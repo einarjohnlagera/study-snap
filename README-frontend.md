@@ -46,8 +46,8 @@ frontend/
 ## UI constraints (MVP)
 - Container: `max-w-3xl`
 - Buttons: only 2 variants
-    - Primary (blue solid)
-    - Secondary (gray outline)
+  - Primary (blue solid)
+  - Secondary (gray outline)
 - Cards: `bg-gray-50`, `border-gray-200`, `shadow-sm`, `rounded-xl`
 - No gradients
 - No emoji icons (use lucide)
@@ -57,6 +57,6 @@ frontend/
 - Use `next-themes` for toggling.
 - Navbar is implemented in `app/layout.tsx` so it appears on all pages.
 - Navbar includes:
-    - Study Snap brand + logo placeholder
-    - Dashboard link
-    - Theme toggle (with mounted guard)
+  - Study Snap brand + logo placeholder
+  - Dashboard link
+  - Theme toggle (with mounted guard)
