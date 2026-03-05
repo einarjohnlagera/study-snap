@@ -4,113 +4,100 @@ You are an AI coding agent (Codex) helping implement Study Snap.
 Follow these rules strictly to keep the codebase consistent and shippable.
 
 ## Product summary
-Study Snap is a web-first "smart tutor on demand" for students (elementary to college).
-Users can paste text or upload an image of notes/questions. The system returns a structured, step-by-step explanation and final answer.
-Tone: calm, patient, non-judgmental. No “coach” pressure.
+Study Snap converts study notes into structured review materials and practice quizzes.
+Core feature is NOT "solve a question" — it is:
+**Notes → Review Sheet + Key Concepts + Practice Quiz.**
+
+Inputs:
+- pasted notes text
+- uploaded image of notes (OCR)
+
+Outputs:
+- title
+- summary
+- keyConcepts/definitions
+- practice quiz questions
+
+Tone: calm, patient, non-judgmental.
 
 ## MVP scope (do not expand without request)
 Pages:
 - Landing
-- Solve (paste text + optional image upload)
-- Dashboard placeholder (optional)
-Result:
-- Can be inline on Solve for MVP
+- Study (paste notes + upload image)
+- Results (review sheet + quiz)
 
 Backend:
-- One primary endpoint: `POST /api/solve` (text and/or image)
+- One primary endpoint: `POST /api/review` (text and/or image)
 - Optional: health endpoint
 
 MVP includes:
-- Step-by-step explanation + final answer (structured JSON)
-- Friendly failure handling
-- Images deleted after processing (no long-term storage)
+- Review generation from text
+- OCR flow for images with low-confidence fallback (editable extracted text)
+- Global navbar + theme toggle
+- Images deleted after processing
 
 NOT in MVP:
-- Exam mode
-- Deep explanation toggle (premium)
-- Stripe/subscriptions
-- Complex dashboards
+- Exam simulation
+- Flashcards/spaced repetition
+- Payments/Stripe
+- Heavy dashboards/analytics
 - Gamification
 
 ---
 
-## Repository layout
-- `/frontend`: Next.js (TypeScript) web app
-- `/backend`: Spring Boot API
-- `/docs`: specs and roadmap
-
----
-
-## Core UX principles
+## UX principles
 - “Friendly academic”: clean like Khan Academy, slightly warm, not childish.
-- Minimal distractions, slightly guided flow.
+- Slightly guided flow. Minimal distractions.
 - Error states are supportive and actionable.
 
 Microcopy:
-- Prefer: “Let’s work through this step by step.”
+- Prefer: “Let’s turn your notes into a review.”
 - Avoid: “Crush this!”, “Hurry up!”, “Wrong!”
 
 ---
 
-## Frontend tech & conventions (`/frontend`)
+## Frontend conventions (`/frontend`)
 Stack:
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
-- shadcn/ui components (preferred)
+- shadcn/ui (preferred)
 - lucide-react icons
 - next-themes for theme switching
-
-Conventions:
-- `app/*` for routes
-- `components/*` for reusable components
-- `lib/api.ts` for API client functions (no scattered `fetch`)
-- `types/*` for shared TypeScript types
 
 Rules:
 1. Use shadcn/ui components for Button/Input/Card/Alert/etc.
 2. Keep pages thin: orchestrate only; logic in `lib/` and small components/hooks.
-3. Always handle loading and error states.
-4. Keep spacing consistent (Tailwind scale). Avoid custom CSS unless needed.
+3. All backend calls go through `lib/api.ts` (no scattered `fetch`).
+4. Always handle loading and error states.
+5. Use shadcn tokens (`bg-background`, `text-foreground`, etc.) for theme consistency.
 
 ### Theme + Navbar requirements (MVP)
 - Support light/dark theme with a toggle in the navbar.
 - Tailwind: `darkMode: ["class"]`.
-- Use shadcn tokens (`bg-background`, `text-foreground`, etc.) so theme applies consistently.
-- Navbar must appear on all pages (at minimum `/` and `/dashboard`).
-- Navbar includes:
-  - Study Snap brand text
-  - Logo placeholder (simple square/rounded mark OK)
-  - Menu link(s) (at least Dashboard)
-  - Theme toggle button
-- Implement Navbar in `app/layout.tsx` (global).
-- Theme toggle must avoid hydration mismatch (mounted guard or equivalent).
+- Navbar appears on all pages.
+- Navbar includes: Study Snap brand text, logo placeholder, menu link(s), theme toggle.
+- Theme toggle avoids hydration mismatch (mounted guard).
 
 ---
 
-## Backend tech & conventions (`/backend`)
-Stack:
-- Spring Boot
-- Java 17+ (or project default)
-- OCR provider + LLM provider (external)
-
+## Backend conventions (`/backend`)
 Rules:
 1. Controllers thin; business logic in services.
-2. Use one orchestrator service (e.g., `SolveService`):
-   validate → OCR (if image) → normalize text → LLM → validate output → return.
+2. Use one orchestrator service (e.g., `ReviewService`):
+   validate → OCR (if image) → normalize → LLM → validate output → return.
 3. Enforce input limits server-side (file size/type, text length).
-4. Do not store images permanently; delete immediately after OCR.
+4. Do not store images permanently; delete after OCR.
 5. Log request id + latency + failure codes (avoid logging full extracted text).
 
 ---
 
 ## API contract (MVP)
 
-### POST `/api/solve`
-
+### POST `/api/review`
 Inputs:
-- JSON (text-only) OR multipart (image)
-- Optional `subject`
+- JSON (notes text) OR multipart (image of notes)
+- Optional subject/topic label
 
 Success response:
 ```json
@@ -118,12 +105,14 @@ Success response:
   "id": "string",
   "inputType": "text|image",
   "extractedText": "string|null",
-  "restatedQuestion": "string",
-  "steps": ["string"],
-  "finalAnswer": "string",
+  "title": "string",
+  "summary": "string",
+  "keyConcepts": ["string"],
+  "quiz": [
+    { "question": "string", "choices": ["string"], "answer": "string", "explanation": "string" }
+  ],
   "meta": {
     "ocrConfidence": "number|null",
-    "modelTier": "free|premium",
     "latencyMs": "number"
   }
 }
@@ -149,22 +138,3 @@ Error response:
   }
 }
 ```
-
----
-
-## Prompting / LLM output requirements
-LLM output must be parsable as structured JSON with:
-- `restatedQuestion` (string)
-- `steps` (string[])
-- `finalAnswer` (string)
-
-Tone:
-- Calm and supportive.
-- Free tier: moderate length.
-
----
-
-## Security & privacy
-- Images deleted after processing.
-- Do not log raw images or full extracted text.
-- Light rate limiting is OK; do not overbuild anti-abuse for MVP.

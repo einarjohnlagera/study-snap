@@ -1,79 +1,69 @@
 # ROADMAP.md — Study Snap (Web-first MVP)
 
-This roadmap is optimized for fast shipping and minimal scope creep.
+Goal: ship an MVP that turns notes into review materials + practice quiz.
 
-## Phase 0 — Repo & setup (0.5–1 day)
-- [ ] Create monorepo: `frontend/`, `backend/`, `docs/`
+## Phase 0 — Repo & setup
+- [ ] Monorepo folders: `frontend/`, `backend/`, `docs/`
 - [ ] Add docs: `AGENTS.md`, `docs/SPEC.md`, `docs/ROADMAP.md`
 - [ ] Add `.env.example`
-- [ ] Decide OCR + LLM providers (stub is OK initially)
+- [ ] Choose OCR + LLM providers (stubs acceptable initially)
 
-Deliverable: repo builds locally.
+Deliverable: repo runs locally.
 
 ---
 
-## Phase 1 — Frontend skeleton (1–2 days)
-- [ ] Initialize Next.js App Router (TypeScript)
-- [ ] Configure Tailwind + class-based dark mode
-- [ ] Install shadcn/ui
-- [ ] Install next-themes + create ThemeProvider + ThemeToggle
-- [ ] Add global Navbar in `app/layout.tsx` (brand + dashboard link + theme toggle)
-- [ ] Create pages:
-  - [ ] `/` landing placeholder
-  - [ ] `/solve` skeleton
-  - [ ] `/dashboard` placeholder
+## Phase 1 — Frontend foundation
+- [ ] Next.js App Router (TypeScript) initialized
+- [ ] Tailwind configured with class-based dark mode
+- [ ] shadcn/ui installed
+- [ ] next-themes ThemeProvider + ThemeToggle
+- [ ] Global Navbar in `app/layout.tsx`
+- [ ] Pages:
+  - [ ] `/` landing (notes → review positioning)
+  - [ ] `/study` UI skeleton
+  - [ ] `/dashboard` placeholder (optional)
 
 Deliverable: UI shell + theme toggle on all pages.
 
 ---
 
-## Phase 2 — Backend MVP (text-only solve) (1–3 days)
-- [ ] `POST /api/solve` accepts JSON `{ text }`
-- [ ] Validate input
+## Phase 2 — Backend MVP (text review generation)
+- [ ] `POST /api/review` accepts JSON `{ notesText }`
+- [ ] Validate input size
 - [ ] Prompt builder + LLM call (or stub response for UI dev)
-- [ ] Return structured JSON (restatedQuestion, steps[], finalAnswer)
-- [ ] Basic logging (request id, latency)
+- [ ] Return structured JSON: title, summary, keyConcepts, quiz[]
+- [ ] Logging (request id, latency)
 
-Deliverable: text input returns usable result.
+Deliverable: paste notes → get review output.
 
 ---
 
-## Phase 3 — Connect UI to backend (1–2 days)
-- [ ] Add `frontend/types/solve.ts`
-- [ ] Add `frontend/lib/api.ts`
-- [ ] `/solve` page integrates text solve end-to-end
+## Phase 3 — Connect UI to backend
+- [ ] `frontend/types/review.ts`
+- [ ] `frontend/lib/api.ts` with `createReviewFromText()` and `createReviewFromImage()`
+- [ ] `/study` integrates text mode end-to-end
 - [ ] Loading + error states
-- [ ] Result rendering matches SPEC
+- [ ] Results rendering matches SPEC
 
-Deliverable: paste text → solve → show result.
+Deliverable: paste notes → generate → render.
 
 ---
 
-## Phase 4 — Image upload + OCR (2–5 days)
+## Phase 4 — Image upload + OCR
 - [ ] Frontend: upload + preview
 - [ ] Backend: accept multipart + OCR integration
 - [ ] Low-confidence OCR flow (`needs_text_confirmation`)
-- [ ] UI: user can edit extracted text and resubmit as text
+- [ ] UI: allow editing extracted text and resubmit
 
-Deliverable: upload image → OCR → LLM result (with edit fallback).
+Deliverable: upload image notes → OCR → review output (with edit fallback).
 
 ---
 
-## Phase 5 — MVP polish (1–3 days)
-- [ ] Improve formatting
-- [ ] Confirm image deletion behavior
+## Phase 5 — MVP polish + deploy
+- [ ] Improve prompt quality and formatting
 - [ ] Add caps: max file size, allowed types
-- [ ] Add basic metrics counters (success/fail)
-
-Deliverable: MVP stable for friends beta.
-
----
-
-## Phase 6 — Optional: anonymous limits + simple auth (later)
-- [ ] Session cookie usage count (1–2 solves)
-- [ ] Soft wall (signup) after limit
-- [ ] Free account daily limits (optional)
-
-Deliverable: controlled usage without overengineering.
+- [ ] Confirm image deletion behavior
+- [ ] Deploy frontend (Vercel) + backend (Render/Fly/AWS)
+- [ ] Add basic counters (success/fail)
 
 End of ROADMAP.md

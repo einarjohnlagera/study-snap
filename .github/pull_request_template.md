@@ -3,10 +3,10 @@ What does this PR change?
 
 ## Checklist
 - [ ] Follows AGENTS.md conventions
-- [ ] Follows docs/SPEC.md behavior + design rules
-- [ ] UI changes include screenshots (if applicable)
-- [ ] API changes updated TS types + Java DTOs (if applicable)
-- [ ] Handles loading and error states
+- [ ] Aligns with docs/SPEC.md
+- [ ] UI screenshots (if applicable)
+- [ ] TS types + Java DTOs updated (if applicable)
+- [ ] Loading/error states handled
 
 ## Notes
 Anything reviewers (future you) should know?
