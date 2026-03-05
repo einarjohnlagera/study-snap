@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: study-snap-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: study_snap
+      POSTGRES_USER: ss_user
+      POSTGRES_PASSWORD: ss#260503
+    ports:
+      - "5432:5432"
+    volumes:
+      - study_snap_pgdata:/var/lib/postgresql/data
+
+volumes:
+  study_snap_pgdata:
