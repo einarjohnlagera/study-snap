@@ -10,6 +10,20 @@ Backend API for Study Snap.
 - Return structured JSON
 
 ## Run locally
+Start Postgres first (from repo root):
+```bash
+docker compose up -d postgres
+```
+
+Set datasource env vars to match `docker-compose.yml`:
+```bash
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=study_snap
+DB_USER=ss_user
+DB_PASSWORD=ss#260503
+```
+
 Maven:
 ```bash
 ./mvnw spring-boot:run
@@ -19,6 +33,7 @@ Gradle:
 ./gradlew bootRun
 ```
 Default: http://localhost:8080
+Base API path: http://localhost:8080/api
 
 ## MVP endpoint
 ### POST /api/review

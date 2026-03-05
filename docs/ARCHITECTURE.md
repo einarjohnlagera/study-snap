@@ -37,6 +37,25 @@ Frontend calls the backend via `NEXT_PUBLIC_API_BASE_URL`.
 - Validates inputs and enforces limits
 - Deletes images after OCR
 - Stores review output and share tokens
+- Runs under servlet context path `/api`
+
+### Local Infrastructure (Docker Compose)
+- `docker-compose.yml` provides a local PostgreSQL 16 instance for backend development.
+- Service name: `postgres`
+- Container name: `study-snap-postgres`
+- Port mapping: `5432:5432`
+- Persistent volume: `study_snap_pgdata`
+
+Backend datasource env vars should match the compose values:
+- `DB_HOST=localhost`
+- `DB_PORT=5432`
+- `DB_NAME=study_snap`
+- `DB_USER=ss_user`
+- `DB_PASSWORD=ss#260503`
+
+Run locally:
+- `docker compose up -d postgres`
+- Then start backend; Flyway will apply migrations on startup.
 
 ---
 
