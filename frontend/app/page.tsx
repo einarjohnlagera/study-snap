@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Camera, ListChecks, Sparkles } from "lucide-react";
+import { BookText, Lightbulb, ListChecks, Sparkles } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 
@@ -9,18 +9,18 @@ export default function Home() {
       <section className="space-y-4 rounded-xl border border-border bg-gray-50 p-6 shadow-sm dark:bg-gray-950/40">
         <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 text-sm text-foreground/80">
           <Sparkles className="h-4 w-4 text-emerald-500" />
-          Calm, step-by-step tutoring
+          Calm, structured study support
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          Study Snap helps you understand questions, one clear step at a time.
+          Turn notes into review materials in one focused flow.
         </h1>
         <p className="text-base leading-relaxed text-foreground/75">
-          Paste a problem or upload a photo of your notes. We will restate the
-          question, walk through the reasoning, and give a final answer you can
-          trust.
+          Paste class notes or upload a photo. Study Snap organizes your
+          material into a concise summary, key concepts, and a quick practice
+          quiz so review feels clear and manageable.
         </p>
-        <Link href="/solve" className={buttonVariants({ className: "w-fit" })}>
-          Try a Question
+        <Link href="/study" className={buttonVariants({ className: "w-fit" })}>
+          Start Studying
         </Link>
       </section>
 
@@ -28,25 +28,27 @@ export default function Home() {
         <h2 className="text-2xl font-semibold text-foreground">Features</h2>
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
-            <BookOpen className="mb-3 h-5 w-5 text-blue-600 dark:text-blue-400" />
-            <CardTitle className="mb-2">Clear explanations</CardTitle>
+            <BookText className="mb-3 h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <CardTitle className="mb-2">Summary</CardTitle>
             <CardDescription>
-              Get structured steps that explain the method, not just the result.
+              Get a clean, high-signal summary of your notes before you dive
+              into details.
             </CardDescription>
           </Card>
           <Card>
-            <Camera className="mb-3 h-5 w-5 text-blue-600 dark:text-blue-400" />
-            <CardTitle className="mb-2">Image support</CardTitle>
+            <Lightbulb className="mb-3 h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <CardTitle className="mb-2">Key concepts</CardTitle>
             <CardDescription>
-              Upload notes or worksheets and let OCR pull text before solving.
+              Highlight the most important ideas, terms, and relationships to
+              focus your review.
             </CardDescription>
           </Card>
           <Card>
             <ListChecks className="mb-3 h-5 w-5 text-blue-600 dark:text-blue-400" />
-            <CardTitle className="mb-2">Final answer + steps</CardTitle>
+            <CardTitle className="mb-2">Practice quiz</CardTitle>
             <CardDescription>
-              See the restated question, numbered steps, and a final answer in
-              one response.
+              Check understanding with a short quiz generated from your study
+              material.
             </CardDescription>
           </Card>
         </div>
@@ -60,7 +62,7 @@ export default function Home() {
               Step 1
             </p>
             <p className="text-base text-foreground/80">
-              Paste text or upload an image of your question.
+              Paste notes or upload an image from your notebook or slides.
             </p>
           </div>
           <div>
@@ -68,7 +70,7 @@ export default function Home() {
               Step 2
             </p>
             <p className="text-base text-foreground/80">
-              Study Snap analyzes the content and builds a clear explanation.
+              Study Snap extracts the content and builds your review set.
             </p>
           </div>
           <div>
@@ -76,7 +78,7 @@ export default function Home() {
               Step 3
             </p>
             <p className="text-base text-foreground/80">
-              Review each step and the final answer at your own pace.
+              Review the summary, concepts, and quiz at your own pace.
             </p>
           </div>
         </Card>
