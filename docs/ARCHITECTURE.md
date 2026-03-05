@@ -41,6 +41,7 @@ Frontend calls the backend via `NEXT_PUBLIC_API_BASE_URL`.
 
 ### Local Infrastructure (Docker Compose)
 - `docker-compose.yml` provides a local PostgreSQL 16 instance for backend development.
+- `docker-compose.yml` can also run the Spring Boot backend container.
 - Service name: `postgres`
 - Container name: `study-snap-postgres`
 - Port mapping: `5432:5432`
@@ -56,6 +57,9 @@ Backend datasource env vars should match the compose values:
 Run locally:
 - `docker compose up -d postgres`
 - Then start backend; Flyway will apply migrations on startup.
+
+Run backend + Postgres together:
+- `docker compose up -d --build backend`
 
 ---
 

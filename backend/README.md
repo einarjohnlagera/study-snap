@@ -35,6 +35,16 @@ Gradle:
 Default: http://localhost:8080
 Base API path: http://localhost:8080/api
 
+## Run with Docker
+From repo root:
+```bash
+docker compose up -d --build backend
+```
+
+This starts:
+- `postgres` on `localhost:5432`
+- `backend` on `localhost:8080` (API base path `/api`)
+
 ## MVP endpoint
 ### POST /api/review
 Input:
