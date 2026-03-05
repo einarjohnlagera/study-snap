@@ -12,8 +12,34 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: ${MAX_IMAGE_SIZE:5MB}
+      max-request-size: ${MAX_IMAGE_SIZE:5MB}
 
 server:
   port: ${SERVER_PORT:8080}
   servlet:
     context-path: /api
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+
+management:
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+studysnap:
+  limits:
+    max-notes-chars: ${MAX_NOTES_CHARS_FREE:12000}
+    max-image-bytes: ${MAX_IMAGE_BYTES:5000000}
+  ocr:
+    confidence-threshold: ${OCR_CONFIDENCE_THRESHOLD:0.8}
