@@ -1,0 +1,46 @@
+Generate study review materials from the provided notes.
+
+Output JSON schema:
+
+{
+  "title": string,
+  "summary": string,
+  "keyConcepts": string[],
+  "quiz": [
+    {
+      "question": string,
+      "choices": string[4],
+      "answerIndex": integer (0..3),
+      "explanation": string
+    }
+  ]
+}
+
+Rules:
+
+Summary
+- 3 to 6 sentences
+- clear and concise
+
+Key Concepts
+- 5 to 10 items
+- short phrases
+
+Quiz
+- exactly {QUIZ_COUNT} questions
+- each question must have 4 choices
+- answerIndex must be between 0 and 3
+- explanation should briefly explain why the answer is correct
+
+Content guidelines
+
+- Questions must be answerable from the notes
+- If notes are incomplete, generate simpler conceptual questions
+- Avoid hallucinating specific details not present in the notes
+- If OCR noise exists, ignore gibberish lines
+- If the notes were extracted via OCR and edited by the user, treat the edited text as the final authoritative notes.
+
+Tone
+- calm
+- supportive
+- easy to understand for students
