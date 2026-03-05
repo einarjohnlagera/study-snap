@@ -38,6 +38,14 @@ study-snap/
   .env.example
 ```
 
+## Documentation
+
+Product and development documentation lives in `/docs`.
+
+- SPEC.md — product behavior and UX rules
+- ROADMAP.md — development phases
+- ARCHITECTURE.md — backend system design
+
 ## MVP goal
 Upload notes → generate review materials.
 

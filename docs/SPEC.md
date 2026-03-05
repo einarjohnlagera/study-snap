@@ -12,6 +12,11 @@ Tone:
 
 ---
 
+## Product statement
+Study Snap helps students turn messy notes into structured review materials and practice quizzes using AI.
+
+---
+
 ## MVP scope
 
 Included:
@@ -57,15 +62,26 @@ States:
 ---
 
 ## Results view
+
+### For all subscriptions
 Sections:
 1. Title (derived topic)
 2. Summary (short paragraph)
 3. Key concepts (bulleted list)
-4. Practice quiz (default 5 questions)
+4. Practice quiz (includes 3–5 questions)
 5. Actions:
    - “Try Another”
    - “Edit Notes” (optional)
    - (Future) Regenerate / More questions / Flashcards
+
+## For freemium and higher
+1. Users can optionally share generated study packs via public link.
+
+### For premium users
+1. Premium users can access Mock exam mode
+    - 10–20 exam questions
+    - explanations
+    - grading logic
 
 ---
 
@@ -80,6 +96,32 @@ Flow:
 5. Call LLM
 6. Validate structured output
 7. Return JSON response
+
+---
+
+## Backend architecture (MVP)
+
+Primary endpoint:
+- `POST /api/review`
+
+Input:
+- notes text (JSON) OR notes image (multipart)
+
+Processing flow:
+1. Validate input (size/type)
+2. If image: OCR → extractedText + confidence, delete image immediately after OCR
+3. Normalize notes text
+4. LLM generates structured JSON:
+    - title, summary, keyConcepts[], quiz[]
+5. Validate JSON schema
+6. Persist review
+7. Return response
+
+OCR low-confidence:
+- Return `status: needs_text_confirmation` with extractedText
+- UI allows user to edit extractedText and resubmit
+
+Detailed system architecture is described in `docs/ARCHITECTURE.md`.
 
 ---
 
@@ -112,8 +154,43 @@ Rules:
 
 ---
 
+## Shareable Study Pack (Distribution feature)
+
+After generating a review, users can create a shareable link:
+- Public URL: `/share/[token]`
+
+Rules:
+- Shared page shows generated content (title/summary/key concepts/quiz)
+- Do not expose raw uploaded image
+- Optionally hide raw notes text by default (recommended)
+- Tokens must be unguessable and can support optional expiration later (premium)
+
+---
+
 ## Privacy
 - Uploaded images are deleted after OCR processing.
 - Avoid logging raw images or full extracted text.
+
+---
+
+# Pricing Model
+
+Study Snap follows a freemium model.
+
+## Plans (MVP direction)
+
+Demo (no login):
+- 1 review generation
+- includes: summary, key concepts, practice quiz (3 questions)
+- no saving
+
+Free account:
+- 3 reviews per day
+- includes: summary, key concepts, practice quiz (5 questions)
+- can save and view history
+
+Premium:
+- up to 200 reviews per month
+- includes: mock exam mode + analytics (future)
 
 End of SPEC.md

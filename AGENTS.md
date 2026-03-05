@@ -20,6 +20,8 @@ Outputs:
 
 Tone: calm, patient, non-judgmental.
 
+Refer to `docs/ARCHITECTURE.md` for backend system design and data models.
+
 ## MVP scope (do not expand without request)
 Pages:
 - Landing
@@ -92,6 +94,27 @@ Rules:
 
 ---
 
+## Backend module plan (Spring Boot)
+
+Controllers:
+- ReviewController
+- ShareController
+- HealthController (optional)
+
+Services:
+- ReviewService (orchestrator)
+- OcrService
+- LlmReviewService
+- UsageLimitService
+- ShareService
+
+Persistence:
+- ReviewRepository
+- ShareLinkRepository
+- (Optional) ReviewDraftRepository for OCR confirmation flow
+
+---
+
 ## API contract (MVP)
 
 ### POST `/api/review`
@@ -138,3 +161,39 @@ Error response:
   }
 }
 ```
+
+---
+
+## Endpoints (MVP + near-future)
+
+- POST /api/review
+   - JSON { notesText } OR multipart { image }
+   - returns ReviewResponse OR needs_text_confirmation
+
+- POST /api/review/confirm-text
+   - { draftId, notesText } → generates and returns ReviewResponse
+
+- GET /api/review/{id}
+   - fetch saved review
+
+- POST /api/review/{id}/share
+   - creates share token
+
+- GET /api/share/{token}
+   - public fetch for share page
+
+---
+
+## Cost control: tiered model strategy (required)
+
+Use different model tiers depending on feature:
+- Cheap model: text cleanup/OCR formatting (optional)
+- Standard model (free): summary + key concepts + practice quiz (3–5 questions)
+- Higher quality model (premium): mock exam generation + analytics
+
+Config knobs:
+- LLM_MODEL_FREE
+- LLM_MODEL_PREMIUM
+- QUIZ_QUESTIONS_FREE
+- QUIZ_QUESTIONS_PREMIUM
+- MAX_NOTES_CHARS_FREE

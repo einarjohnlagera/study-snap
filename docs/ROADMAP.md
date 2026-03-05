@@ -3,24 +3,24 @@
 Goal: ship an MVP that turns notes into review materials + practice quiz.
 
 ## Phase 0 — Repo & setup
-- [ ] Monorepo folders: `frontend/`, `backend/`, `docs/`
-- [ ] Add docs: `AGENTS.md`, `docs/SPEC.md`, `docs/ROADMAP.md`
-- [ ] Add `.env.example`
-- [ ] Choose OCR + LLM providers (stubs acceptable initially)
+- [X] Monorepo folders: `frontend/`, `backend/`, `docs/`
+- [X] Add docs: `AGENTS.md`, `docs/SPEC.md`, `docs/ROADMAP.md`
+- [X] Add `.env.example`
+- [X] Choose OCR + LLM providers (stubs acceptable initially)
 
 Deliverable: repo runs locally.
 
 ---
 
 ## Phase 1 — Frontend foundation
-- [ ] Next.js App Router (TypeScript) initialized
-- [ ] Tailwind configured with class-based dark mode
-- [ ] shadcn/ui installed
-- [ ] next-themes ThemeProvider + ThemeToggle
-- [ ] Global Navbar in `app/layout.tsx`
-- [ ] Pages:
-  - [ ] `/` landing (notes → review positioning)
-  - [ ] `/study` UI skeleton
+- [X] Next.js App Router (TypeScript) initialized
+- [X] Tailwind configured with class-based dark mode
+- [X] shadcn/ui installed
+- [X] next-themes ThemeProvider + ThemeToggle
+- [X] Global Navbar in `app/layout.tsx`
+- [X] Pages:
+  - [X] `/` landing (notes → review positioning)
+  - [X] `/study` UI skeleton
   - [ ] `/dashboard` placeholder (optional)
 
 Deliverable: UI shell + theme toggle on all pages.
@@ -65,5 +65,24 @@ Deliverable: upload image notes → OCR → review output (with edit fallback).
 - [ ] Confirm image deletion behavior
 - [ ] Deploy frontend (Vercel) + backend (Render/Fly/AWS)
 - [ ] Add basic counters (success/fail)
+
+## Phase 6 — Premium Features
+- [ ] Mock Exam mode
+- [ ] Performance analytics
+- [ ] Topic mastery detection
+- [ ] User accounts
+- [ ] Snap history
+
+## Phase 7 – Shareable Study Packs
+- [ ] Create share tokens in backend
+- [ ] Add public page route: `/share/[token]`
+- [ ] Track optional view_count
+- [ ] (Optional later) expiration + private links (premium)
+
+## Phase — Usage limits + plans
+
+- [ ] Demo: 1 review (anonymous cookie/session)
+- [ ] Free: 3 reviews/day (requires login)
+- [ ] Premium: 200 reviews/month + mock exam + analytics (future)
 
 End of ROADMAP.md
