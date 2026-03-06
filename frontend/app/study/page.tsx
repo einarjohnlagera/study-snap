@@ -4,12 +4,24 @@ import { useMemo, useState } from "react";
 import { FileImage, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import {
+  confirmReviewText,
+  createReviewFromImage,
+  createReviewFromText,
+  isNeedsTextConfirmationResponse,
+  type NeedsTextConfirmationResponse,
+  type ReviewResponse,
+} from "@/lib/api";
 
 export default function StudyPage() {
   const [notesText, setNotesText] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [hasResult, setHasResult] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reviewResult, setReviewResult] = useState<ReviewResponse | null>(null);
+  const [needsConfirmation, setNeedsConfirmation] =
+    useState<NeedsTextConfirmationResponse | null>(null);
+  const [confirmedText, setConfirmedText] = useState("");
 
   const canGenerate = useMemo(
     () => notesText.trim().length > 0 || imageFile !== null,
@@ -22,13 +34,57 @@ export default function StudyPage() {
     }
 
     setLoading(true);
-    setHasResult(false);
+    setErrorMessage(null);
+    setReviewResult(null);
+    setNeedsConfirmation(null);
 
-    // Placeholder generation flow until API wiring is added.
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      if (imageFile) {
+        const response = await createReviewFromImage(imageFile);
+        if (isNeedsTextConfirmationResponse(response)) {
+          setNeedsConfirmation(response);
+          setConfirmedText(response.extractedText);
+          return;
+        }
+        setReviewResult(response);
+        return;
+      }
 
-    setLoading(false);
-    setHasResult(true);
+      const response = await createReviewFromText(notesText);
+      setReviewResult(response);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "We could not generate your review right now. Please try again.";
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmText = async () => {
+    if (!needsConfirmation || confirmedText.trim().length === 0 || loading) {
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage(null);
+    setReviewResult(null);
+
+    try {
+      const response = await confirmReviewText(needsConfirmation.id, confirmedText);
+      setReviewResult(response);
+      setNeedsConfirmation(null);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "We could not generate your review right now. Please try again.";
+      setErrorMessage(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -105,41 +161,101 @@ export default function StudyPage() {
         </Button>
       </Card>
 
-      {hasResult ? (
+      {errorMessage ? (
+        <Card className="border-red-500/40 bg-red-50/70 dark:bg-red-950/20">
+          <CardTitle className="mb-2">Couldn&apos;t Generate Review</CardTitle>
+          <CardDescription>{errorMessage}</CardDescription>
+        </Card>
+      ) : null}
+
+      {needsConfirmation ? (
+        <Card className="space-y-4 border-amber-500/40">
+          <div>
+            <CardTitle className="mb-2">Confirm Extracted Text</CardTitle>
+            <CardDescription>
+              The uploaded image was a little unclear. Please edit the extracted
+              text below, then continue.
+            </CardDescription>
+          </div>
+          <textarea
+            value={confirmedText}
+            onChange={(event) => setConfirmedText(event.target.value)}
+            className="min-h-40 w-full rounded-lg border border-border bg-background px-3 py-2 text-base leading-relaxed text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+          />
+          <p className="text-sm text-foreground/70">
+            OCR confidence:{" "}
+            {needsConfirmation.meta.ocrConfidence !== null
+              ? `${Math.round(needsConfirmation.meta.ocrConfidence * 100)}%`
+              : "n/a"}
+          </p>
+          <Button
+            type="button"
+            onClick={handleConfirmText}
+            disabled={loading || confirmedText.trim().length === 0}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating your review materials...
+              </>
+            ) : (
+              "Continue With Edited Text"
+            )}
+          </Button>
+        </Card>
+      ) : null}
+
+      {reviewResult ? (
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold text-foreground">Review Set</h2>
 
           <Card>
             <CardTitle className="mb-2">Title</CardTitle>
-            <CardDescription>
-              Photosynthesis and Energy Conversion
-            </CardDescription>
+            <CardDescription>{reviewResult.title}</CardDescription>
           </Card>
 
           <Card>
             <CardTitle className="mb-2">Summary</CardTitle>
-            <CardDescription>
-              These notes explain how plants convert light energy into chemical
-              energy. Chlorophyll in chloroplasts captures sunlight to power
-              reactions that create glucose and release oxygen.
-            </CardDescription>
+            <CardDescription>{reviewResult.summary}</CardDescription>
           </Card>
 
           <Card>
             <CardTitle className="mb-2">Key Concepts</CardTitle>
             <ul className="list-disc space-y-2 pl-5 text-base leading-relaxed text-foreground/80">
-              <li>Role of chlorophyll and chloroplasts</li>
-              <li>Difference between light-dependent reactions and Calvin cycle</li>
-              <li>How glucose and oxygen are produced</li>
+              {reviewResult.keyConcepts.map((concept) => (
+                <li key={concept}>{concept}</li>
+              ))}
             </ul>
           </Card>
 
           <Card className="border-emerald-500/40">
-            <CardTitle className="mb-2">Practice Quiz (placeholder)</CardTitle>
-            <CardDescription>
-              1) What is the main purpose of chlorophyll? 2) Which stage uses
-              carbon dioxide to produce sugars?
-            </CardDescription>
+            <CardTitle className="mb-4">Practice Quiz</CardTitle>
+            <div className="space-y-4">
+              {reviewResult.quiz.map((item, index) => (
+                <div key={`${item.question}-${index}`} className="space-y-1">
+                  <p className="font-medium text-foreground">
+                    {index + 1}. {item.question}
+                  </p>
+                  {item.choices.length > 0 ? (
+                    <ul className="list-disc pl-5 text-sm text-foreground/75">
+                      {item.choices.map((choice) => (
+                        <li key={choice}>{choice}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <p className="text-sm text-foreground/75">
+                    <span className="font-medium text-foreground">Answer:</span>{" "}
+                    {item.answer}
+                  </p>
+                  <p className="text-sm text-foreground/75">
+                    <span className="font-medium text-foreground">
+                      Explanation:
+                    </span>{" "}
+                    {item.explanation}
+                  </p>
+                </div>
+              ))}
+            </div>
           </Card>
         </section>
       ) : null}
