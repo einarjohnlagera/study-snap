@@ -1,0 +1,29 @@
+<svg width="1400" height="420" viewBox="0 0 1400 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="96" y1="44" x2="314" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#84CC16"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <filter id="shadow" x="66" y="26" width="300" height="300" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <g transform="translate(40 40)" filter="url(#shadow)">
+    <path d="M160 6L304 92V228L160 314L16 228V92L160 6Z" fill="url(#g1)"/>
+    <path d="M16 228L160 314V190L70 140L16 176V228Z" fill="#1E3A8A" fill-opacity="0.28"/>
+    <path d="M92 160L142 210L244 104" stroke="white" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M252 42L258 58L274 64L258 70L252 86L246 70L230 64L246 58L252 42Z" fill="#2563EB"/>
+    <path d="M286 26L291 38L303 43L291 48L286 60L281 48L269 43L281 38L286 26Z" fill="#84CC16"/>
+  </g>
+
+  <g transform="translate(410 66)">
+    <text x="0" y="118" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="112" font-weight="800" fill="#374151">Study</text>
+    <text x="0" y="236" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="112" font-weight="800" fill="#374151">Snap</text>
+    <path d="M420 132L386 198H424L396 286L486 170H438L466 132H420Z" fill="url(#bolt)"/>
+  </g>
+</svg>

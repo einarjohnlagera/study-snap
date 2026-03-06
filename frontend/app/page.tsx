@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { BookText, Lightbulb, ListChecks, Sparkles } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,13 @@ export default function Home() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-8 px-6 py-10">
       <section className="space-y-4 rounded-xl border border-border bg-gray-50 p-6 shadow-sm dark:bg-gray-950/40">
+        <Image
+          src="/study-snap-logo-full.svg"
+          alt="Study Snap"
+          width={220}
+          height={44}
+          priority
+        />
         <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 text-sm text-foreground/80">
           <Sparkles className="h-4 w-4 text-emerald-500" />
           Calm, structured study support

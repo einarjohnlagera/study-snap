@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Square } from "lucide-react";
+import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 
 export function Navbar() {
@@ -8,7 +8,13 @@ export function Navbar() {
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
         <Link href="/" className="flex items-center gap-3">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border">
-            <Square className="h-4 w-4" />
+            <Image
+              src="/study-snap-logo-icon.svg"
+              alt="Study Snap logo"
+              width={20}
+              height={20}
+              priority
+            />
           </span>
           <span className="text-sm font-semibold sm:text-base">Study Snap</span>
         </Link>
