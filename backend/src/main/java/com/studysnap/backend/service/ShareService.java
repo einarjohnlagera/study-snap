@@ -1,8 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.dto.PublicShareResponse;
 import com.studysnap.backend.dto.ShareLinkResponse;
 import com.studysnap.backend.entity.ReviewEntity;
@@ -17,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Base64;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,7 +22,6 @@ import java.util.UUID;
 public class ShareService {
 	private final ShareLinkRepository shareLinkRepository;
 	private final ReviewRepository reviewRepository;
-	private final ObjectMapper objectMapper;
 
 	public ShareLinkResponse createShareLink(String reviewId) {
 		UUID id;
@@ -65,27 +60,13 @@ public class ShareService {
 				review.getId().toString(),
 				review.getTitle(),
 				review.getSummary(),
-				readList(review.getKeyConcepts(), new TypeReference<>() {
-				}),
-				readList(review.getQuiz(), new TypeReference<>() {
-				})
+				review.getKeyConcepts(),
+				review.getQuiz()
 		);
 	}
 
 	private String generateToken() {
 		byte[] random = UUID.randomUUID().toString().getBytes();
 		return Base64.getUrlEncoder().withoutPadding().encodeToString(random).substring(0, 22);
-	}
-
-	private <T> List<T> readList(String json, TypeReference<List<T>> typeRef) {
-		try {
-			return objectMapper.readValue(json, typeRef);
-		} catch (JsonProcessingException ex) {
-			throw new AppException(
-					"DESERIALIZATION_ERROR",
-					"Stored review data is invalid.",
-					HttpStatus.INTERNAL_SERVER_ERROR
-			);
-		}
 	}
 }
