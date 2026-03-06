@@ -11,6 +11,8 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmReviewService;
 import com.studysnap.backend.service.model.GeneratedReviewContent;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,8 @@ import java.util.Objects;
 @ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "openai", matchIfMissing = true)
 @RequiredArgsConstructor
 public class OpenAiLlmReviewService implements LlmReviewService {
+    private static final Logger log = LoggerFactory.getLogger(OpenAiLlmReviewService.class);
+
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
@@ -114,13 +118,14 @@ public class OpenAiLlmReviewService implements LlmReviewService {
                     null
             );
         } catch (RestClientResponseException ex) {
+            log.warn("openai_request_failed status={} errorCode={}", ex.getStatusCode().value(), ex.getClass().getSimpleName());
             throw new AppException(
                     "LLM_REQUEST_FAILED",
                     "Review generation failed. Please try again in a moment.",
-                    ex.getResponseBodyAsString(),
                     HttpStatus.BAD_GATEWAY
             );
         } catch (RestClientException | IOException ex) {
+            log.warn("openai_unavailable errorCode={} message={}", ex.getClass().getSimpleName(), ex.getMessage());
             throw new AppException(
                     "LLM_UNAVAILABLE",
                     "Review generation is temporarily unavailable. Please try again.",
