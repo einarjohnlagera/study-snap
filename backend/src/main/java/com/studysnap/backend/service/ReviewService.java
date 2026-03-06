@@ -1,8 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateReviewRequest;
@@ -43,7 +40,6 @@ public class ReviewService {
 	private final OcrService ocrService;
 	private final LlmReviewService llmReviewService;
 	private final StudySnapProperties properties;
-	private final ObjectMapper objectMapper;
 
 	public ReviewResponse createFromText(CreateReviewRequest request) {
 		long startedAt = System.currentTimeMillis();
@@ -192,8 +188,8 @@ public class ReviewService {
 		entity.setInputType(inputType);
 		entity.setTitle(generated.title());
 		entity.setSummary(generated.summary());
-		entity.setKeyConcepts(writeJson(generated.keyConcepts()));
-		entity.setQuiz(writeJson(generated.quiz()));
+		entity.setKeyConcepts(generated.keyConcepts());
+		entity.setQuiz(generated.quiz());
 		entity.setOcrConfidence(ocrConfidence);
 		entity.setModelTier(ModelTier.FREE);
 		entity.setStatus(ReviewStatus.DONE);
@@ -208,36 +204,10 @@ public class ReviewService {
 				extractedText,
 				entity.getTitle(),
 				entity.getSummary(),
-				readList(entity.getKeyConcepts(), new TypeReference<>() {
-				}),
-				readList(entity.getQuiz(), new TypeReference<>() {
-				}),
+				entity.getKeyConcepts(),
+				entity.getQuiz(),
 				new ReviewMeta(entity.getOcrConfidence(), latencyMs)
 		);
-	}
-
-	private <T> String writeJson(List<T> content) {
-		try {
-			return objectMapper.writeValueAsString(content);
-		} catch (JsonProcessingException ex) {
-			throw new AppException(
-					"SERIALIZATION_ERROR",
-					"Failed to prepare review output.",
-					HttpStatus.INTERNAL_SERVER_ERROR
-			);
-		}
-	}
-
-	private <T> List<T> readList(String json, TypeReference<List<T>> typeRef) {
-		try {
-			return objectMapper.readValue(json, typeRef);
-		} catch (JsonProcessingException ex) {
-			throw new AppException(
-					"DESERIALIZATION_ERROR",
-					"Stored review data is invalid.",
-					HttpStatus.INTERNAL_SERVER_ERROR
-			);
-		}
 	}
 
 	private UUID parseUuid(String raw, String code, String message) {
