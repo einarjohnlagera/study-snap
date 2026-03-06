@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: study_snap
       POSTGRES_USER: ss_user
-      POSTGRES_PASSWORD: ss#260503
+      POSTGRES_PASSWORD: ss#20260305
     ports:
       - "5432:5432"
     volumes:
@@ -29,7 +29,7 @@ services:
       DB_PORT: 5432
       DB_NAME: study_snap
       DB_USER: ss_user
-      DB_PASSWORD: ss#260503
+      DB_PASSWORD: ss#20260305
       CORS_ALLOWED_ORIGINS: http://localhost:3000
     ports:
       - "8080:8080"
