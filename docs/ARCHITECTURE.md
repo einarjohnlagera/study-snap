@@ -52,7 +52,7 @@ Backend datasource env vars should match the compose values:
 - `DB_PORT=5432`
 - `DB_NAME=study_snap`
 - `DB_USER=ss_user`
-- `DB_PASSWORD=ss#260503`
+- `DB_PASSWORD=ss#20260305`
 
 Run locally:
 - `docker compose up -d postgres`

@@ -21,7 +21,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=study_snap
 DB_USER=ss_user
-DB_PASSWORD=ss#260503
+DB_PASSWORD=ss#20260305
 ```
 
 For local development, you can set these in `backend/.env` and start with:
