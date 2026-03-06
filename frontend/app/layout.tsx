@@ -17,6 +17,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Study Snap",
   description: "Smart tutor on demand",
+  icons: {
+    icon: "/study-snap-logo-icon.svg",
+    shortcut: "/study-snap-logo-icon.svg",
+    apple: "/study-snap-logo-icon.svg",
+  },
 };
 
 export default function RootLayout({
