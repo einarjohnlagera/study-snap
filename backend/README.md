@@ -24,6 +24,12 @@ DB_USER=ss_user
 DB_PASSWORD=ss#260503
 ```
 
+For local development, you can set these in `backend/.env` and start with:
+```powershell
+./start-dev.ps1
+```
+If you still see `${DB_USER}` in runtime errors, clear any `DB_USER`/`DB_PASSWORD` values from your IDE Run Configuration or system environment, because those override `.env`.
+
 Maven:
 ```bash
 ./mvnw spring-boot:run

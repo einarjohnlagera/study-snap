@@ -17,6 +17,8 @@ npm run dev
 ```
 Default: http://localhost:3000
 
+Frontend environment variables should be set in `frontend/.env.local`.
+
 ## Rules
 - Pages are thin; logic in `lib/` and small components/hooks.
 - All backend calls go through `lib/api.ts`.
