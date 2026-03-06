@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
-@ConditionalOnProperty(prefix = "studysnap.llm", name = "provider", havingValue = "stub")
+@ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "stub")
 public class StubLlmReviewService implements LlmReviewService {
 
     @Override

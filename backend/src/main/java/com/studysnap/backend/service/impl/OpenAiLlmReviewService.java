@@ -4,58 +4,37 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmReviewService;
 import com.studysnap.backend.service.model.GeneratedReviewContent;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
 @Service
-@ConditionalOnProperty(prefix = "studysnap.llm", name = "provider", havingValue = "openai", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "openai", matchIfMissing = true)
+@RequiredArgsConstructor
 public class OpenAiLlmReviewService implements LlmReviewService {
-    private static final String PROMPT_DIR = "prompts/review-v1/";
-    private static final String SYSTEM_PROMPT_PATH = PROMPT_DIR + "system.txt";
-    private static final String DEVELOPER_PROMPT_PATH = PROMPT_DIR + "developer.txt";
-    private static final String SCHEMA_PATH = PROMPT_DIR + "schema.json";
-
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
-    private final String systemPrompt;
-    private final String developerPromptTemplate;
-    private final JsonNode responseSchema;
-
-    public OpenAiLlmReviewService(StudySnapProperties properties, ObjectMapper objectMapper) {
-        this.properties = properties;
-        this.objectMapper = objectMapper;
-        this.systemPrompt = readResourceAsString(SYSTEM_PROMPT_PATH);
-        this.developerPromptTemplate = readResourceAsString(DEVELOPER_PROMPT_PATH);
-        this.responseSchema = readResourceAsJson(SCHEMA_PATH);
-        this.restClient = RestClient.builder()
-                .baseUrl(properties.getLlm().getBaseUrl())
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getLlm().getApiKey())
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .build();
-    }
+    private final OpenAiPromptResources promptResources;
 
     @Override
     public GeneratedReviewContent generateReview(String normalizedNotesText) {
-        if (properties.getLlm().getApiKey() == null || properties.getLlm().getApiKey().isBlank()) {
+        if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
             throw new AppException(
                     "LLM_CONFIGURATION_ERROR",
                     "LLM API key is missing. Please configure LLM_API_KEY.",
@@ -64,13 +43,13 @@ public class OpenAiLlmReviewService implements LlmReviewService {
         }
 
         ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", properties.getLlm().getModelFree());
+        requestBody.put("model", properties.getSettings().getModelFree());
         requestBody.set("input", buildInputMessages(normalizedNotesText));
         ObjectNode textNode = requestBody.putObject("text");
         ObjectNode formatNode = textNode.putObject("format");
         formatNode.put("type", "json_schema");
         formatNode.put("name", "study_snap_review");
-        formatNode.set("schema", responseSchema);
+        formatNode.set("schema", promptResources.responseSchema());
         formatNode.put("strict", true);
 
         try {
@@ -121,7 +100,7 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             Integer inputTokens = asNullableInt(usage.get("input_tokens"));
             Integer outputTokens = asNullableInt(usage.get("output_tokens"));
             Integer cachedInputTokens = asNullableInt(usage.path("input_tokens_details").get("cached_tokens"));
-            String modelUsed = responseJson.path("model").asText(properties.getLlm().getModelFree());
+            String modelUsed = responseJson.path("model").asText(properties.getSettings().getModelFree());
 
             return new GeneratedReviewContent(
                     promptReview.title(),
@@ -152,11 +131,11 @@ public class OpenAiLlmReviewService implements LlmReviewService {
 
     private ArrayNode buildInputMessages(String normalizedNotesText) {
         ArrayNode input = objectMapper.createArrayNode();
-        input.add(buildTextMessage("system", systemPrompt));
+        input.add(buildTextMessage("system", promptResources.systemPrompt()));
 
-        String developerPrompt = developerPromptTemplate.replace(
+        String developerPrompt = promptResources.developerPromptTemplate().replace(
                 "{QUIZ_COUNT}",
-                String.valueOf(properties.getLlm().getQuizQuestionsFree())
+                String.valueOf(properties.getSettings().getQuizQuestionsFree())
         );
         input.add(buildTextMessage("developer", developerPrompt));
         input.add(buildTextMessage("user", "Study notes:\n" + normalizedNotesText));
@@ -193,24 +172,6 @@ public class OpenAiLlmReviewService implements LlmReviewService {
                 "The review service returned an unexpected format. Please try again.",
                 HttpStatus.BAD_GATEWAY
         );
-    }
-
-    private String readResourceAsString(String resourcePath) {
-        try {
-            ClassPathResource resource = new ClassPathResource(resourcePath);
-            byte[] bytes = resource.getInputStream().readAllBytes();
-            return new String(bytes, StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Failed to read resource: " + resourcePath, ex);
-        }
-    }
-
-    private JsonNode readResourceAsJson(String resourcePath) {
-        try {
-            return objectMapper.readTree(readResourceAsString(resourcePath));
-        } catch (IOException ex) {
-            throw new IllegalStateException("Failed to parse JSON resource: " + resourcePath, ex);
-        }
     }
 
     private Integer asNullableInt(JsonNode node) {

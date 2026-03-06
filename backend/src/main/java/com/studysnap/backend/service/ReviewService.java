@@ -139,7 +139,7 @@ public class ReviewService {
             throw new AppException("INVALID_IMAGE", "Please upload an image to continue.", HttpStatus.BAD_REQUEST);
         }
 
-        if (image.getSize() > properties.getLimits().getMaxImageBytes()) {
+        if (image.getSize() > properties.getSettings().getMaxImageBytes()) {
             throw new AppException(
                     "IMAGE_TOO_LARGE",
                     "Image is too large. Please upload an image under 5MB.",
@@ -166,7 +166,7 @@ public class ReviewService {
                     HttpStatus.BAD_REQUEST
             );
         }
-        if (normalized.length() > properties.getLimits().getMaxNotesChars()) {
+        if (normalized.length() > properties.getSettings().getMaxNotesChars()) {
             throw new AppException(
                     "NOTES_TOO_LONG",
                     "Notes are too long. Please shorten and try again.",
@@ -194,7 +194,7 @@ public class ReviewService {
         entity.setOcrConfidence(ocrConfidence);
         entity.setModelTier(ModelTier.FREE);
         entity.setModelUsed(Optional.ofNullable(generated.modelUsed())
-                .orElse(properties.getLlm().getModelFree()));
+                .orElse(properties.getSettings().getModelFree()));
         entity.setInputTokens(generated.inputTokens());
         entity.setOutputTokens(generated.outputTokens());
         entity.setCachedInputTokens(generated.cachedInputTokens());

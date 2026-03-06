@@ -4,7 +4,7 @@ spring:
   config:
     import: optional:file:.env[.properties]
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:studysnap}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:study_snap}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
   jpa:
@@ -40,15 +40,17 @@ management:
         include: health
 
 studysnap:
-  limits:
+  settings:
     max-notes-chars: ${MAX_NOTES_CHARS_FREE:12000}
     max-image-bytes: ${MAX_IMAGE_BYTES:5000000}
+    quiz-questions-free: ${QUIZ_QUESTIONS_FREE:5}
+    model-free: ${LLM_MODEL_FREE:gpt-4.1-mini}
+    model-premium: ${LLM_MODEL_PREMIUM:gpt-4.1}
+    prompt-dir: ${LLM_PROMPT_DIR:prompts/review-v1}
   ocr:
     confidence-threshold: ${OCR_CONFIDENCE_THRESHOLD:0.8}
   llm:
-    provider: ${LLM_PROVIDER:openai}
-    api-key: ${LLM_API_KEY:}
-    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
-    model-free: ${LLM_MODEL_FREE:gpt-4.1-mini}
-    model-premium: ${LLM_MODEL_PREMIUM:gpt-4.1}
-    quiz-questions-free: ${QUIZ_QUESTIONS_FREE:5}
+    api:
+      provider: ${LLM_PROVIDER:openai}
+      api-key: ${LLM_API_KEY:}
+      base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
