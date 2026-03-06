@@ -154,6 +154,7 @@ OCR needs confirmation response:
 Error response:
 ```json
 {
+  "requestId": "string",
   "error": {
     "code": "string",
     "message": "user-friendly string",
