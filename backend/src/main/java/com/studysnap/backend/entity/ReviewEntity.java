@@ -1,5 +1,6 @@
 package com.studysnap.backend.entity;
 
+import com.studysnap.backend.dto.QuizItem;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -9,8 +10,11 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -39,11 +43,13 @@ public class ReviewEntity {
 	@Column(nullable = false)
 	private String summary;
 
+	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(name = "key_concepts", nullable = false, columnDefinition = "jsonb")
-	private String keyConcepts;
+	private List<String> keyConcepts;
 
+	@JdbcTypeCode(SqlTypes.JSON)
 	@Column(nullable = false, columnDefinition = "jsonb")
-	private String quiz;
+	private List<QuizItem> quiz;
 
 	@Column(name = "ocr_confidence")
 	private Double ocrConfidence;
