@@ -182,6 +182,17 @@ Error response:
 - GET /api/share/{token}
    - public fetch for share page
 
+### Review usage metadata
+
+When saving reviews, also persist model usage metadata where available:
+- modelUsed
+- inputTokens
+- outputTokens
+- cachedInputTokens (optional)
+- estimatedCost (optional)
+
+This is for internal monitoring and cost analysis.
+
 ---
 
 ## Cost control: tiered model strategy (required)
@@ -197,3 +208,13 @@ Config knobs:
 - QUIZ_QUESTIONS_FREE
 - QUIZ_QUESTIONS_PREMIUM
 - MAX_NOTES_CHARS_FREE
+
+### Initial model decision (MVP)
+
+For Demo and Free plans, use `gpt-4.1-mini`.
+
+Reason:
+- good cost/performance balance for summary + key concepts + practice quiz
+- cheaper than `gpt-4.1`
+
+Premium may use a stronger model later for premium-only features.

@@ -97,6 +97,17 @@ Flow:
 6. Validate structured output
 7. Return JSON response
 
+### Review metadata persistence
+
+Each generated review should store model and usage metadata for cost tracking.
+
+Recommended fields:
+- modelUsed
+- inputTokens
+- outputTokens
+- cachedInputTokens (optional, if available)
+- estimatedCost (optional, can be computed later)
+
 ---
 
 ## Backend architecture (MVP)
@@ -192,5 +203,19 @@ Free account:
 Premium:
 - up to 200 reviews per month
 - includes: mock exam mode + analytics (future)
+
+### Model usage by plan
+
+Demo:
+- uses `gpt-4.1-mini`
+
+Free:
+- uses `gpt-4.1-mini`
+
+Premium:
+- may use a higher quality model later for premium-only features such as:
+    - mock exam generation
+    - deeper explanations
+    - analytics and topic mastery
 
 End of SPEC.md

@@ -205,6 +205,13 @@ Response:
 - `status` (DONE | NEEDS_CONFIRMATION | FAILED)
 - `error_code` (nullable)
 
+Additional usage-tracking fields:
+- `model_used` (text)
+- `input_tokens` (integer, nullable)
+- `output_tokens` (integer, nullable)
+- `cached_input_tokens` (integer, nullable)
+- `estimated_cost` (numeric, nullable)
+
 ### review_drafts (recommended)
 Used for OCR low-confidence flows so the UI can edit and resubmit.
 
@@ -265,6 +272,18 @@ Configuration knobs (env):
 - `QUIZ_QUESTIONS_FREE`
 - `QUIZ_QUESTIONS_PREMIUM`
 - `MAX_NOTES_CHARS_FREE`
+
+### Initial model mapping
+
+Demo:
+- `gpt-4.1-mini`
+
+Free:
+- `gpt-4.1-mini`
+
+Premium (future):
+- default can remain `gpt-4.1-mini`
+- premium-only features may upgrade to a stronger model if justified by user value and cost
 
 ### Token limits
 - Enforce max characters for free tier notes
