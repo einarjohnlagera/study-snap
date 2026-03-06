@@ -192,6 +192,7 @@ public class ReviewService {
 		entity.setQuiz(generated.quiz());
 		entity.setOcrConfidence(ocrConfidence);
 		entity.setModelTier(ModelTier.FREE);
+		entity.setModelUsed(properties.getLlm().getModelFree());
 		entity.setStatus(ReviewStatus.DONE);
 		entity.setCreatedAt(OffsetDateTime.now());
 		return reviewRepository.save(entity);

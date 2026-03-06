@@ -11,6 +11,11 @@ CREATE TABLE IF NOT EXISTS reviews (
     quiz JSONB NOT NULL,
     ocr_confidence NUMERIC(5, 4),
     model_tier VARCHAR(16) NOT NULL DEFAULT 'FREE',
+    model_used VARCHAR(64) NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cached_input_tokens INTEGER,
+    estimated_cost NUMERIC(12, 6),
     status VARCHAR(32) NOT NULL DEFAULT 'DONE',
     error_code VARCHAR(64),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -13,6 +13,7 @@ import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -57,6 +58,21 @@ public class ReviewEntity {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "model_tier", nullable = false)
 	private ModelTier modelTier;
+
+	@Column(name = "model_used", nullable = false, length = 64)
+	private String modelUsed;
+
+	@Column(name = "input_tokens")
+	private Integer inputTokens;
+
+	@Column(name = "output_tokens")
+	private Integer outputTokens;
+
+	@Column(name = "cached_input_tokens")
+	private Integer cachedInputTokens;
+
+	@Column(name = "estimated_cost", precision = 12, scale = 6)
+	private BigDecimal estimatedCost;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false)

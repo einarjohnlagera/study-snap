@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class StudySnapProperties {
 	private final Limits limits = new Limits();
 	private final Ocr ocr = new Ocr();
+	private final Llm llm = new Llm();
 
 	@Getter
 	@Setter
@@ -21,5 +22,12 @@ public class StudySnapProperties {
 	@Setter
 	public static class Ocr {
 		private double confidenceThreshold = 0.8;
+	}
+
+	@Getter
+	@Setter
+	public static class Llm {
+		private String modelFree = "gpt-4.1-mini";
+		private String modelPremium = "gpt-4.1";
 	}
 }
