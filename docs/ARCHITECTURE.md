@@ -100,7 +100,7 @@ Run backend + Postgres together:
 ## API Endpoints
 
 ### Create review (text)
-`POST /api/review`  
+`POST /api/review`
 Content-Type: `application/json`
 
 Request:
@@ -127,7 +127,7 @@ Response (success):
 ---
 
 ### Create review (image)
-`POST /api/review`  
+`POST /api/review`
 Content-Type: `multipart/form-data`
 
 Form fields:
@@ -149,7 +149,7 @@ Response (low confidence OCR):
 ---
 
 ### Confirm extracted text (OCR fallback)
-`POST /api/review/confirm-text`  
+`POST /api/review/confirm-text`
 Content-Type: `application/json`
 
 Request:

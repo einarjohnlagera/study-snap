@@ -25,62 +25,62 @@ import java.util.UUID;
 @NoArgsConstructor
 public class ReviewEntity {
 
-	@Id
-	private UUID id;
+    @Id
+    private UUID id;
 
-	@Column(name = "owner_user_id")
-	private String ownerUserId;
+    @Column(name = "owner_user_id")
+    private String ownerUserId;
 
-	@Column(name = "anon_id")
-	private String anonId;
+    @Column(name = "anon_id")
+    private String anonId;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "input_type", nullable = false)
-	private InputType inputType;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "input_type", nullable = false)
+    private InputType inputType;
 
-	@Column(nullable = false)
-	private String title;
+    @Column(nullable = false)
+    private String title;
 
-	@Column(nullable = false)
-	private String summary;
+    @Column(nullable = false)
+    private String summary;
 
-	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(name = "key_concepts", nullable = false, columnDefinition = "jsonb")
-	private List<String> keyConcepts;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "key_concepts", nullable = false, columnDefinition = "jsonb")
+    private List<String> keyConcepts;
 
-	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(nullable = false, columnDefinition = "jsonb")
-	private List<QuizItem> quiz;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false, columnDefinition = "jsonb")
+    private List<QuizItem> quiz;
 
-	@Column(name = "ocr_confidence")
-	private Double ocrConfidence;
+    @Column(name = "ocr_confidence")
+    private Double ocrConfidence;
 
-	@Enumerated(EnumType.STRING)
-	@Column(name = "model_tier", nullable = false)
-	private ModelTier modelTier;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "model_tier", nullable = false)
+    private ModelTier modelTier;
 
-	@Column(name = "model_used", nullable = false, length = 64)
-	private String modelUsed;
+    @Column(name = "model_used", nullable = false, length = 64)
+    private String modelUsed;
 
-	@Column(name = "input_tokens")
-	private Integer inputTokens;
+    @Column(name = "input_tokens")
+    private Integer inputTokens;
 
-	@Column(name = "output_tokens")
-	private Integer outputTokens;
+    @Column(name = "output_tokens")
+    private Integer outputTokens;
 
-	@Column(name = "cached_input_tokens")
-	private Integer cachedInputTokens;
+    @Column(name = "cached_input_tokens")
+    private Integer cachedInputTokens;
 
-	@Column(name = "estimated_cost", precision = 12, scale = 6)
-	private BigDecimal estimatedCost;
+    @Column(name = "estimated_cost", precision = 12, scale = 6)
+    private BigDecimal estimatedCost;
 
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false)
-	private ReviewStatus status;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ReviewStatus status;
 
-	@Column(name = "error_code")
-	private String errorCode;
+    @Column(name = "error_code")
+    private String errorCode;
 
-	@Column(name = "created_at", nullable = false)
-	private OffsetDateTime createdAt;
+    @Column(name = "created_at", nullable = false)
+    private OffsetDateTime createdAt;
 }

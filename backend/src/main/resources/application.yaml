@@ -46,5 +46,9 @@ studysnap:
   ocr:
     confidence-threshold: ${OCR_CONFIDENCE_THRESHOLD:0.8}
   llm:
+    provider: ${LLM_PROVIDER:openai}
+    api-key: ${LLM_API_KEY:}
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
     model-free: ${LLM_MODEL_FREE:gpt-4.1-mini}
     model-premium: ${LLM_MODEL_PREMIUM:gpt-4.1}
+    quiz-questions-free: ${QUIZ_QUESTIONS_FREE:5}
