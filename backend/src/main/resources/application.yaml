@@ -1,6 +1,8 @@
 spring:
   application:
     name: study-snap-backend
+  config:
+    import: optional:file:.env[.properties]
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:studysnap}
     username: ${DB_USER}
