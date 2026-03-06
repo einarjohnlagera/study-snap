@@ -45,3 +45,6 @@ studysnap:
     max-image-bytes: ${MAX_IMAGE_BYTES:5000000}
   ocr:
     confidence-threshold: ${OCR_CONFIDENCE_THRESHOLD:0.8}
+  llm:
+    model-free: ${LLM_MODEL_FREE:gpt-4.1-mini}
+    model-premium: ${LLM_MODEL_PREMIUM:gpt-4.1}
