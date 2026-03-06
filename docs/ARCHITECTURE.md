@@ -188,6 +188,26 @@ Response:
 
 ---
 
+## Error Handling Convention
+
+- Every API error response includes `requestId`.
+- Backend also returns `X-Request-Id` response header.
+- Clients can surface this id to users for support/debugging without exposing internal error details.
+
+Example:
+```json
+{
+  "requestId": "string",
+  "error": {
+    "code": "string",
+    "message": "user-friendly string",
+    "details": "optional"
+  }
+}
+```
+
+---
+
 ## Data Model (Postgres)
 
 ### reviews
