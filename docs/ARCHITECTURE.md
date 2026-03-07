@@ -321,6 +321,15 @@ Premium (future):
 
 ---
 
+## Anonymous Guardrails
+
+For real `/api/review` calls without authentication:
+- apply rate limiting by session cookie and/or IP
+- enforce minimum and maximum note length
+- optionally apply cooldown between requests
+
+---
+
 ## Frontend Integration Notes
 - Frontend uses `lib/api.ts` as a single API client.
 - `/study` calls:
@@ -338,5 +347,19 @@ Premium (future):
 - Topic mastery detection + recommendations
 - Caching for repeated inputs
 - Export to PDF / Notion / Google Docs
+
+---
+
+## Demo Architecture
+
+Demo mode is frontend-driven and does not use the real backend review generation flow.
+
+Behavior:
+- frontend loads predefined sample notes
+- frontend renders predefined review JSON
+- no LLM call
+- no database write
+
+Real review generation remains behind `/api/review`.
 
 End of ARCHITECTURE.md

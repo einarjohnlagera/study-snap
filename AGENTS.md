@@ -218,4 +218,17 @@ Reason:
 - good cost/performance balance for summary + key concepts + practice quiz
 - cheaper than `gpt-4.1`
 
+---
+
+## Demo guardrail
+
+Demo mode must not call the real `/api/review` LLM pipeline.
+
+For `?demo=true`:
+- use hardcoded sample notes
+- use hardcoded review response
+- do not save review
+- do not count toward usage
+- do not trigger OpenAI API calls
+
 Premium may use a stronger model later for premium-only features.

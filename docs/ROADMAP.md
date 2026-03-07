@@ -65,6 +65,9 @@ Deliverable: upload image notes → OCR → review output (with edit fallback).
 - [ ] Confirm image deletion behavior
 - [ ] Deploy frontend (Vercel) + backend (Render/Fly/AWS)
 - [ ] Add basic counters (success/fail)
+- [ ] Add demo mode with hardcoded review response
+- [ ] Ensure demo does not hit backend LLM endpoint
+- [ ] Add anonymous guardrails for real `/api/review` calls
 
 ## Phase 6 — Premium Features
 - [ ] Mock Exam mode

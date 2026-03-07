@@ -61,6 +61,22 @@ States:
 
 ---
 
+## Demo Mode
+
+Study Snap provides a non-LLM demo experience for first-time users.
+
+Demo behavior:
+- uses prefilled sample notes
+- returns a hardcoded review response
+- does not call the backend LLM
+- does not save to the database
+
+Purpose:
+- show product value instantly
+- avoid abuse of paid LLM calls
+
+---
+
 ## Results view
 
 ### For all subscriptions
@@ -187,6 +203,8 @@ Rules:
 # Pricing Model
 
 Study Snap follows a freemium model.
+
+Demo mode is separate from real review generation and does not count as a real usage event.
 
 ## Plans (MVP direction)
 
