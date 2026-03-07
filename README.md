@@ -50,3 +50,14 @@ Product and development documentation lives in `/docs`.
 Upload notes → generate review materials.
 
 Privacy: uploaded images are deleted after OCR processing.
+
+## Core value
+
+Study Snap helps users turn notes into reusable study packs.
+
+A study pack includes:
+- summary
+- key concepts
+- practice quiz
+
+Users can save generated study packs in their personal Study Library for later review.

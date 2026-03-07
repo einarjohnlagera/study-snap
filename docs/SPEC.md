@@ -91,6 +91,75 @@ Sections:
    - “Edit Notes” (optional)
    - (Future) Regenerate / More questions / Flashcards
 
+---
+
+## Study Library
+
+Study Snap includes a Study Library for saved generated reviews.
+
+Purpose:
+- let users revisit past study packs
+- build a reusable review collection over time
+- make Study Snap feel like a long-term study workspace
+
+### Tags
+
+Each saved study pack may include one or more tags.
+
+Purpose:
+- help users organize study packs by subject or topic
+- support filtering and search in the Study Library
+- improve future topic-based insights
+
+Examples of tags:
+- Biology
+- Chemistry
+- Algebra
+- Java
+- Spring Boot
+- Interview Prep
+- REST API Design
+
+For the first version, tags may be:
+- auto-generated from the detected topic or title
+- derived from user-selected subject input
+- manually editable later
+
+Future Study Library features may allow:
+- filtering by tag
+- searching by tag
+- grouping study packs by tag
+
+### Dashboard
+
+The dashboard is primarily for authenticated users.
+
+It shows:
+- saved study packs
+- title
+- created date
+- short summary preview
+- quiz count
+- actions: open, delete
+
+Saved study pack cards may display tags when available.
+
+### MVP Library behavior
+
+For the first version, the Study Library supports:
+- viewing saved study packs
+- opening a study pack
+- deleting a study pack
+
+Future versions may support:
+- rename
+- search
+- filters
+- folders/collections
+- reviewed status
+
+---
+
 ## For freemium and higher
 1. Users can optionally share generated study packs via public link.
 
@@ -218,10 +287,15 @@ Free account:
 - 3 reviews per day
 - includes: summary, key concepts, practice quiz (5 questions)
 - can save and view history
+- access to Study Library
+- can save and revisit study packs
 
 Premium:
 - up to 200 reviews per month
 - includes: mock exam mode + analytics (future)
+- access to Study Library
+- mock exam mode
+- analytics and mastery tracking (future)
 
 ### Model usage by plan
 

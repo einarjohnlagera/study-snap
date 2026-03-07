@@ -21,29 +21,29 @@ Deliverable: repo runs locally.
 - [X] Pages:
   - [X] `/` landing (notes → review positioning)
   - [X] `/study` UI skeleton
-  - [ ] `/dashboard` placeholder (optional)
+  - [X] `/dashboard` placeholder (optional)
 
 Deliverable: UI shell + theme toggle on all pages.
 
 ---
 
 ## Phase 2 — Backend MVP (text review generation)
-- [ ] `POST /api/review` accepts JSON `{ notesText }`
-- [ ] Validate input size
-- [ ] Prompt builder + LLM call (or stub response for UI dev)
-- [ ] Return structured JSON: title, summary, keyConcepts, quiz[]
-- [ ] Logging (request id, latency)
+- [X] `POST /api/review` accepts JSON `{ notesText }`
+- [X] Validate input size
+- [X] Prompt builder + LLM call (or stub response for UI dev)
+- [X] Return structured JSON: title, summary, keyConcepts, quiz[]
+- [X] Logging (request id, latency)
 
 Deliverable: paste notes → get review output.
 
 ---
 
 ## Phase 3 — Connect UI to backend
-- [ ] `frontend/types/review.ts`
-- [ ] `frontend/lib/api.ts` with `createReviewFromText()` and `createReviewFromImage()`
-- [ ] `/study` integrates text mode end-to-end
-- [ ] Loading + error states
-- [ ] Results rendering matches SPEC
+- [X] `frontend/types/review.ts`
+- [X] `frontend/lib/api.ts` with `createReviewFromText()` and `createReviewFromImage()`
+- [X] `/study` integrates text mode end-to-end
+- [X] Loading + error states
+- [X] Results rendering matches SPEC
 
 Deliverable: paste notes → generate → render.
 
@@ -81,6 +81,24 @@ Deliverable: upload image notes → OCR → review output (with edit fallback).
 - [ ] Add public page route: `/share/[token]`
 - [ ] Track optional view_count
 - [ ] (Optional later) expiration + private links (premium)
+
+## Phase 8 — Study Library
+
+- Create dashboard page for saved study packs
+- Fetch saved reviews from backend
+- Display study pack cards with metadata
+- Open saved study packs
+- Delete saved study packs
+
+## Phase 9 — Study Library Enhancements
+
+- Add tags to saved study packs
+- Support filtering by tag
+- Support tag-based search
+- Use tags to improve dashboard organization
+
+Deliverable:
+- users can revisit their generated reviews from a dedicated dashboard
 
 ## Phase — Usage limits + plans
 

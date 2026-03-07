@@ -340,6 +340,18 @@ For real `/api/review` calls without authentication:
 
 ---
 
+## Demo Architecture
+
+Demo mode is frontend-driven and does not use the real backend review generation flow.
+
+Demo flow:
+Landing → /study?demo=true → simulated generation → static review
+
+Real flow:
+Landing → /study → POST /api/review → LLM → database → review response
+
+---
+
 ## Future Architecture Extensions (Post-MVP)
 - Auth + user accounts
 - Paid plans (Stripe)
@@ -350,14 +362,45 @@ For real `/api/review` calls without authentication:
 
 ---
 
-## Demo Architecture
+## Study Library Architecture
 
-Demo mode is frontend-driven and does not use the real backend review generation flow.
+The Study Library is the persistence and retrieval layer for generated study packs.
 
-Demo flow:
-Landing → /study?demo=true → simulated generation → static review
+Each generated review should be retrievable for future study sessions.
 
-Real flow:
-Landing → /study → POST /api/review → LLM → database → review response
+Required backend support:
+- list reviews
+- fetch review by id
+- delete review
+
+Recommended response metadata for list view:
+- id
+- title
+- summary preview
+- createdAt
+- quiz question count
+
+Future extensions:
+- rename review
+- tags
+- folders/collections
+- reviewed status
+
+## Tags Architecture
+
+Study packs may support tags for organization and filtering.
+
+Purpose:
+- subject/topic categorization
+- dashboard filtering
+- future analytics and topic grouping
+
+Recommended MVP-friendly implementation:
+- store tags as a simple array field on the review/study pack record
+
+Example:
+```json
+["Biology", "Photosynthesis"]
+```
 
 End of ARCHITECTURE.md

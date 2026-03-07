@@ -233,3 +233,39 @@ For `?demo=true`:
 - do not trigger OpenAI API calls
 
 Premium may use a stronger model later for premium-only features.
+
+## Study Library feature
+
+Study Snap is not only a generator; it is a study workspace.
+
+Generated reviews should be treated as reusable study packs.
+
+The dashboard should present saved study packs in a clean library-style layout.
+
+MVP library actions:
+- open
+- delete
+
+Future actions:
+- rename
+- search
+- filter
+- reviewed status
+
+The dashboard is intended primarily for authenticated users, but the architecture should support saved review retrieval cleanly.
+
+### Tags
+
+Saved study packs may include tags for lightweight organization and filtering.
+
+Tags should support:
+- subject/topic grouping
+- dashboard filtering
+- future search and analytics
+
+If manual tagging is not yet implemented, tags may be derived from:
+- review title
+- detected topic
+- user-selected subject
+
+For MVP and early versions, prefer a simple array-based tags field over a separate tag table.
