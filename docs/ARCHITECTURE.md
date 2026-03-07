@@ -438,4 +438,27 @@ Send text to LLM review generation
 - allowed image formats (jpg, png)
 - text detection before OCR extraction
 
+---
+
+## OCR Text Normalization
+
+OCR text often contains formatting artifacts such as:
+- broken line breaks
+- irregular spacing
+- hyphenated words
+- empty lines
+
+Before sending extracted OCR text to the LLM, the system should normalize the text.
+
+Normalization steps:
+- trim whitespace
+- collapse repeated spaces
+- replace single line breaks with spaces
+- preserve paragraph breaks
+- remove OCR artifacts where possible
+
+Pipeline:
+
+Image → OCR → Text normalization → LLM prompt
+
 End of ARCHITECTURE.md

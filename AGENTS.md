@@ -285,3 +285,15 @@ Instead:
 This prevents unnecessary OCR costs and improves input validation.
 
 If no readable text is detected, the system should prompt the user to upload clearer notes.
+
+## OCR text cleanup
+
+Text extracted from OCR should be normalized before being passed to the LLM.
+
+Normalization should include:
+- trimming whitespace
+- collapsing repeated spaces
+- removing broken line breaks
+- preserving paragraph structure
+
+This improves the quality of summaries and quizzes generated from OCR inputs.
