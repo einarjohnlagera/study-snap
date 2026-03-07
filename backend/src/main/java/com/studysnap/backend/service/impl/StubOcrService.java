@@ -2,10 +2,12 @@ package com.studysnap.backend.service.impl;
 
 import com.studysnap.backend.service.OcrService;
 import com.studysnap.backend.service.model.OcrResult;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@ConditionalOnProperty(prefix = "studysnap.ocr", name = "provider", havingValue = "stub", matchIfMissing = true)
 public class StubOcrService implements OcrService {
 
 	@Override
