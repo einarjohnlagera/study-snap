@@ -13,6 +13,7 @@ import com.studysnap.backend.service.model.GeneratedReviewContent;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -45,9 +46,17 @@ public class OpenAiLlmReviewService implements LlmReviewService {
                     HttpStatus.INTERNAL_SERVER_ERROR
             );
         }
+        String model = properties.getSettings().getModelFree();
+        if (model == null || model.isBlank()) {
+            throw new AppException(
+                    "LLM_CONFIGURATION_ERROR",
+                    "LLM model is missing. Please configure LLM_MODEL_FREE.",
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
 
         ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", properties.getSettings().getModelFree());
+        requestBody.put("model", model);
         requestBody.set("input", buildInputMessages(normalizedNotesText));
         ObjectNode textNode = requestBody.putObject("text");
         ObjectNode formatNode = textNode.putObject("format");
@@ -57,9 +66,10 @@ public class OpenAiLlmReviewService implements LlmReviewService {
         formatNode.put("strict", true);
 
         try {
+            String requestBodyJson = objectMapper.writeValueAsString(requestBody);
             String responseBody = restClient.post()
                     .uri("/responses")
-                    .body(requestBody)
+                    .body(requestBodyJson)
                     .retrieve()
                     .body(String.class);
 
@@ -104,7 +114,7 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             Integer inputTokens = asNullableInt(usage.get("input_tokens"));
             Integer outputTokens = asNullableInt(usage.get("output_tokens"));
             Integer cachedInputTokens = asNullableInt(usage.path("input_tokens_details").get("cached_tokens"));
-            String modelUsed = responseJson.path("model").asText(properties.getSettings().getModelFree());
+            String modelUsed = responseJson.path("model").asText(model);
 
             return new GeneratedReviewContent(
                     promptReview.title(),
@@ -118,14 +128,28 @@ public class OpenAiLlmReviewService implements LlmReviewService {
                     null
             );
         } catch (RestClientResponseException ex) {
-            log.warn("openai_request_failed status={} errorCode={}", ex.getStatusCode().value(), ex.getClass().getSimpleName());
+            String requestId = MDC.get("requestId");
+            String upstreamMessage = extractUpstreamErrorMessage(ex.getResponseBodyAsString());
+            log.warn(
+                    "openai_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
+                    requestId,
+                    ex.getStatusCode().value(),
+                    ex.getClass().getSimpleName(),
+                    upstreamMessage
+            );
             throw new AppException(
                     "LLM_REQUEST_FAILED",
                     "Review generation failed. Please try again in a moment.",
                     HttpStatus.BAD_GATEWAY
             );
         } catch (RestClientException | IOException ex) {
-            log.warn("openai_unavailable errorCode={} message={}", ex.getClass().getSimpleName(), ex.getMessage());
+            String requestId = MDC.get("requestId");
+            log.warn(
+                    "openai_unavailable requestId={} errorCode={} message={}",
+                    requestId,
+                    ex.getClass().getSimpleName(),
+                    ex.getMessage()
+            );
             throw new AppException(
                     "LLM_UNAVAILABLE",
                     "Review generation is temporarily unavailable. Please try again.",
@@ -181,6 +205,22 @@ public class OpenAiLlmReviewService implements LlmReviewService {
 
     private Integer asNullableInt(JsonNode node) {
         return node != null && node.isNumber() ? node.intValue() : null;
+    }
+
+    private String extractUpstreamErrorMessage(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return "n/a";
+        }
+        try {
+            JsonNode node = objectMapper.readTree(responseBody);
+            String message = node.path("error").path("message").asText();
+            if (message == null || message.isBlank()) {
+                return "n/a";
+            }
+            return message;
+        } catch (IOException ex) {
+            return "unparseable_upstream_error";
+        }
     }
 
     private record PromptReview(

@@ -28,7 +28,11 @@ public class GlobalExceptionHandler {
 				ex.getMessage()
 		);
 		return ResponseEntity.status(ex.getStatus()).body(
-				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(ex.getCode(), ex.getMessage(), ex.getDetails()))
+				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(
+						ex.getCode(),
+						ex.getMessage(),
+						safeDetails(ex)
+				))
 		);
 	}
 
@@ -72,5 +76,15 @@ public class GlobalExceptionHandler {
 	private String getRequestId(HttpServletRequest request) {
 		Object requestId = request.getAttribute(RequestIdFilter.REQUEST_ID_ATTR);
 		return requestId != null ? requestId.toString() : "unknown";
+	}
+
+	private String safeDetails(AppException ex) {
+		if (ex.getStatus().is5xxServerError()) {
+			return null;
+		}
+		if (ex.getCode() != null && ex.getCode().startsWith("LLM_")) {
+			return null;
+		}
+		return ex.getDetails();
 	}
 }
