@@ -269,3 +269,19 @@ If manual tagging is not yet implemented, tags may be derived from:
 - user-selected subject
 
 For MVP and early versions, prefer a simple array-based tags field over a separate tag table.
+
+---
+
+## OCR Processing Strategy
+
+Image-based note uploads use a hybrid OCR strategy.
+
+The system should not immediately perform full OCR extraction.
+
+Instead:
+1. run quick text detection
+2. only perform full OCR if text is detected
+
+This prevents unnecessary OCR costs and improves input validation.
+
+If no readable text is detected, the system should prompt the user to upload clearer notes.

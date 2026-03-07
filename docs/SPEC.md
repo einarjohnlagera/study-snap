@@ -311,4 +311,30 @@ Premium:
     - deeper explanations
     - analytics and topic mastery
 
+---
+
+## OCR Image Processing
+
+Study Snap supports image-based note uploads.
+
+Uploaded images are processed through an OCR pipeline to extract text before generating study packs.
+
+### OCR Flow
+
+1. User uploads image
+2. System validates the image
+3. Quick text detection is performed
+4. If text is detected, full OCR extraction runs
+5. Extracted text is cleaned and sent to the LLM review generator
+
+### Image Guardrails
+
+To prevent unnecessary processing:
+
+- images must contain detectable text
+- maximum image size limits are enforced
+- unsupported formats are rejected
+
+If an image contains no readable text, the system returns a message prompting the user to upload clearer notes.
+
 End of SPEC.md

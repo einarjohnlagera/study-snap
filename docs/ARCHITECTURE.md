@@ -403,4 +403,39 @@ Example:
 ["Biology", "Photosynthesis"]
 ```
 
+---
+
+## Hybrid OCR Strategy
+
+Study Snap uses a hybrid OCR strategy to reduce cost and avoid unnecessary OCR calls.
+
+### Processing Pipeline
+
+Image upload
+↓
+Image validation
+↓
+Quick text detection (TEXT_DETECTION)
+↓
+If text detected:
+run DOCUMENT_TEXT_DETECTION
+↓
+Extract text
+↓
+Clean extracted text
+↓
+Send text to LLM review generation
+
+### Benefits
+
+- reduces OCR costs
+- prevents processing useless images
+- improves reliability of note extraction
+
+### Image Guardrails
+
+- maximum image size limit
+- allowed image formats (jpg, png)
+- text detection before OCR extraction
+
 End of ARCHITECTURE.md

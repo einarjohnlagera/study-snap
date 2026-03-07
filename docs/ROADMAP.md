@@ -51,9 +51,14 @@ Deliverable: paste notes → generate → render.
 
 ## Phase 4 — Image upload + OCR
 - [ ] Frontend: upload + preview
-- [ ] Backend: accept multipart + OCR integration
-- [ ] Low-confidence OCR flow (`needs_text_confirmation`)
+- [X] Backend: accept multipart + OCR integration
+- [X] Low-confidence OCR flow (`needs_text_confirmation`)
 - [ ] UI: allow editing extracted text and resubmit
+- [ ] Implement Google Vision OCR integration
+- [ ] Add hybrid OCR pipeline
+- [ ] Validate uploaded images
+- [ ] Add quick text detection before OCR extraction
+- [ ] Clean extracted OCR text before sending to LLM
 
 Deliverable: upload image notes → OCR → review output (with edit fallback).
 
