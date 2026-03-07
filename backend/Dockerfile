@@ -1,4 +1,4 @@
-FROM maven:3.9.11-eclipse-temurin-17 AS builder
+FROM maven:3.9.11-eclipse-temurin-25 AS builder
 WORKDIR /app
 
 COPY pom.xml ./
@@ -8,7 +8,7 @@ COPY src src
 
 RUN chmod +x mvnw && ./mvnw -B -DskipTests package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 WORKDIR /app
 
 COPY --from=builder /app/target/*.jar app.jar
