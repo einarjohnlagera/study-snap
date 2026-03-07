@@ -354,12 +354,10 @@ For real `/api/review` calls without authentication:
 
 Demo mode is frontend-driven and does not use the real backend review generation flow.
 
-Behavior:
-- frontend loads predefined sample notes
-- frontend renders predefined review JSON
-- no LLM call
-- no database write
+Demo flow:
+Landing → /study?demo=true → simulated generation → static review
 
-Real review generation remains behind `/api/review`.
+Real flow:
+Landing → /study → POST /api/review → LLM → database → review response
 
 End of ARCHITECTURE.md

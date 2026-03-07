@@ -225,9 +225,10 @@ Reason:
 Demo mode must not call the real `/api/review` LLM pipeline.
 
 For `?demo=true`:
-- use hardcoded sample notes
-- use hardcoded review response
-- do not save review
+- prefill sample notes
+- simulate generation delay
+- return static placeholder review
+- do not save to database
 - do not count toward usage
 - do not trigger OpenAI API calls
 

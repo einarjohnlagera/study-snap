@@ -63,13 +63,14 @@ States:
 
 ## Demo Mode
 
-Study Snap provides a non-LLM demo experience for first-time users.
+Study Snap provides a demo mode for first-time users.
 
-Demo behavior:
-- uses prefilled sample notes
-- returns a hardcoded review response
-- does not call the backend LLM
-- does not save to the database
+Behavior:
+- activated via `/study?demo=true`
+- does not call the backend review API
+- returns a static placeholder review
+- does not write to the database
+- demonstrates summary, key concepts, and quiz generation
 
 Purpose:
 - show product value instantly
