@@ -25,7 +25,11 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class Ocr {
+        private String provider = "stub";
         private double confidenceThreshold = 0.8;
+        private int minDetectedChars = 30;
+        private int minDetectedWords = 6;
+        private double hardRejectConfidence = 0.45;
     }
 
     @Getter

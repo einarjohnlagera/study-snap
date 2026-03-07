@@ -48,7 +48,11 @@ studysnap:
     model-premium: ${LLM_MODEL_PREMIUM:gpt-4.1}
     prompt-dir: ${LLM_PROMPT_DIR:prompts/review-v1}
   ocr:
+    provider: ${OCR_PROVIDER:stub}
     confidence-threshold: ${OCR_CONFIDENCE_THRESHOLD:0.8}
+    min-detected-chars: ${OCR_MIN_DETECTED_CHARS:30}
+    min-detected-words: ${OCR_MIN_DETECTED_WORDS:6}
+    hard-reject-confidence: ${OCR_HARD_REJECT_CONFIDENCE:0.45}
   llm:
     api:
       provider: ${LLM_PROVIDER:openai}
