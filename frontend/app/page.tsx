@@ -20,15 +20,29 @@ export default function Home() {
           Calm, structured study support
         </div>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
-          Turn notes into review materials in one focused flow.
+          Turn messy notes into a clear study pack in seconds.
         </h1>
         <p className="text-base leading-relaxed text-foreground/75">
-          Paste class notes or upload a photo. Study Snap organizes your
-          material into a concise summary, key concepts, and a quick practice
-          quiz so review feels clear and manageable.
+          Paste your notes or upload a photo.
+          <br />
+          Study Snap creates:
+          <br />
+          • a concise summary
+          <br />
+          • key concepts
+          <br />
+          • a practice quiz
+          <br />
+          in seconds.
         </p>
-        <Link href="/study" className={buttonVariants({ className: "w-fit" })}>
-          Start Studying
+        <p className="text-sm text-foreground/65">
+          Built for students, exam preparation, and interview review.
+        </p>
+        <Link
+          href="/study?demo=true"
+          className={buttonVariants({ className: "w-fit" })}
+        >
+          Try Demo
         </Link>
       </section>
 
