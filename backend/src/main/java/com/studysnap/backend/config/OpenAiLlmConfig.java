@@ -39,7 +39,7 @@ public class OpenAiLlmConfig {
 
     private String normalizePromptDir(String promptDir) {
         if (promptDir == null || promptDir.isBlank()) {
-            return "prompts/review-v1";
+            return "prompts/study-pack-v1";
         }
         if (promptDir.endsWith("/")) {
             return promptDir.substring(0, promptDir.length() - 1);
@@ -65,3 +65,4 @@ public class OpenAiLlmConfig {
         }
     }
 }
+

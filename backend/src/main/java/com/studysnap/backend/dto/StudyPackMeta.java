@@ -1,7 +1,8 @@
 package com.studysnap.backend.dto;
 
-public record ReviewMeta(
+public record StudyPackMeta(
 		Double ocrConfidence,
 		Long latencyMs
 ) {
 }
+

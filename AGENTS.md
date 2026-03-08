@@ -40,7 +40,7 @@ Refer to:
 Pages:
 - Landing
 - Study (paste notes + upload image)
-- Results (review sheet + quiz)
+- Results (study pack sheet + quiz)
 
 Backend:
 - One primary endpoint family for Study Pack generation
@@ -74,7 +74,7 @@ Not in MVP unless explicitly requested:
 - Error states are supportive and actionable
 
 Microcopy:
-- Prefer: “Let’s turn your notes into a review.”
+- Prefer: “Let’s turn your notes into a study pack.”
 - Avoid: “Crush this!”, “Hurry up!”, “Wrong!”
 
 ## Frontend conventions (`/frontend`)
@@ -112,29 +112,29 @@ Rules:
 5. Log request id, latency, and failure codes.
 6. Avoid logging raw images or full extracted text.
 7. Persist only validated LLM output.
-8. Favor Study Pack terminology in new code, even if some legacy code still uses Review.
+8. Favor Study Pack terminology in new code, even if some legacy code still uses study pack.
 
 ## Backend module plan (Spring Boot)
 
 Controllers:
-- `ReviewController` / future `StudyPackController` transition path
+- `StudyPackController` / future `StudyPackController` transition path
 - `ShareController`
 - `HealthController` (optional)
 - future auth controllers when user accounts are implemented
 
 Services:
-- `ReviewService` or `StudyPackService` orchestrator
+- `StudyPackService` or `StudyPackService` orchestrator
 - `OcrService`
-- `LlmReviewService`
+- `LlmStudyPackService`
 - `UsageLimitService`
 - `ShareService`
 - future `UserAccountService`
 - future `SubscriptionService`
 
 Persistence:
-- `ReviewRepository` / future `StudyPackRepository`
+- `StudyPackRepository` / future `StudyPackRepository`
 - `ShareLinkRepository`
-- optional `ReviewDraftRepository` for OCR confirmation flow
+- optional `StudyPackDraftRepository` for OCR confirmation flow
 - future `UserRepository`
 - future `SubscriptionRepository`
 
@@ -146,7 +146,7 @@ Current and near-future endpoints are documented in:
 
 Agent rule:
 - preserve backward compatibility where practical
-- prefer evolving the domain language from Review toward Study Pack
+- prefer evolving the domain language from study pack toward Study Pack
 - do not silently invent new payload fields not described in the docs
 
 ## Cost control (required)
@@ -173,7 +173,7 @@ Demo mode must not call the real LLM generation pipeline.
 For `?demo=true`:
 - prefill sample notes
 - simulate generation delay
-- return static placeholder review
+- return static placeholder study pack
 - do not save to database
 - do not count toward usage
 - do not trigger OpenAI API calls
@@ -225,3 +225,4 @@ The legacy project docs remain available under `/legacy`.
 When differences exist:
 - use the refactored docs as the organized working set
 - use `/legacy` for historical cross-checking
+

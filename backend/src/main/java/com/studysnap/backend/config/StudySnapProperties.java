@@ -19,7 +19,7 @@ public class StudySnapProperties {
         private int quizQuestionsFree = 5;
         private String modelFree = "gpt-4.1-mini";
         private String modelPremium = "gpt-4.1";
-        private String promptDir = "prompts/review-v1";
+        private String promptDir = "prompts/study-pack-v1";
     }
 
     @Getter
@@ -46,3 +46,4 @@ public class StudySnapProperties {
         private String baseUrl = "https://api.openai.com/v1";
     }
 }
+

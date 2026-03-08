@@ -5,7 +5,7 @@ export type QuizItem = {
   explanation: string;
 };
 
-export type ReviewResponse = {
+export type StudyPackResponse = {
   id: string;
   inputType: "text" | "image";
   extractedText: string | null;
@@ -29,7 +29,7 @@ export type NeedsTextConfirmationResponse = {
   };
 };
 
-export type ReviewApiResponse = ReviewResponse | NeedsTextConfirmationResponse;
+export type StudyPackApiResponse = StudyPackResponse | NeedsTextConfirmationResponse;
 
 type ApiErrorPayload = {
   error?: {
@@ -47,17 +47,17 @@ function buildUrl(path: string) {
 }
 
 export function isNeedsTextConfirmationResponse(
-  payload: ReviewApiResponse,
+  payload: StudyPackApiResponse,
 ): payload is NeedsTextConfirmationResponse {
   return "status" in payload && payload.status === "needs_text_confirmation";
 }
 
-async function parseApiResponse(response: Response): Promise<ReviewApiResponse> {
+async function parseApiResponse(response: Response): Promise<StudyPackApiResponse> {
   if (response.ok) {
-    return (await response.json()) as ReviewApiResponse;
+    return (await response.json()) as StudyPackApiResponse;
   }
 
-  const fallbackMessage = "We could not generate your review right now. Please try again.";
+  const fallbackMessage = "We could not generate your study pack right now. Please try again.";
 
   let errorPayload: ApiErrorPayload | null = null;
   try {
@@ -70,10 +70,10 @@ async function parseApiResponse(response: Response): Promise<ReviewApiResponse> 
   throw new Error(message);
 }
 
-export async function createReviewFromText(
+export async function createStudyPackFromText(
   notesText: string,
-): Promise<ReviewResponse> {
-  const response = await fetch(buildUrl("/review"), {
+): Promise<StudyPackResponse> {
+  const response = await fetch(buildUrl("/studyPack"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -89,13 +89,13 @@ export async function createReviewFromText(
   return payload;
 }
 
-export async function createReviewFromImage(
+export async function createStudyPackFromImage(
   imageFile: File,
-): Promise<ReviewApiResponse> {
+): Promise<StudyPackApiResponse> {
   const formData = new FormData();
   formData.append("image", imageFile);
 
-  const response = await fetch(buildUrl("/review"), {
+  const response = await fetch(buildUrl("/studyPack"), {
     method: "POST",
     body: formData,
   });
@@ -103,11 +103,11 @@ export async function createReviewFromImage(
   return parseApiResponse(response);
 }
 
-export async function confirmReviewText(
+export async function confirmStudyPackText(
   draftId: string,
   notesText: string,
-): Promise<ReviewResponse> {
-  const response = await fetch(buildUrl("/review/confirm-text"), {
+): Promise<StudyPackResponse> {
+  const response = await fetch(buildUrl("/studyPack/confirm-text"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -122,3 +122,4 @@ export async function confirmReviewText(
 
   return payload;
 }
+

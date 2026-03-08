@@ -8,8 +8,8 @@ import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
-import com.studysnap.backend.service.LlmReviewService;
-import com.studysnap.backend.service.model.GeneratedReviewContent;
+import com.studysnap.backend.service.LlmStudyPackService;
+import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,8 +33,8 @@ import java.util.Set;
 @Service
 @ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "openai", matchIfMissing = true)
 @RequiredArgsConstructor
-public class OpenAiLlmReviewService implements LlmReviewService {
-    private static final Logger log = LoggerFactory.getLogger(OpenAiLlmReviewService.class);
+public class OpenAiLlmStudyPackService implements LlmStudyPackService {
+    private static final Logger log = LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
 
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
@@ -42,7 +42,7 @@ public class OpenAiLlmReviewService implements LlmReviewService {
     private final OpenAiPromptResources promptResources;
 
     @Override
-    public GeneratedReviewContent generateReview(String normalizedNotesText) {
+    public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText) {
         if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
             throw new AppException(
                     "LLM_CONFIGURATION_ERROR",
@@ -65,7 +65,7 @@ public class OpenAiLlmReviewService implements LlmReviewService {
         ObjectNode textNode = requestBody.putObject("text");
         ObjectNode formatNode = textNode.putObject("format");
         formatNode.put("type", "json_schema");
-        formatNode.put("name", "study_snap_review");
+        formatNode.put("name", "study_snap_study_pack");
         formatNode.set("schema", promptResources.responseSchema());
         formatNode.put("strict", true);
 
@@ -80,58 +80,58 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             if (responseBody == null || responseBody.isBlank()) {
                 throw new AppException(
                         "LLM_EMPTY_RESPONSE",
-                        "The review service returned an empty response. Please try again.",
+                        "The study pack service returned an empty response. Please try again.",
                         HttpStatus.BAD_GATEWAY
                 );
             }
 
             JsonNode responseJson = objectMapper.readTree(responseBody);
             String outputJson = extractOutputJson(responseJson);
-            PromptReview promptReview = objectMapper.readValue(outputJson, PromptReview.class);
+            PromptStudyPack promptStudyPack = objectMapper.readValue(outputJson, PromptStudyPack.class);
             int expectedQuizCount = properties.getSettings().getQuizQuestionsFree();
-            if (promptReview.quiz().size() != expectedQuizCount) {
+            if (promptStudyPack.quiz().size() != expectedQuizCount) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
-                        "The review service returned an invalid quiz format. Please try again.",
+                        "The study pack service returned an invalid quiz format. Please try again.",
                         HttpStatus.BAD_GATEWAY
                 );
             }
 
             List<QuizItem> quizItems = new ArrayList<>();
             Set<String> normalizedQuestions = new HashSet<>();
-            for (PromptQuizItem item : promptReview.quiz()) {
+            for (PromptQuizItem item : promptStudyPack.quiz()) {
                 if (item.choices() == null || item.choices().size() != 4) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "The review service returned an invalid quiz format. Please try again.",
+                            "The study pack service returned an invalid quiz format. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
                 if (item.answerIndex() < 0 || item.answerIndex() >= item.choices().size()) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "The review service returned an invalid quiz answer. Please try again.",
+                            "The study pack service returned an invalid quiz answer. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
                 if (isBlank(item.question()) || isBlank(item.explanation())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "The review service returned an invalid quiz format. Please try again.",
+                            "The study pack service returned an invalid quiz format. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
                 if (!normalizedQuestions.add(normalizeForDuplicateCheck(item.question()))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "The review service returned repetitive quiz questions. Please try again.",
+                            "The study pack service returned repetitive quiz questions. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
                 if (hasBlankOrDuplicateChoices(item.choices())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "The review service returned an invalid quiz format. Please try again.",
+                            "The study pack service returned an invalid quiz format. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
@@ -153,10 +153,10 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             Integer cachedInputTokens = asNullableInt(usage.path("input_tokens_details").get("cached_tokens"));
             String modelUsed = responseJson.path("model").asText(model);
 
-            return new GeneratedReviewContent(
-                    promptReview.title(),
-                    promptReview.summary(),
-                    promptReview.keyConcepts(),
+            return new GeneratedStudyPackContent(
+                    promptStudyPack.title(),
+                    promptStudyPack.summary(),
+                    promptStudyPack.keyConcepts(),
                     quizItems,
                     modelUsed,
                     inputTokens,
@@ -176,7 +176,7 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             );
             throw new AppException(
                     "LLM_REQUEST_FAILED",
-                    "Review generation failed. Please try again in a moment.",
+                    "Study pack generation failed. Please try again in a moment.",
                     HttpStatus.BAD_GATEWAY
             );
         } catch (RestClientException | IOException ex) {
@@ -189,7 +189,7 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             );
             throw new AppException(
                     "LLM_UNAVAILABLE",
-                    "Review generation is temporarily unavailable. Please try again.",
+                    "Study pack generation is temporarily unavailable. Please try again.",
                     HttpStatus.BAD_GATEWAY
             );
         }
@@ -262,7 +262,7 @@ public class OpenAiLlmReviewService implements LlmReviewService {
 
         throw new AppException(
                 "LLM_INVALID_OUTPUT",
-                "The review service returned an unexpected format. Please try again.",
+                "The study pack service returned an unexpected format. Please try again.",
                 HttpStatus.BAD_GATEWAY
         );
     }
@@ -315,13 +315,13 @@ public class OpenAiLlmReviewService implements LlmReviewService {
         }
     }
 
-    private record PromptReview(
+    private record PromptStudyPack(
             String title,
             String summary,
             List<String> keyConcepts,
             List<PromptQuizItem> quiz
     ) {
-        PromptReview {
+        PromptStudyPack {
             Objects.requireNonNull(title, "title");
             Objects.requireNonNull(summary, "summary");
             Objects.requireNonNull(keyConcepts, "keyConcepts");
@@ -340,3 +340,5 @@ public class OpenAiLlmReviewService implements LlmReviewService {
     private record QuizMix(int recallCount, int understandingCount, int applicationCount) {
     }
 }
+
+

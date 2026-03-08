@@ -6,7 +6,7 @@ Backend API for Study Snap.
 - Accept notes text or image
 - OCR image input (if provided)
 - Normalize notes
-- Call LLM to generate review materials
+- Call LLM to generate study pack materials
 - Return structured JSON
 
 ## Run locally
@@ -52,7 +52,7 @@ This starts:
 - `backend` on `localhost:8080` (API base path `/api`)
 
 ## MVP endpoint
-### POST /api/review
+### POST /api/studyPack
 Input:
 - JSON `{ "notesText": "..." }` OR multipart with `image`
 
@@ -67,3 +67,4 @@ Output:
 - Enforce server-side limits (file size/type, text length).
 - Delete images after OCR.
 - Avoid logging raw images or full extracted text.
+

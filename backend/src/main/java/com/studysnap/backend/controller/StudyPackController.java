@@ -1,9 +1,9 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ConfirmTextRequest;
-import com.studysnap.backend.dto.CreateReviewRequest;
-import com.studysnap.backend.dto.ReviewResponse;
-import com.studysnap.backend.service.ReviewService;
+import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.service.StudyPackService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -18,14 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/review")
+@RequestMapping("/studyPack")
 @RequiredArgsConstructor
-public class ReviewController {
-	private final ReviewService reviewService;
+public class StudyPackController {
+	private final StudyPackService studyPackService;
 
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-	public ReviewResponse createFromText(@Valid @RequestBody CreateReviewRequest request) {
-		return reviewService.createFromText(request);
+	public StudyPackResponse createFromText(@Valid @RequestBody CreateStudyPackRequest request) {
+		return studyPackService.createFromText(request);
 	}
 
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -33,16 +33,17 @@ public class ReviewController {
 			@RequestPart("image") MultipartFile image,
 			@RequestParam(value = "subject", required = false) String subject
 	) {
-		return reviewService.createFromImage(image, subject);
+		return studyPackService.createFromImage(image, subject);
 	}
 
 	@PostMapping("/confirm-text")
-	public ReviewResponse confirmText(@Valid @RequestBody ConfirmTextRequest request) {
-		return reviewService.confirmExtractedText(request);
+	public StudyPackResponse confirmText(@Valid @RequestBody ConfirmTextRequest request) {
+		return studyPackService.confirmExtractedText(request);
 	}
 
 	@GetMapping("/{id}")
-	public ReviewResponse getById(@PathVariable String id) {
-		return reviewService.getById(id);
+	public StudyPackResponse getById(@PathVariable String id) {
+		return studyPackService.getById(id);
 	}
 }
+

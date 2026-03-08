@@ -1,12 +1,12 @@
-import type { ReviewResponse } from "@/lib/api";
+import type { StudyPackResponse } from "@/lib/api";
 
 export const DEMO_GENERATION_DELAY_MS = 1200;
 
 export const DEMO_NOTES = `Photosynthesis is the process plants use to convert sunlight into energy.
 Plants absorb sunlight using chlorophyll in their leaves. Carbon dioxide and water are used to produce glucose, which provides energy for the plant. Oxygen is released as a byproduct.`;
 
-export const DEMO_REVIEW_RESULT: ReviewResponse = {
-  id: "demo-review",
+export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
+  id: "demo-study-pack",
   inputType: "text",
   extractedText: null,
   title: "Photosynthesis Fundamentals",
@@ -77,3 +77,4 @@ export const DEMO_REVIEW_RESULT: ReviewResponse = {
     latencyMs: DEMO_GENERATION_DELAY_MS,
   },
 };
+

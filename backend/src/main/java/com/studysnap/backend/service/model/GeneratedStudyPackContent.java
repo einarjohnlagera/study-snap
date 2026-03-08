@@ -5,7 +5,7 @@ import com.studysnap.backend.dto.QuizItem;
 import java.math.BigDecimal;
 import java.util.List;
 
-public record GeneratedReviewContent(
+public record GeneratedStudyPackContent(
         String title,
         String summary,
         List<String> keyConcepts,
@@ -17,3 +17,4 @@ public record GeneratedReviewContent(
         BigDecimal estimatedCost
 ) {
 }
+
