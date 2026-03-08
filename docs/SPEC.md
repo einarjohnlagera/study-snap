@@ -91,6 +91,19 @@ Sections:
    - “Edit Notes” (optional)
    - (Future) Regenerate / More questions / Flashcards
 
+### Quiz Quality
+
+Practice quizzes should include a balanced mix of:
+- recall questions
+- understanding questions
+- application questions
+
+Purpose:
+- make quizzes feel more like real study reviewers
+- improve usefulness for exam preparation and interview review
+
+If notes are too short or simple, quizzes may prioritize recall and understanding questions.
+
 ---
 
 ## Study Library

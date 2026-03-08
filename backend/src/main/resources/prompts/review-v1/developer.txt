@@ -28,9 +28,26 @@ Key Concepts
 
 Quiz
 - exactly {QUIZ_COUNT} questions
+- target mix:
+  - recall: {RECALL_COUNT}
+  - understanding: {UNDERSTANDING_COUNT}
+  - application: {APPLICATION'_COUNT}
 - each question must have 4 choices
 - answerIndex must be between 0 and 3
 - explanation should briefly explain why the answer is correct
+
+Quiz quality
+- use all major ideas in the notes across the full quiz; avoid repeating one concept in most questions
+- recall questions should test facts, terms, and definitions
+- understanding questions should test conceptual understanding, causes, differences, or relationships
+- application questions should test practical use of the concept in a realistic scenario
+- if the notes are too short or too simple, prioritize recall and understanding
+- all questions must remain answerable from the notes
+- avoid generic question stems that could fit any subject
+- avoid repeating the same question pattern or wording
+- incorrect choices must be plausible and same-topic, not obvious throwaway distractors
+- keep wording precise and exam-style; avoid trick questions and ambiguity
+- include at least one question that connects two ideas when the notes include related concepts
 
 Content guidelines
 

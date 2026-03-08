@@ -23,8 +23,12 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Random;
+import java.util.Set;
 
 @Service
 @ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "openai", matchIfMissing = true)
@@ -84,8 +88,17 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             JsonNode responseJson = objectMapper.readTree(responseBody);
             String outputJson = extractOutputJson(responseJson);
             PromptReview promptReview = objectMapper.readValue(outputJson, PromptReview.class);
+            int expectedQuizCount = properties.getSettings().getQuizQuestionsFree();
+            if (promptReview.quiz().size() != expectedQuizCount) {
+                throw new AppException(
+                        "LLM_INVALID_OUTPUT",
+                        "The review service returned an invalid quiz format. Please try again.",
+                        HttpStatus.BAD_GATEWAY
+                );
+            }
 
             List<QuizItem> quizItems = new ArrayList<>();
+            Set<String> normalizedQuestions = new HashSet<>();
             for (PromptQuizItem item : promptReview.quiz()) {
                 if (item.choices() == null || item.choices().size() != 4) {
                     throw new AppException(
@@ -101,11 +114,35 @@ public class OpenAiLlmReviewService implements LlmReviewService {
                             HttpStatus.BAD_GATEWAY
                     );
                 }
+                if (isBlank(item.question()) || isBlank(item.explanation())) {
+                    throw new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "The review service returned an invalid quiz format. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    );
+                }
+                if (!normalizedQuestions.add(normalizeForDuplicateCheck(item.question()))) {
+                    throw new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "The review service returned repetitive quiz questions. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    );
+                }
+                if (hasBlankOrDuplicateChoices(item.choices())) {
+                    throw new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "The review service returned an invalid quiz format. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    );
+                }
+
+                List<String> randomizedChoices = randomizeChoices(item.choices(), item.question());
+                String correctAnswer = item.choices().get(item.answerIndex());
 
                 quizItems.add(new QuizItem(
                         item.question(),
-                        item.choices(),
-                        item.choices().get(item.answerIndex()),
+                        randomizedChoices,
+                        correctAnswer,
                         item.explanation()
                 ));
             }
@@ -162,14 +199,41 @@ public class OpenAiLlmReviewService implements LlmReviewService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.systemPrompt()));
 
-        String developerPrompt = promptResources.developerPromptTemplate().replace(
-                "{QUIZ_COUNT}",
-                String.valueOf(properties.getSettings().getQuizQuestionsFree())
-        );
+        QuizMix quizMix = deriveQuizMix(properties.getSettings().getQuizQuestionsFree());
+        String developerPrompt = promptResources.developerPromptTemplate()
+                .replace("{QUIZ_COUNT}", String.valueOf(properties.getSettings().getQuizQuestionsFree()))
+                .replace("{RECALL_COUNT}", String.valueOf(quizMix.recallCount()))
+                .replace("{UNDERSTANDING_COUNT}", String.valueOf(quizMix.understandingCount()))
+                .replace("{APPLICATION_COUNT}", String.valueOf(quizMix.applicationCount()));
         input.add(buildTextMessage("developer", developerPrompt));
         input.add(buildTextMessage("user", "Study notes:\n" + normalizedNotesText));
 
         return input;
+    }
+
+    private QuizMix deriveQuizMix(int quizCount) {
+        int count = Math.max(1, quizCount);
+        if (count == 1) {
+            return new QuizMix(1, 0, 0);
+        }
+        if (count == 2) {
+            return new QuizMix(1, 1, 0);
+        }
+
+        int recall = Math.max(1, count / 3);
+        int application = Math.max(1, count / 3);
+        int understanding = count - recall - application;
+
+        if (understanding < 1) {
+            if (recall >= application) {
+                recall--;
+            } else {
+                application--;
+            }
+            understanding = 1;
+        }
+
+        return new QuizMix(recall, understanding, application);
     }
 
     private ObjectNode buildTextMessage(String role, String text) {
@@ -205,6 +269,34 @@ public class OpenAiLlmReviewService implements LlmReviewService {
 
     private Integer asNullableInt(JsonNode node) {
         return node != null && node.isNumber() ? node.intValue() : null;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String normalizeForDuplicateCheck(String value) {
+        return value == null ? "" : value.toLowerCase().replaceAll("[^a-z0-9 ]", "").replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean hasBlankOrDuplicateChoices(List<String> choices) {
+        Set<String> normalizedChoices = new HashSet<>();
+        for (String choice : choices) {
+            if (isBlank(choice)) {
+                return true;
+            }
+            if (!normalizedChoices.add(normalizeForDuplicateCheck(choice))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> randomizeChoices(List<String> choices, String question) {
+        List<String> shuffled = new ArrayList<>(choices);
+        long seed = normalizeForDuplicateCheck(question).hashCode();
+        Collections.shuffle(shuffled, new Random(seed));
+        return shuffled;
     }
 
     private String extractUpstreamErrorMessage(String responseBody) {
@@ -243,5 +335,8 @@ public class OpenAiLlmReviewService implements LlmReviewService {
             int answerIndex,
             String explanation
     ) {
+    }
+
+    private record QuizMix(int recallCount, int understandingCount, int applicationCount) {
     }
 }

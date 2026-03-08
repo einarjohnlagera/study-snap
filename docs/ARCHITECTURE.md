@@ -272,6 +272,17 @@ The backend should require the LLM to output STRICT JSON with:
 
 Backend validates schema and rejects malformed output.
 
+### Quiz Generation Strategy
+
+Quizzes should not consist only of factual recall.
+
+The LLM should generate a balanced mix of:
+- recall questions
+- understanding questions
+- application questions
+
+This improves perceived quiz quality and makes the output more useful for study and interview preparation.
+
 ---
 
 ## Cost Control Strategy (Required)
