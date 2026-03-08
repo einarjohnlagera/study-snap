@@ -297,3 +297,12 @@ Normalization should include:
 - preserving paragraph structure
 
 This improves the quality of summaries and quizzes generated from OCR inputs.
+
+## Quiz generation quality
+
+Practice quizzes should feel like real study reviewers, not generic AI trivia.
+
+When generating quiz questions:
+- mix recall, understanding, and application question types
+- keep questions answerable from the notes
+- prioritize clarity over cleverness
