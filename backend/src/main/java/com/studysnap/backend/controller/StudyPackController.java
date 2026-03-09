@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.QuickReviewActivityRequest;
 import com.studysnap.backend.dto.StudyPackListItemResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -89,6 +90,16 @@ public class StudyPackController {
 	) {
 		UUID userId = user.userId();
 		studyPackService.deleteMine(id, userId);
+	}
+
+	@PostMapping("/{id}/quick-review/activity")
+	public void recordQuickReviewActivity(
+			@PathVariable String id,
+			@Valid @RequestBody QuickReviewActivityRequest request,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		UUID userId = user.userId();
+		studyPackService.recordQuickReviewActivity(id, userId, request.activityType());
 	}
 }
 
