@@ -126,6 +126,29 @@ Quiz rendering consistency:
 - correct answer choice is highlighted in green with the same "Correct answer" treatment
 - shared quiz rendering components should be preferred to avoid UI drift
 
+### Quick Review Mode
+
+The Study Library includes a focused Quick Review Mode for saved Study Packs.
+
+Route:
+- `/study-packs/[id]/quick-review`
+
+Purpose:
+- give users a lightweight way to study quiz content one question at a time
+- make Study Snap feel like an active study workflow, not only a generator and library
+
+Behavior (v1):
+- show one question at a time
+- reveal correct answer and explanation immediately after selection
+- highlight the correct answer in green
+- show progress (`Question X of Y`)
+- show final results with score, retry, and return-to-detail actions
+
+Activity tracking:
+- start event: `STARTED_QUICK_REVIEW`
+- completion event: `COMPLETED_QUICK_REVIEW`
+- tracking failures should not block the review experience
+
 ## Roadmap note
 
 The original roadmap placed Study Library after several other phases.

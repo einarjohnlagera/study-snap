@@ -106,6 +106,7 @@ export type NeedsTextConfirmationResponse = {
 };
 
 export type StudyPackApiResponse = StudyPackResponse | NeedsTextConfirmationResponse;
+export type QuickReviewActivityType = "STARTED_QUICK_REVIEW" | "COMPLETED_QUICK_REVIEW";
 
 type ApiErrorPayload = {
   error?: {
@@ -410,5 +411,23 @@ export async function deleteMyStudyPack(id: string): Promise<void> {
   );
   if (!response.ok) {
     await parseApiResponse<void>(response, "Could not delete this Study Pack.");
+  }
+}
+
+export async function trackQuickReviewActivity(
+  studyPackId: string,
+  activityType: QuickReviewActivityType,
+): Promise<void> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/quick-review/activity`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ activityType }),
+    },
+    true,
+  );
+  if (!response.ok) {
+    await parseApiResponse<void>(response, "Could not track quick review activity.");
   }
 }

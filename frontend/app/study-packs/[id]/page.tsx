@@ -154,9 +154,11 @@ export default function StudyPackDetailPage() {
               </div>
             ) : null}
             <div>
-              <Button type="button" variant="outline" disabled title="Quick Review is coming soon.">
-                Start Quick Review
-              </Button>
+              <Link href={`/study-packs/${studyPack.id}/quick-review`}>
+                <Button type="button" variant="outline">
+                  Start Quick Review
+                </Button>
+              </Link>
             </div>
           </Card>
 

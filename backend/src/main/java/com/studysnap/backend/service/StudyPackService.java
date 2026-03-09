@@ -155,6 +155,23 @@ public class StudyPackService {
         studyPackRepository.delete(entity);
     }
 
+    public void recordQuickReviewActivity(String id, UUID ownerUserId, ActivityType activityType) {
+        UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
+        studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+
+        if (activityType != ActivityType.STARTED_QUICK_REVIEW
+                && activityType != ActivityType.COMPLETED_QUICK_REVIEW) {
+            throw new AppException(
+                    "INVALID_ACTIVITY_TYPE",
+                    "Unsupported quick review activity type.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+        activityTrackingService.recordActivity(ownerUserId, activityType, studyPackId);
+    }
+
     public NeedsTextConfirmationResponse toNeedsConfirmation(String draftId, String extractedText, double confidence) {
         return new NeedsTextConfirmationResponse(
                 "needs_text_confirmation",
