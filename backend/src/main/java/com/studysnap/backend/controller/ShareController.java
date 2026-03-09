@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShareController {
 	private final ShareService shareService;
 
-	@PostMapping("/studyPack/{id}/share")
+	@PostMapping("/study-packs/{id}/share")
 	@PreAuthorize("hasAnyRole('USER','ADMIN')")
 	public ShareLinkResponse createShare(
 			@PathVariable String id,
@@ -33,4 +33,3 @@ public class ShareController {
 		return shareService.getPublicShare(token);
 	}
 }
-

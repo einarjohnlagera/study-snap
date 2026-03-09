@@ -52,7 +52,7 @@ This starts:
 - `backend` on `localhost:8080` (API base path `/api`)
 
 ## MVP endpoint
-### POST /api/studyPack
+### POST /api/study-packs
 Input:
 - JSON `{ "notesText": "..." }` OR multipart with `image`
 

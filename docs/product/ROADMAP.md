@@ -24,7 +24,7 @@ Deliverable: repo runs locally.
 Deliverable: UI shell + theme toggle on all pages.
 
 ## Phase 2 — Backend MVP (text Study Pack generation)
-- [X] `POST /api/studyPack` accepts JSON `{ notesText }`
+- [X] `POST /api/study-packs` accepts JSON `{ notesText }`
 - [X] Validate input size
 - [X] Prompt builder + LLM call (or stub response)
 - [X] Return structured JSON: title, summary, keyConcepts, quiz[]
@@ -62,7 +62,7 @@ Deliverable: upload image notes → OCR → Study Pack output.
 - [ ] add basic counters (success/fail)
 - [ ] add demo mode with hardcoded study pack response
 - [ ] ensure demo does not hit backend LLM endpoint
-- [ ] add anonymous guardrails for real `/api/studyPack` calls
+- [ ] add anonymous guardrails for real `/api/study-packs` calls
 
 ## Phase 6 — User accounts foundation
 - [ ] signup

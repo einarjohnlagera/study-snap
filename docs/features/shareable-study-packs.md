@@ -8,7 +8,7 @@ Allow users to create public share links for generated Study Packs.
 - `/share/[token]`
 
 ## Backend endpoints
-- `POST /api/studyPack/{id}/share`
+- `POST /api/study-packs/{id}/share`
 - `GET /api/share/{token}`
 
 ## Rules

@@ -91,8 +91,8 @@ Note:
 - Study Pack generation is blocked until account email is verified.
 - Security uses Spring Security + JWT access tokens + rotating refresh tokens.
 
-### Create Study Pack from text
-`POST /api/studyPack`
+### Create StudyPack from text
+`POST /api/study-packs`
 Content-Type: `application/json`
 
 Request example:
@@ -100,8 +100,8 @@ Request example:
 { "notesText": "..." }
 ```
 
-### Create Study Pack from image
-`POST /api/studyPack`
+### Create StudyPack from image
+`POST /api/study-packs`
 Content-Type: `multipart/form-data`
 
 Form fields:
@@ -119,7 +119,7 @@ Low-confidence OCR response:
 ```
 
 ### Confirm extracted text
-`POST /api/studyPack/confirm-text`
+`POST /api/study-packs/confirm-text`
 
 Request example:
 ```json
@@ -147,11 +147,11 @@ Token-backed verification is planned as a future upgrade.
 - role model includes `USER` and `ADMIN`
 - brute-force protection includes login rate limiting + lockout policy
 
-### Get saved Study Pack
-`GET /api/studyPack/{id}`
+### Get saved StudyPack
+`GET /api/study-packs/{id}`
 
 ### Create share link
-`POST /api/studyPack/{id}/share`
+`POST /api/study-packs/{id}/share`
 
 ### Resolve share link
 `GET /api/share/{token}`
@@ -280,7 +280,7 @@ Demo flow:
 Landing → `/study?demo=true` → simulated generation → static Study Pack
 
 Real flow:
-Landing → `/study` → `POST /api/studyPack` → OCR/LLM → database → response
+Landing → `/study` → `POST /api/study-packs` → OCR/LLM → database → response
 
 ## Hybrid OCR strategy
 
