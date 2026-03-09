@@ -37,7 +37,7 @@ Responsibilities:
 - validate inputs and enforce limits
 - delete images after OCR
 - store Study Pack output and share tokens
-- later support authenticated ownership and subscription-aware behavior
+- support authenticated ownership and subscription-aware behavior
 - run under servlet context path `/api`
 
 ### Local infrastructure
@@ -84,6 +84,10 @@ Typical local runs:
 - future `SubscriptionRepository`
 
 ## API endpoints
+
+Note:
+- Real product endpoints are designed for authenticated usage.
+- Current implementation prepares ownership logic via user context resolution and can be wired to full auth middleware next.
 
 ### Create Study Pack from text
 `POST /api/studyPack`
@@ -327,12 +331,9 @@ Premium:
 - truncate or reject overly long inputs
 - consider chunking long notes later
 
-## Anonymous guardrails
+## Demo guardrails
 
-For real unauthenticated `/api/studyPack` calls:
-- apply rate limiting by session cookie and/or IP
-- enforce minimum and maximum note length
-- optionally apply cooldown between requests
+Demo mode stays frontend-driven with pre-coded request/response behavior and does not call real generation APIs.
 
 ## Privacy & security
 

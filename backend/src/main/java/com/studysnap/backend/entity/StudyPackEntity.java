@@ -29,7 +29,7 @@ public class StudyPackEntity {
     private UUID id;
 
     @Column(name = "owner_user_id")
-    private String ownerUserId;
+    private UUID ownerUserId;
 
     @Column(name = "anon_id")
     private String anonId;
@@ -83,5 +83,12 @@ public class StudyPackEntity {
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private OffsetDateTime updatedAt;
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(columnDefinition = "text[]", nullable = false)
+    private String[] tags;
 }
 

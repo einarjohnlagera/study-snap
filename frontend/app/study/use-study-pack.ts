@@ -14,6 +14,7 @@ import {
   DEMO_NOTES,
   DEMO_STUDY_PACK_RESULT,
 } from "./demo-content";
+import { getCurrentUserId } from "@/lib/auth";
 
 type UseStudyPackResult = {
   notesText: string;
@@ -96,6 +97,10 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
       startDemoGeneration();
       return;
     }
+    if (!getCurrentUserId()) {
+      setErrorMessage("Sign up and log in to start generating your Study Pack.");
+      return;
+    }
 
     setLoading(true);
     setErrorMessage(null);
@@ -134,6 +139,10 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
       return;
     }
     if (demoMode) {
+      return;
+    }
+    if (!getCurrentUserId()) {
+      setErrorMessage("Sign up and log in to start generating your Study Pack.");
       return;
     }
 

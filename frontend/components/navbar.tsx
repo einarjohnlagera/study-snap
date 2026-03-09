@@ -1,8 +1,18 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
+import { useEffect, useState } from "react";
+import { getAuthUser } from "@/lib/auth";
 
 export function Navbar() {
+  const [showDashboard, setShowDashboard] = useState(false);
+
+  useEffect(() => {
+    setShowDashboard(Boolean(getAuthUser()));
+  }, []);
+
   return (
     <header className="border-b border-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
@@ -19,12 +29,14 @@ export function Navbar() {
           <span className="text-sm font-semibold sm:text-base">Study Snap</span>
         </Link>
         <div className="flex items-center gap-4">
-          <Link
-            href="/dashboard"
-            className="text-sm text-foreground/80 transition-colors hover:text-foreground"
-          >
-            Dashboard
-          </Link>
+          {showDashboard ? (
+            <Link
+              href="/dashboard"
+              className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+            >
+              Dashboard
+            </Link>
+          ) : null}
           <ThemeToggle />
         </div>
       </div>

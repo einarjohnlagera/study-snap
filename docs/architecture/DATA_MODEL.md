@@ -99,16 +99,15 @@ Demo mode is separate from authenticated subscriptions.
 Purpose:
 - store generated reusable study content
 
-Recommended direction:
+Implemented direction:
 - `id`
-- `owner_user_id` (nullable only while anonymous/demo support still exists)
-- `anon_id` (nullable for anonymous or demo flows)
+- `owner_user_id` (uuid, not null, references `users.id`)
 - `input_type` (`TEXT` | `IMAGE`)
 - `title`
 - `summary`
 - `key_concepts` (json/jsonb array)
 - `quiz` (json/jsonb array)
-- `tags` (nullable json/jsonb array or text[])
+- `tags` (text[], not null, default empty array)
 - `ocr_confidence` (nullable numeric)
 - `status`
 - `error_code` (nullable)
@@ -126,14 +125,14 @@ Legacy architecture also referenced:
 Recommendation:
 - long term, prefer tying effective plan behavior to subscriptions / usage rules rather than only storing `model_tier` on the Study Pack row.
 
-### study_pack_drafts / study_pack_drafts
+### study_pack_drafts
 
 Purpose:
 - store OCR low-confidence extracted text for user confirmation flow
 
 Recommended fields:
 - `id`
-- `owner_user_id` (nullable)
+- `owner_user_id` (uuid, not null when draft belongs to authenticated flow)
 - `anon_id` (nullable)
 - `extracted_text`
 - `ocr_confidence`
@@ -189,7 +188,7 @@ Potential fields:
 - one Study Pack can have one or more share links over time
 
 ### StudyPackDraft → User
-- optional relationship when OCR confirmation belongs to an authenticated user
+- draft rows are expected to be user-owned in real API flows
 
 ## JSON structures
 
