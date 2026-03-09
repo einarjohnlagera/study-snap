@@ -22,7 +22,7 @@ public class StudyPackDraftEntity {
 	private UUID id;
 
 	@Column(name = "owner_user_id")
-	private String ownerUserId;
+	private UUID ownerUserId;
 
 	@Column(name = "anon_id")
 	private String anonId;

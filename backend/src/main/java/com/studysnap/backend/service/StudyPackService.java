@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.NeedsTextConfirmationResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
+import com.studysnap.backend.dto.StudyPackListItemResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,20 +44,20 @@ public class StudyPackService {
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
 
-    public StudyPackResponse createFromText(CreateStudyPackRequest request) {
+    public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         String normalizedText = normalizeAndValidateText(request.notesText());
 
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated);
+        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated, ownerUserId);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
         return mapToResponse(saved, null, latency);
     }
 
-    public Object createFromImage(MultipartFile image, String subject) {
+    public Object createFromImage(MultipartFile image, String subject, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         validateImage(image);
@@ -66,6 +68,7 @@ public class StudyPackService {
         if (ocrResult.confidence() < properties.getOcr().getConfidenceThreshold()) {
             StudyPackDraftEntity draft = new StudyPackDraftEntity();
             draft.setId(UUID.randomUUID());
+            draft.setOwnerUserId(ownerUserId);
             draft.setExtractedText(extractedText);
             draft.setOcrConfidence(ocrResult.confidence());
             draft.setCreatedAt(OffsetDateTime.now());
@@ -83,20 +86,23 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(extractedText);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated, ownerUserId);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
         return mapToResponse(saved, extractedText, latency);
     }
 
-    public StudyPackResponse confirmExtractedText(ConfirmTextRequest request) {
+    public StudyPackResponse confirmExtractedText(ConfirmTextRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
 
         UUID draftId = parseUuid(request.draftId(), "DRAFT_NOT_FOUND", "Draft not found.");
         StudyPackDraftEntity draft = studyPackDraftRepository.findById(draftId)
                 .orElseThrow(() -> new AppException("DRAFT_NOT_FOUND", "Draft not found.", HttpStatus.NOT_FOUND));
+        if (draft.getOwnerUserId() == null || !draft.getOwnerUserId().equals(ownerUserId)) {
+            throw new AppException("DRAFT_NOT_FOUND", "Draft not found.", HttpStatus.NOT_FOUND);
+        }
 
         if (draft.getExpiresAt().isBefore(OffsetDateTime.now())) {
             studyPackDraftRepository.delete(draft);
@@ -109,7 +115,7 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(request.notesText());
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated, ownerUserId);
         studyPackDraftRepository.delete(draft);
         long latency = System.currentTimeMillis() - startedAt;
 
@@ -118,11 +124,32 @@ public class StudyPackService {
     }
 
     @Transactional(readOnly = true)
-    public StudyPackResponse getById(String id) {
+    public StudyPackResponse getById(String id, UUID ownerUserId) {
         UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
-        StudyPackEntity studyPack = studyPackRepository.findById(studyPackId)
+        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
         return mapToResponse(studyPack, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudyPackListItemResponse> listMine(UUID ownerUserId) {
+        return studyPackRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId).stream()
+                .map(entity -> new StudyPackListItemResponse(
+                        entity.getId().toString(),
+                        entity.getTitle(),
+                        buildSummaryPreview(entity.getSummary()),
+                        entity.getQuiz() == null ? 0 : entity.getQuiz().size(),
+                        entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
+                        entity.getCreatedAt()
+                ))
+                .toList();
+    }
+
+    public void deleteMine(String id, UUID ownerUserId) {
+        UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
+        StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+        studyPackRepository.delete(entity);
     }
 
     public NeedsTextConfirmationResponse toNeedsConfirmation(String draftId, String extractedText, double confidence) {
@@ -183,9 +210,15 @@ public class StudyPackService {
         return "Subject: " + subject.trim() + ". " + extractedText;
     }
 
-    private StudyPackEntity saveStudyPack(InputType inputType, Double ocrConfidence, GeneratedStudyPackContent generated) {
+    private StudyPackEntity saveStudyPack(
+            InputType inputType,
+            Double ocrConfidence,
+            GeneratedStudyPackContent generated,
+            UUID ownerUserId
+    ) {
         StudyPackEntity entity = new StudyPackEntity();
         entity.setId(UUID.randomUUID());
+        entity.setOwnerUserId(ownerUserId);
         entity.setInputType(inputType);
         entity.setTitle(generated.title());
         entity.setSummary(generated.summary());
@@ -201,6 +234,8 @@ public class StudyPackService {
         entity.setEstimatedCost(generated.estimatedCost());
         entity.setStatus(StudyPackStatus.DONE);
         entity.setCreatedAt(OffsetDateTime.now());
+        entity.setUpdatedAt(OffsetDateTime.now());
+        entity.setTags(deriveTags(generated.title()));
         return studyPackRepository.save(entity);
     }
 
@@ -212,9 +247,27 @@ public class StudyPackService {
                 entity.getTitle(),
                 entity.getSummary(),
                 entity.getKeyConcepts(),
+                entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getQuiz(),
                 new StudyPackMeta(entity.getOcrConfidence(), latencyMs)
         );
+    }
+
+    private String[] deriveTags(String title) {
+        if (title == null || title.isBlank()) {
+            return new String[0];
+        }
+        return new String[]{title.trim()};
+    }
+
+    private String buildSummaryPreview(String summary) {
+        if (summary == null || summary.isBlank()) {
+            return "";
+        }
+        if (summary.length() <= 140) {
+            return summary;
+        }
+        return summary.substring(0, 140).trim() + "...";
     }
 
     private UUID parseUuid(String raw, String code, String message) {

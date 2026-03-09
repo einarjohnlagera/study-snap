@@ -23,7 +23,7 @@ public class ShareService {
     private final ShareLinkRepository shareLinkRepository;
     private final StudyPackRepository studyPackRepository;
 
-    public ShareLinkResponse createShareLink(String studyPackId) {
+    public ShareLinkResponse createShareLink(String studyPackId, UUID ownerUserId) {
         UUID id;
         try {
             id = UUID.fromString(studyPackId);
@@ -31,7 +31,7 @@ public class ShareService {
             throw new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND);
         }
 
-        StudyPackEntity studyPack = studyPackRepository.findById(id)
+        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(id, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
         ShareLinkEntity share = new ShareLinkEntity();

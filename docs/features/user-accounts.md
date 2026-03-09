@@ -199,6 +199,10 @@ Relationship:
 Recommended ownership field on study packs:
 - `owner_user_id`
 
+Current direction:
+- `owner_user_id` should be non-null for real product Study Pack rows.
+- Demo mode remains frontend-only and does not require backend anonymous persistence.
+
 This should power the future Study Library dashboard for:
 - list my study packs
 - open a study pack
@@ -233,6 +237,12 @@ Possible future relationship types:
 - `GUARDIAN_OF`
 
 This should only be introduced when family plans or managed learner accounts become a real product need.
+
+## Tags direction
+
+For Study Pack categorization and search:
+- use a simple string array for tags
+- support multiple tags per Study Pack (subject/topic friendly)
 
 ### Teacher mode
 

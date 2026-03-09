@@ -9,6 +9,7 @@ public record StudyPackResponse(
 		String title,
 		String summary,
 		List<String> keyConcepts,
+		List<String> tags,
 		List<QuizItem> quiz,
 		StudyPackMeta meta
 ) {
