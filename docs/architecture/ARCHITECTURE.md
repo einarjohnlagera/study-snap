@@ -228,6 +228,34 @@ Future extensions:
 - folders / collections
 - reviewed status
 
+## Activity Tracking
+
+Study Snap records lightweight user activity events to support future study workflow features.
+
+Purpose:
+- capture key study actions without changing current product behavior
+- provide a reliable foundation for future streaks, continue-studying suggestions, Quick Review flows, and usage analytics
+
+Persistence:
+- table: `user_activity_events`
+- fields:
+  - `id`
+  - `user_id`
+  - `study_pack_id` (nullable)
+  - `activity_type`
+  - `created_at`
+
+Activity types:
+- `CREATED_STUDY_PACK`
+- `OPENED_STUDY_PACK`
+- `STARTED_QUICK_REVIEW`
+- `COMPLETED_QUICK_REVIEW`
+
+Recording model:
+- feature code calls a centralized `ActivityTrackingService`
+- the service handles event persistence details through `ActivityEventRepository`
+- activity write failures are logged and do not interrupt main Study Pack requests
+
 ## Tags architecture
 
 Study Packs may support tags for organization and filtering.

@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.NeedsTextConfirmationResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
 import com.studysnap.backend.dto.StudyPackListItemResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.StudyPackDraftEntity;
@@ -43,6 +44,7 @@ public class StudyPackService {
     private final OcrService ocrService;
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
+    private final ActivityTrackingService activityTrackingService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -128,6 +130,7 @@ public class StudyPackService {
         UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+        activityTrackingService.recordActivity(ownerUserId, ActivityType.OPENED_STUDY_PACK, studyPack.getId());
         return mapToResponse(studyPack, null, null);
     }
 
@@ -236,7 +239,9 @@ public class StudyPackService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         entity.setTags(deriveTags(generated.title()));
-        return studyPackRepository.save(entity);
+        StudyPackEntity savedEntity = studyPackRepository.save(entity);
+        activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, savedEntity.getId());
+        return savedEntity;
     }
 
     private StudyPackResponse mapToResponse(StudyPackEntity entity, String extractedText, Long latencyMs) {
