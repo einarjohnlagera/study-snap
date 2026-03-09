@@ -2,6 +2,7 @@ package com.studysnap.backend.dto;
 
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 
 import java.time.OffsetDateTime;
@@ -15,6 +16,7 @@ public record MeResponse(
         String countryCode,
         ProfileType profileType,
         OffsetDateTime emailVerifiedAt,
+        UserRole role,
         UserStatus status,
         PlanType planType
 ) {

@@ -89,6 +89,7 @@ Note:
 - Real product endpoints are designed for authenticated usage.
 - Current implementation prepares ownership logic via user context resolution and can be wired to full auth middleware next.
 - Study Pack generation is blocked until account email is verified.
+- Security uses Spring Security + JWT access tokens + rotating refresh tokens.
 
 ### Create Study Pack from text
 `POST /api/studyPack`
@@ -128,12 +129,23 @@ Request example:
 ### Auth onboarding and verification (current foundation)
 - `POST /api/auth/signup`
 - `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
 - `GET /api/auth/me`
 - `POST /api/auth/onboarding/profile-type`
 - `POST /api/auth/verify-email/request` (placeholder send flow)
 - `POST /api/auth/verify-email/confirm` (placeholder confirm flow)
 
 Token-backed verification is planned as a future upgrade.
+
+## API security model
+
+- all non-public endpoints require Bearer access token
+- access token is short-lived JWT
+- refresh token is stored hashed in database and rotated on refresh
+- keep-signed-in extends refresh token lifetime
+- role model includes `USER` and `ADMIN`
+- brute-force protection includes login rate limiting + lockout policy
 
 ### Get saved Study Pack
 `GET /api/studyPack/{id}`

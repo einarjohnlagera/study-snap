@@ -98,6 +98,10 @@ Recommended fields:
 - `display_name` (optional)
 - `country_code` (optional, ISO-style such as `PH`, `US`)
 - `profile_type` (nullable enum)
+- `role` (`USER` or `ADMIN`)
+- `token_version`
+- `failed_login_attempts`
+- `locked_until`
 - `status`
 - `created_at`
 - `updated_at`
@@ -231,6 +235,13 @@ Future direction:
 - token table-backed verification
 - provider-backed email delivery
 - dedicated verify and resend flows with expiring tokens
+
+## Session security direction
+
+- short-lived JWT access tokens for API authorization
+- hashed rotating refresh tokens for session continuity
+- keep-signed-in extends refresh token TTL (target: 30 days)
+- login rate limiting + account lockout policy for brute-force defense
 
 ---
 

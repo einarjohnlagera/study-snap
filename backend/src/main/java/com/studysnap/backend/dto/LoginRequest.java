@@ -8,6 +8,7 @@ public record LoginRequest(
         @Email(message = "Please provide a valid email address.")
         String email,
         @NotBlank(message = "Password is required.")
-        String password
+        String password,
+        Boolean keepSignedIn
 ) {
 }

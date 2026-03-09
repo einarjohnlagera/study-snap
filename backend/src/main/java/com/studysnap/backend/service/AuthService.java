@@ -2,16 +2,22 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.LoginRequest;
+import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
+import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.VerifyEmailRequest;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.RefreshTokenEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.security.JwtService;
+import com.studysnap.backend.security.SecurityProperties;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,13 +39,17 @@ public class AuthService {
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
+    private final SecurityProperties securityProperties;
 
-    public AuthResponse signup(SignupRequest request) {
+    public AuthResponse signup(SignupRequest request, String ipAddress, String userAgent) {
         String email = normalizeEmail(request.email());
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new AppException("EMAIL_ALREADY_EXISTS", "This email is already registered.", HttpStatus.CONFLICT);
         }
 
+        OffsetDateTime now = OffsetDateTime.now();
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setEmail(email);
@@ -49,31 +59,71 @@ public class AuthService {
         user.setCountryCode(null);
         user.setProfileType(null);
         user.setStatus(UserStatus.ACTIVE);
-        user.setCreatedAt(OffsetDateTime.now());
-        user.setUpdatedAt(OffsetDateTime.now());
+        user.setRole(UserRole.USER);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
+        user.setLastPasswordChangeAt(now);
 
         UserEntity saved = userRepository.save(user);
         subscriptionService.createDefaultFreeSubscription(saved);
         sendVerificationEmailPlaceholder(saved);
-        return buildAuthResponse(saved, PlanType.FREE);
+        return buildAuthResponse(saved, PlanType.FREE, false, null, ipAddress, userAgent);
     }
 
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String ipAddress, String userAgent) {
         String email = normalizeEmail(request.email());
-        UserEntity user = userRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new AppException("INVALID_CREDENTIALS", "Invalid email or password.", HttpStatus.UNAUTHORIZED));
+        UserEntity user = userRepository.findByEmailIgnoreCase(email).orElse(null);
 
+        if (user == null) {
+            throw invalidCredentials();
+        }
+        if (isLocked(user)) {
+            throw invalidCredentials();
+        }
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new AppException("INVALID_CREDENTIALS", "Invalid email or password.", HttpStatus.UNAUTHORIZED);
+            registerFailedLogin(user);
+            throw invalidCredentials();
         }
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new AppException("ACCOUNT_INACTIVE", "This account is not active.", HttpStatus.FORBIDDEN);
+            throw invalidCredentials();
         }
 
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
         user.setLastLoginAt(OffsetDateTime.now());
         user.setUpdatedAt(OffsetDateTime.now());
+        boolean keepSignedIn = Boolean.TRUE.equals(request.keepSignedIn());
+
         PlanType planType = subscriptionService.resolvePlan(user.getId());
-        return buildAuthResponse(user, planType);
+        return buildAuthResponse(user, planType, keepSignedIn, null, ipAddress, userAgent);
+    }
+
+    public AuthResponse refresh(RefreshTokenRequest request, String ipAddress, String userAgent) {
+        RefreshTokenEntity existing = refreshTokenService.requireValid(request.refreshToken());
+        UserEntity user = userRepository.findById(existing.getUserId())
+                .orElseThrow(() -> new AppException("INVALID_REFRESH_TOKEN", "Invalid refresh token.", HttpStatus.UNAUTHORIZED));
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw new AppException("INVALID_REFRESH_TOKEN", "Invalid refresh token.", HttpStatus.UNAUTHORIZED);
+        }
+
+        refreshTokenService.revoke(request.refreshToken());
+        refreshTokenService.touch(existing);
+        PlanType planType = subscriptionService.resolvePlan(user.getId());
+        return buildAuthResponse(
+                user,
+                planType,
+                Boolean.TRUE.equals(existing.getKeepSignedIn()),
+                existing.getDeviceName(),
+                ipAddress,
+                userAgent
+        );
+    }
+
+    public SimpleMessageResponse logout(LogoutRequest request) {
+        refreshTokenService.revoke(request.refreshToken());
+        return new SimpleMessageResponse("Logged out successfully.");
     }
 
     @Transactional(readOnly = true)
@@ -90,6 +140,7 @@ public class AuthService {
                 user.getCountryCode(),
                 user.getProfileType(),
                 user.getEmailVerifiedAt(),
+                user.getRole(),
                 user.getStatus(),
                 subscriptionService.resolvePlan(user.getId())
         );
@@ -112,6 +163,7 @@ public class AuthService {
                 user.getCountryCode(),
                 user.getProfileType(),
                 user.getEmailVerifiedAt(),
+                user.getRole(),
                 user.getStatus(),
                 planType
         );
@@ -146,6 +198,7 @@ public class AuthService {
                 user.getCountryCode(),
                 user.getProfileType(),
                 user.getEmailVerifiedAt(),
+                user.getRole(),
                 user.getStatus(),
                 subscriptionService.resolvePlan(user.getId())
         );
@@ -164,17 +217,55 @@ public class AuthService {
         }
     }
 
-    private AuthResponse buildAuthResponse(UserEntity user, PlanType planType) {
-        String token = UUID.randomUUID().toString();
+    private AuthResponse buildAuthResponse(
+            UserEntity user,
+            PlanType planType,
+            boolean keepSignedIn,
+            String deviceName,
+            String ipAddress,
+            String userAgent
+    ) {
+        String accessToken = jwtService.generateAccessToken(user);
+        OffsetDateTime accessExpiresAt = jwtService.resolveAccessTokenExpiry();
+        RefreshTokenService.IssuedRefreshToken refreshToken = refreshTokenService.issue(
+                user,
+                keepSignedIn,
+                deviceName,
+                ipAddress,
+                userAgent
+        );
         return new AuthResponse(
                 user.getId().toString(),
                 user.getEmail(),
                 user.getDisplayName(),
                 user.getProfileType(),
                 user.getEmailVerifiedAt(),
+                user.getRole(),
                 planType,
-                token
+                accessToken,
+                refreshToken.rawToken(),
+                accessExpiresAt,
+                refreshToken.expiresAt()
         );
+    }
+
+    private void registerFailedLogin(UserEntity user) {
+        int attempts = user.getFailedLoginAttempts() == null ? 0 : user.getFailedLoginAttempts();
+        attempts += 1;
+        user.setFailedLoginAttempts(attempts);
+        if (attempts >= securityProperties.getAuth().getMaxFailedAttempts()) {
+            user.setLockedUntil(OffsetDateTime.now().plusMinutes(securityProperties.getAuth().getLockMinutes()));
+        }
+        user.setUpdatedAt(OffsetDateTime.now());
+    }
+
+    private boolean isLocked(UserEntity user) {
+        OffsetDateTime lockedUntil = user.getLockedUntil();
+        return lockedUntil != null && lockedUntil.isAfter(OffsetDateTime.now());
+    }
+
+    private AppException invalidCredentials() {
+        return new AppException("INVALID_CREDENTIALS", "Invalid email or password.", HttpStatus.UNAUTHORIZED);
     }
 
     private String normalizeEmail(String email) {

@@ -49,6 +49,22 @@ public class UserEntity {
     @Column(nullable = false, length = 32)
     private UserStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private UserRole role;
+
+    @Column(name = "token_version", nullable = false)
+    private Integer tokenVersion;
+
+    @Column(name = "failed_login_attempts", nullable = false)
+    private Integer failedLoginAttempts;
+
+    @Column(name = "locked_until")
+    private OffsetDateTime lockedUntil;
+
+    @Column(name = "last_password_change_at")
+    private OffsetDateTime lastPasswordChangeAt;
+
     @Column(name = "last_login_at")
     private OffsetDateTime lastLoginAt;
 

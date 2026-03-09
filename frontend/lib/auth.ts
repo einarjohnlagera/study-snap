@@ -6,8 +6,12 @@ export type AuthUser = {
   displayName: string;
   profileType: "STUDENT" | "PARENT" | "PROFESSIONAL" | null;
   emailVerifiedAt: string | null;
+  role: "USER" | "ADMIN";
   planType: "FREE" | "PREMIUM";
-  token: string;
+  accessToken: string;
+  refreshToken: string;
+  accessTokenExpiresAt: string;
+  refreshTokenExpiresAt: string;
 };
 
 const AUTH_USER_KEY = "study_snap_auth_user";
@@ -47,4 +51,21 @@ export function getCurrentUserId(): string | null {
 
 export function isEmailVerified(): boolean {
   return Boolean(getAuthUser()?.emailVerifiedAt);
+}
+
+export function getAccessToken(): string | null {
+  return getAuthUser()?.accessToken ?? null;
+}
+
+export function getRefreshToken(): string | null {
+  return getAuthUser()?.refreshToken ?? null;
+}
+
+export function isAccessTokenExpired(bufferSeconds = 30): boolean {
+  const authUser = getAuthUser();
+  if (!authUser) {
+    return true;
+  }
+  const expiresAt = new Date(authUser.accessTokenExpiresAt).getTime();
+  return Date.now() + bufferSeconds * 1000 >= expiresAt;
 }

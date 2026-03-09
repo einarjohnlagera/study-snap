@@ -253,6 +253,8 @@ Current account flow direction:
 - signup asks for first name, email, password, and optional display name
 - email verification is required before real Study Pack generation
 - onboarding asks profile type after signup/login
+- API sessions use JWT access token + refresh token rotation
+- keep signed in extends session lifetime up to 30 days
 
 UI copy for onboarding profile selection:
 - “I’m using Study Snap as a…”

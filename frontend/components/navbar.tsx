@@ -4,9 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { useEffect, useState } from "react";
-import { clearAuthUser, getAuthUser } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "./ui/button";
+import { logout } from "@/lib/api";
 
 export function Navbar() {
   const router = useRouter();
@@ -22,8 +23,8 @@ export function Navbar() {
     setDisplayName(authUser?.displayName ?? null);
   }, [pathname]);
 
-  const handleLogout = () => {
-    clearAuthUser();
+  const handleLogout = async () => {
+    await logout();
     setShowDashboard(false);
     setShowAuthLinks(true);
     setDisplayName(null);
@@ -66,7 +67,7 @@ export function Navbar() {
               Log in
             </Link>
           ) : (
-            <Button type="button" variant="outline" size="sm" onClick={handleLogout}>
+            <Button type="button" variant="outline" size="sm" onClick={() => void handleLogout()}>
               Log out
             </Button>
           )}

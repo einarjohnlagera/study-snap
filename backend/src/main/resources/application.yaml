@@ -60,4 +60,15 @@ studysnap:
       provider: ${LLM_PROVIDER:openai}
       api-key: ${LLM_API_KEY:}
       base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+  security:
+    jwt:
+      secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}
+      issuer: ${JWT_ISSUER:study-snap}
+      access-token-minutes: ${JWT_ACCESS_TOKEN_MINUTES:15}
+      refresh-token-days: ${JWT_REFRESH_TOKEN_DAYS:1}
+      refresh-token-days-keep-signed-in: ${JWT_REFRESH_TOKEN_DAYS_KEEP_SIGNED_IN:30}
+    auth:
+      max-failed-attempts: ${AUTH_MAX_FAILED_ATTEMPTS:5}
+      lock-minutes: ${AUTH_LOCK_MINUTES:15}
+      auth-rate-limit-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
 
