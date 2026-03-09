@@ -4,14 +4,32 @@ import Link from "next/link";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { useEffect, useState } from "react";
-import { getAuthUser } from "@/lib/auth";
+import { clearAuthUser, getAuthUser } from "@/lib/auth";
+import { usePathname, useRouter } from "next/navigation";
+import { Button } from "./ui/button";
 
 export function Navbar() {
+  const router = useRouter();
+  const pathname = usePathname();
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showAuthLinks, setShowAuthLinks] = useState(true);
+  const [displayName, setDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
-    setShowDashboard(Boolean(getAuthUser()));
-  }, []);
+    const authUser = getAuthUser();
+    setShowDashboard(Boolean(authUser));
+    setShowAuthLinks(!authUser);
+    setDisplayName(authUser?.displayName ?? null);
+  }, [pathname]);
+
+  const handleLogout = () => {
+    clearAuthUser();
+    setShowDashboard(false);
+    setShowAuthLinks(true);
+    setDisplayName(null);
+    router.push("/");
+    router.refresh();
+  };
 
   return (
     <header className="border-b border-border bg-background/95 backdrop-blur">
@@ -37,6 +55,21 @@ export function Navbar() {
               Dashboard
             </Link>
           ) : null}
+          {displayName ? (
+            <span className="text-sm text-foreground/80">Hi, {displayName}</span>
+          ) : null}
+          {showAuthLinks ? (
+            <Link
+              href="/auth"
+              className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+            >
+              Log in
+            </Link>
+          ) : (
+            <Button type="button" variant="outline" size="sm" onClick={handleLogout}>
+              Log out
+            </Button>
+          )}
           <ThemeToggle />
         </div>
       </div>

@@ -3,7 +3,10 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.SimpleMessageResponse;
+import com.studysnap.backend.dto.VerifyEmailRequest;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.UserContextService;
 import jakarta.validation.Valid;
@@ -38,5 +41,31 @@ public class AuthController {
     public MeResponse me(@RequestHeader(name = "X-User-Id", required = false) String userIdHeader) {
         UUID userId = userContextService.requireUserId(userIdHeader);
         return authService.getMe(userId);
+    }
+
+    @PostMapping("/onboarding/profile-type")
+    public MeResponse completeOnboarding(
+            @RequestHeader(name = "X-User-Id", required = false) String userIdHeader,
+            @Valid @RequestBody OnboardingProfileTypeRequest request
+    ) {
+        UUID userId = userContextService.requireUserId(userIdHeader);
+        return authService.completeOnboarding(userId, request);
+    }
+
+    @PostMapping("/verify-email/request")
+    public SimpleMessageResponse requestEmailVerification(
+            @RequestHeader(name = "X-User-Id", required = false) String userIdHeader
+    ) {
+        UUID userId = userContextService.requireUserId(userIdHeader);
+        return authService.requestEmailVerification(userId);
+    }
+
+    @PostMapping("/verify-email/confirm")
+    public MeResponse verifyEmail(
+            @RequestHeader(name = "X-User-Id", required = false) String userIdHeader,
+            @Valid @RequestBody VerifyEmailRequest request
+    ) {
+        UUID userId = userContextService.requireUserId(userIdHeader);
+        return authService.verifyEmail(userId, request);
     }
 }

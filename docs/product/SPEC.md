@@ -249,6 +249,11 @@ User accounts are intended to support:
 - future subscription analytics
 - future premium feature access
 
+Current account flow direction:
+- signup asks for first name, email, password, and optional display name
+- email verification is required before real Study Pack generation
+- onboarding asks profile type after signup/login
+
 UI copy for onboarding profile selection:
 - “I’m using Study Snap as a…”
 

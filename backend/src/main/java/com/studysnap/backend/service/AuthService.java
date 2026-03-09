@@ -3,14 +3,18 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
+import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.VerifyEmailRequest;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,8 @@ import java.util.UUID;
 @Transactional
 @RequiredArgsConstructor
 public class AuthService {
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
     private final PasswordEncoder passwordEncoder;
@@ -39,16 +45,16 @@ public class AuthService {
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFirstName(request.firstName().trim());
-        user.setLastName(request.lastName().trim());
         user.setDisplayName(resolveDisplayName(request.displayName(), request.firstName()));
-        user.setCountryCode(normalizeCountryCode(request.countryCode()));
-        user.setProfileType(request.profileType() == null ? ProfileType.STUDENT : request.profileType());
+        user.setCountryCode(null);
+        user.setProfileType(null);
         user.setStatus(UserStatus.ACTIVE);
         user.setCreatedAt(OffsetDateTime.now());
         user.setUpdatedAt(OffsetDateTime.now());
 
         UserEntity saved = userRepository.save(user);
         subscriptionService.createDefaultFreeSubscription(saved);
+        sendVerificationEmailPlaceholder(saved);
         return buildAuthResponse(saved, PlanType.FREE);
     }
 
@@ -83,9 +89,79 @@ public class AuthService {
                 user.getDisplayName(),
                 user.getCountryCode(),
                 user.getProfileType(),
+                user.getEmailVerifiedAt(),
                 user.getStatus(),
                 subscriptionService.resolvePlan(user.getId())
         );
+    }
+
+    public MeResponse completeOnboarding(UUID userId, OnboardingProfileTypeRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+
+        user.setProfileType(request.profileType());
+        user.setUpdatedAt(OffsetDateTime.now());
+        PlanType planType = subscriptionService.resolvePlan(user.getId());
+
+        return new MeResponse(
+                user.getId().toString(),
+                user.getEmail(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getDisplayName(),
+                user.getCountryCode(),
+                user.getProfileType(),
+                user.getEmailVerifiedAt(),
+                user.getStatus(),
+                planType
+        );
+    }
+
+    public SimpleMessageResponse requestEmailVerification(UUID userId) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        sendVerificationEmailPlaceholder(user);
+        return new SimpleMessageResponse("Verification email sent. Please check your inbox.");
+    }
+
+    public MeResponse verifyEmail(UUID userId, VerifyEmailRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+
+        if (!request.token().trim().equals(user.getId().toString())) {
+            throw new AppException("INVALID_VERIFICATION_TOKEN", "Invalid verification token.", HttpStatus.BAD_REQUEST);
+        }
+
+        if (user.getEmailVerifiedAt() == null) {
+            user.setEmailVerifiedAt(OffsetDateTime.now());
+            user.setUpdatedAt(OffsetDateTime.now());
+        }
+
+        return new MeResponse(
+                user.getId().toString(),
+                user.getEmail(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getDisplayName(),
+                user.getCountryCode(),
+                user.getProfileType(),
+                user.getEmailVerifiedAt(),
+                user.getStatus(),
+                subscriptionService.resolvePlan(user.getId())
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public void requireEmailVerified(UUID userId) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        if (user.getEmailVerifiedAt() == null) {
+            throw new AppException(
+                    "EMAIL_NOT_VERIFIED",
+                    "Verify your email to start generating a Study Pack.",
+                    HttpStatus.FORBIDDEN
+            );
+        }
     }
 
     private AuthResponse buildAuthResponse(UserEntity user, PlanType planType) {
@@ -95,6 +171,7 @@ public class AuthService {
                 user.getEmail(),
                 user.getDisplayName(),
                 user.getProfileType(),
+                user.getEmailVerifiedAt(),
                 planType,
                 token
         );
@@ -104,17 +181,19 @@ public class AuthService {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private String normalizeCountryCode(String countryCode) {
-        if (countryCode == null || countryCode.isBlank()) {
-            return null;
-        }
-        return countryCode.trim().toUpperCase(Locale.ROOT);
-    }
-
     private String resolveDisplayName(String displayName, String firstName) {
         if (displayName != null && !displayName.isBlank()) {
             return displayName.trim();
         }
         return firstName == null ? null : firstName.trim();
+    }
+
+    private void sendVerificationEmailPlaceholder(UserEntity user) {
+        log.info(
+                "email_verification_placeholder userId={} email={} token={} (future: replace with token table + email provider)",
+                user.getId(),
+                user.getEmail(),
+                user.getId()
+        );
     }
 }

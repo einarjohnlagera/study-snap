@@ -38,10 +38,7 @@ export type SignupRequest = {
   email: string;
   password: string;
   firstName: string;
-  lastName: string;
   displayName?: string;
-  countryCode?: string;
-  profileType?: ProfileType;
 };
 
 export type LoginRequest = {
@@ -53,7 +50,8 @@ export type AuthResponse = {
   userId: string;
   email: string;
   displayName: string;
-  profileType: ProfileType;
+  profileType: ProfileType | null;
+  emailVerifiedAt: string | null;
   planType: PlanType;
   token: string;
 };
@@ -62,12 +60,25 @@ export type MeResponse = {
   id: string;
   email: string;
   firstName: string;
-  lastName: string;
+  lastName: string | null;
   displayName: string;
   countryCode: string | null;
-  profileType: ProfileType;
+  profileType: ProfileType | null;
+  emailVerifiedAt: string | null;
   status: "ACTIVE" | "SUSPENDED";
   planType: PlanType;
+};
+
+export type OnboardingProfileTypeRequest = {
+  profileType: ProfileType;
+};
+
+export type SimpleMessageResponse = {
+  message: string;
+};
+
+export type VerifyEmailRequest = {
+  token: string;
 };
 
 export type NeedsTextConfirmationResponse = {
@@ -199,6 +210,7 @@ function toAuthUser(payload: AuthResponse): AuthUser {
     email: payload.email,
     displayName: payload.displayName,
     profileType: payload.profileType,
+    emailVerifiedAt: payload.emailVerifiedAt,
     planType: payload.planType,
     token: payload.token,
   };
@@ -242,6 +254,45 @@ export async function getMe(): Promise<MeResponse> {
   return parseApiResponse<MeResponse>(
     response,
     "Could not load profile. Please try again.",
+  );
+}
+
+export async function completeOnboardingProfileType(
+  request: OnboardingProfileTypeRequest,
+): Promise<MeResponse> {
+  const response = await fetch(buildUrl("/auth/onboarding/profile-type"), {
+    method: "POST",
+    headers: buildAuthHeaders("application/json"),
+    body: JSON.stringify(request),
+  });
+  return parseApiResponse<MeResponse>(
+    response,
+    "Could not complete onboarding. Please try again.",
+  );
+}
+
+export async function requestEmailVerification(): Promise<SimpleMessageResponse> {
+  const response = await fetch(buildUrl("/auth/verify-email/request"), {
+    method: "POST",
+    headers: buildAuthHeaders("application/json"),
+  });
+  return parseApiResponse<SimpleMessageResponse>(
+    response,
+    "Could not send verification email. Please try again.",
+  );
+}
+
+export async function confirmEmailVerification(
+  request: VerifyEmailRequest,
+): Promise<MeResponse> {
+  const response = await fetch(buildUrl("/auth/verify-email/confirm"), {
+    method: "POST",
+    headers: buildAuthHeaders("application/json"),
+    body: JSON.stringify(request),
+  });
+  return parseApiResponse<MeResponse>(
+    response,
+    "Could not verify email. Please try again.",
   );
 }
 

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { deleteMyStudyPack, listMyStudyPacks, type StudyPackListItemResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,6 +18,14 @@ export default function DashboardPage() {
     if (!authUser) {
       setError("Please log in to access your dashboard.");
       setLoading(false);
+      return;
+    }
+    if (!authUser.emailVerifiedAt) {
+      router.replace("/verify-email");
+      return;
+    }
+    if (!authUser.profileType) {
+      router.replace("/onboarding");
       return;
     }
 
@@ -30,7 +40,7 @@ export default function DashboardPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [router]);
 
   const handleDelete = async (id: string) => {
     try {

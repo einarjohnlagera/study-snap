@@ -14,7 +14,7 @@ import {
   DEMO_NOTES,
   DEMO_STUDY_PACK_RESULT,
 } from "./demo-content";
-import { getCurrentUserId } from "@/lib/auth";
+import { getAuthUser, getCurrentUserId } from "@/lib/auth";
 
 type UseStudyPackResult = {
   notesText: string;
@@ -101,6 +101,15 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
       setErrorMessage("Sign up and log in to start generating your Study Pack.");
       return;
     }
+    const authUser = getAuthUser();
+    if (!authUser?.emailVerifiedAt) {
+      setErrorMessage("Verify your email to start generating your Study Pack.");
+      return;
+    }
+    if (!authUser.profileType) {
+      setErrorMessage("Complete onboarding to start generating your Study Pack.");
+      return;
+    }
 
     setLoading(true);
     setErrorMessage(null);
@@ -143,6 +152,15 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     }
     if (!getCurrentUserId()) {
       setErrorMessage("Sign up and log in to start generating your Study Pack.");
+      return;
+    }
+    const authUser = getAuthUser();
+    if (!authUser?.emailVerifiedAt) {
+      setErrorMessage("Verify your email to start generating your Study Pack.");
+      return;
+    }
+    if (!authUser.profileType) {
+      setErrorMessage("Complete onboarding to start generating your Study Pack.");
       return;
     }
 

@@ -32,7 +32,7 @@ Recommended fields:
 - `email`
 - `password_hash`
 - `first_name`
-- `last_name`
+- `last_name` (optional, profile completion)
 - `display_name` (optional)
 - `country_code` (optional, ISO-style such as `PH`, `US`)
 - `profile_type` (nullable enum)
@@ -41,6 +41,17 @@ Recommended fields:
 - `updated_at`
 - `last_login_at` (nullable)
 - `email_verified_at` (nullable)
+
+Current signup payload direction:
+- `first_name`
+- `email`
+- `password_hash` (from password input)
+- `display_name` (optional, fallback to `first_name`)
+
+Fields deferred to onboarding/profile completion:
+- `profile_type`
+- `country_code`
+- `last_name`
 
 ### display_name behavior
 - optional field
