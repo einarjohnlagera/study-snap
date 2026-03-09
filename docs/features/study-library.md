@@ -121,6 +121,11 @@ Response model separation:
 - list endpoint stays lightweight for dashboard usage (`id`, `title`, `summaryPreview`, `quizCount`, `createdAt`, `tags`)
 - detail endpoint returns full study content (`title`, `summary`, `keyConcepts`, `quiz`, `createdAt`, `tags`)
 
+Quiz rendering consistency:
+- Study Pack detail quiz cards should match Study page quiz card behavior
+- correct answer choice is highlighted in green with the same "Correct answer" treatment
+- shared quiz rendering components should be preferred to avoid UI drift
+
 ## Roadmap note
 
 The original roadmap placed Study Library after several other phases.

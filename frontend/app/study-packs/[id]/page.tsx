@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser } from "@/lib/auth";
 import { getMyStudyPack, type StudyPackResponse } from "@/lib/api";
 
@@ -173,29 +174,7 @@ export default function StudyPackDetailPage() {
             </ul>
           </Card>
 
-          <Card className="space-y-4">
-            <h2 className="text-xl font-semibold">Practice Quiz</h2>
-            <div className="space-y-5">
-              {studyPack.quiz.map((item, index) => (
-                <div key={`${studyPack.id}-quiz-${index}`} className="space-y-3 rounded-lg border border-border p-4">
-                  <p className="text-sm font-semibold text-foreground">
-                    {index + 1}. {item.question}
-                  </p>
-                  <ul className="space-y-2 text-sm text-foreground/80">
-                    {item.choices.map((choice, choiceIndex) => (
-                      <li key={`${studyPack.id}-quiz-${index}-choice-${choiceIndex}`} className="rounded-md bg-background px-3 py-2">
-                        {String.fromCharCode(65 + choiceIndex)}. {choice}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="space-y-1 text-sm">
-                    <p className="font-medium text-foreground">Answer: {item.answer}</p>
-                    <p className="text-foreground/75">Explanation: {item.explanation}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <PracticeQuizCard quiz={studyPack.quiz} />
         </div>
       ) : null}
     </main>
