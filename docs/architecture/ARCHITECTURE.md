@@ -88,6 +88,7 @@ Typical local runs:
 Note:
 - Real product endpoints are designed for authenticated usage.
 - Current implementation prepares ownership logic via user context resolution and can be wired to full auth middleware next.
+- Study Pack generation is blocked until account email is verified.
 
 ### Create Study Pack from text
 `POST /api/studyPack`
@@ -123,6 +124,16 @@ Request example:
 ```json
 { "draftId": "string", "notesText": "user-edited text" }
 ```
+
+### Auth onboarding and verification (current foundation)
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/onboarding/profile-type`
+- `POST /api/auth/verify-email/request` (placeholder send flow)
+- `POST /api/auth/verify-email/confirm` (placeholder confirm flow)
+
+Token-backed verification is planned as a future upgrade.
 
 ### Get saved Study Pack
 `GET /api/studyPack/{id}`

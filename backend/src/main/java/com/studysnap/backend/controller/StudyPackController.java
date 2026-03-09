@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.StudyPackListItemResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.StudyPackService;
 import com.studysnap.backend.service.UserContextService;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ import java.util.UUID;
 @RequestMapping("/studyPack")
 @RequiredArgsConstructor
 public class StudyPackController {
+	private final AuthService authService;
 	private final StudyPackService studyPackService;
 	private final UserContextService userContextService;
 
@@ -37,6 +39,7 @@ public class StudyPackController {
 			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
 	) {
 		UUID userId = userContextService.requireUserId(userIdHeader);
+		authService.requireEmailVerified(userId);
 		return studyPackService.createFromText(request, userId);
 	}
 
@@ -47,6 +50,7 @@ public class StudyPackController {
 			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
 	) {
 		UUID userId = userContextService.requireUserId(userIdHeader);
+		authService.requireEmailVerified(userId);
 		return studyPackService.createFromImage(image, subject, userId);
 	}
 
@@ -56,6 +60,7 @@ public class StudyPackController {
 			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
 	) {
 		UUID userId = userContextService.requireUserId(userIdHeader);
+		authService.requireEmailVerified(userId);
 		return studyPackService.confirmExtractedText(request, userId);
 	}
 

@@ -4,7 +4,8 @@ export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
-  profileType: "STUDENT" | "PARENT" | "PROFESSIONAL";
+  profileType: "STUDENT" | "PARENT" | "PROFESSIONAL" | null;
+  emailVerifiedAt: string | null;
   planType: "FREE" | "PREMIUM";
   token: string;
 };
@@ -42,4 +43,8 @@ export function clearAuthUser(): void {
 
 export function getCurrentUserId(): string | null {
   return getAuthUser()?.id ?? null;
+}
+
+export function isEmailVerified(): boolean {
+  return Boolean(getAuthUser()?.emailVerifiedAt);
 }

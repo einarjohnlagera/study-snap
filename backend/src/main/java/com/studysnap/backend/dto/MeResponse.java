@@ -4,6 +4,8 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserStatus;
 
+import java.time.OffsetDateTime;
+
 public record MeResponse(
         String id,
         String email,
@@ -12,6 +14,7 @@ public record MeResponse(
         String displayName,
         String countryCode,
         ProfileType profileType,
+        OffsetDateTime emailVerifiedAt,
         UserStatus status,
         PlanType planType
 ) {

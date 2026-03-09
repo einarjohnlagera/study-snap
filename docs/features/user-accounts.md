@@ -94,7 +94,7 @@ Recommended fields:
 - `email`
 - `password_hash` (or auth provider fields later)
 - `first_name`
-- `last_name`
+- `last_name` (optional, for profile completion)
 - `display_name` (optional)
 - `country_code` (optional, ISO-style such as `PH`, `US`)
 - `profile_type` (nullable enum)
@@ -120,6 +120,17 @@ Backend/API behavior:
   - otherwise `firstName`
 
 This keeps onboarding simple while still allowing user-friendly personalization.
+
+Signup fields for current flow:
+- `firstName` (required)
+- `email` (required)
+- `password` (required)
+- `displayName` (optional)
+
+Deferred to onboarding/profile completion:
+- `profileType`
+- `countryCode`
+- `lastName`
 
 ---
 
@@ -207,6 +218,19 @@ This should power the future Study Library dashboard for:
 - list my study packs
 - open a study pack
 - delete a study pack
+
+## Email verification direction
+
+Email verification is required before real Study Pack generation.
+
+Current implementation direction:
+- signup triggers a placeholder verification send flow
+- generation endpoints are blocked until `email_verified_at` is set
+
+Future direction:
+- token table-backed verification
+- provider-backed email delivery
+- dedicated verify and resend flows with expiring tokens
 
 ---
 
