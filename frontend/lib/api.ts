@@ -22,6 +22,7 @@ export type StudyPackResponse = {
   keyConcepts: string[];
   tags: string[];
   quiz: QuizItem[];
+  createdAt: string;
   meta: {
     ocrConfidence: number | null;
     latencyMs: number | null;
@@ -384,6 +385,18 @@ export async function listMyStudyPacks(): Promise<StudyPackListItemResponse[]> {
     true,
   );
   return parseApiResponse<StudyPackListItemResponse[]>(response, "Could not load your Study Packs.");
+}
+
+export async function getMyStudyPack(id: string): Promise<StudyPackResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/${id}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<StudyPackResponse>(response, "Could not load this Study Pack.");
 }
 
 export async function deleteMyStudyPack(id: string): Promise<void> {

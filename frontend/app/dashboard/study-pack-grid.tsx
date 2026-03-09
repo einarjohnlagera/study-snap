@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { StudyPackListItemResponse } from "@/lib/api";
@@ -41,9 +42,11 @@ export function StudyPackGrid({ studyPacks, onDelete }: StudyPackGridProps) {
             ) : null}
 
             <div className="flex gap-2">
-              <Button type="button" variant="outline" disabled title="Study Pack detail page is coming soon.">
-                Open
-              </Button>
+              <Link href={`/study-packs/${item.id}`}>
+                <Button type="button" variant="outline">
+                  Open
+                </Button>
+              </Link>
               <Button type="button" variant="outline" onClick={() => void onDelete(item.id)}>
                 Delete
               </Button>

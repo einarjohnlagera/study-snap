@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { StudyPackListItemResponse } from "@/lib/api";
@@ -36,9 +37,9 @@ export function ContinueSpotlight({ latestStudyPack }: ContinueSpotlightProps) {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" disabled title="Study Pack detail page is coming soon.">
-          Continue
-        </Button>
+        <Link href={`/study-packs/${latestStudyPack.id}`}>
+          <Button type="button">Continue</Button>
+        </Link>
       </div>
     </Card>
   );

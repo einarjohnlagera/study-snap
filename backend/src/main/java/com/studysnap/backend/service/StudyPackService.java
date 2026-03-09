@@ -249,6 +249,7 @@ public class StudyPackService {
                 entity.getKeyConcepts(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getQuiz(),
+                entity.getCreatedAt(),
                 new StudyPackMeta(entity.getOcrConfidence(), latencyMs)
         );
     }
