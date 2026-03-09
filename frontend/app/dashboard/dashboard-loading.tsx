@@ -4,6 +4,17 @@ export function DashboardLoading() {
   return (
     <div className="space-y-6">
       <Card className="space-y-3">
+        <div className="h-4 w-32 animate-pulse rounded bg-foreground/10" />
+        <div className="h-6 w-56 animate-pulse rounded bg-foreground/10" />
+        <div className="h-4 w-full animate-pulse rounded bg-foreground/10" />
+        <div className="h-4 w-3/4 animate-pulse rounded bg-foreground/10" />
+        <div className="flex gap-2">
+          <div className="h-9 w-32 animate-pulse rounded bg-foreground/10" />
+          <div className="h-9 w-36 animate-pulse rounded bg-foreground/10" />
+        </div>
+      </Card>
+
+      <Card className="space-y-3">
         <div className="h-5 w-44 animate-pulse rounded bg-foreground/10" />
         <div className="h-4 w-full animate-pulse rounded bg-foreground/10" />
         <div className="h-4 w-3/4 animate-pulse rounded bg-foreground/10" />

@@ -28,6 +28,33 @@ Recommended list metadata:
 - quiz question count
 - tags when available
 
+### Study consistency card (UI guidance)
+
+The dashboard includes a lightweight Study Consistency card to encourage repeated study behavior.
+
+Purpose:
+- keep the dashboard action-oriented even with few saved Study Packs
+- prompt users to continue reviewing or create a new Study Pack
+- reinforce a regular study habit without pressure
+
+Current behavior:
+- motivational message and clear actions (continue studying, create new Study Pack)
+- if no Study Packs exist, guidance focuses on creating the first Study Pack
+- no streak numbers and no fake activity data
+
+Future direction:
+- real streak/activity tracking can be layered later when backend activity signals are available
+
+### Dashboard CTA hierarchy refinement
+
+To keep the Study Library focused and intentional:
+- the hero section owns the main primary action (`New Study Pack`)
+- continue studying appears only when at least one Study Pack exists
+- the study consistency card stays supportive and motivational (not a duplicate CTA area)
+- empty state owns the `Create your first Study Pack` action for new users
+
+The dashboard should avoid repeating multiple equivalent primary actions that all point to the same route.
+
 ## User-account dependency
 
 The Study Library works better after user accounts exist because:
