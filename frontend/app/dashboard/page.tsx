@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [contentVisible, setContentVisible] = useState(false);
 
   const loadStudyPacks = useCallback(async () => {
     const authUser = getAuthUser();
@@ -51,6 +52,15 @@ export default function DashboardPage() {
     void loadStudyPacks();
   }, [loadStudyPacks]);
 
+  useEffect(() => {
+    if (loading) {
+      setContentVisible(false);
+      return;
+    }
+    const timer = setTimeout(() => setContentVisible(true), 20);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
   const handleDelete = async (id: string) => {
     try {
       await deleteMyStudyPack(id);
@@ -70,9 +80,17 @@ export default function DashboardPage() {
       {loading ? (
         <DashboardLoading />
       ) : error ? (
-        <DashboardError message={error} onRetry={loadStudyPacks} />
+        <div
+          className="space-y-6"
+          style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
+        >
+          <DashboardError message={error} onRetry={loadStudyPacks} />
+        </div>
       ) : (
-        <>
+        <div
+          className="space-y-6"
+          style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
+        >
           <ContinueSpotlight latestStudyPack={latestStudyPack} />
           <DashboardStats studyPacks={items} />
           {items.length === 0 ? (
@@ -80,7 +98,7 @@ export default function DashboardPage() {
           ) : (
             <StudyPackGrid studyPacks={items} onDelete={handleDelete} />
           )}
-        </>
+        </div>
       )}
     </div>
   );
