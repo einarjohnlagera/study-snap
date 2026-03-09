@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/studyPack")
+@RequestMapping("/study-packs")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('USER','ADMIN')")
 public class StudyPackController {

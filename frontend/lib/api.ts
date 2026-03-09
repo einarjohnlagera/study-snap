@@ -312,7 +312,7 @@ export async function confirmEmailVerification(request: VerifyEmailRequest): Pro
 
 export async function createStudyPackFromText(notesText: string): Promise<StudyPackResponse> {
   const response = await fetchWithAuth(
-    "/studyPack",
+    "/study-packs",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -336,7 +336,7 @@ export async function createStudyPackFromImage(imageFile: File): Promise<StudyPa
   formData.append("image", imageFile);
 
   const response = await fetchWithAuth(
-    "/studyPack",
+    "/study-packs",
     {
       method: "POST",
       headers: buildAuthHeaders(),
@@ -355,7 +355,7 @@ export async function confirmStudyPackText(
   notesText: string,
 ): Promise<StudyPackResponse> {
   const response = await fetchWithAuth(
-    "/studyPack/confirm-text",
+    "/study-packs/confirm-text",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -376,7 +376,7 @@ export async function confirmStudyPackText(
 
 export async function listMyStudyPacks(): Promise<StudyPackListItemResponse[]> {
   const response = await fetchWithAuth(
-    "/studyPack",
+    "/study-packs",
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -388,7 +388,7 @@ export async function listMyStudyPacks(): Promise<StudyPackListItemResponse[]> {
 
 export async function deleteMyStudyPack(id: string): Promise<void> {
   const response = await fetchWithAuth(
-    `/studyPack/${id}`,
+    `/study-packs/${id}`,
     {
       method: "DELETE",
       headers: buildAuthHeaders(),
