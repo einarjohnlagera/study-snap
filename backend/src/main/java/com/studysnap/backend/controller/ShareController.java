@@ -2,32 +2,30 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.PublicShareResponse;
 import com.studysnap.backend.dto.ShareLinkResponse;
-import com.studysnap.backend.security.SecurityUserContext;
+import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.ShareService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
 @RestController
 @RequestMapping
 @RequiredArgsConstructor
 public class ShareController {
 	private final ShareService shareService;
-	private final SecurityUserContext securityUserContext;
 
 	@PostMapping("/studyPack/{id}/share")
+	@PreAuthorize("hasAnyRole('USER','ADMIN')")
 	public ShareLinkResponse createShare(
 			@PathVariable String id,
-			Authentication authentication
+			@AuthenticationPrincipal AuthenticatedUser user
 	) {
-		UUID userId = securityUserContext.requireUserId(authentication);
-		return shareService.createShareLink(id, userId);
+		return shareService.createShareLink(id, user.userId());
 	}
 
 	@GetMapping("/share/{token}")

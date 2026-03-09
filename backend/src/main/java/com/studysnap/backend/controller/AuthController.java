@@ -9,13 +9,14 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.VerifyEmailRequest;
+import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
-import com.studysnap.backend.security.SecurityUserContext;
 import com.studysnap.backend.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
-    private final SecurityUserContext securityUserContext;
     private final AuthRateLimitService authRateLimitService;
 
     @PostMapping("/signup")
@@ -55,33 +55,33 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public MeResponse me(Authentication authentication) {
-        var userId = securityUserContext.requireUserId(authentication);
-        return authService.getMe(userId);
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse me(@AuthenticationPrincipal AuthenticatedUser user) {
+        return authService.getMe(user.userId());
     }
 
     @PostMapping("/onboarding/profile-type")
+    @PreAuthorize("isAuthenticated()")
     public MeResponse completeOnboarding(
-            Authentication authentication,
+            @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody OnboardingProfileTypeRequest request
     ) {
-        var userId = securityUserContext.requireUserId(authentication);
-        return authService.completeOnboarding(userId, request);
+        return authService.completeOnboarding(user.userId(), request);
     }
 
     @PostMapping("/verify-email/request")
-    public SimpleMessageResponse requestEmailVerification(Authentication authentication) {
-        var userId = securityUserContext.requireUserId(authentication);
-        return authService.requestEmailVerification(userId);
+    @PreAuthorize("isAuthenticated()")
+    public SimpleMessageResponse requestEmailVerification(@AuthenticationPrincipal AuthenticatedUser user) {
+        return authService.requestEmailVerification(user.userId());
     }
 
     @PostMapping("/verify-email/confirm")
+    @PreAuthorize("isAuthenticated()")
     public MeResponse verifyEmail(
-            Authentication authentication,
+            @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody VerifyEmailRequest request
     ) {
-        var userId = securityUserContext.requireUserId(authentication);
-        return authService.verifyEmail(userId, request);
+        return authService.verifyEmail(user.userId(), request);
     }
 
     private String resolveClientIp(HttpServletRequest request) {
