@@ -4,18 +4,18 @@ import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.StudyPackListItemResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.security.SecurityUserContext;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.StudyPackService;
-import com.studysnap.backend.service.UserContextService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -31,14 +31,14 @@ import java.util.UUID;
 public class StudyPackController {
 	private final AuthService authService;
 	private final StudyPackService studyPackService;
-	private final UserContextService userContextService;
+	private final SecurityUserContext securityUserContext;
 
 	@PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
 	public StudyPackResponse createFromText(
 			@Valid @RequestBody CreateStudyPackRequest request,
-			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
+			Authentication authentication
 	) {
-		UUID userId = userContextService.requireUserId(userIdHeader);
+		UUID userId = securityUserContext.requireUserId(authentication);
 		authService.requireEmailVerified(userId);
 		return studyPackService.createFromText(request, userId);
 	}
@@ -47,9 +47,9 @@ public class StudyPackController {
 	public Object createFromImage(
 			@RequestPart("image") MultipartFile image,
 			@RequestParam(value = "subject", required = false) String subject,
-			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
+			Authentication authentication
 	) {
-		UUID userId = userContextService.requireUserId(userIdHeader);
+		UUID userId = securityUserContext.requireUserId(authentication);
 		authService.requireEmailVerified(userId);
 		return studyPackService.createFromImage(image, subject, userId);
 	}
@@ -57,9 +57,9 @@ public class StudyPackController {
 	@PostMapping("/confirm-text")
 	public StudyPackResponse confirmText(
 			@Valid @RequestBody ConfirmTextRequest request,
-			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
+			Authentication authentication
 	) {
-		UUID userId = userContextService.requireUserId(userIdHeader);
+		UUID userId = securityUserContext.requireUserId(authentication);
 		authService.requireEmailVerified(userId);
 		return studyPackService.confirmExtractedText(request, userId);
 	}
@@ -67,26 +67,26 @@ public class StudyPackController {
 	@GetMapping("/{id}")
 	public StudyPackResponse getById(
 			@PathVariable String id,
-			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
+			Authentication authentication
 	) {
-		UUID userId = userContextService.requireUserId(userIdHeader);
+		UUID userId = securityUserContext.requireUserId(authentication);
 		return studyPackService.getById(id, userId);
 	}
 
 	@GetMapping
 	public List<StudyPackListItemResponse> listMine(
-			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
+			Authentication authentication
 	) {
-		UUID userId = userContextService.requireUserId(userIdHeader);
+		UUID userId = securityUserContext.requireUserId(authentication);
 		return studyPackService.listMine(userId);
 	}
 
 	@DeleteMapping("/{id}")
 	public void deleteMine(
 			@PathVariable String id,
-			@RequestHeader(name = "X-User-Id", required = false) String userIdHeader
+			Authentication authentication
 	) {
-		UUID userId = userContextService.requireUserId(userIdHeader);
+		UUID userId = securityUserContext.requireUserId(authentication);
 		studyPackService.deleteMine(id, userId);
 	}
 }

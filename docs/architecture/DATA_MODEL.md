@@ -36,6 +36,10 @@ Recommended fields:
 - `display_name` (optional)
 - `country_code` (optional, ISO-style such as `PH`, `US`)
 - `profile_type` (nullable enum)
+- `role` (`USER` | `ADMIN`)
+- `token_version` (integer for access-token invalidation)
+- `failed_login_attempts` (integer)
+- `locked_until` (nullable)
 - `status`
 - `created_at`
 - `updated_at`
@@ -185,6 +189,24 @@ Potential fields:
 - `event_type`
 - `request_units`
 - `created_at`
+
+### refresh_tokens
+
+Purpose:
+- keep-signed-in sessions and secure token rotation
+
+Fields:
+- `id`
+- `user_id`
+- `token_hash` (sha256 hash of refresh token)
+- `expires_at`
+- `revoked_at` (nullable)
+- `created_at`
+- `last_used_at` (nullable)
+- `keep_signed_in` (boolean)
+- `device_name` (nullable)
+- `ip_address` (nullable)
+- `user_agent` (nullable)
 
 ## Relationships
 

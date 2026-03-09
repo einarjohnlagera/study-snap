@@ -26,6 +26,7 @@ export default function AuthPage() {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +62,7 @@ export default function AuthPage() {
               password,
               displayName: displayName.trim().length > 0 ? displayName : undefined,
             })
-          : await login({ email, password });
+          : await login({ email, password, keepSignedIn });
       setAuthUser(authUser);
       router.push(nextRouteForAuth(authUser.profileType, authUser.emailVerifiedAt));
       router.refresh();
@@ -150,6 +151,16 @@ export default function AuthPage() {
               required
             />
           </label>
+          {mode === "login" ? (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={keepSignedIn}
+                onChange={(e) => setKeepSignedIn(e.target.checked)}
+              />
+              Keep me signed in for 30 days
+            </label>
+          ) : null}
 
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
