@@ -30,6 +30,8 @@ public class StudySnapProperties {
         private int minDetectedChars = 30;
         private int minDetectedWords = 6;
         private double hardRejectConfidence = 0.45;
+        private String googleApplicationCredentials = "";
+        private String googleApplicationCredentialsJson = "";
     }
 
     @Getter

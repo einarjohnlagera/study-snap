@@ -1,5 +1,7 @@
 package com.studysnap.backend.service.impl;
 
+import com.google.api.gax.core.FixedCredentialsProvider;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.vision.v1.AnnotateImageRequest;
 import com.google.cloud.vision.v1.AnnotateImageResponse;
 import com.google.cloud.vision.v1.BatchAnnotateImagesResponse;
@@ -7,6 +9,7 @@ import com.google.cloud.vision.v1.Block;
 import com.google.cloud.vision.v1.Feature;
 import com.google.cloud.vision.v1.Image;
 import com.google.cloud.vision.v1.ImageAnnotatorClient;
+import com.google.cloud.vision.v1.ImageAnnotatorSettings;
 import com.google.cloud.vision.v1.Page;
 import com.google.cloud.vision.v1.TextAnnotation;
 import com.google.protobuf.ByteString;
@@ -22,10 +25,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.nio.charset.StandardCharsets;
 
 /**
  * OCR implementation backed by Google Cloud Vision.
@@ -58,7 +64,7 @@ public class GoogleVisionOcrService implements OcrService {
     public OcrResult extractText(MultipartFile image) {
         byte[] imageBytes = readImageBytes(image);
 
-        try (ImageAnnotatorClient client = ImageAnnotatorClient.create()) {
+        try (ImageAnnotatorClient client = createVisionClient()) {
             String quickDetectedText = runQuickDetection(client, imageBytes);
             validateQuickDetection(quickDetectedText);
 
@@ -89,6 +95,42 @@ public class GoogleVisionOcrService implements OcrService {
                     "OCR_UNAVAILABLE",
                     "We could not read text from this image right now. Please try again.",
                     HttpStatus.BAD_GATEWAY
+            );
+        }
+    }
+
+    private ImageAnnotatorClient createVisionClient() {
+        String credentialsJson = properties.getOcr().getGoogleApplicationCredentialsJson();
+        String credentialsPath = properties.getOcr().getGoogleApplicationCredentials();
+
+        try {
+            if (credentialsJson != null && !credentialsJson.isBlank()) {
+                GoogleCredentials credentials = GoogleCredentials.fromStream(
+                        new ByteArrayInputStream(credentialsJson.getBytes(StandardCharsets.UTF_8))
+                );
+                ImageAnnotatorSettings settings = ImageAnnotatorSettings.newBuilder()
+                        .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+                        .build();
+                return ImageAnnotatorClient.create(settings);
+            }
+
+            if (credentialsPath != null && !credentialsPath.isBlank()) {
+                try (FileInputStream input = new FileInputStream(credentialsPath)) {
+                    GoogleCredentials credentials = GoogleCredentials.fromStream(input);
+                    ImageAnnotatorSettings settings = ImageAnnotatorSettings.newBuilder()
+                            .setCredentialsProvider(FixedCredentialsProvider.create(credentials))
+                            .build();
+                    return ImageAnnotatorClient.create(settings);
+                }
+            }
+
+            // Fallback for environments that provide ADC natively (Cloud Run/GCE/etc.)
+            return ImageAnnotatorClient.create();
+        } catch (IOException ex) {
+            throw new AppException(
+                    "OCR_CONFIGURATION_ERROR",
+                    "Google OCR credentials are invalid or unreadable. Check your GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_APPLICATION_CREDENTIALS_JSON configuration.",
+                    HttpStatus.INTERNAL_SERVER_ERROR
             );
         }
     }

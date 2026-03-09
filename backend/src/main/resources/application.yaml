@@ -53,6 +53,8 @@ studysnap:
     min-detected-chars: ${OCR_MIN_DETECTED_CHARS:30}
     min-detected-words: ${OCR_MIN_DETECTED_WORDS:6}
     hard-reject-confidence: ${OCR_HARD_REJECT_CONFIDENCE:0.45}
+    google-application-credentials: ${GOOGLE_APPLICATION_CREDENTIALS:}
+    google-application-credentials-json: ${GOOGLE_APPLICATION_CREDENTIALS_JSON:}
   llm:
     api:
       provider: ${LLM_PROVIDER:openai}
