@@ -68,3 +68,10 @@ Output:
 - Delete images after OCR.
 - Avoid logging raw images or full extracted text.
 
+## Google OCR credentials
+For `OCR_PROVIDER=google-vision`, credentials can be provided in either way:
+- `GOOGLE_APPLICATION_CREDENTIALS`: absolute path to the service-account JSON file
+- `GOOGLE_APPLICATION_CREDENTIALS_JSON`: raw service-account JSON content
+
+If both are empty, the backend falls back to Google ADC (Application Default Credentials).
+
