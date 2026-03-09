@@ -11,6 +11,7 @@ import { StudyPackGrid } from "./study-pack-grid";
 import { DashboardLoading } from "./dashboard-loading";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
+import { StudyConsistencyCard } from "./study-consistency-card";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -91,7 +92,8 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
-          <ContinueSpotlight latestStudyPack={latestStudyPack} />
+          {latestStudyPack ? <ContinueSpotlight latestStudyPack={latestStudyPack} /> : null}
+          <StudyConsistencyCard />
           <DashboardStats studyPacks={items} />
           {items.length === 0 ? (
             <DashboardEmpty />

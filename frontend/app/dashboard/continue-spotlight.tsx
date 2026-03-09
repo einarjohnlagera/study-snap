@@ -1,32 +1,12 @@
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { StudyPackListItemResponse } from "@/lib/api";
 
 type ContinueSpotlightProps = {
-  latestStudyPack: StudyPackListItemResponse | null;
+  latestStudyPack: StudyPackListItemResponse;
 };
 
 export function ContinueSpotlight({ latestStudyPack }: ContinueSpotlightProps) {
-  if (!latestStudyPack) {
-    return (
-      <Card className="space-y-4">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Continue Studying
-          </p>
-          <h2 className="text-xl font-semibold">Start your first Study Pack</h2>
-          <p className="text-sm text-foreground/75">
-            Turn your notes into a summary, key concepts, and a practice quiz you can revisit here anytime.
-          </p>
-        </div>
-        <Link href="/study">
-          <Button type="button">Create your first Study Pack</Button>
-        </Link>
-      </Card>
-    );
-  }
-
   return (
     <Card className="space-y-4">
       <div className="space-y-1">
@@ -59,11 +39,6 @@ export function ContinueSpotlight({ latestStudyPack }: ContinueSpotlightProps) {
         <Button type="button" disabled title="Study Pack detail page is coming soon.">
           Continue
         </Button>
-        <Link href="/study">
-          <Button type="button" variant="outline">
-            Create new Study Pack
-          </Button>
-        </Link>
       </div>
     </Card>
   );
