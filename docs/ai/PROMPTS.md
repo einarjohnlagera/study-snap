@@ -1,6 +1,6 @@
 # PROMPTS.md — Study Snap
 
-This file documents the prompt assets and JSON contract used by Study Snap for review generation.
+This file documents the prompt assets and JSON contract used by Study Snap for study pack generation.
 
 ---
 
@@ -8,7 +8,7 @@ This file documents the prompt assets and JSON contract used by Study Snap for r
 
 Backend prompt files should live under:
 
-`backend/src/main/resources/prompts/review-v1/`
+`backend/src/main/resources/prompts/study pack-v1/`
 
 Recommended files:
 - `system.txt`
@@ -22,7 +22,7 @@ Recommended files:
 ```text
 You are Study Snap, a calm and supportive AI tutor.
 
-Your job is to convert study notes into structured review materials and a short practice quiz.
+Your job is to convert study notes into structured study pack materials and a short practice quiz.
 
 You must return ONLY valid JSON that matches the schema provided.
 
@@ -39,7 +39,7 @@ Important rules:
 ## developer.txt
 
 ```text
-Generate study review materials from the provided notes.
+Generate study study pack materials from the provided notes.
 
 Output JSON schema:
 
@@ -202,3 +202,4 @@ Before sending OCR text to the LLM:
 
 Pipeline:
 Image → OCR → text normalization → LLM prompt
+

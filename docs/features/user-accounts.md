@@ -13,7 +13,7 @@ It should be read together with:
 
 ## Why this exists
 
-Study Snap is evolving from a one-shot review generator into a reusable study workspace.
+Study Snap is evolving from a one-shot study pack generator into a reusable study workspace.
 
 The product already treats generated outputs as **study packs** that users can revisit later in a Study Library.
 Because of that, user accounts should be introduced **before** fully implementing the Study Library dashboard.
@@ -49,10 +49,10 @@ This is intentionally **not** a full classroom/family management system in the f
 
 ### Review → Study Pack
 
-The backend/domain should gradually move from the term **Review** to **Study Pack** where practical.
+The backend/domain should use **StudyPack** as the default term for this entity.
 
 Reason:
-- “Review” is becoming vague as the product grows.
+- "Review" is becoming vague as the product grows.
 - “Study Pack” matches product language in README, SPEC, and roadmap.
 - The Study Library is conceptually a library of study packs.
 
@@ -317,3 +317,5 @@ This context should guide the next implementation work for User Accounts and the
 ## Placement in the refactored docs
 
 This file now lives under `docs/features/` because it is a feature-specific context file.
+
+

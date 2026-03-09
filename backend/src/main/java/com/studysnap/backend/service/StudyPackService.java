@@ -2,19 +2,19 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ConfirmTextRequest;
-import com.studysnap.backend.dto.CreateReviewRequest;
+import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.NeedsTextConfirmationResponse;
-import com.studysnap.backend.dto.ReviewMeta;
-import com.studysnap.backend.dto.ReviewResponse;
+import com.studysnap.backend.dto.StudyPackMeta;
+import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
-import com.studysnap.backend.entity.ReviewDraftEntity;
-import com.studysnap.backend.entity.ReviewEntity;
-import com.studysnap.backend.entity.ReviewStatus;
+import com.studysnap.backend.entity.StudyPackDraftEntity;
+import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
-import com.studysnap.backend.repository.ReviewDraftRepository;
-import com.studysnap.backend.repository.ReviewRepository;
-import com.studysnap.backend.service.model.GeneratedReviewContent;
+import com.studysnap.backend.repository.StudyPackDraftRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -32,26 +32,26 @@ import java.util.UUID;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class ReviewService {
-    private static final Logger log = LoggerFactory.getLogger(ReviewService.class);
+public class StudyPackService {
+    private static final Logger log = LoggerFactory.getLogger(StudyPackService.class);
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/png", "image/webp");
 
-    private final ReviewRepository reviewRepository;
-    private final ReviewDraftRepository reviewDraftRepository;
+    private final StudyPackRepository studyPackRepository;
+    private final StudyPackDraftRepository studyPackDraftRepository;
     private final OcrService ocrService;
-    private final LlmReviewService llmReviewService;
+    private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
 
-    public ReviewResponse createFromText(CreateReviewRequest request) {
+    public StudyPackResponse createFromText(CreateStudyPackRequest request) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         String normalizedText = normalizeAndValidateText(request.notesText());
 
-        GeneratedReviewContent generated = llmReviewService.generateReview(normalizedText);
-        ReviewEntity saved = saveReview(InputType.TEXT, null, generated);
+        GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
+        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated);
         long latency = System.currentTimeMillis() - startedAt;
 
-        log.info("requestId={} action=create_review inputType=text latencyMs={}", requestId, latency);
+        log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
         return mapToResponse(saved, null, latency);
     }
 
@@ -64,17 +64,17 @@ public class ReviewService {
         String extractedText = mergeSubject(ocrResult.extractedText(), subject);
 
         if (ocrResult.confidence() < properties.getOcr().getConfidenceThreshold()) {
-            ReviewDraftEntity draft = new ReviewDraftEntity();
+            StudyPackDraftEntity draft = new StudyPackDraftEntity();
             draft.setId(UUID.randomUUID());
             draft.setExtractedText(extractedText);
             draft.setOcrConfidence(ocrResult.confidence());
             draft.setCreatedAt(OffsetDateTime.now());
             draft.setExpiresAt(OffsetDateTime.now().plusHours(24));
-            reviewDraftRepository.save(draft);
+            studyPackDraftRepository.save(draft);
 
             long latency = System.currentTimeMillis() - startedAt;
             log.info(
-                    "requestId={} action=create_review inputType=image outcome=needs_text_confirmation latencyMs={}",
+                    "requestId={} action=create_studyPack inputType=image outcome=needs_text_confirmation latencyMs={}",
                     requestId,
                     latency
             );
@@ -82,24 +82,24 @@ public class ReviewService {
         }
 
         String normalizedText = normalizeAndValidateText(extractedText);
-        GeneratedReviewContent generated = llmReviewService.generateReview(normalizedText);
-        ReviewEntity saved = saveReview(InputType.IMAGE, ocrResult.confidence(), generated);
+        GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated);
         long latency = System.currentTimeMillis() - startedAt;
 
-        log.info("requestId={} action=create_review inputType=image latencyMs={}", requestId, latency);
+        log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
         return mapToResponse(saved, extractedText, latency);
     }
 
-    public ReviewResponse confirmExtractedText(ConfirmTextRequest request) {
+    public StudyPackResponse confirmExtractedText(ConfirmTextRequest request) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
 
         UUID draftId = parseUuid(request.draftId(), "DRAFT_NOT_FOUND", "Draft not found.");
-        ReviewDraftEntity draft = reviewDraftRepository.findById(draftId)
+        StudyPackDraftEntity draft = studyPackDraftRepository.findById(draftId)
                 .orElseThrow(() -> new AppException("DRAFT_NOT_FOUND", "Draft not found.", HttpStatus.NOT_FOUND));
 
         if (draft.getExpiresAt().isBefore(OffsetDateTime.now())) {
-            reviewDraftRepository.delete(draft);
+            studyPackDraftRepository.delete(draft);
             throw new AppException(
                     "DRAFT_EXPIRED",
                     "This text confirmation has expired. Please upload the image again.",
@@ -108,9 +108,9 @@ public class ReviewService {
         }
 
         String normalizedText = normalizeAndValidateText(request.notesText());
-        GeneratedReviewContent generated = llmReviewService.generateReview(normalizedText);
-        ReviewEntity saved = saveReview(InputType.IMAGE, draft.getOcrConfidence(), generated);
-        reviewDraftRepository.delete(draft);
+        GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated);
+        studyPackDraftRepository.delete(draft);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=confirm_text latencyMs={}", requestId, latency);
@@ -118,11 +118,11 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true)
-    public ReviewResponse getById(String id) {
-        UUID reviewId = parseUuid(id, "REVIEW_NOT_FOUND", "Review not found.");
-        ReviewEntity review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> new AppException("REVIEW_NOT_FOUND", "Review not found.", HttpStatus.NOT_FOUND));
-        return mapToResponse(review, null, null);
+    public StudyPackResponse getById(String id) {
+        UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
+        StudyPackEntity studyPack = studyPackRepository.findById(studyPackId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+        return mapToResponse(studyPack, null, null);
     }
 
     public NeedsTextConfirmationResponse toNeedsConfirmation(String draftId, String extractedText, double confidence) {
@@ -130,7 +130,7 @@ public class ReviewService {
                 "needs_text_confirmation",
                 draftId,
                 extractedText,
-                new ReviewMeta(confidence, null)
+                new StudyPackMeta(confidence, null)
         );
     }
 
@@ -162,7 +162,7 @@ public class ReviewService {
         if (normalized.isBlank()) {
             throw new AppException(
                     "EMPTY_NOTES",
-                    "Please provide notes text before generating a review.",
+                    "Please provide notes text before generating a study pack.",
                     HttpStatus.BAD_REQUEST
             );
         }
@@ -183,8 +183,8 @@ public class ReviewService {
         return "Subject: " + subject.trim() + ". " + extractedText;
     }
 
-    private ReviewEntity saveReview(InputType inputType, Double ocrConfidence, GeneratedReviewContent generated) {
-        ReviewEntity entity = new ReviewEntity();
+    private StudyPackEntity saveStudyPack(InputType inputType, Double ocrConfidence, GeneratedStudyPackContent generated) {
+        StudyPackEntity entity = new StudyPackEntity();
         entity.setId(UUID.randomUUID());
         entity.setInputType(inputType);
         entity.setTitle(generated.title());
@@ -199,13 +199,13 @@ public class ReviewService {
         entity.setOutputTokens(generated.outputTokens());
         entity.setCachedInputTokens(generated.cachedInputTokens());
         entity.setEstimatedCost(generated.estimatedCost());
-        entity.setStatus(ReviewStatus.DONE);
+        entity.setStatus(StudyPackStatus.DONE);
         entity.setCreatedAt(OffsetDateTime.now());
-        return reviewRepository.save(entity);
+        return studyPackRepository.save(entity);
     }
 
-    private ReviewResponse mapToResponse(ReviewEntity entity, String extractedText, Long latencyMs) {
-        return new ReviewResponse(
+    private StudyPackResponse mapToResponse(StudyPackEntity entity, String extractedText, Long latencyMs) {
+        return new StudyPackResponse(
                 entity.getId().toString(),
                 entity.getInputType().name().toLowerCase(),
                 extractedText,
@@ -213,7 +213,7 @@ public class ReviewService {
                 entity.getSummary(),
                 entity.getKeyConcepts(),
                 entity.getQuiz(),
-                new ReviewMeta(entity.getOcrConfidence(), latencyMs)
+                new StudyPackMeta(entity.getOcrConfidence(), latencyMs)
         );
     }
 
@@ -225,3 +225,4 @@ public class ReviewService {
         }
     }
 }
+

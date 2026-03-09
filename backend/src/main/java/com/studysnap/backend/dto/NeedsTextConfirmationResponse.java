@@ -4,6 +4,7 @@ public record NeedsTextConfirmationResponse(
 		String status,
 		String id,
 		String extractedText,
-		ReviewMeta meta
+		StudyPackMeta meta
 ) {
 }
+

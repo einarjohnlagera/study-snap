@@ -26,7 +26,7 @@ This implementation is a foundation for those features.
 
 ### Naming
 - Prefer **StudyPack** terminology for new schema/design work.
-- Existing `Review` naming may still exist in current code; do not break everything unnecessarily.
+- Existing `study pack` naming may still exist in current code; do not break everything unnecessarily.
 - Use migration-safe, incremental refactors where possible.
 
 ### User profile rules
@@ -121,10 +121,10 @@ Use enums where appropriate for:
 - `SubscriptionStatus`
 
 ### 3. Relationship preparation for Study Packs
-Prepare the design so that saved study packs/reviews can later belong to a user via:
+Prepare the design so that saved study packs/study packs can later belong to a user via:
 - `owner_user_id`
 
-If the project currently still uses `reviews`, keep the implementation incremental and safe.
+If the project currently still uses `study packs`, keep the implementation incremental and safe.
 Do not force a giant rename if it would create unnecessary churn.
 
 ### 4. API design proposal
@@ -198,3 +198,4 @@ Please return:
 8. anything risky or ambiguous that should be reviewed before coding
 
 Favor concrete code scaffolding over vague advice.
+

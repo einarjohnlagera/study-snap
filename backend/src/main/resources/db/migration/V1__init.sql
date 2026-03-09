@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS reviews (
+CREATE TABLE IF NOT EXISTS study_packs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_user_id VARCHAR(255),
     anon_id VARCHAR(255),
@@ -21,11 +21,11 @@ CREATE TABLE IF NOT EXISTS reviews (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_reviews_owner_user_id ON reviews(owner_user_id);
-CREATE INDEX IF NOT EXISTS idx_reviews_anon_id ON reviews(anon_id);
-CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_study_packs_owner_user_id ON study_packs(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_study_packs_anon_id ON study_packs(anon_id);
+CREATE INDEX IF NOT EXISTS idx_study_packs_created_at ON study_packs(created_at DESC);
 
-CREATE TABLE IF NOT EXISTS review_drafts (
+CREATE TABLE IF NOT EXISTS study_pack_drafts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_user_id VARCHAR(255),
     anon_id VARCHAR(255),
@@ -35,17 +35,17 @@ CREATE TABLE IF NOT EXISTS review_drafts (
     expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_review_drafts_owner_user_id ON review_drafts(owner_user_id);
-CREATE INDEX IF NOT EXISTS idx_review_drafts_anon_id ON review_drafts(anon_id);
-CREATE INDEX IF NOT EXISTS idx_review_drafts_expires_at ON review_drafts(expires_at);
+CREATE INDEX IF NOT EXISTS idx_study_pack_drafts_owner_user_id ON study_pack_drafts(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_study_pack_drafts_anon_id ON study_pack_drafts(anon_id);
+CREATE INDEX IF NOT EXISTS idx_study_pack_drafts_expires_at ON study_pack_drafts(expires_at);
 
 CREATE TABLE IF NOT EXISTS share_links (
     token VARCHAR(128) PRIMARY KEY,
-    review_id UUID NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+    study_pack_id UUID NOT NULL REFERENCES study_packs(id) ON DELETE CASCADE,
     is_public BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ,
     view_count INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE INDEX IF NOT EXISTS idx_share_links_review_id ON share_links(review_id);
+CREATE INDEX IF NOT EXISTS idx_share_links_study_pack_id ON share_links(study_pack_id);

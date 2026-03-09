@@ -2,7 +2,7 @@
 
 ## Product positioning
 
-Study Snap turns study notes into structured review materials and practice quizzes.
+Study Snap turns study notes into structured study pack materials and practice quizzes.
 
 It is a calm, on-demand tutor workflow:
 
@@ -43,7 +43,7 @@ Study Snap is designed for:
 Included:
 - landing page
 - study page (paste notes + image upload)
-- results view (review sheet + quiz)
+- results view (study pack sheet + quiz)
 - friendly error handling
 - light/dark theme + global navbar
 - demo mode
@@ -65,10 +65,10 @@ Excluded for now:
 ## Primary user flow
 
 ### 1) Landing (`/`)
-Headline and CTA focus on **NOTES → REVIEW** or **NOTES → STUDY PACK**, not question solving.
+Headline and CTA focus on **NOTES → study pack** or **NOTES → STUDY PACK**, not question solving.
 
 CTA:
-- “Turn Notes into Review” → `/study`
+- “Turn Notes into Study Pack” → `/study`
 
 ### 2) Study page (`/study`)
 Input modes:
@@ -78,7 +78,7 @@ Input modes:
 States:
 1. idle: nothing provided, Generate disabled
 2. ready: notes text or image present, Generate enabled
-3. loading: “Creating your review materials…”
+3. loading: “Creating your study pack materials…”
 4. OCR needs confirmation: show editable extracted text, user confirms
 5. result: show Study Pack + quiz
 6. error: friendly message + recovery path
@@ -92,7 +92,7 @@ Behavior:
 - prefill example notes
 - simulate generation delay
 - return a static placeholder Study Pack
-- does not call the backend review API
+- does not call the backend study pack API
 - does not call OpenAI
 - does not write to the database
 - does not count as a real usage event
@@ -123,7 +123,7 @@ Practice quizzes should include a balanced mix of:
 
 Purpose:
 - make quizzes feel more like real study reviewers
-- improve usefulness for exam preparation and interview review
+- improve usefulness for exam preparation and interview preparation
 
 If notes are too short or simple, quizzes may prioritize recall and understanding.
 
@@ -133,7 +133,7 @@ Study Snap includes a Study Library for saved generated Study Packs.
 
 Purpose:
 - let users revisit past Study Packs
-- build a reusable review collection over time
+- build a reusable study pack collection over time
 - make Study Snap feel like a long-term study workspace
 
 ### Dashboard
@@ -215,13 +215,13 @@ Study Snap follows a freemium model.
 - no saving
 
 ### Free account
-- 3 reviews per day
+- 3 study packs per day
 - summary + key concepts + 5-question quiz
 - can save and view history
 - access to Study Library
 
 ### Premium
-- up to 200 reviews per month
+- up to 200 study packs per month
 - access to Study Library
 - mock exam mode later
 - analytics and mastery tracking later
@@ -323,3 +323,6 @@ This file preserves and reorganizes content from:
 - later user-account decisions
 
 The original source files remain under `/legacy`.
+
+
+

@@ -11,11 +11,11 @@ This document consolidates the data model direction for Study Snap from the lega
 - `StudyPack`
 
 Reason:
-- “Review” is becoming vague as the product grows.
-- “Study Pack” matches product language, Study Library behavior, and user-facing terminology.
+- "Review" is becoming vague as the product grows.
+- "Study Pack" matches product language, Study Library behavior, and user-facing terminology.
 
 Transitional note:
-- legacy code, tables, or endpoints may still use `review`
+- legacy code, tables, or endpoints may still use `Review` terminology
 - future-facing schema and docs should prefer `StudyPack`
 
 ## Core entities
@@ -126,7 +126,7 @@ Legacy architecture also referenced:
 Recommendation:
 - long term, prefer tying effective plan behavior to subscriptions / usage rules rather than only storing `model_tier` on the Study Pack row.
 
-### review_drafts / study_pack_drafts
+### study_pack_drafts / study_pack_drafts
 
 Purpose:
 - store OCR low-confidence extracted text for user confirmation flow
@@ -147,7 +147,7 @@ Purpose:
 
 Fields:
 - `token`
-- `study_pack_id` or legacy `review_id`
+- `study_pack_id`
 - `is_public`
 - `created_at`
 - `expires_at` (nullable)
@@ -240,9 +240,11 @@ Deferred.
 ## Migration guidance
 
 Suggested implementation order:
-1. keep legacy `review` entities working
+1. keep legacy `Review` entities working where they still exist
 2. introduce Study Pack naming in DTOs/docs/new code
 3. add users
 4. add subscriptions
 5. link saved Study Packs to authenticated owners
 6. evolve the Study Library on top of owned Study Packs
+
+

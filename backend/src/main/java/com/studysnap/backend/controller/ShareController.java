@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShareController {
 	private final ShareService shareService;
 
-	@PostMapping("/review/{id}/share")
+	@PostMapping("/studyPack/{id}/share")
 	public ShareLinkResponse createShare(@PathVariable String id) {
 		return shareService.createShareLink(id);
 	}
@@ -26,3 +26,4 @@ public class ShareController {
 		return shareService.getPublicShare(token);
 	}
 }
+

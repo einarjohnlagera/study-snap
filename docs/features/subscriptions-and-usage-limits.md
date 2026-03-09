@@ -13,12 +13,12 @@ Support freemium usage control and future premium plan behavior.
 - 3-question quiz direction
 
 ### Free
-- 3 reviews per day
+- 3 study packs per day
 - access to Study Library
 - 5-question quiz direction
 
 ### Premium
-- up to 200 reviews per month
+- up to 200 study packs per month
 - access to Study Library
 - premium-only features later
 
@@ -44,3 +44,4 @@ For unauthenticated real generation:
 - cancellation handling
 - usage events
 - richer plan enforcement
+

@@ -23,8 +23,8 @@ public class ShareLinkEntity {
 	private String token;
 
 	@ManyToOne(optional = false)
-	@JoinColumn(name = "review_id", nullable = false)
-	private ReviewEntity review;
+	@JoinColumn(name = "study_pack_id", nullable = false)
+	private StudyPackEntity studyPack;
 
 	@Column(name = "is_public", nullable = false)
 	private Boolean isPublic;
@@ -38,3 +38,4 @@ public class ShareLinkEntity {
 	@Column(name = "view_count", nullable = false)
 	private Integer viewCount;
 }
+

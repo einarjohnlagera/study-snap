@@ -12,11 +12,11 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "review_drafts")
+@Table(name = "study_pack_drafts")
 @Getter
 @Setter
 @NoArgsConstructor
-public class ReviewDraftEntity {
+public class StudyPackDraftEntity {
 
 	@Id
 	private UUID id;
@@ -39,3 +39,4 @@ public class ReviewDraftEntity {
 	@Column(name = "expires_at", nullable = false)
 	private OffsetDateTime expiresAt;
 }
+

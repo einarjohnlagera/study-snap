@@ -19,11 +19,11 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "reviews")
+@Table(name = "study_packs")
 @Getter
 @Setter
 @NoArgsConstructor
-public class ReviewEntity {
+public class StudyPackEntity {
 
     @Id
     private UUID id;
@@ -76,7 +76,7 @@ public class ReviewEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ReviewStatus status;
+    private StudyPackStatus status;
 
     @Column(name = "error_code")
     private String errorCode;
@@ -84,3 +84,4 @@ public class ReviewEntity {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 }
+

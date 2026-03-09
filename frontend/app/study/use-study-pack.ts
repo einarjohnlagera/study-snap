@@ -2,20 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  confirmReviewText,
-  createReviewFromImage,
-  createReviewFromText,
+  confirmStudyPackText,
+  createStudyPackFromImage,
+  createStudyPackFromText,
   isNeedsTextConfirmationResponse,
   type NeedsTextConfirmationResponse,
-  type ReviewResponse,
+  type StudyPackResponse,
 } from "@/lib/api";
 import {
   DEMO_GENERATION_DELAY_MS,
   DEMO_NOTES,
-  DEMO_REVIEW_RESULT,
+  DEMO_STUDY_PACK_RESULT,
 } from "./demo-content";
 
-type UseStudyReviewResult = {
+type UseStudyPackResult = {
   notesText: string;
   setNotesText: (value: string) => void;
   imageFile: File | null;
@@ -23,19 +23,19 @@ type UseStudyReviewResult = {
   imageInputKey: number;
   loading: boolean;
   errorMessage: string | null;
-  reviewResult: ReviewResponse | null;
+  studyPackResult: StudyPackResponse | null;
   needsConfirmation: NeedsTextConfirmationResponse | null;
   confirmedText: string;
   setConfirmedText: (value: string) => void;
   canGenerate: boolean;
   generatedLabel: string | null;
   detectedTopic: string | null;
-  handleGenerateReview: () => Promise<void>;
+  handleGenerateStudyPack: () => Promise<void>;
   handleConfirmText: () => Promise<void>;
   handleClearNotes: () => void;
 };
 
-export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
+export function useStudyPack(demoMode: boolean): UseStudyPackResult {
   const demoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [notesText, setNotesText] = useState("");
@@ -43,7 +43,7 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
   const [imageInputKey, setImageInputKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [reviewResult, setReviewResult] = useState<ReviewResponse | null>(null);
+  const [studyPackResult, setStudyPackResult] = useState<StudyPackResponse | null>(null);
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [needsConfirmation, setNeedsConfirmation] =
     useState<NeedsTextConfirmationResponse | null>(null);
@@ -57,7 +57,7 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
   const startDemoGeneration = () => {
     setLoading(true);
     setErrorMessage(null);
-    setReviewResult(null);
+    setStudyPackResult(null);
     setNeedsConfirmation(null);
 
     if (demoTimerRef.current) {
@@ -65,7 +65,7 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
     }
 
     demoTimerRef.current = setTimeout(() => {
-      setReviewResult(DEMO_REVIEW_RESULT);
+      setStudyPackResult(DEMO_STUDY_PACK_RESULT);
       setGeneratedAt(new Date());
       setLoading(false);
     }, DEMO_GENERATION_DELAY_MS);
@@ -87,7 +87,7 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
     };
   }, [demoMode]);
 
-  const handleGenerateReview = async () => {
+  const handleGenerateStudyPack = async () => {
     if (!canGenerate || loading) {
       return;
     }
@@ -99,30 +99,30 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
 
     setLoading(true);
     setErrorMessage(null);
-    setReviewResult(null);
+    setStudyPackResult(null);
     setNeedsConfirmation(null);
 
     try {
       if (imageFile) {
-        const response = await createReviewFromImage(imageFile);
+        const response = await createStudyPackFromImage(imageFile);
         if (isNeedsTextConfirmationResponse(response)) {
           setNeedsConfirmation(response);
           setConfirmedText(response.extractedText);
           return;
         }
-        setReviewResult(response);
+        setStudyPackResult(response);
         setGeneratedAt(new Date());
         return;
       }
 
-      const response = await createReviewFromText(notesText);
-      setReviewResult(response);
+      const response = await createStudyPackFromText(notesText);
+      setStudyPackResult(response);
       setGeneratedAt(new Date());
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "We could not generate your review right now. Please try again.";
+          : "We could not generate your study pack right now. Please try again.";
       setErrorMessage(message);
     } finally {
       setLoading(false);
@@ -139,18 +139,18 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
 
     setLoading(true);
     setErrorMessage(null);
-    setReviewResult(null);
+    setStudyPackResult(null);
 
     try {
-      const response = await confirmReviewText(needsConfirmation.id, confirmedText);
-      setReviewResult(response);
+      const response = await confirmStudyPackText(needsConfirmation.id, confirmedText);
+      setStudyPackResult(response);
       setGeneratedAt(new Date());
       setNeedsConfirmation(null);
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : "We could not generate your review right now. Please try again.";
+          : "We could not generate your study pack right now. Please try again.";
       setErrorMessage(message);
     } finally {
       setLoading(false);
@@ -165,7 +165,7 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
     setNotesText("");
     setImageFile(null);
     setImageInputKey((prev) => prev + 1);
-    setReviewResult(null);
+    setStudyPackResult(null);
     setNeedsConfirmation(null);
     setConfirmedText("");
     setErrorMessage(null);
@@ -186,17 +186,17 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
   }, [generatedAt]);
 
   const detectedTopic = useMemo(() => {
-    if (!reviewResult) {
+    if (!studyPackResult) {
       return null;
     }
-    const firstConcept = reviewResult.keyConcepts.find(
+    const firstConcept = studyPackResult.keyConcepts.find(
       (concept) => concept.trim().length > 0,
     );
     if (firstConcept) {
       return firstConcept;
     }
-    return reviewResult.title;
-  }, [reviewResult]);
+    return studyPackResult.title;
+  }, [studyPackResult]);
 
   return {
     notesText,
@@ -206,15 +206,16 @@ export function useStudyReview(demoMode: boolean): UseStudyReviewResult {
     imageInputKey,
     loading,
     errorMessage,
-    reviewResult,
+    studyPackResult,
     needsConfirmation,
     confirmedText,
     setConfirmedText,
     canGenerate,
     generatedLabel,
     detectedTopic,
-    handleGenerateReview,
+    handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,
   };
 }
+

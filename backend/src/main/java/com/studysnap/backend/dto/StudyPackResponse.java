@@ -2,7 +2,7 @@ package com.studysnap.backend.dto;
 
 import java.util.List;
 
-public record ReviewResponse(
+public record StudyPackResponse(
 		String id,
 		String inputType,
 		String extractedText,
@@ -10,6 +10,7 @@ public record ReviewResponse(
 		String summary,
 		List<String> keyConcepts,
 		List<QuizItem> quiz,
-		ReviewMeta meta
+		StudyPackMeta meta
 ) {
 }
+

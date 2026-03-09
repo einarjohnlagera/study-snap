@@ -24,16 +24,16 @@ Deliverable: repo runs locally.
 Deliverable: UI shell + theme toggle on all pages.
 
 ## Phase 2 — Backend MVP (text Study Pack generation)
-- [X] `POST /api/review` accepts JSON `{ notesText }`
+- [X] `POST /api/studyPack` accepts JSON `{ notesText }`
 - [X] Validate input size
 - [X] Prompt builder + LLM call (or stub response)
 - [X] Return structured JSON: title, summary, keyConcepts, quiz[]
 - [X] Logging (request id, latency)
 
-Deliverable: paste notes → get review output.
+Deliverable: paste notes → get study pack output.
 
 ## Phase 3 — Connect UI to backend
-- [X] shared review types
+- [X] shared study pack types
 - [X] API client wiring
 - [X] `/study` integrates text mode end-to-end
 - [X] loading + error states
@@ -60,9 +60,9 @@ Deliverable: upload image notes → OCR → Study Pack output.
 - [ ] confirm image deletion behavior
 - [ ] deploy frontend + backend
 - [ ] add basic counters (success/fail)
-- [ ] add demo mode with hardcoded review response
+- [ ] add demo mode with hardcoded study pack response
 - [ ] ensure demo does not hit backend LLM endpoint
-- [ ] add anonymous guardrails for real `/api/review` calls
+- [ ] add anonymous guardrails for real `/api/studyPack` calls
 
 ## Phase 6 — User accounts foundation
 - [ ] signup
@@ -102,9 +102,9 @@ Deliverable:
 - [ ] support reviewed status later
 
 ## Phase 10 — Usage limits + plans
-- [ ] Demo: 1 review (anonymous cookie/session)
-- [ ] Free: 3 reviews/day
-- [ ] Premium: 200 reviews/month + premium-only features later
+- [ ] Demo: 1 study pack (anonymous cookie/session)
+- [ ] Free: 3 study packs/day
+- [ ] Premium: 200 study packs/month + premium-only features later
 - [ ] subscriptions table
 - [ ] plan enforcement
 - [ ] analytics-ready subscription history
@@ -133,3 +133,4 @@ Reason:
 - subscription history becomes easier to introduce later
 
 The old ordering is preserved in `/legacy/ROADMAP.md`.
+

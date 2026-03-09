@@ -36,7 +36,7 @@ export default function Home() {
           in seconds.
         </p>
         <p className="text-sm text-foreground/65">
-          Built for students, exam preparation, and interview review.
+          Built for students, exam preparation, and interviews.
         </p>
         <Link
           href="/study?demo=true"
@@ -62,7 +62,7 @@ export default function Home() {
             <CardTitle className="mb-2">Key concepts</CardTitle>
             <CardDescription>
               Highlight the most important ideas, terms, and relationships to
-              focus your review.
+              focus your study.
             </CardDescription>
           </Card>
           <Card>
@@ -92,7 +92,7 @@ export default function Home() {
               Step 2
             </p>
             <p className="text-base text-foreground/80">
-              Study Snap extracts the content and builds your review set.
+              Study Snap extracts the content and builds your study pack set.
             </p>
           </div>
           <div>
@@ -100,7 +100,7 @@ export default function Home() {
               Step 3
             </p>
             <p className="text-base text-foreground/80">
-              Review the summary, concepts, and quiz at your own pace.
+              Study the summary, concepts, and quiz at your own pace.
             </p>
           </div>
         </Card>
@@ -112,3 +112,4 @@ export default function Home() {
     </main>
   );
 }
+

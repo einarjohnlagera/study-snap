@@ -1,7 +1,8 @@
 package com.studysnap.backend.entity;
 
-public enum ReviewStatus {
+public enum StudyPackStatus {
 	DONE,
 	NEEDS_CONFIRMATION,
 	FAILED
 }
+

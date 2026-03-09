@@ -24,11 +24,11 @@ A Study Pack includes:
 - key concepts
 - practice quiz
 
-Users can save generated Study Packs in their personal Study Library for later review.
+Users can save generated Study Packs in their personal Study Library for later study pack.
 
 ## Product direction
 
-Study Snap is evolving from a one-shot review generator into a reusable study workspace.
+Study Snap is evolving from a one-shot study pack generator into a reusable study workspace.
 
 Core workflow:
 
@@ -98,9 +98,10 @@ The previous versions of the original markdown files are preserved under `/legac
 
 ## MVP goal
 
-Upload notes → generate review materials → save and revisit them as Study Packs.
+Upload notes → generate study pack materials → save and revisit them as Study Packs.
 
 ## Privacy
 
 Uploaded images are deleted after OCR processing.
 Avoid logging raw images or full extracted text.
+

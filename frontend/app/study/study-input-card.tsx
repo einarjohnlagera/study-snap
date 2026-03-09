@@ -39,7 +39,7 @@ export function StudyInputCard({
           className="min-h-40 w-full rounded-lg border border-border bg-background px-3 py-2 text-base leading-relaxed text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
         />
         <p className="text-sm text-foreground/70">
-          Paste lecture notes, reviewer text, or interview preparation notes.
+          Paste lecture notes, lesson notes text, or interview preparation notes.
           Best results when the notes focus on a single topic.
         </p>
       </div>
@@ -63,7 +63,7 @@ export function StudyInputCard({
           />
         </div>
         <p className="text-xs text-foreground/65">
-          Uploaded images are processed and deleted after review generation.
+          Uploaded images are processed and deleted after study pack generation.
         </p>
         {imageFile ? (
           <p className="text-sm text-foreground/70">Selected: {imageFile.name}</p>
@@ -80,12 +80,12 @@ export function StudyInputCard({
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating review materials...
+              Generating study pack materials...
             </>
           ) : (
             <>
               <Sparkles className="mr-2 h-4 w-4" />
-              Generate Review
+              Generate Study Pack
             </>
           )}
         </Button>
@@ -102,3 +102,4 @@ export function StudyInputCard({
     </Card>
   );
 }
+

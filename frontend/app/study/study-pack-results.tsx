@@ -1,22 +1,22 @@
 import { Loader2 } from "lucide-react";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import type { ReviewResponse } from "@/lib/api";
+import type { StudyPackResponse } from "@/lib/api";
 
-type ReviewResultsProps = {
+type StudyPackResultsProps = {
   loading: boolean;
   demoMode: boolean;
-  reviewResult: ReviewResponse | null;
+  studyPackResult: StudyPackResponse | null;
   generatedLabel: string | null;
   detectedTopic: string | null;
 };
 
-export function ReviewResults({
+export function StudyPackResults({
   loading,
   demoMode,
-  reviewResult,
+  studyPackResult,
   generatedLabel,
   detectedTopic,
-}: ReviewResultsProps) {
+}: StudyPackResultsProps) {
   if (loading) {
     return (
       <section className="space-y-4">
@@ -38,7 +38,7 @@ export function ReviewResults({
     );
   }
 
-  if (!reviewResult) {
+  if (!studyPackResult) {
     return (
       <section className="space-y-4">
         <h2 className="text-2xl font-semibold text-foreground">
@@ -71,24 +71,24 @@ export function ReviewResults({
         </Card>
       ) : null}
       <p className="text-sm text-foreground/65">
-        {generatedLabel} • {reviewResult.quiz.length} quiz questions • Topic
+        {generatedLabel} • {studyPackResult.quiz.length} quiz questions • Topic
         detected: {detectedTopic}
       </p>
 
       <Card>
         <CardTitle className="mb-2">Title</CardTitle>
-        <CardDescription>{reviewResult.title}</CardDescription>
+        <CardDescription>{studyPackResult.title}</CardDescription>
       </Card>
 
       <Card>
         <CardTitle className="mb-2">Summary</CardTitle>
-        <CardDescription>{reviewResult.summary}</CardDescription>
+        <CardDescription>{studyPackResult.summary}</CardDescription>
       </Card>
 
       <Card>
         <CardTitle className="mb-2">Key Concepts</CardTitle>
         <ul className="list-disc space-y-2 pl-5 text-base leading-relaxed text-foreground/80">
-          {reviewResult.keyConcepts.map((concept) => (
+          {studyPackResult.keyConcepts.map((concept) => (
             <li key={concept}>{concept}</li>
           ))}
         </ul>
@@ -97,7 +97,7 @@ export function ReviewResults({
       <Card className="border-emerald-500/40">
         <CardTitle className="mb-4">Practice Quiz</CardTitle>
         <div className="space-y-6">
-          {reviewResult.quiz.map((item, index) => (
+          {studyPackResult.quiz.map((item, index) => (
             <Card key={`${item.question}-${index}`} className="space-y-3">
               <CardTitle className="text-base">
                 {index + 1}. {item.question}
@@ -137,3 +137,4 @@ export function ReviewResults({
     </section>
   );
 }
+

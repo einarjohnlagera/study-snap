@@ -2,10 +2,10 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.PublicShareResponse;
 import com.studysnap.backend.dto.ShareLinkResponse;
-import com.studysnap.backend.entity.ReviewEntity;
+import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.ShareLinkEntity;
 import com.studysnap.backend.exception.AppException;
-import com.studysnap.backend.repository.ReviewRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.ShareLinkRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,23 +21,23 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ShareService {
     private final ShareLinkRepository shareLinkRepository;
-    private final ReviewRepository reviewRepository;
+    private final StudyPackRepository studyPackRepository;
 
-    public ShareLinkResponse createShareLink(String reviewId) {
+    public ShareLinkResponse createShareLink(String studyPackId) {
         UUID id;
         try {
-            id = UUID.fromString(reviewId);
+            id = UUID.fromString(studyPackId);
         } catch (IllegalArgumentException ex) {
-            throw new AppException("REVIEW_NOT_FOUND", "Review not found.", HttpStatus.NOT_FOUND);
+            throw new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND);
         }
 
-        ReviewEntity review = reviewRepository.findById(id)
-                .orElseThrow(() -> new AppException("REVIEW_NOT_FOUND", "Review not found.", HttpStatus.NOT_FOUND));
+        StudyPackEntity studyPack = studyPackRepository.findById(id)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
         ShareLinkEntity share = new ShareLinkEntity();
         String token = generateToken();
         share.setToken(token);
-        share.setReview(review);
+        share.setStudyPack(studyPack);
         share.setIsPublic(true);
         share.setCreatedAt(OffsetDateTime.now());
         share.setViewCount(0);
@@ -55,13 +55,13 @@ public class ShareService {
             throw new AppException("SHARE_NOT_FOUND", "Share link not found.", HttpStatus.NOT_FOUND);
         }
 
-        ReviewEntity review = share.getReview();
+        StudyPackEntity studyPack = share.getStudyPack();
         return new PublicShareResponse(
-                review.getId().toString(),
-                review.getTitle(),
-                review.getSummary(),
-                review.getKeyConcepts(),
-                review.getQuiz()
+                studyPack.getId().toString(),
+                studyPack.getTitle(),
+                studyPack.getSummary(),
+                studyPack.getKeyConcepts(),
+                studyPack.getQuiz()
         );
     }
 
@@ -70,3 +70,4 @@ public class ShareService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(random).substring(0, 22);
     }
 }
+

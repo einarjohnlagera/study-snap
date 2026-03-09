@@ -190,7 +190,7 @@ public class GoogleVisionOcrService implements OcrService {
         if (looksLikeMemeOrNonStudyImage(lower)) {
             throw new AppException(
                     "IMAGE_NOT_STUDY_NOTES",
-                    "This image does not look like study notes. Please upload lecture notes or reviewer text.",
+                    "This image does not look like study notes. Please upload lecture notes or lesson notes text.",
                     HttpStatus.BAD_REQUEST
             );
         }
@@ -302,3 +302,4 @@ public class GoogleVisionOcrService implements OcrService {
         return String.join("\n\n", paragraphs).trim();
     }
 }
+

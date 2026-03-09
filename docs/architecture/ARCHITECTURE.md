@@ -57,7 +57,7 @@ Typical local runs:
 ## Backend modules
 
 ### Controllers
-- `ReviewController` (legacy naming, can evolve later)
+- `StudyPackController` (legacy naming, can evolve later)
   - creates Study Packs from text or image
   - handles OCR-confirmation resubmits
 - `ShareController`
@@ -67,26 +67,26 @@ Typical local runs:
 - future auth controllers
 
 ### Services
-- `ReviewService` / future `StudyPackService`
+- `StudyPackService` / future `StudyPackService`
   - validate → OCR (if image) → normalize → LLM → validate output → persist → return
 - `OcrService`
-- `LlmReviewService`
+- `LlmStudyPackService`
 - `UsageLimitService`
 - `ShareService`
 - future `UserAccountService`
 - future `SubscriptionService`
 
 ### Persistence
-- `ReviewRepository` / future `StudyPackRepository`
+- `StudyPackRepository` / future `StudyPackRepository`
 - `ShareLinkRepository`
-- optional `ReviewDraftRepository`
+- optional `StudyPackDraftRepository`
 - future `UserRepository`
 - future `SubscriptionRepository`
 
 ## API endpoints
 
 ### Create Study Pack from text
-`POST /api/review`
+`POST /api/studyPack`
 Content-Type: `application/json`
 
 Request example:
@@ -95,7 +95,7 @@ Request example:
 ```
 
 ### Create Study Pack from image
-`POST /api/review`
+`POST /api/studyPack`
 Content-Type: `multipart/form-data`
 
 Form fields:
@@ -113,7 +113,7 @@ Low-confidence OCR response:
 ```
 
 ### Confirm extracted text
-`POST /api/review/confirm-text`
+`POST /api/studyPack/confirm-text`
 
 Request example:
 ```json
@@ -121,10 +121,10 @@ Request example:
 ```
 
 ### Get saved Study Pack
-`GET /api/review/{id}`
+`GET /api/studyPack/{id}`
 
 ### Create share link
-`POST /api/review/{id}/share`
+`POST /api/studyPack/{id}/share`
 
 ### Resolve share link
 `GET /api/share/{token}`
@@ -149,7 +149,7 @@ Example:
 }
 ```
 
-## Review generation output contract
+## study pack generation output contract
 
 The backend should require the LLM to output strict JSON with:
 - `title`
@@ -253,7 +253,7 @@ Demo flow:
 Landing → `/study?demo=true` → simulated generation → static Study Pack
 
 Real flow:
-Landing → `/study` → `POST /api/review` → OCR/LLM → database → response
+Landing → `/study` → `POST /api/studyPack` → OCR/LLM → database → response
 
 ## Hybrid OCR strategy
 
@@ -329,7 +329,7 @@ Premium:
 
 ## Anonymous guardrails
 
-For real unauthenticated `/api/review` calls:
+For real unauthenticated `/api/studyPack` calls:
 - apply rate limiting by session cookie and/or IP
 - enforce minimum and maximum note length
 - optionally apply cooldown between requests
@@ -345,3 +345,4 @@ For real unauthenticated `/api/review` calls:
 ## Data model reference
 
 See `docs/architecture/DATA_MODEL.md` for the consolidated table/entity view.
+

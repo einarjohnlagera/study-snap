@@ -1,4 +1,4 @@
-Generate study review materials from the provided notes.
+Generate study pack materials from the provided notes.
 
 Output JSON schema:
 
@@ -31,7 +31,7 @@ Quiz
 - target mix:
   - recall: {RECALL_COUNT}
   - understanding: {UNDERSTANDING_COUNT}
-  - application: {APPLICATION'_COUNT}
+  - application: {APPLICATION_COUNT}
 - each question must have 4 choices
 - answerIndex must be between 0 and 3
 - explanation should briefly explain why the answer is correct
@@ -61,3 +61,4 @@ Tone
 - calm
 - supportive
 - easy to understand for students
+
