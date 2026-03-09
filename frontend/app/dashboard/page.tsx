@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { deleteMyStudyPack, listMyStudyPacks, type StudyPackListItemResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { DashboardHero } from "./dashboard-hero";
+import { ContinueSpotlight } from "./continue-spotlight";
+import { DashboardStats } from "./dashboard-stats";
+import { StudyPackGrid } from "./study-pack-grid";
+import { DashboardLoading } from "./dashboard-loading";
+import { DashboardEmpty } from "./dashboard-empty";
+import { DashboardError } from "./dashboard-error";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -13,7 +18,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadStudyPacks = useCallback(async () => {
     const authUser = getAuthUser();
     if (!authUser) {
       setError("Please log in to access your dashboard.");
@@ -29,18 +34,22 @@ export default function DashboardPage() {
       return;
     }
 
-    void (async () => {
-      try {
-        const data = await listMyStudyPacks();
-        setItems(data);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
-        setError(message);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listMyStudyPacks();
+      setItems(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
+
+  useEffect(() => {
+    void loadStudyPacks();
+  }, [loadStudyPacks]);
 
   const handleDelete = async (id: string) => {
     try {
@@ -52,28 +61,27 @@ export default function DashboardPage() {
     }
   };
 
+  const latestStudyPack = useMemo(() => (items.length > 0 ? items[0] : null), [items]);
+
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 px-6 py-10">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-      {loading ? <p className="text-foreground/75">Loading your Study Packs...</p> : null}
-      {error ? <p className="text-red-600 dark:text-red-400">{error}</p> : null}
+    <div className="mx-auto w-full max-w-5xl space-y-6 px-6 py-10">
+      <DashboardHero />
 
-      {!loading && !error && items.length === 0 ? (
-        <p className="text-foreground/75">You do not have any saved Study Packs yet.</p>
-      ) : null}
-
-      {items.map((item) => (
-        <Card key={item.id} className="space-y-3">
-          <h2 className="text-lg font-medium">{item.title}</h2>
-          <p className="text-sm text-foreground/75">{item.summaryPreview}</p>
-          <p className="text-xs text-foreground/65">
-            {item.quizCount} quiz questions · {new Date(item.createdAt).toLocaleString()}
-          </p>
-          <Button type="button" variant="outline" onClick={() => void handleDelete(item.id)}>
-            Delete
-          </Button>
-        </Card>
-      ))}
+      {loading ? (
+        <DashboardLoading />
+      ) : error ? (
+        <DashboardError message={error} onRetry={loadStudyPacks} />
+      ) : (
+        <>
+          <ContinueSpotlight latestStudyPack={latestStudyPack} />
+          <DashboardStats studyPacks={items} />
+          {items.length === 0 ? (
+            <DashboardEmpty />
+          ) : (
+            <StudyPackGrid studyPacks={items} onDelete={handleDelete} />
+          )}
+        </>
+      )}
     </div>
   );
 }
