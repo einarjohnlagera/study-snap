@@ -99,6 +99,28 @@ Required backend support:
 - fetch Study Pack by id
 - delete Study Pack
 
+### Study Pack detail page
+
+The Study Library now includes a dedicated Study Pack detail page for authenticated users.
+
+Purpose:
+- make Open/Continue actions meaningful
+- support focused studying from saved Study Packs
+- reinforce Study Snap as a reusable study workspace
+
+Frontend route:
+- `/study-packs/[id]`
+
+API detail endpoint:
+- `GET /api/study-packs/{id}`
+
+Dashboard integration:
+- Continue Studying and Study Pack card Open actions now navigate to the detail route
+
+Response model separation:
+- list endpoint stays lightweight for dashboard usage (`id`, `title`, `summaryPreview`, `quizCount`, `createdAt`, `tags`)
+- detail endpoint returns full study content (`title`, `summary`, `keyConcepts`, `quiz`, `createdAt`, `tags`)
+
 ## Roadmap note
 
 The original roadmap placed Study Library after several other phases.

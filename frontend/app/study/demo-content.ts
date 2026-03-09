@@ -21,6 +21,7 @@ export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
     "Oxygen byproduct",
   ],
   tags: ["Biology", "Photosynthesis"],
+  createdAt: "2026-01-01T00:00:00Z",
   quiz: [
     {
       question: "What is the main purpose of photosynthesis in plants?",

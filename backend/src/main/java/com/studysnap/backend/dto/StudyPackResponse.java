@@ -1,5 +1,6 @@
 package com.studysnap.backend.dto;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public record StudyPackResponse(
@@ -11,6 +12,7 @@ public record StudyPackResponse(
 		List<String> keyConcepts,
 		List<String> tags,
 		List<QuizItem> quiz,
+		OffsetDateTime createdAt,
 		StudyPackMeta meta
 ) {
 }
