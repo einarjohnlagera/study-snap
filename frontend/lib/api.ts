@@ -38,6 +38,19 @@ export type StudyPackListItemResponse = {
   createdAt: string;
 };
 
+export type ContinueStudyingReason = "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
+
+export type ContinueStudyingResponse = {
+  studyPackId: string | null;
+  title: string | null;
+  summaryPreview: string | null;
+  reason: ContinueStudyingReason | null;
+  lastScorePercentage: number | null;
+  lastReviewedAt: string | null;
+  lastOpenedAt: string | null;
+  createdAt: string | null;
+};
+
 export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";
 export type PlanType = "FREE" | "PREMIUM";
 export type UserRole = "USER" | "ADMIN";
@@ -410,6 +423,21 @@ export async function listMyStudyPacks(): Promise<StudyPackListItemResponse[]> {
     true,
   );
   return parseApiResponse<StudyPackListItemResponse[]>(response, "Could not load your Study Packs.");
+}
+
+export async function getContinueStudyingRecommendation(): Promise<ContinueStudyingResponse> {
+  const response = await fetchWithAuth(
+    "/dashboard/continue-studying",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ContinueStudyingResponse>(
+    response,
+    "Could not load continue studying recommendation.",
+  );
 }
 
 export async function getMyStudyPack(id: string): Promise<StudyPackResponse> {

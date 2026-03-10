@@ -55,6 +55,43 @@ To keep the Study Library focused and intentional:
 
 The dashboard should avoid repeating multiple equivalent primary actions that all point to the same route.
 
+### Smart Continue Studying
+
+The dashboard includes a Smart Continue Studying recommendation so the spotlight suggests one high-value next Study Pack instead of only showing the latest item.
+
+Purpose:
+- keep the dashboard learning-focused and personalized
+- guide users toward the most useful immediate review action
+- keep recommendation behavior deterministic and explainable
+
+Endpoint:
+- `GET /api/dashboard/continue-studying`
+
+Priority logic (v1):
+- priority 1: most recently reviewed Study Pack whose latest completed Quick Review score is below `100%`
+- priority 2: otherwise most recently opened Study Pack
+- priority 3: otherwise most recently created Study Pack
+- priority 4: if no Study Packs exist, return no recommendation
+
+Recommendation reasons:
+- `LOW_SCORE_RECENT`: user recently reviewed this Study Pack and scored below `100%`; spotlight should encourage score improvement
+- `RECENTLY_OPENED`: user recently opened this Study Pack; spotlight should encourage continuing review
+- `RECENTLY_CREATED`: no stronger activity signal exists; spotlight should encourage starting review
+
+Response shape direction:
+- `studyPackId`
+- `title`
+- `summaryPreview`
+- `reason`
+- `lastScorePercentage` (nullable)
+- `lastReviewedAt` (nullable)
+- `lastOpenedAt` (nullable)
+- `createdAt` (nullable)
+
+Scope note:
+- this recommendation is distinct from future "Resume Quick Review" support
+- v1 does not resume unfinished sessions
+
 ## User-account dependency
 
 The Study Library works better after user accounts exist because:
