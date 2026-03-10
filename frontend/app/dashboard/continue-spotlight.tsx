@@ -16,6 +16,18 @@ function formatScorePercentage(value: number) {
 }
 
 function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
+  if (recommendation.reason === "RESUME_REVIEW") {
+    const currentQuestion = recommendation.currentQuestionIndex ?? 0;
+    const totalQuestions = recommendation.totalQuestions ?? 0;
+    return {
+      label: "In Progress",
+      icon: TrendingUp,
+      heading: "Resume Quick Review",
+      body: `You left off on Question ${currentQuestion + 1} of ${totalQuestions}. Continue your Quick Review.`,
+      cta: "Resume Review",
+    };
+  }
+
   const latestScore = recommendation.lastScorePercentage;
   if (latestScore !== null) {
     if (latestScore >= 100) {

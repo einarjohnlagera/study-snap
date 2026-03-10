@@ -11,6 +11,8 @@ public record ContinueStudyingResponse(
         BigDecimal lastScorePercentage,
         OffsetDateTime lastReviewedAt,
         OffsetDateTime lastOpenedAt,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        Integer currentQuestionIndex,
+        Integer totalQuestions
 ) {
 }
