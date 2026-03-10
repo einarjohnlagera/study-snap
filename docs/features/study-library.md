@@ -149,6 +149,33 @@ Activity tracking:
 - completion event: `COMPLETED_QUICK_REVIEW`
 - tracking failures should not block the review experience
 
+Quick Review session persistence:
+- Quick Review session records are stored separately from Study Pack content in `quick_review_sessions`
+- Study Packs remain the source of static quiz content
+- Quick Review sessions store user performance history per attempt
+
+Stored session fields:
+- `id`
+- `user_id`
+- `study_pack_id`
+- `total_questions`
+- `correct_answers`
+- `score_percentage`
+- `retry_count`
+- `duration_seconds` (nullable)
+- `session_metadata` (nullable, optional context)
+- `created_at`
+- `completed_at`
+
+Session API flow:
+- `POST /api/quick-review-sessions/start` creates a session and returns `sessionId`
+- `POST /api/quick-review-sessions/{sessionId}/complete` computes and stores `score_percentage`
+- `GET /api/quick-review-sessions/study-packs/{studyPackId}/recent` returns recent completed sessions
+
+Study Pack detail history:
+- Study Pack detail page shows a compact "Recent Review Sessions" list (latest attempts)
+- each item includes completed date, score (`correct/total`), and percentage
+
 ## Roadmap note
 
 The original roadmap placed Study Library after several other phases.

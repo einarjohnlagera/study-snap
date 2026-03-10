@@ -108,6 +108,30 @@ export type NeedsTextConfirmationResponse = {
 export type StudyPackApiResponse = StudyPackResponse | NeedsTextConfirmationResponse;
 export type QuickReviewActivityType = "STARTED_QUICK_REVIEW" | "COMPLETED_QUICK_REVIEW";
 
+export type QuickReviewSessionStartResponse = {
+  sessionId: string;
+};
+
+export type QuickReviewSessionCompleteRequest = {
+  correctAnswers: number;
+  totalQuestions: number;
+  retryCount: number;
+  durationSeconds?: number;
+  sessionMetadata?: Record<string, unknown>;
+};
+
+export type QuickReviewSessionSummaryResponse = {
+  id: string;
+  studyPackId: string;
+  totalQuestions: number;
+  correctAnswers: number;
+  scorePercentage: number;
+  retryCount: number;
+  durationSeconds: number | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -430,4 +454,53 @@ export async function trackQuickReviewActivity(
   if (!response.ok) {
     await parseApiResponse<void>(response, "Could not track quick review activity.");
   }
+}
+
+export async function startQuickReviewSession(
+  studyPackId: string,
+): Promise<QuickReviewSessionStartResponse> {
+  const response = await fetchWithAuth(
+    "/quick-review-sessions/start",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ studyPackId }),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewSessionStartResponse>(response, "Could not start Quick Review.");
+}
+
+export async function completeQuickReviewSession(
+  sessionId: string,
+  request: QuickReviewSessionCompleteRequest,
+): Promise<QuickReviewSessionSummaryResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/${sessionId}/complete`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewSessionSummaryResponse>(response, "Could not save Quick Review results.");
+}
+
+export async function listRecentQuickReviewSessions(
+  studyPackId: string,
+  limit = 5,
+): Promise<QuickReviewSessionSummaryResponse[]> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/study-packs/${studyPackId}/recent?limit=${limit}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewSessionSummaryResponse[]>(
+    response,
+    "Could not load recent Quick Review sessions.",
+  );
 }
