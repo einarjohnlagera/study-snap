@@ -51,6 +51,8 @@ export type ContinueStudyingResponse = {
   createdAt: string | null;
   currentQuestionIndex: number | null;
   totalQuestions: number | null;
+  currentRound: "INITIAL" | "RETRY" | null;
+  remainingQuestions: number | null;
 };
 
 export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";

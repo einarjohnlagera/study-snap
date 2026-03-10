@@ -1,5 +1,7 @@
 package com.studysnap.backend.dto;
 
+import com.studysnap.backend.entity.QuickReviewRound;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
@@ -13,6 +15,8 @@ public record ContinueStudyingResponse(
         OffsetDateTime lastOpenedAt,
         OffsetDateTime createdAt,
         Integer currentQuestionIndex,
-        Integer totalQuestions
+        Integer totalQuestions,
+        QuickReviewRound currentRound,
+        Integer remainingQuestions
 ) {
 }

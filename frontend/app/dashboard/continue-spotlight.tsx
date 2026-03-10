@@ -17,6 +17,18 @@ function formatScorePercentage(value: number) {
 
 function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
   if (recommendation.reason === "RESUME_REVIEW") {
+    if (recommendation.currentRound === "RETRY") {
+      const remainingQuestions = recommendation.remainingQuestions ?? 0;
+      const questionLabel = remainingQuestions === 1 ? "question" : "questions";
+      return {
+        label: "Retry Round",
+        icon: TrendingUp,
+        heading: "Resume Retry Round",
+        body: `You still have ${remainingQuestions} ${questionLabel} to review.`,
+        cta: "Resume Review",
+      };
+    }
+
     const currentQuestion = recommendation.currentQuestionIndex ?? 0;
     const totalQuestions = recommendation.totalQuestions ?? 0;
     return {
