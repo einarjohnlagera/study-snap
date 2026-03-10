@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -36,16 +37,25 @@ public class DashboardService {
     private final ActivityEventRepository activityEventRepository;
 
     public ContinueStudyingResponse getContinueStudyingRecommendation(UUID userId) {
+        // Priority 1: resume an unfinished Quick Review session when available.
+        Optional<ContinueStudyingResponse> inProgress = resolveInProgressRecommendation(userId);
+        if (inProgress.isPresent()) {
+            return inProgress.get();
+        }
+
+        // Priority 2: otherwise recommend the weakest recently reviewed Study Pack.
         Optional<ContinueStudyingResponse> lowScoreRecent = resolveLowScoreRecentRecommendation(userId);
         if (lowScoreRecent.isPresent()) {
             return lowScoreRecent.get();
         }
 
+        // Priority 3: otherwise use the most recently opened Study Pack.
         Optional<ContinueStudyingResponse> recentlyOpened = resolveRecentlyOpenedRecommendation(userId);
         if (recentlyOpened.isPresent()) {
             return recentlyOpened.get();
         }
 
+        // Priority 4: otherwise use the most recently created Study Pack.
         Optional<StudyPackEntity> recentlyCreated = studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId);
         if (recentlyCreated.isPresent()) {
             StudyPackEntity studyPack = recentlyCreated.get();
@@ -55,11 +65,47 @@ public class DashboardService {
                     null,
                     null,
                     findLastOpenedAt(userId, studyPack.getId()),
-                    studyPack.getCreatedAt()
+                    studyPack.getCreatedAt(),
+                    null,
+                    null,
+                    null,
+                    null
             );
         }
 
-        return new ContinueStudyingResponse(null, null, null, null, null, null, null, null);
+        // No Study Packs or usable activity context -> no recommendation.
+        return new ContinueStudyingResponse(null, null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    private Optional<ContinueStudyingResponse> resolveInProgressRecommendation(UUID userId) {
+        Optional<QuickReviewSessionEntity> inProgress = quickReviewSessionRepository
+                .findTopByUserIdAndStatusOrderByCreatedAtDesc(userId, QuickReviewSessionStatus.IN_PROGRESS);
+        if (inProgress.isEmpty()) {
+            return Optional.empty();
+        }
+
+        QuickReviewSessionEntity session = inProgress.get();
+        Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
+        if (studyPack.isEmpty()) {
+            return Optional.empty();
+        }
+
+        int currentQuestionIndex = session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex();
+        int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
+        QuickReviewRound currentRound = session.getCurrentRound();
+        int remainingQuestions = calculateRemainingQuestions(session, currentQuestionIndex, totalQuestions);
+        return Optional.of(toResponse(
+                studyPack.get(),
+                ContinueStudyingReason.RESUME_REVIEW,
+                null,
+                session.getCreatedAt(),
+                findLastOpenedAt(userId, session.getStudyPackId()),
+                studyPack.get().getCreatedAt(),
+                currentQuestionIndex,
+                totalQuestions,
+                currentRound,
+                remainingQuestions
+        ));
     }
 
     private Optional<ContinueStudyingResponse> resolveLowScoreRecentRecommendation(UUID userId) {
@@ -100,7 +146,11 @@ public class DashboardService {
                     scorePercentageOrZero(session),
                     session.getCompletedAt(),
                     findLastOpenedAt(userId, session.getStudyPackId()),
-                    studyPack.get().getCreatedAt()
+                    studyPack.get().getCreatedAt(),
+                    null,
+                    null,
+                    null,
+                    null
             ));
         }
 
@@ -145,7 +195,11 @@ public class DashboardService {
                     latestSession.map(QuickReviewSessionEntity::getScorePercentage).orElse(null),
                     latestSession.map(QuickReviewSessionEntity::getCompletedAt).orElse(null),
                     openedEvent.getCreatedAt(),
-                    studyPack.get().getCreatedAt()
+                    studyPack.get().getCreatedAt(),
+                    null,
+                    null,
+                    null,
+                    null
             ));
         }
 
@@ -169,7 +223,11 @@ public class DashboardService {
             BigDecimal lastScorePercentage,
             OffsetDateTime lastReviewedAt,
             OffsetDateTime lastOpenedAt,
-            OffsetDateTime createdAt
+            OffsetDateTime createdAt,
+            Integer currentQuestionIndex,
+            Integer totalQuestions,
+            QuickReviewRound currentRound,
+            Integer remainingQuestions
     ) {
         return new ContinueStudyingResponse(
                 studyPack.getId().toString(),
@@ -179,7 +237,32 @@ public class DashboardService {
                 lastScorePercentage,
                 lastReviewedAt,
                 lastOpenedAt,
-                createdAt
+                createdAt,
+                currentQuestionIndex,
+                totalQuestions,
+                currentRound,
+                remainingQuestions
         );
+    }
+
+    private int calculateRemainingQuestions(
+            QuickReviewSessionEntity session,
+            int currentQuestionIndex,
+            int totalQuestions
+    ) {
+        if (session.getCurrentRound() != QuickReviewRound.RETRY) {
+            return 0;
+        }
+        if (session.getSessionState() == null) {
+            return Math.max(0, totalQuestions - currentQuestionIndex);
+        }
+        Object retryQuestionIndexes = session.getSessionState().get("retryQuestionIndexes");
+        if (!(retryQuestionIndexes instanceof List<?> retryIndexesList)) {
+            return Math.max(0, totalQuestions - currentQuestionIndex);
+        }
+        long validRetryIndexes = retryIndexesList.stream()
+                .filter(Integer.class::isInstance)
+                .count();
+        return Math.max(0, Math.toIntExact(validRetryIndexes) - currentQuestionIndex);
     }
 }

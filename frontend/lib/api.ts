@@ -38,7 +38,7 @@ export type StudyPackListItemResponse = {
   createdAt: string;
 };
 
-export type ContinueStudyingReason = "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
+export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
 
 export type ContinueStudyingResponse = {
   studyPackId: string | null;
@@ -49,6 +49,10 @@ export type ContinueStudyingResponse = {
   lastReviewedAt: string | null;
   lastOpenedAt: string | null;
   createdAt: string | null;
+  currentQuestionIndex: number | null;
+  totalQuestions: number | null;
+  currentRound: "INITIAL" | "RETRY" | null;
+  remainingQuestions: number | null;
 };
 
 export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";

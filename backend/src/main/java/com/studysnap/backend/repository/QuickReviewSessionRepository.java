@@ -28,4 +28,9 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             UUID studyPackId,
             QuickReviewSessionStatus status
     );
+
+    Optional<QuickReviewSessionEntity> findTopByUserIdAndStatusOrderByCreatedAtDesc(
+            UUID userId,
+            QuickReviewSessionStatus status
+    );
 }

@@ -68,14 +68,16 @@ Endpoint:
 - `GET /api/dashboard/continue-studying`
 
 Priority logic (v1):
-- priority 1: weakest recently reviewed Study Pack, using each Study Pack's latest completed Quick Review score below `100%`
+- priority 1: in-progress Quick Review session (`RESUME_REVIEW`)
+- priority 2: weakest recently reviewed Study Pack, using each Study Pack's latest completed Quick Review score below `100%`
   - compare by `score_percentage ASC`
   - tie-break by `completed_at DESC`
-- priority 2: otherwise most recently opened Study Pack
-- priority 3: otherwise most recently created Study Pack
-- priority 4: if no Study Packs exist, return no recommendation
+- priority 3: otherwise most recently opened Study Pack
+- priority 4: otherwise most recently created Study Pack
+- priority 5: if no Study Packs exist, return no recommendation
 
 Recommendation reasons:
+- `RESUME_REVIEW`: user has an unfinished Quick Review session; spotlight should prioritize resuming it
 - `LOW_SCORE_RECENT`: user recently reviewed this Study Pack and scored below `100%`; spotlight should encourage score improvement
 - `RECENTLY_OPENED`: user recently opened this Study Pack; spotlight should encourage continuing review
 - `RECENTLY_CREATED`: no stronger activity signal exists; spotlight should encourage starting review
@@ -89,10 +91,12 @@ Response shape direction:
 - `lastReviewedAt` (nullable)
 - `lastOpenedAt` (nullable)
 - `createdAt` (nullable)
+- `currentQuestionIndex` (nullable, populated for `RESUME_REVIEW`)
+- `totalQuestions` (nullable, populated for `RESUME_REVIEW`)
 
 Scope note:
-- this recommendation is distinct from future "Resume Quick Review" support
-- v1 does not resume unfinished sessions
+- Smart Continue Studying now supports unfinished-session priority via `RESUME_REVIEW`
+- dashboard resume recommendation is complementary to Quick Review session resume endpoints
 
 Smart Continue Studying card messaging (score-aware):
 - if `lastScorePercentage` exists and is below `100`:
