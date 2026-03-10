@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,13 +11,20 @@ import { getAuthUser } from "@/lib/auth";
 import {
   completeQuickReviewSession,
   getMyStudyPack,
-  listRecentQuickReviewSessions,
   startQuickReviewSession,
+  updateQuickReviewSessionProgress,
+  type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
   type StudyPackResponse,
 } from "@/lib/api";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
+type SessionStatePayload = {
+  selectedChoices?: Record<string, string>;
+  retryQuestionIndexes?: number[];
+  activeQuestionIndexes?: number[];
+  roundSelections?: Record<string, string>;
+};
 
 function getMotivationalFeedback(scorePercentage: number) {
   if (scorePercentage >= 100) {
@@ -47,12 +54,30 @@ function QuickReviewLoading() {
   );
 }
 
+function toNumberArray(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is number => typeof item === "number");
+}
+
+function toChoiceRecord(value: unknown): Record<number, string> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => typeof v === "string")
+    .map(([k, v]) => [Number(k), v as string] as const)
+    .filter(([k]) => Number.isInteger(k) && k >= 0);
+  return Object.fromEntries(entries);
+}
+
 export default function QuickReviewPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionInitializing, setSessionInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<QuickReviewPhase>("initial");
   const [activeQuestionIndexes, setActiveQuestionIndexes] = useState<number[]>([]);
@@ -73,12 +98,6 @@ export default function QuickReviewPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
-  const sessionIdFromQuery = searchParams.get("sessionId");
-
-  useEffect(() => {
-    setCurrentSessionId(sessionIdFromQuery);
-    setSessionStartedAt(Date.now());
-  }, [sessionIdFromQuery]);
 
   const loadStudyPack = useCallback(async () => {
     if (!studyPackId) {
@@ -106,12 +125,6 @@ export default function QuickReviewPage() {
     try {
       const detail = await getMyStudyPack(studyPackId);
       setStudyPack(detail);
-      try {
-        const history = await listRecentQuickReviewSessions(studyPackId, 20);
-        setRecentSessions(history);
-      } catch {
-        setRecentSessions([]);
-      }
       setPhase("initial");
       setActiveQuestionIndexes(detail.quiz.map((_, index) => index));
       setCurrentRoundIndex(0);
@@ -121,6 +134,10 @@ export default function QuickReviewPage() {
       setRetryCount(0);
       setCompletionTracked(false);
       setPersistedResult(null);
+      setRecentSessions([]);
+      setCurrentSessionId(null);
+      setSessionStartedAt(Date.now());
+      setSessionInitializing(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
       setError(message);
@@ -173,6 +190,89 @@ export default function QuickReviewPage() {
   const isPerfectScore = totalQuestions > 0 && score === totalQuestions;
   const displayedRetryCount = persistedResult?.retryCount ?? retryCount;
 
+  const persistProgress = useCallback((next: {
+    currentQuestionIndex: number;
+    currentRound: "INITIAL" | "RETRY";
+    retryCount: number;
+    selectedChoices: Record<number, string>;
+    retryQuestionIndexes: number[];
+    activeQuestionIndexes: number[];
+    roundSelections: Record<number, string>;
+  }) => {
+    if (!currentSessionId) {
+      return;
+    }
+    const sessionState: SessionStatePayload = {
+      selectedChoices: Object.fromEntries(Object.entries(next.selectedChoices).map(([k, v]) => [String(k), v])),
+      retryQuestionIndexes: next.retryQuestionIndexes,
+      activeQuestionIndexes: next.activeQuestionIndexes,
+      roundSelections: Object.fromEntries(Object.entries(next.roundSelections).map(([k, v]) => [String(k), v])),
+    };
+    void updateQuickReviewSessionProgress(currentSessionId, {
+      currentQuestionIndex: next.currentQuestionIndex,
+      currentRound: next.currentRound,
+      retryCount: next.retryCount,
+      sessionState,
+    }).catch(() => {
+      // Progress persistence should not block review flow.
+    });
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    if (!studyPack || !sessionInitializing) {
+      return;
+    }
+
+    let isMounted = true;
+    void (async () => {
+      try {
+        const started = await startQuickReviewSession(studyPack.id);
+        if (!isMounted || !started.sessionId) {
+          return;
+        }
+
+        const state = (started.sessionState ?? {}) as SessionStatePayload;
+        const restoredSelectedChoices = toChoiceRecord(state.selectedChoices);
+        const restoredRetryQuestionIndexes = toNumberArray(state.retryQuestionIndexes);
+        const restoredRoundSelections = toChoiceRecord(state.roundSelections);
+        const allIndexes = quiz.map((_, index) => index);
+        const round = started.currentRound ?? "INITIAL";
+        const retryIndexes = restoredRetryQuestionIndexes;
+        const restoredActiveIndexes = toNumberArray(state.activeQuestionIndexes);
+        const activeIndexes = round === "RETRY"
+          ? (restoredActiveIndexes.length > 0 ? restoredActiveIndexes : retryIndexes)
+          : allIndexes;
+        const restoredRoundIndex = Math.max(0, Math.min(started.currentQuestionIndex, Math.max(0, activeIndexes.length - 1)));
+        const isRetryTransition = round === "INITIAL"
+          && started.retryCount > 0
+          && retryIndexes.length > 0
+          && started.currentQuestionIndex >= allIndexes.length;
+
+        setCurrentSessionId(started.sessionId);
+        setSessionStartedAt(Date.now());
+        setSelectedChoices(restoredSelectedChoices);
+        setRetryQuestionIndexes(retryIndexes);
+        setActiveQuestionIndexes(activeIndexes.length > 0 ? activeIndexes : allIndexes);
+        setRoundSelections(restoredRoundSelections);
+        setRetryCount(started.retryCount ?? 0);
+        setCurrentRoundIndex(restoredRoundIndex);
+        setPhase(isRetryTransition ? "retry-transition" : (round === "RETRY" ? "retry" : "initial"));
+      } catch {
+        if (isMounted) {
+          setCurrentSessionId(null);
+        }
+      } finally {
+        if (isMounted) {
+          setSessionInitializing(false);
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [quiz, sessionInitializing, studyPack]);
+
   useEffect(() => {
     if (!isComplete || completionTracked || !currentSessionId) {
       return;
@@ -211,14 +311,25 @@ export default function QuickReviewPage() {
     if (!currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent) {
       return;
     }
-    setRoundSelections((prev) => ({
-      ...prev,
+    const nextRoundSelections = {
+      ...roundSelections,
       [currentQuestionIndex]: choice,
-    }));
-    setSelectedChoices((prev) => ({
-      ...prev,
+    };
+    const nextSelectedChoices = {
+      ...selectedChoices,
       [currentQuestionIndex]: choice,
-    }));
+    };
+    setRoundSelections(nextRoundSelections);
+    setSelectedChoices(nextSelectedChoices);
+    persistProgress({
+      currentQuestionIndex: currentRoundIndex,
+      currentRound: phase === "retry" ? "RETRY" : "INITIAL",
+      retryCount,
+      selectedChoices: nextSelectedChoices,
+      retryQuestionIndexes,
+      activeQuestionIndexes,
+      roundSelections: nextRoundSelections,
+    });
   };
 
   const handleNext = () => {
@@ -227,7 +338,17 @@ export default function QuickReviewPage() {
     }
     const isLastInRound = currentRoundIndex + 1 >= activeQuestionIndexes.length;
     if (!isLastInRound) {
-      setCurrentRoundIndex((prev) => prev + 1);
+      const nextRoundIndex = currentRoundIndex + 1;
+      setCurrentRoundIndex(nextRoundIndex);
+      persistProgress({
+        currentQuestionIndex: nextRoundIndex,
+        currentRound: phase === "retry" ? "RETRY" : "INITIAL",
+        retryCount,
+        selectedChoices,
+        retryQuestionIndexes,
+        activeQuestionIndexes,
+        roundSelections,
+      });
       return;
     }
 
@@ -240,6 +361,15 @@ export default function QuickReviewPage() {
       setRetryQuestionIndexes(incorrectIndexes);
       setRetryCount(1);
       setPhase("retry-transition");
+      persistProgress({
+        currentQuestionIndex: activeQuestionIndexes.length,
+        currentRound: "INITIAL",
+        retryCount: 1,
+        selectedChoices,
+        retryQuestionIndexes: incorrectIndexes,
+        activeQuestionIndexes,
+        roundSelections,
+      });
       return;
     }
 
@@ -257,6 +387,15 @@ export default function QuickReviewPage() {
     setActiveQuestionIndexes(retryQuestionIndexes);
     setCurrentRoundIndex(0);
     setRoundSelections({});
+    persistProgress({
+      currentQuestionIndex: 0,
+      currentRound: "RETRY",
+      retryCount,
+      selectedChoices,
+      retryQuestionIndexes,
+      activeQuestionIndexes: retryQuestionIndexes,
+      roundSelections: {},
+    });
   };
 
   const handleRetry = () => {
@@ -273,7 +412,11 @@ export default function QuickReviewPage() {
     setSessionStartedAt(Date.now());
     if (studyPackId) {
       void startQuickReviewSession(studyPackId)
-        .then((result) => {
+        .then((result: QuickReviewSessionStartResponse) => {
+          if (!result.sessionId) {
+            setCurrentSessionId(null);
+            return;
+          }
           setCurrentSessionId(result.sessionId);
           setSessionStartedAt(Date.now());
         })
@@ -292,7 +435,7 @@ export default function QuickReviewPage() {
         </Link>
       </div>
 
-      {loading ? (
+      {loading || sessionInitializing ? (
         <QuickReviewLoading />
       ) : error ? (
         <Card className="space-y-4">
@@ -373,7 +516,7 @@ export default function QuickReviewPage() {
                 <p>Best Score: {bestDisplayedCorrect} / {totalQuestions}</p>
                 {improvedVsPrevious ? (
                   <p className="font-medium text-emerald-700 dark:text-emerald-300">
-                    Your Score: {score} / {totalQuestions} ↑
+                    Your Score: {score} / {totalQuestions} (improved)
                   </p>
                 ) : null}
               </div>

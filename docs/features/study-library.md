@@ -217,21 +217,40 @@ Quick Review session persistence:
 - Quick Review sessions store user performance history per attempt
 - one retry round (when needed) is still part of the same Quick Review session record
 
+Quick Review resume lifecycle:
+- session statuses:
+  - `IN_PROGRESS`: user can leave and later resume from saved progress
+  - `COMPLETED`: attempt is finalized and appears in session history
+- one `IN_PROGRESS` session is allowed per user and Study Pack
+- starting Quick Review reuses an existing `IN_PROGRESS` session for that user + Study Pack
+- a new session is created only when no `IN_PROGRESS` session exists
+- completing Quick Review updates the same session to `COMPLETED` (does not create a new session)
+- resume restores practical progress state (current question index, current round, and retry question context)
+- resuming a session is different from starting a new attempt:
+  - resume continues existing progress
+  - new attempt starts a fresh session after completion
+
 Stored session fields:
 - `id`
 - `user_id`
 - `study_pack_id`
+- `status`
+- `current_question_index`
+- `current_round`
 - `total_questions`
 - `correct_answers`
 - `score_percentage`
 - `retry_count`
 - `duration_seconds` (nullable)
 - `session_metadata` (nullable, optional context)
+- `session_state` (nullable, lightweight progress state for resume)
 - `created_at`
 - `completed_at`
 
 Session API flow:
-- `POST /api/quick-review-sessions/start` creates a session and returns `sessionId`
+- `POST /api/quick-review-sessions/start` reuses in-progress session when available, otherwise creates a new one
+- `GET /api/quick-review-sessions/study-packs/{studyPackId}/in-progress` returns current in-progress session (or none)
+- `POST /api/quick-review-sessions/{sessionId}/progress` persists lightweight progress during review
 - `POST /api/quick-review-sessions/{sessionId}/complete` computes and stores `score_percentage`
 - `GET /api/quick-review-sessions/study-packs/{studyPackId}/recent` returns recent completed sessions
 

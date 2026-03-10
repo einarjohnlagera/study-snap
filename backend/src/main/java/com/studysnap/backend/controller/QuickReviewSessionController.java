@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartRequest;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
@@ -45,6 +46,25 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewSessionService.completeSession(sessionId, userId, request);
+    }
+
+    @PostMapping("/{sessionId}/progress")
+    public QuickReviewSessionResponse updateSessionProgress(
+            @PathVariable String sessionId,
+            @Valid @RequestBody QuickReviewSessionProgressRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.updateSessionProgress(sessionId, userId, request);
+    }
+
+    @GetMapping("/study-packs/{studyPackId}/in-progress")
+    public QuickReviewSessionStartResponse getInProgressSession(
+            @PathVariable String studyPackId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.getInProgressSession(studyPackId, userId);
     }
 
     @GetMapping("/study-packs/{studyPackId}/recent")
