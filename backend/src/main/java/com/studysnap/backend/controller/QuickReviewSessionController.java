@@ -1,0 +1,59 @@
+package com.studysnap.backend.controller;
+
+import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewSessionResponse;
+import com.studysnap.backend.dto.QuickReviewSessionStartRequest;
+import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.security.AuthenticatedUser;
+import com.studysnap.backend.service.QuickReviewSessionService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/quick-review-sessions")
+@RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('USER','ADMIN')")
+public class QuickReviewSessionController {
+    private final QuickReviewSessionService quickReviewSessionService;
+
+    @PostMapping("/start")
+    public QuickReviewSessionStartResponse startSession(
+            @Valid @RequestBody QuickReviewSessionStartRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.startSession(request.studyPackId(), userId);
+    }
+
+    @PostMapping("/{sessionId}/complete")
+    public QuickReviewSessionResponse completeSession(
+            @PathVariable String sessionId,
+            @Valid @RequestBody QuickReviewSessionCompleteRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.completeSession(sessionId, userId, request);
+    }
+
+    @GetMapping("/study-packs/{studyPackId}/recent")
+    public List<QuickReviewSessionResponse> listRecentSessions(
+            @PathVariable String studyPackId,
+            @RequestParam(value = "limit", defaultValue = "5") int limit,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.listRecentSessions(studyPackId, userId, limit);
+    }
+}

@@ -7,7 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser } from "@/lib/auth";
-import { getMyStudyPack, type StudyPackResponse } from "@/lib/api";
+import {
+  getMyStudyPack,
+  listRecentQuickReviewSessions,
+  startQuickReviewSession,
+  type QuickReviewSessionSummaryResponse,
+  type StudyPackResponse,
+} from "@/lib/api";
 
 function StudyPackDetailLoading() {
   return (
@@ -46,8 +52,11 @@ export default function StudyPackDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
+  const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [startingQuickReview, setStartingQuickReview] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -82,10 +91,21 @@ export default function StudyPackDetailPage() {
     try {
       const detail = await getMyStudyPack(studyPackId);
       setStudyPack(detail);
+      try {
+        const history = await listRecentQuickReviewSessions(studyPackId, 5);
+        setRecentSessions(history);
+        setHistoryError(null);
+      } catch (historyErr) {
+        const message = historyErr instanceof Error ? historyErr.message : "Could not load recent sessions.";
+        setHistoryError(message);
+        setRecentSessions([]);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
       setError(message);
       setStudyPack(null);
+      setRecentSessions([]);
+      setHistoryError(null);
     } finally {
       setLoading(false);
     }
@@ -96,6 +116,22 @@ export default function StudyPackDetailPage() {
   }, [loadStudyPack]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
+
+  const handleStartQuickReview = async () => {
+    if (!studyPack) {
+      return;
+    }
+    setStartingQuickReview(true);
+    try {
+      const started = await startQuickReviewSession(studyPack.id);
+      router.push(`/study-packs/${studyPack.id}/quick-review?sessionId=${started.sessionId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not start Quick Review.";
+      setHistoryError(message);
+    } finally {
+      setStartingQuickReview(false);
+    }
+  };
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-6 py-10">
@@ -154,11 +190,9 @@ export default function StudyPackDetailPage() {
               </div>
             ) : null}
             <div>
-              <Link href={`/study-packs/${studyPack.id}/quick-review`}>
-                <Button type="button" variant="outline">
-                  Start Quick Review
-                </Button>
-              </Link>
+              <Button type="button" variant="outline" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
+                {startingQuickReview ? "Starting..." : "Start Quick Review"}
+              </Button>
             </div>
           </Card>
 
@@ -174,6 +208,33 @@ export default function StudyPackDetailPage() {
                 <li key={`${studyPack.id}-concept-${index}`}>{concept}</li>
               ))}
             </ul>
+          </Card>
+
+          <Card className="space-y-3">
+            <h2 className="text-xl font-semibold">Recent Review Sessions</h2>
+            {historyError ? (
+              <p className="text-sm text-foreground/75">{historyError}</p>
+            ) : recentSessions.length === 0 ? (
+              <p className="text-sm text-foreground/75">No completed Quick Review sessions yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {recentSessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <span className="text-foreground/75">
+                      {session.completedAt
+                        ? new Date(session.completedAt).toLocaleString()
+                        : new Date(session.createdAt).toLocaleString()}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {session.correctAnswers}/{session.totalQuestions} ({session.scorePercentage}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <PracticeQuizCard quiz={studyPack.quiz} />

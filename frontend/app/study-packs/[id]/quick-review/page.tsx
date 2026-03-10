@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
-import { getMyStudyPack, trackQuickReviewActivity, type StudyPackResponse } from "@/lib/api";
+import {
+  completeQuickReviewSession,
+  getMyStudyPack,
+  startQuickReviewSession,
+  type QuickReviewSessionSummaryResponse,
+  type StudyPackResponse,
+} from "@/lib/api";
 
 function QuickReviewLoading() {
   return (
@@ -27,12 +33,16 @@ function QuickReviewLoading() {
 export default function QuickReviewPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
   const [completionTracked, setCompletionTracked] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  const [persistedResult, setPersistedResult] = useState<QuickReviewSessionSummaryResponse | null>(null);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -40,6 +50,12 @@ export default function QuickReviewPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+  const sessionIdFromQuery = searchParams.get("sessionId");
+
+  useEffect(() => {
+    setCurrentSessionId(sessionIdFromQuery);
+    setSessionStartedAt(Date.now());
+  }, [sessionIdFromQuery]);
 
   const loadStudyPack = useCallback(async () => {
     if (!studyPackId) {
@@ -70,11 +86,7 @@ export default function QuickReviewPage() {
       setCurrentIndex(0);
       setSelectedChoices({});
       setCompletionTracked(false);
-      try {
-        await trackQuickReviewActivity(studyPackId, "STARTED_QUICK_REVIEW");
-      } catch {
-        // Activity tracking failures should not block review flow.
-      }
+      setPersistedResult(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
       setError(message);
@@ -104,16 +116,27 @@ export default function QuickReviewPage() {
   );
 
   useEffect(() => {
-    if (!isComplete || completionTracked || !studyPackId) {
+    if (!isComplete || completionTracked || !currentSessionId) {
       return;
     }
 
     let isMounted = true;
     void (async () => {
+      const durationSeconds = sessionStartedAt
+        ? Math.max(0, Math.round((Date.now() - sessionStartedAt) / 1000))
+        : undefined;
       try {
-        await trackQuickReviewActivity(studyPackId, "COMPLETED_QUICK_REVIEW");
+        const result = await completeQuickReviewSession(currentSessionId, {
+          correctAnswers: score,
+          totalQuestions,
+          retryCount: 0,
+          durationSeconds,
+        });
+        if (isMounted) {
+          setPersistedResult(result);
+        }
       } catch {
-        // Activity tracking failures should not block review flow.
+        // Session persistence errors should not block the review experience.
       } finally {
         if (isMounted) {
           setCompletionTracked(true);
@@ -124,7 +147,7 @@ export default function QuickReviewPage() {
     return () => {
       isMounted = false;
     };
-  }, [completionTracked, isComplete, studyPackId]);
+  }, [completionTracked, currentSessionId, isComplete, score, sessionStartedAt, totalQuestions]);
 
   const handleSelectChoice = (choice: string) => {
     if (!currentQuestion || hasAnsweredCurrent) {
@@ -147,10 +170,15 @@ export default function QuickReviewPage() {
     setCurrentIndex(0);
     setSelectedChoices({});
     setCompletionTracked(false);
+    setPersistedResult(null);
+    setSessionStartedAt(Date.now());
     if (studyPackId) {
-      void trackQuickReviewActivity(studyPackId, "STARTED_QUICK_REVIEW").catch(() => {
-        // Activity tracking failures should not block review flow.
-      });
+      void startQuickReviewSession(studyPackId)
+        .then((result) => {
+          setCurrentSessionId(result.sessionId);
+          setSessionStartedAt(Date.now());
+        })
+        .catch(() => setCurrentSessionId(null));
     }
   };
 
@@ -202,15 +230,31 @@ export default function QuickReviewPage() {
             </Button>
           </Link>
         </Card>
+      ) : studyPack && !currentSessionId ? (
+        <Card className="space-y-4">
+          <h1 className="text-2xl font-semibold">Quick Review not started</h1>
+          <p className="text-sm text-foreground/75">
+            Start Quick Review from the Study Pack detail page to create a session.
+          </p>
+          <Link href={`/study-packs/${studyPack.id}`}>
+            <Button type="button" variant="outline">
+              Back to Study Pack
+            </Button>
+          </Link>
+        </Card>
       ) : studyPack && isComplete ? (
         <Card className="space-y-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Complete
           </p>
           <h1 className="text-2xl font-semibold">Your results</h1>
-          <p className="text-sm text-foreground/75">
-            Score: {score} / {totalQuestions}
-          </p>
+          <div className="space-y-1 text-sm text-foreground/75">
+            <p>Score: {score} / {totalQuestions}</p>
+            <p>
+              Percentage: {persistedResult?.scorePercentage ?? ((score / totalQuestions) * 100).toFixed(2)}%
+            </p>
+            <p>Retry count: {persistedResult?.retryCount ?? 0}</p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={handleRetry}>
               Retry Quick Review
