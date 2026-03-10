@@ -18,6 +18,8 @@ import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
+import com.studysnap.backend.util.SummaryPreviewUtils;
+import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,7 +101,12 @@ public class StudyPackService {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
 
-        UUID draftId = parseUuid(request.draftId(), "DRAFT_NOT_FOUND", "Draft not found.");
+        UUID draftId = UuidParsingUtils.parseUuidOrThrow(
+                request.draftId(),
+                "DRAFT_NOT_FOUND",
+                "Draft not found.",
+                HttpStatus.NOT_FOUND
+        );
         StudyPackDraftEntity draft = studyPackDraftRepository.findById(draftId)
                 .orElseThrow(() -> new AppException("DRAFT_NOT_FOUND", "Draft not found.", HttpStatus.NOT_FOUND));
         if (draft.getOwnerUserId() == null || !draft.getOwnerUserId().equals(ownerUserId)) {
@@ -127,7 +134,12 @@ public class StudyPackService {
 
     @Transactional(readOnly = true)
     public StudyPackResponse getById(String id, UUID ownerUserId) {
-        UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
         activityTrackingService.recordActivity(ownerUserId, ActivityType.OPENED_STUDY_PACK, studyPack.getId());
@@ -140,7 +152,7 @@ public class StudyPackService {
                 .map(entity -> new StudyPackListItemResponse(
                         entity.getId().toString(),
                         entity.getTitle(),
-                        buildSummaryPreview(entity.getSummary()),
+                        SummaryPreviewUtils.buildSummaryPreview(entity.getSummary(), 140),
                         entity.getQuiz() == null ? 0 : entity.getQuiz().size(),
                         entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                         entity.getCreatedAt()
@@ -149,14 +161,24 @@ public class StudyPackService {
     }
 
     public void deleteMine(String id, UUID ownerUserId) {
-        UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
         studyPackRepository.delete(entity);
     }
 
     public void recordQuickReviewActivity(String id, UUID ownerUserId, ActivityType activityType) {
-        UUID studyPackId = parseUuid(id, "STUDY_PACK_NOT_FOUND", "Study pack not found.");
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
         studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
@@ -281,24 +303,6 @@ public class StudyPackService {
             return new String[0];
         }
         return new String[]{title.trim()};
-    }
-
-    private String buildSummaryPreview(String summary) {
-        if (summary == null || summary.isBlank()) {
-            return "";
-        }
-        if (summary.length() <= 140) {
-            return summary;
-        }
-        return summary.substring(0, 140).trim() + "...";
-    }
-
-    private UUID parseUuid(String raw, String code, String message) {
-        try {
-            return UUID.fromString(raw);
-        } catch (IllegalArgumentException ex) {
-            throw new AppException(code, message, HttpStatus.NOT_FOUND);
-        }
     }
 }
 

@@ -9,6 +9,7 @@ import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.util.SummaryPreviewUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -158,22 +159,12 @@ public class DashboardService {
         return new ContinueStudyingResponse(
                 studyPack.getId().toString(),
                 studyPack.getTitle(),
-                buildSummaryPreview(studyPack.getSummary()),
+                SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), 140),
                 reason,
                 lastScorePercentage,
                 lastReviewedAt,
                 lastOpenedAt,
                 createdAt
         );
-    }
-
-    private String buildSummaryPreview(String summary) {
-        if (summary == null || summary.isBlank()) {
-            return "";
-        }
-        if (summary.length() <= 140) {
-            return summary;
-        }
-        return summary.substring(0, 140).trim() + "...";
     }
 }
