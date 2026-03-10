@@ -68,7 +68,9 @@ Endpoint:
 - `GET /api/dashboard/continue-studying`
 
 Priority logic (v1):
-- priority 1: most recently reviewed Study Pack whose latest completed Quick Review score is below `100%`
+- priority 1: weakest recently reviewed Study Pack, using each Study Pack's latest completed Quick Review score below `100%`
+  - compare by `score_percentage ASC`
+  - tie-break by `completed_at DESC`
 - priority 2: otherwise most recently opened Study Pack
 - priority 3: otherwise most recently created Study Pack
 - priority 4: if no Study Packs exist, return no recommendation
