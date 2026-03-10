@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
-import { getAuthUser } from "@/lib/auth";
+import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   getInProgressQuickReviewSession,
   getMyStudyPack,
@@ -74,17 +74,7 @@ export default function StudyPackDetailPage() {
       return;
     }
 
-    const authUser = getAuthUser();
-    if (!authUser) {
-      router.replace("/login");
-      return;
-    }
-    if (!authUser.emailVerifiedAt) {
-      router.replace("/verify-email");
-      return;
-    }
-    if (!authUser.profileType) {
-      router.replace("/onboarding");
+    if (!requireVerifiedOnboardedUser(router)) {
       return;
     }
 

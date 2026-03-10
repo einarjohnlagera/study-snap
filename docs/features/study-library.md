@@ -92,6 +92,31 @@ Scope note:
 - this recommendation is distinct from future "Resume Quick Review" support
 - v1 does not resume unfinished sessions
 
+Smart Continue Studying card messaging (score-aware):
+- if `lastScorePercentage` exists and is below `100`:
+  - title: `Continue studying`
+  - message: encourages improving score with latest percentage
+  - CTA: `Continue Review`
+- if `lastScorePercentage` exists and equals `100`:
+  - title: `Nice work on this pack`
+  - message: reinforces mastery and encourages occasional practice
+  - CTA: `Practice Again`
+- if `lastScorePercentage` is null (no completed Quick Review yet):
+  - title: `Start studying`
+  - message: encourages first Quick Review
+  - CTA: `Start Review`
+
+CTA navigation:
+- Smart Continue Studying action routes directly to Quick Review:
+  - `/study-packs/{id}/quick-review`
+
+Smart Continue Studying card hierarchy:
+- motivational feedback appears in a distinct visual block (badge/label + message) to improve scanability
+- Study Pack summary appears in a separate secondary section:
+  - label: `About this Study Pack`
+- metadata is formatted as compact secondary lines (for example `Last reviewed · ...`)
+- layout and behavior remain consistent with existing dashboard patterns; this is a presentation-only improvement
+
 ## User-account dependency
 
 The Study Library works better after user accounts exist because:
