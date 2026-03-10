@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser } from "@/lib/auth";
 import {
+  getInProgressQuickReviewSession,
   getMyStudyPack,
   listRecentQuickReviewSessions,
   startQuickReviewSession,
@@ -57,6 +58,7 @@ export default function StudyPackDetailPage() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingQuickReview, setStartingQuickReview] = useState(false);
+  const [hasInProgressQuickReview, setHasInProgressQuickReview] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -100,12 +102,19 @@ export default function StudyPackDetailPage() {
         setHistoryError(message);
         setRecentSessions([]);
       }
+      try {
+        const inProgress = await getInProgressQuickReviewSession(studyPackId);
+        setHasInProgressQuickReview(Boolean(inProgress.sessionId));
+      } catch {
+        setHasInProgressQuickReview(false);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
       setError(message);
       setStudyPack(null);
       setRecentSessions([]);
       setHistoryError(null);
+      setHasInProgressQuickReview(false);
     } finally {
       setLoading(false);
     }
@@ -124,7 +133,9 @@ export default function StudyPackDetailPage() {
     setStartingQuickReview(true);
     try {
       const started = await startQuickReviewSession(studyPack.id);
-      router.push(`/study-packs/${studyPack.id}/quick-review?sessionId=${started.sessionId}`);
+      if (started.sessionId) {
+        router.push(`/study-packs/${studyPack.id}/quick-review?sessionId=${started.sessionId}`);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not start Quick Review.";
       setHistoryError(message);
@@ -191,7 +202,9 @@ export default function StudyPackDetailPage() {
             ) : null}
             <div>
               <Button type="button" variant="outline" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
-                {startingQuickReview ? "Starting..." : "Start Quick Review"}
+                {startingQuickReview
+                  ? (hasInProgressQuickReview ? "Resuming..." : "Starting...")
+                  : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
               </Button>
             </div>
           </Card>

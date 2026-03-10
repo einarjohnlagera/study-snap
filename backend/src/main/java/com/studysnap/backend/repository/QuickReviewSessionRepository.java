@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -20,5 +21,11 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     List<QuickReviewSessionEntity> findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
             UUID userId,
             Pageable pageable
+    );
+
+    Optional<QuickReviewSessionEntity> findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+            UUID userId,
+            UUID studyPackId,
+            QuickReviewSessionStatus status
     );
 }

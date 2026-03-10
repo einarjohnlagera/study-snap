@@ -122,7 +122,12 @@ export type StudyPackApiResponse = StudyPackResponse | NeedsTextConfirmationResp
 export type QuickReviewActivityType = "STARTED_QUICK_REVIEW" | "COMPLETED_QUICK_REVIEW";
 
 export type QuickReviewSessionStartResponse = {
-  sessionId: string;
+  sessionId: string | null;
+  status: "IN_PROGRESS" | "COMPLETED" | null;
+  currentQuestionIndex: number;
+  currentRound: "INITIAL" | "RETRY" | null;
+  retryCount: number;
+  sessionState: Record<string, unknown> | null;
 };
 
 export type QuickReviewSessionCompleteRequest = {
@@ -133,14 +138,25 @@ export type QuickReviewSessionCompleteRequest = {
   sessionMetadata?: Record<string, unknown>;
 };
 
+export type QuickReviewSessionProgressRequest = {
+  currentQuestionIndex: number;
+  currentRound: "INITIAL" | "RETRY";
+  retryCount: number;
+  sessionState?: Record<string, unknown>;
+};
+
 export type QuickReviewSessionSummaryResponse = {
   id: string;
   studyPackId: string;
+  status?: "IN_PROGRESS" | "COMPLETED";
+  currentQuestionIndex?: number;
+  currentRound?: "INITIAL" | "RETRY";
   totalQuestions: number;
   correctAnswers: number;
   scorePercentage: number;
   retryCount: number;
   durationSeconds: number | null;
+  sessionState?: Record<string, unknown> | null;
   createdAt: string;
   completedAt: string | null;
 };
@@ -497,6 +513,39 @@ export async function startQuickReviewSession(
     true,
   );
   return parseApiResponse<QuickReviewSessionStartResponse>(response, "Could not start Quick Review.");
+}
+
+export async function getInProgressQuickReviewSession(
+  studyPackId: string,
+): Promise<QuickReviewSessionStartResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/study-packs/${studyPackId}/in-progress`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewSessionStartResponse>(response, "Could not load in-progress Quick Review.");
+}
+
+export async function updateQuickReviewSessionProgress(
+  sessionId: string,
+  request: QuickReviewSessionProgressRequest,
+): Promise<QuickReviewSessionSummaryResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/${sessionId}/progress`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewSessionSummaryResponse>(
+    response,
+    "Could not save Quick Review progress.",
+  );
 }
 
 export async function completeQuickReviewSession(

@@ -2,6 +2,8 @@ package com.studysnap.backend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -30,6 +32,17 @@ public class QuickReviewSessionEntity {
     @Column(name = "study_pack_id", nullable = false)
     private UUID studyPackId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 32)
+    private QuickReviewSessionStatus status;
+
+    @Column(name = "current_question_index", nullable = false)
+    private Integer currentQuestionIndex;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_round", nullable = false, length = 16)
+    private QuickReviewRound currentRound;
+
     @Column(name = "total_questions", nullable = false)
     private Integer totalQuestions;
 
@@ -48,6 +61,10 @@ public class QuickReviewSessionEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "session_metadata", columnDefinition = "jsonb")
     private Map<String, Object> sessionMetadata;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "session_state", columnDefinition = "jsonb")
+    private Map<String, Object> sessionState;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
