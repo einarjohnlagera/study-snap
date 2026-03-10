@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,18 +68,27 @@ public class DashboardService {
 
         Map<UUID, QuickReviewSessionEntity> latestSessionByStudyPack = new LinkedHashMap<>();
         for (QuickReviewSessionEntity session : recentSessions) {
+            if (session.getStatus() != QuickReviewSessionStatus.COMPLETED) {
+                continue;
+            }
             UUID studyPackId = session.getStudyPackId();
             if (!latestSessionByStudyPack.containsKey(studyPackId)) {
                 latestSessionByStudyPack.put(studyPackId, session);
             }
         }
 
-        for (QuickReviewSessionEntity session : latestSessionByStudyPack.values()) {
-            BigDecimal scorePercentage = session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage();
-            if (scorePercentage.compareTo(PERFECT_SCORE) >= 0) {
-                continue;
-            }
+        List<QuickReviewSessionEntity> weakestCandidates = latestSessionByStudyPack.values().stream()
+                .filter(session -> scorePercentageOrZero(session).compareTo(PERFECT_SCORE) < 0)
+                .sorted(
+                        Comparator.comparing(this::scorePercentageOrZero)
+                                .thenComparing(
+                                        QuickReviewSessionEntity::getCompletedAt,
+                                        Comparator.nullsLast(Comparator.reverseOrder())
+                                )
+                )
+                .toList();
 
+        for (QuickReviewSessionEntity session : weakestCandidates) {
             Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
             if (studyPack.isEmpty()) {
                 continue;
@@ -86,7 +97,7 @@ public class DashboardService {
             return Optional.of(toResponse(
                     studyPack.get(),
                     ContinueStudyingReason.LOW_SCORE_RECENT,
-                    scorePercentage,
+                    scorePercentageOrZero(session),
                     session.getCompletedAt(),
                     findLastOpenedAt(userId, session.getStudyPackId()),
                     studyPack.get().getCreatedAt()
@@ -94,6 +105,10 @@ public class DashboardService {
         }
 
         return Optional.empty();
+    }
+
+    private BigDecimal scorePercentageOrZero(QuickReviewSessionEntity session) {
+        return session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage();
     }
 
     private Optional<ContinueStudyingResponse> resolveRecentlyOpenedRecommendation(UUID userId) {
