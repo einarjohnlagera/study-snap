@@ -9,7 +9,7 @@ import {
   type ContinueStudyingResponse,
   type StudyPackListItemResponse,
 } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
+import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import { DashboardHero } from "./dashboard-hero";
 import { ContinueSpotlight } from "./continue-spotlight";
 import { DashboardStats } from "./dashboard-stats";
@@ -28,18 +28,12 @@ export default function DashboardPage() {
   const [contentVisible, setContentVisible] = useState(false);
 
   const loadStudyPacks = useCallback(async () => {
-    const authUser = getAuthUser();
-    if (!authUser) {
-      setError("Please log in to access your dashboard.");
-      setLoading(false);
-      return;
-    }
-    if (!authUser.emailVerifiedAt) {
-      router.replace("/verify-email");
-      return;
-    }
-    if (!authUser.profileType) {
-      router.replace("/onboarding");
+    if (!requireVerifiedOnboardedUser(router, {
+      onUnauthenticated: () => {
+        setError("Please log in to access your dashboard.");
+        setLoading(false);
+      },
+    })) {
       return;
     }
 

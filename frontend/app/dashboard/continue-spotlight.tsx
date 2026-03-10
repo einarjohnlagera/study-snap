@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { ContinueStudyingResponse } from "@/lib/api";
@@ -7,32 +8,46 @@ type ContinueSpotlightProps = {
   recommendation: ContinueStudyingResponse;
 };
 
-function getReasonCopy(recommendation: ContinueStudyingResponse) {
-  const title = recommendation.title ?? "Continue Studying";
-  if (recommendation.reason === "LOW_SCORE_RECENT") {
-    const scoreText = recommendation.lastScorePercentage === null ? "" : ` (${recommendation.lastScorePercentage}%)`;
-    return {
-      heading: title,
-      body: `You recently completed Quick Review${scoreText}. A short revisit can strengthen this topic.`,
-      cta: "Improve Score",
-    };
+function formatScorePercentage(value: number) {
+  if (Number.isInteger(value)) {
+    return String(value);
   }
-  if (recommendation.reason === "RECENTLY_OPENED") {
+  return value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
+  const latestScore = recommendation.lastScorePercentage;
+  if (latestScore !== null) {
+    if (latestScore >= 100) {
+      return {
+        label: "Perfect Score",
+        icon: CheckCircle2,
+        heading: "Nice work on this pack",
+        body: "You scored 100% on your latest Quick Review. Practice again anytime to keep it sharp.",
+        cta: "Practice Again",
+      };
+    }
     return {
-      heading: title,
-      body: "You recently opened this Study Pack. Continue reviewing while it is still fresh.",
+      label: "Keep Improving",
+      icon: TrendingUp,
+      heading: "Continue studying",
+      body: `You recently scored ${formatScorePercentage(latestScore)}% on this Study Pack. Review it again to improve your score.`,
       cta: "Continue Review",
     };
   }
+
   return {
-    heading: title,
-    body: "This Study Pack is newly created and ready for your first focused review.",
+    label: "Get Started",
+    icon: Sparkles,
+    heading: "Start studying",
+    body: "You created this Study Pack recently. Start your first Quick Review.",
     cta: "Start Review",
   };
 }
 
 export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
-  const copy = getReasonCopy(recommendation);
+  const copy = getScoreAwareCopy(recommendation);
+  const FeedbackIcon = copy.icon;
   if (!recommendation.studyPackId) {
     return null;
   }
@@ -41,29 +56,42 @@ export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
     <Card className="space-y-4">
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Continue Studying
+          KEEP IT SHARP
         </p>
-        <h2 className="text-xl font-semibold">{copy.heading}</h2>
-        <p className="text-sm text-foreground/75">{copy.body}</p>
+        <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-[11px] font-medium text-foreground/80">
+              <FeedbackIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              {copy.label}
+            </span>
+          </div>
+          <h2 className="text-xl font-semibold">{copy.heading}</h2>
+          <p className="text-sm font-medium text-foreground/85">{copy.body}</p>
+        </div>
         {recommendation.summaryPreview ? (
-          <p className="text-sm text-foreground/75">{recommendation.summaryPreview}</p>
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+              About this Study Pack
+            </p>
+            <p className="text-sm text-foreground/70">{recommendation.summaryPreview}</p>
+          </div>
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-3 text-xs text-foreground/70">
+      <div className="space-y-1 text-xs text-foreground/65">
         {recommendation.lastReviewedAt ? (
-          <span>Last reviewed: {new Date(recommendation.lastReviewedAt).toLocaleString()}</span>
+          <p>Last reviewed · {new Date(recommendation.lastReviewedAt).toLocaleString()}</p>
         ) : null}
         {recommendation.lastOpenedAt ? (
-          <span>Last opened: {new Date(recommendation.lastOpenedAt).toLocaleString()}</span>
+          <p>Last opened · {new Date(recommendation.lastOpenedAt).toLocaleString()}</p>
         ) : null}
         {recommendation.createdAt ? (
-          <span>Created: {new Date(recommendation.createdAt).toLocaleString()}</span>
+          <p>Created · {new Date(recommendation.createdAt).toLocaleDateString()}</p>
         ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link href={`/study-packs/${recommendation.studyPackId}`}>
+        <Link href={`/study-packs/${recommendation.studyPackId}/quick-review`}>
           <Button type="button">{copy.cta}</Button>
         </Link>
       </div>

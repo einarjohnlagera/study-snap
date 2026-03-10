@@ -7,7 +7,7 @@ import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
-import { getAuthUser } from "@/lib/auth";
+import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   completeQuickReviewSession,
   getMyStudyPack,
@@ -51,6 +51,29 @@ function QuickReviewLoading() {
       </div>
       <div className="h-4 w-3/4 animate-pulse rounded bg-foreground/10" />
     </Card>
+  );
+}
+
+function ScoreProgressBlock({
+  score,
+  totalQuestions,
+  scorePercentage,
+}: {
+  score: number;
+  totalQuestions: number;
+  scorePercentage: number;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-base font-medium text-foreground">Score: {score} / {totalQuestions} correct</p>
+      <p className="font-medium text-foreground">{scorePercentage}%</p>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
+          style={{ width: `${scorePercentage}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -99,6 +122,18 @@ export default function QuickReviewPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
 
+  const resetQuickReviewState = useCallback((allIndexes: number[]) => {
+    setPhase("initial");
+    setActiveQuestionIndexes(allIndexes);
+    setCurrentRoundIndex(0);
+    setRetryQuestionIndexes([]);
+    setRoundSelections({});
+    setSelectedChoices({});
+    setRetryCount(0);
+    setCompletionTracked(false);
+    setPersistedResult(null);
+  }, []);
+
   const loadStudyPack = useCallback(async () => {
     if (!studyPackId) {
       setError("Study Pack not found.");
@@ -106,17 +141,7 @@ export default function QuickReviewPage() {
       return;
     }
 
-    const authUser = getAuthUser();
-    if (!authUser) {
-      router.replace("/login");
-      return;
-    }
-    if (!authUser.emailVerifiedAt) {
-      router.replace("/verify-email");
-      return;
-    }
-    if (!authUser.profileType) {
-      router.replace("/onboarding");
+    if (!requireVerifiedOnboardedUser(router)) {
       return;
     }
 
@@ -125,15 +150,7 @@ export default function QuickReviewPage() {
     try {
       const detail = await getMyStudyPack(studyPackId);
       setStudyPack(detail);
-      setPhase("initial");
-      setActiveQuestionIndexes(detail.quiz.map((_, index) => index));
-      setCurrentRoundIndex(0);
-      setRetryQuestionIndexes([]);
-      setRoundSelections({});
-      setSelectedChoices({});
-      setRetryCount(0);
-      setCompletionTracked(false);
-      setPersistedResult(null);
+      resetQuickReviewState(detail.quiz.map((_, index) => index));
       setRecentSessions([]);
       setCurrentSessionId(null);
       setSessionStartedAt(Date.now());
@@ -145,7 +162,7 @@ export default function QuickReviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [router, studyPackId]);
+  }, [resetQuickReviewState, router, studyPackId]);
 
   useEffect(() => {
     void loadStudyPack();
@@ -189,6 +206,7 @@ export default function QuickReviewPage() {
   const scoreFeedback = getMotivationalFeedback(scorePercentage);
   const isPerfectScore = totalQuestions > 0 && score === totalQuestions;
   const displayedRetryCount = persistedResult?.retryCount ?? retryCount;
+  const currentRoundType = phase === "retry" ? "RETRY" : "INITIAL";
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -323,7 +341,7 @@ export default function QuickReviewPage() {
     setSelectedChoices(nextSelectedChoices);
     persistProgress({
       currentQuestionIndex: currentRoundIndex,
-      currentRound: phase === "retry" ? "RETRY" : "INITIAL",
+      currentRound: currentRoundType,
       retryCount,
       selectedChoices: nextSelectedChoices,
       retryQuestionIndexes,
@@ -342,7 +360,7 @@ export default function QuickReviewPage() {
       setCurrentRoundIndex(nextRoundIndex);
       persistProgress({
         currentQuestionIndex: nextRoundIndex,
-        currentRound: phase === "retry" ? "RETRY" : "INITIAL",
+        currentRound: currentRoundType,
         retryCount,
         selectedChoices,
         retryQuestionIndexes,
@@ -400,15 +418,7 @@ export default function QuickReviewPage() {
 
   const handleRetry = () => {
     const allIndexes = quiz.map((_, index) => index);
-    setPhase("initial");
-    setActiveQuestionIndexes(allIndexes);
-    setCurrentRoundIndex(0);
-    setRetryQuestionIndexes([]);
-    setRoundSelections({});
-    setSelectedChoices({});
-    setRetryCount(0);
-    setCompletionTracked(false);
-    setPersistedResult(null);
+    resetQuickReviewState(allIndexes);
     setSessionStartedAt(Date.now());
     if (studyPackId) {
       void startQuickReviewSession(studyPackId)
@@ -418,7 +428,6 @@ export default function QuickReviewPage() {
             return;
           }
           setCurrentSessionId(result.sessionId);
-          setSessionStartedAt(Date.now());
         })
         .catch(() => setCurrentSessionId(null));
     }
@@ -491,14 +500,7 @@ export default function QuickReviewPage() {
           </p>
           <h1 className="text-2xl font-semibold">Your results</h1>
           <div className="space-y-2 text-sm text-foreground/75">
-            <p className="text-base font-medium text-foreground">Score: {score} / {totalQuestions} correct</p>
-            <p className="font-medium text-foreground">{scorePercentage}%</p>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
-                style={{ width: `${scorePercentage}%` }}
-              />
-            </div>
+            <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
             {isPerfectScore ? (
               <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
                 <div className="mb-1 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
@@ -541,14 +543,7 @@ export default function QuickReviewPage() {
           </p>
           <h1 className="text-2xl font-semibold">You&apos;re making progress.</h1>
           <div className="space-y-2 rounded-md border border-border bg-background p-3 text-sm text-foreground/75">
-            <p className="text-base font-medium text-foreground">Score: {score} / {totalQuestions} correct</p>
-            <p className="font-medium text-foreground">{scorePercentage}%</p>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
-                style={{ width: `${scorePercentage}%` }}
-              />
-            </div>
+            <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
           </div>
           <p className="text-sm text-foreground/75">
             You missed {incorrectCount} {incorrectCount === 1 ? "question" : "questions"}. Let&apos;s review them again.
