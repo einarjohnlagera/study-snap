@@ -10,5 +10,6 @@ import java.util.UUID;
 public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID> {
     List<StudyPackEntity> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
     Optional<StudyPackEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+    Optional<StudyPackEntity> findTopByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
 }
 

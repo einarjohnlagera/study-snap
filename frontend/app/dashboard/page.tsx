@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { deleteMyStudyPack, listMyStudyPacks, type StudyPackListItemResponse } from "@/lib/api";
+import {
+  deleteMyStudyPack,
+  getContinueStudyingRecommendation,
+  listMyStudyPacks,
+  type ContinueStudyingResponse,
+  type StudyPackListItemResponse,
+} from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { DashboardHero } from "./dashboard-hero";
 import { ContinueSpotlight } from "./continue-spotlight";
@@ -16,6 +22,7 @@ import { StudyConsistencyCard } from "./study-consistency-card";
 export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
+  const [continueRecommendation, setContinueRecommendation] = useState<ContinueStudyingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
@@ -41,6 +48,12 @@ export default function DashboardPage() {
     try {
       const data = await listMyStudyPacks();
       setItems(data);
+      try {
+        const recommendation = await getContinueStudyingRecommendation();
+        setContinueRecommendation(recommendation);
+      } catch {
+        setContinueRecommendation(null);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
       setError(message);
@@ -66,13 +79,22 @@ export default function DashboardPage() {
     try {
       await deleteMyStudyPack(id);
       setItems((prev) => prev.filter((item) => item.id !== id));
+      try {
+        const recommendation = await getContinueStudyingRecommendation();
+        setContinueRecommendation(recommendation);
+      } catch {
+        setContinueRecommendation(null);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete the Study Pack.";
       setError(message);
     }
   };
 
-  const latestStudyPack = useMemo(() => (items.length > 0 ? items[0] : null), [items]);
+  const hasContinueRecommendation = useMemo(
+    () => Boolean(continueRecommendation?.studyPackId),
+    [continueRecommendation],
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-6 py-10">
@@ -92,7 +114,9 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
-          {latestStudyPack ? <ContinueSpotlight latestStudyPack={latestStudyPack} /> : null}
+          {hasContinueRecommendation && continueRecommendation ? (
+            <ContinueSpotlight recommendation={continueRecommendation} />
+          ) : null}
           <StudyConsistencyCard />
           <DashboardStats studyPacks={items} />
           {items.length === 0 ? (
