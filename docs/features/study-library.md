@@ -144,6 +144,31 @@ Behavior (v1):
 - show progress (`Question X of Y`)
 - show final results with score, retry, and return-to-detail actions
 
+Retry reinforcement behavior:
+- after the initial pass, missed questions are retried once in the same Quick Review flow
+- retry round includes only the originally missed questions
+- if no questions were missed, Quick Review goes directly to final results
+- retry does not increase `total_questions`; final score remains based on the original quiz size
+- no third round is created; retry is limited to one immediate reinforcement round
+
+Retry prompt UX:
+- shows progress summary before retry starts (`score`, `percentage`, and missed-question count)
+- uses encouraging guidance (study-supportive tone) instead of repetitive warning copy
+- action labels are explicit and learning-oriented:
+`Retry Incorrect Questions` and `Return to Study Pack`
+
+Results screen UX:
+- shows final score as `correct / total` plus percentage
+- includes lightweight visual score indicator (simple progress bar)
+- includes motivational feedback by score band:
+  - `100%`: mastery reinforcement
+  - `80-99%`: near-mastery encouragement
+  - `50-79%`: reinforcement-oriented nudge
+  - `<50%`: supportive retry guidance
+- shows session-to-session context when available:
+`Previous Attempt` and `Best Score`
+- if the latest score beats the previous attempt, the UI highlights improvement
+
 Activity tracking:
 - start event: `STARTED_QUICK_REVIEW`
 - completion event: `COMPLETED_QUICK_REVIEW`
@@ -153,6 +178,7 @@ Quick Review session persistence:
 - Quick Review session records are stored separately from Study Pack content in `quick_review_sessions`
 - Study Packs remain the source of static quiz content
 - Quick Review sessions store user performance history per attempt
+- one retry round (when needed) is still part of the same Quick Review session record
 
 Stored session fields:
 - `id`
