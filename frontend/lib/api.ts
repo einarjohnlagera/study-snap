@@ -165,6 +165,20 @@ export type QuickReviewSessionSummaryResponse = {
   completedAt: string | null;
 };
 
+export type QuickReviewIncorrectQuestionInput = {
+  question: string;
+  correctAnswer: string;
+  explanation: string;
+};
+
+export type QuickReviewStudyTipRequest = {
+  incorrectQuestions: QuickReviewIncorrectQuestionInput[];
+};
+
+export type QuickReviewStudyTipResponse = {
+  studyTip: string | null;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -584,4 +598,20 @@ export async function listRecentQuickReviewSessions(
     response,
     "Could not load recent Quick Review sessions.",
   );
+}
+
+export async function generateQuickReviewStudyTip(
+  studyPackId: string,
+  request: QuickReviewStudyTipRequest,
+): Promise<QuickReviewStudyTipResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/study-packs/${studyPackId}/study-tip`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewStudyTipResponse>(response, "Could not generate study tip.");
 }

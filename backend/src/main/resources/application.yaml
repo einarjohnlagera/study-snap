@@ -60,6 +60,11 @@ studysnap:
       provider: ${LLM_PROVIDER:openai}
       api-key: ${LLM_API_KEY:}
       base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+  quick-review:
+    study-tip:
+      enabled: ${QUICK_REVIEW_STUDY_TIP_ENABLED:false}
+      min-incorrect-count: ${QUICK_REVIEW_STUDY_TIP_MIN_INCORRECT_COUNT:1}
+      max-questions: ${QUICK_REVIEW_STUDY_TIP_MAX_QUESTIONS:3}
   security:
     jwt:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}

@@ -5,8 +5,11 @@ import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartRequest;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
+import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.QuickReviewSessionService;
+import com.studysnap.backend.service.QuickReviewStudyTipService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +31,7 @@ import java.util.UUID;
 @PreAuthorize("hasAnyRole('USER','ADMIN')")
 public class QuickReviewSessionController {
     private final QuickReviewSessionService quickReviewSessionService;
+    private final QuickReviewStudyTipService quickReviewStudyTipService;
 
     @PostMapping("/start")
     public QuickReviewSessionStartResponse startSession(
@@ -75,5 +79,15 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewSessionService.listRecentSessions(studyPackId, userId, limit);
+    }
+
+    @PostMapping("/study-packs/{studyPackId}/study-tip")
+    public QuickReviewStudyTipResponse generateStudyTip(
+            @PathVariable String studyPackId,
+            @Valid @RequestBody QuickReviewStudyTipRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewStudyTipService.generateStudyTip(studyPackId, userId, request);
     }
 }

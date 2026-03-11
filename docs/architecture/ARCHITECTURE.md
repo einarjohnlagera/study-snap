@@ -365,6 +365,20 @@ Image → OCR → text normalization → LLM prompt
 - `QUIZ_QUESTIONS_FREE`
 - `QUIZ_QUESTIONS_PREMIUM`
 - `MAX_NOTES_CHARS_FREE`
+- `QUICK_REVIEW_STUDY_TIP_ENABLED`
+- `QUICK_REVIEW_STUDY_TIP_MIN_INCORRECT_COUNT`
+- `QUICK_REVIEW_STUDY_TIP_MAX_QUESTIONS`
+
+### Quick Review AI Study Tip cost controls
+
+Quick Review results can optionally request an AI-generated Study Tip based on missed questions.
+
+Backend guardrails:
+- feature flag can fully disable tip generation (`studysnap.quick-review.study-tip.enabled`)
+- tip generation runs only when incorrect answer count reaches the configured threshold
+- only incorrect questions are sent to the LLM
+- incorrect question input is capped by configured max-question count
+- failures are non-blocking; Quick Review completion/results always continue
 
 ### Initial model mapping
 Demo:
