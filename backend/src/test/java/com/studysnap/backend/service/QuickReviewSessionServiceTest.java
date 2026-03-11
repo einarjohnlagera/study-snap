@@ -1,11 +1,18 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
+import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.InputType;
+import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -18,6 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -183,6 +192,124 @@ class QuickReviewSessionServiceTest {
                 .isEqualTo("INVALID_SESSION_RESULT");
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(activityTrackingService, never()).recordActivity(any(UUID.class), any(ActivityType.class), any(UUID.class));
+    }
+
+    @Test
+    void startSession_reusesExistingInProgressSessionForSameStudyPack() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 5);
+        QuickReviewSessionEntity existingSession = buildInProgressSession(sessionId, userId, studyPackId);
+        existingSession.setCurrentRound(QuickReviewRound.RETRY);
+        existingSession.setRetryCount(1);
+        existingSession.setSessionState(Map.of("retryQuestionIndexes", List.of(1, 4)));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(existingSession));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.startSession(studyPackId.toString(), userId);
+
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+        assertThat(response.retryCount()).isEqualTo(1);
+        assertThat(response.sessionState()).containsKey("retryQuestionIndexes");
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(activityTrackingService, never()).recordActivity(any(UUID.class), any(ActivityType.class), any(UUID.class));
+    }
+
+    @Test
+    void updateSessionProgress_persistsRetryRoundStateAndRetryIndexes() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        QuickReviewSessionProgressRequest request = new QuickReviewSessionProgressRequest(
+                0,
+                QuickReviewRound.RETRY,
+                1,
+                Map.of("retryQuestionIndexes", List.of(1, 3))
+        );
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionResponse response = quickReviewSessionService.updateSessionProgress(sessionId.toString(), userId, request);
+
+        assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+        assertThat(response.retryCount()).isEqualTo(1);
+        assertThat(response.sessionState()).containsEntry("retryQuestionIndexes", List.of(1, 3));
+        assertThat(session.getCurrentRound()).isEqualTo(QuickReviewRound.RETRY);
+        assertThat(session.getRetryCount()).isEqualTo(1);
+        assertThat(session.getSessionState()).containsEntry("retryQuestionIndexes", List.of(1, 3));
+    }
+
+    @Test
+    void completeSession_allowsScoreImprovementAfterRetryWithoutChangingOriginalTotal() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setCorrectAnswers(3);
+        session.setTotalQuestions(5);
+        session.setScorePercentage(BigDecimal.valueOf(60).setScale(2, RoundingMode.HALF_UP));
+        QuickReviewSessionCompleteRequest request = new QuickReviewSessionCompleteRequest(5, 5, 1, 150, null);
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
+
+        assertThat(response.id()).isEqualTo(sessionId.toString());
+        assertThat(response.correctAnswers()).isEqualTo(5);
+        assertThat(response.totalQuestions()).isEqualTo(5);
+        assertThat(response.scorePercentage()).isEqualByComparingTo("100.00");
+        assertThat(response.retryCount()).isEqualTo(1);
+        assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+    }
+
+    @Test
+    void updateSessionProgress_rejectsFurtherRetryProgressAfterSessionCompleted() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+        QuickReviewSessionProgressRequest request = new QuickReviewSessionProgressRequest(
+                0,
+                QuickReviewRound.RETRY,
+                1,
+                Map.of("retryQuestionIndexes", List.of(2, 4))
+        );
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> quickReviewSessionService.updateSessionProgress(sessionId.toString(), userId, request))
+                .isInstanceOf(AppException.class)
+                .hasMessage("Quick Review session is already completed.")
+                .extracting(ex -> ((AppException) ex).getCode())
+                .isEqualTo("SESSION_NOT_IN_PROGRESS");
+    }
+
+    private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId, int quizCount) {
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setInputType(InputType.TEXT);
+        studyPack.setTitle("Quick Review Pack");
+        studyPack.setSummary("Summary");
+        List<QuizItem> quizItems = new ArrayList<>();
+        for (int index = 0; index < quizCount; index++) {
+            quizItems.add(new QuizItem("Q" + (index + 1), List.of("A", "B"), "A", "E"));
+        }
+        studyPack.setQuiz(quizItems);
+        studyPack.setModelTier(ModelTier.FREE);
+        studyPack.setModelUsed("gpt-4.1-mini");
+        studyPack.setStatus(StudyPackStatus.DONE);
+        studyPack.setCreatedAt(OffsetDateTime.now().minusDays(1));
+        studyPack.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+        studyPack.setTags(new String[]{"retry"});
+        return studyPack;
     }
 
     private QuickReviewSessionEntity buildInProgressSession(UUID sessionId, UUID userId, UUID studyPackId) {

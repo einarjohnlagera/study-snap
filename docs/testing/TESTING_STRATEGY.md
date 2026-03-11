@@ -44,6 +44,7 @@ Unit tests should:
 Current automated unit coverage includes:
 * `DashboardService` recommendation priority/ranking tests
 * `QuickReviewSessionService` scoring and completion consistency tests
+* `QuickReviewSessionService` retry-flow lifecycle tests (in-progress reuse, retry-state persistence, single-session completion)
 
 Example test targets:
 
