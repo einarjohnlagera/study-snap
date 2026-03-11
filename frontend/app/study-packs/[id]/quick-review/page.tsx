@@ -117,6 +117,7 @@ export default function QuickReviewPage() {
   const [persistedResult, setPersistedResult] = useState<QuickReviewSessionSummaryResponse | null>(null);
   const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
   const [studyTip, setStudyTip] = useState<string | null>(null);
+  const [completingSession, setCompletingSession] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -136,6 +137,7 @@ export default function QuickReviewPage() {
     setCompletionTracked(false);
     setPersistedResult(null);
     setStudyTip(null);
+    setCompletingSession(false);
   }, []);
 
   const loadStudyPack = useCallback(async () => {
@@ -309,39 +311,32 @@ export default function QuickReviewPage() {
     };
   }, [quiz, sessionInitializing, studyPack]);
 
-  useEffect(() => {
-    if (!isComplete || completionTracked || !currentSessionId) {
+  const completeSessionIfNeeded = useCallback(async (finalRetryCount?: number) => {
+    if (!currentSessionId || completionTracked || completingSession) {
       return;
     }
 
-    let isMounted = true;
-    void (async () => {
-      const durationSeconds = sessionStartedAt
-        ? Math.max(0, Math.round((Date.now() - sessionStartedAt) / 1000))
-        : undefined;
-      try {
-        const result = await completeQuickReviewSession(currentSessionId, {
-          correctAnswers: score,
-          totalQuestions,
-          retryCount,
-          durationSeconds,
-        });
-        if (isMounted) {
-          setPersistedResult(result);
-        }
-      } catch {
-        // Session persistence errors should not block the review experience.
-      } finally {
-        if (isMounted) {
-          setCompletionTracked(true);
-        }
-      }
-    })();
+    setCompletingSession(true);
+    const durationSeconds = sessionStartedAt
+      ? Math.max(0, Math.round((Date.now() - sessionStartedAt) / 1000))
+      : undefined;
+    const effectiveRetryCount = finalRetryCount ?? retryCount;
 
-    return () => {
-      isMounted = false;
-    };
-  }, [completionTracked, currentSessionId, isComplete, retryCount, score, sessionStartedAt, totalQuestions]);
+    try {
+      const result = await completeQuickReviewSession(currentSessionId, {
+        correctAnswers: score,
+        totalQuestions,
+        retryCount: effectiveRetryCount,
+        durationSeconds,
+      });
+      setPersistedResult(result);
+    } catch {
+      // Session persistence errors should not block the review experience.
+    } finally {
+      setCompletionTracked(true);
+      setCompletingSession(false);
+    }
+  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions]);
 
   useEffect(() => {
     if (!isComplete || !studyPack) {
@@ -422,6 +417,7 @@ export default function QuickReviewPage() {
       const incorrectIndexes = activeQuestionIndexes.filter((index) => selectedChoices[index] !== quiz[index]?.answer);
       if (incorrectIndexes.length === 0) {
         setPhase("complete");
+        void completeSessionIfNeeded(0);
         return;
       }
       setRetryQuestionIndexes(incorrectIndexes);
@@ -441,6 +437,7 @@ export default function QuickReviewPage() {
 
     if (phase === "retry") {
       setPhase("complete");
+      void completeSessionIfNeeded(retryCount);
     }
   };
 
@@ -462,6 +459,11 @@ export default function QuickReviewPage() {
       activeQuestionIndexes: retryQuestionIndexes,
       roundSelections: {},
     });
+  };
+
+  const handleFinishReview = () => {
+    setPhase("complete");
+    void completeSessionIfNeeded(0);
   };
 
   const handleRetry = () => {
@@ -582,14 +584,16 @@ export default function QuickReviewPage() {
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={handleRetry}>
-              {isPerfectScore ? "Review Again" : "Improve Your Score"}
-            </Button>
             <Link href={`/study-packs/${studyPack.id}`}>
-              <Button type="button" variant="outline">
-                Return to Study Pack
+              <Button type="button">
+                Back to Study Pack
               </Button>
             </Link>
+            {!isPerfectScore ? (
+              <Button type="button" variant="outline" onClick={handleRetry}>
+                Practice Again
+              </Button>
+            ) : null}
           </div>
         </Card>
       ) : studyPack && phase === "retry-transition" ? (
@@ -602,17 +606,19 @@ export default function QuickReviewPage() {
             <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
           </div>
           <p className="text-sm text-foreground/75">
-            You missed {incorrectCount} {incorrectCount === 1 ? "question" : "questions"}. Let&apos;s review them again.
+            You got {score} out of {totalQuestions} correct.
+          </p>
+          <p className="text-sm text-foreground/75">
+            You missed {incorrectCount} {incorrectCount === 1 ? "question" : "questions"}. Review them now or finish
+            with your current score.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={handleStartRetryRound}>
+            <Button type="button" onClick={handleStartRetryRound} disabled={completingSession}>
               Retry Incorrect Questions
             </Button>
-            <Link href={`/study-packs/${studyPack.id}`}>
-              <Button type="button" variant="outline">
-                Return to Study Pack
-              </Button>
-            </Link>
+            <Button type="button" variant="outline" onClick={handleFinishReview} disabled={completingSession}>
+              Finish Review
+            </Button>
           </div>
         </Card>
       ) : studyPack && currentQuestion ? (
