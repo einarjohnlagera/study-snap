@@ -47,5 +47,14 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 null
         );
     }
+
+    @Override
+    public String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries) {
+        if (incorrectQuestionSummaries == null || incorrectQuestionSummaries.isEmpty()) {
+            return null;
+        }
+        String first = incorrectQuestionSummaries.getFirst();
+        return "Review this concept again: " + first;
+    }
 }
 

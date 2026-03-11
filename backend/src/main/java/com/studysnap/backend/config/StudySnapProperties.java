@@ -10,6 +10,7 @@ public class StudySnapProperties {
     private final Settings settings = new Settings();
     private final Ocr ocr = new Ocr();
     private final Llm llm = new Llm();
+    private final QuickReview quickReview = new QuickReview();
 
     @Getter
     @Setter
@@ -46,6 +47,20 @@ public class StudySnapProperties {
         private String provider = "openai";
         private String apiKey = "";
         private String baseUrl = "https://api.openai.com/v1";
+    }
+
+    @Getter
+    @Setter
+    public static class QuickReview {
+        private final StudyTip studyTip = new StudyTip();
+    }
+
+    @Getter
+    @Setter
+    public static class StudyTip {
+        private boolean enabled = true;
+        private int minIncorrectCount = 1;
+        private int maxQuestions = 3;
     }
 }
 

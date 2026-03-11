@@ -10,11 +10,13 @@ import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   completeQuickReviewSession,
+  generateQuickReviewStudyTip,
   getMyStudyPack,
   startQuickReviewSession,
   updateQuickReviewSessionProgress,
   type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
+  type QuickReviewStudyTipRequest,
   type StudyPackResponse,
 } from "@/lib/api";
 
@@ -114,6 +116,7 @@ export default function QuickReviewPage() {
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [persistedResult, setPersistedResult] = useState<QuickReviewSessionSummaryResponse | null>(null);
   const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
+  const [studyTip, setStudyTip] = useState<string | null>(null);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -132,6 +135,7 @@ export default function QuickReviewPage() {
     setRetryCount(0);
     setCompletionTracked(false);
     setPersistedResult(null);
+    setStudyTip(null);
   }, []);
 
   const loadStudyPack = useCallback(async () => {
@@ -207,6 +211,20 @@ export default function QuickReviewPage() {
   const isPerfectScore = totalQuestions > 0 && score === totalQuestions;
   const displayedRetryCount = persistedResult?.retryCount ?? retryCount;
   const currentRoundType = phase === "retry" ? "RETRY" : "INITIAL";
+  const incorrectQuestionsForStudyTip = useMemo<QuickReviewStudyTipRequest["incorrectQuestions"]>(() => {
+    return quiz
+      .map((item, index) => {
+        if (selectedChoices[index] === item.answer) {
+          return null;
+        }
+        return {
+          question: item.question,
+          correctAnswer: item.answer,
+          explanation: item.explanation,
+        };
+      })
+      .filter((item): item is QuickReviewStudyTipRequest["incorrectQuestions"][number] => item !== null);
+  }, [quiz, selectedChoices]);
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -324,6 +342,36 @@ export default function QuickReviewPage() {
       isMounted = false;
     };
   }, [completionTracked, currentSessionId, isComplete, retryCount, score, sessionStartedAt, totalQuestions]);
+
+  useEffect(() => {
+    if (!isComplete || !studyPack) {
+      return;
+    }
+    if (incorrectQuestionsForStudyTip.length === 0) {
+      setStudyTip(null);
+      return;
+    }
+
+    let isMounted = true;
+    void generateQuickReviewStudyTip(studyPack.id, {
+      incorrectQuestions: incorrectQuestionsForStudyTip,
+    })
+      .then((response) => {
+        if (!isMounted) {
+          return;
+        }
+        setStudyTip(response.studyTip?.trim() ? response.studyTip.trim() : null);
+      })
+      .catch(() => {
+        if (isMounted) {
+          setStudyTip(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [incorrectQuestionsForStudyTip, isComplete, studyPack]);
 
   const handleSelectChoice = (choice: string) => {
     if (!currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent) {
@@ -524,6 +572,14 @@ export default function QuickReviewPage() {
               </div>
             ) : null}
             {displayedRetryCount > 0 ? <p>Retry count: {displayedRetryCount}</p> : null}
+            {studyTip ? (
+              <div className="space-y-1 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                  Study Tip
+                </p>
+                <p>{studyTip}</p>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={handleRetry}>

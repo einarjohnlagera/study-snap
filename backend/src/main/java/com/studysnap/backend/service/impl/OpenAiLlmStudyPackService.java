@@ -35,6 +35,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final Logger log = LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
+    private static final int MAX_STUDY_TIP_LENGTH = 280;
 
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
@@ -211,6 +212,25 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return input;
     }
 
+    private ArrayNode buildQuickReviewStudyTipInputMessages(String incorrectQuestionSummaries) {
+        ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage(
+                "system",
+                "You are Study Snap, a calm and supportive tutor helping users review weak concepts."
+        ));
+        input.add(buildTextMessage(
+                "developer",
+                "Generate exactly one concise Study Tip in 1-2 sentences. " +
+                        "Focus only on the shared concept from the missed questions and what to review next. " +
+                        "Do not use markdown, bullets, labels, or extra commentary."
+        ));
+        input.add(buildTextMessage(
+                "user",
+                "Missed Quick Review questions:\n" + incorrectQuestionSummaries
+        ));
+        return input;
+    }
+
     private QuizMix deriveQuizMix(int quizCount) {
         int count = Math.max(1, quizCount);
         if (count == 1) {
@@ -312,6 +332,113 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             return message;
         } catch (IOException ex) {
             return "unparseable_upstream_error";
+        }
+    }
+
+    private String sanitizeStudyTip(String rawTip) {
+        if (rawTip == null) {
+            return null;
+        }
+
+        String normalized = rawTip
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (normalized.isBlank()) {
+            return null;
+        }
+
+        String[] sentences = normalized.split("(?<=[.!?])\\s+");
+        if (sentences.length > 2) {
+            normalized = String.join(" ", List.of(sentences).subList(0, 2)).trim();
+        }
+        if (normalized.length() > MAX_STUDY_TIP_LENGTH) {
+            normalized = normalized.substring(0, MAX_STUDY_TIP_LENGTH).trim();
+        }
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    @Override
+    public String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries) {
+        if (incorrectQuestionSummaries == null || incorrectQuestionSummaries.isEmpty()) {
+            return null;
+        }
+        if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
+            throw new AppException(
+                    "LLM_CONFIGURATION_ERROR",
+                    "LLM API key is missing. Please configure LLM_API_KEY.",
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+        String model = properties.getSettings().getModelFree();
+        if (model == null || model.isBlank()) {
+            throw new AppException(
+                    "LLM_CONFIGURATION_ERROR",
+                    "LLM model is missing. Please configure LLM_MODEL_FREE.",
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
+
+        String joinedSummaries = incorrectQuestionSummaries.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .map(value -> "- " + value)
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("");
+        if (joinedSummaries.isBlank()) {
+            return null;
+        }
+
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", model);
+        requestBody.set("input", buildQuickReviewStudyTipInputMessages(joinedSummaries));
+
+        try {
+            String requestBodyJson = objectMapper.writeValueAsString(requestBody);
+            String responseBody = restClient.post()
+                    .uri("/responses")
+                    .body(requestBodyJson)
+                    .retrieve()
+                    .body(String.class);
+
+            if (responseBody == null || responseBody.isBlank()) {
+                throw new AppException(
+                        "LLM_EMPTY_RESPONSE",
+                        "The study tip service returned an empty response. Please try again.",
+                        HttpStatus.BAD_GATEWAY
+                );
+            }
+
+            JsonNode responseJson = objectMapper.readTree(responseBody);
+            return sanitizeStudyTip(extractOutputJson(responseJson));
+        } catch (RestClientResponseException ex) {
+            String requestId = MDC.get("requestId");
+            String upstreamMessage = extractUpstreamErrorMessage(ex.getResponseBodyAsString());
+            log.warn(
+                    "openai_study_tip_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
+                    requestId,
+                    ex.getStatusCode().value(),
+                    ex.getClass().getSimpleName(),
+                    upstreamMessage
+            );
+            throw new AppException(
+                    "LLM_REQUEST_FAILED",
+                    "Study tip generation failed. Please try again in a moment.",
+                    HttpStatus.BAD_GATEWAY
+            );
+        } catch (RestClientException | IOException ex) {
+            String requestId = MDC.get("requestId");
+            log.warn(
+                    "openai_study_tip_unavailable requestId={} errorCode={} message={}",
+                    requestId,
+                    ex.getClass().getSimpleName(),
+                    ex.getMessage()
+            );
+            throw new AppException(
+                    "LLM_UNAVAILABLE",
+                    "Study tip generation is temporarily unavailable. Please try again.",
+                    HttpStatus.BAD_GATEWAY
+            );
         }
     }
 

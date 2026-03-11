@@ -243,6 +243,8 @@ Results screen UX:
 - shows session-to-session context when available:
 `Previous Attempt` and `Best Score`
 - if the latest score beats the previous attempt, the UI highlights improvement
+- when incorrect answers exist, may show a short AI-generated `Study Tip` focused on the concept to review next
+- tip generation is non-blocking; if generation fails, results still render and the tip is hidden
 
 Activity tracking:
 - start event: `STARTED_QUICK_REVIEW`

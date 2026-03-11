@@ -170,6 +170,7 @@ After Quick Review is completed, the user sees:
 - score percentage
 - retry count
 - motivational feedback
+- optional AI-generated Study Tip when incorrect answers exist
 
 Examples of motivational messaging:
 
@@ -189,6 +190,27 @@ The results screen may also show:
 
 - previous attempt
 - best score
+
+### Study Tip
+
+When the user misses one or more questions, Quick Review may show a short `Study Tip` on the results screen.
+
+Behavior:
+
+- backend builds a lightweight list of incorrect question context
+- context is sent to the LLM to generate one concise tip (1-2 sentences)
+- tip focuses on what concept to review next
+- tip generation is configurable:
+  - `studysnap.quick-review.study-tip.enabled`
+  - `studysnap.quick-review.study-tip.min-incorrect-count`
+  - `studysnap.quick-review.study-tip.max-questions`
+- tip generation is skipped when:
+  - feature is disabled
+  - no incorrect answers exist (including `100%` score)
+  - incorrect answers are below configured minimum
+- to reduce cost, only incorrect questions are sent and input is capped by `max-questions`
+- if tip generation fails, results still load normally and the tip is hidden
+- if there are no incorrect answers, no tip request is sent
 
 ---
 
