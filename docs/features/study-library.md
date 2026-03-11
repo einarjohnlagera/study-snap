@@ -298,6 +298,11 @@ Study Pack detail history:
 - Study Pack detail page shows a compact "Recent Review Sessions" list (latest attempts)
 - each item includes completed date, score (`correct/total`), and percentage
 
+Mobile UX refinement:
+- dashboard, Study Pack detail, and Quick Review screens are optimized for small-screen readability and tap usability
+- key actions stack on smaller viewports, metadata wraps cleanly, and answer choices preserve comfortable tap targets
+- desktop behavior remains intact while improving mobile scanability and spacing
+
 ## Roadmap note
 
 The original roadmap placed Study Library after several other phases.

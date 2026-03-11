@@ -11,17 +11,17 @@ type StudyPackGridProps = {
 export function StudyPackGrid({ studyPacks, onDelete }: StudyPackGridProps) {
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Your Study Packs</h2>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-semibold sm:text-xl">Your Study Packs</h2>
         <p className="text-xs text-foreground/65">{studyPacks.length} saved</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         {studyPacks.map((item) => (
-          <Card key={item.id} className="space-y-4">
+          <Card key={item.id} className="space-y-4 p-4 sm:p-6">
             <div className="space-y-2">
-              <h3 className="text-lg font-semibold">{item.title}</h3>
-              <p className="text-sm text-foreground/75">{item.summaryPreview}</p>
+              <h3 className="text-base font-semibold sm:text-lg">{item.title}</h3>
+              <p className="text-sm leading-relaxed text-foreground/75">{item.summaryPreview}</p>
             </div>
 
             <p className="text-xs text-foreground/65">
@@ -41,13 +41,13 @@ export function StudyPackGrid({ studyPacks, onDelete }: StudyPackGridProps) {
               </div>
             ) : null}
 
-            <div className="flex gap-2">
-              <Link href={`/study-packs/${item.id}`}>
-                <Button type="button" variant="outline">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Link href={`/study-packs/${item.id}`} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Open
                 </Button>
               </Link>
-              <Button type="button" variant="outline" onClick={() => void onDelete(item.id)}>
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void onDelete(item.id)}>
                 Delete
               </Button>
             </div>

@@ -61,8 +61,8 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-xl px-6 py-10">
-      <Card className="space-y-5">
+    <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6 sm:py-10">
+      <Card className="space-y-5 p-4 sm:p-6">
         <div className="space-y-2">
           <CardTitle>Welcome to Study Snap!</CardTitle>
           <CardDescription>I&apos;m using Study Snap as a:</CardDescription>
@@ -71,7 +71,7 @@ export default function OnboardingPage() {
           {OPTIONS.map((option) => (
             <label
               key={option.value}
-              className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+              className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 text-sm"
             >
               <input
                 type="radio"
@@ -85,7 +85,7 @@ export default function OnboardingPage() {
           ))}
         </div>
         {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-        <Button type="button" onClick={() => void handleContinue()} disabled={!profileType || loading}>
+        <Button type="button" className="w-full sm:w-auto" onClick={() => void handleContinue()} disabled={!profileType || loading}>
           {loading ? "Saving..." : "Continue"}
         </Button>
       </Card>

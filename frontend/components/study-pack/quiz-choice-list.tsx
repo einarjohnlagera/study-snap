@@ -33,7 +33,7 @@ export function QuizChoiceList({
               disabled={!isInteractive}
               onClick={() => onSelectChoice?.(choice)}
               className={cn(
-                "w-full rounded-md border px-3 py-2 text-left transition-colors",
+                "min-h-11 w-full rounded-md border px-3 py-2 text-left text-sm leading-relaxed transition-colors whitespace-normal break-words",
                 revealAnswer && isCorrect
                   ? "border-emerald-500/50 bg-emerald-500/10 text-foreground"
                   : isSelected

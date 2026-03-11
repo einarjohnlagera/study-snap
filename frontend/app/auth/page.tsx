@@ -74,8 +74,8 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-xl px-6 py-10">
-      <Card className="space-y-6">
+    <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6 sm:py-10">
+      <Card className="space-y-6 p-4 sm:p-6">
         <div className="space-y-2">
           <CardTitle>{mode === "login" ? "Log in to Study Snap" : "Create your Study Snap account"}</CardTitle>
           <CardDescription>
@@ -85,10 +85,11 @@ export default function AuthPage() {
           </CardDescription>
         </div>
 
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button
             type="button"
             variant={mode === "login" ? "default" : "outline"}
+            className="w-full"
             onClick={() => setMode("login")}
           >
             Log in
@@ -96,6 +97,7 @@ export default function AuthPage() {
           <Button
             type="button"
             variant={mode === "signup" ? "default" : "outline"}
+            className="w-full"
             onClick={() => setMode("signup")}
           >
             Sign up
@@ -152,7 +154,7 @@ export default function AuthPage() {
             />
           </label>
           {mode === "login" ? (
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={keepSignedIn}
@@ -164,7 +166,7 @@ export default function AuthPage() {
 
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
-          <Button type="submit" disabled={!canSubmit || loading}>
+          <Button type="submit" className="w-full sm:w-auto" disabled={!canSubmit || loading}>
             {loading ? "Please wait..." : mode === "login" ? "Log in" : "Create account"}
           </Button>
         </form>

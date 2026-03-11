@@ -8,11 +8,11 @@ type PracticeQuizCardProps = {
 
 export function PracticeQuizCard({ quiz }: PracticeQuizCardProps) {
   return (
-    <Card className="border-emerald-500/40">
+    <Card className="border-emerald-500/40 p-4 sm:p-6">
       <CardTitle className="mb-4">Practice Quiz</CardTitle>
       <div className="space-y-6">
         {quiz.map((item, index) => (
-          <Card key={`${item.question}-${index}`} className="space-y-3">
+          <Card key={`${item.question}-${index}`} className="space-y-3 p-4 sm:p-6">
             <CardTitle className="text-base">
               {index + 1}. {item.question}
             </CardTitle>
@@ -21,7 +21,7 @@ export function PracticeQuizCard({ quiz }: PracticeQuizCardProps) {
               correctAnswer={item.answer}
               revealAnswer
             />
-            <CardDescription>
+            <CardDescription className="text-sm">
               <span className="font-medium text-foreground">Explanation:</span>{" "}
               {item.explanation}
             </CardDescription>

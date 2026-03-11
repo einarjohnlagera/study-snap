@@ -67,7 +67,7 @@ function ScoreProgressBlock({
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-base font-medium text-foreground">Score: {score} / {totalQuestions} correct</p>
+      <p className="text-sm font-medium text-foreground sm:text-base">Score: {score} / {totalQuestions} correct</p>
       <p className="font-medium text-foreground">{scorePercentage}%</p>
       <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div
@@ -484,7 +484,7 @@ export default function QuickReviewPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-6 py-10">
+    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
         <Link
           href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"}
@@ -497,7 +497,7 @@ export default function QuickReviewPage() {
       {loading || sessionInitializing ? (
         <QuickReviewLoading />
       ) : error ? (
-        <Card className="space-y-4">
+        <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">
             {isNotFound ? "Study Pack not found" : "Could not start Quick Review"}
           </h1>
@@ -506,49 +506,49 @@ export default function QuickReviewPage() {
               ? "This Study Pack is unavailable or does not belong to your account."
               : error}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             {!isNotFound ? (
-              <Button type="button" onClick={() => void loadStudyPack()}>
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadStudyPack()}>
                 Retry
               </Button>
             ) : null}
-            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"}>
-              <Button type="button" variant="outline">
+            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
                 Back to Study Pack
               </Button>
             </Link>
           </div>
         </Card>
       ) : studyPack && totalQuestions === 0 ? (
-        <Card className="space-y-4">
+        <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">No quiz questions available</h1>
           <p className="text-sm text-foreground/75">
             This Study Pack does not have quiz questions yet. Generate another Study Pack to try Quick Review.
           </p>
-          <Link href={`/study-packs/${studyPack.id}`}>
-            <Button type="button" variant="outline">
+          <Link href={`/study-packs/${studyPack.id}`} className="w-full sm:w-auto">
+            <Button type="button" variant="outline" className="w-full sm:w-auto">
               Back to Study Pack
             </Button>
           </Link>
         </Card>
       ) : studyPack && !currentSessionId ? (
-        <Card className="space-y-4">
+        <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">Quick Review not started</h1>
           <p className="text-sm text-foreground/75">
             Start Quick Review from the Study Pack detail page to create a session.
           </p>
-          <Link href={`/study-packs/${studyPack.id}`}>
-            <Button type="button" variant="outline">
+          <Link href={`/study-packs/${studyPack.id}`} className="w-full sm:w-auto">
+            <Button type="button" variant="outline" className="w-full sm:w-auto">
               Back to Study Pack
             </Button>
           </Link>
         </Card>
       ) : studyPack && isComplete ? (
-        <Card className="space-y-4">
+        <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Complete
           </p>
-          <h1 className="text-2xl font-semibold">Your results</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">Your results</h1>
           <div className="space-y-2 text-sm text-foreground/75">
             <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
             {isPerfectScore ? (
@@ -583,25 +583,25 @@ export default function QuickReviewPage() {
               </div>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/study-packs/${studyPack.id}`}>
-              <Button type="button">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link href={`/study-packs/${studyPack.id}`} className="w-full sm:w-auto">
+              <Button type="button" className="w-full sm:w-auto">
                 Back to Study Pack
               </Button>
             </Link>
             {!isPerfectScore ? (
-              <Button type="button" variant="outline" onClick={handleRetry}>
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>
                 Practice Again
               </Button>
             ) : null}
           </div>
         </Card>
       ) : studyPack && phase === "retry-transition" ? (
-        <Card className="space-y-4">
+        <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Progress
           </p>
-          <h1 className="text-2xl font-semibold">You&apos;re making progress.</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">You&apos;re making progress.</h1>
           <div className="space-y-2 rounded-md border border-border bg-background p-3 text-sm text-foreground/75">
             <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
           </div>
@@ -612,22 +612,22 @@ export default function QuickReviewPage() {
             You missed {incorrectCount} {incorrectCount === 1 ? "question" : "questions"}. Review them now or finish
             with your current score.
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={handleStartRetryRound} disabled={completingSession}>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" className="w-full sm:w-auto" onClick={handleStartRetryRound} disabled={completingSession}>
               Retry Incorrect Questions
             </Button>
-            <Button type="button" variant="outline" onClick={handleFinishReview} disabled={completingSession}>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleFinishReview} disabled={completingSession}>
               Finish Review
             </Button>
           </div>
         </Card>
       ) : studyPack && currentQuestion ? (
         <div className="space-y-4">
-          <Card className="space-y-2">
+          <Card className="space-y-2 p-4 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
               Quick Review
             </p>
-            <h1 className="text-2xl font-semibold">{studyPack.title}</h1>
+            <h1 className="text-xl font-semibold sm:text-2xl">{studyPack.title}</h1>
             <p className="text-sm text-foreground/75">
               {phase === "retry"
                 ? `Retry question ${currentRoundIndex + 1} of ${activeQuestionIndexes.length}`
@@ -635,7 +635,7 @@ export default function QuickReviewPage() {
             </p>
           </Card>
 
-          <Card className="space-y-4">
+          <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold">
               {(currentQuestionIndex ?? 0) + 1}. {currentQuestion.question}
             </h2>
@@ -656,8 +656,8 @@ export default function QuickReviewPage() {
               </div>
             ) : null}
 
-            <div className="flex justify-end">
-              <Button type="button" onClick={handleNext} disabled={!hasAnsweredCurrent}>
+            <div className="flex justify-stretch sm:justify-end">
+              <Button type="button" className="w-full sm:w-auto" onClick={handleNext} disabled={!hasAnsweredCurrent}>
                 {currentRoundIndex + 1 === activeQuestionIndexes.length
                   ? phase === "retry"
                     ? "Finish Retry"

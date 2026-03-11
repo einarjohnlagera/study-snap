@@ -17,11 +17,11 @@ export function DashboardStats({ studyPacks }: DashboardStatsProps) {
   ];
 
   return (
-    <section className="grid gap-4 sm:grid-cols-3">
+    <section className="grid gap-3 sm:grid-cols-3 sm:gap-4">
       {cards.map((card) => (
-        <Card key={card.label} className="space-y-2">
+        <Card key={card.label} className="space-y-2 p-4 sm:p-6">
           <p className="text-xs uppercase tracking-wide text-foreground/65">{card.label}</p>
-          <p className="text-2xl font-semibold">{card.value}</p>
+          <p className="text-xl font-semibold sm:text-2xl">{card.value}</p>
         </Card>
       ))}
     </section>
