@@ -199,7 +199,7 @@ class QuickReviewSessionServiceTest {
         UUID studyPackId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 5);
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
                 userId,
                 studyPackId,
@@ -234,7 +234,7 @@ class QuickReviewSessionServiceTest {
         existingSession.setRetryCount(1);
         existingSession.setSessionState(Map.of("retryQuestionIndexes", List.of(1, 4)));
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
                 userId,
                 studyPackId,
@@ -258,7 +258,7 @@ class QuickReviewSessionServiceTest {
         UUID studyPackId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 4);
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
                 userId,
                 studyPackId,

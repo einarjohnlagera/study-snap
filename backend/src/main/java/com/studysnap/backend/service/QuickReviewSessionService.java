@@ -40,7 +40,7 @@ public class QuickReviewSessionService {
                 "Study pack not found.",
                 HttpStatus.NOT_FOUND
         );
-        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
