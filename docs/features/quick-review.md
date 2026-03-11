@@ -122,6 +122,8 @@ After the first pass through the quiz:
 - incorrectly answered questions are collected
 - those questions are shown again in a retry round
 - retry happens once only
+- retrying incorrect questions is the primary in-session reinforcement action
+- users may also finish the review directly without entering retry
 
 Rules:
 
@@ -211,6 +213,24 @@ Behavior:
 - to reduce cost, only incorrect questions are sent and input is capped by `max-questions`
 - if tip generation fails, results still load normally and the tip is hidden
 - if there are no incorrect answers, no tip request is sent
+
+### Retry-transition CTA hierarchy
+
+When missed questions exist after the first pass:
+
+- primary action: `Retry Incorrect Questions` (continue reinforcement in the same session)
+- secondary action: `Finish Review` (complete the session with current score)
+
+This keeps retry as the main reinforcement mechanic while allowing users to end a short review loop cleanly.
+
+### Results CTA hierarchy
+
+After completion:
+
+- primary action: `Back to Study Pack`
+- secondary action: `Practice Again` (optional, lower emphasis)
+
+`Practice Again` is not the primary post-review action, especially for short quizzes.
 
 ---
 
