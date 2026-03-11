@@ -46,6 +46,7 @@ Current automated unit coverage includes:
 * `QuickReviewSessionService` scoring and completion consistency tests
 * `QuickReviewSessionService` retry-flow lifecycle tests (in-progress reuse, retry-state persistence, single-session completion)
 * `QuickReviewSessionService` resume-session lifecycle tests (new vs reused session, progress restoration, duplicate in-progress prevention)
+* `ActivityTrackingService` tests for Quick Review start/complete event logging and fail-safe behavior
 
 Current repository coverage includes:
 * `QuickReviewSessionRepository` query tests for in-progress detection, latest completed lookup, user/study-pack scoping, and completed-at ordering
