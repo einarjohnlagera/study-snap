@@ -45,6 +45,7 @@ Current automated unit coverage includes:
 * `DashboardService` recommendation priority/ranking tests
 * `QuickReviewSessionService` scoring and completion consistency tests
 * `QuickReviewSessionService` retry-flow lifecycle tests (in-progress reuse, retry-state persistence, single-session completion)
+* `QuickReviewSessionService` resume-session lifecycle tests (new vs reused session, progress restoration, duplicate in-progress prevention)
 
 Example test targets:
 
