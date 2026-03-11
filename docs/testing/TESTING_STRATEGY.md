@@ -20,6 +20,16 @@ Study Snap uses the following testing structure:
 
 Most tests should be unit tests.
 
+## Test Fixture Builders
+
+Tests may use fixture builders for common entities to reduce duplicated setup.
+
+Examples include:
+
+- TestUserBuilder
+- TestStudyPackBuilder
+- TestQuickReviewSessionBuilder
+
 ---
 
 # Unit Tests
