@@ -98,6 +98,13 @@ Scope note:
 - Smart Continue Studying now supports unfinished-session priority via `RESUME_REVIEW`
 - dashboard resume recommendation is complementary to Quick Review session resume endpoints
 
+Automated test coverage:
+- backend service-level tests validate Smart Continue Studying recommendation priority and ranking:
+  - `RESUME_REVIEW` priority over all other reasons
+  - weakest latest-score selection and tie-break by most recent completion
+  - fallbacks to `RECENTLY_OPENED`, then `RECENTLY_CREATED`, then empty recommendation
+  - latest completed session per Study Pack is used (not historical best score)
+
 Smart Continue Studying card messaging (score-aware):
 - if `lastScorePercentage` exists and is below `100`:
   - title: `Continue studying`
