@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
@@ -185,6 +186,39 @@ public class QuickReviewSessionService {
                 ).stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public QuickReviewPerformanceSummaryResponse getPerformanceSummary(String studyPackIdRaw, UUID userId) {
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                studyPackIdRaw,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
+        studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+
+        long attempts = quickReviewSessionRepository.countByUserIdAndStudyPackIdAndCompletedAtIsNotNull(userId, studyPackId);
+        if (attempts == 0) {
+            return new QuickReviewPerformanceSummaryResponse(null, 0L, null, null);
+        }
+
+        BigDecimal bestScore = quickReviewSessionRepository.findBestScorePercentageByUserIdAndStudyPackId(userId, studyPackId);
+        QuickReviewSessionEntity latest = quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        studyPackId,
+                        PageRequest.of(0, 1)
+                ).stream()
+                .findFirst()
+                .orElse(null);
+
+        return new QuickReviewPerformanceSummaryResponse(
+                bestScore,
+                attempts,
+                latest == null ? null : latest.getScorePercentage(),
+                latest == null ? null : latest.getCompletedAt()
+        );
     }
 
     private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session) {

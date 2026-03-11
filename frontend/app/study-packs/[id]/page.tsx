@@ -8,10 +8,12 @@ import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
+  getQuickReviewPerformanceSummary,
   getInProgressQuickReviewSession,
   getMyStudyPack,
   listRecentQuickReviewSessions,
   startQuickReviewSession,
+  type QuickReviewPerformanceSummaryResponse,
   type QuickReviewSessionSummaryResponse,
   type StudyPackResponse,
 } from "@/lib/api";
@@ -54,8 +56,10 @@ export default function StudyPackDetailPage() {
   const params = useParams<{ id: string }>();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
+  const [performanceSummary, setPerformanceSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [performanceError, setPerformanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingQuickReview, setStartingQuickReview] = useState(false);
   const [hasInProgressQuickReview, setHasInProgressQuickReview] = useState(false);
@@ -93,6 +97,15 @@ export default function StudyPackDetailPage() {
         setRecentSessions([]);
       }
       try {
+        const summary = await getQuickReviewPerformanceSummary(studyPackId);
+        setPerformanceSummary(summary);
+        setPerformanceError(null);
+      } catch (performanceErr) {
+        const message = performanceErr instanceof Error ? performanceErr.message : "Could not load review performance.";
+        setPerformanceError(message);
+        setPerformanceSummary(null);
+      }
+      try {
         const inProgress = await getInProgressQuickReviewSession(studyPackId);
         setHasInProgressQuickReview(Boolean(inProgress.sessionId));
       } catch {
@@ -103,7 +116,9 @@ export default function StudyPackDetailPage() {
       setError(message);
       setStudyPack(null);
       setRecentSessions([]);
+      setPerformanceSummary(null);
       setHistoryError(null);
+      setPerformanceError(null);
       setHasInProgressQuickReview(false);
     } finally {
       setLoading(false);
@@ -115,6 +130,16 @@ export default function StudyPackDetailPage() {
   }, [loadStudyPack]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
+
+  const formatScore = (value: number | null) => {
+    if (value === null) {
+      return "—";
+    }
+    if (Number.isInteger(value)) {
+      return `${value}%`;
+    }
+    return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
+  };
 
   const handleStartQuickReview = async () => {
     if (!studyPack) {
@@ -236,6 +261,38 @@ export default function StudyPackDetailPage() {
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
+          </Card>
+
+          <Card className="space-y-3">
+            <h2 className="text-xl font-semibold">Review Performance</h2>
+            {performanceError ? (
+              <p className="text-sm text-foreground/75">{performanceError}</p>
+            ) : !performanceSummary || performanceSummary.attempts === 0 ? (
+              <p className="text-sm text-foreground/75">No Quick Reviews yet. Start your first review.</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Best Score</p>
+                  <p className="mt-1 text-lg font-semibold">{formatScore(performanceSummary.bestScorePercentage)}</p>
+                </div>
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Attempts</p>
+                  <p className="mt-1 text-lg font-semibold">{performanceSummary.attempts}</p>
+                </div>
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Last Score</p>
+                  <p className="mt-1 text-lg font-semibold">{formatScore(performanceSummary.lastScorePercentage)}</p>
+                </div>
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Last Reviewed</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {performanceSummary.lastReviewedAt
+                      ? new Date(performanceSummary.lastReviewedAt).toLocaleString()
+                      : "—"}
+                  </p>
+                </div>
               </div>
             )}
           </Card>
