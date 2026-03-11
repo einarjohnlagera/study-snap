@@ -226,3 +226,11 @@ When differences exist:
 - use the refactored docs as the organized working set
 - use `/legacy` for historical cross-checking
 
+## Testing
+
+Refer to docs/testing/TESTING_STRATEGY.md for testing guidelines.
+
+When creating tests:
+- follow the testing pyramid
+- prefer service-level tests
+- avoid excessive controller tests
