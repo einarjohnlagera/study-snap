@@ -41,6 +41,10 @@ Unit tests should:
 * avoid database usage
 * mock external dependencies
 
+Current automated unit coverage includes:
+* `DashboardService` recommendation priority/ranking tests
+* `QuickReviewSessionService` scoring and completion consistency tests
+
 Example test targets:
 
 DashboardRecommendationService
