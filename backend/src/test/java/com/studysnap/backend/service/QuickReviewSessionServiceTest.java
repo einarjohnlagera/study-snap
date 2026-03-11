@@ -19,6 +19,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -195,6 +197,36 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
+    void startSession_createsNewSessionWhenNoInProgressExists() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 5);
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.startSession(studyPackId.toString(), userId);
+
+        ArgumentCaptor<QuickReviewSessionEntity> captor = ArgumentCaptor.forClass(QuickReviewSessionEntity.class);
+        verify(quickReviewSessionRepository, times(1)).save(captor.capture());
+        QuickReviewSessionEntity saved = captor.getValue();
+        assertThat(saved.getId()).isNotNull();
+        assertThat(saved.getUserId()).isEqualTo(userId);
+        assertThat(saved.getStudyPackId()).isEqualTo(studyPackId);
+        assertThat(saved.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(saved.getCurrentQuestionIndex()).isEqualTo(0);
+        assertThat(saved.getCurrentRound()).isEqualTo(QuickReviewRound.INITIAL);
+        assertThat(saved.getRetryCount()).isEqualTo(0);
+        assertThat(saved.getTotalQuestions()).isEqualTo(5);
+        assertThat(response.sessionId()).isEqualTo(saved.getId().toString());
+        verify(activityTrackingService, times(1)).recordActivity(userId, ActivityType.STARTED_QUICK_REVIEW, studyPackId);
+    }
+
+    @Test
     void startSession_reusesExistingInProgressSessionForSameStudyPack() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -224,6 +256,27 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
+    void startSession_createsNewSessionWhenLatestKnownSessionWasCompleted() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 4);
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.startSession(studyPackId.toString(), userId);
+
+        verify(quickReviewSessionRepository, times(1)).save(any(QuickReviewSessionEntity.class));
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.currentQuestionIndex()).isEqualTo(0);
+        assertThat(response.currentRound()).isEqualTo(QuickReviewRound.INITIAL);
+    }
+
+    @Test
     void updateSessionProgress_persistsRetryRoundStateAndRetryIndexes() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -248,6 +301,35 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
+    void getInProgressSession_preservesStoredProgressWhenResuming() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 5);
+        QuickReviewSessionEntity inProgress = buildInProgressSession(sessionId, userId, studyPackId);
+        inProgress.setCurrentQuestionIndex(3);
+        inProgress.setCurrentRound(QuickReviewRound.RETRY);
+        inProgress.setRetryCount(1);
+        inProgress.setSessionState(Map.of("retryQuestionIndexes", List.of(1, 3)));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                studyPackId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(inProgress));
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.getInProgressSession(studyPackId.toString(), userId);
+
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.currentQuestionIndex()).isEqualTo(3);
+        assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+        assertThat(response.retryCount()).isEqualTo(1);
+        assertThat(response.sessionState()).containsEntry("retryQuestionIndexes", List.of(1, 3));
+    }
+
+    @Test
     void completeSession_allowsScoreImprovementAfterRetryWithoutChangingOriginalTotal() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -267,6 +349,23 @@ class QuickReviewSessionServiceTest {
         assertThat(response.scorePercentage()).isEqualByComparingTo("100.00");
         assertThat(response.retryCount()).isEqualTo(1);
         assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+    }
+
+    @Test
+    void completeSession_updatesExistingSessionInsteadOfCreatingNewOne() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        QuickReviewSessionCompleteRequest request = new QuickReviewSessionCompleteRequest(4, 5, 1, 120, null);
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
+
+        assertThat(response.id()).isEqualTo(sessionId.toString());
+        assertThat(session.getId()).isEqualTo(sessionId);
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.COMPLETED);
+        verify(quickReviewSessionRepository, times(1)).save(session);
     }
 
     @Test
