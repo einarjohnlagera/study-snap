@@ -17,7 +17,17 @@ function formatScorePercentage(value: number) {
 
 function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
   if (recommendation.reason === "RESUME_REVIEW") {
-    if (recommendation.currentRound === "RETRY") {
+    if (recommendation.resumeState === "RETRY_TRANSITION") {
+      return {
+        label: "Retry Ready",
+        icon: TrendingUp,
+        heading: "Resume Quick Review",
+        body: "You finished the first pass and still have some missed questions to review.",
+        cta: "Resume Review",
+      };
+    }
+
+    if (recommendation.resumeState === "RETRY_IN_PROGRESS") {
       const remainingQuestions = recommendation.remainingQuestions ?? 0;
       const questionLabel = remainingQuestions === 1 ? "question" : "questions";
       return {
@@ -31,11 +41,13 @@ function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
 
     const currentQuestion = recommendation.currentQuestionIndex ?? 0;
     const totalQuestions = recommendation.totalQuestions ?? 0;
+    const normalizedTotal = Math.max(1, totalQuestions);
+    const normalizedQuestion = Math.min(Math.max(1, currentQuestion + 1), normalizedTotal);
     return {
       label: "In Progress",
       icon: TrendingUp,
       heading: "Resume Quick Review",
-      body: `You left off on Question ${currentQuestion + 1} of ${totalQuestions}. Continue your Quick Review.`,
+      body: `You left off on Question ${normalizedQuestion} of ${normalizedTotal}. Continue your Quick Review.`,
       cta: "Resume Review",
     };
   }
