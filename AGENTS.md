@@ -3,6 +3,8 @@
 You are an AI coding agent helping implement Study Snap.
 Follow these rules strictly to keep the codebase consistent and shippable.
 
+When working on a feature, always check the corresponding document under docs/features/.
+
 ## Product summary
 
 Study Snap converts study notes into structured study materials and practice quizzes.
@@ -234,3 +236,14 @@ When creating tests:
 - follow the testing pyramid
 - prefer service-level tests
 - avoid excessive controller tests
+
+## Feature documentation
+
+When working on a feature, always check the corresponding file under docs/features/.
+
+Examples:
+- docs/features/quick-review.md
+- docs/features/dashboard-recommendation.md
+
+SPEC.md contains high-level product behavior.
+Feature docs contain detailed feature rules and workflows.

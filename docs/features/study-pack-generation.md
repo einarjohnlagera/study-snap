@@ -1,5 +1,3 @@
-# quiz-generation.md — Study Snap Feature Context
-
 This file consolidates quiz-quality and prompt-quality guidance.
 
 ## Goal

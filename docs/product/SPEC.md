@@ -1,335 +1,150 @@
-# SPEC.md — Study Snap
+# Study Snap Product Specification
 
-## Product positioning
+## Product Overview
 
-Study Snap turns study notes into structured study pack materials and practice quizzes.
+Study Snap is an AI-powered study assistant that transforms notes into structured Study Packs containing summaries, key concepts, and quiz questions.
 
-It is a calm, on-demand tutor workflow:
+The goal of Study Snap is to help students quickly convert raw learning material into a format that supports active recall and repeated practice.
 
-**upload notes → get a Study Pack you can study from**
+Study Snap focuses on simplicity and fast study loops rather than complex study planning tools.
 
-Tone:
-- calm
-- structured
-- supportive
-- non-judgmental
+---
 
-## Product statement
+# Core Learning Loop
 
-Study Snap helps users turn messy notes into structured study materials and reusable Study Packs using AI.
+Study Snap is designed around a lightweight learning cycle:
 
-## Core product idea
+Notes → Study Pack → Quick Review → Retry mistakes → Dashboard recommendation → Repeat
 
-A Study Pack is the product’s core output.
+Users upload or capture notes which are converted into Study Packs.
+They review the material, test themselves through Quick Review, and the dashboard recommends what to study next.
 
-A Study Pack includes:
-- title
-- summary
-- key concepts
-- practice quiz
+This loop encourages consistent practice and reinforcement.
 
-Users can save generated Study Packs and revisit them in a Study Library.
+---
 
-## Target users
+# Key Features
 
-Study Snap is designed for:
-- students preparing for exams
-- learners reviewing lecture notes
-- professionals preparing for interviews
-- developers reviewing technical concepts
+## Feature Documentation
 
-## MVP scope
+Detailed feature behavior is documented in:
 
-Included:
-- landing page
-- study page (paste notes + image upload)
-- results view (study pack sheet + quiz)
-- friendly error handling
-- light/dark theme + global navbar
-- demo mode
-- OCR direction
-- Study Library direction
-- shareable Study Pack direction
+- docs/features/*
 
-Excluded for now:
-- full exam simulation with grading analytics
-- deep explanation mode (premium later)
-- flashcards / spaced repetition
-- payments / Stripe
-- advanced dashboards / analytics
-- gamification
-- classroom management
-- teacher mode
-- family linking
+## Study Pack Generation
 
-## Primary user flow
+Study Packs are generated from user-provided notes using AI.
 
-### 1) Landing (`/`)
-Headline and CTA focus on **NOTES → study pack** or **NOTES → STUDY PACK**, not question solving.
+Each Study Pack contains:
 
-CTA:
-- “Turn Notes into Study Pack” → `/study`
+* Title
+* Summary
+* Key Concepts
+* Quiz Questions
 
-### 2) Study page (`/study`)
-Input modes:
-- paste notes
-- upload image (`jpeg/png/webp` where supported)
+Study Packs act as the main unit of learning inside the system.
 
-States:
-1. idle: nothing provided, Generate disabled
-2. ready: notes text or image present, Generate enabled
-3. loading: “Creating your study pack materials…”
-4. OCR needs confirmation: show editable extracted text, user confirms
-5. result: show Study Pack + quiz
-6. error: friendly message + recovery path
-
-## Demo mode
-
-Study Snap provides a demo mode for first-time users.
-
-Behavior:
-- activated via `/study?demo=true`
-- prefill example notes
-- simulate generation delay
-- return a static placeholder Study Pack
-- does not call the backend study pack API
-- does not call OpenAI
-- does not write to the database
-- does not count as a real usage event
-
-Purpose:
-- show product value instantly
-- avoid abuse of paid LLM calls
-
-## Results view
-
-### For all plans
-Sections:
-1. title
-2. summary
-3. key concepts
-4. practice quiz
-5. actions:
-   - Try Another
-   - Edit Notes (optional)
-   - future: Regenerate / More questions / Flashcards
-
-## Quiz quality
-
-Practice quizzes should include a balanced mix of:
-- recall questions
-- understanding questions
-- application questions
-
-Purpose:
-- make quizzes feel more like real study reviewers
-- improve usefulness for exam preparation and interview preparation
-
-If notes are too short or simple, quizzes may prioritize recall and understanding.
+---
 
 ## Study Library
 
-Study Snap includes a Study Library for saved generated Study Packs.
+The Study Library allows users to access and manage all generated Study Packs.
 
-Purpose:
-- let users revisit past Study Packs
-- build a reusable study pack collection over time
-- make Study Snap feel like a long-term study workspace
+Users can:
 
-### Dashboard
+* view saved Study Packs
+* open a Study Pack
+* read summaries and key concepts
+* start Quick Review sessions
+* delete Study Packs
 
-The dashboard is primarily for authenticated users.
+The Study Library acts as the central location for accessing learning material.
 
-It shows:
-- saved Study Packs
-- title
-- created date
-- short summary preview
-- quiz count
-- actions: open, delete
+---
 
-Saved Study Pack cards may display tags when available.
+## Quick Review
 
-### MVP Library behavior
+Quick Review allows users to actively practice a Study Pack through an interactive quiz.
 
-For the first version, the Study Library supports:
-- viewing saved Study Packs
-- opening a Study Pack
-- deleting a Study Pack
+Users answer questions one at a time and receive immediate feedback. After the first pass, incorrectly answered questions may appear again in a retry round to reinforce learning.
 
-Future versions may support:
-- rename
-- search
-- filters
-- folders / collections
-- reviewed status
+Quick Review sessions track:
 
-### Tags
+* correct answers
+* total questions
+* score percentage
+* session history
 
-Each saved Study Pack may include one or more tags.
+Users can leave a review session and resume it later if it remains unfinished.
 
-Purpose:
-- help users organize Study Packs by subject or topic
-- support filtering and search in the Study Library
-- improve future topic-based insights
+For detailed behavior including retry logic, scoring rules, and session states, see:
 
-Examples:
-- Biology
-- Chemistry
-- Algebra
-- Java
-- Spring Boot
-- Interview Prep
-- REST API Design
+docs/features/quick-review.md
 
-For the first version, tags may be:
-- auto-generated from the detected topic or title
-- derived from user-selected subject input
-- manually editable later
+---
 
-Future Study Library features may allow:
-- filtering by tag
-- searching by tag
-- grouping Study Packs by tag
+## Smart Continue Studying
 
-## Shareable Study Packs
+The dashboard includes a recommendation card that suggests the most useful next study action.
 
-After generating a Study Pack, users can create a shareable link:
-- public URL: `/share/[token]`
+The system analyzes recent activity and may recommend:
 
-Rules:
-- shared page shows generated content
-- raw uploaded image must not be exposed
-- raw notes text may be hidden by default
-- tokens must be unguessable
-- expiration may be added later for premium plans
+* resuming an unfinished Quick Review
+* revisiting a Study Pack with a low recent score
+* continuing a recently opened Study Pack
+* starting review of a newly created Study Pack
 
-## Pricing model
+The messaging adapts to the user’s learning progress to encourage continued study.
 
-Study Snap follows a freemium model.
+For detailed recommendation logic and messaging rules, see:
 
-### Demo
-- no login
-- 1 demo generation direction
-- summary + key concepts + 3-question quiz
-- no saving
+docs/features/dashboard-recommendation.md
 
-### Free account
-- 3 study packs per day
-- summary + key concepts + 5-question quiz
-- can save and view history
-- access to Study Library
+---
 
-### Premium
-- up to 200 study packs per month
-- access to Study Library
-- mock exam mode later
-- analytics and mastery tracking later
+# Activity Tracking
 
-### Model usage by plan
+Study Snap records key learning actions as activity events.
 
-Demo:
-- `gpt-4.1-mini`
+These events help support:
 
-Free:
-- `gpt-4.1-mini`
+* future analytics
+* learning insights
+* recommendation improvements
 
-Premium:
-- may use a higher quality model later for premium-only features such as:
-  - mock exam generation
-  - deeper explanations
-  - analytics and topic mastery
+Examples of tracked events include:
 
-## User accounts direction
+* STARTED_QUICK_REVIEW
+* COMPLETED_QUICK_REVIEW
 
-User accounts are intended to support:
-- authenticated ownership of Study Packs
-- Study Library access
-- future usage limits by plan
-- future subscription analytics
-- future premium feature access
+Activity events store the related user, Study Pack, and timestamp.
 
-Current account flow direction:
-- signup asks for first name, email, password, and optional display name
-- email verification is required before real Study Pack generation
-- onboarding asks profile type after signup/login
-- API sessions use JWT access token + refresh token rotation
-- keep signed in extends session lifetime up to 30 days
+---
 
-UI copy for onboarding profile selection:
-- “I’m using Study Snap as a…”
+# Pricing Model (Initial)
 
-Initial values:
-- Student
-- Parent
-- Professional
+Study Snap will launch with a simple usage-based model.
 
-Teacher mode is intentionally deferred.
+Free Plan:
 
-Family / linked-child accounts are intentionally deferred.
+* up to 3 Study Packs generated per day
+* unlimited review of generated Study Packs
+* Quick Review available for generated Study Packs
 
-## OCR image processing
+Future plans may include premium tiers with expanded limits.
 
-Study Snap supports image-based note uploads.
+---
 
-Uploaded images are processed through an OCR pipeline to extract text before generating Study Packs.
+# Non-Goals (Initial Version)
 
-### OCR flow
-1. user uploads image
-2. system validates the image
-3. quick text detection is performed
-4. if text is detected, full OCR extraction runs
-5. extracted text is cleaned and sent to the LLM generator
+The first version of Study Snap intentionally avoids complex learning management features.
 
-### Image guardrails
-- images must contain detectable text
-- maximum image size limits are enforced
-- unsupported formats are rejected
+Not included in the initial release:
 
-If an image contains no readable text, the system returns a message prompting the user to upload clearer notes.
+* spaced repetition scheduling
+* full exam simulation modes
+* advanced learning analytics dashboards
+* classroom or teacher management tools
+* collaborative study features
 
-## Privacy
-
-- uploaded images are deleted after OCR processing
-- avoid logging raw images or full extracted text
-
-## Design system (locked for MVP)
-
-Goal:
-- “Friendly academic” — clean like Khan Academy, slightly warm
-
-Visual direction:
-- background: white
-- surface/cards: gray-50
-- border: gray-200
-- text primary: gray-900
-- text secondary: gray-600
-- primary accent: blue-600
-- success accent: emerald-500
-
-Rules:
-- no gradients for MVP
-- one primary accent for primary actions
-- use shadcn tokens for theme consistency
-- cards: rounded-xl, shadow-sm
-- inputs/buttons: rounded-lg
-
-## Global layout
-
-- global navbar appears on all pages
-- navbar includes Study Snap brand + logo placeholder
-- menu links
-- light/dark theme toggle
-- theme toggle avoids hydration mismatch
-
-## Legacy carryover note
-
-This file preserves and reorganizes content from:
-- `SPEC.md`
-- `PROJECT_CONTEXT.md`
-- later user-account decisions
-
-The original source files remain under `/legacy`.
-
-
-
+These may be explored in future versions.

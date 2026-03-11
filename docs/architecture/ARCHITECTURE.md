@@ -398,3 +398,18 @@ Demo mode stays frontend-driven with pre-coded request/response behavior and doe
 
 See `docs/architecture/DATA_MODEL.md` for the consolidated table/entity view.
 
+## Core Domain Models
+
+Study Snap revolves around several core domain models.
+
+User
+Represents an account using the platform.
+
+StudyPack
+Generated learning material derived from notes.
+
+QuickReviewSession
+Represents a user's attempt to review a Study Pack quiz.
+
+ActivityEvent
+Tracks learning activity such as starting or completing reviews.

@@ -29,6 +29,9 @@ Deliverable: UI shell + theme toggle on all pages.
 - [X] Prompt builder + LLM call (or stub response)
 - [X] Return structured JSON: title, summary, keyConcepts, quiz[]
 - [X] Logging (request id, latency)
+- [X] Quick Review session history
+- [X] Resume unfinished Quick Reviews
+- [X] Smart Continue Studying dashboard recommendations
 
 Deliverable: paste notes → get study pack output.
 
