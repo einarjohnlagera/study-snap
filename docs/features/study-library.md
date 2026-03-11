@@ -297,6 +297,12 @@ Session API flow:
 Study Pack detail history:
 - Study Pack detail page shows a compact "Recent Review Sessions" list (latest attempts)
 - each item includes completed date, score (`correct/total`), and percentage
+- Study Pack detail page includes a compact `Review Performance` section based on completed Quick Review sessions for that Study Pack:
+  - `Best Score`
+  - `Attempts`
+  - `Last Score`
+  - `Last Reviewed`
+- if no completed sessions exist, the section shows an empty-state prompt to start the first review
 
 ## Roadmap note
 

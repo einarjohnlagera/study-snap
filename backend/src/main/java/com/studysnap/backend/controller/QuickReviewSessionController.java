@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartRequest;
@@ -79,6 +80,15 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewSessionService.listRecentSessions(studyPackId, userId, limit);
+    }
+
+    @GetMapping("/study-packs/{studyPackId}/performance-summary")
+    public QuickReviewPerformanceSummaryResponse getPerformanceSummary(
+            @PathVariable String studyPackId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.getPerformanceSummary(studyPackId, userId);
     }
 
     @PostMapping("/study-packs/{studyPackId}/study-tip")

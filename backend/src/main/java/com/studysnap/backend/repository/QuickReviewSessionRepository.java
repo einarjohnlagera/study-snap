@@ -3,6 +3,7 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -33,4 +34,15 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             UUID userId,
             QuickReviewSessionStatus status
     );
+
+    long countByUserIdAndStudyPackIdAndCompletedAtIsNotNull(UUID userId, UUID studyPackId);
+
+    @Query("""
+            select max(q.scorePercentage)
+            from QuickReviewSessionEntity q
+            where q.userId = :userId
+              and q.studyPackId = :studyPackId
+              and q.completedAt is not null
+            """)
+    java.math.BigDecimal findBestScorePercentageByUserIdAndStudyPackId(UUID userId, UUID studyPackId);
 }

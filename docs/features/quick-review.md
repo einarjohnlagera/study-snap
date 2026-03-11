@@ -246,6 +246,15 @@ The Study Pack detail page can display recent review sessions such as:
 
 This history helps users see their progress over time.
 
+The Study Pack detail page also includes a compact `Review Performance` summary based on completed sessions for the current Study Pack:
+
+- `Best Score` (highest `scorePercentage`)
+- `Attempts` (total completed sessions)
+- `Last Score` (most recent completed session score)
+- `Last Reviewed` (most recent completed session timestamp)
+
+If there are no completed sessions yet, the page shows a simple empty prompt to start the first Quick Review.
+
 ---
 
 ## Activity Tracking

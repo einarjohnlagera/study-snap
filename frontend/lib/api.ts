@@ -167,6 +167,13 @@ export type QuickReviewSessionSummaryResponse = {
   completedAt: string | null;
 };
 
+export type QuickReviewPerformanceSummaryResponse = {
+  bestScorePercentage: number | null;
+  attempts: number;
+  lastScorePercentage: number | null;
+  lastReviewedAt: string | null;
+};
+
 export type QuickReviewIncorrectQuestionInput = {
   question: string;
   correctAnswer: string;
@@ -599,6 +606,23 @@ export async function listRecentQuickReviewSessions(
   return parseApiResponse<QuickReviewSessionSummaryResponse[]>(
     response,
     "Could not load recent Quick Review sessions.",
+  );
+}
+
+export async function getQuickReviewPerformanceSummary(
+  studyPackId: string,
+): Promise<QuickReviewPerformanceSummaryResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/study-packs/${studyPackId}/performance-summary`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewPerformanceSummaryResponse>(
+    response,
+    "Could not load Quick Review performance summary.",
   );
 }
 
