@@ -39,6 +39,7 @@ export type StudyPackListItemResponse = {
 };
 
 export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
+export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
 
 export type ContinueStudyingResponse = {
   studyPackId: string | null;
@@ -53,6 +54,7 @@ export type ContinueStudyingResponse = {
   totalQuestions: number | null;
   currentRound: "INITIAL" | "RETRY" | null;
   remainingQuestions: number | null;
+  resumeState: ContinueStudyingResumeState | null;
 };
 
 export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";

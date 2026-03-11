@@ -17,6 +17,7 @@ public record ContinueStudyingResponse(
         Integer currentQuestionIndex,
         Integer totalQuestions,
         QuickReviewRound currentRound,
-        Integer remainingQuestions
+        Integer remainingQuestions,
+        ContinueStudyingResumeState resumeState
 ) {
 }

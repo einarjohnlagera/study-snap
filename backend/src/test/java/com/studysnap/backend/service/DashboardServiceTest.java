@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.ContinueStudyingReason;
+import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -88,6 +89,63 @@ class DashboardServiceTest {
         assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
         assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
         assertThat(response.remainingQuestions()).isEqualTo(2);
+        assertThat(response.resumeState()).isEqualTo(ContinueStudyingResumeState.RETRY_IN_PROGRESS);
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_setsRetryTransitionResumeStateAfterInitialPassEnds() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Biology");
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId,
+                studyPackId,
+                5,
+                5,
+                QuickReviewRound.INITIAL,
+                Map.of("retryQuestionIndexes", List.of(0, 3)),
+                OffsetDateTime.now().minusMinutes(5)
+        );
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(inProgress));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RESUME_REVIEW);
+        assertThat(response.resumeState()).isEqualTo(ContinueStudyingResumeState.RETRY_TRANSITION);
+        assertThat(response.currentRound()).isEqualTo(QuickReviewRound.INITIAL);
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_setsQuestionInProgressResumeStateDuringInitialFlow() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Biology");
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId,
+                studyPackId,
+                2,
+                5,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                OffsetDateTime.now().minusMinutes(5)
+        );
+        inProgress.setRetryCount(0);
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(inProgress));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RESUME_REVIEW);
+        assertThat(response.resumeState()).isEqualTo(ContinueStudyingResumeState.QUESTION_IN_PROGRESS);
     }
 
     @Test

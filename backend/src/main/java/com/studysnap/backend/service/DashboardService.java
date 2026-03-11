@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.ContinueStudyingReason;
+import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -69,12 +70,13 @@ public class DashboardService {
                     null,
                     null,
                     null,
+                    null,
                     null
             );
         }
 
         // No Study Packs or usable activity context -> no recommendation.
-        return new ContinueStudyingResponse(null, null, null, null, null, null, null, null, null, null, null, null);
+        return new ContinueStudyingResponse(null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     private Optional<ContinueStudyingResponse> resolveInProgressRecommendation(UUID userId) {
@@ -94,6 +96,11 @@ public class DashboardService {
         int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
         QuickReviewRound currentRound = session.getCurrentRound();
         int remainingQuestions = calculateRemainingQuestions(session, currentQuestionIndex, totalQuestions);
+        ContinueStudyingResumeState resumeState = determineResumeState(
+                session,
+                currentQuestionIndex,
+                totalQuestions
+        );
         return Optional.of(toResponse(
                 studyPack.get(),
                 ContinueStudyingReason.RESUME_REVIEW,
@@ -104,7 +111,8 @@ public class DashboardService {
                 currentQuestionIndex,
                 totalQuestions,
                 currentRound,
-                remainingQuestions
+                remainingQuestions,
+                resumeState
         ));
     }
 
@@ -147,6 +155,7 @@ public class DashboardService {
                     session.getCompletedAt(),
                     findLastOpenedAt(userId, session.getStudyPackId()),
                     studyPack.get().getCreatedAt(),
+                    null,
                     null,
                     null,
                     null,
@@ -199,6 +208,7 @@ public class DashboardService {
                     null,
                     null,
                     null,
+                    null,
                     null
             ));
         }
@@ -227,7 +237,8 @@ public class DashboardService {
             Integer currentQuestionIndex,
             Integer totalQuestions,
             QuickReviewRound currentRound,
-            Integer remainingQuestions
+            Integer remainingQuestions,
+            ContinueStudyingResumeState resumeState
     ) {
         return new ContinueStudyingResponse(
                 studyPack.getId().toString(),
@@ -241,7 +252,8 @@ public class DashboardService {
                 currentQuestionIndex,
                 totalQuestions,
                 currentRound,
-                remainingQuestions
+                remainingQuestions,
+                resumeState
         );
     }
 
@@ -264,5 +276,51 @@ public class DashboardService {
                 .filter(Integer.class::isInstance)
                 .count();
         return Math.max(0, Math.toIntExact(validRetryIndexes) - currentQuestionIndex);
+    }
+
+    private ContinueStudyingResumeState determineResumeState(
+            QuickReviewSessionEntity session,
+            int currentQuestionIndex,
+            int totalQuestions
+    ) {
+        if (session.getCurrentRound() == QuickReviewRound.RETRY) {
+            return ContinueStudyingResumeState.RETRY_IN_PROGRESS;
+        }
+
+        if (isRetryTransition(session, currentQuestionIndex, totalQuestions)) {
+            return ContinueStudyingResumeState.RETRY_TRANSITION;
+        }
+
+        return ContinueStudyingResumeState.QUESTION_IN_PROGRESS;
+    }
+
+    private boolean isRetryTransition(
+            QuickReviewSessionEntity session,
+            int currentQuestionIndex,
+            int totalQuestions
+    ) {
+        if (session.getCurrentRound() != QuickReviewRound.INITIAL) {
+            return false;
+        }
+        if (session.getRetryCount() == null || session.getRetryCount() <= 0) {
+            return false;
+        }
+        if (countRetryQuestionIndexes(session) <= 0) {
+            return false;
+        }
+        return currentQuestionIndex >= Math.max(0, totalQuestions);
+    }
+
+    private int countRetryQuestionIndexes(QuickReviewSessionEntity session) {
+        if (session.getSessionState() == null) {
+            return 0;
+        }
+        Object retryQuestionIndexes = session.getSessionState().get("retryQuestionIndexes");
+        if (!(retryQuestionIndexes instanceof List<?> retryIndexesList)) {
+            return 0;
+        }
+        return (int) retryIndexesList.stream()
+                .filter(Integer.class::isInstance)
+                .count();
     }
 }
