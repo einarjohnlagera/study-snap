@@ -3,6 +3,7 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -283,22 +284,27 @@ class QuickReviewSessionRepositoryTest {
             OffsetDateTime completedAt,
             Integer scorePercentage
     ) {
-        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
-        session.setId(UUID.randomUUID());
-        session.setUserId(userId);
-        session.setStudyPackId(studyPackId);
-        session.setStatus(status);
-        session.setCurrentQuestionIndex(status == QuickReviewSessionStatus.COMPLETED ? 5 : 0);
-        session.setCurrentRound(status == QuickReviewSessionStatus.COMPLETED ? QuickReviewRound.RETRY : QuickReviewRound.INITIAL);
-        session.setTotalQuestions(5);
-        session.setCorrectAnswers(scorePercentage == null ? null : Math.max(0, Math.min(5, scorePercentage / 20)));
-        session.setScorePercentage(scorePercentage == null ? null : BigDecimal.valueOf(scorePercentage).setScale(2));
-        session.setRetryCount(status == QuickReviewSessionStatus.COMPLETED ? 1 : 0);
-        session.setDurationSeconds(120);
-        session.setSessionMetadata(null);
-        session.setSessionState(null);
-        session.setCreatedAt(createdAt);
-        session.setCompletedAt(completedAt);
+        QuickReviewRound round = status == QuickReviewSessionStatus.COMPLETED ? QuickReviewRound.RETRY : QuickReviewRound.INITIAL;
+        Integer correctAnswers = scorePercentage == null ? null : Math.max(0, Math.min(5, scorePercentage / 20));
+        BigDecimal score = scorePercentage == null ? null : BigDecimal.valueOf(scorePercentage).setScale(2);
+
+        QuickReviewSessionEntity session = QuickReviewSessionEntityBuilder.anInProgressSession()
+                .withId(UUID.randomUUID())
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withStatus(status)
+                .withCurrentQuestionIndex(status == QuickReviewSessionStatus.COMPLETED ? 5 : 0)
+                .withCurrentRound(round)
+                .withTotalQuestions(5)
+                .withCorrectAnswers(correctAnswers)
+                .withScorePercentage(score)
+                .withRetryCount(status == QuickReviewSessionStatus.COMPLETED ? 1 : 0)
+                .withDurationSeconds(120)
+                .withSessionMetadata(null)
+                .withSessionState(null)
+                .withCreatedAt(createdAt)
+                .withCompletedAt(completedAt)
+                .build();
         return quickReviewSessionRepository.save(session);
     }
 }

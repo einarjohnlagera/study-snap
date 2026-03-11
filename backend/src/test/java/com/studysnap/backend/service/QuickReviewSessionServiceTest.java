@@ -4,18 +4,16 @@ import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
-import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
-import com.studysnap.backend.entity.InputType;
-import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
-import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
+import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,7 +24,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -391,43 +388,31 @@ class QuickReviewSessionServiceTest {
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId, int quizCount) {
-        StudyPackEntity studyPack = new StudyPackEntity();
-        studyPack.setId(studyPackId);
-        studyPack.setOwnerUserId(userId);
-        studyPack.setInputType(InputType.TEXT);
-        studyPack.setTitle("Quick Review Pack");
-        studyPack.setSummary("Summary");
-        List<QuizItem> quizItems = new ArrayList<>();
-        for (int index = 0; index < quizCount; index++) {
-            quizItems.add(new QuizItem("Q" + (index + 1), List.of("A", "B"), "A", "E"));
-        }
-        studyPack.setQuiz(quizItems);
-        studyPack.setModelTier(ModelTier.FREE);
-        studyPack.setModelUsed("gpt-4.1-mini");
-        studyPack.setStatus(StudyPackStatus.DONE);
-        studyPack.setCreatedAt(OffsetDateTime.now().minusDays(1));
-        studyPack.setUpdatedAt(OffsetDateTime.now().minusDays(1));
-        studyPack.setTags(new String[]{"retry"});
-        return studyPack;
+        OffsetDateTime createdAt = OffsetDateTime.now().minusDays(1);
+        return StudyPackEntityBuilder.aStudyPack()
+                .withId(studyPackId)
+                .withOwnerUserId(userId)
+                .withTitle("Quick Review Pack")
+                .withSummary("Summary")
+                .withQuizCount(quizCount)
+                .withCreatedAt(createdAt)
+                .withUpdatedAt(createdAt)
+                .build();
     }
 
     private QuickReviewSessionEntity buildInProgressSession(UUID sessionId, UUID userId, UUID studyPackId) {
-        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
-        session.setId(sessionId);
-        session.setUserId(userId);
-        session.setStudyPackId(studyPackId);
-        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
-        session.setCurrentQuestionIndex(2);
-        session.setCurrentRound(QuickReviewRound.INITIAL);
-        session.setTotalQuestions(5);
-        session.setCorrectAnswers(2);
-        session.setScorePercentage(BigDecimal.valueOf(40).setScale(2, RoundingMode.HALF_EVEN));
-        session.setRetryCount(0);
-        session.setDurationSeconds(null);
-        session.setSessionMetadata(null);
-        session.setSessionState(null);
-        session.setCreatedAt(OffsetDateTime.now().minusMinutes(15));
-        session.setCompletedAt(null);
-        return session;
+        return QuickReviewSessionEntityBuilder.anInProgressSession()
+                .withId(sessionId)
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withCurrentQuestionIndex(2)
+                .withCurrentRound(QuickReviewRound.INITIAL)
+                .withTotalQuestions(5)
+                .withCorrectAnswers(2)
+                .withScorePercentage(BigDecimal.valueOf(40).setScale(2, RoundingMode.HALF_EVEN))
+                .withRetryCount(0)
+                .withCreatedAt(OffsetDateTime.now().minusMinutes(15))
+                .withCompletedAt(null)
+                .build();
     }
 }
