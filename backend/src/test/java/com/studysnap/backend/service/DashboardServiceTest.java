@@ -3,17 +3,17 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.entity.ActivityType;
-import com.studysnap.backend.entity.InputType;
-import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
-import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
+import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
+import com.studysnap.backend.testutil.builders.UserActivityEventEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -292,20 +292,15 @@ class DashboardServiceTest {
     }
 
     private StudyPackEntity buildStudyPack(UUID userId, UUID studyPackId, String title) {
-        OffsetDateTime now = OffsetDateTime.now();
-        StudyPackEntity studyPack = new StudyPackEntity();
-        studyPack.setId(studyPackId);
-        studyPack.setOwnerUserId(userId);
-        studyPack.setInputType(InputType.TEXT);
-        studyPack.setTitle(title);
-        studyPack.setSummary("Summary for " + title);
-        studyPack.setModelTier(ModelTier.FREE);
-        studyPack.setModelUsed("gpt-4.1-mini");
-        studyPack.setStatus(StudyPackStatus.DONE);
-        studyPack.setCreatedAt(now.minusDays(2));
-        studyPack.setUpdatedAt(now.minusDays(2));
-        studyPack.setTags(new String[]{"test"});
-        return studyPack;
+        OffsetDateTime createdAt = OffsetDateTime.now().minusDays(2);
+        return StudyPackEntityBuilder.aStudyPack()
+                .withId(studyPackId)
+                .withOwnerUserId(userId)
+                .withTitle(title)
+                .withSummary("Summary for " + title)
+                .withCreatedAt(createdAt)
+                .withUpdatedAt(createdAt)
+                .build();
     }
 
     private QuickReviewSessionEntity buildCompletedSession(
@@ -314,20 +309,16 @@ class DashboardServiceTest {
             BigDecimal scorePercentage,
             OffsetDateTime completedAt
     ) {
-        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
-        session.setId(UUID.randomUUID());
-        session.setUserId(userId);
-        session.setStudyPackId(studyPackId);
-        session.setStatus(QuickReviewSessionStatus.COMPLETED);
-        session.setCurrentQuestionIndex(0);
-        session.setCurrentRound(QuickReviewRound.INITIAL);
-        session.setTotalQuestions(5);
-        session.setCorrectAnswers(3);
-        session.setRetryCount(0);
-        session.setScorePercentage(scorePercentage);
-        session.setCreatedAt(completedAt.minusMinutes(10));
-        session.setCompletedAt(completedAt);
-        return session;
+        return QuickReviewSessionEntityBuilder.aCompletedSession()
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withScorePercentage(scorePercentage)
+                .withCorrectAnswers(3)
+                .withRetryCount(0)
+                .withCurrentRound(QuickReviewRound.INITIAL)
+                .withCreatedAt(completedAt.minusMinutes(10))
+                .withCompletedAt(completedAt)
+                .build();
     }
 
     private QuickReviewSessionEntity buildInProgressSession(
@@ -339,28 +330,25 @@ class DashboardServiceTest {
             Map<String, Object> sessionState,
             OffsetDateTime createdAt
     ) {
-        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
-        session.setId(UUID.randomUUID());
-        session.setUserId(userId);
-        session.setStudyPackId(studyPackId);
-        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
-        session.setCurrentQuestionIndex(currentQuestionIndex);
-        session.setCurrentRound(round);
-        session.setTotalQuestions(totalQuestions);
-        session.setRetryCount(1);
-        session.setSessionState(sessionState);
-        session.setCreatedAt(createdAt);
-        return session;
+        return QuickReviewSessionEntityBuilder.anInProgressSession()
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withCurrentQuestionIndex(currentQuestionIndex)
+                .withCurrentRound(round)
+                .withTotalQuestions(totalQuestions)
+                .withRetryCount(1)
+                .withSessionState(sessionState)
+                .withCreatedAt(createdAt)
+                .build();
     }
 
     private UserActivityEventEntity buildOpenedEvent(UUID userId, UUID studyPackId, OffsetDateTime createdAt) {
-        UserActivityEventEntity event = new UserActivityEventEntity();
-        event.setId(UUID.randomUUID());
-        event.setUserId(userId);
-        event.setStudyPackId(studyPackId);
-        event.setActivityType(ActivityType.OPENED_STUDY_PACK);
-        event.setCreatedAt(createdAt);
-        return event;
+        return UserActivityEventEntityBuilder.anActivityEvent()
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withActivityType(ActivityType.OPENED_STUDY_PACK)
+                .withCreatedAt(createdAt)
+                .build();
     }
 
     private BigDecimal bigDecimal(int value) {
