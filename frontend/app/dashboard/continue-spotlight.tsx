@@ -89,7 +89,7 @@ export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
   }
 
   return (
-    <Card className="space-y-4">
+    <Card className="space-y-4 p-4 sm:p-6">
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
           KEEP IT SHARP
@@ -101,34 +101,34 @@ export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
               {copy.label}
             </span>
           </div>
-          <h2 className="text-xl font-semibold">{copy.heading}</h2>
-          <p className="text-sm font-medium text-foreground/85">{copy.body}</p>
+          <h2 className="text-lg font-semibold sm:text-xl">{copy.heading}</h2>
+          <p className="text-sm font-medium leading-relaxed text-foreground/85">{copy.body}</p>
         </div>
         {recommendation.summaryPreview ? (
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
               About this Study Pack
             </p>
-            <p className="text-sm text-foreground/70">{recommendation.summaryPreview}</p>
+            <p className="text-sm leading-relaxed text-foreground/70">{recommendation.summaryPreview}</p>
           </div>
         ) : null}
       </div>
 
       <div className="space-y-1 text-xs text-foreground/65">
         {recommendation.lastReviewedAt ? (
-          <p>Last reviewed · {new Date(recommendation.lastReviewedAt).toLocaleString()}</p>
+          <p className="break-words">Last reviewed · {new Date(recommendation.lastReviewedAt).toLocaleString()}</p>
         ) : null}
         {recommendation.lastOpenedAt ? (
-          <p>Last opened · {new Date(recommendation.lastOpenedAt).toLocaleString()}</p>
+          <p className="break-words">Last opened · {new Date(recommendation.lastOpenedAt).toLocaleString()}</p>
         ) : null}
         {recommendation.createdAt ? (
-          <p>Created · {new Date(recommendation.createdAt).toLocaleDateString()}</p>
+          <p className="break-words">Created · {new Date(recommendation.createdAt).toLocaleDateString()}</p>
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Link href={`/study-packs/${recommendation.studyPackId}/quick-review`}>
-          <Button type="button">{copy.cta}</Button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Link href={`/study-packs/${recommendation.studyPackId}/quick-review`} className="w-full sm:w-auto">
+          <Button type="button" className="w-full sm:w-auto">{copy.cta}</Button>
         </Link>
       </div>
     </Card>

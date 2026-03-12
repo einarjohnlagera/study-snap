@@ -160,7 +160,7 @@ export default function StudyPackDetailPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-4xl space-y-6 px-6 py-10">
+    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
         <Link href="/dashboard" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
           Back to Dashboard
@@ -170,7 +170,7 @@ export default function StudyPackDetailPage() {
       {loading ? (
         <StudyPackDetailLoading />
       ) : error ? (
-        <Card className="space-y-4">
+        <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">
             {isNotFound ? "Study Pack not found" : "Could not load this Study Pack"}
           </h1>
@@ -179,14 +179,14 @@ export default function StudyPackDetailPage() {
               ? "This Study Pack is unavailable or does not belong to your account."
               : error}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             {!isNotFound ? (
-              <Button type="button" onClick={() => void loadStudyPack()}>
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadStudyPack()}>
                 Retry
               </Button>
             ) : null}
-            <Link href="/dashboard">
-              <Button type="button" variant="outline">
+            <Link href="/dashboard" className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
                 Back to Dashboard
               </Button>
             </Link>
@@ -194,12 +194,12 @@ export default function StudyPackDetailPage() {
         </Card>
       ) : studyPack ? (
         <div className="space-y-6">
-          <Card className="space-y-3">
+          <Card className="space-y-3 p-4 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
               Study Pack
             </p>
-            <h1 className="text-3xl font-semibold tracking-tight">{studyPack.title}</h1>
-            <div className="flex flex-wrap gap-3 text-xs text-foreground/70">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{studyPack.title}</h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/70">
               <span>{new Date(studyPack.createdAt).toLocaleString()}</span>
               <span>{studyPack.quiz.length} quiz questions</span>
             </div>
@@ -216,7 +216,7 @@ export default function StudyPackDetailPage() {
               </div>
             ) : null}
             <div>
-              <Button type="button" variant="outline" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
                 {startingQuickReview
                   ? (hasInProgressQuickReview ? "Resuming..." : "Starting...")
                   : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
@@ -224,13 +224,13 @@ export default function StudyPackDetailPage() {
             </div>
           </Card>
 
-          <Card className="space-y-3">
-            <h2 className="text-xl font-semibold">Summary</h2>
+          <Card className="space-y-3 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{studyPack.summary}</p>
           </Card>
 
-          <Card className="space-y-3">
-            <h2 className="text-xl font-semibold">Key Concepts</h2>
+          <Card className="space-y-3 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
             <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
               {studyPack.keyConcepts.map((concept, index) => (
                 <li key={`${studyPack.id}-concept-${index}`}>{concept}</li>
@@ -238,8 +238,8 @@ export default function StudyPackDetailPage() {
             </ul>
           </Card>
 
-          <Card className="space-y-3">
-            <h2 className="text-xl font-semibold">Recent Review Sessions</h2>
+          <Card className="space-y-3 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Recent Review Sessions</h2>
             {historyError ? (
               <p className="text-sm text-foreground/75">{historyError}</p>
             ) : recentSessions.length === 0 ? (
@@ -249,7 +249,7 @@ export default function StudyPackDetailPage() {
                 {recentSessions.map((session) => (
                   <div
                     key={session.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span className="text-foreground/75">
                       {session.completedAt
@@ -265,8 +265,8 @@ export default function StudyPackDetailPage() {
             )}
           </Card>
 
-          <Card className="space-y-3">
-            <h2 className="text-xl font-semibold">Review Performance</h2>
+          <Card className="space-y-3 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Review Performance</h2>
             {performanceError ? (
               <p className="text-sm text-foreground/75">{performanceError}</p>
             ) : !performanceSummary || performanceSummary.attempts === 0 ? (
