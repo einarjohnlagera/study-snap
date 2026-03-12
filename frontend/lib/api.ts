@@ -10,6 +10,7 @@ export type QuizItem = {
   question: string;
   choices: string[];
   answer: string;
+  concept?: string;
   explanation: string;
 };
 
@@ -141,7 +142,10 @@ export type QuickReviewSessionCompleteRequest = {
   totalQuestions: number;
   retryCount: number;
   durationSeconds?: number;
-  sessionMetadata?: Record<string, unknown>;
+  sessionMetadata?: {
+    weakConcepts?: string[];
+    [key: string]: unknown;
+  };
 };
 
 export type QuickReviewSessionProgressRequest = {
@@ -162,6 +166,7 @@ export type QuickReviewSessionSummaryResponse = {
   scorePercentage: number;
   retryCount: number;
   durationSeconds: number | null;
+  weakConcepts?: string[];
   sessionState?: Record<string, unknown> | null;
   createdAt: string;
   completedAt: string | null;

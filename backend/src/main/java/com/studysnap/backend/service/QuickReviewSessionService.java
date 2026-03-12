@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -233,6 +234,7 @@ public class QuickReviewSessionService {
                 session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage(),
                 session.getRetryCount() == null ? 0 : session.getRetryCount(),
                 session.getDurationSeconds(),
+                extractWeakConcepts(session),
                 session.getSessionState(),
                 session.getCreatedAt(),
                 session.getCompletedAt()
@@ -248,5 +250,27 @@ public class QuickReviewSessionService {
                 session.getRetryCount() == null ? 0 : session.getRetryCount(),
                 session.getSessionState()
         );
+    }
+
+    private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
+        if (session.getSessionMetadata() == null) {
+            return List.of();
+        }
+        Object weakConceptsRaw = session.getSessionMetadata().get("weakConcepts");
+        if (!(weakConceptsRaw instanceof List<?> weakConceptsList)) {
+            return List.of();
+        }
+
+        List<String> weakConcepts = new ArrayList<>();
+        for (Object value : weakConceptsList) {
+            if (!(value instanceof String concept)) {
+                continue;
+            }
+            String normalized = concept.trim();
+            if (!normalized.isBlank()) {
+                weakConcepts.add(normalized);
+            }
+        }
+        return weakConcepts;
     }
 }

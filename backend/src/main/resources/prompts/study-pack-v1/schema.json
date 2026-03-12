@@ -24,6 +24,7 @@
           "question",
           "choices",
           "answerIndex",
+          "concept",
           "explanation"
         ],
         "properties": {
@@ -42,6 +43,9 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 3
+          },
+          "concept": {
+            "type": "string"
           },
           "explanation": {
             "type": "string"

@@ -29,14 +29,16 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 List.of(
                         new QuizItem(
                                 "What is the main topic of these notes?",
-                                List.of("Topic A", "Topic B", "Topic C"),
+                                List.of("Topic A", "Topic B", "Topic C", "Topic D"),
                                 "Topic A",
+                                "Main Topic",
                                 "The topic comes directly from the provided notes."
                         ),
                         new QuizItem(
                                 "Which concept should be studyPacked first?",
-                                List.of("Background idea", "Core definition", "Edge case"),
+                                List.of("Background idea", "Core definition", "Edge case", "Advanced exception"),
                                 "Core definition",
+                                "Core Definitions",
                                 "Foundational definitions are best reviewed first."
                         )
                 ),
