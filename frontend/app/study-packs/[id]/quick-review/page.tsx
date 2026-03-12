@@ -41,6 +41,31 @@ function getMotivationalFeedback(scorePercentage: number) {
   return "Nice attempt. Let's review the concepts and try again.";
 }
 
+function getPerformanceBadge(scorePercentage: number) {
+  if (scorePercentage >= 100) {
+    return {
+      label: "🏆 Perfect Mastery",
+      className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    };
+  }
+  if (scorePercentage >= 80) {
+    return {
+      label: "⚡ Strong Understanding",
+      className: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    };
+  }
+  if (scorePercentage >= 60) {
+    return {
+      label: "👍 Good Progress",
+      className: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    };
+  }
+  return {
+    label: "📘 Needs Review",
+    className: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
+  };
+}
+
 function QuickReviewLoading() {
   return (
     <Card className="space-y-4">
@@ -210,6 +235,7 @@ export default function QuickReviewPage() {
   const bestDisplayedCorrect = bestPreviousCorrect === null ? score : Math.max(bestPreviousCorrect, score);
   const improvedVsPrevious = previousAttempt ? score > previousAttempt.correctAnswers : false;
   const scoreFeedback = getMotivationalFeedback(scorePercentage);
+  const performanceBadge = getPerformanceBadge(scorePercentage);
   const isPerfectScore = totalQuestions > 0 && score === totalQuestions;
   const displayedRetryCount = persistedResult?.retryCount ?? retryCount;
   const currentRoundType = phase === "retry" ? "RETRY" : "INITIAL";
@@ -572,18 +598,10 @@ export default function QuickReviewPage() {
           </p>
           <h1 className="text-2xl font-semibold">Your results</h1>
           <div className="space-y-2 text-sm text-foreground/75">
+            <div className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${performanceBadge.className}`}>
+              {performanceBadge.label}
+            </div>
             <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
-            {isPerfectScore ? (
-              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
-                <div className="mb-1 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                  <Trophy className="h-4 w-4" aria-hidden="true" />
-                  <p className="font-medium">Excellent work! You mastered this topic.</p>
-                </div>
-                <p>Try another Study Pack to continue learning.</p>
-              </div>
-            ) : (
-              <p>{scoreFeedback}</p>
-            )}
             {previousAttempt ? (
               <div className="space-y-1 rounded-md border border-border bg-background p-3">
                 <p>Previous Attempt: {previousAttempt.correctAnswers} / {previousAttempt.totalQuestions}</p>
@@ -595,12 +613,23 @@ export default function QuickReviewPage() {
                 ) : null}
               </div>
             ) : null}
-            {displayedRetryCount > 0 ? <p>Retry count: {displayedRetryCount}</p> : null}
-            {displayedWeakConcepts.length > 0 ? (
+            {isPerfectScore ? (
+              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
+                <div className="mb-1 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                  <Trophy className="h-4 w-4" aria-hidden="true" />
+                  <p className="font-medium">Excellent work! You mastered this topic.</p>
+                </div>
+                <p>Try another Study Pack to continue learning.</p>
+              </div>
+            ) : (
+              <p>{scoreFeedback}</p>
+            )}
+            {!isPerfectScore && incorrectCount > 0 && displayedWeakConcepts.length > 0 ? (
               <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                  Weak Concepts
+                  Weak Areas
                 </p>
+                <p>You may want to review these concepts:</p>
                 <ul className="list-disc space-y-1 pl-5">
                   {displayedWeakConcepts.map((concept) => (
                     <li key={concept}>{concept}</li>
@@ -608,6 +637,7 @@ export default function QuickReviewPage() {
                 </ul>
               </div>
             ) : null}
+            {displayedRetryCount > 0 ? <p>Retry attempts: {displayedRetryCount}</p> : null}
             {studyTip ? (
               <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
