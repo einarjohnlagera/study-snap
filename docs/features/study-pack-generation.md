@@ -31,6 +31,31 @@ Detailed expectations:
 - if OCR noise exists, ignore gibberish lines
 - if OCR text was edited by the user, the edited text becomes the authoritative input
 
+## OCR input flow (image notes)
+
+Study Pack generation supports an OCR-first flow when users upload image notes.
+
+Frontend OCR UX goals:
+- clear upload guidance before OCR starts
+- visible image selection confirmation (including preview)
+- explicit OCR processing states
+- clean extracted-text review before final generation
+
+Processing states shown in the UI:
+- `idle`: no active OCR operation
+- `uploading`: image is being uploaded
+- `extracting text`: OCR is running
+- `success`: OCR text extracted successfully
+- `failure`: OCR could not complete or validation failed
+
+Validation/error handling in the OCR path:
+- unsupported file type (`png/jpeg/webp` only)
+- image too large (max `5 MB` in current UX guidance)
+- no readable text detected
+- generic OCR/extraction failures
+
+Errors should remain supportive and actionable.
+
 ## Question counts by plan
 
 - Demo: 3 questions
@@ -47,6 +72,16 @@ Backend should:
 If validation fails:
 - run one repair pass
 - if it still fails, return a friendly error
+
+## Extracted text review/edit step
+
+When OCR returns extracted text for confirmation:
+- the extracted text is shown in an editable review area
+- users can correct OCR mistakes before continuing
+- edited text is treated as the final source of truth for Study Pack generation
+
+Authoritative input rule:
+- if the user edits extracted OCR text, generation must use the edited text (not the original raw OCR output)
 
 ## Future improvements
 

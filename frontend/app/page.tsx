@@ -107,7 +107,7 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-border pt-6 text-sm text-foreground/65">
-        Study Snap MVP. Let&apos;s work through this step by step.
+        Study Snap MVP. Let's work through this step by step.
       </footer>
     </main>
   );

@@ -19,13 +19,15 @@ export function ConfirmTextCard({
   onConfirm,
 }: ConfirmTextCardProps) {
   return (
-    <Card className="space-y-4 border-amber-500/40">
+    <Card className="space-y-4 border-amber-500/40 p-4 sm:p-6">
       <div>
-        <CardTitle className="mb-2">Confirm Extracted Text</CardTitle>
+        <CardTitle className="mb-2">Review Extracted Text</CardTitle>
         <CardDescription>
-          The uploaded image was a little unclear. Please edit the extracted text
-          below, then continue.
+          OCR finished. Review and edit the extracted text below before continuing.
         </CardDescription>
+      </div>
+      <div className="rounded-md border border-blue-500/40 bg-blue-50/70 p-3 text-sm text-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+        Your edited text will be used as the final source for Study Pack generation.
       </div>
       <textarea
         value={confirmedText}
@@ -42,6 +44,7 @@ export function ConfirmTextCard({
         type="button"
         onClick={onConfirm}
         disabled={loading || confirmedText.trim().length === 0}
+        className="w-full sm:w-auto"
       >
         {loading ? (
           <>

@@ -26,16 +26,18 @@ export default function StudyPage() {
     canGenerate,
     generatedLabel,
     detectedTopic,
+    ocrFlowState,
+    ocrStatusMessage,
     handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,
   } = useStudyPack(demoMode);
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-8 px-6 py-10">
+    <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       <section className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold text-foreground md:text-4xl">
+          <h1 className="text-2xl font-semibold text-foreground sm:text-3xl md:text-4xl">
             Turn Notes Into Study Pack Materials
           </h1>
           {demoMode ? (
@@ -45,7 +47,7 @@ export default function StudyPage() {
           ) : null}
         </div>
         <p className="text-base leading-relaxed text-foreground/75">
-          Paste your notes or upload a photo. We&apos;ll organize everything
+          Paste your notes or upload a photo. We'll organize everything
           into a clean summary, key concepts, and a quick practice quiz.
         </p>
       </section>
@@ -58,6 +60,8 @@ export default function StudyPage() {
         imageInputKey={imageInputKey}
         canGenerate={canGenerate}
         loading={loading}
+        ocrFlowState={ocrFlowState}
+        ocrStatusMessage={ocrStatusMessage}
         onGenerate={() => {
           void handleGenerateStudyPack();
         }}
@@ -65,8 +69,10 @@ export default function StudyPage() {
       />
 
       {errorMessage ? (
-        <Card className="border-red-500/40 bg-red-50/70 dark:bg-red-950/20">
-          <CardTitle className="mb-2">Couldn&apos;t Generate Study Pack</CardTitle>
+        <Card className="border-red-500/40 bg-red-50/70 p-4 dark:bg-red-950/20 sm:p-6">
+          <CardTitle className="mb-2">
+            {ocrFlowState === "failure" ? "Couldn't Process Notes Image" : "Couldn't Generate Study Pack"}
+          </CardTitle>
           <CardDescription>{errorMessage}</CardDescription>
         </Card>
       ) : null}
