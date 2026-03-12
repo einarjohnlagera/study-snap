@@ -22,14 +22,20 @@ Include a balanced mix of:
 - application questions
 
 Detailed expectations:
+- generate exactly 5 questions for the current Quick Review-oriented Study Pack flow
+- each question must test a different concept from the notes
 - recall questions test facts, terms, and definitions
-- understanding questions test conceptual understanding
+- understanding questions test conceptual understanding (not rote memorization)
 - application questions test simple practical use of the concept
+- each question must contain 4 answer options with exactly 1 correct answer
+- explanations are required for each quiz item and should briefly explain why the correct answer is correct
 - all questions must remain answerable from the notes
 - if notes are too short or too simple, prioritize recall and understanding
 - avoid hallucinating details not present in the notes
 - if OCR noise exists, ignore gibberish lines
 - if OCR text was edited by the user, the edited text becomes the authoritative input
+- distractors should be plausible same-topic alternatives, not obvious throwaway options
+- avoid "all of the above", "none of the above", trick questions, and duplicate concepts
 
 ## OCR input flow (image notes)
 

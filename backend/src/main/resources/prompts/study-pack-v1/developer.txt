@@ -32,12 +32,16 @@ Quiz
   - recall: {RECALL_COUNT}
   - understanding: {UNDERSTANDING_COUNT}
   - application: {APPLICATION_COUNT}
+- each question must test a different concept from the notes
+- prioritize conceptual understanding over rote memorization
 - each question must have 4 choices
 - answerIndex must be between 0 and 3
-- explanation should briefly explain why the answer is correct
+- exactly one choice must be correct
+- explanation should briefly explain why the answer is correct (1-2 sentences)
 
 Quiz quality
 - use all major ideas in the notes across the full quiz; avoid repeating one concept in most questions
+- avoid duplicate concepts across questions; if two questions are about the same concept, rewrite one
 - recall questions should test facts, terms, and definitions
 - understanding questions should test conceptual understanding, causes, differences, or relationships
 - application questions should test practical use of the concept in a realistic scenario
@@ -46,7 +50,9 @@ Quiz quality
 - avoid generic question stems that could fit any subject
 - avoid repeating the same question pattern or wording
 - incorrect choices must be plausible and same-topic, not obvious throwaway distractors
+- incorrect choices should be credible alternatives a learner might confuse with the correct answer
 - keep wording precise and exam-style; avoid trick questions and ambiguity
+- do not use "all of the above" or "none of the above"
 - include at least one question that connects two ideas when the notes include related concepts
 
 Content guidelines
