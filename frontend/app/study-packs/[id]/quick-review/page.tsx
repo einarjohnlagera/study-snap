@@ -609,11 +609,11 @@ export default function QuickReviewPage() {
               </div>
             ) : null}
             {studyTip ? (
-              <div className="space-y-1 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
+              <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
                   Study Tip
                 </p>
-                <p>{studyTip}</p>
+                <p className="whitespace-normal break-words leading-relaxed text-foreground/85">{studyTip}</p>
               </div>
             ) : null}
           </div>

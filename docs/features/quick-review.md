@@ -220,6 +220,7 @@ Behavior:
 - to reduce cost, only incorrect questions are sent and input is capped by `max-questions`
 - if tip generation fails, results still load normally and the tip is hidden
 - if there are no incorrect answers, no tip request is sent
+- Study Tip text should be fully readable in the results UI (no unintended clipping or silent truncation)
 
 ### Retry-transition CTA hierarchy
 
