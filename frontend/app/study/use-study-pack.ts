@@ -31,13 +31,43 @@ type UseStudyPackResult = {
   canGenerate: boolean;
   generatedLabel: string | null;
   detectedTopic: string | null;
+  ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
+  ocrStatusMessage: string | null;
   handleGenerateStudyPack: () => Promise<void>;
   handleConfirmText: () => Promise<void>;
   handleClearNotes: () => void;
 };
 
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function toFriendlyOcrErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("unsupported")
+    || normalized.includes("file type")
+    || normalized.includes("content type")
+    || normalized.includes("format")
+  ) {
+    return "Unsupported image type. Upload a PNG, JPEG, or WEBP image.";
+  }
+  if (normalized.includes("too large") || normalized.includes("max") || normalized.includes("size")) {
+    return "Image is too large. Try an image smaller than 5 MB.";
+  }
+  if (
+    normalized.includes("no readable text")
+    || normalized.includes("no text")
+    || normalized.includes("text detected")
+    || normalized.includes("text not detected")
+  ) {
+    return "No readable text was detected. Retake the photo with better lighting and focus, then try again.";
+  }
+  return "We could not extract text from this image right now. Try another image or paste notes manually.";
+}
+
 export function useStudyPack(demoMode: boolean): UseStudyPackResult {
   const demoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ocrStageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [notesText, setNotesText] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -49,6 +79,9 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
   const [needsConfirmation, setNeedsConfirmation] =
     useState<NeedsTextConfirmationResponse | null>(null);
   const [confirmedText, setConfirmedText] = useState("");
+  const [ocrFlowState, setOcrFlowState] =
+    useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
+  const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
 
   const canGenerate = useMemo(
     () => notesText.trim().length > 0 || imageFile !== null,
@@ -72,6 +105,13 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     }, DEMO_GENERATION_DELAY_MS);
   };
 
+  const clearOcrStageTimer = () => {
+    if (ocrStageTimerRef.current) {
+      clearTimeout(ocrStageTimerRef.current);
+      ocrStageTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
     if (!demoMode) {
       return;
@@ -85,8 +125,42 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
       if (demoTimerRef.current) {
         clearTimeout(demoTimerRef.current);
       }
+      clearOcrStageTimer();
     };
   }, [demoMode]);
+
+  const setImageFileWithValidation = (file: File | null) => {
+    setErrorMessage(null);
+
+    if (!file) {
+      setImageFile(null);
+      setOcrFlowState("idle");
+      setOcrStatusMessage(null);
+      return;
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setImageFile(null);
+      setImageInputKey((prev) => prev + 1);
+      setOcrFlowState("failure");
+      setOcrStatusMessage("Unsupported image type. Upload a PNG, JPEG, or WEBP image.");
+      setErrorMessage("Unsupported image type. Upload a PNG, JPEG, or WEBP image.");
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      setImageFile(null);
+      setImageInputKey((prev) => prev + 1);
+      setOcrFlowState("failure");
+      setOcrStatusMessage("Image is too large. Try an image smaller than 5 MB.");
+      setErrorMessage("Image is too large. Try an image smaller than 5 MB.");
+      return;
+    }
+
+    setImageFile(file);
+    setOcrFlowState("idle");
+    setOcrStatusMessage("Image selected. OCR will start when you generate the Study Pack.");
+  };
 
   const handleGenerateStudyPack = async () => {
     if (!canGenerate || loading) {
@@ -99,15 +173,27 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     }
     if (!getCurrentUserId()) {
       setErrorMessage("Sign up and log in to start generating your Study Pack.");
+      if (imageFile) {
+        setOcrFlowState("failure");
+        setOcrStatusMessage("Sign in first, then upload and extract text from your image.");
+      }
       return;
     }
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
       setErrorMessage("Verify your email to start generating your Study Pack.");
+      if (imageFile) {
+        setOcrFlowState("failure");
+        setOcrStatusMessage("Verify your email before running OCR from image notes.");
+      }
       return;
     }
     if (!authUser.profileType) {
       setErrorMessage("Complete onboarding to start generating your Study Pack.");
+      if (imageFile) {
+        setOcrFlowState("failure");
+        setOcrStatusMessage("Complete onboarding before running OCR from image notes.");
+      }
       return;
     }
 
@@ -118,12 +204,25 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
 
     try {
       if (imageFile) {
+        setOcrFlowState("uploading");
+        setOcrStatusMessage("Uploading image...");
+        clearOcrStageTimer();
+        ocrStageTimerRef.current = setTimeout(() => {
+          setOcrFlowState("extracting");
+          setOcrStatusMessage("Extracting text from your image...");
+        }, 700);
+
         const response = await createStudyPackFromImage(imageFile);
+        clearOcrStageTimer();
         if (isNeedsTextConfirmationResponse(response)) {
+          setOcrFlowState("success");
+          setOcrStatusMessage("Text extracted. Review and edit it before generating your Study Pack.");
           setNeedsConfirmation(response);
           setConfirmedText(response.extractedText);
           return;
         }
+        setOcrFlowState("success");
+        setOcrStatusMessage("Text extracted successfully. Your Study Pack is ready.");
         setStudyPackResult(response);
         setGeneratedAt(new Date());
         return;
@@ -133,12 +232,21 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
       setStudyPackResult(response);
       setGeneratedAt(new Date());
     } catch (error) {
+      clearOcrStageTimer();
       const message =
         error instanceof Error
           ? error.message
           : "We could not generate your study pack right now. Please try again.";
-      setErrorMessage(message);
+      if (imageFile) {
+        const friendlyMessage = toFriendlyOcrErrorMessage(message);
+        setOcrFlowState("failure");
+        setOcrStatusMessage(friendlyMessage);
+        setErrorMessage(friendlyMessage);
+      } else {
+        setErrorMessage(message);
+      }
     } finally {
+      clearOcrStageTimer();
       setLoading(false);
     }
   };
@@ -167,17 +275,23 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     setLoading(true);
     setErrorMessage(null);
     setStudyPackResult(null);
+    setOcrFlowState("extracting");
+    setOcrStatusMessage("Generating your Study Pack from edited text...");
 
     try {
       const response = await confirmStudyPackText(needsConfirmation.id, confirmedText);
       setStudyPackResult(response);
       setGeneratedAt(new Date());
       setNeedsConfirmation(null);
+      setOcrFlowState("success");
+      setOcrStatusMessage("Done. Your Study Pack was generated from your edited text.");
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
           : "We could not generate your study pack right now. Please try again.";
+      setOcrFlowState("failure");
+      setOcrStatusMessage("Could not continue with edited text. Update the text and try again.");
       setErrorMessage(message);
     } finally {
       setLoading(false);
@@ -188,6 +302,7 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     if (demoTimerRef.current) {
       clearTimeout(demoTimerRef.current);
     }
+    clearOcrStageTimer();
 
     setNotesText("");
     setImageFile(null);
@@ -198,6 +313,8 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     setErrorMessage(null);
     setGeneratedAt(null);
     setLoading(false);
+    setOcrFlowState("idle");
+    setOcrStatusMessage(null);
   };
 
   const generatedLabel = useMemo(() => {
@@ -229,7 +346,7 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     notesText,
     setNotesText,
     imageFile,
-    setImageFile,
+    setImageFile: setImageFileWithValidation,
     imageInputKey,
     loading,
     errorMessage,
@@ -240,6 +357,8 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     canGenerate,
     generatedLabel,
     detectedTopic,
+    ocrFlowState,
+    ocrStatusMessage,
     handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,

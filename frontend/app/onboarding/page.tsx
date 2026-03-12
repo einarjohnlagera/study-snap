@@ -65,7 +65,7 @@ export default function OnboardingPage() {
       <Card className="space-y-5">
         <div className="space-y-2">
           <CardTitle>Welcome to Study Snap!</CardTitle>
-          <CardDescription>I&apos;m using Study Snap as a:</CardDescription>
+          <CardDescription>I'm using Study Snap as a:</CardDescription>
         </div>
         <div className="space-y-2">
           {OPTIONS.map((option) => (
