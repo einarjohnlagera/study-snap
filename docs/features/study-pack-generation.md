@@ -28,6 +28,7 @@ Detailed expectations:
 - understanding questions test conceptual understanding (not rote memorization)
 - application questions test simple practical use of the concept
 - each question must contain 4 answer options with exactly 1 correct answer
+- each quiz question includes concept metadata (short topic label for the idea being tested)
 - explanations are required for each quiz item and should briefly explain why the correct answer is correct
 - all questions must remain answerable from the notes
 - if notes are too short or too simple, prioritize recall and understanding

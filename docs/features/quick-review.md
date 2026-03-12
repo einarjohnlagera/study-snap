@@ -110,6 +110,7 @@ For each question:
 - correct answer is highlighted
 - explanation is shown immediately
 - user moves to the next question
+- each quiz item carries concept metadata to identify the key idea being tested
 
 Quick Review should feel consistent with quiz behavior elsewhere in the app.
 
@@ -192,6 +193,12 @@ The results screen may also show:
 
 - previous attempt
 - best score
+- weak concepts (derived from incorrectly answered question concepts)
+
+Weak concept detection:
+- when a session is completed, incorrect answers are mapped to their `concept` values
+- duplicate concepts are deduplicated for the session summary
+- results display a `Weak Concepts` section when at least one concept was missed
 
 ### Study Tip
 

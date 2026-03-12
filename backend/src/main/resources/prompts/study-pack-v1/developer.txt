@@ -11,6 +11,7 @@ Output JSON schema:
       "question": string,
       "choices": string[4],
       "answerIndex": integer (0..3),
+      "concept": string,
       "explanation": string
     }
   ]
@@ -33,6 +34,7 @@ Quiz
   - understanding: {UNDERSTANDING_COUNT}
   - application: {APPLICATION_COUNT}
 - each question must test a different concept from the notes
+- concept should be a short topic label for the key idea being tested
 - prioritize conceptual understanding over rote memorization
 - each question must have 4 choices
 - answerIndex must be between 0 and 3

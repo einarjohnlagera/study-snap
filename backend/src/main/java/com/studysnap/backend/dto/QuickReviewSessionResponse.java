@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 
 public record QuickReviewSessionResponse(
@@ -18,6 +19,7 @@ public record QuickReviewSessionResponse(
         BigDecimal scorePercentage,
         int retryCount,
         Integer durationSeconds,
+        List<String> weakConcepts,
         Map<String, Object> sessionState,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt

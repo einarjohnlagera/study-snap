@@ -227,6 +227,25 @@ export default function QuickReviewPage() {
       })
       .filter((item): item is QuickReviewStudyTipRequest["incorrectQuestions"][number] => item !== null);
   }, [quiz, selectedChoices]);
+  const weakConcepts = useMemo(() => {
+    const concepts = quiz
+      .map((item, index) => {
+        if (selectedChoices[index] === item.answer) {
+          return null;
+        }
+        const concept = item.concept?.trim();
+        return concept ? concept : null;
+      })
+      .filter((concept): concept is string => concept !== null);
+    return Array.from(new Set(concepts));
+  }, [quiz, selectedChoices]);
+  const displayedWeakConcepts = useMemo(() => {
+    const persistedWeakConcepts = persistedResult?.weakConcepts?.filter((concept) => concept.trim().length > 0) ?? [];
+    if (persistedWeakConcepts.length > 0) {
+      return persistedWeakConcepts;
+    }
+    return weakConcepts;
+  }, [persistedResult?.weakConcepts, weakConcepts]);
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -328,6 +347,9 @@ export default function QuickReviewPage() {
         totalQuestions,
         retryCount: effectiveRetryCount,
         durationSeconds,
+        sessionMetadata: {
+          weakConcepts,
+        },
       });
       setPersistedResult(result);
     } catch {
@@ -336,7 +358,7 @@ export default function QuickReviewPage() {
       setCompletionTracked(true);
       setCompletingSession(false);
     }
-  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions]);
+  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
     if (!isComplete || !studyPack) {
@@ -574,6 +596,18 @@ export default function QuickReviewPage() {
               </div>
             ) : null}
             {displayedRetryCount > 0 ? <p>Retry count: {displayedRetryCount}</p> : null}
+            {displayedWeakConcepts.length > 0 ? (
+              <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                  Weak Concepts
+                </p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {displayedWeakConcepts.map((concept) => (
+                    <li key={concept}>{concept}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {studyTip ? (
               <div className="space-y-1 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">

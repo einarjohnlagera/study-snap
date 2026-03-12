@@ -38,7 +38,7 @@ public final class StudyPackEntityBuilder {
                 UUID.randomUUID(),
                 "Study Pack",
                 "Summary",
-                List.of(new QuizItem("Q1", List.of("A", "B"), "A", "Explanation")),
+                List.of(new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept 1", "Explanation")),
                 InputType.TEXT,
                 ModelTier.FREE,
                 "gpt-4.1-mini",
@@ -52,7 +52,13 @@ public final class StudyPackEntityBuilder {
     public StudyPackEntityBuilder withQuizCount(int quizCount) {
         List<QuizItem> items = new ArrayList<>();
         for (int index = 0; index < quizCount; index++) {
-            items.add(new QuizItem("Q" + (index + 1), List.of("A", "B"), "A", "Explanation"));
+            items.add(new QuizItem(
+                    "Q" + (index + 1),
+                    List.of("A", "B", "C", "D"),
+                    "A",
+                    "Concept " + (index + 1),
+                    "Explanation"
+            ));
         }
         return withQuiz(items);
     }

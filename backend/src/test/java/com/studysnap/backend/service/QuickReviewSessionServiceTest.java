@@ -175,6 +175,27 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
+    void completeSession_returnsWeakConceptsFromSessionMetadata() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        QuickReviewSessionCompleteRequest request = new QuickReviewSessionCompleteRequest(
+                3,
+                5,
+                1,
+                120,
+                Map.of("weakConcepts", List.of("Light Reactions", "Calvin Cycle", "Light Reactions"))
+        );
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
+
+        assertThat(response.weakConcepts()).containsExactly("Light Reactions", "Calvin Cycle", "Light Reactions");
+    }
+
+    @Test
     void completeSession_rejectsInvalidResultWhenCorrectAnswersExceedTotal() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();

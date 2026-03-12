@@ -100,6 +100,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
             List<QuizItem> quizItems = new ArrayList<>();
             Set<String> normalizedQuestions = new HashSet<>();
+            Set<String> normalizedConcepts = new HashSet<>();
             for (PromptQuizItem item : promptStudyPack.quiz()) {
                 if (item.choices() == null || item.choices().size() != 4) {
                     throw new AppException(
@@ -122,10 +123,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             HttpStatus.BAD_GATEWAY
                     );
                 }
+                if (isBlank(item.concept())) {
+                    throw new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "The study pack service returned an invalid quiz format. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    );
+                }
                 if (!normalizedQuestions.add(normalizeForDuplicateCheck(item.question()))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned repetitive quiz questions. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    );
+                }
+                if (!normalizedConcepts.add(normalizeForDuplicateCheck(item.concept()))) {
+                    throw new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "The study pack service returned repetitive quiz concepts. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
@@ -144,6 +159,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         item.question(),
                         randomizedChoices,
                         correctAnswer,
+                        item.concept(),
                         item.explanation()
                 ));
             }
@@ -460,6 +476,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String question,
             List<String> choices,
             int answerIndex,
+            String concept,
             String explanation
     ) {
     }

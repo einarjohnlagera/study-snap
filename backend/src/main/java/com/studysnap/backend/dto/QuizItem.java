@@ -6,6 +6,7 @@ public record QuizItem(
 		String question,
 		List<String> choices,
 		String answer,
+		String concept,
 		String explanation
 ) {
 }
