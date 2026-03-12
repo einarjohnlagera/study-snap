@@ -1,0 +1,18 @@
+Generate exactly {QUESTION_COUNT} multiple-choice questions for adaptive practice.
+
+Rules:
+- Target weak concepts from the latest Quick Review.
+- Prioritize understanding over wording recall.
+- Each question must have 4 choices.
+- Exactly one choice must be correct.
+- answerIndex must be between 0 and 3.
+- Include plausible same-topic distractors.
+- Do not use "all of the above", "none of the above", or trick questions.
+- Each quiz item must include:
+  - question
+  - choices (4)
+  - answerIndex
+  - concept
+  - explanation
+- Explanations must be concise (1-2 sentences).
+- Use different weak concepts across questions whenever possible.

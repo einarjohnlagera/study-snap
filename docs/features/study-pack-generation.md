@@ -95,3 +95,14 @@ Authoritative input rule:
 - better topic-aware distractors
 - stronger premium quiz experiences
 - mock exam mode
+
+## Adaptive follow-up generation
+
+Study Pack generation produces the original baseline quiz that remains stable for the pack.
+
+Adaptive quiz generation is a separate follow-up flow:
+
+- triggered from Quick Review results when weak concepts are detected
+- generated from weak concepts in the latest completed Quick Review session
+- returns a new short practice set (3-5 questions) with concept labels and explanations
+- does not overwrite or mutate the original Study Pack quiz

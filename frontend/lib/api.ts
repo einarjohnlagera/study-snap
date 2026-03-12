@@ -193,6 +193,14 @@ export type QuickReviewStudyTipResponse = {
   studyTip: string | null;
 };
 
+export type QuickReviewAdaptiveQuizResponse = {
+  studyPackId: string;
+  title: string;
+  weakConcepts: string[];
+  quiz: QuizItem[];
+  message: string;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -645,4 +653,21 @@ export async function generateQuickReviewStudyTip(
     true,
   );
   return parseApiResponse<QuickReviewStudyTipResponse>(response, "Could not generate study tip.");
+}
+
+export async function generateAdaptiveQuickReviewQuiz(
+  studyPackId: string,
+): Promise<QuickReviewAdaptiveQuizResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/study-packs/${studyPackId}/adaptive-practice`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
+    response,
+    "Could not generate adaptive practice quiz.",
+  );
 }

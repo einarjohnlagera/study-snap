@@ -222,6 +222,24 @@ Behavior:
 - if there are no incorrect answers, no tip request is sent
 - Study Tip text should be fully readable in the results UI (no unintended clipping or silent truncation)
 
+### Adaptive Practice (Weak Areas)
+
+Quick Review can offer a follow-up adaptive practice set based on weak concepts from the latest completed session.
+
+Behavior:
+
+- weak concepts are sourced from the most recent completed Quick Review for the same Study Pack
+- adaptive practice is available only when weak concepts exist
+- adaptive quiz is newly generated and separate from the original Study Pack quiz
+- adaptive set contains 3-5 questions, each with 4 choices, one correct answer, and explanation
+- adaptive questions target weak concepts and prioritize understanding over wording recall
+- generation failure should not break Quick Review results; the UI should fail gracefully
+
+Entry point:
+
+- results screen shows `Practice Weak Areas` when weak concepts exist
+- this starts a separate follow-up practice flow
+
 ### Retry-transition CTA hierarchy
 
 When missed questions exist after the first pass:
