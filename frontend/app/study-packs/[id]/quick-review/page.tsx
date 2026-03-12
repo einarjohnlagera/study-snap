@@ -653,6 +653,13 @@ export default function QuickReviewPage() {
                 Back to Study Pack
               </Button>
             </Link>
+            {displayedWeakConcepts.length > 0 ? (
+              <Link href={`/study-packs/${studyPack.id}/adaptive-practice`} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  Practice Weak Areas
+                </Button>
+              </Link>
+            ) : null}
             {!isPerfectScore ? (
               <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>
                 Practice Again

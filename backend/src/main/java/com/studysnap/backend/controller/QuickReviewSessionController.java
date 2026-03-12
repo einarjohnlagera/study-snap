@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
@@ -10,6 +11,7 @@ import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.QuickReviewSessionService;
+import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ import java.util.UUID;
 public class QuickReviewSessionController {
     private final QuickReviewSessionService quickReviewSessionService;
     private final QuickReviewStudyTipService quickReviewStudyTipService;
+    private final QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
 
     @PostMapping("/start")
     public QuickReviewSessionStartResponse startSession(
@@ -99,5 +102,14 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewStudyTipService.generateStudyTip(studyPackId, userId, request);
+    }
+
+    @PostMapping("/study-packs/{studyPackId}/adaptive-practice")
+    public QuickReviewAdaptiveQuizResponse generateAdaptivePracticeQuiz(
+            @PathVariable String studyPackId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId);
     }
 }

@@ -33,8 +33,16 @@ public class OpenAiLlmConfig {
         String promptDir = normalizePromptDir(properties.getSettings().getPromptDir());
         String systemPrompt = readResourceAsString(promptDir + "/system.txt");
         String developerPromptTemplate = readResourceAsString(promptDir + "/developer.txt");
+        String adaptivePracticeSystemPrompt = readResourceAsString(promptDir + "/adaptive-practice-system.txt");
+        String adaptivePracticeDeveloperPromptTemplate = readResourceAsString(promptDir + "/adaptive-practice-developer.txt");
         JsonNode responseSchema = readResourceAsJson(promptDir + "/schema.json", objectMapper);
-        return new OpenAiPromptResources(systemPrompt, developerPromptTemplate, responseSchema);
+        return new OpenAiPromptResources(
+                systemPrompt,
+                developerPromptTemplate,
+                responseSchema,
+                adaptivePracticeSystemPrompt,
+                adaptivePracticeDeveloperPromptTemplate
+        );
     }
 
     private String normalizePromptDir(String promptDir) {
