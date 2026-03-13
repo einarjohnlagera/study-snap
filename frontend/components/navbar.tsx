@@ -62,6 +62,12 @@ export function Navbar() {
               >
                 Profile
               </Link>
+              <Link
+                href="/settings"
+                className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+              >
+                Settings
+              </Link>
             </>
           ) : null}
           {displayName ? (
