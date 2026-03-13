@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { getMe, logout, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -92,15 +93,11 @@ export default function SettingsPage() {
         </Card>
       ) : profile ? (
         <div className="space-y-6">
-          <Card className="space-y-2 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Settings
-            </p>
-            <h1 className="text-2xl font-semibold sm:text-3xl">Configuration</h1>
-            <p className="text-sm text-foreground/75">
-              Manage account settings, plan details, and upcoming preferences.
-            </p>
-          </Card>
+          <PageHeader
+            eyebrow="SETTINGS"
+            title="Configuration"
+            description="Manage account settings, plan details, and upcoming preferences."
+          />
 
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Account</h2>

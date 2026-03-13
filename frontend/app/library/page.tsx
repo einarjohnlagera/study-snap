@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { listMyStudyPacks, type StudyPackListItemResponse } from "@/lib/api";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 
@@ -70,15 +71,11 @@ export default function LibraryPage() {
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <Card className="space-y-2 p-4 sm:p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Study Library
-        </p>
-        <h1 className="text-2xl font-semibold sm:text-3xl">Your Study Packs</h1>
-        <p className="text-sm text-foreground/75">
-          Browse all saved Study Packs and continue learning where you left off.
-        </p>
-      </Card>
+      <PageHeader
+        eyebrow="LIBRARY"
+        title="Study Library"
+        description="Browse and revisit all of your saved Study Packs."
+      />
 
       {loading ? (
         <LibraryLoading />
