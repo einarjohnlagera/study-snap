@@ -22,6 +22,8 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
         return new GeneratedStudyPackContent(
                 "Study Pack: " + preview,
                 "These notes have been organized into a concise study summary to support focused revision.",
+                "General Studies",
+                List.of("Core Concepts", "Study Skills", "Review Practice"),
                 List.of(
                         "Main topic and scope",
                         "Core definitions and relationships",

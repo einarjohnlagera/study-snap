@@ -20,6 +20,7 @@ export type StudyPackResponse = {
   extractedText: string | null;
   title: string;
   summary: string;
+  subject?: string | null;
   keyConcepts: string[];
   tags: string[];
   quiz: QuizItem[];

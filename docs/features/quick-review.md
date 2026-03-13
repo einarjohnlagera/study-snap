@@ -111,6 +111,8 @@ For each question:
 - explanation is shown immediately
 - user moves to the next question
 - each quiz item carries concept metadata to identify the key idea being tested
+- concept metadata should be concise and non-null for newly generated Study Packs
+- concept metadata is generated during the same Study Pack AI generation request
 
 Quick Review should feel consistent with quiz behavior elsewhere in the app.
 
@@ -199,6 +201,7 @@ Weak concept detection:
 - when a session is completed, incorrect answers are mapped to their `concept` values
 - duplicate concepts are deduplicated for the session summary
 - results display a `Weak Concepts` section when at least one concept was missed
+- concise concept metadata improves weak-area quality and adaptive practice targeting
 
 ### Study Tip
 

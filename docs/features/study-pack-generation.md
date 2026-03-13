@@ -9,6 +9,8 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 The LLM should produce:
 - title
 - summary
+- subject
+- tags
 - keyConcepts
 - quiz[]
 
@@ -28,7 +30,7 @@ Detailed expectations:
 - understanding questions test conceptual understanding (not rote memorization)
 - application questions test simple practical use of the concept
 - each question must contain 4 answer options with exactly 1 correct answer
-- each quiz question includes concept metadata (short topic label for the idea being tested)
+- each quiz question includes non-null concept metadata (short topic label for the idea being tested)
 - explanations are required for each quiz item and should briefly explain why the correct answer is correct
 - all questions must remain answerable from the notes
 - if notes are too short or too simple, prioritize recall and understanding
@@ -37,6 +39,28 @@ Detailed expectations:
 - if OCR text was edited by the user, the edited text becomes the authoritative input
 - distractors should be plausible same-topic alternatives, not obvious throwaway options
 - avoid "all of the above", "none of the above", trick questions, and duplicate concepts
+
+## Metadata generation rules
+
+Subject, tags, and quiz concept metadata are generated in the same Study Pack AI request (no extra LLM call).
+
+### Subject
+- exactly one subject value per Study Pack
+- broad academic category (for example: History, Biology, Chemistry, Physics, Mathematics, Literature, Computer Science, Geography, Economics)
+- concise and human-readable
+- not sentence-like
+
+### Tags
+- generate 3 to 6 tags
+- each tag is 1 to 3 words
+- tags are reusable filtering/search keywords (not long sentence-like phrases)
+- tags must not repeat the Study Pack title
+- avoid punctuation-heavy labels
+
+### Quiz concept metadata
+- every quiz question includes a non-null `concept`
+- concept should be concise and reusable (1 to 4 words)
+- concept should represent the key idea tested by the question
 
 ## OCR input flow (image notes)
 

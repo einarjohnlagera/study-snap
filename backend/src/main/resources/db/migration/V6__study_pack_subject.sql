@@ -1,0 +1,2 @@
+ALTER TABLE study_packs
+    ADD COLUMN IF NOT EXISTS subject VARCHAR(64);
