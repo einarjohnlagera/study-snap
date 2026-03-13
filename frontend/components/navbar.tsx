@@ -57,6 +57,12 @@ export function Navbar() {
                 Dashboard
               </Link>
               <Link
+                href="/library"
+                className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+              >
+                Library
+              </Link>
+              <Link
                 href="/profile"
                 className="text-sm text-foreground/80 transition-colors hover:text-foreground"
               >
