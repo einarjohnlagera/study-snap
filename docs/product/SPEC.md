@@ -60,6 +60,13 @@ Users can:
 
 The Study Library acts as the central location for accessing learning material.
 
+Dashboard behavior note:
+
+* Dashboard is guidance-first and non-destructive
+* Study Pack deletion is handled in the Library page, not the Dashboard
+* Dashboard Study Pack cards should only expose safe actions (for example: `Open`, `Resume`, `Start Review`)
+* Study Pack deletion from the Library must require an explicit confirmation step
+
 ---
 
 ## Quick Review

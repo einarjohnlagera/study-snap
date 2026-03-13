@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { listMyStudyPacks, type StudyPackListItemResponse } from "@/lib/api";
+import { deleteMyStudyPack, listMyStudyPacks, type StudyPackListItemResponse } from "@/lib/api";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 
 function LibraryLoading() {
@@ -33,7 +34,12 @@ export default function LibraryPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<StudyPackListItemResponse | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   const loadLibrary = useCallback(async () => {
     if (!requireVerifiedOnboardedUser(router, {
@@ -47,6 +53,7 @@ export default function LibraryPage() {
 
     setLoading(true);
     setError(null);
+    setActionError(null);
     try {
       const data = await listMyStudyPacks();
       setItems(data);
@@ -61,6 +68,44 @@ export default function LibraryPage() {
   useEffect(() => {
     void loadLibrary();
   }, [loadLibrary]);
+
+  useEffect(() => {
+    if (!menuOpenId) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!menuRef.current) {
+        return;
+      }
+      if (!menuRef.current.contains(event.target as Node)) {
+        setMenuOpenId(null);
+      }
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      window.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, [menuOpenId]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDeleteItem) {
+      return;
+    }
+    const targetId = pendingDeleteItem.id;
+    setDeletingId(targetId);
+    setActionError(null);
+    try {
+      await deleteMyStudyPack(targetId);
+      setItems((previous) => previous.filter((item) => item.id !== targetId));
+      setPendingDeleteItem(null);
+      setMenuOpenId((previous) => (previous === targetId ? null : previous));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not delete this Study Pack.";
+      setActionError(message);
+    } finally {
+      setDeletingId(null);
+    }
+  }, [pendingDeleteItem]);
 
   const hasItems = items.length > 0;
   const sortedItems = useMemo(() => {
@@ -91,7 +136,7 @@ export default function LibraryPage() {
         <Card className="space-y-4 p-4 sm:p-6">
           <h2 className="text-xl font-semibold">No Study Packs yet</h2>
           <p className="text-sm text-foreground/75">
-            Generate your first Study Pack to build your study library.
+            Create your first Study Pack to start studying.
           </p>
           <Link href="/study" className="w-full sm:w-auto">
             <Button type="button" className="w-full sm:w-auto">
@@ -100,22 +145,134 @@ export default function LibraryPage() {
           </Link>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {sortedItems.map((item) => (
-            <Link key={item.id} href={`/study-packs/${item.id}`} className="group">
-              <Card className="flex h-full flex-col justify-between space-y-4 p-4 transition-shadow sm:p-6">
-                <div className="space-y-2">
-                  <h3 className="text-base font-semibold transition-colors group-hover:text-foreground sm:text-lg">
-                    {item.title}
-                  </h3>
-                  <p className="text-sm leading-relaxed text-foreground/75">{item.summaryPreview}</p>
+        <div className="space-y-4">
+          {actionError ? (
+            <Card className="space-y-3 p-4 sm:p-6">
+              <h2 className="text-base font-semibold sm:text-lg">Could not delete Study Pack</h2>
+              <p className="text-sm text-foreground/75">{actionError}</p>
+            </Card>
+          ) : null}
+          <div className="grid gap-4 md:grid-cols-2">
+            {sortedItems.map((item) => {
+              const isDeleting = deletingId === item.id;
+              const menuOpen = menuOpenId === item.id;
+              return (
+                <Card key={item.id} className="flex h-full flex-col justify-between space-y-4 p-4 sm:p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-2">
+                      <Link href={`/study-packs/${item.id}`} className="group block">
+                        <h3 className="text-base font-semibold transition-colors group-hover:text-foreground sm:text-lg">
+                          {item.title}
+                        </h3>
+                      </Link>
+                      <p className="text-sm leading-relaxed text-foreground/75">{item.summaryPreview}</p>
+                    </div>
+                    <div
+                      className="relative shrink-0"
+                      ref={menuOpen ? menuRef : undefined}
+                    >
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 px-0"
+                        aria-label={`Open actions for ${item.title}`}
+                        aria-haspopup="menu"
+                        aria-expanded={menuOpen}
+                        onClick={() => {
+                          setMenuOpenId((previous) => (previous === item.id ? null : item.id));
+                          setActionError(null);
+                        }}
+                        disabled={isDeleting}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                      {menuOpen ? (
+                        <div className="absolute right-0 top-10 z-20 w-44 rounded-md border border-border bg-background p-1 shadow-sm">
+                          <Link
+                            href={`/study-packs/${item.id}`}
+                            className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                            onClick={() => setMenuOpenId(null)}
+                          >
+                            Open Study Pack
+                          </Link>
+                          <button
+                            type="button"
+                            className="block w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                            onClick={() => {
+                              setPendingDeleteItem(item);
+                              setMenuOpenId(null);
+                            }}
+                            disabled={isDeleting}
+                          >
+                            Delete Study Pack
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-foreground/65">
+                    {new Date(item.createdAt).toLocaleString()}
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+
+          {pendingDeleteItem ? (
+            <>
+              <button
+                type="button"
+                className="fixed inset-0 z-30 bg-black/70 backdrop-blur-[1px]"
+                aria-label="Close delete confirmation"
+                onClick={() => {
+                  if (deletingId) {
+                    return;
+                  }
+                  setPendingDeleteItem(null);
+                }}
+              />
+              <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+                <div
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="delete-study-pack-title"
+                  className="w-full max-w-md space-y-4 rounded-xl border border-border bg-background p-5 text-foreground shadow-2xl dark:border-gray-700 dark:bg-gray-900 sm:p-6"
+                >
+                  <div className="space-y-2">
+                    <h2 id="delete-study-pack-title" className="text-lg font-semibold sm:text-xl">
+                      Delete Study Pack
+                    </h2>
+                    <p className="text-sm text-foreground/90">
+                      Are you sure you want to delete this Study Pack?
+                      <br />
+                      This action cannot be undone.
+                    </p>
+                    <p className="text-sm font-medium text-foreground/95">{pendingDeleteItem.title}</p>
+                  </div>
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setPendingDeleteItem(null)}
+                      disabled={Boolean(deletingId)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700"
+                      onClick={() => void handleConfirmDelete()}
+                      disabled={Boolean(deletingId)}
+                    >
+                      {deletingId ? "Deleting..." : "Delete"}
+                    </Button>
+                  </div>
                 </div>
-                <p className="text-xs text-foreground/65">
-                  {new Date(item.createdAt).toLocaleString()}
-                </p>
-              </Card>
-            </Link>
-          ))}
+              </div>
+            </>
+          ) : null}
         </div>
       )}
     </main>

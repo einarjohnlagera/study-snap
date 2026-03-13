@@ -4,6 +4,11 @@ The dashboard recommendation system helps users decide what to study next.
 
 Its purpose is to make the dashboard feel useful, personalized, and learning-oriented instead of acting only as a static Study Pack library.
 
+Dashboard scope note:
+- guidance and quick-study actions only
+- no destructive Study Pack management actions
+- Study Pack deletion is handled in the Library page
+
 ---
 
 ## Purpose

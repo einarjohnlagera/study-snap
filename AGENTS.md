@@ -189,10 +189,12 @@ Study Snap is not only a generator; it is a study workspace.
 Generated outputs should be treated as reusable Study Packs.
 
 The dashboard should present saved Study Packs in a clean library-style layout.
+The dashboard is guidance-first and non-destructive; destructive actions such as deleting a Study Pack belong in the Library page.
 
 MVP library actions:
 - open
-- delete
+- delete (Library page only; not from Dashboard)
+- delete actions in Library must use explicit confirmation
 
 Future actions:
 - rename

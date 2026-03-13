@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  deleteMyStudyPack,
   getContinueStudyingRecommendation,
   getStudyEngagement,
   getTodayFocus,
@@ -78,24 +77,6 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteMyStudyPack(id);
-      setItems((prev) => prev.filter((item) => item.id !== id));
-      const [continueResult, todayFocusResult, engagementResult] = await Promise.allSettled([
-        getContinueStudyingRecommendation(),
-        getTodayFocus(),
-        getStudyEngagement(),
-      ]);
-      setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
-      setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
-      setStudyEngagement(engagementResult.status === "fulfilled" ? engagementResult.value : null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not delete the Study Pack.";
-      setError(message);
-    }
-  };
-
   const hasContinueRecommendation = useMemo(
     () => Boolean(continueRecommendation?.studyPackId),
     [continueRecommendation],
@@ -128,7 +109,7 @@ export default function DashboardPage() {
           {items.length === 0 ? (
             <DashboardEmpty />
           ) : (
-            <StudyPackGrid studyPacks={items} onDelete={handleDelete} />
+            <StudyPackGrid studyPacks={items} />
           )}
         </div>
       )}
