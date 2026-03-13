@@ -33,7 +33,7 @@ Response shape:
 
 ```json
 {
-  "type": "RESUME_REVIEW | RETRY_REVIEW | PRACTICE_WEAK_CONCEPT | STUDY_SUGGESTION",
+  "type": "RESUME_REVIEW | RETRY_REVIEW | PRACTICE_WEAK_CONCEPT | REVIEW_PACK | STUDY_SUGGESTION",
   "studyPackId": "uuid-or-null",
   "title": "string",
   "message": "string",
@@ -46,14 +46,16 @@ Today's Focus priority:
 1. Resume unfinished review (`resumeState = QUESTION_IN_PROGRESS`)
 2. Retry incorrect questions (`resumeState = RETRY_IN_PROGRESS`, including retry transition handling)
 3. Practice weak concepts from the latest completed Quick Review session
-4. Study habit suggestion fallback
+4. Review a specific Study Pack (fallback priority: last opened -> most recently created -> most recently reviewed)
+5. Study suggestion only if no Study Packs exist
 
 Action routing guidance:
 
 - `RESUME_REVIEW` -> Study Pack Quick Review route
 - `RETRY_REVIEW` -> Study Pack Quick Review route
 - `PRACTICE_WEAK_CONCEPT` -> Study Pack adaptive practice route
-- `STUDY_SUGGESTION` -> Study Library route
+- `REVIEW_PACK` -> Study Pack Quick Review route
+- `STUDY_SUGGESTION` -> Study route (no packs yet)
 
 ---
 

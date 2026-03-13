@@ -9,11 +9,17 @@ type TodayFocusCardProps = {
 };
 
 function resolveActionHref(focus: TodayFocusResponse) {
-  if ((focus.type === "RESUME_REVIEW" || focus.type === "RETRY_REVIEW") && focus.studyPackId) {
+  if (
+    (focus.type === "RESUME_REVIEW" || focus.type === "RETRY_REVIEW" || focus.type === "REVIEW_PACK")
+    && focus.studyPackId
+  ) {
     return `/study-packs/${focus.studyPackId}/quick-review`;
   }
   if (focus.type === "PRACTICE_WEAK_CONCEPT" && focus.studyPackId) {
     return `/study-packs/${focus.studyPackId}/adaptive-practice`;
+  }
+  if (focus.type === "STUDY_SUGGESTION") {
+    return "/study";
   }
   return "/library";
 }
