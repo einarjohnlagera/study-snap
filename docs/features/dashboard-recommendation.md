@@ -21,6 +21,42 @@ The recommendation system should feel:
 
 ---
 
+## Today's Focus
+
+The dashboard includes a dedicated `Today's Focus` card that highlights one high-value learning action for the current day.
+
+Endpoint:
+
+- `GET /dashboard/today-focus`
+
+Response shape:
+
+```json
+{
+  "type": "RESUME_REVIEW | RETRY_REVIEW | PRACTICE_WEAK_CONCEPT | STUDY_SUGGESTION",
+  "studyPackId": "uuid-or-null",
+  "title": "string",
+  "message": "string",
+  "actionLabel": "string"
+}
+```
+
+Today's Focus priority:
+
+1. Resume unfinished review (`resumeState = QUESTION_IN_PROGRESS`)
+2. Retry incorrect questions (`resumeState = RETRY_IN_PROGRESS`, including retry transition handling)
+3. Practice weak concepts from the latest completed Quick Review session
+4. Study habit suggestion fallback
+
+Action routing guidance:
+
+- `RESUME_REVIEW` -> Study Pack Quick Review route
+- `RETRY_REVIEW` -> Study Pack Quick Review route
+- `PRACTICE_WEAK_CONCEPT` -> Study Pack adaptive practice route
+- `STUDY_SUGGESTION` -> Study Library route
+
+---
+
 ## Recommendation Priority
 
 The dashboard recommendation follows this priority order:

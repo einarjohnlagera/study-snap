@@ -3,6 +3,8 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.TodayFocusResponse;
+import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -347,6 +349,114 @@ class DashboardServiceTest {
         assertThat(response.reason()).isEqualTo(ContinueStudyingReason.LOW_SCORE_RECENT);
         assertThat(response.studyPackId()).isEqualTo(packWithOlderPerfectNewerWeakId.toString());
         assertThat(response.lastScorePercentage()).isEqualByComparingTo(bigDecimal(60));
+    }
+
+    @Test
+    void getTodayFocus_prefersResumeReviewWhenQuestionInProgress() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Biology");
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId,
+                studyPackId,
+                2,
+                5,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                OffsetDateTime.now().minusMinutes(4)
+        );
+        inProgress.setRetryCount(0);
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(inProgress));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.RESUME_REVIEW);
+        assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Resume Review");
+    }
+
+    @Test
+    void getTodayFocus_usesRetryReviewWhenRetryRoundIsInProgress() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Chemistry");
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId,
+                studyPackId,
+                1,
+                5,
+                QuickReviewRound.RETRY,
+                Map.of("retryQuestionIndexes", List.of(0, 2, 4)),
+                OffsetDateTime.now().minusMinutes(5)
+        );
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(inProgress));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.RETRY_REVIEW);
+        assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Retry Questions");
+    }
+
+    @Test
+    void getTodayFocus_recommendsWeakConceptPracticeWhenLatestCompletedHasWeakConcepts() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "World History");
+        QuickReviewSessionEntity latestCompleted = buildCompletedSession(
+                userId,
+                studyPackId,
+                bigDecimal(60),
+                now.minusMinutes(10)
+        );
+        latestCompleted.setSessionMetadata(Map.of("weakConcepts", List.of("Alliances", "Militarism")));
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of(latestCompleted));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
+        assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Practice Weak Areas");
+    }
+
+    @Test
+    void getTodayFocus_returnsStudySuggestionWhenNoResumeOrWeakConceptContextExists() {
+        UUID userId = UUID.randomUUID();
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.STUDY_SUGGESTION);
+        assertThat(response.studyPackId()).isNull();
+        assertThat(response.actionLabel()).isEqualTo("Open Library");
     }
 
     private StudyPackEntity buildStudyPack(UUID userId, UUID studyPackId, String title) {

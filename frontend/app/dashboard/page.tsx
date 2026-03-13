@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   deleteMyStudyPack,
   getContinueStudyingRecommendation,
+  getTodayFocus,
   listMyStudyPacks,
   type ContinueStudyingResponse,
   type StudyPackListItemResponse,
+  type TodayFocusResponse,
 } from "@/lib/api";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import { DashboardHero } from "./dashboard-hero";
@@ -18,11 +20,13 @@ import { DashboardLoading } from "./dashboard-loading";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
 import { StudyConsistencyCard } from "./study-consistency-card";
+import { TodayFocusCard } from "./today-focus-card";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [continueRecommendation, setContinueRecommendation] = useState<ContinueStudyingResponse | null>(null);
+  const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
@@ -42,12 +46,12 @@ export default function DashboardPage() {
     try {
       const data = await listMyStudyPacks();
       setItems(data);
-      try {
-        const recommendation = await getContinueStudyingRecommendation();
-        setContinueRecommendation(recommendation);
-      } catch {
-        setContinueRecommendation(null);
-      }
+      const [continueResult, todayFocusResult] = await Promise.allSettled([
+        getContinueStudyingRecommendation(),
+        getTodayFocus(),
+      ]);
+      setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
+      setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
       setError(message);
@@ -73,12 +77,12 @@ export default function DashboardPage() {
     try {
       await deleteMyStudyPack(id);
       setItems((prev) => prev.filter((item) => item.id !== id));
-      try {
-        const recommendation = await getContinueStudyingRecommendation();
-        setContinueRecommendation(recommendation);
-      } catch {
-        setContinueRecommendation(null);
-      }
+      const [continueResult, todayFocusResult] = await Promise.allSettled([
+        getContinueStudyingRecommendation(),
+        getTodayFocus(),
+      ]);
+      setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
+      setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete the Study Pack.";
       setError(message);
@@ -108,6 +112,7 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
+          {todayFocus ? <TodayFocusCard focus={todayFocus} /> : null}
           {hasContinueRecommendation && continueRecommendation ? (
             <ContinueSpotlight recommendation={continueRecommendation} />
           ) : null}
