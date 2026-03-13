@@ -49,12 +49,20 @@ export function Navbar() {
         </Link>
         <div className="flex items-center gap-4">
           {showDashboard ? (
-            <Link
-              href="/dashboard"
-              className="text-sm text-foreground/80 transition-colors hover:text-foreground"
-            >
-              Dashboard
-            </Link>
+            <>
+              <Link
+                href="/dashboard"
+                className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/profile"
+                className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+              >
+                Profile
+              </Link>
+            </>
           ) : null}
           {displayName ? (
             <span className="text-sm text-foreground/80">Hi, {displayName}</span>

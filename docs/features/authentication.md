@@ -363,4 +363,30 @@ This context should guide the next implementation work for User Accounts and the
 
 This file now lives under `docs/features/` because it is a feature-specific context file.
 
+---
+
+## Profile page
+
+Authenticated users have a dedicated profile page at:
+
+- `/profile`
+
+The profile page shows:
+
+- initial-letter avatar (computed from `displayName`, fallback to `firstName`, fallback to `email`)
+- resolved display name and email
+- account information from existing user data:
+  - profile type
+  - plan type
+  - email verification timestamp
+  - account status
+
+`Member Since` is shown as unavailable until account creation date is exposed by the current API contract.
+
+Profile actions are lightweight:
+
+- Edit Profile (safe stub)
+- Manage Plan (safe stub)
+- Sign Out (active)
+
 
