@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   deleteMyStudyPack,
   getContinueStudyingRecommendation,
+  getStudyEngagement,
   getTodayFocus,
   listMyStudyPacks,
   type ContinueStudyingResponse,
+  type StudyEngagementResponse,
   type StudyPackListItemResponse,
   type TodayFocusResponse,
 } from "@/lib/api";
@@ -27,6 +29,7 @@ export default function DashboardPage() {
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [continueRecommendation, setContinueRecommendation] = useState<ContinueStudyingResponse | null>(null);
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
+  const [studyEngagement, setStudyEngagement] = useState<StudyEngagementResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
@@ -46,12 +49,14 @@ export default function DashboardPage() {
     try {
       const data = await listMyStudyPacks();
       setItems(data);
-      const [continueResult, todayFocusResult] = await Promise.allSettled([
+      const [continueResult, todayFocusResult, engagementResult] = await Promise.allSettled([
         getContinueStudyingRecommendation(),
         getTodayFocus(),
+        getStudyEngagement(),
       ]);
       setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
+      setStudyEngagement(engagementResult.status === "fulfilled" ? engagementResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
       setError(message);
@@ -77,12 +82,14 @@ export default function DashboardPage() {
     try {
       await deleteMyStudyPack(id);
       setItems((prev) => prev.filter((item) => item.id !== id));
-      const [continueResult, todayFocusResult] = await Promise.allSettled([
+      const [continueResult, todayFocusResult, engagementResult] = await Promise.allSettled([
         getContinueStudyingRecommendation(),
         getTodayFocus(),
+        getStudyEngagement(),
       ]);
       setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
+      setStudyEngagement(engagementResult.status === "fulfilled" ? engagementResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete the Study Pack.";
       setError(message);
@@ -113,10 +120,10 @@ export default function DashboardPage() {
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
           {todayFocus ? <TodayFocusCard focus={todayFocus} /> : null}
+          {studyEngagement ? <StudyConsistencyCard engagement={studyEngagement} /> : null}
           {hasContinueRecommendation && continueRecommendation ? (
             <ContinueSpotlight recommendation={continueRecommendation} />
           ) : null}
-          <StudyConsistencyCard />
           <DashboardStats studyPacks={items} />
           {items.length === 0 ? (
             <DashboardEmpty />

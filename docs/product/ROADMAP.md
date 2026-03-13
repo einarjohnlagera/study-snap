@@ -85,6 +85,8 @@ Deliverable: authenticated user identity foundation for ownership and Study Libr
 - [ ] open saved Study Packs
 - [ ] delete saved Study Packs
 - [ ] link saved Study Packs to authenticated users
+- [X] add user-controlled engagement mode (`FOCUSED` default, optional `CONSISTENCY` / `STREAK`)
+- [X] render dashboard consistency/streak card based on selected engagement mode
 
 Deliverable:
 - users can revisit generated Study Packs from a dedicated dashboard

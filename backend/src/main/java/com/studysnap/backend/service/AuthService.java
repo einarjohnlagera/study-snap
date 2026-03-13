@@ -8,7 +8,9 @@ import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.VerifyEmailRequest;
+import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.RefreshTokenEntity;
 import com.studysnap.backend.entity.UserEntity;
@@ -58,10 +60,14 @@ public class AuthService {
         user.setDisplayName(resolveDisplayName(request.displayName(), request.firstName()));
         user.setCountryCode(null);
         user.setProfileType(null);
+        user.setEngagementMode(EngagementMode.FOCUSED);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
         user.setTokenVersion(0);
         user.setFailedLoginAttempts(0);
+        user.setCurrentStreak(0);
+        user.setLongestStreak(0);
+        user.setLastStudyDate(null);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
         user.setLastPasswordChangeAt(now);
@@ -131,19 +137,7 @@ public class AuthService {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
 
-        return new MeResponse(
-                user.getId().toString(),
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getDisplayName(),
-                user.getCountryCode(),
-                user.getProfileType(),
-                user.getEmailVerifiedAt(),
-                user.getRole(),
-                user.getStatus(),
-                subscriptionService.resolvePlan(user.getId())
-        );
+        return toMeResponse(user);
     }
 
     public MeResponse completeOnboarding(UUID userId, OnboardingProfileTypeRequest request) {
@@ -152,21 +146,7 @@ public class AuthService {
 
         user.setProfileType(request.profileType());
         user.setUpdatedAt(OffsetDateTime.now());
-        PlanType planType = subscriptionService.resolvePlan(user.getId());
-
-        return new MeResponse(
-                user.getId().toString(),
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getDisplayName(),
-                user.getCountryCode(),
-                user.getProfileType(),
-                user.getEmailVerifiedAt(),
-                user.getRole(),
-                user.getStatus(),
-                planType
-        );
+        return toMeResponse(user);
     }
 
     public SimpleMessageResponse requestEmailVerification(UUID userId) {
@@ -189,6 +169,20 @@ public class AuthService {
             user.setUpdatedAt(OffsetDateTime.now());
         }
 
+        return toMeResponse(user);
+    }
+
+    public MeResponse updateEngagementMode(UUID userId, UpdateEngagementModeRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+
+        user.setEngagementMode(request.engagementMode());
+        user.setUpdatedAt(OffsetDateTime.now());
+
+        return toMeResponse(user);
+    }
+
+    private MeResponse toMeResponse(UserEntity user) {
         return new MeResponse(
                 user.getId().toString(),
                 user.getEmail(),
@@ -197,6 +191,7 @@ public class AuthService {
                 user.getDisplayName(),
                 user.getCountryCode(),
                 user.getProfileType(),
+                user.getEngagementMode(),
                 user.getEmailVerifiedAt(),
                 user.getRole(),
                 user.getStatus(),

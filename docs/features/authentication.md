@@ -389,4 +389,23 @@ Profile actions are lightweight:
 - Manage Plan (safe stub)
 - Sign Out (active)
 
+---
+
+## Engagement mode preference
+
+Users have a configurable `engagementMode` preference that controls dashboard motivation behavior.
+
+Allowed values:
+
+- `FOCUSED` (default)
+- `CONSISTENCY`
+- `STREAK`
+
+API support:
+
+- `GET /api/auth/me` returns current `engagementMode`
+- `POST /api/auth/preferences/engagement-mode` updates the value
+
+This preference is user-controlled so Study Snap can support both calm exam-time usage and optional consistency/streak motivation styles.
+
 
