@@ -1,14 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { MoreHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { PageHeader } from "@/components/page-header";
-import { deleteMyStudyPack, listMyStudyPacks, type StudyPackListItemResponse } from "@/lib/api";
-import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {useRouter} from "next/navigation";
+import {MoreHorizontal} from "lucide-react";
+import {Button} from "@/components/ui/button";
+import {Card} from "@/components/ui/card";
+import {PageHeader} from "@/components/page-header";
+import {
+  deleteMyStudyPack,
+  getQuickReviewPerformanceSummary,
+  listMyStudyPacks,
+  type StudyPackListItemResponse,
+} from "@/lib/api";
+import {requireVerifiedOnboardedUser} from "@/lib/route-guards";
+
+type LibrarySortOption = "RECENTLY_CREATED" | "RECENTLY_REVIEWED" | "TITLE";
+
+function toSummaryPreview(summary: string, maxLength = 160) {
+  const clean = summary.trim();
+  if (clean.length <= maxLength) {
+    return clean;
+  }
+  return `${clean.slice(0, maxLength - 3)}...`;
+}
 
 function LibraryLoading() {
   return (
@@ -33,6 +48,9 @@ function LibraryLoading() {
 export default function LibraryPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_CREATED");
+  const [lastReviewedByPackId, setLastReviewedByPackId] = useState<Record<string, string | null>>({});
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +58,26 @@ export default function LibraryPage() {
   const [pendingDeleteItem, setPendingDeleteItem] = useState<StudyPackListItemResponse | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const hydrateLastReviewed = useCallback(async (packs: StudyPackListItemResponse[]) => {
+    if (packs.length === 0) {
+      setLastReviewedByPackId({});
+      return;
+    }
+
+    const entries = await Promise.all(
+      packs.map(async (pack) => {
+        try {
+          const summary = await getQuickReviewPerformanceSummary(pack.id);
+          return [pack.id, summary.lastReviewedAt] as const;
+        } catch {
+          return [pack.id, null] as const;
+        }
+      }),
+    );
+
+    setLastReviewedByPackId(Object.fromEntries(entries));
+  }, []);
 
   const loadLibrary = useCallback(async () => {
     if (!requireVerifiedOnboardedUser(router, {
@@ -57,13 +95,14 @@ export default function LibraryPage() {
     try {
       const data = await listMyStudyPacks();
       setItems(data);
+      void hydrateLastReviewed(data);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
       setError(message);
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [hydrateLastReviewed, router]);
 
   useEffect(() => {
     void loadLibrary();
@@ -97,6 +136,11 @@ export default function LibraryPage() {
     try {
       await deleteMyStudyPack(targetId);
       setItems((previous) => previous.filter((item) => item.id !== targetId));
+      setLastReviewedByPackId((previous) => {
+        const next = { ...previous };
+        delete next[targetId];
+        return next;
+      });
       setPendingDeleteItem(null);
       setMenuOpenId((previous) => (previous === targetId ? null : previous));
     } catch (err) {
@@ -108,11 +152,35 @@ export default function LibraryPage() {
   }, [pendingDeleteItem]);
 
   const hasItems = items.length > 0;
-  const sortedItems = useMemo(() => {
-    return [...items].sort((left, right) => {
-      return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+  const visibleItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = query.length === 0
+      ? items
+      : items.filter((item) => {
+          const titleMatch = item.title.toLowerCase().includes(query);
+          const tagMatch = item.tags.some((tag) => tag.toLowerCase().includes(query));
+          return titleMatch || tagMatch;
+        });
+
+    const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
+      const leftTime = leftDate ? new Date(leftDate).getTime() : 0;
+      const rightTime = rightDate ? new Date(rightDate).getTime() : 0;
+      return rightTime - leftTime;
+    };
+
+    return [...filtered].sort((left, right) => {
+      if (sortBy === "TITLE") {
+        return left.title.localeCompare(right.title);
+      }
+      if (sortBy === "RECENTLY_REVIEWED") {
+        const reviewedDiff = byDateDesc(lastReviewedByPackId[left.id], lastReviewedByPackId[right.id]);
+        if (reviewedDiff !== 0) {
+          return reviewedDiff;
+        }
+      }
+      return byDateDesc(left.createdAt, right.createdAt);
     });
-  }, [items]);
+  }, [items, lastReviewedByPackId, searchQuery, sortBy]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -134,7 +202,7 @@ export default function LibraryPage() {
         </Card>
       ) : !hasItems ? (
         <Card className="space-y-4 p-4 sm:p-6">
-          <h2 className="text-xl font-semibold">No Study Packs yet</h2>
+          <h2 className="text-xl font-semibold">Your study library is empty</h2>
           <p className="text-sm text-foreground/75">
             Create your first Study Pack to start studying.
           </p>
@@ -146,79 +214,155 @@ export default function LibraryPage() {
         </Card>
       ) : (
         <div className="space-y-4">
+          <Card className="space-y-4 p-4 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="w-full space-y-2 sm:max-w-md">
+                <label htmlFor="library-search" className="text-sm font-medium">
+                  Search
+                </label>
+                <input
+                  id="library-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search study packs..."
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                />
+              </div>
+              <div className="w-full space-y-2 sm:w-56">
+                <label htmlFor="library-sort" className="text-sm font-medium">
+                  Sort by
+                </label>
+                <select
+                  id="library-sort"
+                  value={sortBy}
+                  onChange={(event) => setSortBy(event.target.value as LibrarySortOption)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="RECENTLY_CREATED">Recently created</option>
+                  <option value="RECENTLY_REVIEWED">Recently reviewed</option>
+                  <option value="TITLE">Title</option>
+                </select>
+              </div>
+            </div>
+          </Card>
+
           {actionError ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-base font-semibold sm:text-lg">Could not delete Study Pack</h2>
               <p className="text-sm text-foreground/75">{actionError}</p>
             </Card>
           ) : null}
-          <div className="grid gap-4 md:grid-cols-2">
-            {sortedItems.map((item) => {
-              const isDeleting = deletingId === item.id;
-              const menuOpen = menuOpenId === item.id;
-              return (
-                <Card key={item.id} className="flex h-full flex-col justify-between space-y-4 p-4 sm:p-6">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-2">
-                      <Link href={`/study-packs/${item.id}`} className="group block">
-                        <h3 className="text-base font-semibold transition-colors group-hover:text-foreground sm:text-lg">
-                          {item.title}
-                        </h3>
-                      </Link>
-                      <p className="text-sm leading-relaxed text-foreground/75">{item.summaryPreview}</p>
-                    </div>
-                    <div
-                      className="relative shrink-0"
-                      ref={menuOpen ? menuRef : undefined}
-                    >
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 w-9 px-0"
-                        aria-label={`Open actions for ${item.title}`}
-                        aria-haspopup="menu"
-                        aria-expanded={menuOpen}
-                        onClick={() => {
-                          setMenuOpenId((previous) => (previous === item.id ? null : item.id));
-                          setActionError(null);
-                        }}
-                        disabled={isDeleting}
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                      {menuOpen ? (
-                        <div className="absolute right-0 top-10 z-20 w-44 rounded-md border border-border bg-background p-1 shadow-sm">
-                          <Link
-                            href={`/study-packs/${item.id}`}
-                            className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
-                            onClick={() => setMenuOpenId(null)}
-                          >
-                            Open Study Pack
-                          </Link>
-                          <button
-                            type="button"
-                            className="block w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                            onClick={() => {
-                              setPendingDeleteItem(item);
-                              setMenuOpenId(null);
-                            }}
-                            disabled={isDeleting}
-                          >
-                            Delete Study Pack
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+          {visibleItems.length === 0 ? (
+            <Card className="space-y-3 p-4 sm:p-6">
+              <h2 className="text-base font-semibold sm:text-lg">No Study Packs found</h2>
+              <p className="text-sm text-foreground/75">
+                Try a different title or tag keyword.
+              </p>
+              <div className="flex justify-start">
+                <Button type="button" variant="outline" onClick={() => setSearchQuery("")}>
+                  Clear search
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {visibleItems.map((item) => {
+                const isDeleting = deletingId === item.id;
+                const menuOpen = menuOpenId === item.id;
+                const lastReviewed = lastReviewedByPackId[item.id];
 
-                  <p className="text-xs text-foreground/65">
-                    {new Date(item.createdAt).toLocaleString()}
-                  </p>
-                </Card>
-              );
-            })}
-          </div>
+                return (
+                  <Card key={item.id} className="flex h-full flex-col justify-between space-y-4 p-4 sm:p-6">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 space-y-2">
+                        <Link href={`/study-packs/${item.id}`} className="group block">
+                          <h3 className="text-base font-semibold transition-colors group-hover:text-foreground sm:text-lg">
+                            {item.title}
+                          </h3>
+                        </Link>
+                        <p className="text-sm leading-relaxed text-foreground/75">
+                          {toSummaryPreview(item.summaryPreview)}
+                        </p>
+                      </div>
+                      <div className="relative shrink-0" ref={menuOpen ? menuRef : undefined}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-9 w-9 px-0"
+                          aria-label={`Open actions for ${item.title}`}
+                          aria-haspopup="menu"
+                          aria-expanded={menuOpen}
+                          onClick={() => {
+                            setMenuOpenId((previous) => (previous === item.id ? null : item.id));
+                            setActionError(null);
+                          }}
+                          disabled={isDeleting}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                        {menuOpen ? (
+                          <div className="absolute right-0 top-10 z-20 w-44 rounded-md border border-border bg-background p-1 shadow-sm">
+                            <button
+                              type="button"
+                              className="block w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                              onClick={() => {
+                                setPendingDeleteItem(item);
+                                setMenuOpenId(null);
+                              }}
+                              disabled={isDeleting}
+                            >
+                              Delete Study Pack
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {item.tags.length > 0 ? (
+                        item.tags.map((tag) => (
+                          <span
+                            key={`${item.id}-${tag}`}
+                            className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
+                          No tags
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <p className="text-xs text-foreground/65">
+                        Created {new Date(item.createdAt).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-foreground/65">
+                        Last reviewed {lastReviewed ? new Date(lastReviewed).toLocaleString() : "Not yet"}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Link href={`/study-packs/${item.id}`} className="w-full sm:w-auto">
+                        <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto">
+                          Open Study Pack
+                        </Button>
+                      </Link>
+                      <Link href={`/study-packs/${item.id}/quick-review`} className="w-full sm:w-auto">
+                        <Button type="button" size="sm" className="w-full sm:w-auto">
+                          Quick Review
+                        </Button>
+                      </Link>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
 
           {pendingDeleteItem ? (
             <>

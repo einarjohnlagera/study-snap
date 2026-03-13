@@ -53,8 +53,12 @@ The Study Library allows users to access and manage all generated Study Packs.
 Users can:
 
 * view saved Study Packs
+* search Study Packs by title or tags
+* sort Study Packs (recently created, recently reviewed, title)
 * open a Study Pack
+* start Quick Review from a Study Pack card
 * read summaries and key concepts
+* view tag chips for quick scanning
 * start Quick Review sessions
 * delete Study Packs
 

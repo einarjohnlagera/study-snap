@@ -195,6 +195,8 @@ MVP library actions:
 - open
 - delete (Library page only; not from Dashboard)
 - delete actions in Library must use explicit confirmation
+- search by title/tags and lightweight client-side sorting should be available in Library for browsing
+- show tags as chips on Library cards to improve scanability
 
 Future actions:
 - rename
