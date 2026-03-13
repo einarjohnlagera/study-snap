@@ -3,17 +3,21 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -21,20 +25,25 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.time.ZoneId;
+import java.time.temporal.TemporalAdjusters;
+import java.util.*;
 
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class DashboardService {
     private static final BigDecimal PERFECT_SCORE = BigDecimal.valueOf(100);
+    private static final Set<ActivityType> MEANINGFUL_STUDY_ACTIVITIES = EnumSet.of(
+            ActivityType.CREATED_STUDY_PACK,
+            ActivityType.COMPLETED_QUICK_REVIEW,
+            ActivityType.COMPLETED_ADAPTIVE_QUIZ
+    );
 
+    private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
@@ -101,6 +110,22 @@ public class DashboardService {
                 "Create Study Pack"
         ));
 
+    }
+
+    public StudyEngagementResponse getStudyEngagement(UUID userId) {
+        UserEntity user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return new StudyEngagementResponse(EngagementMode.FOCUSED, 0, 0, 0);
+        }
+
+        EngagementMode engagementMode = user.getEngagementMode() == null
+                ? EngagementMode.FOCUSED
+                : user.getEngagementMode();
+        int studyDaysThisWeek = countStudyDaysThisWeek(userId);
+        int currentStreak = user.getCurrentStreak() == null ? 0 : user.getCurrentStreak();
+        int longestStreak = user.getLongestStreak() == null ? 0 : user.getLongestStreak();
+
+        return new StudyEngagementResponse(engagementMode, currentStreak, longestStreak, studyDaysThisWeek);
     }
 
     private Optional<TodayFocusResponse> resolveTodayFocusInProgress(UUID userId) {
@@ -511,5 +536,26 @@ public class DashboardService {
                 .filter(value -> !value.isBlank())
                 .distinct()
                 .toList();
+    }
+
+    private int countStudyDaysThisWeek(UUID userId) {
+        LocalDate today = LocalDate.now();
+        LocalDate weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        OffsetDateTime weekStartAtMidnight = weekStart
+                .atStartOfDay(ZoneId.systemDefault())
+                .toOffsetDateTime();
+
+        List<UserActivityEventEntity> events = activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                userId,
+                MEANINGFUL_STUDY_ACTIVITIES,
+                weekStartAtMidnight
+        );
+
+        return (int) events.stream()
+                .map(UserActivityEventEntity::getCreatedAt)
+                .filter(Objects::nonNull)
+                .map(createdAt -> createdAt.atZoneSameInstant(ZoneId.systemDefault()).toLocalDate())
+                .distinct()
+                .count();
     }
 }

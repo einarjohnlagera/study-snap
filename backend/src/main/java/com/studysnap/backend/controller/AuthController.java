@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
+import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.VerifyEmailRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
@@ -82,6 +83,15 @@ public class AuthController {
             @Valid @RequestBody VerifyEmailRequest request
     ) {
         return authService.verifyEmail(user.userId(), request);
+    }
+
+    @PostMapping("/preferences/engagement-mode")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateEngagementMode(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody UpdateEngagementModeRequest request
+    ) {
+        return authService.updateEngagementMode(user.userId(), request);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

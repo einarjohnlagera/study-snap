@@ -183,10 +183,11 @@ public class StudyPackService {
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
         if (activityType != ActivityType.STARTED_QUICK_REVIEW
-                && activityType != ActivityType.COMPLETED_QUICK_REVIEW) {
+                && activityType != ActivityType.COMPLETED_QUICK_REVIEW
+                && activityType != ActivityType.COMPLETED_ADAPTIVE_QUIZ) {
             throw new AppException(
                     "INVALID_ACTIVITY_TYPE",
-                    "Unsupported quick review activity type.",
+                    "Unsupported study activity type.",
                     HttpStatus.BAD_REQUEST
             );
         }

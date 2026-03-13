@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -46,6 +47,10 @@ public class UserEntity {
     private ProfileType profileType;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "engagement_mode", nullable = false, length = 32)
+    private EngagementMode engagementMode;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private UserStatus status;
 
@@ -58,6 +63,15 @@ public class UserEntity {
 
     @Column(name = "failed_login_attempts", nullable = false)
     private Integer failedLoginAttempts;
+
+    @Column(name = "current_streak", nullable = false)
+    private Integer currentStreak;
+
+    @Column(name = "longest_streak", nullable = false)
+    private Integer longestStreak;
+
+    @Column(name = "last_study_date")
+    private LocalDate lastStudyDate;
 
     @Column(name = "locked_until")
     private OffsetDateTime lockedUntil;

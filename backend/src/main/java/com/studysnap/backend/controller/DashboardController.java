@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.DashboardService;
@@ -34,5 +35,13 @@ public class DashboardController {
     ) {
         UUID userId = user.userId();
         return dashboardService.getTodayFocus(userId);
+    }
+
+    @GetMapping("/study-engagement")
+    public StudyEngagementResponse getStudyEngagement(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return dashboardService.getStudyEngagement(userId);
     }
 }

@@ -76,6 +76,7 @@ export type TodayFocusResponse = {
 export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";
 export type PlanType = "FREE" | "PREMIUM";
 export type UserRole = "USER" | "ADMIN";
+export type EngagementMode = "FOCUSED" | "CONSISTENCY" | "STREAK";
 
 export type SignupRequest = {
   email: string;
@@ -112,10 +113,22 @@ export type MeResponse = {
   displayName: string;
   countryCode: string | null;
   profileType: ProfileType | null;
+  engagementMode: EngagementMode;
   emailVerifiedAt: string | null;
   role: UserRole;
   status: "ACTIVE" | "SUSPENDED";
   planType: PlanType;
+};
+
+export type UpdateEngagementModeRequest = {
+  engagementMode: EngagementMode;
+};
+
+export type StudyEngagementResponse = {
+  engagementMode: EngagementMode;
+  currentStreak: number;
+  longestStreak: number;
+  studyDaysThisWeek: number;
 };
 
 export type OnboardingProfileTypeRequest = {
@@ -141,7 +154,10 @@ export type NeedsTextConfirmationResponse = {
 };
 
 export type StudyPackApiResponse = StudyPackResponse | NeedsTextConfirmationResponse;
-export type QuickReviewActivityType = "STARTED_QUICK_REVIEW" | "COMPLETED_QUICK_REVIEW";
+export type QuickReviewActivityType =
+  | "STARTED_QUICK_REVIEW"
+  | "COMPLETED_QUICK_REVIEW"
+  | "COMPLETED_ADAPTIVE_QUIZ";
 
 export type QuickReviewSessionStartResponse = {
   sessionId: string | null;
@@ -418,6 +434,19 @@ export async function confirmEmailVerification(request: VerifyEmailRequest): Pro
     true,
   );
   return parseApiResponse<MeResponse>(response, "Could not verify email. Please try again.");
+}
+
+export async function updateEngagementMode(request: UpdateEngagementModeRequest): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/auth/preferences/engagement-mode",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<MeResponse>(response, "Could not update engagement mode. Please try again.");
 }
 
 export async function createStudyPackFromText(notesText: string): Promise<StudyPackResponse> {
@@ -697,4 +726,16 @@ export async function getTodayFocus(): Promise<TodayFocusResponse> {
     true,
   );
   return parseApiResponse<TodayFocusResponse>(response, "Could not load today's focus.");
+}
+
+export async function getStudyEngagement(): Promise<StudyEngagementResponse> {
+  const response = await fetchWithAuth(
+    "/dashboard/study-engagement",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<StudyEngagementResponse>(response, "Could not load study engagement.");
 }

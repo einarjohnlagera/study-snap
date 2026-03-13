@@ -9,6 +9,7 @@ import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   generateAdaptiveQuickReviewQuiz,
+  trackQuickReviewActivity,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
 
@@ -34,6 +35,7 @@ export default function AdaptivePracticePage() {
   const [adaptiveQuiz, setAdaptiveQuiz] = useState<QuickReviewAdaptiveQuizResponse | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
+  const [completionTracked, setCompletionTracked] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -60,6 +62,7 @@ export default function AdaptivePracticePage() {
       setAdaptiveQuiz(response);
       setCurrentIndex(0);
       setSelectedChoices({});
+      setCompletionTracked(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate adaptive practice.";
       setError(message);
@@ -106,6 +109,12 @@ export default function AdaptivePracticePage() {
       return;
     }
     const nextIndex = currentIndex + 1;
+    if (nextIndex >= quiz.length && !completionTracked && studyPackId) {
+      setCompletionTracked(true);
+      void trackQuickReviewActivity(studyPackId, "COMPLETED_ADAPTIVE_QUIZ").catch(() => {
+        // Keep adaptive practice flow non-blocking if activity tracking fails.
+      });
+    }
     setCurrentIndex(nextIndex);
   };
 

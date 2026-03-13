@@ -59,6 +59,46 @@ Action routing guidance:
 
 ---
 
+## Study Engagement Card
+
+The dashboard also supports a user-controlled engagement card rendered below `Today's Focus`.
+
+Endpoint:
+
+- `GET /dashboard/study-engagement`
+
+Response shape:
+
+```json
+{
+  "engagementMode": "FOCUSED | CONSISTENCY | STREAK",
+  "currentStreak": 0,
+  "longestStreak": 0,
+  "studyDaysThisWeek": 0
+}
+```
+
+Mode behavior:
+
+1. `FOCUSED` (default): no streak/consistency card is shown
+2. `CONSISTENCY`: show a soft weekly consistency summary (for example: `3 study days this week`)
+3. `STREAK`: show consecutive-day streak progress (for example: `4 day streak`, optional best streak)
+
+Meaningful study activity for engagement stats:
+
+- `CREATED_STUDY_PACK`
+- `COMPLETED_QUICK_REVIEW`
+- `COMPLETED_ADAPTIVE_QUIZ`
+
+Passive actions such as opening pages are intentionally excluded.
+
+Copy principle:
+
+- supportive and low-pressure
+- avoid guilt-based streak language
+
+---
+
 ## Recommendation Priority
 
 The dashboard recommendation follows this priority order:

@@ -74,6 +74,7 @@ Not in MVP unless explicitly requested:
 - Slightly guided flow
 - Minimal distractions
 - Error states are supportive and actionable
+- Streak mechanics are opt-in only through user engagement mode; default experience stays calm (`FOCUSED`)
 
 Microcopy:
 - Prefer: “Let’s turn your notes into a study pack.”

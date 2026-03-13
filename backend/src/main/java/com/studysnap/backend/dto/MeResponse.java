@@ -1,5 +1,6 @@
 package com.studysnap.backend.dto;
 
+import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserRole;
@@ -15,6 +16,7 @@ public record MeResponse(
         String displayName,
         String countryCode,
         ProfileType profileType,
+        EngagementMode engagementMode,
         OffsetDateTime emailVerifiedAt,
         UserRole role,
         UserStatus status,

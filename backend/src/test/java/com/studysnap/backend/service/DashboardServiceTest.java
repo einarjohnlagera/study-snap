@@ -6,17 +6,21 @@ import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import com.studysnap.backend.testutil.builders.StudyPackEntityBuilder;
 import com.studysnap.backend.testutil.builders.UserActivityEventEntityBuilder;
+import com.studysnap.backend.testutil.builders.UserEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,12 +50,15 @@ class DashboardServiceTest {
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
     private ActivityEventRepository activityEventRepository;
+    @Mock
+    private UserRepository userRepository;
 
     private DashboardService dashboardService;
 
     @BeforeEach
     void setUp() {
         dashboardService = new DashboardService(
+                userRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
                 activityEventRepository
@@ -61,6 +68,72 @@ class DashboardServiceTest {
                         any(UUID.class),
                         eq(ActivityType.OPENED_STUDY_PACK)))
                 .thenReturn(Optional.empty());
+    }
+
+    @Test
+    void getStudyEngagement_returnsFocusedDefaultWhenUserMissing() {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        var response = dashboardService.getStudyEngagement(userId);
+
+        assertThat(response.engagementMode()).isEqualTo(EngagementMode.FOCUSED);
+        assertThat(response.currentStreak()).isEqualTo(0);
+        assertThat(response.longestStreak()).isEqualTo(0);
+        assertThat(response.studyDaysThisWeek()).isEqualTo(0);
+    }
+
+    @Test
+    void getStudyEngagement_returnsConsistencyMetricsForConsistencyMode() {
+        UUID userId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        UserEntity user = UserEntityBuilder.aUser()
+                .withId(userId)
+                .withEngagementMode(EngagementMode.CONSISTENCY)
+                .withCurrentStreak(0)
+                .withLongestStreak(4)
+                .build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(userId),
+                any(),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of(
+                buildActivityEvent(userId, ActivityType.COMPLETED_QUICK_REVIEW, now.minusDays(1)),
+                buildActivityEvent(userId, ActivityType.CREATED_STUDY_PACK, now.minusDays(1).minusHours(3)),
+                buildActivityEvent(userId, ActivityType.COMPLETED_ADAPTIVE_QUIZ, now.minusDays(2))
+        ));
+
+        var response = dashboardService.getStudyEngagement(userId);
+
+        assertThat(response.engagementMode()).isEqualTo(EngagementMode.CONSISTENCY);
+        assertThat(response.currentStreak()).isEqualTo(0);
+        assertThat(response.longestStreak()).isEqualTo(4);
+        assertThat(response.studyDaysThisWeek()).isEqualTo(2);
+    }
+
+    @Test
+    void getStudyEngagement_returnsStreakMetricsForStreakMode() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = UserEntityBuilder.aUser()
+                .withId(userId)
+                .withEngagementMode(EngagementMode.STREAK)
+                .withCurrentStreak(5)
+                .withLongestStreak(8)
+                .build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(userId),
+                any(),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of());
+
+        var response = dashboardService.getStudyEngagement(userId);
+
+        assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
+        assertThat(response.currentStreak()).isEqualTo(5);
+        assertThat(response.longestStreak()).isEqualTo(8);
+        assertThat(response.studyDaysThisWeek()).isEqualTo(0);
     }
 
     @Test
@@ -612,6 +685,15 @@ class DashboardServiceTest {
                 .withUserId(userId)
                 .withStudyPackId(studyPackId)
                 .withActivityType(ActivityType.OPENED_STUDY_PACK)
+                .withCreatedAt(createdAt)
+                .build();
+    }
+
+    private UserActivityEventEntity buildActivityEvent(UUID userId, ActivityType activityType, OffsetDateTime createdAt) {
+        return UserActivityEventEntityBuilder.anActivityEvent()
+                .withUserId(userId)
+                .withStudyPackId(UUID.randomUUID())
+                .withActivityType(activityType)
                 .withCreatedAt(createdAt)
                 .build();
     }

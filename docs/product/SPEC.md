@@ -102,6 +102,26 @@ docs/features/dashboard-recommendation.md
 
 ---
 
+## Study Engagement Modes
+
+Study Snap uses a user-controlled engagement model so motivation stays supportive and flexible.
+
+Available engagement modes:
+
+* FOCUSED (default)
+* CONSISTENCY
+* STREAK
+
+Behavior:
+
+* FOCUSED: no streak/consistency card, keep a calm guidance-first dashboard
+* CONSISTENCY: show a lightweight weekly consistency summary
+* STREAK: show consecutive-day streak progress
+
+Today’s Focus remains the primary dashboard guidance card in all modes.
+
+---
+
 # Activity Tracking
 
 Study Snap records key learning actions as activity events.
@@ -114,8 +134,10 @@ These events help support:
 
 Examples of tracked events include:
 
+* CREATED_STUDY_PACK
 * STARTED_QUICK_REVIEW
 * COMPLETED_QUICK_REVIEW
+* COMPLETED_ADAPTIVE_QUIZ
 
 Activity events store the related user, Study Pack, and timestamp.
 
