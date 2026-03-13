@@ -224,7 +224,7 @@ export default function LibraryPage() {
             <>
               <button
                 type="button"
-                className="fixed inset-0 z-30 bg-black/50"
+                className="fixed inset-0 z-30 bg-black/70 backdrop-blur-[1px]"
                 aria-label="Close delete confirmation"
                 onClick={() => {
                   if (deletingId) {
@@ -234,15 +234,22 @@ export default function LibraryPage() {
                 }}
               />
               <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
-                <Card role="alertdialog" aria-modal="true" className="w-full max-w-md space-y-4 p-5 sm:p-6">
+                <div
+                  role="alertdialog"
+                  aria-modal="true"
+                  aria-labelledby="delete-study-pack-title"
+                  className="w-full max-w-md space-y-4 rounded-xl border border-border bg-background p-5 text-foreground shadow-2xl dark:border-gray-700 dark:bg-gray-900 sm:p-6"
+                >
                   <div className="space-y-2">
-                    <h2 className="text-lg font-semibold sm:text-xl">Delete Study Pack</h2>
-                    <p className="text-sm text-foreground/75">
+                    <h2 id="delete-study-pack-title" className="text-lg font-semibold sm:text-xl">
+                      Delete Study Pack
+                    </h2>
+                    <p className="text-sm text-foreground/90">
                       Are you sure you want to delete this Study Pack?
                       <br />
                       This action cannot be undone.
                     </p>
-                    <p className="text-sm font-medium text-foreground">{pendingDeleteItem.title}</p>
+                    <p className="text-sm font-medium text-foreground/95">{pendingDeleteItem.title}</p>
                   </div>
                   <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                     <Button
@@ -262,7 +269,7 @@ export default function LibraryPage() {
                       {deletingId ? "Deleting..." : "Delete"}
                     </Button>
                   </div>
-                </Card>
+                </div>
               </div>
             </>
           ) : null}
