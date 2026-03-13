@@ -46,6 +46,7 @@ export type TodayFocusType =
   | "RESUME_REVIEW"
   | "RETRY_REVIEW"
   | "PRACTICE_WEAK_CONCEPT"
+  | "REVIEW_PACK"
   | "STUDY_SUGGESTION";
 
 export type ContinueStudyingResponse = {

@@ -88,12 +88,17 @@ public class DashboardService {
         }
 
         Optional<TodayFocusResponse> weakConceptFocus = resolveTodayFocusWeakConcepts(userId);
-        return weakConceptFocus.orElseGet(() -> new TodayFocusResponse(
+        if (weakConceptFocus.isPresent()) {
+            return weakConceptFocus.get();
+        }
+
+        Optional<TodayFocusResponse> reviewPackFocus = resolveTodayFocusReviewPack(userId);
+        return reviewPackFocus.orElseGet(() -> new TodayFocusResponse(
                 TodayFocusType.STUDY_SUGGESTION,
                 null,
-                "Keep your study habit strong",
-                "Pick a Study Pack from your library and do a short review today.",
-                "Open Library"
+                "Start your first review",
+                "Create your first Study Pack to begin your daily focus.",
+                "Create Study Pack"
         ));
 
     }
@@ -184,6 +189,65 @@ public class DashboardService {
                         + conceptLabel + ". Practice them now.",
                 "Practice Weak Areas"
         ));
+    }
+
+    private Optional<TodayFocusResponse> resolveTodayFocusReviewPack(UUID userId) {
+        Optional<StudyPackEntity> fallbackStudyPack = findLastOpenedStudyPack(userId)
+                .or(() -> findMostRecentlyCreatedStudyPack(userId))
+                .or(() -> findMostRecentlyReviewedStudyPack(userId));
+
+        if (fallbackStudyPack.isEmpty()) {
+            return Optional.empty();
+        }
+
+        StudyPackEntity studyPack = fallbackStudyPack.get();
+        return Optional.of(new TodayFocusResponse(
+                TodayFocusType.REVIEW_PACK,
+                studyPack.getId().toString(),
+                "Reinforce \"" + studyPack.getTitle() + "\"",
+                "A quick review today can strengthen your understanding.",
+                "Start Quick Review"
+        ));
+    }
+
+    private Optional<StudyPackEntity> findLastOpenedStudyPack(UUID userId) {
+        List<UserActivityEventEntity> recentOpened = activityEventRepository
+                .findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                        userId,
+                        ActivityType.OPENED_STUDY_PACK,
+                        PageRequest.of(0, 30)
+                );
+
+        for (UserActivityEventEntity openedEvent : recentOpened) {
+            UUID studyPackId = openedEvent.getStudyPackId();
+            if (studyPackId == null) {
+                continue;
+            }
+            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId);
+            if (studyPack.isPresent()) {
+                return studyPack;
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<StudyPackEntity> findMostRecentlyCreatedStudyPack(UUID userId) {
+        return studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId);
+    }
+
+    private Optional<StudyPackEntity> findMostRecentlyReviewedStudyPack(UUID userId) {
+        List<QuickReviewSessionEntity> recentCompleted = quickReviewSessionRepository
+                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 30));
+
+        for (QuickReviewSessionEntity session : recentCompleted) {
+            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
+            if (studyPack.isPresent()) {
+                return studyPack;
+            }
+        }
+
+        return Optional.empty();
     }
 
     private Optional<ContinueStudyingResponse> resolveInProgressRecommendation(UUID userId) {

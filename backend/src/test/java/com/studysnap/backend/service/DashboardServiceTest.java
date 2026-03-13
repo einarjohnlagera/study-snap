@@ -440,8 +440,11 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getTodayFocus_returnsStudySuggestionWhenNoResumeOrWeakConceptContextExists() {
+    void getTodayFocus_fallbackUsesLastOpenedPackWhenAvailable() {
         UUID userId = UUID.randomUUID();
+        UUID openedPackId = UUID.randomUUID();
+        StudyPackEntity openedPack = buildStudyPack(userId, openedPackId, "Opened Pack");
+        UserActivityEventEntity openedEvent = buildOpenedEvent(userId, openedPackId, OffsetDateTime.now().minusMinutes(8));
 
         when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
                 userId,
@@ -451,12 +454,106 @@ class DashboardServiceTest {
                 eq(userId),
                 any(Pageable.class)
         )).thenReturn(List.of());
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of(openedEvent));
+        when(studyPackRepository.findByIdAndOwnerUserId(openedPackId, userId)).thenReturn(Optional.of(openedPack));
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.studyPackId()).isEqualTo(openedPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Start Quick Review");
+    }
+
+    @Test
+    void getTodayFocus_fallbackUsesRecentlyCreatedWhenNoOpenedPackExists() {
+        UUID userId = UUID.randomUUID();
+        UUID createdPackId = UUID.randomUUID();
+        StudyPackEntity createdPack = buildStudyPack(userId, createdPackId, "Created Pack");
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.of(createdPack));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.studyPackId()).isEqualTo(createdPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Start Quick Review");
+    }
+
+    @Test
+    void getTodayFocus_fallbackUsesMostRecentlyReviewedWhenNoOpenedOrCreatedPackExists() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewedPackId = UUID.randomUUID();
+        StudyPackEntity reviewedPack = buildStudyPack(userId, reviewedPackId, "Reviewed Pack");
+        QuickReviewSessionEntity reviewedSession = buildCompletedSession(
+                userId,
+                reviewedPackId,
+                bigDecimal(70),
+                OffsetDateTime.now().minusMinutes(2)
+        );
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of(), List.of(reviewedSession));
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.empty());
+        when(studyPackRepository.findByIdAndOwnerUserId(reviewedPackId, userId)).thenReturn(Optional.of(reviewedPack));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.studyPackId()).isEqualTo(reviewedPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Start Quick Review");
+    }
+
+    @Test
+    void getTodayFocus_returnsStudySuggestionWhenNoStudyPacksExistForFallback() {
+        UUID userId = UUID.randomUUID();
+
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of(), List.of());
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.empty());
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
 
         assertThat(response.type()).isEqualTo(TodayFocusType.STUDY_SUGGESTION);
         assertThat(response.studyPackId()).isNull();
-        assertThat(response.actionLabel()).isEqualTo("Open Library");
+        assertThat(response.actionLabel()).isEqualTo("Create Study Pack");
     }
 
     private StudyPackEntity buildStudyPack(UUID userId, UUID studyPackId, String title) {
