@@ -1,22 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { getMe, type MeResponse } from "@/lib/api";
+import { getMe, logout, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
-function formatProfileType(value: MeResponse["profileType"]): string {
-  if (!value) {
-    return "Not set";
-  }
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+function formatPlan(planType: MeResponse["planType"]): string {
+  return planType.charAt(0) + planType.slice(1).toLowerCase();
 }
 
 function SettingsLoading() {
@@ -34,6 +26,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+  const [planMessage, setPlanMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -52,6 +46,7 @@ export default function SettingsPage() {
 
     setLoading(true);
     setError(null);
+    setPlanMessage(null);
     try {
       const me = await getMe();
       setProfile(me);
@@ -68,18 +63,20 @@ export default function SettingsPage() {
     void loadProfile();
   }, [loadProfile]);
 
-  const displayName = useMemo(() => {
-    if (!profile) {
-      return "";
+  const handleUpgradeClick = () => {
+    setPlanMessage("Premium upgrade flow is coming soon.");
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await logout();
+      router.push("/auth");
+      router.refresh();
+    } finally {
+      setSigningOut(false);
     }
-    if (profile.displayName?.trim()) {
-      return profile.displayName.trim();
-    }
-    if (profile.firstName?.trim()) {
-      return profile.firstName.trim();
-    }
-    return profile.email;
-  }, [profile]);
+  };
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -99,79 +96,52 @@ export default function SettingsPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
               Settings
             </p>
-            <h1 className="text-2xl font-semibold sm:text-3xl">Account & Preferences</h1>
+            <h1 className="text-2xl font-semibold sm:text-3xl">Configuration</h1>
             <p className="text-sm text-foreground/75">
-              Manage your profile details and application preferences.
+              Manage account settings, plan details, and upcoming preferences.
             </p>
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Account</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-2">
-                <span className="text-sm font-medium">Display Name</span>
-                <input
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                  value={displayName}
-                  disabled
-                />
-              </label>
-              <label className="block space-y-2">
-                <span className="text-sm font-medium">Profile Type</span>
-                <input
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                  value={formatProfileType(profile.profileType)}
-                  disabled
-                />
-              </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void handleSignOut()} disabled={signingOut}>
+                {signingOut ? "Signing out..." : "Sign Out"}
+              </Button>
+              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
+                Delete Account (Coming Soon)
+              </Button>
             </div>
-            <p className="text-xs text-foreground/60">
-              Profile editing will be available soon.
-            </p>
+          </Card>
+
+          <Card className="space-y-4 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Plan</h2>
+            <div className="rounded-md border border-border bg-background p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current Plan</p>
+              <p className="mt-2 text-lg font-semibold">{formatPlan(profile.planType)}</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button type="button" className="w-full sm:w-auto" onClick={handleUpgradeClick}>
+                Upgrade to Premium
+              </Button>
+              {planMessage ? (
+                <p className="text-xs text-foreground/60">{planMessage}</p>
+              ) : null}
+            </div>
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Preferences</h2>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-background p-3">
+              <div>
+                <p className="text-sm font-medium">Study reminders</p>
+                <p className="text-xs text-foreground/60">Coming soon</p>
+              </div>
+              <input type="checkbox" disabled />
+            </div>
+            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-background p-3">
               <div>
                 <p className="text-sm font-medium">Theme</p>
-                <p className="text-xs text-foreground/60">Switch between light and dark mode.</p>
-              </div>
-              <ThemeToggle />
-            </div>
-            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-background p-3">
-              <div>
-                <p className="text-sm font-medium">Study reminders</p>
-                <p className="text-xs text-foreground/60">Coming soon</p>
-              </div>
-              <input type="checkbox" disabled />
-            </div>
-          </Card>
-
-          <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Security</h2>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
-                Change Password (Coming Soon)
-              </Button>
-              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
-                Manage Sessions (Coming Soon)
-              </Button>
-            </div>
-          </Card>
-
-          <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Notifications</h2>
-            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-background p-3">
-              <div>
-                <p className="text-sm font-medium">Product updates</p>
-                <p className="text-xs text-foreground/60">Coming soon</p>
-              </div>
-              <input type="checkbox" disabled />
-            </div>
-            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-background p-3">
-              <div>
-                <p className="text-sm font-medium">Study reminders</p>
                 <p className="text-xs text-foreground/60">Coming soon</p>
               </div>
               <input type="checkbox" disabled />

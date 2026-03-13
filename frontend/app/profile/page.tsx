@@ -7,6 +7,12 @@ import { Card } from "@/components/ui/card";
 import { getMe, logout, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
+type IdentityForm = {
+  firstName: string;
+  lastName: string;
+  email: string;
+};
+
 function formatProfileType(value: MeResponse["profileType"]): string {
   if (!value) {
     return "Not set";
@@ -42,6 +48,12 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [identityForm, setIdentityForm] = useState<IdentityForm>({
+    firstName: "",
+    lastName: "",
+    email: "",
+  });
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -60,9 +72,15 @@ export default function ProfilePage() {
 
     setLoading(true);
     setError(null);
+    setSaveMessage(null);
     try {
       const me = await getMe();
       setProfile(me);
+      setIdentityForm({
+        firstName: me.firstName ?? "",
+        lastName: me.lastName ?? "",
+        email: me.email ?? "",
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load profile.";
       setError(message);
@@ -105,6 +123,19 @@ export default function ProfilePage() {
     }
   };
 
+  const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
+    setSaveMessage(null);
+    setIdentityForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const handleSaveIdentity = () => {
+    // Placeholder flow until profile update endpoint is available.
+    setSaveMessage("Profile updates are not connected yet. Changes are local for this session.");
+  };
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       {loading ? (
@@ -128,6 +159,45 @@ export default function ProfilePage() {
                 <h1 className="truncate text-2xl font-semibold tracking-tight">{resolvedDisplayName}</h1>
                 <p className="truncate text-sm text-foreground/75">{profile.email}</p>
               </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Identity</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">First Name</span>
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={identityForm.firstName}
+                  onChange={(event) => handleIdentityFieldChange("firstName", event.target.value)}
+                />
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">Last Name</span>
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={identityForm.lastName}
+                  onChange={(event) => handleIdentityFieldChange("lastName", event.target.value)}
+                />
+              </label>
+              <label className="block space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium">Email</span>
+                <input
+                  type="email"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={identityForm.email}
+                  onChange={(event) => handleIdentityFieldChange("email", event.target.value)}
+                />
+              </label>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button type="button" className="w-full sm:w-auto" onClick={handleSaveIdentity}>
+                Save Identity
+              </Button>
+              {saveMessage ? (
+                <p className="text-xs text-foreground/60">{saveMessage}</p>
+              ) : null}
             </div>
           </Card>
 
