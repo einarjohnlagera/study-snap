@@ -3,6 +3,8 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.TodayFocusResponse;
+import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -77,6 +79,111 @@ public class DashboardService {
 
         // No Study Packs or usable activity context -> no recommendation.
         return new ContinueStudyingResponse(null, null, null, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    public TodayFocusResponse getTodayFocus(UUID userId) {
+        Optional<TodayFocusResponse> inProgressFocus = resolveTodayFocusInProgress(userId);
+        if (inProgressFocus.isPresent()) {
+            return inProgressFocus.get();
+        }
+
+        Optional<TodayFocusResponse> weakConceptFocus = resolveTodayFocusWeakConcepts(userId);
+        return weakConceptFocus.orElseGet(() -> new TodayFocusResponse(
+                TodayFocusType.STUDY_SUGGESTION,
+                null,
+                "Keep your study habit strong",
+                "Pick a Study Pack from your library and do a short review today.",
+                "Open Library"
+        ));
+
+    }
+
+    private Optional<TodayFocusResponse> resolveTodayFocusInProgress(UUID userId) {
+        Optional<QuickReviewSessionEntity> inProgress = quickReviewSessionRepository
+                .findTopByUserIdAndStatusOrderByCreatedAtDesc(userId, QuickReviewSessionStatus.IN_PROGRESS);
+        if (inProgress.isEmpty()) {
+            return Optional.empty();
+        }
+
+        QuickReviewSessionEntity session = inProgress.get();
+        Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
+        if (studyPack.isEmpty()) {
+            return Optional.empty();
+        }
+
+        int currentQuestionIndex = session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex();
+        int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
+        ContinueStudyingResumeState resumeState = determineResumeState(session, currentQuestionIndex, totalQuestions);
+
+        if (resumeState == ContinueStudyingResumeState.QUESTION_IN_PROGRESS) {
+            int normalizedTotal = Math.max(1, totalQuestions);
+            int normalizedQuestion = Math.min(Math.max(1, currentQuestionIndex + 1), normalizedTotal);
+            return Optional.of(new TodayFocusResponse(
+                    TodayFocusType.RESUME_REVIEW,
+                    studyPack.get().getId().toString(),
+                    "Resume Quick Review",
+                    "You left off on Question " + normalizedQuestion + " of " + normalizedTotal + " in \""
+                            + studyPack.get().getTitle() + "\".",
+                    "Resume Review"
+            ));
+        }
+
+        if (resumeState == ContinueStudyingResumeState.RETRY_IN_PROGRESS
+                || resumeState == ContinueStudyingResumeState.RETRY_TRANSITION) {
+            int retryQuestionsLeft = resumeState == ContinueStudyingResumeState.RETRY_TRANSITION
+                    ? countRetryQuestionIndexes(session)
+                    : calculateRemainingQuestions(session, currentQuestionIndex, totalQuestions);
+            int normalizedRetryCount = Math.max(0, retryQuestionsLeft);
+            String questionLabel = normalizedRetryCount == 1 ? "question" : "questions";
+            String message = normalizedRetryCount > 0
+                    ? "You still have " + normalizedRetryCount + " " + questionLabel + " to review in \""
+                    + studyPack.get().getTitle() + "\"."
+                    : "You still have missed questions ready to retry in \"" + studyPack.get().getTitle() + "\".";
+            return Optional.of(new TodayFocusResponse(
+                    TodayFocusType.RETRY_REVIEW,
+                    studyPack.get().getId().toString(),
+                    "Retry Incorrect Questions",
+                    message,
+                    "Retry Questions"
+            ));
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<TodayFocusResponse> resolveTodayFocusWeakConcepts(UUID userId) {
+        QuickReviewSessionEntity latestCompletedSession = quickReviewSessionRepository
+                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 1))
+                .stream()
+                .findFirst()
+                .orElse(null);
+        if (latestCompletedSession == null) {
+            return Optional.empty();
+        }
+
+        List<String> weakConcepts = extractWeakConcepts(latestCompletedSession);
+        if (weakConcepts.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(
+                latestCompletedSession.getStudyPackId(),
+                userId
+        );
+        if (studyPack.isEmpty()) {
+            return Optional.empty();
+        }
+
+        int weakConceptCount = weakConcepts.size();
+        String conceptLabel = weakConceptCount == 1 ? "concept" : "concepts";
+        return Optional.of(new TodayFocusResponse(
+                TodayFocusType.PRACTICE_WEAK_CONCEPT,
+                studyPack.get().getId().toString(),
+                "Practice Weak Concepts",
+                "Your latest Quick Review in \"" + studyPack.get().getTitle() + "\" showed " + weakConceptCount + " weak "
+                        + conceptLabel + ". Practice them now.",
+                "Practice Weak Areas"
+        ));
     }
 
     private Optional<ContinueStudyingResponse> resolveInProgressRecommendation(UUID userId) {
@@ -322,5 +429,23 @@ public class DashboardService {
         return (int) retryIndexesList.stream()
                 .filter(Integer.class::isInstance)
                 .count();
+    }
+
+    private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
+        if (session.getSessionMetadata() == null) {
+            return List.of();
+        }
+        Object weakConceptsRaw = session.getSessionMetadata().get("weakConcepts");
+        if (!(weakConceptsRaw instanceof List<?> weakConceptsList)) {
+            return List.of();
+        }
+
+        return weakConceptsList.stream()
+                .filter(String.class::isInstance)
+                .map(String.class::cast)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .distinct()
+                .toList();
     }
 }

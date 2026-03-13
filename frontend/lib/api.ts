@@ -42,6 +42,11 @@ export type StudyPackListItemResponse = {
 
 export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
+export type TodayFocusType =
+  | "RESUME_REVIEW"
+  | "RETRY_REVIEW"
+  | "PRACTICE_WEAK_CONCEPT"
+  | "STUDY_SUGGESTION";
 
 export type ContinueStudyingResponse = {
   studyPackId: string | null;
@@ -57,6 +62,14 @@ export type ContinueStudyingResponse = {
   currentRound: "INITIAL" | "RETRY" | null;
   remainingQuestions: number | null;
   resumeState: ContinueStudyingResumeState | null;
+};
+
+export type TodayFocusResponse = {
+  type: TodayFocusType;
+  studyPackId: string | null;
+  title: string;
+  message: string;
+  actionLabel: string;
 };
 
 export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";
@@ -671,4 +684,16 @@ export async function generateAdaptiveQuickReviewQuiz(
     response,
     "Could not generate adaptive practice quiz.",
   );
+}
+
+export async function getTodayFocus(): Promise<TodayFocusResponse> {
+  const response = await fetchWithAuth(
+    "/dashboard/today-focus",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<TodayFocusResponse>(response, "Could not load today's focus.");
 }
