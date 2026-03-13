@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { getMe, logout, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -150,6 +151,12 @@ export default function ProfilePage() {
         </Card>
       ) : profile ? (
         <div className="space-y-6">
+          <PageHeader
+            eyebrow="PROFILE"
+            title="Profile"
+            description="Manage your personal information and account identity."
+          />
+
           <Card className="space-y-4 p-4 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white dark:bg-blue-500">
