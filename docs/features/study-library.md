@@ -37,6 +37,29 @@ Recommended list metadata:
 - quiz question count
 - tags when available
 
+### Library browsing UX
+
+The Library page supports lightweight client-side organization for growing Study Pack collections.
+
+Current behavior:
+- search input with placeholder `Search study packs...`
+- search filters by Study Pack `title` and `tags`
+- sort options:
+  - `Recently created` (default)
+  - `Recently reviewed`
+  - `Title`
+- Study Pack cards display:
+  - title
+  - shortened summary preview
+  - tag chips
+  - created date
+  - open and quick-review actions
+  - overflow menu with delete action
+
+Empty states:
+- no Study Packs: `Your study library is empty` + primary `Create Study Pack` action
+- no matches for current search: show a clear no-results message with a `Clear search` action
+
 ### Study consistency card (UI guidance)
 
 The dashboard includes a lightweight Study Consistency card to encourage repeated study behavior.
