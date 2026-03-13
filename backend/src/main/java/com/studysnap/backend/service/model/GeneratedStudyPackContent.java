@@ -8,6 +8,8 @@ import java.util.List;
 public record GeneratedStudyPackContent(
         String title,
         String summary,
+        String subject,
+        List<String> tags,
         List<String> keyConcepts,
         List<QuizItem> quiz,
         String modelUsed,

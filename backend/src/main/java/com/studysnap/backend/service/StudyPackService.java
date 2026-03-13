@@ -264,6 +264,7 @@ public class StudyPackService {
         entity.setInputType(inputType);
         entity.setTitle(generated.title());
         entity.setSummary(generated.summary());
+        entity.setSubject(normalizeSubject(generated.subject()));
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());
         entity.setOcrConfidence(ocrConfidence);
@@ -277,7 +278,7 @@ public class StudyPackService {
         entity.setStatus(StudyPackStatus.DONE);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
-        entity.setTags(deriveTags(generated.title()));
+        entity.setTags(resolveTags(generated.tags(), generated.title()));
         StudyPackEntity savedEntity = studyPackRepository.save(entity);
         activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, savedEntity.getId());
         return savedEntity;
@@ -290,6 +291,7 @@ public class StudyPackService {
                 extractedText,
                 entity.getTitle(),
                 entity.getSummary(),
+                entity.getSubject(),
                 entity.getKeyConcepts(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getQuiz(),
@@ -298,11 +300,30 @@ public class StudyPackService {
         );
     }
 
-    private String[] deriveTags(String title) {
-        if (title == null || title.isBlank()) {
+    private String[] resolveTags(List<String> generatedTags, String fallbackTitle) {
+        if (generatedTags != null) {
+            List<String> normalizedTags = generatedTags.stream()
+                    .filter(tag -> tag != null && !tag.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .toList();
+            if (!normalizedTags.isEmpty()) {
+                return normalizedTags.toArray(String[]::new);
+            }
+        }
+
+        if (fallbackTitle == null || fallbackTitle.isBlank()) {
             return new String[0];
         }
-        return new String[]{title.trim()};
+        return new String[]{fallbackTitle.trim()};
+    }
+
+    private String normalizeSubject(String subject) {
+        if (subject == null) {
+            return null;
+        }
+        String normalized = subject.trim();
+        return normalized.isBlank() ? null : normalized;
     }
 }
 

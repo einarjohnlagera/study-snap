@@ -9,6 +9,7 @@ public record StudyPackResponse(
 		String extractedText,
 		String title,
 		String summary,
+		String subject,
 		List<String> keyConcepts,
 		List<String> tags,
 		List<QuizItem> quiz,

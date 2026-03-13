@@ -97,6 +97,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         HttpStatus.BAD_GATEWAY
                 );
             }
+            String normalizedSubject = normalizeAndValidateSubject(promptStudyPack.subject());
+            List<String> normalizedTags = normalizeAndValidateTags(promptStudyPack.tags(), promptStudyPack.title());
 
             List<QuizItem> quizItems = new ArrayList<>();
             Set<String> normalizedQuestions = new HashSet<>();
@@ -123,13 +125,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (isBlank(item.concept())) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned an invalid quiz format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
+                String normalizedConcept = normalizeAndValidateConcept(item.concept());
                 if (!normalizedQuestions.add(normalizeForDuplicateCheck(item.question()))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
@@ -137,7 +133,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (!normalizedConcepts.add(normalizeForDuplicateCheck(item.concept()))) {
+                if (!normalizedConcepts.add(normalizeForDuplicateCheck(normalizedConcept))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned repetitive quiz concepts. Please try again.",
@@ -159,7 +155,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         item.question(),
                         randomizedChoices,
                         correctAnswer,
-                        item.concept(),
+                        normalizedConcept,
                         item.explanation()
                 ));
             }
@@ -173,6 +169,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             return new GeneratedStudyPackContent(
                     promptStudyPack.title(),
                     promptStudyPack.summary(),
+                    normalizedSubject,
+                    normalizedTags,
                     promptStudyPack.keyConcepts(),
                     quizItems,
                     modelUsed,
@@ -370,6 +368,86 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String normalizeAndValidateSubject(String subject) {
+        String normalized = normalizeMetadataValue(subject);
+        if (!containsAlphaNumeric(normalized) || !hasWordCountBetween(normalized, 1, 4)) {
+            throw new AppException(
+                    "LLM_INVALID_OUTPUT",
+                    "The study pack service returned invalid subject metadata. Please try again.",
+                    HttpStatus.BAD_GATEWAY
+            );
+        }
+        return normalized;
+    }
+
+    private List<String> normalizeAndValidateTags(List<String> tags, String title) {
+        if (tags == null || tags.size() < 3 || tags.size() > 6) {
+            throw new AppException(
+                    "LLM_INVALID_OUTPUT",
+                    "The study pack service returned invalid tag metadata. Please try again.",
+                    HttpStatus.BAD_GATEWAY
+            );
+        }
+
+        String normalizedTitle = normalizeForDuplicateCheck(title);
+        Set<String> normalizedSeenTags = new HashSet<>();
+        List<String> normalizedTags = new ArrayList<>();
+        for (String tag : tags) {
+            String normalizedTag = normalizeMetadataValue(tag);
+            if (!containsAlphaNumeric(normalizedTag)
+                    || !hasWordCountBetween(normalizedTag, 1, 3)) {
+                throw new AppException(
+                        "LLM_INVALID_OUTPUT",
+                        "The study pack service returned invalid tag metadata. Please try again.",
+                        HttpStatus.BAD_GATEWAY
+                );
+            }
+
+            String normalizedTagForComparison = normalizeForDuplicateCheck(normalizedTag);
+            if (normalizedTagForComparison.isBlank()
+                    || normalizedTagForComparison.equals(normalizedTitle)
+                    || !normalizedSeenTags.add(normalizedTagForComparison)) {
+                throw new AppException(
+                        "LLM_INVALID_OUTPUT",
+                        "The study pack service returned invalid tag metadata. Please try again.",
+                        HttpStatus.BAD_GATEWAY
+                );
+            }
+            normalizedTags.add(normalizedTag);
+        }
+
+        return normalizedTags;
+    }
+
+    private String normalizeAndValidateConcept(String concept) {
+        String normalized = normalizeMetadataValue(concept);
+        if (normalized == null || !hasWordCountBetween(normalized, 1, 4)) {
+            throw new AppException(
+                    "LLM_INVALID_OUTPUT",
+                    "The study pack service returned an invalid quiz concept. Please try again.",
+                    HttpStatus.BAD_GATEWAY
+            );
+        }
+        return normalized;
+    }
+
+    private String normalizeMetadataValue(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim().replaceAll("\\s+", " ");
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private boolean hasWordCountBetween(String value, int minWords, int maxWords) {
+        int wordCount = value.trim().split("\\s+").length;
+        return wordCount >= minWords && wordCount <= maxWords;
+    }
+
+    private boolean containsAlphaNumeric(String value) {
+        return value != null && value.matches(".*[A-Za-z0-9].*");
     }
 
     private String normalizeForDuplicateCheck(String value) {
@@ -694,12 +772,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private record PromptStudyPack(
             String title,
             String summary,
+            String subject,
+            List<String> tags,
             List<String> keyConcepts,
             List<PromptQuizItem> quiz
     ) {
         PromptStudyPack {
             Objects.requireNonNull(title, "title");
             Objects.requireNonNull(summary, "summary");
+            Objects.requireNonNull(subject, "subject");
+            Objects.requireNonNull(tags, "tags");
             Objects.requireNonNull(keyConcepts, "keyConcepts");
             Objects.requireNonNull(quiz, "quiz");
         }

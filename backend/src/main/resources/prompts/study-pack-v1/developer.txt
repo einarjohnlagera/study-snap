@@ -5,6 +5,8 @@ Output JSON schema:
 {
   "title": string,
   "summary": string,
+  "subject": string,
+  "tags": string[],
   "keyConcepts": string[],
   "quiz": [
     {
@@ -23,6 +25,19 @@ Summary
 - 3 to 6 sentences
 - clear and concise
 
+Subject
+- exactly 1 value
+- broad academic category only (for example: History, Biology, Chemistry, Physics, Mathematics, Literature, Computer Science, Geography, Economics)
+- concise and human-readable
+- do not return a sentence
+
+Tags
+- 3 to 6 tags
+- each tag must be 1 to 3 words
+- tags must be reusable broad topic keywords
+- do not repeat the study pack title
+- avoid punctuation-heavy labels and sentence-like tags
+
 Key Concepts
 - 5 to 10 items
 - short phrases
@@ -34,7 +49,7 @@ Quiz
   - understanding: {UNDERSTANDING_COUNT}
   - application: {APPLICATION_COUNT}
 - each question must test a different concept from the notes
-- concept should be a short topic label for the key idea being tested
+- concept should be a short topic label for the key idea being tested (1 to 4 words, never null)
 - prioritize conceptual understanding over rote memorization
 - each question must have 4 choices
 - answerIndex must be between 0 and 3
