@@ -141,6 +141,25 @@ export default function StudyPackDetailPage() {
     return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
   };
 
+  const latestCompletedSession = recentSessions[0] ?? null;
+  const focusAreas = Array.from(
+    new Set(
+      (latestCompletedSession?.weakConcepts ?? [])
+        .map((concept) => concept.trim())
+        .filter((concept) => concept.length > 0),
+    ),
+  ).slice(0, 4);
+
+  const suggestedNextStep = (() => {
+    if (!latestCompletedSession) {
+      return "Start your first Quick Review to discover which concepts need more work.";
+    }
+    if (focusAreas.length > 0) {
+      return "Practice weak concepts to strengthen this topic.";
+    }
+    return "Continue reviewing this Study Pack.";
+  })();
+
   const handleStartQuickReview = async () => {
     if (!studyPack) {
       return;
@@ -239,33 +258,6 @@ export default function StudyPackDetailPage() {
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Recent Review Sessions</h2>
-            {historyError ? (
-              <p className="text-sm text-foreground/75">{historyError}</p>
-            ) : recentSessions.length === 0 ? (
-              <p className="text-sm text-foreground/75">No completed Quick Review sessions yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {recentSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <span className="text-foreground/75">
-                      {session.completedAt
-                        ? new Date(session.completedAt).toLocaleString()
-                        : new Date(session.createdAt).toLocaleString()}
-                    </span>
-                    <span className="font-medium text-foreground">
-                      {session.correctAnswers}/{session.totalQuestions} ({session.scorePercentage}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-
-          <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Review Performance</h2>
             {performanceError ? (
               <p className="text-sm text-foreground/75">{performanceError}</p>
@@ -293,6 +285,61 @@ export default function StudyPackDetailPage() {
                       : "—"}
                   </p>
                 </div>
+              </div>
+            )}
+          </Card>
+
+          <Card className="space-y-3 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">AI Study Coach</h2>
+            {historyError ? (
+              <p className="text-sm text-foreground/75">{historyError}</p>
+            ) : (
+              <div className="space-y-3">
+                {focusAreas.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                      Focus Areas
+                    </p>
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
+                      {focusAreas.map((concept) => (
+                        <li key={`focus-area-${concept}`}>{concept}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                    Suggested Next Step
+                  </p>
+                  <p className="mt-2 text-sm text-foreground/80">{suggestedNextStep}</p>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card className="space-y-3 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Recent Review Sessions</h2>
+            {historyError ? (
+              <p className="text-sm text-foreground/75">{historyError}</p>
+            ) : recentSessions.length === 0 ? (
+              <p className="text-sm text-foreground/75">No completed Quick Review sessions yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {recentSessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <span className="text-foreground/75">
+                      {session.completedAt
+                        ? new Date(session.completedAt).toLocaleString()
+                        : new Date(session.createdAt).toLocaleString()}
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {session.correctAnswers}/{session.totalQuestions} ({session.scorePercentage}%)
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </Card>

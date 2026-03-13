@@ -192,6 +192,13 @@ API detail endpoint:
 Dashboard integration:
 - Continue Studying and Study Pack card Open actions now navigate to the detail route
 
+AI guidance panel:
+- Study Pack detail includes a compact `AI Study Coach` section below `Review Performance`
+- it uses the latest completed Quick Review context and weak concepts to surface `Focus Areas`
+- it provides a concise suggested next step for the learner
+- if no completed Quick Review exists, it shows a supportive start-review empty state
+- this panel is based on existing stored data and does not add a new LLM call
+
 Response model separation:
 - list endpoint stays lightweight for dashboard usage (`id`, `title`, `summaryPreview`, `quizCount`, `createdAt`, `tags`)
 - detail endpoint returns full study content (`title`, `summary`, `keyConcepts`, `quiz`, `createdAt`, `tags`)

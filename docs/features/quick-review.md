@@ -284,6 +284,24 @@ The Study Pack detail page also includes a compact `Review Performance` summary 
 
 If there are no completed sessions yet, the page shows a simple empty prompt to start the first Quick Review.
 
+### AI Study Coach (Study Pack detail)
+
+The Study Pack detail page includes a compact `AI Study Coach` panel powered by existing Quick Review data.
+
+Behavior:
+
+- focus areas come from weak concepts in the latest completed Quick Review session
+- focus areas are shown concisely (up to 4 concepts)
+- suggested next step adapts to learning state:
+  - weak concepts available: practice weak concepts
+  - completed review without weak concepts: continue reviewing
+  - no completed review yet: start first Quick Review
+
+Scope:
+
+- uses existing session data only
+- no additional LLM call is required
+
 ---
 
 ## Activity Tracking

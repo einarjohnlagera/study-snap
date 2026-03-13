@@ -83,6 +83,21 @@ docs/features/quick-review.md
 
 ---
 
+## Study Pack AI Study Coach
+
+The Study Pack detail page includes a compact `AI Study Coach` panel.
+
+The panel uses existing Quick Review context (latest completed session and weak concepts) to show:
+
+* focus areas (when weak concepts exist)
+* a suggested next step
+
+If no completed Quick Review exists yet, the panel shows a supportive prompt to start the first review.
+
+This guidance layer is data-driven and does not require an additional LLM call.
+
+---
+
 ## Smart Continue Studying
 
 The dashboard includes a recommendation card that suggests the most useful next study action.

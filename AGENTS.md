@@ -75,6 +75,7 @@ Not in MVP unless explicitly requested:
 - Minimal distractions
 - Error states are supportive and actionable
 - Streak mechanics are opt-in only through user engagement mode; default experience stays calm (`FOCUSED`)
+- For Study Pack detail guidance, prefer compact data-driven coaching (latest weak concepts + next step) before adding new LLM calls
 
 Microcopy:
 - Prefer: “Let’s turn your notes into a study pack.”
