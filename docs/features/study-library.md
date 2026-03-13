@@ -18,7 +18,16 @@ The dashboard is primarily for authenticated users.
 It should support:
 - listing saved Study Packs
 - opening a saved Study Pack
-- deleting a saved Study Pack
+- guiding next study actions without destructive controls
+
+The Library page is the content-management surface and handles destructive actions such as deleting a Study Pack.
+The Dashboard is intentionally non-destructive and must not render delete buttons, delete menus, or delete confirmation dialogs for Study Packs.
+
+Library deletion UX:
+- each Study Pack item in Library exposes a small action menu (`Open Study Pack`, `Delete Study Pack`)
+- deleting a Study Pack requires confirmation before the delete request is submitted
+- after deletion, the item is removed from the Library state immediately
+- if the last item is deleted, Library falls back to the empty state
 
 Recommended list metadata:
 - id
@@ -52,6 +61,7 @@ To keep the Study Library focused and intentional:
 - continue studying appears only when at least one Study Pack exists
 - the study consistency card stays supportive and motivational (not a duplicate CTA area)
 - empty state owns the `Create your first Study Pack` action for new users
+- dashboard Study Pack cards expose non-destructive actions only (for example `Open`)
 
 The dashboard should avoid repeating multiple equivalent primary actions that all point to the same route.
 

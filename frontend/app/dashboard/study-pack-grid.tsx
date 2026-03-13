@@ -5,10 +5,9 @@ import type { StudyPackListItemResponse } from "@/lib/api";
 
 type StudyPackGridProps = {
   studyPacks: StudyPackListItemResponse[];
-  onDelete: (id: string) => Promise<void>;
 };
 
-export function StudyPackGrid({ studyPacks, onDelete }: StudyPackGridProps) {
+export function StudyPackGrid({ studyPacks }: StudyPackGridProps) {
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -47,9 +46,6 @@ export function StudyPackGrid({ studyPacks, onDelete }: StudyPackGridProps) {
                   Open
                 </Button>
               </Link>
-              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void onDelete(item.id)}>
-                Delete
-              </Button>
             </div>
           </Card>
         ))}
