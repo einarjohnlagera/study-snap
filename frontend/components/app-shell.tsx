@@ -85,10 +85,10 @@ function NavLinks({
         key={item.href}
         href={item.href}
         onClick={onNavigate}
-        className={`rounded-md px-3 py-2 text-sm transition-colors ${
+        className={`block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
           active
-            ? "bg-blue-600 text-white dark:bg-blue-500"
-            : "text-foreground/80 hover:bg-muted/60 hover:text-foreground"
+            ? "bg-blue-600/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200"
+            : "text-foreground/80 hover:bg-muted/70 hover:text-foreground"
         }`}
       >
         {item.label}
@@ -98,11 +98,11 @@ function NavLinks({
 
   return (
     <>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <p className="px-3 text-xs font-semibold uppercase tracking-wide text-foreground/50">Main</p>
         {MAIN_NAV.map(renderLink)}
       </div>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         <p className="px-3 text-xs font-semibold uppercase tracking-wide text-foreground/50">Account</p>
         {SECONDARY_NAV.map(renderLink)}
       </div>
