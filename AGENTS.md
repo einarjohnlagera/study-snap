@@ -197,6 +197,8 @@ MVP library actions:
 - delete actions in Library must use explicit confirmation
 - search by title/tags and lightweight client-side sorting should be available in Library for browsing
 - show tags as chips on Library cards to improve scanability
+- use clickable Study Pack cards/titles as the primary open interaction (avoid explicit `Open` buttons)
+- keep Quick Review as a secondary action where shown
 
 Future actions:
 - rename

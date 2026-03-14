@@ -8,6 +8,7 @@ Dashboard scope note:
 - guidance and quick-study actions only
 - no destructive Study Pack management actions
 - Study Pack deletion is handled in the Library page
+- Study Pack previews in Dashboard open via card/title click (explicit `Open` buttons removed)
 
 ---
 

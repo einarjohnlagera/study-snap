@@ -55,7 +55,7 @@ Users can:
 * view saved Study Packs
 * search Study Packs by title or tags
 * sort Study Packs (recently created, recently reviewed, title)
-* open a Study Pack
+* open a Study Pack by clicking the card or title
 * start Quick Review from a Study Pack card
 * read summaries and key concepts
 * view tag chips for quick scanning
@@ -68,7 +68,7 @@ Dashboard behavior note:
 
 * Dashboard is guidance-first and non-destructive
 * Study Pack deletion is handled in the Library page, not the Dashboard
-* Dashboard Study Pack cards should only expose safe actions (for example: `Open`, `Resume`, `Start Review`)
+* Dashboard Study Pack previews open by clicking the card/title (no explicit `Open` button)
 * Study Pack deletion from the Library must require an explicit confirmation step
 
 ---
