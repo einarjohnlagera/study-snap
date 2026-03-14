@@ -23,6 +23,15 @@ Deliverable: repo runs locally.
 
 Deliverable: UI shell + theme toggle on all pages.
 
+Landing page refinement status:
+- [X] polished public `/` landing page with:
+  - hero + signup/demo CTAs
+  - Study Pack output preview
+  - 3-step how-it-works section
+  - feature highlights
+  - pricing teaser
+  - final call-to-action
+
 ## Phase 2 — Backend MVP (text Study Pack generation)
 - [X] `POST /api/study-packs` accepts JSON `{ notesText }`
 - [X] Validate input size

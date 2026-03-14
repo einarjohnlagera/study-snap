@@ -31,6 +31,25 @@ Detailed feature behavior is documented in:
 
 - docs/features/*
 
+## Public Landing Page
+
+Study Snap includes a public landing page at `/` for unauthenticated users.
+
+Purpose:
+
+* communicate core product value quickly
+* explain how Study Snap works
+* drive signup and demo exploration
+
+Landing page sections:
+
+* hero (headline, supporting subheadline, primary + secondary CTAs)
+* Study Pack output preview (summary, key concepts, quick review)
+* how-it-works (3 steps)
+* feature highlights
+* pricing teaser (Free vs Premium overview)
+* final CTA section
+
 ## Study Pack Generation
 
 Study Packs are generated from user-provided notes using AI.
