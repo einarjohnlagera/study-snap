@@ -218,6 +218,26 @@ Feature-gating behavior:
 
 * premium-only features should show a clear upgrade path when accessed on Free
 * gating should not break core review or study flows
+* upgrade prompts for Premium-only flows should direct users to Settings `Plan & Billing` (`/settings#plan-billing`)
+
+---
+
+## Plan & Billing (Settings)
+
+Settings includes a dedicated `Plan & Billing` section.
+
+Users can:
+
+* view current plan (`FREE` or `PREMIUM`)
+* view monthly Study Pack usage (`used / limit`) with a simple progress indicator
+* review Premium feature highlights (100 Study Packs/month, Weak Concept Detection, Adaptive Quiz Generation)
+* trigger an `Upgrade to Premium` placeholder action until payment integration is implemented
+
+Dashboard usage indicator:
+
+* Free users see a monthly plan usage card (`Free Plan`, `used / 5`)
+* card includes a subtle upgrade action linking to Settings `Plan & Billing`
+* when limit is reached, show a supportive quota-reached message and upgrade CTA
 
 ---
 

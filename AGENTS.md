@@ -63,6 +63,8 @@ MVP includes:
 - Images deleted after processing
 - Study Library direction
 - Demo mode guardrails
+- Settings `Plan & Billing` section (current plan, monthly usage, upgrade CTA)
+- Dashboard Free-plan usage indicator with upgrade path
 
 Not in MVP unless explicitly requested:
 - flashcards / spaced repetition
@@ -174,6 +176,12 @@ Plan and quota policy:
 - Free includes AI summaries, key concepts, Quick Review, retry, Study Library, Today's Focus, and AI Study Coach
 - Premium: 100 Study Packs/month
 - Premium includes everything in Free, plus weak concept detection, adaptive quiz generation, and advanced review capabilities
+
+Plan & Billing UX:
+- Settings includes a `Plan & Billing` section where users can view plan and monthly usage progress
+- Premium upgrade action can use a placeholder flow until billing integration is implemented
+- Premium-gated prompts should direct users to Settings `Plan & Billing` (`/settings#plan-billing`)
+- Dashboard should show a Free-plan monthly usage indicator and subtle upgrade action
 
 Config knobs may include:
 - `LLM_MODEL_FREE`

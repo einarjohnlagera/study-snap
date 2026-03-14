@@ -5,16 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { getMe, logout, updateEngagementMode, type EngagementMode, type MeResponse } from "@/lib/api";
+import { getMe, listMyStudyPacks, logout, updateEngagementMode, type EngagementMode, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-
-function formatPlan(planType: MeResponse["planType"]): string {
-  return planType.charAt(0) + planType.slice(1).toLowerCase();
-}
-
-function getMonthlyStudyPackLimit(planType: MeResponse["planType"]): number {
-  return planType === "PREMIUM" ? 100 : 5;
-}
+import {
+  PLAN_BILLING_SECTION_ID,
+  getCurrentMonthStudyPackUsage,
+  getMonthlyStudyPackLimit,
+  getUsageProgressPercent,
+} from "@/lib/plans";
 
 function SettingsLoading() {
   return (
@@ -31,6 +29,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
+  const [usedThisMonth, setUsedThisMonth] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
   const [planMessage, setPlanMessage] = useState<string | null>(null);
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
@@ -57,13 +56,18 @@ export default function SettingsPage() {
     setPlanMessage(null);
     setEngagementModeMessage(null);
     try {
-      const me = await getMe();
+      const [me, studyPacks] = await Promise.all([
+        getMe(),
+        listMyStudyPacks(),
+      ]);
       setProfile(me);
+      setUsedThisMonth(getCurrentMonthStudyPackUsage(studyPacks));
       setSelectedEngagementMode(me.engagementMode);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
       setProfile(null);
+      setUsedThisMonth(0);
     } finally {
       setLoading(false);
     }
@@ -74,7 +78,7 @@ export default function SettingsPage() {
   }, [loadProfile]);
 
   const handleUpgradeClick = () => {
-    setPlanMessage("Premium upgrade flow is coming soon.");
+    setPlanMessage("Upgrade checkout is coming soon. You can review plan details here for now.");
   };
 
   const handleSignOut = async () => {
@@ -104,6 +108,11 @@ export default function SettingsPage() {
     }
   };
 
+  const monthlyStudyPackLimit = profile ? getMonthlyStudyPackLimit(profile.planType) : 0;
+  const usageProgressPercent = getUsageProgressPercent(usedThisMonth, monthlyStudyPackLimit);
+  const hasReachedMonthlyLimit = usedThisMonth >= monthlyStudyPackLimit && monthlyStudyPackLimit > 0;
+  const isPremiumPlan = profile?.planType === "PREMIUM";
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       {loading ? (
@@ -121,7 +130,7 @@ export default function SettingsPage() {
           <PageHeader
             eyebrow="SETTINGS"
             title="Configuration"
-            description="Manage account settings, plan details, and upcoming preferences."
+            description="Manage account settings, plan and billing details, and learning preferences."
           />
 
           <Card className="space-y-4 p-4 sm:p-6">
@@ -136,26 +145,52 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Plan</h2>
-            <div className="rounded-md border border-border bg-background p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current Plan</p>
-              <p className="mt-2 text-lg font-semibold">{formatPlan(profile.planType)}</p>
-              <p className="mt-1 text-sm text-foreground/70">
-                Study Pack generation limit: {getMonthlyStudyPackLimit(profile.planType)} per month
-              </p>
-              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-foreground/75">
-                <li>Free includes Study Pack generation, Quick Review, Library, Today&apos;s Focus, and AI Study Coach</li>
-                <li>Premium adds Weak Concept Detection and Adaptive Quiz Generation</li>
-              </ul>
+          <Card id={PLAN_BILLING_SECTION_ID} className="space-y-4 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Plan &amp; Billing</h2>
+            <div className="space-y-4 rounded-md border border-border bg-background p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current Plan</p>
+                <p className="mt-2 inline-flex rounded-full border border-border px-3 py-1 text-sm font-semibold">
+                  {profile.planType}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
+                <p className="text-sm text-foreground/80">
+                  {usedThisMonth} / {monthlyStudyPackLimit} Study Packs used this month
+                </p>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
+                    style={{ width: `${usageProgressPercent}%` }}
+                  />
+                </div>
+                {hasReachedMonthlyLimit ? (
+                  <p className="text-sm text-foreground/80">You have reached your monthly Study Pack limit.</p>
+                ) : null}
+              </div>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button type="button" className="w-full sm:w-auto" onClick={handleUpgradeClick}>
-                Upgrade to Premium
-              </Button>
-              {planMessage ? (
-                <p className="text-xs text-foreground/60">{planMessage}</p>
-              ) : null}
+
+            <div className="space-y-3 rounded-md border border-border bg-background p-4">
+              <p className="text-sm font-semibold">Premium</p>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
+                <li>100 Study Packs per month</li>
+                <li>Weak Concept Detection</li>
+                <li>Adaptive Quiz Generation</li>
+              </ul>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={handleUpgradeClick}
+                  disabled={isPremiumPlan}
+                >
+                  {isPremiumPlan ? "Premium Active" : "Upgrade to Premium"}
+                </Button>
+                {planMessage ? (
+                  <p className="text-xs text-foreground/60">{planMessage}</p>
+                ) : null}
+              </div>
             </div>
           </Card>
 
