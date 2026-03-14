@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import type { StudyPackResponse } from "@/lib/api";
 
@@ -64,11 +66,22 @@ export function StudyPackResults({
         Generated Study Pack
       </h2>
       {demoMode ? (
-        <Card className="border-blue-500/40 bg-blue-50/70 dark:bg-blue-950/20">
+        <Card className="space-y-3 border-blue-500/40 bg-blue-50/70 p-4 dark:bg-blue-950/20 sm:p-5">
           <CardDescription className="text-blue-900 dark:text-blue-200">
-            This is a demo example. Paste your own notes to generate your study
-            pack.
+            This is a prebuilt demo Study Pack. It does not create a real account session and does not trigger a new AI generation call.
           </CardDescription>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link href="/demo/quick-review" className="w-full sm:w-auto">
+              <Button type="button" className="w-full sm:w-auto">
+                Start Demo Quick Review
+              </Button>
+            </Link>
+            <Link href="/auth" className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
+                Create your own Study Pack
+              </Button>
+            </Link>
+          </div>
         </Card>
       ) : null}
       <p className="text-sm text-foreground/65">

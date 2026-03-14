@@ -11,6 +11,7 @@ public class StudySnapProperties {
     private final Ocr ocr = new Ocr();
     private final Llm llm = new Llm();
     private final QuickReview quickReview = new QuickReview();
+    private final Pricing pricing = new Pricing();
 
     @Getter
     @Setter
@@ -61,6 +62,13 @@ public class StudySnapProperties {
         private boolean enabled = true;
         private int minIncorrectCount = 1;
         private int maxQuestions = 3;
+    }
+
+    @Getter
+    @Setter
+    public static class Pricing {
+        private int freeMonthlyStudyPackLimit = 5;
+        private int premiumMonthlyStudyPackLimit = 100;
     }
 }
 

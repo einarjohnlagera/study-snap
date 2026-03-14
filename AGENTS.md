@@ -48,6 +48,7 @@ Public landing page requirements:
 - route `/` should clearly communicate Study Snap value for unauthenticated users
 - include hero, Study Pack preview, how-it-works, feature highlights, pricing teaser, and final CTA
 - primary CTA should drive account creation; secondary CTA may drive demo exploration
+- demo exploration route should be `/demo`
 
 Backend:
 - One primary endpoint family for Study Pack generation
@@ -168,6 +169,11 @@ Use tiered model strategy:
 Initial model decision:
 - Demo and Free plans use `gpt-4.1-mini`
 
+Plan and quota policy:
+- Free: 5 Study Packs/month
+- Premium: 100 Study Packs/month
+- weak concept detection and adaptive quiz generation are Premium-only
+
 Config knobs may include:
 - `LLM_MODEL_FREE`
 - `LLM_MODEL_PREMIUM`
@@ -179,7 +185,7 @@ Config knobs may include:
 
 Demo mode must not call the real LLM generation pipeline.
 
-For `?demo=true`:
+For demo mode (`/demo` or `?demo=true`):
 - prefill sample notes
 - simulate generation delay
 - return static placeholder study pack

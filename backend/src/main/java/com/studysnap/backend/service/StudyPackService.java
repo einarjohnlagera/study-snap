@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackDraftEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -52,14 +54,16 @@ public class StudyPackService {
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
     private final ActivityTrackingService activityTrackingService;
+    private final SubscriptionService subscriptionService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         String normalizedText = normalizeAndValidateText(request.notesText());
+        PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
 
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated, ownerUserId);
+        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated, ownerUserId, planType);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
@@ -69,6 +73,7 @@ public class StudyPackService {
     public Object createFromImage(MultipartFile image, String subject, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
+        PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         validateImage(image);
 
         OcrResult ocrResult = ocrService.extractText(image);
@@ -95,7 +100,7 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(extractedText);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated, ownerUserId);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated, ownerUserId, planType);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
@@ -128,8 +133,9 @@ public class StudyPackService {
         }
 
         String normalizedText = normalizeAndValidateText(request.notesText());
+        PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated, ownerUserId);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated, ownerUserId, planType);
         studyPackDraftRepository.delete(draft);
         long latency = System.currentTimeMillis() - startedAt;
 
@@ -276,7 +282,8 @@ public class StudyPackService {
             InputType inputType,
             Double ocrConfidence,
             GeneratedStudyPackContent generated,
-            UUID ownerUserId
+            UUID ownerUserId,
+            PlanType planType
     ) {
         StudyPackEntity entity = new StudyPackEntity();
         entity.setId(UUID.randomUUID());
@@ -288,7 +295,7 @@ public class StudyPackService {
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());
         entity.setOcrConfidence(ocrConfidence);
-        entity.setModelTier(ModelTier.FREE);
+        entity.setModelTier(planType == PlanType.PREMIUM ? ModelTier.PREMIUM : ModelTier.FREE);
         entity.setModelUsed(Optional.ofNullable(generated.modelUsed())
                 .orElse(properties.getSettings().getModelFree()));
         entity.setInputTokens(generated.inputTokens());
@@ -381,6 +388,44 @@ public class StudyPackService {
         }
         String normalized = subject.trim();
         return normalized.isBlank() ? null : normalized;
+    }
+
+    private PlanType assertMonthlyStudyPackQuotaAvailable(UUID ownerUserId) {
+        PlanType planType = subscriptionService.resolvePlan(ownerUserId);
+
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
+
+        long usedThisMonth = studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                ownerUserId,
+                monthStart,
+                nextMonthStart
+        );
+
+        int monthlyLimit = resolveMonthlyStudyPackLimit(planType);
+        if (usedThisMonth < monthlyLimit) {
+            return planType;
+        }
+
+        throw new AppException(
+                "MONTHLY_STUDY_PACK_LIMIT_REACHED",
+                resolveQuotaReachedMessage(planType, monthlyLimit),
+                HttpStatus.FORBIDDEN
+        );
+    }
+
+    private int resolveMonthlyStudyPackLimit(PlanType planType) {
+        return planType == PlanType.PREMIUM
+                ? properties.getPricing().getPremiumMonthlyStudyPackLimit()
+                : properties.getPricing().getFreeMonthlyStudyPackLimit();
+    }
+
+    private String resolveQuotaReachedMessage(PlanType planType, int limit) {
+        if (planType == PlanType.PREMIUM) {
+            return "You have reached your monthly Study Pack limit (" + limit + "). Please try again next month.";
+        }
+        return "You have reached your monthly Free plan limit (" + limit + " Study Packs). Upgrade to Premium for more monthly Study Packs.";
     }
 }
 

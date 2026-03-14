@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
@@ -52,6 +53,8 @@ class DashboardServiceTest {
     private ActivityEventRepository activityEventRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private SubscriptionService subscriptionService;
 
     private DashboardService dashboardService;
 
@@ -61,8 +64,10 @@ class DashboardServiceTest {
                 userRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
-                activityEventRepository
+                activityEventRepository,
+                subscriptionService
         );
+        lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
         lenient().when(activityEventRepository.findTopByUserIdAndStudyPackIdAndActivityTypeOrderByCreatedAtDesc(
                         any(UUID.class),
                         any(UUID.class),
@@ -510,6 +515,42 @@ class DashboardServiceTest {
         assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
         assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
         assertThat(response.actionLabel()).isEqualTo("Practice Weak Areas");
+    }
+
+    @Test
+    void getTodayFocus_skipsWeakConceptPracticeForFreePlan() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewedPackId = UUID.randomUUID();
+        StudyPackEntity reviewedPack = buildStudyPack(userId, reviewedPackId, "Reviewed Pack");
+        QuickReviewSessionEntity reviewedSession = buildCompletedSession(
+                userId,
+                reviewedPackId,
+                bigDecimal(70),
+                OffsetDateTime.now().minusMinutes(2)
+        );
+        reviewedSession.setSessionMetadata(Map.of("weakConcepts", List.of("Alliances", "Militarism")));
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of(reviewedSession), List.of(reviewedSession));
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.empty());
+        when(studyPackRepository.findByIdAndOwnerUserId(reviewedPackId, userId)).thenReturn(Optional.of(reviewedPack));
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.studyPackId()).isEqualTo(reviewedPackId.toString());
     }
 
     @Test

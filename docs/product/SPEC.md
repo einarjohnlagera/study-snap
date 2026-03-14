@@ -50,6 +50,12 @@ Landing page sections:
 * pricing teaser (Free vs Premium overview)
 * final CTA section
 
+Demo mode:
+
+* public route `/demo` provides a prebuilt Study Pack walkthrough
+* demo does not create a real user session
+* demo does not trigger new LLM generation cost
+
 ## Study Pack Generation
 
 Study Packs are generated from user-provided notes using AI.
@@ -195,11 +201,22 @@ Study Snap will launch with a simple usage-based model.
 
 Free Plan:
 
-* up to 3 Study Packs generated per day
-* unlimited review of generated Study Packs
-* Quick Review available for generated Study Packs
+* up to 5 Study Packs generated per month
+* includes Study Pack generation, summaries, key concepts, Quick Review, retry, Library, Today's Focus, and AI Study Coach
+* does not include Weak Concept Detection
+* does not include Adaptive Quiz Generation
 
-Future plans may include premium tiers with expanded limits.
+Premium Plan:
+
+* up to 100 Study Packs generated per month
+* includes everything in Free
+* includes Weak Concept Detection
+* includes Adaptive Quiz Generation
+
+Feature-gating behavior:
+
+* premium-only features should show a clear upgrade path when accessed on Free
+* gating should not break core review or study flows
 
 ---
 
