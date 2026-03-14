@@ -48,6 +48,8 @@ Current behavior:
   - `Recently created` (default)
   - `Recently reviewed`
   - `Title`
+- paginated loading in batches of `20` via cursor-based list API
+- `Load More` fetches the next page and appends items
 - Study Pack cards display:
   - title
   - shortened summary preview
@@ -60,6 +62,21 @@ Current behavior:
 Empty states:
 - no Study Packs: `Your study library is empty` + primary `Create Study Pack` action
 - no matches for current search: show a clear no-results message with a `Clear search` action
+
+### Pagination behavior
+
+Library list endpoint:
+- `GET /api/study-packs?limit=20&cursor=...`
+
+Response shape:
+- `items`
+- `nextCursor` (nullable)
+- `hasMore`
+
+Rules:
+- default page size is `20`
+- sorting remains deterministic (`createdAt` descending baseline for paging)
+- search and sort are applied on currently loaded items, and users can load additional pages while searching
 
 ### Study consistency card (UI guidance)
 

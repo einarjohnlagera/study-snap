@@ -59,6 +59,7 @@ Users can:
 * start Quick Review from a Study Pack card
 * read summaries and key concepts
 * view tag chips for quick scanning
+* load Study Packs in paginated batches (default 20) with a `Load More` control
 * start Quick Review sessions
 * delete Study Packs
 

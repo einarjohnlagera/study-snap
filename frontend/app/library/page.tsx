@@ -10,12 +10,13 @@ import {PageHeader} from "@/components/page-header";
 import {
   deleteMyStudyPack,
   getQuickReviewPerformanceSummary,
-  listMyStudyPacks,
+  listMyStudyPacksPage,
   type StudyPackListItemResponse,
 } from "@/lib/api";
 import {requireVerifiedOnboardedUser} from "@/lib/route-guards";
 
 type LibrarySortOption = "RECENTLY_CREATED" | "RECENTLY_REVIEWED" | "TITLE";
+const LIBRARY_PAGE_SIZE = 20;
 
 function toSummaryPreview(summary: string, maxLength = 160) {
   const clean = summary.trim();
@@ -54,14 +55,19 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<StudyPackListItemResponse | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const hydrateLastReviewed = useCallback(async (packs: StudyPackListItemResponse[]) => {
+  const hydrateLastReviewed = useCallback(async (packs: StudyPackListItemResponse[], append = false) => {
     if (packs.length === 0) {
-      setLastReviewedByPackId({});
+      if (!append) {
+        setLastReviewedByPackId({});
+      }
       return;
     }
 
@@ -76,7 +82,12 @@ export default function LibraryPage() {
       }),
     );
 
-    setLastReviewedByPackId(Object.fromEntries(entries));
+    const entriesByPackId = Object.fromEntries(entries);
+    setLastReviewedByPackId((previous) => (
+      append
+        ? { ...previous, ...entriesByPackId }
+        : entriesByPackId
+    ));
   }, []);
 
   const loadLibrary = useCallback(async () => {
@@ -90,12 +101,15 @@ export default function LibraryPage() {
     }
 
     setLoading(true);
+    setLoadingMore(false);
     setError(null);
     setActionError(null);
     try {
-      const data = await listMyStudyPacks();
-      setItems(data);
-      void hydrateLastReviewed(data);
+      const page = await listMyStudyPacksPage({ limit: LIBRARY_PAGE_SIZE });
+      setItems(page.items);
+      setNextCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+      void hydrateLastReviewed(page.items);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
       setError(message);
@@ -103,6 +117,27 @@ export default function LibraryPage() {
       setLoading(false);
     }
   }, [hydrateLastReviewed, router]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || !nextCursor || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    setActionError(null);
+    try {
+      const page = await listMyStudyPacksPage({ limit: LIBRARY_PAGE_SIZE, cursor: nextCursor });
+      setItems((previous) => [...previous, ...page.items]);
+      setNextCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+      void hydrateLastReviewed(page.items, true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not load more Study Packs.";
+      setActionError(message);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, hydrateLastReviewed, loadingMore, nextCursor]);
 
   useEffect(() => {
     void loadLibrary();
@@ -249,7 +284,7 @@ export default function LibraryPage() {
 
           {actionError ? (
             <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-base font-semibold sm:text-lg">Could not delete Study Pack</h2>
+              <h2 className="text-base font-semibold sm:text-lg">Library action failed</h2>
               <p className="text-sm text-foreground/75">{actionError}</p>
             </Card>
           ) : null}
@@ -382,6 +417,20 @@ export default function LibraryPage() {
               })}
             </div>
           )}
+
+          {hasMore ? (
+            <div className="flex justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void loadMore()}
+                disabled={loadingMore}
+                className="w-full sm:w-auto"
+              >
+                {loadingMore ? "Loading..." : "Load More"}
+              </Button>
+            </div>
+          ) : null}
 
           {pendingDeleteItem ? (
             <>
