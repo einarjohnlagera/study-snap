@@ -199,6 +199,7 @@ MVP library actions:
 - show tags as chips on Library cards to improve scanability
 - use clickable Study Pack cards/titles as the primary open interaction (avoid explicit `Open` buttons)
 - keep Quick Review as a secondary action where shown
+- use paginated Study Pack loading in Library (cursor-based, default page size `20`) with explicit `Load More`
 
 Future actions:
 - rename

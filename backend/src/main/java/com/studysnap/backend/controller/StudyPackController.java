@@ -3,7 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuickReviewActivityRequest;
-import com.studysnap.backend.dto.StudyPackListItemResponse;
+import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -76,11 +75,13 @@ public class StudyPackController {
 	}
 
 	@GetMapping
-	public List<StudyPackListItemResponse> listMine(
+	public StudyPackListPageResponse listMine(
+			@RequestParam(value = "limit", required = false) Integer limit,
+			@RequestParam(value = "cursor", required = false) String cursor,
 			@AuthenticationPrincipal AuthenticatedUser user
 	) {
 		UUID userId = user.userId();
-		return studyPackService.listMine(userId);
+		return studyPackService.listMine(userId, limit, cursor);
 	}
 
 	@DeleteMapping("/{id}")

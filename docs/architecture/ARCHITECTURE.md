@@ -214,6 +214,21 @@ Required backend support:
 - fetch Study Pack by id
 - delete Study Pack
 
+Study Pack list pagination:
+- endpoint: `GET /api/study-packs`
+- query params:
+  - `limit` (optional, default `20`)
+  - `cursor` (optional, opaque cursor token)
+- response:
+  - `items`: current page list
+  - `nextCursor`: cursor for the next page, nullable
+  - `hasMore`: whether additional pages are available
+
+Frontend pagination behavior:
+- initial Library load requests first page (`limit=20`)
+- `Load More` requests the next page using `nextCursor`
+- no infinite scroll; explicit button-driven pagination
+
 Recommended list metadata:
 - id
 - title

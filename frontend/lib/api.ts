@@ -40,6 +40,12 @@ export type StudyPackListItemResponse = {
   createdAt: string;
 };
 
+export type StudyPackListPageResponse = {
+  items: StudyPackListItemResponse[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
 export type TodayFocusType =
@@ -513,16 +519,50 @@ export async function confirmStudyPackText(
   return payload;
 }
 
-export async function listMyStudyPacks(): Promise<StudyPackListItemResponse[]> {
+export async function listMyStudyPacksPage(
+  options: { limit?: number; cursor?: string | null } = {},
+): Promise<StudyPackListPageResponse> {
+  const queryParams = new URLSearchParams();
+  if (options.limit && options.limit > 0) {
+    queryParams.set("limit", String(options.limit));
+  }
+  if (options.cursor) {
+    queryParams.set("cursor", options.cursor);
+  }
+
+  const path = queryParams.size > 0 ? `/study-packs?${queryParams.toString()}` : "/study-packs";
   const response = await fetchWithAuth(
-    "/study-packs",
+    path,
     {
       method: "GET",
       headers: buildAuthHeaders(),
     },
     true,
   );
-  return parseApiResponse<StudyPackListItemResponse[]>(response, "Could not load your Study Packs.");
+  return parseApiResponse<StudyPackListPageResponse>(response, "Could not load your Study Packs.");
+}
+
+export async function listMyStudyPacks(): Promise<StudyPackListItemResponse[]> {
+  const pageSize = 100;
+  const maxPages = 50;
+  const items: StudyPackListItemResponse[] = [];
+
+  let cursor: string | null = null;
+  let hasMore = true;
+  let pagesFetched = 0;
+
+  while (hasMore && pagesFetched < maxPages) {
+    const page = await listMyStudyPacksPage({ limit: pageSize, cursor });
+    items.push(...page.items);
+    hasMore = page.hasMore;
+    cursor = page.nextCursor;
+    pagesFetched += 1;
+    if (!cursor) {
+      break;
+    }
+  }
+
+  return items;
 }
 
 export async function getContinueStudyingRecommendation(): Promise<ContinueStudyingResponse> {

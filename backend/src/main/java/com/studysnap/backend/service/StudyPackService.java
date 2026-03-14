@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ConfirmTextRequest;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.NeedsTextConfirmationResponse;
+import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
 import com.studysnap.backend.dto.StudyPackListItemResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
@@ -18,9 +19,11 @@ import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
+import com.studysnap.backend.util.CreatedAtIdCursorUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -40,6 +43,8 @@ import java.util.UUID;
 public class StudyPackService {
     private static final Logger log = LoggerFactory.getLogger(StudyPackService.class);
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/png", "image/webp");
+    private static final int DEFAULT_LIST_LIMIT = 20;
+    private static final int MAX_LIST_LIMIT = 100;
 
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
@@ -147,17 +152,31 @@ public class StudyPackService {
     }
 
     @Transactional(readOnly = true)
-    public List<StudyPackListItemResponse> listMine(UUID ownerUserId) {
-        return studyPackRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId).stream()
-                .map(entity -> new StudyPackListItemResponse(
-                        entity.getId().toString(),
-                        entity.getTitle(),
-                        SummaryPreviewUtils.buildSummaryPreview(entity.getSummary(), 140),
-                        entity.getQuiz() == null ? 0 : entity.getQuiz().size(),
-                        entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
-                        entity.getCreatedAt()
-                ))
+    public StudyPackListPageResponse listMine(UUID ownerUserId, Integer limit, String cursor) {
+        int pageSize = normalizeLimit(limit);
+        int fetchSize = pageSize + 1;
+        CreatedAtIdCursorUtils.CursorToken cursorToken = parseCursorToken(cursor);
+
+        List<StudyPackEntity> fetched = cursorToken == null
+                ? studyPackRepository.findByOwnerUserIdOrderByCreatedAtDescIdDesc(ownerUserId, PageRequest.of(0, fetchSize))
+                : studyPackRepository.findByOwnerUserIdAndCursor(
+                        ownerUserId,
+                        cursorToken.createdAt(),
+                        cursorToken.id(),
+                        PageRequest.of(0, fetchSize)
+                );
+
+        boolean hasMore = fetched.size() > pageSize;
+        List<StudyPackEntity> pageEntities = hasMore ? fetched.subList(0, pageSize) : fetched;
+        List<StudyPackListItemResponse> items = pageEntities.stream()
+                .map(this::mapToListItemResponse)
                 .toList();
+
+        String nextCursor = hasMore && !pageEntities.isEmpty()
+                ? encodeCursorToken(pageEntities.getLast().getCreatedAt(), pageEntities.getLast().getId())
+                : null;
+
+        return new StudyPackListPageResponse(items, nextCursor, hasMore);
     }
 
     public void deleteMine(String id, UUID ownerUserId) {
@@ -299,6 +318,43 @@ public class StudyPackService {
                 entity.getCreatedAt(),
                 new StudyPackMeta(entity.getOcrConfidence(), latencyMs)
         );
+    }
+
+    private StudyPackListItemResponse mapToListItemResponse(StudyPackEntity entity) {
+        return new StudyPackListItemResponse(
+                entity.getId().toString(),
+                entity.getTitle(),
+                SummaryPreviewUtils.buildSummaryPreview(entity.getSummary(), 140),
+                entity.getQuiz() == null ? 0 : entity.getQuiz().size(),
+                entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
+                entity.getCreatedAt()
+        );
+    }
+
+    private int normalizeLimit(Integer limit) {
+        if (limit == null || limit <= 0) {
+            return DEFAULT_LIST_LIMIT;
+        }
+        return Math.min(limit, MAX_LIST_LIMIT);
+    }
+
+    private CreatedAtIdCursorUtils.CursorToken parseCursorToken(String cursor) {
+        if (cursor == null || cursor.isBlank()) {
+            return null;
+        }
+        try {
+            return CreatedAtIdCursorUtils.decode(cursor);
+        } catch (Exception ex) {
+            throw new AppException(
+                    "INVALID_CURSOR",
+                    "Invalid pagination cursor.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    private String encodeCursorToken(OffsetDateTime createdAt, UUID id) {
+        return CreatedAtIdCursorUtils.encode(createdAt, id);
     }
 
     private String[] resolveTags(List<String> generatedTags, String fallbackTitle) {
