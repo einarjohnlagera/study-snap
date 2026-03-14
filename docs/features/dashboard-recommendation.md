@@ -51,7 +51,7 @@ Today's Focus priority:
 
 1. Resume unfinished review (`resumeState = QUESTION_IN_PROGRESS`)
 2. Retry incorrect questions (`resumeState = RETRY_IN_PROGRESS`, including retry transition handling)
-3. Practice weak concepts from the latest completed Quick Review session
+3. Practice weak concepts from the latest completed Quick Review session (Premium only)
 4. Review a specific Study Pack (fallback priority: last opened -> most recently created -> most recently reviewed)
 5. Study suggestion only if no Study Packs exist
 
@@ -62,6 +62,10 @@ Action routing guidance:
 - `PRACTICE_WEAK_CONCEPT` -> Study Pack adaptive practice route
 - `REVIEW_PACK` -> Study Pack Quick Review route
 - `STUDY_SUGGESTION` -> Study route (no packs yet)
+
+Plan gating note:
+- Free users should not receive a weak-concept/adaptive-practice focus recommendation
+- when on Free, Today’s Focus should continue with resume/retry or pack-review suggestions
 
 ---
 

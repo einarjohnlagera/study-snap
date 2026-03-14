@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
@@ -24,7 +25,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -34,6 +37,7 @@ public class QuickReviewSessionService {
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final StudyPackRepository studyPackRepository;
     private final ActivityTrackingService activityTrackingService;
+    private final SubscriptionService subscriptionService;
 
     public QuickReviewSessionStartResponse startSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
@@ -126,7 +130,7 @@ public class QuickReviewSessionService {
         session.setSessionState(request.sessionState());
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
 
-        return toResponse(saved);
+        return toResponse(saved, subscriptionService.resolvePlan(userId));
     }
 
     public QuickReviewSessionResponse completeSession(String sessionIdRaw, UUID userId, QuickReviewSessionCompleteRequest request) {
@@ -159,13 +163,14 @@ public class QuickReviewSessionService {
         session.setScorePercentage(scorePercentage);
         session.setRetryCount(request.retryCount());
         session.setDurationSeconds(request.durationSeconds());
-        session.setSessionMetadata(request.sessionMetadata());
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        session.setSessionMetadata(sanitizeSessionMetadataForPlan(request.sessionMetadata(), planType));
         session.setCompletedAt(OffsetDateTime.now());
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
 
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 
-        return toResponse(saved);
+        return toResponse(saved, planType);
     }
 
     @Transactional(readOnly = true)
@@ -180,12 +185,13 @@ public class QuickReviewSessionService {
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
         int normalizedLimit = Math.max(1, Math.min(limit, 10));
+        PlanType planType = subscriptionService.resolvePlan(userId);
         return quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         studyPackId,
                         PageRequest.of(0, normalizedLimit)
                 ).stream()
-                .map(this::toResponse)
+                .map(session -> toResponse(session, planType))
                 .toList();
     }
 
@@ -222,7 +228,7 @@ public class QuickReviewSessionService {
         );
     }
 
-    private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session) {
+    private QuickReviewSessionResponse toResponse(QuickReviewSessionEntity session, PlanType planType) {
         return new QuickReviewSessionResponse(
                 session.getId().toString(),
                 session.getStudyPackId().toString(),
@@ -234,7 +240,7 @@ public class QuickReviewSessionService {
                 session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage(),
                 session.getRetryCount() == null ? 0 : session.getRetryCount(),
                 session.getDurationSeconds(),
-                extractWeakConcepts(session),
+                planType == PlanType.PREMIUM ? extractWeakConcepts(session) : List.of(),
                 session.getSessionState(),
                 session.getCreatedAt(),
                 session.getCompletedAt()
@@ -272,5 +278,21 @@ public class QuickReviewSessionService {
             }
         }
         return weakConcepts;
+    }
+
+    private Map<String, Object> sanitizeSessionMetadataForPlan(
+            Map<String, Object> sessionMetadata,
+            PlanType planType
+    ) {
+        if (sessionMetadata == null || sessionMetadata.isEmpty()) {
+            return sessionMetadata;
+        }
+        if (planType == PlanType.PREMIUM) {
+            return sessionMetadata;
+        }
+
+        Map<String, Object> sanitized = new LinkedHashMap<>(sessionMetadata);
+        sanitized.remove("weakConcepts");
+        return sanitized.isEmpty() ? null : sanitized;
     }
 }

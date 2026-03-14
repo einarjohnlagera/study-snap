@@ -70,7 +70,7 @@ export default function Home() {
               Get Started Free
             </Link>
             <Link
-              href="/study?demo=true"
+              href="/demo"
               className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
             >
               Try Demo
@@ -154,18 +154,18 @@ export default function Home() {
             <h3 className="text-xl font-semibold">Free</h3>
             <p className="text-sm text-foreground/75">Best for getting started and daily revision.</p>
             <ul className="space-y-1 text-sm text-foreground/80">
-              <li>Up to 3 Study Packs per day</li>
+              <li>Up to 5 Study Packs per month</li>
               <li>Quick Review and Study Library access</li>
-              <li>OCR and AI-powered study generation</li>
+              <li>AI summaries, key concepts, and Today&apos;s Focus guidance</li>
             </ul>
           </Card>
           <Card className="space-y-3 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
             <h3 className="text-xl font-semibold">Premium</h3>
             <p className="text-sm text-foreground/75">For heavier usage and longer-term study workflows.</p>
             <ul className="space-y-1 text-sm text-foreground/80">
-              <li>Higher monthly Study Pack limits</li>
-              <li>More room for regular review practice</li>
-              <li>Future advanced features as they launch</li>
+              <li>Up to 100 Study Packs per month</li>
+              <li>Weak Concept Detection</li>
+              <li>Adaptive Quiz Generation</li>
             </ul>
           </Card>
         </div>
@@ -182,7 +182,7 @@ export default function Home() {
               Create Free Account
             </Link>
             <Link
-              href="/study?demo=true"
+              href="/demo"
               className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
             >
               Explore Demo

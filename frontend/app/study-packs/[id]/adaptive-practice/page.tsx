@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { getAuthUser } from "@/lib/auth";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   generateAdaptiveQuickReviewQuiz,
@@ -36,6 +37,7 @@ export default function AdaptivePracticePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
   const [completionTracked, setCompletionTracked] = useState(false);
+  const [premiumLocked, setPremiumLocked] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -57,6 +59,15 @@ export default function AdaptivePracticePage() {
 
     setLoading(true);
     setError(null);
+    setPremiumLocked(false);
+    const authUser = getAuthUser();
+    if (authUser?.planType !== "PREMIUM") {
+      setAdaptiveQuiz(null);
+      setPremiumLocked(true);
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await generateAdaptiveQuickReviewQuiz(studyPackId);
       setAdaptiveQuiz(response);
@@ -139,6 +150,28 @@ export default function AdaptivePracticePage() {
             <Button type="button" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()}>
               Try Again
             </Button>
+            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
+                Back to Study Pack
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      ) : premiumLocked ? (
+        <Card className="space-y-4 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Adaptive Practice
+          </p>
+          <h1 className="text-xl font-semibold sm:text-2xl">Premium feature</h1>
+          <p className="text-sm text-foreground/75">
+            Adaptive Quiz Generation and weak-concept targeting are available on Premium.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link href="/settings" className="w-full sm:w-auto">
+              <Button type="button" className="w-full sm:w-auto">
+                Upgrade to Premium
+              </Button>
+            </Link>
             <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
                 Back to Study Pack

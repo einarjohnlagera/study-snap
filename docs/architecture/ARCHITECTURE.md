@@ -320,7 +320,7 @@ Rules:
 Demo mode is frontend-driven and does not use the real backend generation flow.
 
 Demo flow:
-Landing → `/study?demo=true` → simulated generation → static Study Pack
+Landing → `/demo` (or `/study?demo=true`) → simulated generation → static Study Pack
 
 Real flow:
 Landing → `/study` → `POST /api/study-packs` → OCR/LLM → database → response

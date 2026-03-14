@@ -116,9 +116,12 @@ Deliverable:
 - [ ] support reviewed status later
 
 ## Phase 10 — Usage limits + plans
-- [ ] Demo: 1 study pack (anonymous cookie/session)
-- [ ] Free: 3 study packs/day
-- [ ] Premium: 200 study packs/month + premium-only features later
+- [ ] Public demo route (`/demo`) with prebuilt Study Pack (no new LLM generation cost)
+- [ ] Free: 5 Study Packs/month
+- [ ] Premium: 100 Study Packs/month
+- [ ] Premium-only features:
+  - [ ] Weak Concept Detection
+  - [ ] Adaptive Quiz Generation
 - [ ] subscriptions table
 - [ ] plan enforcement
 - [ ] analytics-ready subscription history

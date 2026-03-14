@@ -7,9 +7,13 @@ import { StudyPackResults } from "./study-pack-results";
 import { StudyInputCard } from "./study-input-card";
 import { useStudyPack } from "./use-study-pack";
 
-export default function StudyPage() {
+type StudyPageClientProps = {
+  forcedDemoMode?: boolean;
+};
+
+export default function StudyPageClient({ forcedDemoMode = false }: StudyPageClientProps) {
   const searchParams = useSearchParams();
-  const demoMode = searchParams.get("demo") === "true";
+  const demoMode = forcedDemoMode || searchParams.get("demo") === "true";
 
   const {
     notesText,

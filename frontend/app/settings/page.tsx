@@ -12,6 +12,10 @@ function formatPlan(planType: MeResponse["planType"]): string {
   return planType.charAt(0) + planType.slice(1).toLowerCase();
 }
 
+function getMonthlyStudyPackLimit(planType: MeResponse["planType"]): number {
+  return planType === "PREMIUM" ? 100 : 5;
+}
+
 function SettingsLoading() {
   return (
     <Card className="space-y-4 p-4 sm:p-6">
@@ -137,6 +141,13 @@ export default function SettingsPage() {
             <div className="rounded-md border border-border bg-background p-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current Plan</p>
               <p className="mt-2 text-lg font-semibold">{formatPlan(profile.planType)}</p>
+              <p className="mt-1 text-sm text-foreground/70">
+                Study Pack generation limit: {getMonthlyStudyPackLimit(profile.planType)} per month
+              </p>
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-foreground/75">
+                <li>Free includes Study Pack generation, Quick Review, Library, Today&apos;s Focus, and AI Study Coach</li>
+                <li>Premium adds Weak Concept Detection and Adaptive Quiz Generation</li>
+              </ul>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Button type="button" className="w-full sm:w-auto" onClick={handleUpgradeClick}>

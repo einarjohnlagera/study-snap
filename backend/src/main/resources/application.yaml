@@ -65,6 +65,9 @@ studysnap:
       enabled: ${QUICK_REVIEW_STUDY_TIP_ENABLED:false}
       min-incorrect-count: ${QUICK_REVIEW_STUDY_TIP_MIN_INCORRECT_COUNT:1}
       max-questions: ${QUICK_REVIEW_STUDY_TIP_MAX_QUESTIONS:3}
+  pricing:
+    free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:5}
+    premium-monthly-study-pack-limit: ${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}
   security:
     jwt:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}

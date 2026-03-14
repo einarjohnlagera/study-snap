@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
@@ -47,6 +48,7 @@ public class DashboardService {
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
+    private final SubscriptionService subscriptionService;
 
     public ContinueStudyingResponse getContinueStudyingRecommendation(UUID userId) {
         // Priority 1: resume an unfinished Quick Review session when available.
@@ -91,12 +93,13 @@ public class DashboardService {
     }
 
     public TodayFocusResponse getTodayFocus(UUID userId) {
+        PlanType planType = subscriptionService.resolvePlan(userId);
         Optional<TodayFocusResponse> inProgressFocus = resolveTodayFocusInProgress(userId);
         if (inProgressFocus.isPresent()) {
             return inProgressFocus.get();
         }
 
-        Optional<TodayFocusResponse> weakConceptFocus = resolveTodayFocusWeakConcepts(userId);
+        Optional<TodayFocusResponse> weakConceptFocus = resolveTodayFocusWeakConcepts(userId, planType);
         if (weakConceptFocus.isPresent()) {
             return weakConceptFocus.get();
         }
@@ -181,7 +184,11 @@ public class DashboardService {
         return Optional.empty();
     }
 
-    private Optional<TodayFocusResponse> resolveTodayFocusWeakConcepts(UUID userId) {
+    private Optional<TodayFocusResponse> resolveTodayFocusWeakConcepts(UUID userId, PlanType planType) {
+        if (planType != PlanType.PREMIUM) {
+            return Optional.empty();
+        }
+
         QuickReviewSessionEntity latestCompletedSession = quickReviewSessionRepository
                 .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 1))
                 .stream()

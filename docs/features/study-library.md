@@ -11,6 +11,18 @@ Core idea:
 - saved Study Packs can be revisited later
 - the library becomes a long-term learning workspace
 
+## Plans and usage limits
+
+Study Pack generation is monthly quota-based:
+- Free: 5 Study Packs/month
+- Premium: 100 Study Packs/month
+
+Feature access:
+- Free includes generation, summaries, key concepts, Quick Review, retry, Library, Today's Focus, and AI Study Coach
+- Premium includes everything in Free plus Weak Concept Detection and Adaptive Quiz Generation
+
+If a user on Free reaches monthly quota or opens a Premium-only flow, UI should provide a clear upgrade path without breaking navigation.
+
 ## MVP behavior
 
 The dashboard is primarily for authenticated users.

@@ -116,6 +116,11 @@ For each question:
 
 Quick Review should feel consistent with quiz behavior elsewhere in the app.
 
+Plan gating:
+- core Quick Review (question flow, retry, score) is available on Free and Premium
+- Weak Concept Detection is Premium-only
+- Adaptive Practice is Premium-only
+
 ---
 
 ## Retry Incorrect Questions
@@ -198,9 +203,10 @@ The results screen may also show:
 - weak concepts (derived from incorrectly answered question concepts)
 
 Weak concept detection:
-- when a session is completed, incorrect answers are mapped to their `concept` values
+- when a Premium session is completed, incorrect answers are mapped to their `concept` values
 - duplicate concepts are deduplicated for the session summary
-- results display a `Weak Concepts` section when at least one concept was missed
+- results display a `Weak Concepts` section when at least one concept was missed (Premium)
+- Free plan users continue to get normal score/retry flow without weak-concept output
 - concise concept metadata improves weak-area quality and adaptive practice targeting
 
 ### Study Tip
@@ -233,6 +239,7 @@ Behavior:
 
 - weak concepts are sourced from the most recent completed Quick Review for the same Study Pack
 - adaptive practice is available only when weak concepts exist
+- adaptive practice is Premium-only
 - adaptive quiz is newly generated and separate from the original Study Pack quiz
 - adaptive set contains 3-5 questions, each with 4 choices, one correct answer, and explanation
 - adaptive questions target weak concepts and prioritize understanding over wording recall
@@ -241,6 +248,7 @@ Behavior:
 Entry point:
 
 - results screen shows `Practice Weak Areas` when weak concepts exist
+- Free users should see a clear upgrade CTA instead of adaptive-practice launch
 - this starts a separate follow-up practice flow
 
 ### Retry-transition CTA hierarchy

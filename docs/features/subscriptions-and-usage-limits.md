@@ -10,17 +10,21 @@ Support freemium usage control and future premium plan behavior.
 - separate from authenticated subscriptions
 - should not hit the real LLM pipeline
 - no saving
-- 3-question quiz direction
+- public route `/demo`
+- prebuilt Study Pack with no new LLM call and no real session persistence
 
 ### Free
-- 3 study packs per day
+- 5 Study Packs per month
 - access to Study Library
-- 5-question quiz direction
+- includes Study Pack generation, summaries, key concepts, Quick Review, retry, Today’s Focus, and AI Study Coach
 
 ### Premium
-- up to 200 study packs per month
+- up to 100 Study Packs per month
 - access to Study Library
-- premium-only features later
+- includes everything in Free
+- Premium-only features:
+  - Weak Concept Detection
+  - Adaptive Quiz Generation
 
 ## Subscription design
 

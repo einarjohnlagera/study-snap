@@ -7,6 +7,7 @@ import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { getAuthUser } from "@/lib/auth";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   completeQuickReviewSession,
@@ -236,6 +237,7 @@ export default function QuickReviewPage() {
   const improvedVsPrevious = previousAttempt ? score > previousAttempt.correctAnswers : false;
   const scoreFeedback = getMotivationalFeedback(scorePercentage);
   const performanceBadge = getPerformanceBadge(scorePercentage);
+  const isPremiumPlan = useMemo(() => (getAuthUser()?.planType ?? "FREE") === "PREMIUM", []);
   const isPerfectScore = totalQuestions > 0 && score === totalQuestions;
   const displayedRetryCount = persistedResult?.retryCount ?? retryCount;
   const currentRoundType = phase === "retry" ? "RETRY" : "INITIAL";
@@ -266,12 +268,15 @@ export default function QuickReviewPage() {
     return Array.from(new Set(concepts));
   }, [quiz, selectedChoices]);
   const displayedWeakConcepts = useMemo(() => {
+    if (!isPremiumPlan) {
+      return [];
+    }
     const persistedWeakConcepts = persistedResult?.weakConcepts?.filter((concept) => concept.trim().length > 0) ?? [];
     if (persistedWeakConcepts.length > 0) {
       return persistedWeakConcepts;
     }
     return weakConcepts;
-  }, [persistedResult?.weakConcepts, weakConcepts]);
+  }, [isPremiumPlan, persistedResult?.weakConcepts, weakConcepts]);
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -373,9 +378,11 @@ export default function QuickReviewPage() {
         totalQuestions,
         retryCount: effectiveRetryCount,
         durationSeconds,
-        sessionMetadata: {
-          weakConcepts,
-        },
+        sessionMetadata: isPremiumPlan
+          ? {
+              weakConcepts,
+            }
+          : undefined,
       });
       setPersistedResult(result);
     } catch {
@@ -384,7 +391,7 @@ export default function QuickReviewPage() {
       setCompletionTracked(true);
       setCompletingSession(false);
     }
-  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
+  }, [completingSession, completionTracked, currentSessionId, isPremiumPlan, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
     if (!isComplete || !studyPack) {
@@ -637,13 +644,25 @@ export default function QuickReviewPage() {
                 </ul>
               </div>
             ) : null}
+            {!isPerfectScore && incorrectCount > 0 && !isPremiumPlan ? (
+              <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
+                <p className="text-sm text-foreground/85">
+                  Weak Concept Detection and Adaptive Quiz Generation are available on Premium.
+                </p>
+                <Link href="/settings" className="inline-flex">
+                  <Button type="button" variant="outline" size="sm">
+                    Upgrade to Premium
+                  </Button>
+                </Link>
+              </div>
+            ) : null}
             {displayedRetryCount > 0 ? <p>Retry attempts: {displayedRetryCount}</p> : null}
             {studyTip ? (
               <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
                   Study Tip
                 </p>
-                <p className="whitespace-normal break-words leading-relaxed text-foreground/85">{studyTip}</p>
+                <p className="whitespace-normal wrap-break-word leading-relaxed text-foreground/85">{studyTip}</p>
               </div>
             ) : null}
           </div>
@@ -653,7 +672,7 @@ export default function QuickReviewPage() {
                 Back to Study Pack
               </Button>
             </Link>
-            {displayedWeakConcepts.length > 0 ? (
+            {isPremiumPlan && displayedWeakConcepts.length > 0 ? (
               <Link href={`/study-packs/${studyPack.id}/adaptive-practice`} className="w-full sm:w-auto">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Practice Weak Areas

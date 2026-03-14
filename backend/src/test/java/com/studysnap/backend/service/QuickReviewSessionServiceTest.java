@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
@@ -47,6 +48,8 @@ class QuickReviewSessionServiceTest {
     private StudyPackRepository studyPackRepository;
     @Mock
     private ActivityTrackingService activityTrackingService;
+    @Mock
+    private SubscriptionService subscriptionService;
 
     private QuickReviewSessionService quickReviewSessionService;
 
@@ -55,10 +58,12 @@ class QuickReviewSessionServiceTest {
         quickReviewSessionService = new QuickReviewSessionService(
                 quickReviewSessionRepository,
                 studyPackRepository,
-                activityTrackingService
+                activityTrackingService,
+                subscriptionService
         );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
     }
 
     @Test
@@ -193,6 +198,29 @@ class QuickReviewSessionServiceTest {
         QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
 
         assertThat(response.weakConcepts()).containsExactly("Light Reactions", "Calvin Cycle", "Light Reactions");
+    }
+
+    @Test
+    void completeSession_hidesWeakConceptsForFreePlan() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        QuickReviewSessionCompleteRequest request = new QuickReviewSessionCompleteRequest(
+                3,
+                5,
+                1,
+                120,
+                Map.of("weakConcepts", List.of("Light Reactions", "Calvin Cycle"))
+        );
+
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
+
+        assertThat(response.weakConcepts()).isEmpty();
+        assertThat(session.getSessionMetadata()).isNull();
     }
 
     @Test
