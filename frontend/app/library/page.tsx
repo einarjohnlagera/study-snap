@@ -273,14 +273,24 @@ export default function LibraryPage() {
                 const lastReviewed = lastReviewedByPackId[item.id];
 
                 return (
-                  <Card key={item.id} className="flex h-full flex-col justify-between space-y-4 p-4 sm:p-6">
+                  <Card
+                    key={item.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => router.push(`/study-packs/${item.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(`/study-packs/${item.id}`);
+                      }
+                    }}
+                    className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-2">
-                        <Link href={`/study-packs/${item.id}`} className="group block">
-                          <h3 className="text-base font-semibold transition-colors group-hover:text-foreground sm:text-lg">
-                            {item.title}
-                          </h3>
-                        </Link>
+                        <h3 className="text-base font-semibold transition-colors sm:text-lg">
+                          {item.title}
+                        </h3>
                         <p className="text-sm leading-relaxed text-foreground/75">
                           {toSummaryPreview(item.summaryPreview)}
                         </p>
@@ -294,23 +304,30 @@ export default function LibraryPage() {
                           aria-label={`Open actions for ${item.title}`}
                           aria-haspopup="menu"
                           aria-expanded={menuOpen}
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setMenuOpenId((previous) => (previous === item.id ? null : item.id));
                             setActionError(null);
                           }}
+                          onKeyDown={(event) => event.stopPropagation()}
                           disabled={isDeleting}
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                         {menuOpen ? (
-                          <div className="absolute right-0 top-10 z-20 w-44 rounded-md border border-border bg-background p-1 shadow-sm">
+                          <div
+                            className="absolute right-0 top-10 z-20 w-44 rounded-md border border-border bg-background p-1 shadow-sm"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <button
                               type="button"
                               className="block w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                              onClick={() => {
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 setPendingDeleteItem(item);
                                 setMenuOpenId(null);
                               }}
+                              onKeyDown={(event) => event.stopPropagation()}
                               disabled={isDeleting}
                             >
                               Delete Study Pack
@@ -347,16 +364,18 @@ export default function LibraryPage() {
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      <Link href={`/study-packs/${item.id}`} className="w-full sm:w-auto">
-                        <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto">
-                          Open Study Pack
-                        </Button>
-                      </Link>
-                      <Link href={`/study-packs/${item.id}/quick-review`} className="w-full sm:w-auto">
-                        <Button type="button" size="sm" className="w-full sm:w-auto">
-                          Quick Review
-                        </Button>
-                      </Link>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          router.push(`/study-packs/${item.id}/quick-review`);
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        Quick Review
+                      </Button>
                     </div>
                   </Card>
                 );
