@@ -147,26 +147,37 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Pricing
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Start free, upgrade when your study load grows</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Start free. Upgrade when you need more.</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="space-y-3 p-4 sm:p-6">
             <h3 className="text-xl font-semibold">Free</h3>
-            <p className="text-sm text-foreground/75">Best for getting started and daily revision.</p>
             <ul className="space-y-1 text-sm text-foreground/80">
-              <li>Up to 5 Study Packs per month</li>
-              <li>Quick Review and Study Library access</li>
-              <li>AI summaries, key concepts, and Today&apos;s Focus guidance</li>
+              <li>5 Study Packs per month</li>
+              <li>AI summaries</li>
+              <li>Key concepts</li>
+              <li>Quick Review quizzes</li>
+              <li>Retry incorrect answers</li>
+              <li>Study Library</li>
+              <li>Today&apos;s Focus</li>
+              <li>AI Study Coach</li>
             </ul>
+            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+              Start Free
+            </Link>
           </Card>
           <Card className="space-y-3 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
             <h3 className="text-xl font-semibold">Premium</h3>
-            <p className="text-sm text-foreground/75">For heavier usage and longer-term study workflows.</p>
+            <p className="text-sm text-foreground/75">Everything in Free plus:</p>
             <ul className="space-y-1 text-sm text-foreground/80">
-              <li>Up to 100 Study Packs per month</li>
-              <li>Weak Concept Detection</li>
-              <li>Adaptive Quiz Generation</li>
+              <li>100 Study Packs per month</li>
+              <li>Weak concept detection</li>
+              <li>Adaptive quiz generation</li>
+              <li>Advanced review tools</li>
             </ul>
+            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+              Upgrade to Premium
+            </Link>
           </Card>
         </div>
       </section>

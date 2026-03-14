@@ -118,7 +118,9 @@ Deliverable:
 ## Phase 10 — Usage limits + plans
 - [ ] Public demo route (`/demo`) with prebuilt Study Pack (no new LLM generation cost)
 - [ ] Free: 5 Study Packs/month
+  - [ ] Includes AI summaries, key concepts, Quick Review, retry, Library, Today's Focus, and AI Study Coach
 - [ ] Premium: 100 Study Packs/month
+  - [ ] Includes everything in Free plus advanced review capabilities
 - [ ] Premium-only features:
   - [ ] Weak Concept Detection
   - [ ] Adaptive Quiz Generation
