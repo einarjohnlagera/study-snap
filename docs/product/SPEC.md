@@ -212,6 +212,7 @@ Premium Plan:
 * includes everything in Free
 * includes Weak Concept Detection
 * includes Adaptive Quiz Generation
+* includes advanced review tools as Premium capabilities expand
 
 Feature-gating behavior:
 

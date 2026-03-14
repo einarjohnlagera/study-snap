@@ -171,8 +171,9 @@ Initial model decision:
 
 Plan and quota policy:
 - Free: 5 Study Packs/month
+- Free includes AI summaries, key concepts, Quick Review, retry, Study Library, Today's Focus, and AI Study Coach
 - Premium: 100 Study Packs/month
-- weak concept detection and adaptive quiz generation are Premium-only
+- Premium includes everything in Free, plus weak concept detection, adaptive quiz generation, and advanced review capabilities
 
 Config knobs may include:
 - `LLM_MODEL_FREE`
