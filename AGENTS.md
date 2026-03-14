@@ -44,6 +44,11 @@ Pages:
 - Study (paste notes + upload image)
 - Results (study pack sheet + quiz)
 
+Public landing page requirements:
+- route `/` should clearly communicate Study Snap value for unauthenticated users
+- include hero, Study Pack preview, how-it-works, feature highlights, pricing teaser, and final CTA
+- primary CTA should drive account creation; secondary CTA may drive demo exploration
+
 Backend:
 - One primary endpoint family for Study Pack generation
 - OCR confirmation flow for image-based inputs
