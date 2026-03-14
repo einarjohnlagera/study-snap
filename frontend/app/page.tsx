@@ -17,17 +17,17 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 const coreOutputs = [
   {
     title: "Summary",
-    description: "Get a concise explanation of your notes so you can start reviewing quickly.",
+    description: "Understand the topic quickly with a clear summary of your notes.",
     icon: Sparkles,
   },
   {
     title: "Key Concepts",
-    description: "See the important ideas and terms pulled into a clean, scannable list.",
+    description: "See the most important ideas and terms in a simple, scannable list.",
     icon: Brain,
   },
   {
     title: "Quick Review",
-    description: "Reinforce learning with short quizzes, feedback, and retry support.",
+    description: "Practice active recall with quiz questions, feedback, and retry support.",
     icon: ListChecks,
   },
 ];
@@ -56,14 +56,14 @@ export default function Home() {
           />
           <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 text-xs text-foreground/80 sm:text-sm">
             <ScanText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            AI study support for notes, reviews, and practice
+            AI study assistant for notes, review, and practice
           </div>
           <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl md:text-5xl">
-            Turn your notes into study packs in seconds.
+            Turn your notes into a Study Pack you can actually review.
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Study Snap helps you convert raw notes into a structured Study Pack with summaries, key concepts,
-            and quiz questions. Then it guides what to review next with Quick Review, weak-area insights, and adaptive practice.
+            Study Snap transforms raw notes into a clear Study Pack with a summary, key concepts, and a quiz.
+            Then it helps you review smarter with Quick Review, weak-area insights, and adaptive practice.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
@@ -84,7 +84,7 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Study Pack Preview
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Everything you need for focused review</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Each Study Pack includes three essentials</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           {coreOutputs.map((item) => (
@@ -102,23 +102,23 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             How It Works
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">From notes to smarter review in 3 steps</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">From notes to better review in 3 steps</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="space-y-2 p-4 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Step 1</p>
             <h3 className="text-lg font-semibold">Upload notes</h3>
-            <p className="text-sm text-foreground/75">Paste text or upload an image for OCR extraction.</p>
+            <p className="text-sm text-foreground/75">Paste notes or upload an image. OCR extracts the text for you.</p>
           </Card>
           <Card className="space-y-2 p-4 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Step 2</p>
             <h3 className="text-lg font-semibold">Generate Study Pack</h3>
-            <p className="text-sm text-foreground/75">Get summary, concepts, and quiz questions instantly.</p>
+            <p className="text-sm text-foreground/75">Get a summary, key concepts, and quiz questions in one place.</p>
           </Card>
           <Card className="space-y-2 p-4 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Step 3</p>
             <h3 className="text-lg font-semibold">Review smarter</h3>
-            <p className="text-sm text-foreground/75">Use Quick Review, weak areas, and adaptive practice to improve.</p>
+            <p className="text-sm text-foreground/75">Use Quick Review, spot weak areas, and practice what needs more work.</p>
           </Card>
         </div>
       </section>
@@ -128,7 +128,7 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Feature Highlights
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Built to guide your next study action</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Built to guide your next best study step</h2>
         </div>
         <Card className="p-4 sm:p-6">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -147,12 +147,12 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Pricing
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Start free, upgrade when you need more</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Start free, upgrade when your study load grows</h2>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="space-y-3 p-4 sm:p-6">
             <h3 className="text-xl font-semibold">Free</h3>
-            <p className="text-sm text-foreground/75">Great for getting started and daily study sessions.</p>
+            <p className="text-sm text-foreground/75">Best for getting started and daily revision.</p>
             <ul className="space-y-1 text-sm text-foreground/80">
               <li>Up to 3 Study Packs per day</li>
               <li>Quick Review and Study Library access</li>
@@ -161,10 +161,10 @@ export default function Home() {
           </Card>
           <Card className="space-y-3 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
             <h3 className="text-xl font-semibold">Premium</h3>
-            <p className="text-sm text-foreground/75">For heavier usage and more advanced study workflows.</p>
+            <p className="text-sm text-foreground/75">For heavier usage and longer-term study workflows.</p>
             <ul className="space-y-1 text-sm text-foreground/80">
               <li>Higher monthly Study Pack limits</li>
-              <li>More room for continuous review practice</li>
+              <li>More room for regular review practice</li>
               <li>Future advanced features as they launch</li>
             </ul>
           </Card>
@@ -173,9 +173,9 @@ export default function Home() {
 
       <section className="rounded-2xl border border-border bg-gray-50 p-6 text-center shadow-sm dark:bg-gray-950/40 sm:p-10">
         <div className="mx-auto max-w-2xl space-y-4">
-          <h2 className="text-2xl font-semibold sm:text-3xl">Ready to study with structure and momentum?</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Ready to study with more clarity and consistency?</h2>
           <p className="text-sm text-foreground/75 sm:text-base">
-            Create your account and turn your next set of notes into a reusable Study Pack.
+            Create your account and turn your next set of notes into a reusable Study Pack for active review.
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
             <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
