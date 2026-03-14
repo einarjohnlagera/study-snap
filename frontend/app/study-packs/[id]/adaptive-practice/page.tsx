@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
+import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   generateAdaptiveQuickReviewQuiz,
@@ -87,7 +88,7 @@ export default function AdaptivePracticePage() {
     void loadAdaptiveQuiz();
   }, [loadAdaptiveQuiz]);
 
-  const quiz = adaptiveQuiz?.quiz ?? [];
+  const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
   const currentQuestion = hasQuestions ? quiz[currentIndex] : null;
   const selectedChoice = selectedChoices[currentIndex] ?? null;
@@ -167,7 +168,7 @@ export default function AdaptivePracticePage() {
             Adaptive Quiz Generation and weak-concept targeting are available on Premium.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href="/settings" className="w-full sm:w-auto">
+            <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
                 Upgrade to Premium
               </Button>

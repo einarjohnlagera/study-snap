@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
+import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   completeQuickReviewSession,
@@ -649,7 +650,7 @@ export default function QuickReviewPage() {
                 <p className="text-sm text-foreground/85">
                   Weak Concept Detection and Adaptive Quiz Generation are available on Premium.
                 </p>
-                <Link href="/settings" className="inline-flex">
+                <Link href={PLAN_BILLING_PATH} className="inline-flex">
                   <Button type="button" variant="outline" size="sm">
                     Upgrade to Premium
                   </Button>
@@ -691,7 +692,7 @@ export default function QuickReviewPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Progress
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">You're making progress.</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">You&apos;re making progress.</h1>
           <div className="space-y-2 rounded-md border border-border bg-background p-3 text-sm text-foreground/75">
             <ScoreProgressBlock score={score} totalQuestions={totalQuestions} scorePercentage={scorePercentage} />
           </div>

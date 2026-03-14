@@ -124,6 +124,9 @@ Deliverable:
 - [ ] Premium-only features:
   - [ ] Weak Concept Detection
   - [ ] Adaptive Quiz Generation
+- [X] Settings `Plan & Billing` section shows current plan, monthly usage indicator, Premium feature card, and upgrade placeholder CTA
+- [X] Dashboard shows Free plan monthly usage indicator with subtle upgrade action and limit-reached upgrade CTA
+- [X] Premium-gated prompts route users to Settings `Plan & Billing` (`/settings#plan-billing`)
 - [ ] subscriptions table
 - [ ] plan enforcement
 - [ ] analytics-ready subscription history

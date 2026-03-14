@@ -3,15 +3,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  getMe,
   getContinueStudyingRecommendation,
   getStudyEngagement,
   getTodayFocus,
   listMyStudyPacks,
   type ContinueStudyingResponse,
+  type PlanType,
   type StudyEngagementResponse,
   type StudyPackListItemResponse,
   type TodayFocusResponse,
 } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
+import { getCurrentMonthStudyPackUsage, getMonthlyStudyPackLimit } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import { DashboardHero } from "./dashboard-hero";
 import { ContinueSpotlight } from "./continue-spotlight";
@@ -22,10 +26,12 @@ import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
 import { StudyConsistencyCard } from "./study-consistency-card";
 import { TodayFocusCard } from "./today-focus-card";
+import { PlanUsageCard } from "./plan-usage-card";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
+  const [planType, setPlanType] = useState<PlanType>(() => getAuthUser()?.planType ?? "FREE");
   const [continueRecommendation, setContinueRecommendation] = useState<ContinueStudyingResponse | null>(null);
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [studyEngagement, setStudyEngagement] = useState<StudyEngagementResponse | null>(null);
@@ -48,11 +54,15 @@ export default function DashboardPage() {
     try {
       const data = await listMyStudyPacks();
       setItems(data);
-      const [continueResult, todayFocusResult, engagementResult] = await Promise.allSettled([
+      const [meResult, continueResult, todayFocusResult, engagementResult] = await Promise.allSettled([
+        getMe(),
         getContinueStudyingRecommendation(),
         getTodayFocus(),
         getStudyEngagement(),
       ]);
+      if (meResult.status === "fulfilled") {
+        setPlanType(meResult.value.planType);
+      }
       setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
       setStudyEngagement(engagementResult.status === "fulfilled" ? engagementResult.value : null);
@@ -81,6 +91,9 @@ export default function DashboardPage() {
     () => Boolean(continueRecommendation?.studyPackId),
     [continueRecommendation],
   );
+  const usedThisMonth = useMemo(() => getCurrentMonthStudyPackUsage(items), [items]);
+  const monthlyStudyPackLimit = useMemo(() => getMonthlyStudyPackLimit(planType), [planType]);
+  const isFreePlan = planType === "FREE";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -100,6 +113,9 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
+          {isFreePlan ? (
+            <PlanUsageCard usedThisMonth={usedThisMonth} monthlyLimit={monthlyStudyPackLimit} />
+          ) : null}
           {todayFocus ? <TodayFocusCard focus={todayFocus} /> : null}
           {studyEngagement ? <StudyConsistencyCard engagement={studyEngagement} /> : null}
           {hasContinueRecommendation && continueRecommendation ? (
