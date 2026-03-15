@@ -339,9 +339,6 @@ export default function Home() {
               <li>Today&apos;s Focus</li>
               <li>AI Study Coach</li>
             </ul>
-            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-              Start Free
-            </Link>
           </Card>
           <Card className="space-y-3 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
             <h3 className="text-xl font-semibold">Premium</h3>
@@ -352,9 +349,6 @@ export default function Home() {
               <li>Adaptive quiz generation</li>
               <li>Advanced review tools</li>
             </ul>
-            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-              Upgrade to Premium
-            </Link>
           </Card>
         </div>
       </section>
