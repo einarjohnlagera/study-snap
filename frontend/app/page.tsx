@@ -59,22 +59,36 @@ export default function Home() {
             AI study assistant for notes, review, and practice
           </div>
           <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl md:text-5xl">
-            Turn your notes into a Study Pack you can actually review.
+            Turn your notes into study packs in seconds
           </h1>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Study Snap transforms raw notes into a clear Study Pack with a summary, key concepts, and a quiz.
-            Then it helps you review smarter with Quick Review, weak-area insights, and adaptive practice.
+            Upload or paste your notes and Study Snap turns them into summaries, key concepts, and quiz
+            questions so you can review faster.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-              Get Started Free
-            </Link>
-            <Link
-              href="/demo"
-              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-            >
+            <Link href="/demo" className={buttonVariants({ className: "w-full sm:w-auto" })}>
               Try Demo
             </Link>
+            <Link
+              href="/auth"
+              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+            >
+              Start Free
+            </Link>
+          </div>
+          <p className="text-sm text-foreground/75">
+            Perfect for lecture notes, textbook pages, and study reviewers.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/80">
+              AI summary
+            </span>
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/80">
+              Key concepts
+            </span>
+            <span className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/80">
+              Quick Review quiz
+            </span>
           </div>
         </div>
       </section>
