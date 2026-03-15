@@ -41,7 +41,7 @@ This repo currently centers on:
 - Study Library support
 - demo mode
 - shareable Study Pack links
-- future freemium plans and subscriptions
+- freemium plans and subscriptions (Stripe Checkout)
 - future user accounts and authenticated ownership
 
 ## Tech stack

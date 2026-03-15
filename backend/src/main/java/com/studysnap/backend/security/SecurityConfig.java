@@ -41,6 +41,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh").permitAll()
+                        .requestMatchers("/billing/webhook").permitAll()
                         .requestMatchers("/share/**").permitAll()
                         .requestMatchers("/p/**").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()

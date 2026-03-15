@@ -69,7 +69,6 @@ MVP includes:
 
 Not in MVP unless explicitly requested:
 - flashcards / spaced repetition
-- payments / Stripe
 - gamification
 - heavy analytics dashboards
 - classroom management
@@ -193,7 +192,8 @@ Plan and quota policy:
 
 Plan & Billing UX:
 - Settings includes a `Plan & Billing` section where users can view plan and monthly usage progress
-- Premium upgrade action can use a placeholder flow until billing integration is implemented
+- Premium upgrade uses Stripe Checkout
+- Stripe webhook events should keep `FREE`/`PREMIUM` plan state in sync
 - Premium-gated prompts should direct users to Settings `Plan & Billing` (`/settings#plan-billing`)
 - Dashboard should show a Free-plan monthly usage indicator and subtle upgrade action
 
