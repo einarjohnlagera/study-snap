@@ -4,14 +4,15 @@ import type { StudyPackListItemResponse } from "@/lib/api";
 
 type StudyPackGridProps = {
   studyPacks: StudyPackListItemResponse[];
+  totalStudyPacks: number;
 };
 
-export function StudyPackGrid({ studyPacks }: StudyPackGridProps) {
+export function StudyPackGrid({ studyPacks, totalStudyPacks }: StudyPackGridProps) {
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold sm:text-xl">Your Study Packs</h2>
-        <p className="text-xs text-foreground/65">{studyPacks.length} saved</p>
+        <h2 className="text-lg font-semibold sm:text-xl">Recent Study Packs</h2>
+        <p className="text-xs text-foreground/65">{totalStudyPacks} saved</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -44,6 +45,12 @@ export function StudyPackGrid({ studyPacks }: StudyPackGridProps) {
             </Card>
           </Link>
         ))}
+      </div>
+
+      <div>
+        <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+          View All in Library &rarr;
+        </Link>
       </div>
     </section>
   );
