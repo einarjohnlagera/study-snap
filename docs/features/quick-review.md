@@ -237,6 +237,23 @@ Behavior:
 - if there are no incorrect answers, no tip request is sent
 - Study Tip text should be fully readable in the results UI (no unintended clipping or silent truncation)
 
+### Confidence Feedback (Optional)
+
+After completion, results include an optional confidence prompt:
+
+- `How confident did you feel about this topic?`
+- options:
+  - `Very confident` -> `HIGH`
+  - `Somewhat confident` -> `MEDIUM`
+  - `Not confident` -> `LOW`
+- confidence selection is optional and does not block completion
+- after selection, UI shows `Thanks for the feedback.`
+- confidence is stored as nullable `confidence_level` on the Quick Review session
+
+Current scope:
+- lightweight capture only (no heavy analytics behavior yet)
+- data is intended for future weak-concept tuning, adaptive recommendations, and confidence trend insights
+
 ### Adaptive Practice (Weak Areas)
 
 Quick Review can offer a follow-up adaptive practice set based on weak concepts from the latest completed session.

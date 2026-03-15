@@ -149,6 +149,14 @@ Quick Review sessions track:
 * total questions
 * score percentage
 * session history
+* optional post-review confidence feedback (`HIGH`, `MEDIUM`, `LOW`)
+
+Confidence feedback behavior:
+
+* results screen includes `How confident did you feel about this topic?`
+* options: `Very confident`, `Somewhat confident`, `Not confident`
+* confidence is optional and does not block review completion
+* saved confidence supports future learning analytics and adaptive recommendations
 
 Users can leave a review session and resume it later if it remains unfinished.
 

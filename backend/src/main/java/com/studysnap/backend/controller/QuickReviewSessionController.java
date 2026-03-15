@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
+import com.studysnap.backend.dto.QuickReviewSessionConfidenceRequest;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
@@ -54,6 +55,16 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewSessionService.completeSession(sessionId, userId, request);
+    }
+
+    @PostMapping("/{sessionId}/confidence")
+    public QuickReviewSessionResponse saveConfidenceLevel(
+            @PathVariable String sessionId,
+            @Valid @RequestBody QuickReviewSessionConfidenceRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.saveConfidenceLevel(sessionId, userId, request.confidenceLevel());
     }
 
     @PostMapping("/{sessionId}/progress")

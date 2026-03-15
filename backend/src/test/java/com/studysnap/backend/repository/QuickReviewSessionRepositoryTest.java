@@ -44,6 +44,7 @@ class QuickReviewSessionRepositoryTest {
                     score_percentage numeric(5,2),
                     retry_count integer,
                     duration_seconds integer,
+                    confidence_level varchar(16),
                     session_metadata json,
                     session_state json,
                     created_at timestamp with time zone not null,

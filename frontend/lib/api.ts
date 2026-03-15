@@ -191,6 +191,8 @@ export type QuickReviewSessionCompleteRequest = {
   };
 };
 
+export type QuickReviewConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
+
 export type QuickReviewSessionProgressRequest = {
   currentQuestionIndex: number;
   currentRound: "INITIAL" | "RETRY";
@@ -209,6 +211,7 @@ export type QuickReviewSessionSummaryResponse = {
   scorePercentage: number;
   retryCount: number;
   durationSeconds: number | null;
+  confidenceLevel?: QuickReviewConfidenceLevel | null;
   weakConcepts?: string[];
   sessionState?: Record<string, unknown> | null;
   createdAt: string;
@@ -740,6 +743,25 @@ export async function completeQuickReviewSession(
     true,
   );
   return parseApiResponse<QuickReviewSessionSummaryResponse>(response, "Could not save Quick Review results.");
+}
+
+export async function saveQuickReviewConfidence(
+  sessionId: string,
+  confidenceLevel: QuickReviewConfidenceLevel,
+): Promise<QuickReviewSessionSummaryResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/${sessionId}/confidence`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ confidenceLevel }),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewSessionSummaryResponse>(
+    response,
+    "Could not save confidence feedback.",
+  );
 }
 
 export async function listRecentQuickReviewSessions(
