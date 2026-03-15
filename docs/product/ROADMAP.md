@@ -103,6 +103,7 @@ Deliverable:
 ## Phase 8 — Shareable Study Packs
 - [X] create share tokens in backend
 - [X] add public page route: `/p/[token]`
+- [X] use public navbar for unauthenticated share viewers and authenticated app shell for logged-in viewers
 - [X] add remix flow to copy shared Study Packs into personal Study Library
 - [X] add in-product Study Pack detail share action (`Copy Link`)
 - [ ] track optional view count

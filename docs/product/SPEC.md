@@ -107,6 +107,9 @@ Share behavior:
 
 * owners can generate or reuse a tokenized share link for a Study Pack
 * public share route is `/p/{token}`
+* shared page layout is auth-aware:
+  * unauthenticated viewers use the public minimal navbar
+  * authenticated viewers use the app shell/sidebar layout
 * shared Study Pack pages are read-only (no direct editing)
 * shared pages show title, summary, key concepts, and quiz preview
 * Study Pack detail includes an in-product share action (`Copy Link`)
