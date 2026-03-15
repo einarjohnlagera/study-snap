@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
@@ -434,6 +435,46 @@ class QuickReviewSessionServiceTest {
                 .hasMessage("Quick Review session is already completed.")
                 .extracting(ex -> ((AppException) ex).getCode())
                 .isEqualTo("SESSION_NOT_IN_PROGRESS");
+    }
+
+    @Test
+    void saveConfidenceLevel_persistsOptionalConfidenceForCompletedSession() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuickReviewSessionResponse response = quickReviewSessionService.saveConfidenceLevel(
+                sessionId.toString(),
+                userId,
+                QuickReviewConfidenceLevel.MEDIUM
+        );
+
+        assertThat(session.getConfidenceLevel()).isEqualTo(QuickReviewConfidenceLevel.MEDIUM);
+        assertThat(response.confidenceLevel()).isEqualTo(QuickReviewConfidenceLevel.MEDIUM);
+    }
+
+    @Test
+    void saveConfidenceLevel_rejectsInProgressSession() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> quickReviewSessionService.saveConfidenceLevel(
+                sessionId.toString(),
+                userId,
+                QuickReviewConfidenceLevel.HIGH
+        ))
+                .isInstanceOf(AppException.class)
+                .hasMessage("Quick Review session must be completed before saving confidence feedback.")
+                .extracting(ex -> ((AppException) ex).getCode())
+                .isEqualTo("SESSION_NOT_COMPLETED");
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID userId, int quizCount) {

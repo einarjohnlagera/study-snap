@@ -14,8 +14,10 @@ import {
   completeQuickReviewSession,
   generateQuickReviewStudyTip,
   getMyStudyPack,
+  saveQuickReviewConfidence,
   startQuickReviewSession,
   updateQuickReviewSessionProgress,
+  type QuickReviewConfidenceLevel,
   type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
@@ -145,6 +147,10 @@ export default function QuickReviewPage() {
   const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
   const [studyTip, setStudyTip] = useState<string | null>(null);
   const [completingSession, setCompletingSession] = useState(false);
+  const [confidenceLevel, setConfidenceLevel] = useState<QuickReviewConfidenceLevel | null>(null);
+  const [savingConfidence, setSavingConfidence] = useState(false);
+  const [confidenceAcknowledged, setConfidenceAcknowledged] = useState(false);
+  const [confidenceError, setConfidenceError] = useState<string | null>(null);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -165,6 +171,10 @@ export default function QuickReviewPage() {
     setPersistedResult(null);
     setStudyTip(null);
     setCompletingSession(false);
+    setConfidenceLevel(null);
+    setSavingConfidence(false);
+    setConfidenceAcknowledged(false);
+    setConfidenceError(null);
   }, []);
 
   const loadStudyPack = useCallback(async () => {
@@ -278,6 +288,14 @@ export default function QuickReviewPage() {
     }
     return weakConcepts;
   }, [isPremiumPlan, persistedResult?.weakConcepts, weakConcepts]);
+  const confidenceOptions = useMemo<Array<{ label: string; value: QuickReviewConfidenceLevel }>>(
+    () => [
+      { label: "Very confident", value: "HIGH" },
+      { label: "Somewhat confident", value: "MEDIUM" },
+      { label: "Not confident", value: "LOW" },
+    ],
+    [],
+  );
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -539,6 +557,26 @@ export default function QuickReviewPage() {
     }
   };
 
+  const handleSelectConfidence = useCallback(async (level: QuickReviewConfidenceLevel) => {
+    if (!currentSessionId || savingConfidence || completingSession || !completionTracked) {
+      return;
+    }
+
+    setSavingConfidence(true);
+    setConfidenceError(null);
+    try {
+      const updated = await saveQuickReviewConfidence(currentSessionId, level);
+      setPersistedResult(updated);
+      setConfidenceLevel(updated.confidenceLevel ?? level);
+      setConfidenceAcknowledged(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not save confidence feedback.";
+      setConfidenceError(message);
+    } finally {
+      setSavingConfidence(false);
+    }
+  }, [completingSession, completionTracked, currentSessionId, savingConfidence]);
+
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
@@ -666,6 +704,30 @@ export default function QuickReviewPage() {
                 <p className="whitespace-normal wrap-break-word leading-relaxed text-foreground/85">{studyTip}</p>
               </div>
             ) : null}
+            <div className="space-y-2 rounded-md border border-border bg-background p-3">
+              <p className="text-sm font-medium text-foreground">How confident did you feel about this topic?</p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {confidenceOptions.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    size="sm"
+                    variant={confidenceLevel === option.value ? "default" : "outline"}
+                    className="w-full sm:w-auto"
+                    disabled={savingConfidence || completingSession || !completionTracked}
+                    onClick={() => void handleSelectConfidence(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              {confidenceAcknowledged ? (
+                <p className="text-xs text-foreground/70">Thanks for the feedback.</p>
+              ) : null}
+              {confidenceError ? (
+                <p className="text-xs text-red-600 dark:text-red-400">{confidenceError}</p>
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link href={`/study-packs/${studyPack.id}`} className="w-full sm:w-auto">

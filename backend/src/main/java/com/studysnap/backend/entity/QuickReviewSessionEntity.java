@@ -58,6 +58,10 @@ public class QuickReviewSessionEntity {
     @Column(name = "duration_seconds")
     private Integer durationSeconds;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "confidence_level", length = 16)
+    private QuickReviewConfidenceLevel confidenceLevel;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "session_metadata", columnDefinition = "jsonb")
     private Map<String, Object> sessionMetadata;

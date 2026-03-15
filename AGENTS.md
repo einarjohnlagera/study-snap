@@ -279,6 +279,12 @@ Quiz answer feedback semantics (Quick Review and Adaptive Quiz):
 - non-selected, non-correct options remain neutral
 - do not use blue for correct/incorrect answer states
 
+Quick Review post-results confidence feedback:
+- results should include an optional confidence prompt (`Very confident`, `Somewhat confident`, `Not confident`)
+- map to stored values `HIGH`, `MEDIUM`, `LOW`
+- confidence feedback must be non-blocking (session remains valid if skipped)
+- confidence data is intended for future adaptive recommendations and learning insights (no heavy analytics in this scope)
+
 ## Legacy preservation note
 
 The legacy project docs remain available under `/legacy`.

@@ -41,6 +41,7 @@ Landing page refinement status:
 - [X] Quick Review session history
 - [X] Resume unfinished Quick Reviews
 - [X] Smart Continue Studying dashboard recommendations
+- [X] Optional post-review confidence feedback capture (`HIGH` / `MEDIUM` / `LOW`)
 
 Deliverable: paste notes → get study pack output.
 

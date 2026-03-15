@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
@@ -173,6 +174,34 @@ public class QuickReviewSessionService {
         return toResponse(saved, planType);
     }
 
+    public QuickReviewSessionResponse saveConfidenceLevel(
+            String sessionIdRaw,
+            UUID userId,
+            QuickReviewConfidenceLevel confidenceLevel
+    ) {
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
+                sessionIdRaw,
+                "SESSION_NOT_FOUND",
+                "Quick Review session not found.",
+                HttpStatus.NOT_FOUND
+        );
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)
+                .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Quick Review session not found.", HttpStatus.NOT_FOUND));
+
+        if (session.getStatus() != QuickReviewSessionStatus.COMPLETED) {
+            throw new AppException(
+                    "SESSION_NOT_COMPLETED",
+                    "Quick Review session must be completed before saving confidence feedback.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+        session.setConfidenceLevel(confidenceLevel);
+        QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        return toResponse(saved, planType);
+    }
+
     @Transactional(readOnly = true)
     public List<QuickReviewSessionResponse> listRecentSessions(String studyPackIdRaw, UUID userId, int limit) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
@@ -240,6 +269,7 @@ public class QuickReviewSessionService {
                 session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage(),
                 session.getRetryCount() == null ? 0 : session.getRetryCount(),
                 session.getDurationSeconds(),
+                session.getConfidenceLevel(),
                 planType == PlanType.PREMIUM ? extractWeakConcepts(session) : List.of(),
                 session.getSessionState(),
                 session.getCreatedAt(),

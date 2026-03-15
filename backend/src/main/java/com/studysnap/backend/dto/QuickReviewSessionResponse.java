@@ -1,6 +1,7 @@
 package com.studysnap.backend.dto;
 
 import com.studysnap.backend.entity.QuickReviewRound;
+import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 
 import java.math.BigDecimal;
@@ -19,6 +20,7 @@ public record QuickReviewSessionResponse(
         BigDecimal scorePercentage,
         int retryCount,
         Integer durationSeconds,
+        QuickReviewConfidenceLevel confidenceLevel,
         List<String> weakConcepts,
         Map<String, Object> sessionState,
         OffsetDateTime createdAt,
