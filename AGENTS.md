@@ -46,7 +46,8 @@ Pages:
 
 Public landing page requirements:
 - route `/` should clearly communicate Study Snap value for unauthenticated users
-- include hero, Study Pack preview, how-it-works, feature highlights, pricing teaser, and final CTA
+- include hero, Study Pack preview, how-it-works, feature highlights, pricing teaser, final CTA, and FAQ
+- FAQ should be placed before the footer and use a lightweight accordion layout
 - primary CTA should drive account creation; secondary CTA may drive demo exploration
 - demo exploration route should be `/demo`
 

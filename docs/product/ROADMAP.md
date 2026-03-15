@@ -31,6 +31,7 @@ Landing page refinement status:
   - feature highlights
   - pricing teaser
   - final call-to-action
+  - FAQ section (accordion) placed before footer
 
 ## Phase 2 — Backend MVP (text Study Pack generation)
 - [X] `POST /api/study-packs` accepts JSON `{ notesText }`
