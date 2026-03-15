@@ -91,12 +91,7 @@ export default function LibraryPage() {
   }, []);
 
   const loadLibrary = useCallback(async () => {
-    if (!requireVerifiedOnboardedUser(router, {
-      onUnauthenticated: () => {
-        setError("Please log in to view your Study Library.");
-        setLoading(false);
-      },
-    })) {
+    if (!requireVerifiedOnboardedUser(router)) {
       return;
     }
 

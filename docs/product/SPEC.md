@@ -97,6 +97,18 @@ Dashboard behavior note:
 * Dashboard Study Pack previews open by clicking the card/title (no explicit `Open` button)
 * Study Pack deletion from the Library must require an explicit confirmation step
 
+## Authentication Session Handling
+
+Protected app routes require authentication.
+
+Behavior:
+
+* when protected API requests return `401 Unauthorized`, Study Snap clears local auth state and redirects to `/login`
+* login redirect preserves destination using `redirect` query parameter (example: `/login?redirect=/study-packs/{id}`)
+* session-expired redirects include a user-friendly login hint (`Your session has expired. Please log in again.`)
+* after successful login, verified/onboarded users are returned to the preserved destination when available
+* unauthenticated access to protected routes is redirected to login with destination preservation
+
 ---
 
 ## Shareable Study Packs

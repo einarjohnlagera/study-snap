@@ -44,12 +44,7 @@ export default function DashboardPage() {
   const [contentVisible, setContentVisible] = useState(false);
 
   const loadStudyPacks = useCallback(async () => {
-    if (!requireVerifiedOnboardedUser(router, {
-      onUnauthenticated: () => {
-        setError("Please log in to access your dashboard.");
-        setLoading(false);
-      },
-    })) {
+    if (!requireVerifiedOnboardedUser(router)) {
       return;
     }
 

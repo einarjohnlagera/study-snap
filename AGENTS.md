@@ -106,6 +106,13 @@ Rules:
 4. Always handle loading and error states.
 5. Use shadcn tokens (`bg-background`, `text-foreground`, etc.) for theme consistency.
 
+### Auth session behavior
+- Centralize authenticated request handling in `frontend/lib/api.ts` (avoid per-page 401 handling).
+- When a protected API call returns `401`, clear auth state and redirect to `/login`.
+- Preserve destination on login redirects using `redirect` query (for example `/login?redirect=/study-packs/{id}`).
+- Include a session-expired hint on login when redirecting after invalid session (`reason=session_expired`).
+- Protected routes should use shared route guards so unauthenticated access is redirected consistently.
+
 ### Theme + Navbar requirements
 - Support light/dark theme with a toggle in the navbar.
 - Tailwind should use class-based dark mode.

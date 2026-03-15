@@ -85,6 +85,9 @@ Deliverable: upload image notes → OCR → Study Pack output.
 - [ ] account status fields
 - [ ] email verification timestamps
 - [ ] last login tracking
+- [X] centralized session expiration handling for protected API calls (`401` → clear auth → redirect to `/login`)
+- [X] preserve protected destination on login redirects (`/login?redirect=...`)
+- [X] enforce protected route auth guard with consistent login redirect behavior
 
 Deliverable: authenticated user identity foundation for ownership and Study Library.
 

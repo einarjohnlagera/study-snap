@@ -2,6 +2,7 @@ import {
   clearAuthUser,
   getAccessToken,
   getRefreshToken,
+  handleUnauthorizedSession,
   setAuthUser,
   type AuthUser,
 } from "./auth";
@@ -359,10 +360,14 @@ async function tryRefreshAccessToken(): Promise<boolean> {
 async function fetchWithAuth(path: string, init: RequestInit, retry = true): Promise<Response> {
   const response = await fetch(buildUrl(path), init);
   if (response.status !== 401 || !retry) {
+    if (response.status === 401) {
+      handleUnauthorizedSession();
+    }
     return response;
   }
   const refreshed = await tryRefreshAccessToken();
   if (!refreshed) {
+    handleUnauthorizedSession();
     return response;
   }
   const updatedHeaders = new Headers(init.headers ?? {});
@@ -370,10 +375,14 @@ async function fetchWithAuth(path: string, init: RequestInit, retry = true): Pro
   if (token) {
     updatedHeaders.set("Authorization", `Bearer ${token}`);
   }
-  return fetch(buildUrl(path), {
+  const retriedResponse = await fetch(buildUrl(path), {
     ...init,
     headers: updatedHeaders,
   });
+  if (retriedResponse.status === 401) {
+    handleUnauthorizedSession();
+  }
+  return retriedResponse;
 }
 
 export async function signup(request: SignupRequest): Promise<AuthUser> {

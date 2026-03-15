@@ -15,6 +15,50 @@ export type AuthUser = {
 };
 
 const AUTH_USER_KEY = "study_snap_auth_user";
+export const LOGIN_REDIRECT_QUERY_KEY = "redirect";
+export const LOGIN_REASON_QUERY_KEY = "reason";
+export const LOGIN_REASON_SESSION_EXPIRED = "session_expired";
+
+let hasTriggeredSessionExpiryRedirect = false;
+
+function emitAuthChangeEvent(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(new Event("studysnap-auth-change"));
+}
+
+function getSafeRedirectPath(path: string | null | undefined): string | null {
+  if (!path) {
+    return null;
+  }
+  if (!path.startsWith("/") || path.startsWith("//")) {
+    return null;
+  }
+  return path;
+}
+
+export function getCurrentPathWithQuery(): string {
+  if (typeof window === "undefined") {
+    return "/dashboard";
+  }
+  return `${window.location.pathname}${window.location.search}`;
+}
+
+export function buildLoginPath(options?: {
+  redirectTo?: string | null;
+  sessionExpired?: boolean;
+}): string {
+  const params = new URLSearchParams();
+  const redirectTo = getSafeRedirectPath(options?.redirectTo ?? null);
+  if (redirectTo) {
+    params.set(LOGIN_REDIRECT_QUERY_KEY, redirectTo);
+  }
+  if (options?.sessionExpired) {
+    params.set(LOGIN_REASON_QUERY_KEY, LOGIN_REASON_SESSION_EXPIRED);
+  }
+  return params.size > 0 ? `/login?${params.toString()}` : "/login";
+}
 
 export function getAuthUser(): AuthUser | null {
   if (typeof window === "undefined") {
@@ -36,6 +80,7 @@ export function setAuthUser(user: AuthUser): void {
     return;
   }
   window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  emitAuthChangeEvent();
 }
 
 export function clearAuthUser(): void {
@@ -43,6 +88,7 @@ export function clearAuthUser(): void {
     return;
   }
   window.localStorage.removeItem(AUTH_USER_KEY);
+  emitAuthChangeEvent();
 }
 
 export function getCurrentUserId(): string | null {
@@ -68,4 +114,23 @@ export function isAccessTokenExpired(bufferSeconds = 30): boolean {
   }
   const expiresAt = new Date(authUser.accessTokenExpiresAt).getTime();
   return Date.now() + bufferSeconds * 1000 >= expiresAt;
+}
+
+export function handleUnauthorizedSession(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  if (hasTriggeredSessionExpiryRedirect) {
+    return;
+  }
+
+  hasTriggeredSessionExpiryRedirect = true;
+  const redirectTo = getCurrentPathWithQuery();
+  clearAuthUser();
+  window.location.replace(
+    buildLoginPath({
+      redirectTo,
+      sessionExpired: true,
+    }),
+  );
 }
