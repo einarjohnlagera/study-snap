@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { getMe, listMyStudyPacks, logout, updateEngagementMode, type EngagementMode, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
   PLAN_BILLING_SECTION_ID,
   getCurrentMonthStudyPackUsage,
@@ -39,7 +40,7 @@ export default function SettingsPage() {
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
     if (!authUser) {
-      router.replace("/auth");
+      redirectToLoginWithCurrentDestination(router);
       return;
     }
     if (!authUser.emailVerifiedAt) {

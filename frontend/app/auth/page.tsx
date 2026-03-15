@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { login, signup } from "@/lib/api";
-import { getAuthUser, setAuthUser } from "@/lib/auth";
+import {
+  getAuthUser,
+  LOGIN_REASON_QUERY_KEY,
+  LOGIN_REASON_SESSION_EXPIRED,
+  LOGIN_REDIRECT_QUERY_KEY,
+  setAuthUser,
+} from "@/lib/auth";
 
 type Mode = "login" | "signup";
 
@@ -19,6 +25,19 @@ function nextRouteForAuth(profileType: "STUDENT" | "PARENT" | "PROFESSIONAL" | n
   return "/dashboard";
 }
 
+function resolveSafeRedirectTarget(redirectParam: string | null): string | null {
+  if (!redirectParam) {
+    return null;
+  }
+  if (!redirectParam.startsWith("/") || redirectParam.startsWith("//")) {
+    return null;
+  }
+  if (redirectParam.startsWith("/auth") || redirectParam.startsWith("/login")) {
+    return null;
+  }
+  return redirectParam;
+}
+
 export default function AuthPage() {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
@@ -29,14 +48,37 @@ export default function AuthPage() {
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirectTarget, setRedirectTarget] = useState<string | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    const params = new URLSearchParams(window.location.search);
+    return resolveSafeRedirectTarget(params.get(LOGIN_REDIRECT_QUERY_KEY));
+  });
+  const [showSessionExpiredMessage, setShowSessionExpiredMessage] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED;
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setRedirectTarget(resolveSafeRedirectTarget(params.get(LOGIN_REDIRECT_QUERY_KEY)));
+    setShowSessionExpiredMessage(params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED);
+  }, []);
 
   useEffect(() => {
     const authUser = getAuthUser();
     if (!authUser) {
       return;
     }
-    router.replace(nextRouteForAuth(authUser.profileType, authUser.emailVerifiedAt));
-  }, [router]);
+
+    const defaultRoute = nextRouteForAuth(authUser.profileType, authUser.emailVerifiedAt);
+    const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && authUser.profileType && redirectTarget);
+    router.replace(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
+  }, [redirectTarget, router]);
 
   const canSubmit = useMemo(() => {
     if (mode === "signup") {
@@ -64,7 +106,9 @@ export default function AuthPage() {
             })
           : await login({ email, password, keepSignedIn });
       setAuthUser(authUser);
-      router.push(nextRouteForAuth(authUser.profileType, authUser.emailVerifiedAt));
+      const defaultRoute = nextRouteForAuth(authUser.profileType, authUser.emailVerifiedAt);
+      const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && authUser.profileType && redirectTarget);
+      router.push(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not continue. Please try again.");
@@ -83,6 +127,11 @@ export default function AuthPage() {
               ? "Continue to your study workspace."
               : "Sign up to generate and save Study Packs."}
           </CardDescription>
+          {showSessionExpiredMessage ? (
+            <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
+              Your session has expired. Please log in again.
+            </p>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 gap-2">

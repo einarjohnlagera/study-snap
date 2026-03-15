@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { confirmEmailVerification, requestEmailVerification } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
+import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     const authUser = getAuthUser();
     if (!authUser) {
-      router.replace("/auth");
+      redirectToLoginWithCurrentDestination(router);
       return;
     }
     if (authUser.emailVerifiedAt) {

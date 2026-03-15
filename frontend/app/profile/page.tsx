@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { getMe, logout, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type IdentityForm = {
   firstName: string;
@@ -59,7 +60,7 @@ export default function ProfilePage() {
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
     if (!authUser) {
-      router.replace("/auth");
+      redirectToLoginWithCurrentDestination(router);
       return;
     }
     if (!authUser.emailVerifiedAt) {

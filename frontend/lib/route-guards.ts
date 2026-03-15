@@ -1,24 +1,23 @@
-import { getAuthUser } from "./auth";
+import { buildLoginPath, getAuthUser, getCurrentPathWithQuery } from "./auth";
 
 type RouterLike = {
   replace: (href: string) => void;
 };
 
-type RequireVerifiedOnboardedUserOptions = {
-  onUnauthenticated?: () => void;
-};
+export function redirectToLoginWithCurrentDestination(router: RouterLike): void {
+  router.replace(
+    buildLoginPath({
+      redirectTo: getCurrentPathWithQuery(),
+    }),
+  );
+}
 
 export function requireVerifiedOnboardedUser(
   router: RouterLike,
-  options?: RequireVerifiedOnboardedUserOptions,
 ): boolean {
   const authUser = getAuthUser();
   if (!authUser) {
-    if (options?.onUnauthenticated) {
-      options.onUnauthenticated();
-    } else {
-      router.replace("/login");
-    }
+    redirectToLoginWithCurrentDestination(router);
     return false;
   }
   if (!authUser.emailVerifiedAt) {
