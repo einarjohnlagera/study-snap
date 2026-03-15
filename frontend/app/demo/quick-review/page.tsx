@@ -146,18 +146,31 @@ export default function DemoQuickReviewPage() {
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">Your demo results</h1>
           <DemoScoreBlock score={score} total={totalQuestions} percentage={scorePercentage} />
+          <div className="space-y-1 text-sm text-foreground/85">
+            <p className="font-medium text-foreground">Nice work! 🎉</p>
+            <p>Study Snap just turned notes into a quiz in seconds.</p>
+            <p>Now try it with your own notes.</p>
+          </div>
           <p className="text-sm text-foreground/75">
             This demo uses a prebuilt Study Pack and does not create a real session.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" onClick={handleRestart} className="w-full sm:w-auto">
-              Practice Demo Again
-            </Button>
             <Link href="/auth" className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Start Free
+              <Button type="button" className="w-full sm:w-auto">
+                Create My Study Pack
               </Button>
             </Link>
+            <Button type="button" variant="outline" onClick={handleRestart} className="w-full sm:w-auto">
+              Practice Demo Again
+            </Button>
+          </div>
+          <div className="space-y-1 rounded-md border border-border bg-background p-3 text-xs text-foreground/75">
+            <p className="font-medium text-foreground/85">Generate study packs from:</p>
+            <ul className="space-y-1">
+              <li>• handwritten notes</li>
+              <li>• lecture slides</li>
+              <li>• textbook pages</li>
+            </ul>
           </div>
         </Card>
       ) : phase === "retry-transition" ? (
