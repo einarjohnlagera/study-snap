@@ -238,6 +238,23 @@ export type QuickReviewAdaptiveQuizResponse = {
   message: string;
 };
 
+export type ShareLinkResponse = {
+  token: string;
+  shareUrl: string;
+};
+
+export type PublicShareResponse = {
+  id: string;
+  title: string;
+  summary: string;
+  keyConcepts: string[];
+  quiz: QuizItem[];
+};
+
+export type ShareRemixResponse = {
+  studyPackId: string;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -604,6 +621,37 @@ export async function deleteMyStudyPack(id: string): Promise<void> {
   if (!response.ok) {
     await parseApiResponse<void>(response, "Could not delete this Study Pack.");
   }
+}
+
+export async function createStudyPackShareLink(studyPackId: string): Promise<ShareLinkResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/share`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ShareLinkResponse>(response, "Could not create a share link.");
+}
+
+export async function getPublicSharedStudyPack(token: string): Promise<PublicShareResponse> {
+  const response = await fetch(buildUrl(`/p/${token}`), {
+    method: "GET",
+  });
+  return parseApiResponse<PublicShareResponse>(response, "Could not load this shared Study Pack.");
+}
+
+export async function remixSharedStudyPack(token: string): Promise<ShareRemixResponse> {
+  const response = await fetchWithAuth(
+    `/p/${token}/remix`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ShareRemixResponse>(response, "Could not copy this Study Pack.");
 }
 
 export async function trackQuickReviewActivity(

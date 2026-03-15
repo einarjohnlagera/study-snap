@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.PublicShareResponse;
 import com.studysnap.backend.dto.ShareLinkResponse;
+import com.studysnap.backend.dto.ShareRemixResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.ShareService;
 import lombok.RequiredArgsConstructor;
@@ -31,5 +32,19 @@ public class ShareController {
 	@GetMapping("/share/{token}")
 	public PublicShareResponse getShared(@PathVariable String token) {
 		return shareService.getPublicShare(token);
+	}
+
+	@GetMapping("/p/{token}")
+	public PublicShareResponse getSharedByPublicToken(@PathVariable String token) {
+		return shareService.getPublicShare(token);
+	}
+
+	@PostMapping("/p/{token}/remix")
+	@PreAuthorize("hasAnyRole('USER','ADMIN')")
+	public ShareRemixResponse remixSharedStudyPack(
+			@PathVariable String token,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		return shareService.remixSharedStudyPack(token, user.userId());
 	}
 }

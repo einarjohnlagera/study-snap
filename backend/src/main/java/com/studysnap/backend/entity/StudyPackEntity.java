@@ -90,6 +90,9 @@ public class StudyPackEntity {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    @Column(name = "share_token", length = 128, unique = true)
+    private String shareToken;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]", nullable = false)
     private String[] tags;
