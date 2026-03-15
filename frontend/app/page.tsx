@@ -75,6 +75,53 @@ function FeatureHighlightsSection() {
   );
 }
 
+function ProductPreviewSection() {
+  return (
+    <section className="space-y-4">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Product Preview
+        </p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">See Study Snap in action</h2>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="space-y-3 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">AI Summary</p>
+          <p className="text-sm leading-relaxed text-foreground/85">
+            Plants convert light energy into chemical energy to produce glucose.
+          </p>
+        </Card>
+        <Card className="space-y-3 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Key Concepts</p>
+          <ul className="space-y-1 text-sm text-foreground/85">
+            <li>• Chlorophyll</li>
+            <li>• Calvin cycle</li>
+            <li>• Light-dependent reactions</li>
+          </ul>
+        </Card>
+        <Card className="space-y-3 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Quick Review</p>
+          <div className="space-y-2 text-sm text-foreground/85">
+            <p className="font-medium text-foreground">Question:</p>
+            <p>What is the main role of chlorophyll?</p>
+            <p className="font-medium text-foreground">Options:</p>
+            <ul className="space-y-1">
+              <li>A) absorb sunlight</li>
+              <li>B) store water</li>
+              <li>C) produce oxygen</li>
+            </ul>
+          </div>
+        </Card>
+      </div>
+      <div>
+        <Link href="/demo" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+          Try the demo to experience the full workflow.
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 function HeroTransformationPreview() {
   return (
     <div className="rounded-xl border border-border/80 bg-background/80 p-3 shadow-sm backdrop-blur sm:p-4">
@@ -224,6 +271,7 @@ export default function Home() {
       </section>
 
       <FeatureHighlightsSection />
+      <ProductPreviewSection />
 
       <section className="space-y-4">
         <div className="space-y-2">
