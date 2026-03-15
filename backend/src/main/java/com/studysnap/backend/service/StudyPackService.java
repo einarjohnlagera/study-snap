@@ -49,7 +49,7 @@ public class StudyPackService {
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/png", "image/webp");
     private static final int DEFAULT_LIST_LIMIT = 20;
     private static final int MAX_LIST_LIMIT = 100;
-    private static final int MAX_TAG_LENGTH = 40;
+    private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_TAGS_PER_STUDY_PACK = 30;
 
     private final StudyPackRepository studyPackRepository;
@@ -428,7 +428,7 @@ public class StudyPackService {
             if (normalizedTag.length() > MAX_TAG_LENGTH) {
                 throw new AppException(
                         "TAG_TOO_LONG",
-                        "Tags must be 40 characters or fewer.",
+                        "Tags must be 30 characters or fewer.",
                         HttpStatus.BAD_REQUEST
                 );
             }

@@ -20,6 +20,8 @@ import {
   type StudyPackResponse,
 } from "@/lib/api";
 
+const TAG_MAX_LENGTH = 30;
+
 function StudyPackDetailLoading() {
   return (
     <div className="space-y-6">
@@ -315,6 +317,10 @@ export default function StudyPackDetailPage() {
       setTagError(null);
       return;
     }
+    if (trimmedTag.length > TAG_MAX_LENGTH) {
+      setTagError("Tags must be 30 characters or fewer.");
+      return;
+    }
 
     const alreadyExists = studyPack.tags.some(
       (tag) => tag.trim().toLowerCase() === trimmedTag.toLowerCase(),
@@ -413,6 +419,7 @@ export default function StudyPackDetailPage() {
                       value={newTagValue}
                       onChange={(event) => setNewTagValue(event.target.value)}
                       placeholder="Enter tag"
+                      maxLength={TAG_MAX_LENGTH}
                       className="h-8 w-36 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
