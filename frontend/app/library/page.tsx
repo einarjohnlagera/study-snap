@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter} from "next/navigation";
-import {MoreHorizontal} from "lucide-react";
+import {ChevronDown, MoreHorizontal} from "lucide-react";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {PageHeader} from "@/components/page-header";
@@ -76,9 +76,11 @@ export default function LibraryPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [tagFilterOpen, setTagFilterOpen] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<StudyPackListItemResponse | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const tagFilterRef = useRef<HTMLDivElement | null>(null);
 
   const hydrateLastReviewed = useCallback(async (packs: StudyPackListItemResponse[], append = false) => {
     if (packs.length === 0) {
@@ -172,6 +174,31 @@ export default function LibraryPage() {
       window.removeEventListener("mousedown", handleOutsideClick);
     };
   }, [menuOpenId]);
+
+  useEffect(() => {
+    if (!tagFilterOpen) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!tagFilterRef.current) {
+        return;
+      }
+      if (!tagFilterRef.current.contains(event.target as Node)) {
+        setTagFilterOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTagFilterOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [tagFilterOpen]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!pendingDeleteItem) {
@@ -316,7 +343,7 @@ export default function LibraryPage() {
       ) : (
         <div className="space-y-4">
           <Card className="space-y-4 p-4 sm:p-6">
-            <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-4">
               <div className="space-y-2 lg:col-span-1">
                 <label htmlFor="library-search" className="text-sm font-medium">
                   Search
@@ -348,6 +375,60 @@ export default function LibraryPage() {
                   ))}
                 </select>
               </div>
+              <div className="relative space-y-2 lg:col-span-1" ref={tagFilterRef}>
+                <label htmlFor="library-tag-filter" className="text-sm font-medium">
+                  Tags
+                </label>
+                <button
+                  id="library-tag-filter"
+                  type="button"
+                  className="flex h-10 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                  aria-haspopup="listbox"
+                  aria-expanded={tagFilterOpen}
+                  aria-label="Select tags"
+                  onClick={() => setTagFilterOpen((previous) => !previous)}
+                >
+                  <span className={selectedTags.length === 0 ? "text-foreground/55" : ""}>
+                    {selectedTags.length === 0
+                      ? "Select tags"
+                      : selectedTags.length === 1
+                        ? selectedTags[0]
+                        : `${selectedTags.length} tags selected`}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-foreground/70 transition-transform ${tagFilterOpen ? "rotate-180" : ""}`} />
+                </button>
+                {tagFilterOpen ? (
+                  <div
+                    className="absolute z-30 mt-1 w-full rounded-lg border border-border bg-background p-2 shadow-md"
+                    role="listbox"
+                    aria-multiselectable="true"
+                  >
+                    {availableTags.length === 0 ? (
+                      <p className="px-2 py-1 text-sm text-foreground/65">No tags available yet.</p>
+                    ) : (
+                      <div className="max-h-56 space-y-1 overflow-y-auto">
+                        {availableTags.map((tag) => {
+                          const isSelected = selectedTags.includes(tag);
+                          return (
+                            <label
+                              key={tag}
+                              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleTag(tag)}
+                                className="h-4 w-4 rounded border-border"
+                              />
+                              <span>{tag}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
               <div className="space-y-2 lg:col-span-1">
                 <label htmlFor="library-sort" className="text-sm font-medium">
                   Sort by
@@ -363,31 +444,6 @@ export default function LibraryPage() {
                   <option value="TITLE">Title</option>
                 </select>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Tags</p>
-              {availableTags.length === 0 ? (
-                <p className="text-sm text-foreground/65">No tags available yet.</p>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {availableTags.map((tag) => {
-                    const isSelected = selectedTags.includes(tag);
-                    return (
-                      <Button
-                        key={tag}
-                        type="button"
-                        size="sm"
-                        variant={isSelected ? "default" : "outline"}
-                        className="h-8"
-                        onClick={() => toggleTag(tag)}
-                      >
-                        {tag}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
 
             {hasActiveFilters ? (
@@ -409,7 +465,7 @@ export default function LibraryPage() {
                       key={`active-tag-${tag}`}
                       className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs"
                     >
-                      Tag: {tag}
+                      {tag}
                       <button
                         type="button"
                         className="text-foreground/65 hover:text-foreground"

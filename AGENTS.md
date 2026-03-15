@@ -225,7 +225,7 @@ MVP library actions:
 - delete actions in Library must use explicit confirmation
 - search by title/tags and lightweight client-side sorting should be available in Library for browsing
 - subject filtering should be available in Library as single-select (`All subjects` default)
-- tag filtering should be available in Library as multi-select with OR matching across selected tags
+- tag filtering should be available in Library as a multi-select dropdown with OR matching across selected tags
 - subject/tag filters should combine with search and stay frontend-only on currently loaded Study Pack items
 - active filter chips (subject/tags) should support per-chip removal and `Clear all`
 - show tags as chips on Library cards to improve scanability

@@ -57,7 +57,7 @@ Current behavior:
 - search input with placeholder `Search study packs...`
 - search filters by Study Pack `title` and `tags`
 - subject filter (`All subjects` default, single-select)
-- tag filter (multi-select) with OR matching across selected tags
+- tag filter uses a multi-select dropdown (not a full visible tag-button list) with OR matching across selected tags
 - search + subject + tags are combined before rendering visible results
 - sort options:
   - `Recently created` (default)
@@ -67,6 +67,7 @@ Current behavior:
 - `Load More` fetches the next page and appends items
 - subject and tag options are derived from currently loaded Study Packs (frontend-only filtering)
 - active filter chips are shown for subject/tags, with per-chip removal and `Clear all`
+- selected tags appear as removable chips above the list and stay in sync with dropdown selection
 - Study Pack cards display:
   - title
   - shortened summary preview

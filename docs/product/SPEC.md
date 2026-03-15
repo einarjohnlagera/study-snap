@@ -80,7 +80,7 @@ Users can:
 * view saved Study Packs
 * search Study Packs by title or tags
 * filter by one subject at a time (`All subjects` default)
-* filter by multiple tags with OR matching (a pack matches if any selected tag is present)
+* filter by multiple tags using a scalable multi-select dropdown with OR matching (a pack matches if any selected tag is present)
 * combine search, subject filter, and tag filters together
 * sort Study Packs (recently created, recently reviewed, title)
 * open a Study Pack by clicking the card or title
@@ -96,6 +96,7 @@ The Study Library acts as the central location for accessing learning material.
 Library filter implementation note:
 
 * subject and tag filters are frontend-only on currently loaded Study Packs
+* selected tags are shown as removable active chips
 * filtering safely handles missing/empty `subject` and `tags` values on older Study Packs
 * sorting is applied after search/filtering on the visible set
 
