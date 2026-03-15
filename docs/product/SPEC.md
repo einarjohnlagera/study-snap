@@ -119,7 +119,11 @@ Remix behavior:
 
 * shared pages support `Copy to my Study Library` for authenticated users
 * remix duplicates the Study Pack under the current user
+* copied Study Packs auto-resolve duplicate titles per user:
+  * first duplicate: `{Title} (Copy)`
+  * next duplicates: `{Title} (Copy 2)`, `{Title} (Copy 3)`, ...
 * remix does not trigger a new LLM generation request
+* successful remix shows `Study Pack copied to your library.` after redirect
 * unauthenticated users see a signup/login CTA to copy
 * original shared Study Pack remains immutable
 

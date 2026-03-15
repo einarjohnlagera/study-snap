@@ -241,9 +241,14 @@ Rules:
 - shared Study Pack pages are read-only
 - shared pages can show title, summary, key concepts, and quiz preview
 - remix/copy should duplicate into the current user's Study Library
+- when remixing, duplicate titles for the same user must auto-resolve:
+  - `{Title}`
+  - `{Title} (Copy)`
+  - `{Title} (Copy 2)`, `{Title} (Copy 3)`, ...
 - remix must not trigger a new LLM generation request
 - original shared Study Pack remains immutable
 - in-product sharing should be discoverable on Study Pack detail (`Copy Link` + confirmation feedback)
+- successful remix should show confirmation feedback (`Study Pack copied to your library.`)
 
 ## OCR strategy guidance
 

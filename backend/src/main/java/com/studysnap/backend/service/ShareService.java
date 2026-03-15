@@ -20,7 +20,9 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -30,6 +32,8 @@ public class ShareService {
     private static final int SHARE_TOKEN_BYTES = 18;
     private static final int MAX_TOKEN_GENERATION_ATTEMPTS = 10;
     private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
+    private static final String COPY_SUFFIX = " (Copy)";
+    private static final String COPY_NUMBERED_TEMPLATE = " (Copy %d)";
 
     private final ShareLinkRepository shareLinkRepository;
     private final StudyPackRepository studyPackRepository;
@@ -72,12 +76,13 @@ public class ShareService {
 
     public ShareRemixResponse remixSharedStudyPack(String token, UUID ownerUserId) {
         StudyPackEntity source = resolveSharedStudyPack(token);
+        String remixedTitle = resolveRemixedTitle(ownerUserId, source.getTitle());
         StudyPackEntity remixed = new StudyPackEntity();
         remixed.setId(UUID.randomUUID());
         remixed.setOwnerUserId(ownerUserId);
         remixed.setAnonId(null);
         remixed.setInputType(source.getInputType());
-        remixed.setTitle(source.getTitle());
+        remixed.setTitle(remixedTitle);
         remixed.setSummary(source.getSummary());
         remixed.setSubject(source.getSubject());
         remixed.setKeyConcepts(copyKeyConcepts(source.getKeyConcepts()));
@@ -99,6 +104,31 @@ public class ShareService {
         StudyPackEntity saved = studyPackRepository.save(remixed);
         activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, saved.getId());
         return new ShareRemixResponse(saved.getId().toString());
+    }
+
+    private String resolveRemixedTitle(UUID ownerUserId, String baseTitle) {
+        List<String> matchingTitles = studyPackRepository.findOwnedTitlesForCopyConflict(
+                ownerUserId,
+                baseTitle,
+                baseTitle + " (Copy%"
+        );
+        Set<String> existingTitles = new HashSet<>(matchingTitles);
+        if (!existingTitles.contains(baseTitle)) {
+            return baseTitle;
+        }
+
+        String firstCopyTitle = baseTitle + COPY_SUFFIX;
+        if (!existingTitles.contains(firstCopyTitle)) {
+            return firstCopyTitle;
+        }
+
+        int copyNumber = 2;
+        String candidateTitle = baseTitle + String.format(COPY_NUMBERED_TEMPLATE, copyNumber);
+        while (existingTitles.contains(candidateTitle)) {
+            copyNumber++;
+            candidateTitle = baseTitle + String.format(COPY_NUMBERED_TEMPLATE, copyNumber);
+        }
+        return candidateTitle;
     }
 
     private StudyPackEntity resolveSharedStudyPack(String token) {
@@ -179,4 +209,3 @@ public class ShareService {
         return Arrays.copyOf(tags, tags.length);
     }
 }
-

@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
@@ -35,6 +36,17 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     Optional<StudyPackEntity> findTopByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
     Optional<StudyPackEntity> findByShareToken(String shareToken);
     boolean existsByShareToken(String shareToken);
+    @Query("""
+            select s.title
+            from StudyPackEntity s
+            where s.ownerUserId = :ownerUserId
+              and (s.title = :baseTitle or s.title like :copyPattern)
+            """)
+    List<String> findOwnedTitlesForCopyConflict(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("baseTitle") String baseTitle,
+            @Param("copyPattern") String copyPattern
+    );
     long countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
             UUID ownerUserId,
             OffsetDateTime createdAtFromInclusive,
