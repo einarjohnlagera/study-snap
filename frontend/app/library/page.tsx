@@ -18,6 +18,10 @@ import {requireVerifiedOnboardedUser} from "@/lib/route-guards";
 type LibrarySortOption = "RECENTLY_CREATED" | "RECENTLY_REVIEWED" | "TITLE";
 const LIBRARY_PAGE_SIZE = 20;
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+type ReviewSummaryMeta = {
+  lastReviewedAt: string | null;
+  lastScorePercentage: number | null;
+};
 
 function normalizeSubject(subject: string | null | undefined): string | null {
   const value = subject?.trim();
@@ -39,6 +43,57 @@ function toSummaryPreview(summary: string, maxLength = 160) {
     return clean;
   }
   return `${clean.slice(0, maxLength - 3)}...`;
+}
+
+function formatRelativeReviewTime(lastReviewedAt: string | null | undefined): string {
+  if (!lastReviewedAt) {
+    return "Not yet";
+  }
+
+  const timestamp = new Date(lastReviewedAt).getTime();
+  if (Number.isNaN(timestamp)) {
+    return "Not yet";
+  }
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diffMs = Math.max(0, Date.now() - timestamp);
+  const diffDays = Math.floor(diffMs / dayMs);
+
+  if (diffDays <= 0) {
+    return "today";
+  }
+  if (diffDays === 1) {
+    return "yesterday";
+  }
+  if (diffDays < 30) {
+    return `${diffDays} days ago`;
+  }
+  return new Date(lastReviewedAt).toLocaleDateString();
+}
+
+function getStudyPackStatus(lastScorePercentage: number | null | undefined) {
+  if (lastScorePercentage === null || lastScorePercentage === undefined) {
+    return {
+      label: "Not reviewed",
+      className: "border-border bg-muted/50 text-foreground/70",
+    };
+  }
+  if (lastScorePercentage < 60) {
+    return {
+      label: "Needs practice",
+      className: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+    };
+  }
+  if (lastScorePercentage <= 80) {
+    return {
+      label: "Improving",
+      className: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    };
+  }
+  return {
+    label: "Mastered",
+    className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  };
 }
 
 function LibraryLoading() {
@@ -68,7 +123,7 @@ export default function LibraryPage() {
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_CREATED");
-  const [lastReviewedByPackId, setLastReviewedByPackId] = useState<Record<string, string | null>>({});
+  const [reviewSummaryByPackId, setReviewSummaryByPackId] = useState<Record<string, ReviewSummaryMeta>>({});
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,7 +140,7 @@ export default function LibraryPage() {
   const hydrateLastReviewed = useCallback(async (packs: StudyPackListItemResponse[], append = false) => {
     if (packs.length === 0) {
       if (!append) {
-        setLastReviewedByPackId({});
+        setReviewSummaryByPackId({});
       }
       return;
     }
@@ -94,15 +149,21 @@ export default function LibraryPage() {
       packs.map(async (pack) => {
         try {
           const summary = await getQuickReviewPerformanceSummary(pack.id);
-          return [pack.id, summary.lastReviewedAt] as const;
+          return [pack.id, {
+            lastReviewedAt: summary.lastReviewedAt,
+            lastScorePercentage: summary.lastScorePercentage,
+          }] as const;
         } catch {
-          return [pack.id, null] as const;
+          return [pack.id, {
+            lastReviewedAt: null,
+            lastScorePercentage: null,
+          }] as const;
         }
       }),
     );
 
     const entriesByPackId = Object.fromEntries(entries);
-    setLastReviewedByPackId((previous) => (
+    setReviewSummaryByPackId((previous) => (
       append
         ? { ...previous, ...entriesByPackId }
         : entriesByPackId
@@ -210,7 +271,7 @@ export default function LibraryPage() {
     try {
       await deleteMyStudyPack(targetId);
       setItems((previous) => previous.filter((item) => item.id !== targetId));
-      setLastReviewedByPackId((previous) => {
+      setReviewSummaryByPackId((previous) => {
         const next = { ...previous };
         delete next[targetId];
         return next;
@@ -301,14 +362,17 @@ export default function LibraryPage() {
         return left.title.localeCompare(right.title);
       }
       if (sortBy === "RECENTLY_REVIEWED") {
-        const reviewedDiff = byDateDesc(lastReviewedByPackId[left.id], lastReviewedByPackId[right.id]);
+        const reviewedDiff = byDateDesc(
+          reviewSummaryByPackId[left.id]?.lastReviewedAt,
+          reviewSummaryByPackId[right.id]?.lastReviewedAt,
+        );
         if (reviewedDiff !== 0) {
           return reviewedDiff;
         }
       }
       return byDateDesc(left.createdAt, right.createdAt);
     });
-  }, [items, lastReviewedByPackId, searchQuery, selectedSubject, selectedTags, sortBy]);
+  }, [items, reviewSummaryByPackId, searchQuery, selectedSubject, selectedTags, sortBy]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -515,7 +579,11 @@ export default function LibraryPage() {
               {visibleItems.map((item) => {
                 const isDeleting = deletingId === item.id;
                 const menuOpen = menuOpenId === item.id;
-                const lastReviewed = lastReviewedByPackId[item.id];
+                const reviewSummary = reviewSummaryByPackId[item.id] ?? {
+                  lastReviewedAt: null,
+                  lastScorePercentage: null,
+                };
+                const reviewStatus = getStudyPackStatus(reviewSummary.lastScorePercentage);
                 const itemTags = normalizeTags(item.tags);
 
                 return (
@@ -537,6 +605,11 @@ export default function LibraryPage() {
                         <h3 className="text-base font-semibold transition-colors sm:text-lg">
                           {item.title}
                         </h3>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${reviewStatus.className}`}
+                        >
+                          {reviewStatus.label}
+                        </span>
                         <p className="text-sm leading-relaxed text-foreground/75">
                           {toSummaryPreview(item.summaryPreview)}
                         </p>
@@ -605,7 +678,7 @@ export default function LibraryPage() {
                         Created {new Date(item.createdAt).toLocaleString()}
                       </p>
                       <p className="text-xs text-foreground/65">
-                        Last reviewed {lastReviewed ? new Date(lastReviewed).toLocaleString() : "Not yet"}
+                        Last reviewed: {formatRelativeReviewTime(reviewSummary.lastReviewedAt)}
                       </p>
                     </div>
 
