@@ -39,6 +39,7 @@ export default function AdaptivePracticePage() {
   const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
   const [completionTracked, setCompletionTracked] = useState(false);
   const [premiumLocked, setPremiumLocked] = useState(false);
+  const [quizStarted, setQuizStarted] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -75,6 +76,7 @@ export default function AdaptivePracticePage() {
       setCurrentIndex(0);
       setSelectedChoices({});
       setCompletionTracked(false);
+      setQuizStarted(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate adaptive practice.";
       setError(message);
@@ -105,6 +107,15 @@ export default function AdaptivePracticePage() {
     }
     return Number(((score / quiz.length) * 100).toFixed(0));
   }, [quiz.length, score]);
+  const completionMessage = useMemo(() => {
+    if (scorePercentage >= 85) {
+      return "Great work. You're mastering this concept.";
+    }
+    if (scorePercentage >= 60) {
+      return "You're improving on this concept.";
+    }
+    return "More practice will help strengthen this concept.";
+  }, [scorePercentage]);
 
   const handleSelectChoice = (choice: string) => {
     if (!currentQuestion || hasAnsweredCurrent) {
@@ -165,7 +176,7 @@ export default function AdaptivePracticePage() {
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">Premium feature</h1>
           <p className="text-sm text-foreground/75">
-            Adaptive Quiz Generation and weak-concept targeting are available on Premium.
+            This feature is available in the Premium plan.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
@@ -195,6 +206,40 @@ export default function AdaptivePracticePage() {
             </Button>
           </Link>
         </Card>
+      ) : !quizStarted ? (
+        <Card className="space-y-4 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Adaptive Practice
+          </p>
+          <h1 className="text-xl font-semibold sm:text-2xl">{adaptiveQuiz.title}</h1>
+          <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-foreground/85">
+            <p className="font-medium text-foreground">
+              We noticed you may need more practice with these concepts.
+            </p>
+          </div>
+          <div className="space-y-2 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
+            <p className="font-medium text-foreground">Weak concepts:</p>
+            {adaptiveQuiz.weakConcepts.length > 0 ? (
+              <ul className="list-disc space-y-1 pl-5">
+                {adaptiveQuiz.weakConcepts.map((concept) => (
+                  <li key={`weak-concept-${concept}`}>{concept}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>No specific weak concepts were found. This set still focuses on recent review gaps.</p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setQuizStarted(true)}>
+              Start Adaptive Practice
+            </Button>
+            <Link href={`/study-packs/${studyPackId}`} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
+                Back to Study Pack
+              </Button>
+            </Link>
+          </div>
+        </Card>
       ) : isComplete ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
@@ -204,6 +249,9 @@ export default function AdaptivePracticePage() {
           <p className="text-sm text-foreground/75">
             Score: {score} / {quiz.length} ({scorePercentage}%)
           </p>
+          <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/85">
+            {completionMessage}
+          </div>
           {adaptiveQuiz.weakConcepts.length > 0 ? (
             <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground/80">
               <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
@@ -237,6 +285,11 @@ export default function AdaptivePracticePage() {
             <p className="text-sm text-foreground/75">
               New follow-up practice based on your weak areas.
             </p>
+            {adaptiveQuiz.weakConcepts.length > 0 ? (
+              <p className="text-sm text-foreground/75">
+                Focus concepts: {adaptiveQuiz.weakConcepts.join(", ")}
+              </p>
+            ) : null}
             <p className="text-sm text-foreground/75">
               Question {currentIndex + 1} of {quiz.length}
             </p>

@@ -26,6 +26,9 @@ function resolveActionHref(focus: TodayFocusResponse) {
 
 export function TodayFocusCard({ focus }: TodayFocusCardProps) {
   const actionHref = resolveActionHref(focus);
+  const message = focus.type === "PRACTICE_WEAK_CONCEPT"
+    ? "Practice weak concepts from your recent review."
+    : focus.message;
 
   return (
     <Card className="space-y-4 p-4 sm:p-6">
@@ -37,7 +40,7 @@ export function TodayFocusCard({ focus }: TodayFocusCardProps) {
           <Compass className="h-5 w-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
           {focus.title}
         </h2>
-        <p className="text-sm leading-relaxed text-foreground/80">{focus.message}</p>
+        <p className="text-sm leading-relaxed text-foreground/80">{message}</p>
       </div>
 
       <Link href={actionHref} className="w-full sm:w-auto">
