@@ -14,6 +14,7 @@ import {
   getMyStudyPack,
   listRecentQuickReviewSessions,
   startQuickReviewSession,
+  updateStudyPackTags,
   type QuickReviewPerformanceSummaryResponse,
   type QuickReviewSessionSummaryResponse,
   type StudyPackResponse,
@@ -67,6 +68,10 @@ export default function StudyPackDetailPage() {
   const [startingQuickReview, setStartingQuickReview] = useState(false);
   const [hasInProgressQuickReview, setHasInProgressQuickReview] = useState(false);
   const [creatingShareLink, setCreatingShareLink] = useState(false);
+  const [updatingTags, setUpdatingTags] = useState(false);
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTagValue, setNewTagValue] = useState("");
+  const [tagError, setTagError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastTimeoutRef = useRef<number | null>(null);
@@ -107,6 +112,9 @@ export default function StudyPackDetailPage() {
     try {
       const detail = await getMyStudyPack(studyPackId);
       setStudyPack(detail);
+      setTagError(null);
+      setAddingTag(false);
+      setNewTagValue("");
       try {
         const history = await listRecentQuickReviewSessions(studyPackId, 5);
         setRecentSessions(history);
@@ -140,6 +148,9 @@ export default function StudyPackDetailPage() {
       setHistoryError(null);
       setPerformanceError(null);
       setHasInProgressQuickReview(false);
+      setTagError(null);
+      setAddingTag(false);
+      setNewTagValue("");
     } finally {
       setLoading(false);
     }
@@ -168,6 +179,20 @@ export default function StudyPackDetailPage() {
     }
     return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
   };
+  const formattedCreatedDate = useMemo(() => {
+    if (!studyPack?.createdAt) {
+      return "Not available";
+    }
+    const date = new Date(studyPack.createdAt);
+    if (Number.isNaN(date.getTime())) {
+      return "Not available";
+    }
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }, [studyPack?.createdAt]);
 
   const latestCompletedSession = recentSessions[0] ?? null;
   const focusAreas = Array.from(
@@ -258,6 +283,64 @@ export default function StudyPackDetailPage() {
     }
   }, [creatingShareLink, showShareToast, studyPack]);
 
+  const persistTags = useCallback(async (nextTags: string[]) => {
+    if (!studyPack || updatingTags) {
+      return false;
+    }
+
+    setUpdatingTags(true);
+    setTagError(null);
+    try {
+      const updatedStudyPack = await updateStudyPackTags(studyPack.id, nextTags);
+      setStudyPack(updatedStudyPack);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update tags.";
+      setTagError(message);
+      return false;
+    } finally {
+      setUpdatingTags(false);
+    }
+  }, [studyPack, updatingTags]);
+
+  const handleAddTag = useCallback(async () => {
+    if (!studyPack) {
+      return;
+    }
+
+    const trimmedTag = newTagValue.trim();
+    if (!trimmedTag) {
+      setNewTagValue("");
+      setAddingTag(false);
+      setTagError(null);
+      return;
+    }
+
+    const alreadyExists = studyPack.tags.some(
+      (tag) => tag.trim().toLowerCase() === trimmedTag.toLowerCase(),
+    );
+    if (alreadyExists) {
+      setNewTagValue("");
+      setAddingTag(false);
+      setTagError(null);
+      return;
+    }
+
+    const updated = await persistTags([...studyPack.tags, trimmedTag]);
+    if (updated) {
+      setNewTagValue("");
+      setAddingTag(false);
+    }
+  }, [newTagValue, persistTags, studyPack]);
+
+  const handleRemoveTag = useCallback(async (tagToRemove: string) => {
+    if (!studyPack) {
+      return;
+    }
+    const nextTags = studyPack.tags.filter((tag) => tag !== tagToRemove);
+    await persistTags(nextTags);
+  }, [persistTags, studyPack]);
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
@@ -298,25 +381,96 @@ export default function StudyPackDetailPage() {
               Study Pack
             </p>
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{studyPack.title}</h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/70">
-              <span>{new Date(studyPack.createdAt).toLocaleString()}</span>
-              <span>{studyPack.quiz.length} quiz questions</span>
-            </div>
-            {studyPack.tags.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {studyPack.tags.map((tag) => (
+            <p className="text-sm text-foreground/75">
+              {studyPack.subject?.trim() ? `${studyPack.subject.trim()} • ` : ""}
+              {studyPack.keyConcepts.length} concepts • {studyPack.quiz.length} questions
+            </p>
+            <p className="text-sm text-foreground/65">Created {formattedCreatedDate}</p>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {studyPack.tags.map((tag, index) => (
                   <span
-                    key={tag}
-                    className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
+                    key={`${tag}-${index}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
                   >
                     {tag}
+                    <button
+                      type="button"
+                      className="text-foreground/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Remove tag ${tag}`}
+                      onClick={() => void handleRemoveTag(tag)}
+                      disabled={updatingTags}
+                    >
+                      x
+                    </button>
                   </span>
                 ))}
+
+                {addingTag ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      value={newTagValue}
+                      onChange={(event) => setNewTagValue(event.target.value)}
+                      placeholder="Enter tag"
+                      className="h-8 w-36 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void handleAddTag();
+                        } else if (event.key === "Escape") {
+                          setAddingTag(false);
+                          setNewTagValue("");
+                          setTagError(null);
+                        }
+                      }}
+                      disabled={updatingTags}
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => void handleAddTag()}
+                      disabled={updatingTags}
+                    >
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => {
+                        setAddingTag(false);
+                        setNewTagValue("");
+                        setTagError(null);
+                      }}
+                      disabled={updatingTags}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/70 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => {
+                      setAddingTag(true);
+                      setTagError(null);
+                    }}
+                    disabled={updatingTags}
+                  >
+                    + Add tag
+                  </button>
+                )}
               </div>
-            ) : null}
+              {tagError ? <p className="text-xs text-red-600 dark:text-red-400">{tagError}</p> : null}
+            </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
+                <Button type="button" className="w-full sm:w-auto" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
                   {startingQuickReview
                     ? (hasInProgressQuickReview ? "Resuming..." : "Starting...")
                     : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}

@@ -585,6 +585,7 @@ export default function LibraryPage() {
                 };
                 const reviewStatus = getStudyPackStatus(reviewSummary.lastScorePercentage);
                 const itemTags = normalizeTags(item.tags);
+                const subject = normalizeSubject(item.subject);
 
                 return (
                   <Card
@@ -602,6 +603,11 @@ export default function LibraryPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-2">
+                        {subject ? (
+                          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                            {subject}
+                          </p>
+                        ) : null}
                         <h3 className="text-base font-semibold transition-colors sm:text-lg">
                           {item.title}
                         </h3>

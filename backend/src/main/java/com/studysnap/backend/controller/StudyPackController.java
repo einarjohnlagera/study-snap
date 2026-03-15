@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuickReviewActivityRequest;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.dto.UpdateStudyPackTagsRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.StudyPackService;
@@ -17,6 +18,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -91,6 +93,16 @@ public class StudyPackController {
 	) {
 		UUID userId = user.userId();
 		studyPackService.deleteMine(id, userId);
+	}
+
+	@PutMapping("/{id}/tags")
+	public StudyPackResponse updateTags(
+			@PathVariable String id,
+			@Valid @RequestBody UpdateStudyPackTagsRequest request,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		UUID userId = user.userId();
+		return studyPackService.updateTags(id, userId, request.tags());
 	}
 
 	@PostMapping("/{id}/quick-review/activity")
