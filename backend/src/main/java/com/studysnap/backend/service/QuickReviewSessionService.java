@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -39,6 +40,7 @@ public class QuickReviewSessionService {
     private final StudyPackRepository studyPackRepository;
     private final ActivityTrackingService activityTrackingService;
     private final SubscriptionService subscriptionService;
+    private final FeatureGateService featureGateService;
 
     public QuickReviewSessionStartResponse startSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
@@ -270,7 +272,7 @@ public class QuickReviewSessionService {
                 session.getRetryCount() == null ? 0 : session.getRetryCount(),
                 session.getDurationSeconds(),
                 session.getConfidenceLevel(),
-                planType == PlanType.PREMIUM ? extractWeakConcepts(session) : List.of(),
+                featureGateService.hasFeatureAccess(planType, Feature.WEAK_CONCEPT_DETECTION) ? extractWeakConcepts(session) : List.of(),
                 session.getSessionState(),
                 session.getCreatedAt(),
                 session.getCompletedAt()
@@ -317,7 +319,7 @@ public class QuickReviewSessionService {
         if (sessionMetadata == null || sessionMetadata.isEmpty()) {
             return sessionMetadata;
         }
-        if (planType == PlanType.PREMIUM) {
+        if (featureGateService.hasFeatureAccess(planType, Feature.WEAK_CONCEPT_DETECTION)) {
             return sessionMetadata;
         }
 

@@ -61,12 +61,14 @@ class DashboardServiceTest {
 
     @BeforeEach
     void setUp() {
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService);
         dashboardService = new DashboardService(
                 userRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
-                subscriptionService
+                subscriptionService,
+                featureGateService
         );
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
         lenient().when(activityEventRepository.findTopByUserIdAndStudyPackIdAndActivityTypeOrderByCreatedAtDesc(
