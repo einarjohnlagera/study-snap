@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -129,6 +131,42 @@ public class DashboardService {
         int longestStreak = user.getLongestStreak() == null ? 0 : user.getLongestStreak();
 
         return new StudyEngagementResponse(engagementMode, currentStreak, longestStreak, studyDaysThisWeek);
+    }
+
+    public MasterySnapshotResponse getMasterySnapshot(UUID userId) {
+        List<QuickReviewSessionEntity> recentCompletedSessions = quickReviewSessionRepository
+                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 30))
+                .stream()
+                .filter(session -> session.getStatus() == QuickReviewSessionStatus.COMPLETED)
+                .toList();
+
+        if (recentCompletedSessions.isEmpty()) {
+            return new MasterySnapshotResponse(null, null, 0);
+        }
+
+        List<BigDecimal> recentScores = recentCompletedSessions.stream()
+                .map(this::scorePercentageOrZero)
+                .toList();
+
+        BigDecimal bestRecentScore = recentScores.stream()
+                .max(BigDecimal::compareTo)
+                .orElse(BigDecimal.ZERO);
+
+        BigDecimal averageRecentScore = recentScores.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(recentScores.size()), 2, RoundingMode.HALF_UP);
+
+        int studyPacksReviewed = (int) recentCompletedSessions.stream()
+                .map(QuickReviewSessionEntity::getStudyPackId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+
+        return new MasterySnapshotResponse(
+                averageRecentScore,
+                bestRecentScore,
+                studyPacksReviewed
+        );
     }
 
     private Optional<TodayFocusResponse> resolveTodayFocusInProgress(UUID userId) {

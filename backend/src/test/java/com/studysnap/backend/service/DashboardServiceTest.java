@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
@@ -139,6 +140,44 @@ class DashboardServiceTest {
         assertThat(response.currentStreak()).isEqualTo(5);
         assertThat(response.longestStreak()).isEqualTo(8);
         assertThat(response.studyDaysThisWeek()).isEqualTo(0);
+    }
+
+    @Test
+    void getMasterySnapshot_returnsEmptyWhenNoCompletedSessionsExist() {
+        UUID userId = UUID.randomUUID();
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+
+        MasterySnapshotResponse response = dashboardService.getMasterySnapshot(userId);
+
+        assertThat(response.averageRecentScore()).isNull();
+        assertThat(response.bestRecentScore()).isNull();
+        assertThat(response.studyPacksReviewed()).isEqualTo(0);
+    }
+
+    @Test
+    void getMasterySnapshot_computesAverageBestAndDistinctStudyPacksReviewed() {
+        UUID userId = UUID.randomUUID();
+        UUID firstPackId = UUID.randomUUID();
+        UUID secondPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        QuickReviewSessionEntity sessionA = buildCompletedSession(userId, firstPackId, bigDecimal(80), now.minusDays(1));
+        QuickReviewSessionEntity sessionB = buildCompletedSession(userId, secondPackId, bigDecimal(100), now.minusHours(8));
+        QuickReviewSessionEntity sessionC = buildCompletedSession(userId, firstPackId, bigDecimal(50), now.minusHours(2));
+
+        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(List.of(sessionC, sessionB, sessionA));
+
+        MasterySnapshotResponse response = dashboardService.getMasterySnapshot(userId);
+
+        assertThat(response.averageRecentScore()).isEqualByComparingTo(new BigDecimal("76.67"));
+        assertThat(response.bestRecentScore()).isEqualByComparingTo(bigDecimal(100));
+        assertThat(response.studyPacksReviewed()).isEqualTo(2);
     }
 
     @Test

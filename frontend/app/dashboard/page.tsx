@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   getMe,
   getContinueStudyingRecommendation,
+  getMasterySnapshot,
   getStudyEngagement,
   getTodayFocus,
   listMyStudyPacks,
   type ContinueStudyingResponse,
+  type MasterySnapshotResponse,
   type PlanType,
   type StudyEngagementResponse,
   type StudyPackListItemResponse,
@@ -27,6 +29,7 @@ import { DashboardError } from "./dashboard-error";
 import { StudyConsistencyCard } from "./study-consistency-card";
 import { TodayFocusCard } from "./today-focus-card";
 import { PlanUsageCard } from "./plan-usage-card";
+import { MasterySnapshotCard } from "./mastery-snapshot-card";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -35,6 +38,7 @@ export default function DashboardPage() {
   const [continueRecommendation, setContinueRecommendation] = useState<ContinueStudyingResponse | null>(null);
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [studyEngagement, setStudyEngagement] = useState<StudyEngagementResponse | null>(null);
+  const [masterySnapshot, setMasterySnapshot] = useState<MasterySnapshotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
@@ -54,11 +58,12 @@ export default function DashboardPage() {
     try {
       const data = await listMyStudyPacks();
       setItems(data);
-      const [meResult, continueResult, todayFocusResult, engagementResult] = await Promise.allSettled([
+      const [meResult, continueResult, todayFocusResult, engagementResult, masterySnapshotResult] = await Promise.allSettled([
         getMe(),
         getContinueStudyingRecommendation(),
         getTodayFocus(),
         getStudyEngagement(),
+        getMasterySnapshot(),
       ]);
       if (meResult.status === "fulfilled") {
         setPlanType(meResult.value.planType);
@@ -66,6 +71,7 @@ export default function DashboardPage() {
       setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
       setStudyEngagement(engagementResult.status === "fulfilled" ? engagementResult.value : null);
+      setMasterySnapshot(masterySnapshotResult.status === "fulfilled" ? masterySnapshotResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
       setError(message);
@@ -118,6 +124,7 @@ export default function DashboardPage() {
           ) : null}
           {todayFocus ? <TodayFocusCard focus={todayFocus} /> : null}
           {studyEngagement ? <StudyConsistencyCard engagement={studyEngagement} /> : null}
+          <MasterySnapshotCard snapshot={masterySnapshot} />
           {hasContinueRecommendation && continueRecommendation ? (
             <ContinueSpotlight recommendation={continueRecommendation} />
           ) : null}
