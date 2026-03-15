@@ -3,14 +3,10 @@ import Image from "next/image";
 import {
   ArrowDown,
   ArrowRight,
-  Bot,
   Brain,
-  Compass,
-  FileImage,
   ListChecks,
   ScanText,
   Sparkles,
-  Target,
   TrendingUp,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -34,14 +30,50 @@ const coreOutputs = [
   },
 ];
 
-const highlights = [
-  { label: "OCR from Notes Images", icon: FileImage },
-  { label: "AI Summaries", icon: Sparkles },
-  { label: "Weak Concept Detection", icon: Target },
-  { label: "Adaptive Practice", icon: TrendingUp },
-  { label: "AI Study Coach", icon: Bot },
-  { label: "Today's Focus Guidance", icon: Compass },
+const featureHighlights = [
+  {
+    title: "AI Summary",
+    description: "Study Snap condenses your notes into a clear summary so you can grasp the key points faster.",
+    icon: Sparkles,
+  },
+  {
+    title: "Key Concepts",
+    description: "Important concepts are extracted and organized so you can review them quickly.",
+    icon: Brain,
+  },
+  {
+    title: "Quick Review Quiz",
+    description: "Automatically generated quiz questions help reinforce what you’ve learned.",
+    icon: ListChecks,
+  },
+  {
+    title: "Adaptive Learning",
+    description: "Adaptive quizzes target the topics you struggle with so you improve faster.",
+    icon: TrendingUp,
+  },
 ];
+
+function FeatureHighlightsSection() {
+  return (
+    <section className="space-y-4">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Feature Highlights
+        </p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Everything you need to study faster</h2>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {featureHighlights.map((feature) => (
+          <Card key={feature.title} className="space-y-3 p-4 sm:p-6">
+            <feature.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <CardTitle>{feature.title}</CardTitle>
+            <CardDescription className="text-sm">{feature.description}</CardDescription>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 function HeroTransformationPreview() {
   return (
@@ -191,24 +223,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="space-y-4">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Feature Highlights
-          </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Built to guide your next best study step</h2>
-        </div>
-        <Card className="p-4 sm:p-6">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {highlights.map((feature) => (
-              <div key={feature.label} className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
-                <feature.icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm text-foreground/85">{feature.label}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </section>
+      <FeatureHighlightsSection />
 
       <section className="space-y-4">
         <div className="space-y-2">
