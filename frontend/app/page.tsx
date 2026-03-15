@@ -53,6 +53,25 @@ const featureHighlights = [
   },
 ];
 
+const faqItems = [
+  {
+    question: "What is Study Snap?",
+    answer: "Study Snap turns your notes into a structured study pack with summaries, key concepts, and quizzes.",
+  },
+  {
+    question: "What type of notes can I upload?",
+    answer: "You can paste text notes or upload images of handwritten notes, lecture slides, or textbook pages.",
+  },
+  {
+    question: "Is Study Snap free?",
+    answer: "Study Snap offers a free plan with limited study packs per month, and a premium plan with additional features.",
+  },
+  {
+    question: "Do I need an account to try it?",
+    answer: "No. You can try the demo mode without creating an account.",
+  },
+];
+
 function FeatureHighlightsSection() {
   return (
     <section className="space-y-4">
@@ -117,6 +136,33 @@ function ProductPreviewSection() {
         <Link href="/demo" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
           Try the demo to experience the full workflow.
         </Link>
+      </div>
+    </section>
+  );
+}
+
+function FaqSection() {
+  return (
+    <section className="space-y-4">
+      <div className="space-y-2">
+        <h2 className="text-2xl font-semibold sm:text-3xl">Frequently Asked Questions</h2>
+      </div>
+      <div className="space-y-3">
+        {faqItems.map((item) => (
+          <Card key={item.question} className="p-0">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-left text-sm font-medium sm:p-5 sm:text-base [&::-webkit-details-marker]:hidden">
+                <span>{item.question}</span>
+                <span className="text-xs text-foreground/55" aria-hidden>
+                  +
+                </span>
+              </summary>
+              <p className="border-t border-border px-4 py-3 text-sm leading-relaxed text-foreground/75 sm:px-5">
+                {item.answer}
+              </p>
+            </details>
+          </Card>
+        ))}
       </div>
     </section>
   );
@@ -332,6 +378,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <FaqSection />
     </main>
   );
 }

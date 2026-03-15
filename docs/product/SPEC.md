@@ -49,6 +49,7 @@ Landing page sections:
 * feature highlights
 * pricing teaser (Free vs Premium overview)
 * final CTA section
+* FAQ section before the footer, using a lightweight accordion layout
 
 Demo mode:
 
