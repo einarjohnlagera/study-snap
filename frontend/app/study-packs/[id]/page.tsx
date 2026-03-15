@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
+  createStudyPackShareLink,
   getQuickReviewPerformanceSummary,
   getInProgressQuickReviewSession,
   getMyStudyPack,
@@ -63,6 +64,10 @@ export default function StudyPackDetailPage() {
   const [loading, setLoading] = useState(true);
   const [startingQuickReview, setStartingQuickReview] = useState(false);
   const [hasInProgressQuickReview, setHasInProgressQuickReview] = useState(false);
+  const [creatingShareLink, setCreatingShareLink] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const shareToastTimeoutRef = useRef<number | null>(null);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -129,6 +134,14 @@ export default function StudyPackDetailPage() {
     void loadStudyPack();
   }, [loadStudyPack]);
 
+  useEffect(() => {
+    return () => {
+      if (shareToastTimeoutRef.current !== null) {
+        window.clearTimeout(shareToastTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
   const formatScore = (value: number | null) => {
@@ -177,6 +190,44 @@ export default function StudyPackDetailPage() {
       setStartingQuickReview(false);
     }
   };
+
+  const showShareToast = useCallback((message: string) => {
+    setShareToast(message);
+    if (shareToastTimeoutRef.current !== null) {
+      window.clearTimeout(shareToastTimeoutRef.current);
+    }
+    shareToastTimeoutRef.current = window.setTimeout(() => {
+      setShareToast(null);
+      shareToastTimeoutRef.current = null;
+    }, 2200);
+  }, []);
+
+  const handleCopyShareLink = useCallback(async () => {
+    if (!studyPack || creatingShareLink) {
+      return;
+    }
+
+    setCreatingShareLink(true);
+    setShareError(null);
+    try {
+      const share = await createStudyPackShareLink(studyPack.id);
+      const shareUrl = share.shareUrl.startsWith("http")
+        ? share.shareUrl
+        : new URL(share.shareUrl, window.location.origin).toString();
+
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard is not available in this browser.");
+      }
+
+      await navigator.clipboard.writeText(shareUrl);
+      showShareToast("Share link copied");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not copy share link.";
+      setShareError(message);
+    } finally {
+      setCreatingShareLink(false);
+    }
+  }, [creatingShareLink, showShareToast, studyPack]);
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -234,12 +285,21 @@ export default function StudyPackDetailPage() {
                 ))}
               </div>
             ) : null}
-            <div>
-              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
-                {startingQuickReview
-                  ? (hasInProgressQuickReview ? "Resuming..." : "Starting...")
-                  : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
-              </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
+                  {startingQuickReview
+                    ? (hasInProgressQuickReview ? "Resuming..." : "Starting...")
+                    : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
+                </Button>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Share Study Pack</p>
+                <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleCopyShareLink()} disabled={creatingShareLink}>
+                  {creatingShareLink ? "Copying..." : "Copy Link"}
+                </Button>
+                {shareError ? <p className="text-xs text-red-600 dark:text-red-400">{shareError}</p> : null}
+              </div>
             </div>
           </Card>
 
@@ -345,6 +405,15 @@ export default function StudyPackDetailPage() {
           </Card>
 
           <PracticeQuizCard quiz={studyPack.quiz} />
+        </div>
+      ) : null}
+      {shareToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed right-4 bottom-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm"
+        >
+          {shareToast}
         </div>
       ) : null}
     </main>

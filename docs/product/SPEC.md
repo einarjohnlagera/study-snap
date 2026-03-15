@@ -99,6 +99,32 @@ Dashboard behavior note:
 
 ---
 
+## Shareable Study Packs
+
+Study Packs can be shared publicly using token links.
+
+Share behavior:
+
+* owners can generate or reuse a tokenized share link for a Study Pack
+* public share route is `/p/{token}`
+* shared page layout is auth-aware:
+  * unauthenticated viewers use the public minimal navbar
+  * authenticated viewers use the app shell/sidebar layout
+* shared Study Pack pages are read-only (no direct editing)
+* shared pages show title, summary, key concepts, and quiz preview
+* Study Pack detail includes an in-product share action (`Copy Link`)
+* copying a share link confirms with `Share link copied`
+
+Remix behavior:
+
+* shared pages support `Copy to my Study Library` for authenticated users
+* remix duplicates the Study Pack under the current user
+* remix does not trigger a new LLM generation request
+* unauthenticated users see a signup/login CTA to copy
+* original shared Study Pack remains immutable
+
+---
+
 ## Quick Review
 
 Quick Review allows users to actively practice a Study Pack through an interactive quiz.

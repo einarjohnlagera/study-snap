@@ -33,6 +33,8 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     @Query("select s from StudyPackEntity s where s.id = :id and s.ownerUserId = :ownerUserId")
     Optional<StudyPackEntity> findByIdAndOwnerUserIdForUpdate(UUID id, UUID ownerUserId);
     Optional<StudyPackEntity> findTopByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
+    Optional<StudyPackEntity> findByShareToken(String shareToken);
+    boolean existsByShareToken(String shareToken);
     long countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
             UUID ownerUserId,
             OffsetDateTime createdAtFromInclusive,

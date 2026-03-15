@@ -31,7 +31,17 @@ function isAuthenticatedRoute(pathname: string): boolean {
   );
 }
 
+function shouldUseAuthenticatedShell(pathname: string, hasAuthUser: boolean): boolean {
+  if (pathname.startsWith("/p/")) {
+    return hasAuthUser;
+  }
+  return isAuthenticatedRoute(pathname);
+}
+
 function getPageTitle(pathname: string): string {
+  if (pathname.startsWith("/p/")) {
+    return "Shared Study Pack";
+  }
   if (pathname.startsWith("/dashboard")) {
     return "Dashboard";
   }
@@ -127,7 +137,8 @@ export function AppShell({ children }: AppShellProps) {
     if (!pathname) {
       return false;
     }
-    return isAuthenticatedRoute(pathname);
+    const hasAuthUser = Boolean(getAuthUser());
+    return shouldUseAuthenticatedShell(pathname, hasAuthUser);
   }, [pathname]);
 
   useEffect(() => {

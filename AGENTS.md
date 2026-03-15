@@ -228,6 +228,22 @@ Future actions:
 - reviewed status
 - folders / collections
 
+## Shareable Study Packs
+
+Study Packs support public token sharing and remixing.
+
+Rules:
+- public share links should use `/p/{token}`
+- shared page layout is auth-aware:
+  - unauthenticated viewers use the public minimal navbar
+  - authenticated viewers use the app shell/sidebar layout
+- shared Study Pack pages are read-only
+- shared pages can show title, summary, key concepts, and quiz preview
+- remix/copy should duplicate into the current user's Study Library
+- remix must not trigger a new LLM generation request
+- original shared Study Pack remains immutable
+- in-product sharing should be discoverable on Study Pack detail (`Copy Link` + confirmation feedback)
+
 ## OCR strategy guidance
 
 Use hybrid OCR:
