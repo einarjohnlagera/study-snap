@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { getMe, type MeResponse } from "@/lib/api";
+import {
+  completeOnboardingProfileType,
+  getMe,
+  listMyStudyPacks,
+  type MeResponse,
+  type ProfileType,
+} from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
@@ -15,16 +21,29 @@ type IdentityForm = {
   email: string;
 };
 
-function formatProfileType(value: MeResponse["profileType"]): string {
-  if (!value) {
-    return "Not set";
-  }
-  return value
-    .toLowerCase()
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+function formatPlan(value: MeResponse["planType"]): string {
+  return value.charAt(0) + value.slice(1).toLowerCase();
 }
+
+function formatMemberSince(value: string | null): string {
+  if (!value) {
+    return "Not available yet";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not available yet";
+  }
+  return date.toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+const PROFILE_TYPE_OPTIONS: Array<{ value: ProfileType; label: string }> = [
+  { value: "STUDENT", label: "Student" },
+  { value: "PARENT", label: "Parent" },
+  { value: "PROFESSIONAL", label: "Professional" },
+];
 
 function ProfileLoading() {
   return (
@@ -41,12 +60,16 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
+  const [studyPackCount, setStudyPackCount] = useState(0);
   const [identityForm, setIdentityForm] = useState<IdentityForm>({
     firstName: "",
     lastName: "",
     email: "",
   });
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
+  const [savingProfileType, setSavingProfileType] = useState(false);
+  const [profileTypeMessage, setProfileTypeMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -66,18 +89,26 @@ export default function ProfilePage() {
     setLoading(true);
     setError(null);
     setSaveMessage(null);
+    setProfileTypeMessage(null);
     try {
-      const me = await getMe();
+      const [me, studyPacks] = await Promise.all([
+        getMe(),
+        listMyStudyPacks(),
+      ]);
       setProfile(me);
+      setStudyPackCount(studyPacks.length);
       setIdentityForm({
         firstName: me.firstName ?? "",
         lastName: me.lastName ?? "",
         email: me.email ?? "",
       });
+      setSelectedProfileType(me.profileType ?? "");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load profile.";
       setError(message);
       setProfile(null);
+      setStudyPackCount(0);
+      setSelectedProfileType("");
     } finally {
       setLoading(false);
     }
@@ -116,6 +147,25 @@ export default function ProfilePage() {
   const handleSaveIdentity = () => {
     // Placeholder flow until profile update endpoint is available.
     setSaveMessage("Profile updates are not connected yet. Changes are local for this session.");
+  };
+
+  const handleSaveProfileType = async () => {
+    if (!selectedProfileType || savingProfileType) {
+      return;
+    }
+    setSavingProfileType(true);
+    setProfileTypeMessage(null);
+    try {
+      const updated = await completeOnboardingProfileType({ profileType: selectedProfileType });
+      setProfile(updated);
+      setSelectedProfileType(updated.profileType ?? selectedProfileType);
+      setProfileTypeMessage("Profile type updated.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update profile type.";
+      setProfileTypeMessage(message);
+    } finally {
+      setSavingProfileType(false);
+    }
   };
 
   return (
@@ -191,9 +241,55 @@ export default function ProfilePage() {
 
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Profile Type</h2>
-            <div className="rounded-md border border-border bg-background p-3">
-              <p className="text-xs uppercase tracking-wide text-foreground/60">Current Profile Type</p>
-              <p className="mt-1 font-medium">{formatProfileType(profile.profileType)}</p>
+            <div className="space-y-3 rounded-md border border-border bg-background p-3">
+              <label className="block space-y-2">
+                <span className="text-xs uppercase tracking-wide text-foreground/60">Current Profile Type</span>
+                <select
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={selectedProfileType}
+                  onChange={(event) => {
+                    setProfileTypeMessage(null);
+                    setSelectedProfileType(event.target.value as ProfileType);
+                  }}
+                >
+                  {PROFILE_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => void handleSaveProfileType()}
+                  disabled={!selectedProfileType || savingProfileType}
+                >
+                  {savingProfileType ? "Saving..." : "Save Profile Type"}
+                </Button>
+                {profileTypeMessage ? (
+                  <p className="text-xs text-foreground/60">{profileTypeMessage}</p>
+                ) : null}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Account Information</h2>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border border-border bg-background p-3">
+                <p className="text-xs uppercase tracking-wide text-foreground/60">Member since</p>
+                <p className="mt-1 font-medium">{formatMemberSince(profile.emailVerifiedAt)}</p>
+              </div>
+              <div className="rounded-md border border-border bg-background p-3">
+                <p className="text-xs uppercase tracking-wide text-foreground/60">Plan</p>
+                <p className="mt-1 font-medium">{formatPlan(profile.planType)}</p>
+              </div>
+              <div className="rounded-md border border-border bg-background p-3">
+                <p className="text-xs uppercase tracking-wide text-foreground/60">Study Packs created</p>
+                <p className="mt-1 font-medium">{studyPackCount}</p>
+              </div>
             </div>
           </Card>
         </div>

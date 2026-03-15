@@ -127,7 +127,12 @@ Behavior:
 Profile page scope:
 
 * focuses on user identity information and profile type
-* includes identity-focused fields only
+* includes editable identity fields (`Name`, `Email`)
+* includes editable `Profile Type`
+* includes read-only `Account Information`:
+  * `Member since` (readable month/year format)
+  * `Plan`
+  * `Study Packs created`
 * does not include a separate `Actions` section
 
 Settings page scope:
