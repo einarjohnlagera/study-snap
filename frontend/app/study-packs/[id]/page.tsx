@@ -70,6 +70,19 @@ export default function StudyPackDetailPage() {
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const shareToastTimeoutRef = useRef<number | null>(null);
+  const navigationOrigin = searchParams.get("from");
+  const backNavigation = useMemo(() => {
+    if (navigationOrigin === "dashboard") {
+      return {
+        href: "/dashboard",
+        label: "Back to Dashboard",
+      };
+    }
+    return {
+      href: "/library",
+      label: "Back to Library",
+    };
+  }, [navigationOrigin]);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -248,8 +261,8 @@ export default function StudyPackDetailPage() {
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
-        <Link href="/dashboard" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          Back to Dashboard
+        <Link href={backNavigation.href} className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+          {backNavigation.label}
         </Link>
       </div>
 
@@ -271,9 +284,9 @@ export default function StudyPackDetailPage() {
                 Retry
               </Button>
             ) : null}
-            <Link href="/dashboard" className="w-full sm:w-auto">
+            <Link href={backNavigation.href} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Dashboard
+                {backNavigation.label}
               </Button>
             </Link>
           </div>
