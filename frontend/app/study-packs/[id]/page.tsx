@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
@@ -54,6 +54,8 @@ function StudyPackDetailLoading() {
 
 export default function StudyPackDetailPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
@@ -201,6 +203,20 @@ export default function StudyPackDetailPage() {
       shareToastTimeoutRef.current = null;
     }, 2200);
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("copied") !== "1") {
+      return;
+    }
+    showShareToast("Study Pack copied to your library.");
+
+    const paramsWithoutCopied = new URLSearchParams(searchParams.toString());
+    paramsWithoutCopied.delete("copied");
+    const nextUrl = paramsWithoutCopied.size > 0
+      ? `${pathname}?${paramsWithoutCopied.toString()}`
+      : pathname;
+    router.replace(nextUrl);
+  }, [pathname, router, searchParams, showShareToast]);
 
   const handleCopyShareLink = useCallback(async () => {
     if (!studyPack || creatingShareLink) {

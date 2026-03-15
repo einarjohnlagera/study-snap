@@ -106,6 +106,8 @@ Deliverable:
 - [X] add public page route: `/p/[token]`
 - [X] use public navbar for unauthenticated share viewers and authenticated app shell for logged-in viewers
 - [X] add remix flow to copy shared Study Packs into personal Study Library
+- [X] auto-rename remixed Study Packs when title duplicates exist (`(Copy)`, `(Copy 2)`, ...)
+- [X] show post-remix confirmation feedback (`Study Pack copied to your library.`)
 - [X] add in-product Study Pack detail share action (`Copy Link`)
 - [ ] track optional view count
 - [ ] optional expiration and private links later
