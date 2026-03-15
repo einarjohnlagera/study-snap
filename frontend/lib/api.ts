@@ -37,6 +37,7 @@ export type StudyPackListItemResponse = {
   title: string;
   summaryPreview: string;
   quizCount: number;
+  subject?: string | null;
   tags: string[];
   createdAt: string;
 };

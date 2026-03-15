@@ -56,12 +56,18 @@ The Library page supports lightweight client-side organization for growing Study
 Current behavior:
 - search input with placeholder `Search study packs...`
 - search filters by Study Pack `title` and `tags`
+- subject filter (`All subjects` default, single-select)
+- tag filter uses a multi-select dropdown (not a full visible tag-button list) with OR matching across selected tags
+- search + subject + tags are combined before rendering visible results
 - sort options:
   - `Recently created` (default)
   - `Recently reviewed`
   - `Title`
 - paginated loading in batches of `20` via cursor-based list API
 - `Load More` fetches the next page and appends items
+- subject and tag options are derived from currently loaded Study Packs (frontend-only filtering)
+- active filter chips are shown for subject/tags, with per-chip removal and `Clear all`
+- selected tags appear as removable chips above the list and stay in sync with dropdown selection
 - Study Pack cards display:
   - title
   - shortened summary preview
@@ -73,7 +79,7 @@ Current behavior:
 
 Empty states:
 - no Study Packs: `Your study library is empty` + primary `Create Study Pack` action
-- no matches for current search: show a clear no-results message with a `Clear search` action
+- no matches for current search/filter combination: `No Study Packs match your current filters.` + `Clear filters` action
 
 ### Pagination behavior
 
@@ -88,7 +94,8 @@ Response shape:
 Rules:
 - default page size is `20`
 - sorting remains deterministic (`createdAt` descending baseline for paging)
-- search and sort are applied on currently loaded items, and users can load additional pages while searching
+- search, subject filter, tag filter, and sorting are applied on currently loaded items
+- users can load additional pages while filtering/searching; newly loaded items join the same frontend filtering flow
 
 ### Study consistency card (UI guidance)
 
@@ -205,8 +212,7 @@ The Study Library works better after user accounts exist because:
 
 Future versions may support:
 - rename
-- search
-- filters
+- advanced/faceted filters
 - folders / collections
 - reviewed status
 - richer dashboard organization

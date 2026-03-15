@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {useRouter} from "next/navigation";
-import {MoreHorizontal} from "lucide-react";
+import {ChevronDown, MoreHorizontal} from "lucide-react";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
 import {PageHeader} from "@/components/page-header";
@@ -17,6 +17,21 @@ import {requireVerifiedOnboardedUser} from "@/lib/route-guards";
 
 type LibrarySortOption = "RECENTLY_CREATED" | "RECENTLY_REVIEWED" | "TITLE";
 const LIBRARY_PAGE_SIZE = 20;
+const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+
+function normalizeSubject(subject: string | null | undefined): string | null {
+  const value = subject?.trim();
+  return value && value.length > 0 ? value : null;
+}
+
+function normalizeTags(tags: string[] | null | undefined): string[] {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+  return tags
+    .map((tag) => tag?.trim())
+    .filter((tag): tag is string => Boolean(tag && tag.length > 0));
+}
 
 function toSummaryPreview(summary: string, maxLength = 160) {
   const clean = summary.trim();
@@ -50,6 +65,8 @@ export default function LibraryPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_CREATED");
   const [lastReviewedByPackId, setLastReviewedByPackId] = useState<Record<string, string | null>>({});
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +76,11 @@ export default function LibraryPage() {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [tagFilterOpen, setTagFilterOpen] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<StudyPackListItemResponse | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const tagFilterRef = useRef<HTMLDivElement | null>(null);
 
   const hydrateLastReviewed = useCallback(async (packs: StudyPackListItemResponse[], append = false) => {
     if (packs.length === 0) {
@@ -156,6 +175,31 @@ export default function LibraryPage() {
     };
   }, [menuOpenId]);
 
+  useEffect(() => {
+    if (!tagFilterOpen) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!tagFilterRef.current) {
+        return;
+      }
+      if (!tagFilterRef.current.contains(event.target as Node)) {
+        setTagFilterOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTagFilterOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [tagFilterOpen]);
+
   const handleConfirmDelete = useCallback(async () => {
     if (!pendingDeleteItem) {
       return;
@@ -182,15 +226,69 @@ export default function LibraryPage() {
   }, [pendingDeleteItem]);
 
   const hasItems = items.length > 0;
+  const availableSubjects = useMemo(() => {
+    const subjectSet = new Set<string>();
+    items.forEach((item) => {
+      const subject = normalizeSubject(item.subject);
+      if (subject) {
+        subjectSet.add(subject);
+      }
+    });
+    return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
+  }, [items]);
+
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    items.forEach((item) => {
+      normalizeTags(item.tags).forEach((tag) => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort((left, right) => left.localeCompare(right));
+  }, [items]);
+
+  useEffect(() => {
+    if (selectedSubject === ALL_SUBJECTS) {
+      return;
+    }
+    if (!availableSubjects.includes(selectedSubject)) {
+      setSelectedSubject(ALL_SUBJECTS);
+    }
+  }, [availableSubjects, selectedSubject]);
+
+  useEffect(() => {
+    setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
+  }, [availableTags]);
+
+  const hasActiveFilters = searchQuery.trim().length > 0
+    || selectedSubject !== ALL_SUBJECTS
+    || selectedTags.length > 0;
+
+  const toggleTag = useCallback((tag: string) => {
+    setSelectedTags((previous) => (
+      previous.includes(tag)
+        ? previous.filter((selectedTag) => selectedTag !== tag)
+        : [...previous, tag]
+    ));
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedSubject(ALL_SUBJECTS);
+    setSelectedTags([]);
+  }, []);
+
   const visibleItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const filtered = query.length === 0
-      ? items
-      : items.filter((item) => {
-          const titleMatch = item.title.toLowerCase().includes(query);
-          const tagMatch = item.tags.some((tag) => tag.toLowerCase().includes(query));
-          return titleMatch || tagMatch;
-        });
+    const filtered = items.filter((item) => {
+      const itemTags = normalizeTags(item.tags);
+      const titleMatch = query.length === 0
+        || item.title.toLowerCase().includes(query)
+        || itemTags.some((tag) => tag.toLowerCase().includes(query));
+      const subjectMatch = selectedSubject === ALL_SUBJECTS
+        || normalizeSubject(item.subject) === selectedSubject;
+      const tagMatch = selectedTags.length === 0
+        || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
+      return titleMatch && subjectMatch && tagMatch;
+    });
 
     const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
       const leftTime = leftDate ? new Date(leftDate).getTime() : 0;
@@ -210,7 +308,7 @@ export default function LibraryPage() {
       }
       return byDateDesc(left.createdAt, right.createdAt);
     });
-  }, [items, lastReviewedByPackId, searchQuery, sortBy]);
+  }, [items, lastReviewedByPackId, searchQuery, selectedSubject, selectedTags, sortBy]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -245,8 +343,8 @@ export default function LibraryPage() {
       ) : (
         <div className="space-y-4">
           <Card className="space-y-4 p-4 sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="w-full space-y-2 sm:max-w-md">
+            <div className="grid gap-3 lg:grid-cols-4">
+              <div className="space-y-2 lg:col-span-1">
                 <label htmlFor="library-search" className="text-sm font-medium">
                   Search
                 </label>
@@ -259,7 +357,79 @@ export default function LibraryPage() {
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                 />
               </div>
-              <div className="w-full space-y-2 sm:w-56">
+              <div className="space-y-2 lg:col-span-1">
+                <label htmlFor="library-subject" className="text-sm font-medium">
+                  Subject
+                </label>
+                <select
+                  id="library-subject"
+                  value={selectedSubject}
+                  onChange={(event) => setSelectedSubject(event.target.value)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value={ALL_SUBJECTS}>All subjects</option>
+                  {availableSubjects.map((subject) => (
+                    <option key={subject} value={subject}>
+                      {subject}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative space-y-2 lg:col-span-1" ref={tagFilterRef}>
+                <label htmlFor="library-tag-filter" className="text-sm font-medium">
+                  Tags
+                </label>
+                <button
+                  id="library-tag-filter"
+                  type="button"
+                  className="flex h-10 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-left text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                  aria-haspopup="listbox"
+                  aria-expanded={tagFilterOpen}
+                  aria-label="Select tags"
+                  onClick={() => setTagFilterOpen((previous) => !previous)}
+                >
+                  <span className={selectedTags.length === 0 ? "text-foreground/55" : ""}>
+                    {selectedTags.length === 0
+                      ? "Select tags"
+                      : selectedTags.length === 1
+                        ? selectedTags[0]
+                        : `${selectedTags.length} tags selected`}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-foreground/70 transition-transform ${tagFilterOpen ? "rotate-180" : ""}`} />
+                </button>
+                {tagFilterOpen ? (
+                  <div
+                    className="absolute z-30 mt-1 w-full rounded-lg border border-border bg-background p-2 shadow-md"
+                    role="listbox"
+                    aria-multiselectable="true"
+                  >
+                    {availableTags.length === 0 ? (
+                      <p className="px-2 py-1 text-sm text-foreground/65">No tags available yet.</p>
+                    ) : (
+                      <div className="max-h-56 space-y-1 overflow-y-auto">
+                        {availableTags.map((tag) => {
+                          const isSelected = selectedTags.includes(tag);
+                          return (
+                            <label
+                              key={tag}
+                              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleTag(tag)}
+                                className="h-4 w-4 rounded border-border"
+                              />
+                              <span>{tag}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+              <div className="space-y-2 lg:col-span-1">
                 <label htmlFor="library-sort" className="text-sm font-medium">
                   Sort by
                 </label>
@@ -275,6 +445,49 @@ export default function LibraryPage() {
                 </select>
               </div>
             </div>
+
+            {hasActiveFilters ? (
+              <div className="space-y-2 border-t border-border pt-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedSubject !== ALL_SUBJECTS ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+                      Subject: {selectedSubject}
+                      <button
+                        type="button"
+                        className="text-foreground/65 hover:text-foreground"
+                        onClick={() => setSelectedSubject(ALL_SUBJECTS)}
+                        aria-label="Clear subject filter"
+                      >x</button>
+                    </span>
+                  ) : null}
+                  {selectedTags.map((tag) => (
+                    <span
+                      key={`active-tag-${tag}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        className="text-foreground/65 hover:text-foreground"
+                        onClick={() => setSelectedTags((previous) => previous.filter((value) => value !== tag))}
+                        aria-label={`Remove tag filter ${tag}`}
+                      >x</button>
+                    </span>
+                  ))}
+                  {hasActiveFilters ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={clearFilters}
+                    >
+                      Clear all
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </Card>
 
           {actionError ? (
@@ -285,13 +498,15 @@ export default function LibraryPage() {
           ) : null}
           {visibleItems.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-base font-semibold sm:text-lg">No Study Packs found</h2>
+              <h2 className="text-base font-semibold sm:text-lg">
+                No Study Packs match your current filters.
+              </h2>
               <p className="text-sm text-foreground/75">
-                Try a different title or tag keyword.
+                Try adjusting your search or filters.
               </p>
               <div className="flex justify-start">
-                <Button type="button" variant="outline" onClick={() => setSearchQuery("")}>
-                  Clear search
+                <Button type="button" variant="outline" onClick={clearFilters}>
+                  Clear filters
                 </Button>
               </div>
             </Card>
@@ -301,6 +516,7 @@ export default function LibraryPage() {
                 const isDeleting = deletingId === item.id;
                 const menuOpen = menuOpenId === item.id;
                 const lastReviewed = lastReviewedByPackId[item.id];
+                const itemTags = normalizeTags(item.tags);
 
                 return (
                   <Card
@@ -368,8 +584,8 @@ export default function LibraryPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {item.tags.length > 0 ? (
-                        item.tags.map((tag) => (
+                      {itemTags.length > 0 ? (
+                        itemTags.map((tag) => (
                           <span
                             key={`${item.id}-${tag}`}
                             className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
