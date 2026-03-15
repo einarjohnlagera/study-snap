@@ -250,6 +250,13 @@ When generating quiz questions:
 - prioritize clarity over cleverness
 - avoid hallucinating specific details not present in the notes
 
+Quiz answer feedback semantics (Quick Review and Adaptive Quiz):
+- correct answer state uses green with `✓ Correct`
+- selected incorrect answer state uses red with `✗ Incorrect`
+- if a user selects the wrong option, show both wrong selection (red) and correct option (green)
+- non-selected, non-correct options remain neutral
+- do not use blue for correct/incorrect answer states
+
 ## Legacy preservation note
 
 The legacy project docs remain available under `/legacy`.
