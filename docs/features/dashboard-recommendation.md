@@ -109,6 +109,33 @@ Copy principle:
 
 ---
 
+## Mastery Snapshot Card
+
+The dashboard includes a compact `Mastery Snapshot` card that provides a lightweight progress summary.
+
+Data source:
+
+- existing completed Quick Review session data only
+- no new analytics pipeline or charting requirement
+
+Metric summary:
+
+- average recent score
+- best recent score
+- Study Packs reviewed (distinct packs in the recent session window)
+
+Empty state:
+
+- if no completed Quick Review sessions exist, show a supportive prompt to complete the first review
+
+Placement:
+
+- below `Today's Focus`
+- below `Study Consistency` / `Study Streak` when that card is shown
+- above the `Continue studying` recommendation card
+
+---
+
 ## Recommendation Priority
 
 The dashboard recommendation follows this priority order:

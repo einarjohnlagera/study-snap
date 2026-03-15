@@ -208,6 +208,24 @@ Today’s Focus remains the primary dashboard guidance card in all modes.
 
 ---
 
+## Mastery Snapshot (Dashboard)
+
+The dashboard includes a compact `Mastery Snapshot` card that summarizes recent learning performance using existing completed Quick Review session data.
+
+Displayed metrics:
+
+* average recent score
+* best recent score
+* Study Packs reviewed (distinct packs in the recent session window)
+
+Behavior:
+
+* metrics use lightweight existing session data only (no heavy analytics pipeline)
+* if no completed Quick Review sessions exist, show a supportive empty-state prompt to complete the first review
+* placement is below `Today's Focus` and below Study Consistency/Streak (when shown), and above `Continue studying`
+
+---
+
 # Activity Tracking
 
 Study Snap records key learning actions as activity events.

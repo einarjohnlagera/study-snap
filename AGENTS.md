@@ -210,6 +210,7 @@ Generated outputs should be treated as reusable Study Packs.
 
 The dashboard should present saved Study Packs in a clean library-style layout.
 The dashboard is guidance-first and non-destructive; destructive actions such as deleting a Study Pack belong in the Library page.
+Dashboard guidance should include a lightweight `Mastery Snapshot` summary card based on existing completed Quick Review session data (average recent score, best recent score, Study Packs reviewed), with a supportive empty state when no completed reviews exist.
 
 MVP library actions:
 - open

@@ -137,6 +137,12 @@ export type StudyEngagementResponse = {
   studyDaysThisWeek: number;
 };
 
+export type MasterySnapshotResponse = {
+  averageRecentScore: number | null;
+  bestRecentScore: number | null;
+  studyPacksReviewed: number;
+};
+
 export type OnboardingProfileTypeRequest = {
   profileType: ProfileType;
 };
@@ -826,4 +832,16 @@ export async function getStudyEngagement(): Promise<StudyEngagementResponse> {
     true,
   );
   return parseApiResponse<StudyEngagementResponse>(response, "Could not load study engagement.");
+}
+
+export async function getMasterySnapshot(): Promise<MasterySnapshotResponse> {
+  const response = await fetchWithAuth(
+    "/dashboard/mastery-snapshot",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<MasterySnapshotResponse>(response, "Could not load mastery snapshot.");
 }
