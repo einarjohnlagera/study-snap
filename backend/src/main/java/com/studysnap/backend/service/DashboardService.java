@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -51,6 +52,7 @@ public class DashboardService {
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
     private final SubscriptionService subscriptionService;
+    private final FeatureGateService featureGateService;
 
     public ContinueStudyingResponse getContinueStudyingRecommendation(UUID userId) {
         // Priority 1: resume an unfinished Quick Review session when available.
@@ -223,7 +225,7 @@ public class DashboardService {
     }
 
     private Optional<TodayFocusResponse> resolveTodayFocusWeakConcepts(UUID userId, PlanType planType) {
-        if (planType != PlanType.PREMIUM) {
+        if (!featureGateService.hasFeatureAccess(planType, Feature.WEAK_CONCEPT_DETECTION)) {
             return Optional.empty();
         }
 

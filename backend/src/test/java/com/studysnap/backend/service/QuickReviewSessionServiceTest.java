@@ -56,11 +56,13 @@ class QuickReviewSessionServiceTest {
 
     @BeforeEach
     void setUp() {
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService);
         quickReviewSessionService = new QuickReviewSessionService(
                 quickReviewSessionRepository,
                 studyPackRepository,
                 activityTrackingService,
-                subscriptionService
+                subscriptionService,
+                featureGateService
         );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

@@ -2,7 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
-import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
@@ -30,7 +30,7 @@ public class QuickReviewAdaptivePracticeService {
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final LlmStudyPackService llmStudyPackService;
-    private final SubscriptionService subscriptionService;
+    private final FeatureGateService featureGateService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
@@ -41,14 +41,7 @@ public class QuickReviewAdaptivePracticeService {
         );
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
-        PlanType planType = subscriptionService.resolvePlan(userId);
-        if (planType != PlanType.PREMIUM) {
-            throw new AppException(
-                    "PREMIUM_FEATURE_REQUIRED",
-                    "Adaptive Quiz Generation is a Premium feature. Upgrade to Premium to continue.",
-                    HttpStatus.FORBIDDEN
-            );
-        }
+        featureGateService.checkFeatureAccess(userId, Feature.ADAPTIVE_QUIZ);
 
         QuickReviewSessionEntity latestCompletedSession = quickReviewSessionRepository
                 .findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
