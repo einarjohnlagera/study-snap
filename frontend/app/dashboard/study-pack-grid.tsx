@@ -16,7 +16,7 @@ export function StudyPackGrid({ studyPacks }: StudyPackGridProps) {
 
       <div className="grid gap-4 md:grid-cols-2">
         {studyPacks.map((item) => (
-          <Link key={item.id} href={`/study-packs/${item.id}`} className="group block">
+          <Link key={item.id} href={`/study-packs/${item.id}?from=dashboard`} className="group block">
             <Card className="cursor-pointer space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
               <div className="space-y-2">
                 <h3 className="text-base font-semibold transition-colors group-hover:text-foreground sm:text-lg">

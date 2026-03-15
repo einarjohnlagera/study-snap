@@ -83,6 +83,8 @@ Deliverable: upload image notes → OCR → Study Pack output.
 - [ ] login
 - [ ] users table
 - [ ] profile fields: first name, last name, display name, country code, profile type
+- [X] profile page simplified to identity + profile type only (actions removed)
+- [X] profile includes account information overview (`Member since`, `Plan`, `Study Packs created`)
 - [ ] account status fields
 - [ ] email verification timestamps
 - [ ] last login tracking
