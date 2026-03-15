@@ -35,6 +35,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [planType, setPlanType] = useState<PlanType>(() => getAuthUser()?.planType ?? "FREE");
+  const [greetingName, setGreetingName] = useState("there");
   const [continueRecommendation, setContinueRecommendation] = useState<ContinueStudyingResponse | null>(null);
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
   const [studyEngagement, setStudyEngagement] = useState<StudyEngagementResponse | null>(null);
@@ -62,6 +63,10 @@ export default function DashboardPage() {
       ]);
       if (meResult.status === "fulfilled") {
         setPlanType(meResult.value.planType);
+        const preferredName = meResult.value.firstName?.trim()
+          || meResult.value.displayName?.trim()
+          || "there";
+        setGreetingName(preferredName);
       }
       setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
@@ -95,10 +100,11 @@ export default function DashboardPage() {
   const usedThisMonth = useMemo(() => getCurrentMonthStudyPackUsage(items), [items]);
   const monthlyStudyPackLimit = useMemo(() => getMonthlyStudyPackLimit(planType), [planType]);
   const isFreePlan = planType === "FREE";
+  const recentStudyPacks = useMemo(() => items.slice(0, 4), [items]);
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <DashboardHero />
+      <DashboardHero greetingName={greetingName} />
 
       {loading ? (
         <DashboardLoading />
@@ -127,7 +133,7 @@ export default function DashboardPage() {
           {items.length === 0 ? (
             <DashboardEmpty />
           ) : (
-            <StudyPackGrid studyPacks={items} />
+            <StudyPackGrid studyPacks={recentStudyPacks} totalStudyPacks={items.length} />
           )}
         </div>
       )}
