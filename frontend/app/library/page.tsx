@@ -17,6 +17,21 @@ import {requireVerifiedOnboardedUser} from "@/lib/route-guards";
 
 type LibrarySortOption = "RECENTLY_CREATED" | "RECENTLY_REVIEWED" | "TITLE";
 const LIBRARY_PAGE_SIZE = 20;
+const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+
+function normalizeSubject(subject: string | null | undefined): string | null {
+  const value = subject?.trim();
+  return value && value.length > 0 ? value : null;
+}
+
+function normalizeTags(tags: string[] | null | undefined): string[] {
+  if (!Array.isArray(tags)) {
+    return [];
+  }
+  return tags
+    .map((tag) => tag?.trim())
+    .filter((tag): tag is string => Boolean(tag && tag.length > 0));
+}
 
 function toSummaryPreview(summary: string, maxLength = 160) {
   const clean = summary.trim();
@@ -50,6 +65,8 @@ export default function LibraryPage() {
   const router = useRouter();
   const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_CREATED");
   const [lastReviewedByPackId, setLastReviewedByPackId] = useState<Record<string, string | null>>({});
   const [error, setError] = useState<string | null>(null);
@@ -182,15 +199,69 @@ export default function LibraryPage() {
   }, [pendingDeleteItem]);
 
   const hasItems = items.length > 0;
+  const availableSubjects = useMemo(() => {
+    const subjectSet = new Set<string>();
+    items.forEach((item) => {
+      const subject = normalizeSubject(item.subject);
+      if (subject) {
+        subjectSet.add(subject);
+      }
+    });
+    return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
+  }, [items]);
+
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    items.forEach((item) => {
+      normalizeTags(item.tags).forEach((tag) => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort((left, right) => left.localeCompare(right));
+  }, [items]);
+
+  useEffect(() => {
+    if (selectedSubject === ALL_SUBJECTS) {
+      return;
+    }
+    if (!availableSubjects.includes(selectedSubject)) {
+      setSelectedSubject(ALL_SUBJECTS);
+    }
+  }, [availableSubjects, selectedSubject]);
+
+  useEffect(() => {
+    setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
+  }, [availableTags]);
+
+  const hasActiveFilters = searchQuery.trim().length > 0
+    || selectedSubject !== ALL_SUBJECTS
+    || selectedTags.length > 0;
+
+  const toggleTag = useCallback((tag: string) => {
+    setSelectedTags((previous) => (
+      previous.includes(tag)
+        ? previous.filter((selectedTag) => selectedTag !== tag)
+        : [...previous, tag]
+    ));
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedSubject(ALL_SUBJECTS);
+    setSelectedTags([]);
+  }, []);
+
   const visibleItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const filtered = query.length === 0
-      ? items
-      : items.filter((item) => {
-          const titleMatch = item.title.toLowerCase().includes(query);
-          const tagMatch = item.tags.some((tag) => tag.toLowerCase().includes(query));
-          return titleMatch || tagMatch;
-        });
+    const filtered = items.filter((item) => {
+      const itemTags = normalizeTags(item.tags);
+      const titleMatch = query.length === 0
+        || item.title.toLowerCase().includes(query)
+        || itemTags.some((tag) => tag.toLowerCase().includes(query));
+      const subjectMatch = selectedSubject === ALL_SUBJECTS
+        || normalizeSubject(item.subject) === selectedSubject;
+      const tagMatch = selectedTags.length === 0
+        || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
+      return titleMatch && subjectMatch && tagMatch;
+    });
 
     const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
       const leftTime = leftDate ? new Date(leftDate).getTime() : 0;
@@ -210,7 +281,7 @@ export default function LibraryPage() {
       }
       return byDateDesc(left.createdAt, right.createdAt);
     });
-  }, [items, lastReviewedByPackId, searchQuery, sortBy]);
+  }, [items, lastReviewedByPackId, searchQuery, selectedSubject, selectedTags, sortBy]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -245,8 +316,8 @@ export default function LibraryPage() {
       ) : (
         <div className="space-y-4">
           <Card className="space-y-4 p-4 sm:p-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div className="w-full space-y-2 sm:max-w-md">
+            <div className="grid gap-3 lg:grid-cols-3">
+              <div className="space-y-2 lg:col-span-1">
                 <label htmlFor="library-search" className="text-sm font-medium">
                   Search
                 </label>
@@ -259,7 +330,25 @@ export default function LibraryPage() {
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                 />
               </div>
-              <div className="w-full space-y-2 sm:w-56">
+              <div className="space-y-2 lg:col-span-1">
+                <label htmlFor="library-subject" className="text-sm font-medium">
+                  Subject
+                </label>
+                <select
+                  id="library-subject"
+                  value={selectedSubject}
+                  onChange={(event) => setSelectedSubject(event.target.value)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value={ALL_SUBJECTS}>All subjects</option>
+                  {availableSubjects.map((subject) => (
+                    <option key={subject} value={subject}>
+                      {subject}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2 lg:col-span-1">
                 <label htmlFor="library-sort" className="text-sm font-medium">
                   Sort by
                 </label>
@@ -275,6 +364,74 @@ export default function LibraryPage() {
                 </select>
               </div>
             </div>
+
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Tags</p>
+              {availableTags.length === 0 ? (
+                <p className="text-sm text-foreground/65">No tags available yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {availableTags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <Button
+                        key={tag}
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? "default" : "outline"}
+                        className="h-8"
+                        onClick={() => toggleTag(tag)}
+                      >
+                        {tag}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {hasActiveFilters ? (
+              <div className="space-y-2 border-t border-border pt-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedSubject !== ALL_SUBJECTS ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+                      Subject: {selectedSubject}
+                      <button
+                        type="button"
+                        className="text-foreground/65 hover:text-foreground"
+                        onClick={() => setSelectedSubject(ALL_SUBJECTS)}
+                        aria-label="Clear subject filter"
+                      >x</button>
+                    </span>
+                  ) : null}
+                  {selectedTags.map((tag) => (
+                    <span
+                      key={`active-tag-${tag}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs"
+                    >
+                      Tag: {tag}
+                      <button
+                        type="button"
+                        className="text-foreground/65 hover:text-foreground"
+                        onClick={() => setSelectedTags((previous) => previous.filter((value) => value !== tag))}
+                        aria-label={`Remove tag filter ${tag}`}
+                      >x</button>
+                    </span>
+                  ))}
+                  {hasActiveFilters ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8"
+                      onClick={clearFilters}
+                    >
+                      Clear all
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </Card>
 
           {actionError ? (
@@ -285,13 +442,15 @@ export default function LibraryPage() {
           ) : null}
           {visibleItems.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-base font-semibold sm:text-lg">No Study Packs found</h2>
+              <h2 className="text-base font-semibold sm:text-lg">
+                No Study Packs match your current filters.
+              </h2>
               <p className="text-sm text-foreground/75">
-                Try a different title or tag keyword.
+                Try adjusting your search or filters.
               </p>
               <div className="flex justify-start">
-                <Button type="button" variant="outline" onClick={() => setSearchQuery("")}>
-                  Clear search
+                <Button type="button" variant="outline" onClick={clearFilters}>
+                  Clear filters
                 </Button>
               </div>
             </Card>
@@ -301,6 +460,7 @@ export default function LibraryPage() {
                 const isDeleting = deletingId === item.id;
                 const menuOpen = menuOpenId === item.id;
                 const lastReviewed = lastReviewedByPackId[item.id];
+                const itemTags = normalizeTags(item.tags);
 
                 return (
                   <Card
@@ -368,8 +528,8 @@ export default function LibraryPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {item.tags.length > 0 ? (
-                        item.tags.map((tag) => (
+                      {itemTags.length > 0 ? (
+                        itemTags.map((tag) => (
                           <span
                             key={`${item.id}-${tag}`}
                             className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
