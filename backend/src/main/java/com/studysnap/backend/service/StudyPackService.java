@@ -34,8 +34,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -47,6 +49,8 @@ public class StudyPackService {
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/png", "image/webp");
     private static final int DEFAULT_LIST_LIMIT = 20;
     private static final int MAX_LIST_LIMIT = 100;
+    private static final int MAX_TAG_LENGTH = 30;
+    private static final int MAX_TAGS_PER_STUDY_PACK = 30;
 
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
@@ -195,6 +199,30 @@ public class StudyPackService {
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
         studyPackRepository.delete(entity);
+    }
+
+    public StudyPackResponse updateTags(String id, UUID ownerUserId, List<String> tags) {
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
+        StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+
+        List<String> normalizedTags = normalizeEditableTags(tags);
+        String[] currentTags = entity.getTags() == null ? new String[0] : entity.getTags();
+        String[] nextTags = normalizedTags.toArray(String[]::new);
+
+        StudyPackEntity targetEntity = entity;
+        if (!Arrays.equals(currentTags, nextTags)) {
+            entity.setTags(nextTags);
+            entity.setUpdatedAt(OffsetDateTime.now());
+            targetEntity = studyPackRepository.save(entity);
+        }
+
+        return mapToResponse(targetEntity, null, null);
     }
 
     public void recordQuickReviewActivity(String id, UUID ownerUserId, ActivityType activityType) {
@@ -380,6 +408,43 @@ public class StudyPackService {
             return new String[0];
         }
         return new String[]{fallbackTitle.trim()};
+    }
+
+    private List<String> normalizeEditableTags(List<String> rawTags) {
+        if (rawTags == null) {
+            throw new AppException("INVALID_TAGS", "Tags are required.", HttpStatus.BAD_REQUEST);
+        }
+
+        LinkedHashMap<String, String> normalizedByKey = new LinkedHashMap<>();
+        for (String rawTag : rawTags) {
+            if (rawTag == null) {
+                continue;
+            }
+
+            String normalizedTag = rawTag.trim();
+            if (normalizedTag.isBlank()) {
+                continue;
+            }
+            if (normalizedTag.length() > MAX_TAG_LENGTH) {
+                throw new AppException(
+                        "TAG_TOO_LONG",
+                        "Tags must be 30 characters or fewer.",
+                        HttpStatus.BAD_REQUEST
+                );
+            }
+
+            String duplicateKey = normalizedTag.toLowerCase(Locale.ROOT);
+            normalizedByKey.putIfAbsent(duplicateKey, normalizedTag);
+            if (normalizedByKey.size() > MAX_TAGS_PER_STUDY_PACK) {
+                throw new AppException(
+                        "TOO_MANY_TAGS",
+                        "You can add up to 30 tags per Study Pack.",
+                        HttpStatus.BAD_REQUEST
+                );
+            }
+        }
+
+        return List.copyOf(normalizedByKey.values());
     }
 
     private String normalizeSubject(String subject) {

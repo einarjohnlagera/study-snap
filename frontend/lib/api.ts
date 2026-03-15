@@ -628,6 +628,19 @@ export async function getMyStudyPack(id: string): Promise<StudyPackResponse> {
   return parseApiResponse<StudyPackResponse>(response, "Could not load this Study Pack.");
 }
 
+export async function updateStudyPackTags(studyPackId: string, tags: string[]): Promise<StudyPackResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/tags`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ tags }),
+    },
+    true,
+  );
+  return parseApiResponse<StudyPackResponse>(response, "Could not update tags.");
+}
+
 export async function deleteMyStudyPack(id: string): Promise<void> {
   const response = await fetchWithAuth(
     `/study-packs/${id}`,
