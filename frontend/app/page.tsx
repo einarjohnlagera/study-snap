@@ -122,6 +122,31 @@ function ProductPreviewSection() {
   );
 }
 
+function FinalCtaSection() {
+  return (
+    <section className="rounded-2xl border border-border bg-gradient-to-br from-blue-50 to-white p-6 text-center shadow-sm dark:from-blue-950/30 dark:to-gray-950 sm:p-10">
+      <div className="mx-auto max-w-2xl space-y-4">
+        <h2 className="text-2xl font-semibold sm:text-3xl">Start studying smarter today</h2>
+        <p className="text-sm text-foreground/75 sm:text-base">
+          Upload your notes and let Study Snap create summaries, key concepts, and quizzes so you can review
+          faster.
+        </p>
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
+          <Link href="/demo" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+            Try Demo
+          </Link>
+          <Link
+            href="/auth"
+            className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+          >
+            Start Free
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function HeroTransformationPreview() {
   return (
     <div className="rounded-xl border border-border/80 bg-background/80 p-3 shadow-sm backdrop-blur sm:p-4">
@@ -313,25 +338,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border bg-gray-50 p-6 text-center shadow-sm dark:bg-gray-950/40 sm:p-10">
-        <div className="mx-auto max-w-2xl space-y-4">
-          <h2 className="text-2xl font-semibold sm:text-3xl">Ready to study with more clarity and consistency?</h2>
-          <p className="text-sm text-foreground/75 sm:text-base">
-            Create your account and turn your next set of notes into a reusable Study Pack for active review.
-          </p>
-          <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-              Create Free Account
-            </Link>
-            <Link
-              href="/demo"
-              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-            >
-              Explore Demo
-            </Link>
-          </div>
-        </div>
-      </section>
+      <FinalCtaSection />
     </main>
   );
 }
