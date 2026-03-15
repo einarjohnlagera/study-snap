@@ -121,6 +121,11 @@ Rules:
 - Navbar includes Study Snap brand text, logo placeholder, menu links, and theme toggle.
 - Theme toggle avoids hydration mismatch by using a mounted guard.
 
+### Profile vs Settings ownership
+- Profile page should focus on identity information and profile type only.
+- Keep plan management under Settings `Plan & Billing`.
+- Do not add a generic actions section (for example `Manage Plan`) to Profile.
+
 ## Backend conventions (`/backend`)
 
 Rules:

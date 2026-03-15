@@ -122,6 +122,22 @@ Behavior:
 
 ---
 
+## Profile And Settings Responsibilities
+
+Profile page scope:
+
+* focuses on user identity information and profile type
+* includes identity-focused fields only
+* does not include a separate `Actions` section
+
+Settings page scope:
+
+* owns account configuration and behavior controls
+* owns plan management under `Plan & Billing`
+* upgrade and billing-related actions should stay in Settings, not Profile
+
+---
+
 ## Shareable Study Packs
 
 Study Packs can be shared publicly using token links.

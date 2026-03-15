@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { getMe, logout, type MeResponse } from "@/lib/api";
+import { getMe, type MeResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
@@ -26,14 +26,6 @@ function formatProfileType(value: MeResponse["profileType"]): string {
     .join(" ");
 }
 
-function formatPlan(value: MeResponse["planType"]): string {
-  return value.charAt(0) + value.slice(1).toLowerCase();
-}
-
-function formatStatus(value: MeResponse["status"]): string {
-  return value.charAt(0) + value.slice(1).toLowerCase();
-}
-
 function ProfileLoading() {
   return (
     <Card className="space-y-4 p-4 sm:p-6">
@@ -49,7 +41,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
   const [identityForm, setIdentityForm] = useState<IdentityForm>({
     firstName: "",
     lastName: "",
@@ -114,17 +105,6 @@ export default function ProfilePage() {
     return fallback.charAt(0).toUpperCase();
   }, [profile?.email, resolvedDisplayName]);
 
-  const handleSignOut = async () => {
-    setSigningOut(true);
-    try {
-      await logout();
-      router.push("/auth");
-      router.refresh();
-    } finally {
-      setSigningOut(false);
-    }
-  };
-
   const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
     setSaveMessage(null);
     setIdentityForm((current) => ({
@@ -155,7 +135,7 @@ export default function ProfilePage() {
           <PageHeader
             eyebrow="PROFILE"
             title="Profile"
-            description="Manage your personal information and account identity."
+            description="Manage your personal information and profile type."
           />
 
           <Card className="space-y-4 p-4 sm:p-6">
@@ -210,45 +190,10 @@ export default function ProfilePage() {
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Account Information</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Profile Type</p>
-                <p className="mt-1 font-medium">{formatProfileType(profile.profileType)}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Plan</p>
-                <p className="mt-1 font-medium">{formatPlan(profile.planType)}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Member Since</p>
-                <p className="mt-1 font-medium text-foreground/75">Not available yet</p>
-              </div>
-              <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Email Verified</p>
-                <p className="mt-1 font-medium">
-                  {profile.emailVerifiedAt ? new Date(profile.emailVerifiedAt).toLocaleString() : "Not verified"}
-                </p>
-              </div>
-              <div className="rounded-md border border-border bg-background p-3 sm:col-span-2">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Account Status</p>
-                <p className="mt-1 font-medium">{formatStatus(profile.status)}</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Actions</h2>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
-                Edit Profile (Coming Soon)
-              </Button>
-              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
-                Manage Plan (Coming Soon)
-              </Button>
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void handleSignOut()} disabled={signingOut}>
-                {signingOut ? "Signing out..." : "Sign Out"}
-              </Button>
+            <h2 className="text-lg font-semibold sm:text-xl">Profile Type</h2>
+            <div className="rounded-md border border-border bg-background p-3">
+              <p className="text-xs uppercase tracking-wide text-foreground/60">Current Profile Type</p>
+              <p className="mt-1 font-medium">{formatProfileType(profile.profileType)}</p>
             </div>
           </Card>
         </div>
