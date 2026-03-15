@@ -5,7 +5,15 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
-import { getMe, listMyStudyPacks, logout, updateEngagementMode, type EngagementMode, type MeResponse } from "@/lib/api";
+import {
+  createPremiumCheckoutSession,
+  getMe,
+  listMyStudyPacks,
+  logout,
+  updateEngagementMode,
+  type EngagementMode,
+  type MeResponse,
+} from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
@@ -32,6 +40,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [usedThisMonth, setUsedThisMonth] = useState(0);
   const [signingOut, setSigningOut] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
   const [planMessage, setPlanMessage] = useState<string | null>(null);
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [savingEngagementMode, setSavingEngagementMode] = useState(false);
@@ -54,7 +63,6 @@ export default function SettingsPage() {
 
     setLoading(true);
     setError(null);
-    setPlanMessage(null);
     setEngagementModeMessage(null);
     try {
       const [me, studyPacks] = await Promise.all([
@@ -78,8 +86,31 @@ export default function SettingsPage() {
     void loadProfile();
   }, [loadProfile]);
 
-  const handleUpgradeClick = () => {
-    setPlanMessage("Upgrade checkout is coming soon. You can review plan details here for now.");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const checkoutStatus = params.get("checkout");
+    if (checkoutStatus === "success") {
+      setPlanMessage("Payment received. Your Premium plan will be updated shortly.");
+      return;
+    }
+    if (checkoutStatus === "cancel") {
+      setPlanMessage("Checkout canceled. Your plan remains unchanged.");
+      return;
+    }
+    setPlanMessage(null);
+  }, []);
+
+  const handleUpgradeClick = async () => {
+    setStartingCheckout(true);
+    setPlanMessage(null);
+    try {
+      const payload = await createPremiumCheckoutSession();
+      window.location.assign(payload.checkoutUrl);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not start checkout. Please try again.";
+      setPlanMessage(message);
+      setStartingCheckout(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -183,10 +214,10 @@ export default function SettingsPage() {
                 <Button
                   type="button"
                   className="w-full sm:w-auto"
-                  onClick={handleUpgradeClick}
-                  disabled={isPremiumPlan}
+                  onClick={() => void handleUpgradeClick()}
+                  disabled={isPremiumPlan || startingCheckout}
                 >
-                  {isPremiumPlan ? "Premium Active" : "Upgrade to Premium"}
+                  {isPremiumPlan ? "Premium Active" : startingCheckout ? "Redirecting..." : "Upgrade to Premium"}
                 </Button>
                 {planMessage ? (
                   <p className="text-xs text-foreground/60">{planMessage}</p>

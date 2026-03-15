@@ -266,6 +266,10 @@ export type ShareRemixResponse = {
   studyPackId: string;
 };
 
+export type BillingCheckoutSessionResponse = {
+  checkoutUrl: string;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -889,4 +893,19 @@ export async function getMasterySnapshot(): Promise<MasterySnapshotResponse> {
     true,
   );
   return parseApiResponse<MasterySnapshotResponse>(response, "Could not load mastery snapshot.");
+}
+
+export async function createPremiumCheckoutSession(): Promise<BillingCheckoutSessionResponse> {
+  const response = await fetchWithAuth(
+    "/billing/checkout-session",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<BillingCheckoutSessionResponse>(
+    response,
+    "Could not start Premium checkout. Please try again.",
+  );
 }

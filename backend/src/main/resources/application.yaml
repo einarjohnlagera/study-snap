@@ -68,6 +68,14 @@ studysnap:
   pricing:
     free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:5}
     premium-monthly-study-pack-limit: ${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}
+  billing:
+    stripe:
+      api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com/v1}
+      secret-key: ${STRIPE_SECRET_KEY:}
+      webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+      premium-price-id: ${STRIPE_PREMIUM_PRICE_ID:}
+      checkout-success-url: ${STRIPE_CHECKOUT_SUCCESS_URL:http://localhost:3000/settings?checkout=success}
+      checkout-cancel-url: ${STRIPE_CHECKOUT_CANCEL_URL:http://localhost:3000/settings?checkout=cancel}
   security:
     jwt:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}

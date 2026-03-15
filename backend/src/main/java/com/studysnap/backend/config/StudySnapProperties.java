@@ -12,6 +12,7 @@ public class StudySnapProperties {
     private final Llm llm = new Llm();
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
+    private final Billing billing = new Billing();
 
     @Getter
     @Setter
@@ -69,6 +70,23 @@ public class StudySnapProperties {
     public static class Pricing {
         private int freeMonthlyStudyPackLimit = 5;
         private int premiumMonthlyStudyPackLimit = 100;
+    }
+
+    @Getter
+    @Setter
+    public static class Billing {
+        private final Stripe stripe = new Stripe();
+    }
+
+    @Getter
+    @Setter
+    public static class Stripe {
+        private String apiBaseUrl = "https://api.stripe.com/v1";
+        private String secretKey = "";
+        private String webhookSecret = "";
+        private String premiumPriceId = "";
+        private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
+        private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
     }
 }
 

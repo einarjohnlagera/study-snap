@@ -339,7 +339,14 @@ Users can:
 * view current plan (`FREE` or `PREMIUM`)
 * view monthly Study Pack usage (`used / limit`) with a simple progress indicator
 * review Premium feature highlights (100 Study Packs/month, Weak Concept Detection, Adaptive Quiz Generation)
-* trigger an `Upgrade to Premium` placeholder action until payment integration is implemented
+* upgrade with Stripe Checkout from `Upgrade to Premium`
+
+Stripe billing behavior:
+
+* upgrading creates/uses a Stripe customer linked to the user
+* checkout completion and recurring payment events are processed via Stripe webhooks
+* confirmed active subscription sets plan to `PREMIUM`
+* canceled/ended/failed subscription reverts plan to `FREE`
 
 Dashboard usage indicator:
 

@@ -43,6 +43,12 @@ public class SubscriptionEntity {
     @Column(name = "end_at")
     private OffsetDateTime endAt;
 
+    @Column(name = "stripe_customer_id", length = 128)
+    private String stripeCustomerId;
+
+    @Column(name = "stripe_subscription_id", length = 128)
+    private String stripeSubscriptionId;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
