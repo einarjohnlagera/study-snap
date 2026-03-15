@@ -47,12 +47,12 @@ function toSummaryPreview(summary: string, maxLength = 160) {
 
 function formatRelativeReviewTime(lastReviewedAt: string | null | undefined): string {
   if (!lastReviewedAt) {
-    return "Not yet";
+    return "Not reviewed yet";
   }
 
   const timestamp = new Date(lastReviewedAt).getTime();
   if (Number.isNaN(timestamp)) {
-    return "Not yet";
+    return "Not reviewed yet";
   }
 
   const dayMs = 24 * 60 * 60 * 1000;
@@ -68,7 +68,10 @@ function formatRelativeReviewTime(lastReviewedAt: string | null | undefined): st
   if (diffDays < 30) {
     return `${diffDays} days ago`;
   }
-  return new Date(lastReviewedAt).toLocaleDateString();
+  return new Date(lastReviewedAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function getStudyPackStatus(lastScorePercentage: number | null | undefined) {
@@ -683,9 +686,15 @@ export default function LibraryPage() {
                       <p className="text-xs text-foreground/65">
                         Created {new Date(item.createdAt).toLocaleString()}
                       </p>
-                      <p className="text-xs text-foreground/65">
-                        Last reviewed: {formatRelativeReviewTime(reviewSummary.lastReviewedAt)}
-                      </p>
+                      {reviewSummary.lastReviewedAt ? (
+                        <p className="text-xs text-foreground/65">
+                          Last reviewed {formatRelativeReviewTime(reviewSummary.lastReviewedAt)}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-foreground/65">
+                          Not reviewed yet
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row">
