@@ -24,6 +24,7 @@ export function QuizChoiceList({
       {choices.map((choice) => {
         const isCorrect = choice === correctAnswer;
         const isSelected = choice === selectedChoice;
+        const isIncorrectSelection = revealAnswer && isSelected && !isCorrect;
         const isInteractive = Boolean(onSelectChoice) && !revealAnswer;
 
         return (
@@ -37,7 +38,9 @@ export function QuizChoiceList({
                 revealAnswer && isCorrect
                   ? "border-emerald-500/50 bg-emerald-500/10 text-foreground"
                   : isSelected
-                    ? "border-blue-500/40 bg-blue-500/10 text-foreground"
+                    ? isIncorrectSelection
+                      ? "border-red-500/50 bg-red-500/10 text-foreground"
+                      : "border-foreground/30 bg-muted/60 text-foreground"
                     : "border-border text-foreground/75",
                 isInteractive ? "cursor-pointer" : "cursor-default",
               )}
@@ -45,7 +48,12 @@ export function QuizChoiceList({
               {choice}
               {revealAnswer && isCorrect ? (
                 <span className="ml-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                  Correct answer
+                  ✓ Correct
+                </span>
+              ) : null}
+              {isIncorrectSelection ? (
+                <span className="ml-2 text-xs font-medium text-red-700 dark:text-red-300">
+                  ✗ Incorrect
                 </span>
               ) : null}
             </button>

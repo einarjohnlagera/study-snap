@@ -105,6 +105,14 @@ Quick Review allows users to actively practice a Study Pack through an interacti
 
 Users answer questions one at a time and receive immediate feedback. After the first pass, incorrectly answered questions may appear again in a retry round to reinforce learning.
 
+Answer feedback semantics (Quick Review and Adaptive Practice):
+
+* correct answers are highlighted in green with `✓ Correct`
+* selected incorrect answers are highlighted in red with `✗ Incorrect`
+* when a user answers incorrectly, both the wrong selected option (red) and the correct option (green) are shown
+* non-selected, non-correct options remain neutral
+* blue is not used for correct/incorrect answer states
+
 Quick Review sessions track:
 
 * correct answers

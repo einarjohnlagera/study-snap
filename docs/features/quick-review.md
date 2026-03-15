@@ -113,6 +113,12 @@ For each question:
 - each quiz item carries concept metadata to identify the key idea being tested
 - concept metadata should be concise and non-null for newly generated Study Packs
 - concept metadata is generated during the same Study Pack AI generation request
+- quiz feedback colors use conventional semantics:
+  - correct answer: green + `✓ Correct`
+  - selected incorrect answer: red + `✗ Incorrect`
+  - if user selects incorrectly, both selected wrong (red) and correct answer (green) are shown
+  - non-selected, non-correct options remain neutral
+  - avoid blue for correctness feedback states
 
 Quick Review should feel consistent with quiz behavior elsewhere in the app.
 
