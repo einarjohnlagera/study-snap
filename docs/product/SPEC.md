@@ -25,6 +25,41 @@ This loop encourages consistent practice and reinforcement.
 
 ---
 
+# V2 Notes And Study Pack Architecture Decision
+
+NoteLib V2 uses a strict `1 Note <-> 1 current Study Pack` relationship.
+
+V2 behavior:
+
+* users can create and save notes
+* each note has one current Study Pack
+* regenerating replaces the current Study Pack for that same note
+* V2 does not include visible Study Pack version history
+
+Rationale:
+
+* keeps the UX simple and calm
+* keeps the data model simple and implementation-aligned
+* avoids overengineering while the product evolves into a note-based study workspace
+
+Future versioning direction (not V2):
+
+* if versioning is needed later, implement a dedicated `study_pack_history` snapshot table
+* do not convert V2 into multi-pack-per-note architecture
+* potential snapshot fields:
+  * `id`
+  * `parent_study_pack_id`
+  * `note_id`
+  * `title`
+  * `summary`
+  * `subject`
+  * `concepts_json`
+  * `questions_json`
+  * `version_number`
+  * `archived_at`
+
+---
+
 # Key Features
 
 ## Feature Documentation

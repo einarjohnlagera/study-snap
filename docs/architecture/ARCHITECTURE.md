@@ -83,6 +83,38 @@ Typical local runs:
 - future `UserRepository`
 - future `SubscriptionRepository`
 
+## V2 Notes And Study Pack Relationship
+
+Architecture decision for NoteLib V2:
+
+- one note maps to one current Study Pack (`1 Note <-> 1 Study Pack`)
+- users can create and save notes
+- generating for a note creates or updates that note's current Study Pack
+- regenerating replaces the current Study Pack for that same note
+- V2 does not expose visible Study Pack version history
+
+Rationale:
+
+- preserve a calm and simple user workflow
+- keep persistence and retrieval logic straightforward
+- avoid overengineering while NoteLib is still converging on the note-based workspace model
+
+Future versioning direction (post-V2):
+
+- if version history is needed, add a dedicated `study_pack_history` snapshot table
+- keep the primary V2 relationship unchanged rather than switching to multi-pack-per-note
+- expected snapshot fields can include:
+  - `id`
+  - `parent_study_pack_id`
+  - `note_id`
+  - `title`
+  - `summary`
+  - `subject`
+  - `concepts_json`
+  - `questions_json`
+  - `version_number`
+  - `archived_at`
+
 ## API endpoints
 
 Note:
