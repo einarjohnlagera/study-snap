@@ -43,6 +43,7 @@ Tone:
 Future direction (not V2):
 - If versioning is required later, use a dedicated `study_pack_history` snapshot table.
 - Do not turn V2 into a multi-pack-per-note architecture.
+- Candidate snapshot fields may include: `id`, `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`.
 
 Refer to:
 - `docs/product/SPEC.md` for product behavior

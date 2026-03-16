@@ -55,7 +55,7 @@ Future direction:
 
 - if versioning is needed later, NoteLib will add a dedicated `study_pack_history` snapshot table
 - this future path does not change V2 into multi-pack-per-note architecture
-- potential snapshot fields: `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`
+- potential snapshot fields: `id`, `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`
 
 This repo currently centers on:
 

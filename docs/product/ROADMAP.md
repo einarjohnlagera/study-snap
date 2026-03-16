@@ -36,7 +36,7 @@ Versioning direction (if needed):
 
 - add a dedicated `study_pack_history` snapshot table
 - preserve the V2 primary relationship and keep version history additive
-- likely snapshot fields: `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`
+- likely snapshot fields: `id`, `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`
 
 ## Legacy planning context
 

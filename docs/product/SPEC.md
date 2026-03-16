@@ -47,6 +47,7 @@ Future versioning direction (not V2):
 * if versioning is needed later, implement a dedicated `study_pack_history` snapshot table
 * do not convert V2 into multi-pack-per-note architecture
 * potential snapshot fields:
+  * `id`
   * `parent_study_pack_id`
   * `note_id`
   * `title`

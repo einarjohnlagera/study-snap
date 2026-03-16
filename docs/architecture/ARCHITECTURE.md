@@ -104,6 +104,7 @@ Future versioning direction (post-V2):
 - if version history is needed, add a dedicated `study_pack_history` snapshot table
 - keep the primary V2 relationship unchanged rather than switching to multi-pack-per-note
 - expected snapshot fields can include:
+  - `id`
   - `parent_study_pack_id`
   - `note_id`
   - `title`
