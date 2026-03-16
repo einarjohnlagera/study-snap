@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-NoteLib is an AI-powered study assistant that turns messy notes into structured study materials and reusable study packs.
+NoteLib is an AI-powered study assistant that turns messy notes into structured study materials and reusable Study Packs.
 
 Users can paste notes or upload photos of their study material, and NoteLib can generate:
 
@@ -18,7 +18,7 @@ Turn your notes into exam-ready study materials instantly.
 
 ## Core value
 
-NoteLib helps users turn notes into reusable study packs.
+NoteLib helps users turn notes into reusable Study Packs.
 
 A Study Pack includes:
 
@@ -26,15 +26,36 @@ A Study Pack includes:
 - key concepts
 - practice quiz
 
-Users can save generated Study Packs in their personal Study Library for later study pack.
+Users can save generated Study Packs in their personal Study Library for later study.
 
 ## Product direction
 
-NoteLib is evolving from a one-shot study pack generator into a reusable study workspace.
+NoteLib is evolving from a one-shot study pack generator into a reusable note-based study workspace.
 
 Core workflow:
 
-**Notes → Study Pack → Revisit later**
+**Notes -> Study Pack -> Revisit later**
+
+## V2 architecture decision
+
+NoteLib V2 uses a simple `1 Note <-> 1 current Study Pack` model:
+
+- users can create and save notes
+- each note has one current Study Pack
+- regenerating replaces the current Study Pack for that note
+- V2 does not include visible Study Pack version history
+
+Rationale:
+
+- keep UX calm and straightforward
+- keep the data model simple for implementation and maintenance
+- avoid overengineering while NoteLib evolves
+
+Future direction:
+
+- if versioning is needed later, NoteLib will add a dedicated `study_pack_history` snapshot table
+- this future path does not change V2 into multi-pack-per-note architecture
+- potential snapshot fields: `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`
 
 This repo currently centers on:
 
@@ -81,13 +102,13 @@ notelib/
 
 Canonical documentation now lives in `/docs`:
 
-- `docs/product/SPEC.md` — product behavior and UX rules
-- `docs/product/ROADMAP.md` — development phases and sequencing
-- `docs/architecture/ARCHITECTURE.md` — backend system design and flows
-- `docs/architecture/DATA_MODEL.md` — consolidated entity and table design
-- `docs/features/` — feature-specific execution context
-- `docs/ai/PROMPTS.md` — prompt assets and JSON contract
-- `AGENTS.md` — coding-agent rules for implementation
+- `docs/product/SPEC.md` - product behavior and UX rules
+- `docs/product/ROADMAP.md` - development phases and sequencing
+- `docs/architecture/ARCHITECTURE.md` - backend system design and flows
+- `docs/architecture/DATA_MODEL.md` - consolidated entity and table design
+- `docs/features/` - feature-specific execution context
+- `docs/ai/PROMPTS.md` - prompt assets and JSON contract
+- `AGENTS.md` - coding-agent rules for implementation
 
 ## Legacy preservation
 
@@ -100,10 +121,9 @@ The previous versions of the original markdown files are preserved under `/legac
 
 ## MVP goal
 
-Upload notes → generate study pack materials → save and revisit them as Study Packs.
+Upload notes -> generate study pack materials -> save and revisit them as Study Packs.
 
 ## Privacy
 
 Uploaded images are deleted after OCR processing.
 Avoid logging raw images or full extracted text.
-

@@ -32,6 +32,18 @@ Tone:
 - non-judgmental
 - supportive
 
+## V2 Notes and Study Pack architecture (required)
+
+- V2 uses a strict `1 Note <-> 1 current Study Pack` relationship.
+- Users can create and save notes.
+- Each note has one current Study Pack.
+- Regenerating a Study Pack replaces the current Study Pack for that same note.
+- Do not implement visible Study Pack version history in V2.
+
+Future direction (not V2):
+- If versioning is required later, use a dedicated `study_pack_history` snapshot table.
+- Do not turn V2 into a multi-pack-per-note architecture.
+
 Refer to:
 - `docs/product/SPEC.md` for product behavior
 - `docs/architecture/ARCHITECTURE.md` for system design

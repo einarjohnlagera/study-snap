@@ -1,174 +1,43 @@
-# ROADMAP.md — NoteLib
+# ROADMAP.md - NoteLib
 
 Rebrand note: StudySnap has been rebranded to NoteLib while preserving current behavior and database schema.
 
-Goal: ship an MVP that turns notes into Study Packs and practice quiz materials, then grow into a reusable study workspace.
+Goal: evolve NoteLib from an AI study pack generator into a reusable note-based study workspace without overengineering.
 
-## Phase 0 — Repo & setup
-- [X] Monorepo folders: `frontend/`, `backend/`, `docs/`
-- [X] Add docs
-- [X] Add `.env.example`
-- [X] Choose OCR + LLM providers (stubs acceptable initially)
+## V2 (current direction)
 
-Deliverable: repo runs locally.
+Scope priorities:
 
-## Phase 1 — Frontend foundation
-- [X] Next.js App Router initialized
-- [X] Tailwind configured with class-based dark mode
-- [X] shadcn/ui installed
-- [X] next-themes ThemeProvider + ThemeToggle
-- [X] Global Navbar in `app/layout.tsx`
-- [X] Pages:
-  - [X] `/` landing
-  - [X] `/study` UI skeleton
-  - [X] `/dashboard` placeholder
+- NoteLib rebrand across product surfaces and documentation
+- Notes foundation (users can create and save notes)
+- Notes library for revisiting saved notes
+- one current Study Pack per note (`1 Note <-> 1 current Study Pack`)
+- regenerate replaces the current Study Pack for that same note
+- no visible Study Pack version history in V2
+- public study library support and sharing flow continuity
+- library UX improvements (browse, filtering, sorting, scanability, low-friction revisit)
 
-Deliverable: UI shell + theme toggle on all pages.
+Implementation stance:
 
-Landing page refinement status:
-- [X] polished public `/` landing page with:
-  - hero + signup/demo CTAs
-  - Study Pack output preview
-  - 3-step how-it-works section
-  - feature highlights
-  - pricing teaser
-  - final call-to-action
-  - FAQ section (accordion) placed before footer
+- keep UX calm, practical, and non-overengineered
+- keep data model and backend flows simple
+- avoid introducing multi-pack-per-note architecture in V2
 
-## Phase 2 — Backend MVP (text Study Pack generation)
-- [X] `POST /api/study-packs` accepts JSON `{ notesText }`
-- [X] Validate input size
-- [X] Prompt builder + LLM call (or stub response)
-- [X] Return structured JSON: title, summary, keyConcepts, quiz[]
-- [X] Logging (request id, latency)
-- [X] Quick Review session history
-- [X] Resume unfinished Quick Reviews
-- [X] Smart Continue Studying dashboard recommendations
-- [X] Optional post-review confidence feedback capture (`HIGH` / `MEDIUM` / `LOW`)
+## V3 (future direction)
 
-Deliverable: paste notes → get study pack output.
+Potential expansion areas:
 
-## Phase 3 — Connect UI to backend
-- [X] shared study pack types
-- [X] API client wiring
-- [X] `/study` integrates text mode end-to-end
-- [X] loading + error states
-- [X] results rendering matches spec
+- richer note workspace
+- advanced note editing
+- optional Study Pack version history
+- future multi-version capabilities if product value is proven
 
-Deliverable: paste notes → generate → render.
+Versioning direction (if needed):
 
-## Phase 4 — Image upload + OCR
-- [ ] frontend upload + preview
-- [X] backend accepts multipart + OCR integration direction
-- [X] low-confidence OCR flow (`needs_text_confirmation`)
-- [ ] UI for editing extracted text and resubmitting
-- [ ] implement Google Vision OCR integration
-- [ ] add hybrid OCR pipeline
-- [ ] validate uploaded images
-- [ ] add quick text detection before OCR extraction
-- [ ] clean extracted OCR text before sending to LLM
+- add a dedicated `study_pack_history` snapshot table
+- preserve the V2 primary relationship and keep version history additive
+- likely snapshot fields: `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`
 
-Deliverable: upload image notes → OCR → Study Pack output.
+## Legacy planning context
 
-## Phase 5 — MVP polish + deploy
-- [ ] improve prompt quality and formatting
-- [ ] add caps: max file size, allowed types
-- [ ] confirm image deletion behavior
-- [ ] deploy frontend + backend
-- [ ] add basic counters (success/fail)
-- [ ] add demo mode with hardcoded study pack response
-- [ ] ensure demo does not hit backend LLM endpoint
-- [ ] add anonymous guardrails for real `/api/study-packs` calls
-
-## Phase 6 — User accounts foundation
-- [ ] signup
-- [ ] login
-- [ ] users table
-- [ ] profile fields: first name, last name, display name, country code, profile type
-- [X] profile page simplified to identity + profile type only (actions removed)
-- [X] profile includes account information overview (`Member since`, `Plan`, `Study Packs created`)
-- [ ] account status fields
-- [ ] email verification timestamps
-- [ ] last login tracking
-- [X] centralized session expiration handling for protected API calls (`401` → clear auth → redirect to `/login`)
-- [X] preserve protected destination on login redirects (`/login?redirect=...`)
-- [X] enforce protected route auth guard with consistent login redirect behavior
-
-Deliverable: authenticated user identity foundation for ownership and Study Library.
-
-## Phase 7 — Study Library
-- [ ] create dashboard page for saved Study Packs
-- [ ] fetch saved Study Packs from backend
-- [ ] display Study Pack cards with metadata
-- [ ] open saved Study Packs
-- [ ] delete saved Study Packs
-- [ ] link saved Study Packs to authenticated users
-- [X] add user-controlled engagement mode (`FOCUSED` default, optional `CONSISTENCY` / `STREAK`)
-- [X] render dashboard consistency/streak card based on selected engagement mode
-- [X] add `Mastery Snapshot` dashboard card using recent completed Quick Review session data
-
-Deliverable:
-- users can revisit generated Study Packs from a dedicated dashboard
-
-## Phase 8 — Shareable Study Packs
-- [X] create share tokens in backend
-- [X] add public page route: `/p/[token]`
-- [X] use public navbar for unauthenticated share viewers and authenticated app shell for logged-in viewers
-- [X] add remix flow to copy shared Study Packs into personal Study Library
-- [X] auto-rename remixed Study Packs when title duplicates exist (`(Copy)`, `(Copy 2)`, ...)
-- [X] show post-remix confirmation feedback (`Study Pack copied to your library.`)
-- [X] add in-product Study Pack detail share action (`Copy Link`)
-- [ ] track optional view count
-- [ ] optional expiration and private links later
-
-## Phase 9 — Study Library enhancements
-- [ ] add tags to saved Study Packs
-- [ ] support filtering by tag
-- [ ] support tag-based search
-- [ ] improve dashboard organization
-- [ ] rename saved Study Packs
-- [ ] support folders / collections later
-- [ ] support reviewed status later
-
-## Phase 10 — Usage limits + plans
-- [ ] Public demo route (`/demo`) with prebuilt Study Pack (no new LLM generation cost)
-- [ ] Free: 5 Study Packs/month
-  - [ ] Includes AI summaries, key concepts, Quick Review, retry, Library, Today's Focus, and AI Study Coach
-- [ ] Premium: 100 Study Packs/month
-  - [ ] Includes everything in Free plus advanced review capabilities
-- [ ] Premium-only features:
-  - [ ] Weak Concept Detection
-  - [ ] Adaptive Quiz Generation
-- [X] Settings `Plan & Billing` section shows current plan, monthly usage indicator, Premium feature card, and Stripe Checkout upgrade CTA
-- [X] Dashboard shows Free plan monthly usage indicator with subtle upgrade action and limit-reached upgrade CTA
-- [X] Premium-gated prompts route users to Settings `Plan & Billing` (`/settings#plan-billing`)
-- [X] Stripe Checkout backend integration (`/billing/checkout-session` + `/billing/webhook`) with plan sync events
-- [X] subscriptions table
-- [X] plan enforcement
-- [ ] analytics-ready subscription history
-
-## Phase 11 — Premium features
-- [ ] mock exam mode
-- [ ] performance analytics
-- [ ] topic mastery detection
-- [ ] snap history / richer study history
-- [ ] deeper explanation flows
-
-## Phase 12 — Deferred future ideas
-- [ ] family plan / parent-child account linking
-- [ ] teacher mode
-- [ ] classroom sharing
-- [ ] topic mastery recommendations
-- [ ] caching for repeated inputs
-- [ ] export to PDF / Notion / Google Docs
-
-## Notes on sequencing
-
-This roadmap intentionally moves **User Accounts** earlier than in the old roadmap.
-Reason:
-- authenticated ownership makes the Study Library cleaner
-- plan enforcement becomes easier
-- subscription history becomes easier to introduce later
-
-The old ordering is preserved in `/legacy/ROADMAP.md`.
-
+Older phase-by-phase roadmap details are preserved in `/legacy/ROADMAP.md`.
