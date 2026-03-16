@@ -1,6 +1,6 @@
 # CONTEXT_INDEX.md
 
-This file explains how the Study Snap docs were reorganized.
+This file explains how the NoteLib docs were reorganized.
 
 ## Goal of the refactor
 

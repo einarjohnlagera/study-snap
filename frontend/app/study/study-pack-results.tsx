@@ -52,7 +52,7 @@ export function StudyPackResults({
             Your generated study pack will appear here
           </CardTitle>
           <CardDescription>
-            Study Snap will create a summary, key concepts, and a short practice
+            NoteLib will create a summary, key concepts, and a short practice
             quiz from your notes.
           </CardDescription>
         </Card>

@@ -1,18 +1,20 @@
-# Study Snap Product Specification
+# NoteLib Product Specification
+
+Rebrand note: StudySnap has been rebranded to NoteLib. Product behavior and database schema remain unchanged.
 
 ## Product Overview
 
-Study Snap is an AI-powered study assistant that transforms notes into structured Study Packs containing summaries, key concepts, and quiz questions.
+NoteLib is an AI-powered study assistant that transforms notes into structured Study Packs containing summaries, key concepts, and quiz questions.
 
-The goal of Study Snap is to help students quickly convert raw learning material into a format that supports active recall and repeated practice.
+The goal of NoteLib is to help students quickly convert raw learning material into a format that supports active recall and repeated practice.
 
-Study Snap focuses on simplicity and fast study loops rather than complex study planning tools.
+NoteLib focuses on simplicity and fast study loops rather than complex study planning tools.
 
 ---
 
 # Core Learning Loop
 
-Study Snap is designed around a lightweight learning cycle:
+NoteLib is designed around a lightweight learning cycle:
 
 Notes → Study Pack → Quick Review → Retry mistakes → Dashboard recommendation → Repeat
 
@@ -33,12 +35,12 @@ Detailed feature behavior is documented in:
 
 ## Public Landing Page
 
-Study Snap includes a public landing page at `/` for unauthenticated users.
+NoteLib includes a public landing page at `/` for unauthenticated users.
 
 Purpose:
 
 * communicate core product value quickly
-* explain how Study Snap works
+* explain how NoteLib works
 * drive signup and demo exploration
 
 Landing page sections:
@@ -114,7 +116,7 @@ Protected app routes require authentication.
 
 Behavior:
 
-* when protected API requests return `401 Unauthorized`, Study Snap clears local auth state and redirects to `/login`
+* when protected API requests return `401 Unauthorized`, NoteLib clears local auth state and redirects to `/login`
 * login redirect preserves destination using `redirect` query parameter (example: `/login?redirect=/study-packs/{id}`)
 * session-expired redirects include a user-friendly login hint (`Your session has expired. Please log in again.`)
 * after successful login, verified/onboarded users are returned to the preserved destination when available
@@ -246,7 +248,7 @@ docs/features/dashboard-recommendation.md
 
 ## Study Engagement Modes
 
-Study Snap uses a user-controlled engagement model so motivation stays supportive and flexible.
+NoteLib uses a user-controlled engagement model so motivation stays supportive and flexible.
 
 Available engagement modes:
 
@@ -284,7 +286,7 @@ Behavior:
 
 # Activity Tracking
 
-Study Snap records key learning actions as activity events.
+NoteLib records key learning actions as activity events.
 
 These events help support:
 
@@ -305,7 +307,7 @@ Activity events store the related user, Study Pack, and timestamp.
 
 # Pricing Model (Initial)
 
-Study Snap will launch with a simple usage-based model.
+NoteLib will launch with a simple usage-based model.
 
 Free Plan:
 
@@ -358,7 +360,7 @@ Dashboard usage indicator:
 
 # Non-Goals (Initial Version)
 
-The first version of Study Snap intentionally avoids complex learning management features.
+The first version of NoteLib intentionally avoids complex learning management features.
 
 Not included in the initial release:
 

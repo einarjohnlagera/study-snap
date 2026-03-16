@@ -103,7 +103,7 @@ export default function PublicSharePage() {
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
         <Link href="/" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          Back to Study Snap
+          Back to NoteLib
         </Link>
       </div>
 
@@ -167,7 +167,7 @@ export default function PublicSharePage() {
           <PracticeQuizCard quiz={sharedStudyPack.quiz} />
 
           <Card className="space-y-3 border-blue-500/30 bg-blue-500/10 p-4 sm:p-6">
-            <p className="text-sm font-medium text-foreground/85">Created with Study Snap</p>
+            <p className="text-sm font-medium text-foreground/85">Created with NoteLib</p>
             <p className="text-sm text-foreground/75">Turn your notes into Study Packs instantly.</p>
             <Link href="/auth" className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">

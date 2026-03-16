@@ -1,6 +1,6 @@
 spring:
   application:
-    name: study-snap-backend
+    name: notelib-backend
   config:
     import: optional:file:backend/.env[.properties],optional:file:../backend/.env[.properties]
   datasource:
@@ -79,7 +79,7 @@ studysnap:
   security:
     jwt:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}
-      issuer: ${JWT_ISSUER:study-snap}
+      issuer: ${JWT_ISSUER:notelib}
       access-token-minutes: ${JWT_ACCESS_TOKEN_MINUTES:15}
       refresh-token-days: ${JWT_REFRESH_TOKEN_DAYS:1}
       refresh-token-days-keep-signed-in: ${JWT_REFRESH_TOKEN_DAYS_KEEP_SIGNED_IN:30}

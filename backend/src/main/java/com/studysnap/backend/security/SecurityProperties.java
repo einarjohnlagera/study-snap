@@ -15,7 +15,7 @@ public class SecurityProperties {
     @Setter
     public static class Jwt {
         private String secret = "change-this-in-env-with-at-least-32-characters";
-        private String issuer = "study-snap";
+        private String issuer = "notelib";
         private long accessTokenMinutes = 15;
         private long refreshTokenDays = 1;
         private long refreshTokenDaysKeepSignedIn = 30;

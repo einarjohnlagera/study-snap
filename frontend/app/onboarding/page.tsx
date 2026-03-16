@@ -65,8 +65,8 @@ export default function OnboardingPage() {
     <div className="mx-auto w-full max-w-xl px-6 py-10">
       <Card className="space-y-5">
         <div className="space-y-2">
-          <CardTitle>Welcome to Study Snap!</CardTitle>
-          <CardDescription>I'm using Study Snap as a:</CardDescription>
+          <CardTitle>Welcome to NoteLib!</CardTitle>
+          <CardDescription>I&apos;m using NoteLib as a:</CardDescription>
         </div>
         <div className="space-y-2">
           {OPTIONS.map((option) => (

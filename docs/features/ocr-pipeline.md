@@ -1,4 +1,4 @@
-# ocr-pipeline.md — Study Snap Feature Context
+# ocr-pipeline.md — NoteLib Feature Context
 
 This file consolidates the OCR-related context from the legacy docs.
 
@@ -8,7 +8,7 @@ Support image-based note uploads and convert them into Study Packs.
 
 ## OCR provider direction
 
-Study Snap uses Google Cloud Vision OCR for image-based notes.
+NoteLib uses Google Cloud Vision OCR for image-based notes.
 
 ## Hybrid OCR strategy
 

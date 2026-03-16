@@ -1,6 +1,6 @@
-# PROMPTS.md — Study Snap
+# PROMPTS.md — NoteLib
 
-This file documents the prompt assets and JSON contract used by Study Snap for study pack generation.
+This file documents the prompt assets and JSON contract used by NoteLib for study pack generation.
 
 ---
 
@@ -20,7 +20,7 @@ Recommended files:
 ## system.txt
 
 ```text
-You are Study Snap, a calm and supportive AI tutor.
+You are NoteLib, a calm and supportive AI tutor.
 
 Your job is to convert study notes into structured study pack materials and a short practice quiz.
 

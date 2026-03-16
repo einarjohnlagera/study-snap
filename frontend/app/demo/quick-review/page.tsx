@@ -148,7 +148,7 @@ export default function DemoQuickReviewPage() {
           <DemoScoreBlock score={score} total={totalQuestions} percentage={scorePercentage} />
           <div className="space-y-1 text-sm text-foreground/85">
             <p className="font-medium text-foreground">Nice work! 🎉</p>
-            <p>Study Snap just turned notes into a quiz in seconds.</p>
+            <p>NoteLib just turned notes into a quiz in seconds.</p>
             <p>Now try it with your own notes.</p>
           </div>
           <p className="text-sm text-foreground/75">

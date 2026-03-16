@@ -1,6 +1,6 @@
-# DATA_MODEL.md — Study Snap
+# DATA_MODEL.md — NoteLib
 
-This document consolidates the data model direction for Study Snap from the legacy architecture docs, project context, and later user-account decisions.
+This document consolidates the data model direction for NoteLib from the legacy architecture docs, project context, and later user-account decisions.
 
 ## Naming direction
 

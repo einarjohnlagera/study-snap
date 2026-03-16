@@ -1,8 +1,8 @@
-# Study Snap Project Context
+# NoteLib Project Context
 
-## What Study Snap is
+## What NoteLib is
 
-Study Snap is an AI-powered study assistant that converts notes into Study Packs containing summaries, key concepts, and quiz questions.
+NoteLib is an AI-powered study assistant that converts notes into Study Packs containing summaries, key concepts, and quiz questions.
 
 The system emphasizes active recall and repeated practice.
 

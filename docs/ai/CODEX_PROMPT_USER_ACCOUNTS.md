@@ -1,4 +1,4 @@
-# CODEX PROMPT — Study Snap User Accounts Foundation (V2)
+# CODEX PROMPT — NoteLib User Accounts Foundation (V2)
 
 Use the existing project docs as the primary source of truth:
 - `README.md`
@@ -8,10 +8,10 @@ Use the existing project docs as the primary source of truth:
 - `AGENTS.md`
 - `STUDY_SNAP_USER_ACCOUNTS_CONTEXT.md` (or the latest user-accounts context file)
 
-You are implementing the **User Accounts foundation** for Study Snap.
+You are implementing the **User Accounts foundation** for NoteLib.
 
 ## Product reminder
-Study Snap turns notes into reusable **Study Packs**.
+NoteLib turns notes into reusable **Study Packs**.
 The next major product direction is:
 - authenticated users
 - user-owned study packs
@@ -42,7 +42,7 @@ Technical field name:
 - `profileType`
 
 UI prompt:
-- **“I’m using Study Snap as a…”**
+- **“I’m using NoteLib as a…”**
 
 Allowed initial values:
 - `STUDENT`
@@ -137,7 +137,7 @@ Propose or scaffold minimal endpoints for user accounts, such as:
 If auth is not fully implemented yet, you may stub the API shape and DTOs first.
 
 ### 5. Service design
-Follow Study Snap backend conventions:
+Follow NoteLib backend conventions:
 - thin controllers
 - service-layer business logic
 - avoid overloading entities with UI logic
@@ -174,7 +174,7 @@ Follow existing project conventions from `AGENTS.md` and `ARCHITECTURE.md`:
 - controllers should stay thin
 - business logic belongs in services
 - prefer DTOs for request/response models
-- keep naming aligned with Study Snap product language
+- keep naming aligned with NoteLib product language
 - keep the path clean for the future Study Library feature
 
 Make decisions that support this product sequence:

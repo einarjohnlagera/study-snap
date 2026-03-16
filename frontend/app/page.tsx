@@ -33,7 +33,7 @@ const coreOutputs = [
 const featureHighlights = [
   {
     title: "AI Summary",
-    description: "Study Snap condenses your notes into a clear summary so you can grasp the key points faster.",
+    description: "NoteLib condenses your notes into a clear summary so you can grasp the key points faster.",
     icon: Sparkles,
   },
   {
@@ -55,16 +55,16 @@ const featureHighlights = [
 
 const faqItems = [
   {
-    question: "What is Study Snap?",
-    answer: "Study Snap turns your notes into a structured study pack with summaries, key concepts, and quizzes.",
+    question: "What is NoteLib?",
+    answer: "NoteLib turns your notes into a structured study pack with summaries, key concepts, and quizzes.",
   },
   {
     question: "What type of notes can I upload?",
     answer: "You can paste text notes or upload images of handwritten notes, lecture slides, or textbook pages.",
   },
   {
-    question: "Is Study Snap free?",
-    answer: "Study Snap offers a free plan with limited study packs per month, and a premium plan with additional features.",
+    question: "Is NoteLib free?",
+    answer: "NoteLib offers a free plan with limited study packs per month, and a premium plan with additional features.",
   },
   {
     question: "Do I need an account to try it?",
@@ -101,7 +101,7 @@ function ProductPreviewSection() {
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
           Product Preview
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">See Study Snap in action</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">See NoteLib in action</h2>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="space-y-3 p-4 sm:p-6">
@@ -225,8 +225,8 @@ export default function Home() {
         <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="space-y-5">
             <Image
-              src="/study-snap-logo-full.svg"
-              alt="Study Snap"
+              src="/note-lib-logo-full.svg"
+              alt="NoteLib"
               width={240}
               height={48}
               priority
@@ -239,7 +239,7 @@ export default function Home() {
               Turn your notes into study packs in seconds
             </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Upload or paste your notes and Study Snap turns them into summaries, key concepts, and quiz
+              Upload or paste your notes and NoteLib turns them into summaries, key concepts, and quiz
               questions so you can review faster.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
