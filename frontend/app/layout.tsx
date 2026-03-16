@@ -15,12 +15,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Study Snap",
-  description: "Smart tutor on demand",
+  title: "NoteLib",
+  description: "Turn your notes into reusable study packs.",
   icons: {
-    icon: "/study-snap-logo-icon.svg",
-    shortcut: "/study-snap-logo-icon.svg",
-    apple: "/study-snap-logo-icon.svg",
+    icon: "/note-lib-logo-icon.svg",
+    shortcut: "/note-lib-logo-icon.svg",
+    apple: "/note-lib-logo-icon.svg",
   },
 };
 

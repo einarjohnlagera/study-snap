@@ -242,7 +242,7 @@ export default function SettingsPage() {
                   <span className="space-y-1">
                     <span className="block text-sm font-medium">Focused</span>
                     <span className="block text-xs text-foreground/60">
-                      Use Study Snap when you need it. No streaks or pressure.
+                      Use NoteLib when you need it. No streaks or pressure.
                     </span>
                   </span>
                 </label>

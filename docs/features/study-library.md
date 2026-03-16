@@ -1,10 +1,10 @@
-# study-library.md — Study Snap Feature Context
+# study-library.md — NoteLib Feature Context
 
 This file extracts and consolidates all Study Library-related context from the legacy docs.
 
 ## Goal
 
-The Study Library turns Study Snap from a one-shot generator into a reusable study workspace.
+The Study Library turns NoteLib from a one-shot generator into a reusable study workspace.
 
 Core idea:
 - users generate Study Packs
@@ -250,7 +250,7 @@ The Study Library now includes a dedicated Study Pack detail page for authentica
 Purpose:
 - make Open/Continue actions meaningful
 - support focused studying from saved Study Packs
-- reinforce Study Snap as a reusable study workspace
+- reinforce NoteLib as a reusable study workspace
 
 Frontend route:
 - `/study-packs/[id]`
@@ -286,7 +286,7 @@ Route:
 
 Purpose:
 - give users a lightweight way to study quiz content one question at a time
-- make Study Snap feel like an active study workflow, not only a generator and library
+- make NoteLib feel like an active study workflow, not only a generator and library
 
 Behavior (v1):
 - show one question at a time

@@ -1,8 +1,8 @@
-# ARCHITECTURE.md — Study Snap
+# ARCHITECTURE.md — NoteLib
 
-This document describes the Study Snap system architecture and how the backend connects to the web frontend.
+This document describes the NoteLib system architecture and how the backend connects to the web frontend.
 
-Study Snap core workflow:
+NoteLib core workflow:
 
 **Notes (text or photo) → Study Pack (summary + key concepts + practice quiz) → save / revisit / optional sharing**
 
@@ -245,7 +245,7 @@ Future extensions:
 
 ## Activity Tracking
 
-Study Snap records lightweight user activity events to support future study workflow features.
+NoteLib records lightweight user activity events to support future study workflow features.
 
 Purpose:
 - capture key study actions without changing current product behavior
@@ -327,7 +327,7 @@ Landing → `/study` → `POST /api/study-packs` → OCR/LLM → database → re
 
 ## Hybrid OCR strategy
 
-Study Snap uses a hybrid OCR strategy to reduce cost and avoid unnecessary OCR calls.
+NoteLib uses a hybrid OCR strategy to reduce cost and avoid unnecessary OCR calls.
 
 ### Processing pipeline
 Image upload
@@ -429,7 +429,7 @@ See `docs/architecture/DATA_MODEL.md` for the consolidated table/entity view.
 
 ## Core Domain Models
 
-Study Snap revolves around several core domain models.
+NoteLib revolves around several core domain models.
 
 User
 Represents an account using the platform.

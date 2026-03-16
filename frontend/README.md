@@ -1,6 +1,6 @@
-# Study Snap Frontend (Next.js)
+# NoteLib Frontend (Next.js)
 
-Web UI for Study Snap.
+Web UI for NoteLib.
 
 ## Stack
 - Next.js (App Router)

@@ -121,7 +121,7 @@ export default function AuthPage() {
     <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6 sm:py-10">
       <Card className="space-y-6 p-4 sm:p-6">
         <div className="space-y-2">
-          <CardTitle>{mode === "login" ? "Log in to Study Snap" : "Create your Study Snap account"}</CardTitle>
+          <CardTitle>{mode === "login" ? "Log in to NoteLib" : "Create your NoteLib account"}</CardTitle>
           <CardDescription>
             {mode === "login"
               ? "Continue to your study workspace."

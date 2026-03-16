@@ -1,13 +1,15 @@
-# AGENTS.md — Study Snap
+# AGENTS.md — NoteLib
 
-You are an AI coding agent helping implement Study Snap.
+You are an AI coding agent helping implement NoteLib.
 Follow these rules strictly to keep the codebase consistent and shippable.
+
+Rebrand note: StudySnap has been renamed to NoteLib. Keep database schema/table names unchanged unless explicitly requested.
 
 When working on a feature, always check the corresponding document under docs/features/.
 
 ## Product summary
 
-Study Snap converts study notes into structured study materials and practice quizzes.
+NoteLib converts study notes into structured study materials and practice quizzes.
 
 Core feature is **not** “solve a question.”
 It is:
@@ -45,7 +47,7 @@ Pages:
 - Results (study pack sheet + quiz)
 
 Public landing page requirements:
-- route `/` should clearly communicate Study Snap value for unauthenticated users
+- route `/` should clearly communicate NoteLib value for unauthenticated users
 - include hero, Study Pack preview, how-it-works, feature highlights, pricing teaser, final CTA, and FAQ
 - FAQ should be placed before the footer and use a lightweight accordion layout
 - primary CTA should drive account creation; secondary CTA may drive demo exploration
@@ -117,7 +119,7 @@ Rules:
 - Support light/dark theme with a toggle in the navbar.
 - Tailwind should use class-based dark mode.
 - Navbar appears on all pages.
-- Navbar includes Study Snap brand text, logo placeholder, menu links, and theme toggle.
+- Navbar includes NoteLib brand text, logo placeholder, menu links, and theme toggle.
 - Theme toggle avoids hydration mismatch by using a mounted guard.
 
 ### Profile vs Settings ownership
@@ -218,7 +220,7 @@ For demo mode (`/demo` or `?demo=true`):
 
 ## Study Library direction
 
-Study Snap is not only a generator; it is a study workspace.
+NoteLib is not only a generator; it is a study workspace.
 
 Generated outputs should be treated as reusable Study Packs.
 

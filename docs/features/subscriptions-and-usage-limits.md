@@ -1,4 +1,4 @@
-# subscriptions-and-usage-limits.md — Study Snap Feature Context
+# subscriptions-and-usage-limits.md — NoteLib Feature Context
 
 ## Goal
 

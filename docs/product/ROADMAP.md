@@ -1,4 +1,6 @@
-# ROADMAP.md — Study Snap
+# ROADMAP.md — NoteLib
+
+Rebrand note: StudySnap has been rebranded to NoteLib while preserving current behavior and database schema.
 
 Goal: ship an MVP that turns notes into Study Packs and practice quiz materials, then grow into a reusable study workspace.
 

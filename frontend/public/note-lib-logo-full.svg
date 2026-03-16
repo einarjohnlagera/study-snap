@@ -22,8 +22,8 @@
   </g>
 
   <g transform="translate(410 66)">
-    <text x="0" y="118" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="112" font-weight="800" fill="#374151">Study</text>
-    <text x="0" y="236" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="112" font-weight="800" fill="#374151">Snap</text>
+    <text x="0" y="118" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="112" font-weight="800" fill="#374151">Note</text>
+    <text x="0" y="236" font-family="Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="112" font-weight="800" fill="#374151">Lib</text>
     <path d="M420 132L386 198H424L396 286L486 170H438L466 132H420Z" fill="url(#bolt)"/>
   </g>
 </svg>

@@ -1,8 +1,10 @@
-# Study Snap
+# NoteLib
 
-Study Snap is an AI-powered study assistant that turns messy notes into structured study materials and reusable study packs.
+> Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Users can paste notes or upload photos of their study material, and Study Snap can generate:
+NoteLib is an AI-powered study assistant that turns messy notes into structured study materials and reusable study packs.
+
+Users can paste notes or upload photos of their study material, and NoteLib can generate:
 
 - Title
 - Summary
@@ -16,7 +18,7 @@ Turn your notes into exam-ready study materials instantly.
 
 ## Core value
 
-Study Snap helps users turn notes into reusable study packs.
+NoteLib helps users turn notes into reusable study packs.
 
 A Study Pack includes:
 
@@ -28,7 +30,7 @@ Users can save generated Study Packs in their personal Study Library for later s
 
 ## Product direction
 
-Study Snap is evolving from a one-shot study pack generator into a reusable study workspace.
+NoteLib is evolving from a one-shot study pack generator into a reusable study workspace.
 
 Core workflow:
 
@@ -61,7 +63,7 @@ This repo currently centers on:
 ## Repo structure
 
 ```text
-study-snap/
+notelib/
   frontend/
   backend/
   docs/

@@ -1,6 +1,6 @@
 # STUDY_SNAP_USER_ACCOUNTS_CONTEXT.md
 
-This file extends the existing Study Snap project docs and defines the agreed direction for the **User Accounts foundation**.
+This file extends the existing NoteLib project docs and defines the agreed direction for the **User Accounts foundation**.
 
 It should be read together with:
 - `README.md`
@@ -13,7 +13,7 @@ It should be read together with:
 
 ## Why this exists
 
-Study Snap is evolving from a one-shot study pack generator into a reusable study workspace.
+NoteLib is evolving from a one-shot study pack generator into a reusable study workspace.
 
 The product already treats generated outputs as **study packs** that users can revisit later in a Study Library.
 Because of that, user accounts should be introduced **before** fully implementing the Study Library dashboard.
@@ -24,7 +24,7 @@ This keeps ownership, saved history, plan limits, and future premium features co
 
 ## Product alignment
 
-Study Snap core value remains:
+NoteLib core value remains:
 
 **Notes → Study Pack → Revisit later**
 
@@ -72,7 +72,7 @@ Recommended separation:
 - **study_packs**: user-owned generated content
 - future tables later for usage tracking, account links, etc.
 
-This separation is preferred because Study Snap is expected to grow into:
+This separation is preferred because NoteLib is expected to grow into:
 - freemium plan controls
 - premium subscriptions
 - library/history
@@ -150,7 +150,7 @@ Purpose:
 - not permissions
 
 UI copy:
-- **“I’m using Study Snap as a…”**
+- **“I’m using NoteLib as a…”**
 
 Allowed initial values:
 - `STUDENT`
@@ -342,7 +342,7 @@ Focus on:
 
 ## Final direction snapshot
 
-Study Snap should now move toward this structure:
+NoteLib should now move toward this structure:
 
 - **users** = identity + basic profile
 - **subscriptions** = plan history
@@ -353,7 +353,7 @@ And the agreed UX details are:
 - auto-fill `displayName` from `firstName`
 - if empty, fall back to `firstName`
 - technical field name: `profileType`
-- UI label: **“I’m using Study Snap as a…”**
+- UI label: **“I’m using NoteLib as a…”**
 - values for now: Student, Parent, Professional
 
 This context should guide the next implementation work for User Accounts and the future authenticated Study Library.
@@ -406,6 +406,6 @@ API support:
 - `GET /api/auth/me` returns current `engagementMode`
 - `POST /api/auth/preferences/engagement-mode` updates the value
 
-This preference is user-controlled so Study Snap can support both calm exam-time usage and optional consistency/streak motivation styles.
+This preference is user-controlled so NoteLib can support both calm exam-time usage and optional consistency/streak motivation styles.
 
 

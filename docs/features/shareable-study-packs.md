@@ -1,4 +1,4 @@
-# shareable-study-packs.md — Study Snap Feature Context
+# shareable-study-packs.md — NoteLib Feature Context
 
 ## Goal
 

@@ -66,7 +66,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ObjectNode textNode = requestBody.putObject("text");
         ObjectNode formatNode = textNode.putObject("format");
         formatNode.put("type", "json_schema");
-        formatNode.put("name", "study_snap_study_pack");
+        formatNode.put("name", "note_lib_study_pack");
         formatNode.set("schema", promptResources.responseSchema());
         formatNode.put("strict", true);
 
@@ -230,7 +230,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage(
                 "system",
-                "You are Study Snap, a calm and supportive tutor helping users review weak concepts."
+                "You are NoteLib, a calm and supportive tutor helping users review weak concepts."
         ));
         input.add(buildTextMessage(
                 "developer",
@@ -655,7 +655,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ObjectNode textNode = requestBody.putObject("text");
         ObjectNode formatNode = textNode.putObject("format");
         formatNode.put("type", "json_schema");
-        formatNode.put("name", "study_snap_adaptive_quiz");
+        formatNode.put("name", "note_lib_adaptive_quiz");
         formatNode.set("schema", buildAdaptivePracticeSchema(normalizedQuestionCount));
         formatNode.put("strict", true);
 
@@ -804,5 +804,4 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private record QuizMix(int recallCount, int understandingCount, int applicationCount) {
     }
 }
-
 

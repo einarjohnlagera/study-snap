@@ -11,8 +11,8 @@
 	<groupId>com.studysnap</groupId>
 	<artifactId>backend</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>study-snap-backend</name>
-	<description>Backend project of study snap</description>
+	<name>notelib-backend</name>
+	<description>Backend project of NoteLib</description>
 	<url/>
 	<licenses>
 		<license/>

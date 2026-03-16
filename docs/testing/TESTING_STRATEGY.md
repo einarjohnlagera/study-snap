@@ -1,16 +1,16 @@
-# Study Snap Testing Strategy
+# NoteLib Testing Strategy
 
-This document defines the testing approach for Study Snap.
+This document defines the testing approach for NoteLib.
 
 The goal is to ensure that core learning logic remains stable while keeping tests maintainable and fast.
 
-Study Snap follows a layered testing approach based on the testing pyramid.
+NoteLib follows a layered testing approach based on the testing pyramid.
 
 ---
 
 # Testing Pyramid
 
-Study Snap uses the following testing structure:
+NoteLib uses the following testing structure:
 
 1. Unit Tests
 2. Repository Tests

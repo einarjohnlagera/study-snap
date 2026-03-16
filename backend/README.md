@@ -1,6 +1,6 @@
-# Study Snap Backend (Spring Boot)
+# NoteLib Backend (Spring Boot)
 
-Backend API for Study Snap.
+Backend API for NoteLib.
 
 ## Responsibilities
 - Accept notes text or image

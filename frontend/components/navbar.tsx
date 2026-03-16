@@ -38,14 +38,14 @@ export function Navbar() {
         <Link href="/" className="flex items-center gap-3">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border">
             <Image
-              src="/study-snap-logo-icon.svg"
-              alt="Study Snap logo"
+              src="/note-lib-logo-icon.svg"
+              alt="NoteLib logo"
               width={20}
               height={20}
               priority
             />
           </span>
-          <span className="text-sm font-semibold sm:text-base">Study Snap</span>
+          <span className="text-sm font-semibold sm:text-base">NoteLib</span>
         </Link>
         <div className="flex items-center gap-4">
           {showDashboard ? (
