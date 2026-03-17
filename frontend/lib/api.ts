@@ -270,6 +270,23 @@ export type BillingCheckoutSessionResponse = {
   checkoutUrl: string;
 };
 
+export type UpsertNoteRequest = {
+  title?: string | null;
+  subject?: string | null;
+  tags?: string[];
+  content: string;
+};
+
+export type NoteResponse = {
+  id: string;
+  title: string | null;
+  subject: string | null;
+  tags: string[];
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -908,4 +925,39 @@ export async function createPremiumCheckoutSession(): Promise<BillingCheckoutSes
     response,
     "Could not start Premium checkout. Please try again.",
   );
+}
+
+export async function createNote(
+  request: UpsertNoteRequest,
+  options: { keepalive?: boolean } = {},
+): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    "/notes",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+      keepalive: options.keepalive ?? false,
+    },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(response, "Could not save note.");
+}
+
+export async function updateNote(
+  noteId: string,
+  request: UpsertNoteRequest,
+  options: { keepalive?: boolean } = {},
+): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+      keepalive: options.keepalive ?? false,
+    },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(response, "Could not save note.");
 }
