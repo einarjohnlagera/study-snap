@@ -151,6 +151,7 @@ export default function QuickReviewPage() {
   const [savingConfidence, setSavingConfidence] = useState(false);
   const [confidenceAcknowledged, setConfidenceAcknowledged] = useState(false);
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
+  const [isPremiumPlan, setIsPremiumPlan] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -248,7 +249,6 @@ export default function QuickReviewPage() {
   const improvedVsPrevious = previousAttempt ? score > previousAttempt.correctAnswers : false;
   const scoreFeedback = getMotivationalFeedback(scorePercentage);
   const performanceBadge = getPerformanceBadge(scorePercentage);
-  const isPremiumPlan = useMemo(() => (getAuthUser()?.planType ?? "FREE") === "PREMIUM", []);
   const isPerfectScore = totalQuestions > 0 && score === totalQuestions;
   const displayedRetryCount = persistedResult?.retryCount ?? retryCount;
   const currentRoundType = phase === "retry" ? "RETRY" : "INITIAL";
@@ -296,6 +296,20 @@ export default function QuickReviewPage() {
     ],
     [],
   );
+  const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
+  const showAdaptiveGuidedCta = isStruggling;
+  const showChallengeGuidedCta = !isStruggling;
+
+  useEffect(() => {
+    const syncPlan = () => {
+      setIsPremiumPlan((getAuthUser()?.planType ?? "FREE") === "PREMIUM");
+    };
+    syncPlan();
+    window.addEventListener("studysnap-auth-change", syncPlan);
+    return () => {
+      window.removeEventListener("studysnap-auth-change", syncPlan);
+    };
+  }, []);
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -686,7 +700,7 @@ export default function QuickReviewPage() {
             {!isPerfectScore && incorrectCount > 0 && !isPremiumPlan ? (
               <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
                 <p className="text-sm text-foreground/85">
-                  Weak Concept Detection and Adaptive Quiz Generation are available on Premium.
+                  Adaptive Practice and Challenge Quiz are available on Premium.
                 </p>
                 <Link href={PLAN_BILLING_PATH} className="inline-flex">
                   <Button type="button" variant="outline" size="sm">
@@ -735,12 +749,35 @@ export default function QuickReviewPage() {
                 Back to Study Pack
               </Button>
             </Link>
-            {isPremiumPlan && displayedWeakConcepts.length > 0 ? (
-              <Link href={`/study-packs/${studyPack.id}/adaptive-practice`} className="w-full sm:w-auto">
-                <Button type="button" variant="outline" className="w-full sm:w-auto">
-                  Practice Weak Areas
-                </Button>
-              </Link>
+            {showAdaptiveGuidedCta ? (
+              isPremiumPlan ? (
+                <Link href={`/study-packs/${studyPack.id}/adaptive-practice`} className="w-full sm:w-auto">
+                  <Button type="button" variant="outline" className="w-full sm:w-auto">
+                    Practice Weak Areas
+                  </Button>
+                </Link>
+              ) : (
+                <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
+                  <Button type="button" variant="outline" className="w-full sm:w-auto">
+                    Unlock Adaptive Practice
+                  </Button>
+                </Link>
+              )
+            ) : null}
+            {showChallengeGuidedCta ? (
+              isPremiumPlan ? (
+                <Link href={`/study-packs/${studyPack.id}/challenge-quiz`} className="w-full sm:w-auto">
+                  <Button type="button" variant="outline" className="w-full sm:w-auto">
+                    Start Challenge Quiz
+                  </Button>
+                </Link>
+              ) : (
+                <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
+                  <Button type="button" variant="outline" className="w-full sm:w-auto">
+                    Unlock Challenge Quiz
+                  </Button>
+                </Link>
+              )
             ) : null}
             {!isPerfectScore ? (
               <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>

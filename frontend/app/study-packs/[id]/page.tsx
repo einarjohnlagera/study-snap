@@ -244,12 +244,14 @@ export default function StudyPackDetailPage() {
         .filter((concept) => concept.length > 0),
     ),
   ).slice(0, 4);
+  const hasWeakConcepts = focusAreas.length > 0;
+  const showAdaptivePracticeEntry = isPremiumUser && hasWeakConcepts;
 
   const suggestedNextStep = (() => {
     if (!latestCompletedSession) {
       return "Start your first Quick Review to discover which concepts need more work.";
     }
-    if (focusAreas.length > 0) {
+    if (hasWeakConcepts) {
       return "Practice weak concepts to strengthen this topic.";
     }
     return "Continue reviewing this Study Pack.";
@@ -284,6 +286,13 @@ export default function StudyPackDetailPage() {
     }
     setChallengeHint(null);
     router.push(`/study-packs/${studyPack.id}/challenge-quiz`);
+  };
+
+  const handleStartAdaptivePractice = () => {
+    if (!studyPack || !showAdaptivePracticeEntry) {
+      return;
+    }
+    router.push(`/study-packs/${studyPack.id}/adaptive-practice`);
   };
 
   const showShareToast = useCallback((message: string) => {
@@ -687,6 +696,11 @@ export default function StudyPackDetailPage() {
                     {!isPremiumUser ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
                     Start Challenge Quiz
                   </Button>
+                  {showAdaptivePracticeEntry ? (
+                    <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleStartAdaptivePractice}>
+                      Start Adaptive Practice
+                    </Button>
+                  ) : null}
                 </div>
                 {!isPremiumUser && challengeHint ? (
                   <p className="text-xs text-foreground/70">{challengeHint}</p>

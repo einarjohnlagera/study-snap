@@ -265,6 +265,18 @@ Gating and limits:
 * when the monthly limit is reached, show: `You've reached your monthly Challenge Quiz limit.`
 * Challenge Quiz usage is tracked separately and does not deduct from Study Pack generation credits
 
+Study Pack detail entry behavior:
+
+* `Start Quick Review` is the primary quiz action
+* `Challenge Quiz` is shown as a secondary action (premium-gated for Free users)
+* `Adaptive Practice` is shown only when weak concepts are available
+
+Quick Review results next-step behavior:
+
+* if the user struggles (for example weak concepts or a lower score), results should recommend `Adaptive Practice`
+* if the user performs well, results should recommend `Challenge Quiz`
+* keep `Back to Study Pack` as the primary completion action
+
 ---
 
 ## Study Pack AI Study Coach
@@ -369,15 +381,17 @@ Free Plan:
 * up to 5 Study Packs generated per month
 * includes Study Pack generation, summaries, key concepts, Quick Review, retry, Library, Today's Focus, and AI Study Coach
 * does not include Weak Concept Detection
-* does not include Adaptive Quiz Generation
+* does not include Adaptive Practice
+* does not include Challenge Quiz
 
 Premium Plan:
 
 * up to 100 Study Packs generated per month
 * includes everything in Free
-* includes Weak Concept Detection
-* includes Adaptive Quiz Generation
-* includes advanced review tools as Premium capabilities expand
+* includes Challenge Quiz (50/month)
+* includes Adaptive Practice (50/month)
+* includes Weak Concept Detection / weak concept insights
+* includes advanced review tools
 
 Feature-gating behavior:
 
@@ -394,9 +408,17 @@ Settings includes a dedicated `Plan & Billing` section.
 Users can:
 
 * view current plan (`FREE` or `PREMIUM`)
-* view monthly Study Pack usage (`used / limit`) with a simple progress indicator
-* review Premium feature highlights (100 Study Packs/month, Weak Concept Detection, Adaptive Quiz Generation)
+* view monthly usage with separate progress indicators:
+  * Study Packs (`used / monthly limit`)
+  * Challenge Quiz (`used / 50`)
+  * Adaptive Practice (`used / 50`)
+* review Premium feature highlights (100 Study Packs/month, Challenge Quiz, Adaptive Practice, Weak Concept insights)
 * upgrade with Stripe Checkout from `Upgrade to Premium`
+
+Usage policy:
+
+* Study Pack usage, Challenge Quiz usage, and Adaptive Practice usage are tracked independently
+* quiz usage must not deduct from Study Pack generation credits
 
 Stripe billing behavior:
 

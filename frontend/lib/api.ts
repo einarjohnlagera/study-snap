@@ -300,6 +300,16 @@ export type BillingCheckoutSessionResponse = {
   checkoutUrl: string;
 };
 
+export type BillingUsageSummaryResponse = {
+  planType: PlanType;
+  studyPacksUsed: number;
+  studyPacksLimit: number;
+  challengeQuizUsed: number;
+  challengeQuizLimit: number;
+  adaptivePracticeUsed: number;
+  adaptivePracticeLimit: number;
+};
+
 export type UpdateStudyPackMetadataRequest = {
   title: string;
   subject?: string | null;
@@ -1005,6 +1015,21 @@ export async function createPremiumCheckoutSession(): Promise<BillingCheckoutSes
   return parseApiResponse<BillingCheckoutSessionResponse>(
     response,
     "Could not start Premium checkout. Please try again.",
+  );
+}
+
+export async function getBillingUsageSummary(): Promise<BillingUsageSummaryResponse> {
+  const response = await fetchWithAuth(
+    "/billing/usage-summary",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<BillingUsageSummaryResponse>(
+    response,
+    "Could not load billing usage.",
   );
 }
 

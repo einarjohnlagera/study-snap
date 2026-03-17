@@ -30,6 +30,12 @@ Users can start Quick Review from:
 - dashboard recommendation card
 - resume prompt if an unfinished session exists
 
+Study Pack detail quiz-entry hierarchy:
+
+- primary action: `Start Quick Review`
+- secondary action: `Challenge Quiz` (Premium-gated for Free users)
+- `Adaptive Practice` should only be shown when weak concepts exist
+
 ---
 
 ## Core Flow
@@ -275,6 +281,7 @@ Entry point:
 - results screen shows `Practice Weak Areas` when weak concepts exist
 - Free users should see a clear upgrade CTA instead of adaptive-practice launch
 - this starts a separate follow-up practice flow
+- Adaptive Practice usage limit is 50/month (tracked separately from Study Pack credits)
 
 ### Retry-transition CTA hierarchy
 
@@ -290,6 +297,8 @@ This keeps retry as the main reinforcement mechanic while allowing users to end 
 After completion:
 
 - primary action: `Back to Study Pack`
+- guided next step when struggling: `Practice Weak Areas` (Adaptive Practice, Premium-gated)
+- guided next step when performing well: `Start Challenge Quiz` (Premium-gated)
 - secondary action: `Practice Again` (optional, lower emphasis)
 
 `Practice Again` is not the primary post-review action, especially for short quizzes.
@@ -313,6 +322,7 @@ Gating and usage:
 - Challenge Quiz usage limit is 50/month
 - usage is counted on quiz start
 - Challenge Quiz usage does not deduct from monthly Study Pack generation credits
+- Challenge Quiz and Adaptive Practice quotas are independent from each other
 
 ---
 

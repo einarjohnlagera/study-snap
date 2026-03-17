@@ -210,6 +210,11 @@ Plan and quota policy:
 
 Plan & Billing UX:
 - Settings includes a `Plan & Billing` section where users can view plan and monthly usage progress
+- Plan & Billing usage visibility should show separate buckets with progress bars:
+  - Study Packs (monthly plan quota)
+  - Challenge Quiz (50/month)
+  - Adaptive Practice (50/month)
+- Do not merge quiz usage into Study Pack usage; each bucket is independent
 - Premium upgrade uses Stripe Checkout
 - Stripe webhook events should keep `FREE`/`PREMIUM` plan state in sync
 - Premium-gated prompts should direct users to Settings `Plan & Billing` (`/settings#plan-billing`)
@@ -325,6 +330,16 @@ Quick Review post-results confidence feedback:
 - map to stored values `HIGH`, `MEDIUM`, `LOW`
 - confidence feedback must be non-blocking (session remains valid if skipped)
 - confidence data is intended for future adaptive recommendations and learning insights (no heavy analytics in this scope)
+
+Quick Review guided next-step CTA behavior:
+- if results indicate struggle (for example lower score or weak concepts), prefer an Adaptive Practice next-step CTA
+- if results indicate strong performance, prefer a Challenge Quiz next-step CTA
+- keep `Back to Study Pack` as the primary completion action
+
+Study Pack detail quiz entry hierarchy:
+- `Start Quick Review` is the primary action
+- `Challenge Quiz` is secondary and visible (premium-gated for Free users)
+- `Adaptive Practice` should be shown only when weak concepts are available
 
 ## Legacy preservation note
 

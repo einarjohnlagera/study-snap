@@ -69,6 +69,7 @@ studysnap:
     free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:5}
     premium-monthly-study-pack-limit: ${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}
     premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
+    premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:50}
   billing:
     stripe:
       api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com/v1}

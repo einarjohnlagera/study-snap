@@ -16,6 +16,10 @@ Scope priorities:
 - no visible Study Pack version history in V2
 - Premium Challenge Quiz (timed exam-style mode using existing Study Pack quiz data)
 - separate Premium review quotas for Challenge Quiz and Adaptive Practice (50/month each)
+- Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
+- guided review entry hierarchy:
+  - Study Pack detail: Quick Review primary, Challenge secondary, Adaptive only when weak concepts exist
+  - Quick Review results: recommend Adaptive when struggling, Challenge when strong
 - public study library support and sharing flow continuity
 - library UX improvements (browse, filtering, sorting, scanability, low-friction revisit)
 

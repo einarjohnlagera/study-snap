@@ -29,4 +29,11 @@ public interface ActivityEventRepository extends JpaRepository<UserActivityEvent
             Collection<ActivityType> activityTypes,
             OffsetDateTime createdAt
     );
+
+    long countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            UUID userId,
+            ActivityType activityType,
+            OffsetDateTime createdAtFromInclusive,
+            OffsetDateTime createdAtToExclusive
+    );
 }
