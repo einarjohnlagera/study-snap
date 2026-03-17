@@ -82,6 +82,7 @@ export default function StudyPackDetailPage() {
   const [tagError, setTagError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  const [showOriginalNotes, setShowOriginalNotes] = useState(false);
   const shareToastTimeoutRef = useRef<number | null>(null);
   const navigationOrigin = searchParams.get("from");
   const backNavigation = useMemo(() => {
@@ -183,6 +184,7 @@ export default function StudyPackDetailPage() {
     setMetadataTitle(studyPack.title);
     setMetadataSubject(studyPack.subject ?? "");
     setMetadataError(null);
+    setShowOriginalNotes(false);
   }, [studyPack]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
@@ -210,6 +212,10 @@ export default function StudyPackDetailPage() {
       year: "numeric",
     });
   }, [studyPack?.createdAt]);
+  const originalNotesText = useMemo(() => {
+    return studyPack?.sourceText?.trim() ?? "";
+  }, [studyPack?.sourceText]);
+  const hasOriginalNotes = originalNotesText.length > 0;
 
   const latestCompletedSession = recentSessions[0] ?? null;
   const focusAreas = Array.from(
@@ -609,6 +615,34 @@ export default function StudyPackDetailPage() {
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{studyPack.summary}</p>
+          </Card>
+
+          <Card className="space-y-3 p-4 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold sm:text-xl">Original Notes</h2>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowOriginalNotes((previous) => !previous)}
+                disabled={!hasOriginalNotes}
+              >
+                {showOriginalNotes ? "Hide original notes" : "Show original notes"}
+              </Button>
+            </div>
+            {showOriginalNotes ? (
+              hasOriginalNotes ? (
+                <div className="max-h-80 overflow-y-auto rounded-md border border-border bg-background p-3">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{originalNotesText}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-foreground/75">Original notes are not available for this Study Pack.</p>
+              )
+            ) : (
+              <p className="text-sm text-foreground/75">
+                Review the original text used to generate this Study Pack.
+              </p>
+            )}
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
