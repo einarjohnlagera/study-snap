@@ -260,13 +260,16 @@ export default function StudyPackDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("copied") !== "1") {
+    const copied = searchParams.get("copied") === "1";
+    const created = searchParams.get("created") === "1";
+    if (!copied && !created) {
       return;
     }
-    showShareToast("Study Pack copied to your library.");
+    showShareToast(created ? "Study Pack created successfully" : "Study Pack copied to your library.");
 
     const paramsWithoutCopied = new URLSearchParams(searchParams.toString());
     paramsWithoutCopied.delete("copied");
+    paramsWithoutCopied.delete("created");
     const nextUrl = paramsWithoutCopied.size > 0
       ? `${pathname}?${paramsWithoutCopied.toString()}`
       : pathname;

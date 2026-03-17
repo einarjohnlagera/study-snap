@@ -1,6 +1,7 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { getSampleNotePreset } from "@/lib/sample-notes";
 import { ConfirmTextCard } from "./confirm-text-card";
@@ -13,11 +14,13 @@ type StudyPageClientProps = {
 };
 
 export default function StudyPageClient({ forcedDemoMode = false }: StudyPageClientProps) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const demoMode = forcedDemoMode || searchParams.get("demo") === "true";
   const focusUpload = searchParams.get("focus") === "upload";
   const samplePreset = getSampleNotePreset(searchParams.get("sample"));
   const isSampleNote = Boolean(samplePreset);
+  const [redirecting, setRedirecting] = useState(false);
 
   const {
     notesText,
@@ -39,6 +42,28 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     handleGenerateStudyPack,
     handleConfirmText,
   } = useStudyPack(demoMode, samplePreset?.content ?? "");
+
+  const handleGenerate = async () => {
+    if (redirecting) {
+      return;
+    }
+    const created = await handleGenerateStudyPack();
+    if (!demoMode && created) {
+      setRedirecting(true);
+      router.push(`/study-packs/${created.id}?from=study&created=1`);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (redirecting) {
+      return;
+    }
+    const created = await handleConfirmText();
+    if (!demoMode && created) {
+      setRedirecting(true);
+      router.push(`/study-packs/${created.id}?from=study&created=1`);
+    }
+  };
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
@@ -65,11 +90,11 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
         onImageFileChange={setImageFile}
         imageInputKey={imageInputKey}
         canGenerate={canGenerate}
-        loading={loading}
+        loading={loading || redirecting}
         ocrFlowState={ocrFlowState}
         ocrStatusMessage={ocrStatusMessage}
         onGenerate={() => {
-          void handleGenerateStudyPack();
+          void handleGenerate();
         }}
       />
 
@@ -84,23 +109,25 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
 
       {needsConfirmation ? (
         <ConfirmTextCard
-          loading={loading}
+          loading={loading || redirecting}
           needsConfirmation={needsConfirmation}
           confirmedText={confirmedText}
           onConfirmedTextChange={setConfirmedText}
           onConfirm={() => {
-            void handleConfirmText();
+            void handleConfirm();
           }}
         />
       ) : null}
 
-      <StudyPackResults
-        loading={loading}
-        demoMode={demoMode}
-        studyPackResult={studyPackResult}
-        generatedLabel={generatedLabel}
-        detectedTopic={detectedTopic}
-      />
+      {demoMode ? (
+        <StudyPackResults
+          loading={loading}
+          demoMode={demoMode}
+          studyPackResult={studyPackResult}
+          generatedLabel={generatedLabel}
+          detectedTopic={detectedTopic}
+        />
+      ) : null}
     </main>
   );
 }
