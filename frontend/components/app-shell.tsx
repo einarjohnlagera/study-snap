@@ -27,6 +27,8 @@ function isAuthenticatedRoute(pathname: string): boolean {
     || pathname.startsWith("/library")
     || pathname.startsWith("/profile")
     || pathname.startsWith("/settings")
+    || pathname === "/study"
+    || pathname.startsWith("/study/")
     || pathname.startsWith("/study-packs")
   );
 }
@@ -53,6 +55,9 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/settings")) {
     return "Settings";
+  }
+  if (pathname === "/study" || pathname.startsWith("/study/")) {
+    return "Create Note";
   }
   if (pathname.includes("/quick-review")) {
     return "Quick Review";
