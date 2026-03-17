@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 
 type StudyInputCardProps = {
   noteEditorMode: boolean;
+  isSampleNote: boolean;
   focusUpload: boolean;
   noteTitle: string;
   onNoteTitleChange: (value: string) => void;
@@ -28,6 +29,7 @@ type StudyInputCardProps = {
 
 export function StudyInputCard({
   noteEditorMode,
+  isSampleNote,
   focusUpload,
   noteTitle,
   onNoteTitleChange,
@@ -85,7 +87,10 @@ export function StudyInputCard({
   const actionLabel = hasStudyPack ? "Regenerate Study Pack" : "Generate Study Pack";
   const helperText = hasStudyPack
     ? "This will replace the current Study Pack."
-    : "This note doesn\u2019t have a Study Pack yet.";
+    : isSampleNote
+      ? "This is a sample note. Try generating a Study Pack."
+      : "This note doesn\u2019t have a Study Pack yet.";
+  const highlightedGenerateCta = isSampleNote && !hasStudyPack;
 
   return (
     <Card className="space-y-6 p-4 sm:p-6">
@@ -214,7 +219,7 @@ export function StudyInputCard({
               type="button"
               disabled={!canGenerate || loading}
               onClick={onGenerate}
-              className="w-full sm:w-auto"
+              className={`w-full sm:w-auto ${highlightedGenerateCta ? "ring-2 ring-blue-300 dark:ring-blue-700" : ""}`}
             >
               {loading ? (
                 <>
@@ -283,7 +288,7 @@ export function StudyInputCard({
             type="button"
             disabled={!canGenerate || loading}
             onClick={onGenerate}
-            className="w-full"
+            className={`w-full ${highlightedGenerateCta ? "ring-2 ring-blue-300 dark:ring-blue-700" : ""}`}
           >
             {loading ? (
               <>

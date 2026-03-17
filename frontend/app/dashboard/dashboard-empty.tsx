@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PHOTOSYNTHESIS_SAMPLE_NOTE } from "@/lib/sample-notes";
 
 export function DashboardEmpty() {
   return (
@@ -17,7 +18,10 @@ export function DashboardEmpty() {
           <Button type="button" variant="outline" className="w-full sm:w-auto">Upload Notes</Button>
         </Link>
       </div>
-      <Link href="/demo" className="inline-block text-sm text-blue-600 hover:underline dark:text-blue-400">
+      <Link
+        href={`/study?editor=note&sample=${PHOTOSYNTHESIS_SAMPLE_NOTE.key}`}
+        className="inline-block text-sm text-blue-600 hover:underline dark:text-blue-400"
+      >
         Try with sample notes
       </Link>
     </Card>
