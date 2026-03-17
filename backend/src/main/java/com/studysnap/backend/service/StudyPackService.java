@@ -389,6 +389,7 @@ public class StudyPackService {
                 entity.getTitle(),
                 SummaryPreviewUtils.buildSummaryPreview(entity.getSummary(), 140),
                 entity.getQuiz() == null ? 0 : entity.getQuiz().size(),
+                entity.getSubject(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getCreatedAt()
         );

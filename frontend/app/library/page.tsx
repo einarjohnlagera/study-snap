@@ -589,6 +589,10 @@ export default function LibraryPage() {
                 const reviewStatus = getStudyPackStatus(reviewSummary.lastScorePercentage);
                 const itemTags = normalizeTags(item.tags);
                 const subject = normalizeSubject(item.subject);
+                const subjectLabel = subject ?? "Uncategorized";
+                const subjectClassName = subject
+                  ? "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                  : "border-border bg-muted/40 text-foreground/65";
 
                 return (
                   <Card
@@ -606,11 +610,11 @@ export default function LibraryPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-2">
-                        {subject ? (
-                          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                            {subject}
-                          </p>
-                        ) : null}
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${subjectClassName}`}
+                        >
+                          {subjectLabel}
+                        </span>
                         <h3 className="text-base font-semibold transition-colors sm:text-lg">
                           {item.title}
                         </h3>
