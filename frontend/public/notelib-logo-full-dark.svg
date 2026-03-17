@@ -1,0 +1,33 @@
+<svg width="460" height="120" viewBox="0 0 460 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">NoteLib full logo dark</title>
+  <desc id="desc">NoteLib wordmark with a tilted note icon and spark, optimized for dark surfaces.</desc>
+  <defs>
+    <linearGradient id="dark-paper-blue" x1="20" y1="27" x2="52" y2="73" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F8CFF"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="dark-paper-face" x1="27" y1="19" x2="56" y2="66" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#DDE7F5"/>
+    </linearGradient>
+    <linearGradient id="dark-line-grad" x1="35" y1="33" x2="46" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="dark-spark-grad" x1="47" y1="16" x2="64" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A3E635"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(8,16)">
+    <rect x="10" y="18" width="48" height="56" rx="10" transform="rotate(-10 10 18)" fill="url(#dark-paper-blue)"/>
+    <rect x="22" y="7" width="48" height="56" rx="10" transform="rotate(-10 22 7)" fill="url(#dark-paper-face)"/>
+    <rect x="39" y="28" width="17" height="5" rx="2.5" transform="rotate(-10 39 28)" fill="url(#dark-line-grad)"/>
+    <rect x="37" y="40" width="24" height="5" rx="2.5" transform="rotate(-10 37 40)" fill="url(#dark-line-grad)"/>
+    <rect x="36" y="52" width="20" height="5" rx="2.5" transform="rotate(-10 36 52)" fill="url(#dark-line-grad)"/>
+    <path d="M61 6L49 26H59L54 42L74 19H64L69 6H61Z" fill="url(#dark-spark-grad)"/>
+  </g>
+
+  <text x="112" y="74" fill="#F8FAFC" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="48" font-weight="700" letter-spacing="0.2">NoteLib</text>
+</svg>

@@ -18,9 +18,9 @@ export const metadata: Metadata = {
   title: "NoteLib",
   description: "Turn your notes into reusable study packs.",
   icons: {
-    icon: "/note-lib-logo-icon.svg",
-    shortcut: "/note-lib-logo-icon.svg",
-    apple: "/note-lib-logo-icon.svg",
+    icon: "/notelib-logo-icon.svg",
+    shortcut: "/notelib-logo-icon.svg",
+    apple: "/notelib-logo-icon.svg",
   },
 };
 
