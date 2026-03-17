@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
@@ -44,9 +45,10 @@ public class QuickReviewAdaptivePracticeService {
         featureGateService.checkFeatureAccess(userId, Feature.ADAPTIVE_QUIZ);
 
         QuickReviewSessionEntity latestCompletedSession = quickReviewSessionRepository
-                .findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 1)
                 ).stream()
                 .findFirst()

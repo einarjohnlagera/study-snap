@@ -9,6 +9,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
@@ -66,6 +67,51 @@ class QuickReviewSessionServiceTest {
         );
         lenient().when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(any(UUID.class), any(UUID.class), any()))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findByIdAndUserId(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1)
+                ));
+        lenient().when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(QuickReviewSessionMode.class),
+                        any(QuickReviewSessionStatus.class)
+                ))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(3)
+                ));
+        lenient().when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(QuickReviewSessionMode.class),
+                        any()
+                ))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(3)
+                ));
+        lenient().when(quickReviewSessionRepository.countByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNull(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(QuickReviewSessionMode.class)
+                ))
+                .thenAnswer(invocation -> quickReviewSessionRepository.countByUserIdAndStudyPackIdAndCompletedAtIsNotNull(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1)
+                ));
+        lenient().when(quickReviewSessionRepository.findBestScorePercentageByUserIdAndStudyPackIdAndSessionMode(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(QuickReviewSessionMode.class)
+                ))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findBestScorePercentageByUserIdAndStudyPackId(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1)
+                ));
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
     }
 

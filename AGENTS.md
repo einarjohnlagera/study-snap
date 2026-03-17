@@ -203,7 +203,10 @@ Plan and quota policy:
 - Free: 5 Study Packs/month
 - Free includes AI summaries, key concepts, Quick Review, retry, Study Library, Today's Focus, and AI Study Coach
 - Premium: 100 Study Packs/month
-- Premium includes everything in Free, plus weak concept detection, adaptive quiz generation, and advanced review capabilities
+- Premium includes everything in Free, plus weak concept detection, adaptive practice, Challenge Quiz, and advanced review capabilities
+- Premium Challenge Quiz quota: 50 sessions/month
+- Premium Adaptive Practice quota: 50 sessions/month
+- Challenge Quiz and Adaptive Practice usage are tracked separately from Study Pack generation credits
 
 Plan & Billing UX:
 - Settings includes a `Plan & Billing` section where users can view plan and monthly usage progress
@@ -311,6 +314,11 @@ Quiz answer feedback semantics (Quick Review and Adaptive Quiz):
 - if a user selects the wrong option, show both wrong selection (red) and correct option (green)
 - non-selected, non-correct options remain neutral
 - do not use blue for correct/incorrect answer states
+
+Challenge Quiz guidance:
+- Challenge Quiz is Premium-only and timed
+- use existing Study Pack quiz data (no new LLM generation call)
+- Challenge Quiz usage must be tracked separately from Study Pack generation quota
 
 Quick Review post-results confidence feedback:
 - results should include an optional confidence prompt (`Very confident`, `Somewhat confident`, `Not confident`)

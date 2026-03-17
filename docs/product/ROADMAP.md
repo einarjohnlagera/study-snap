@@ -14,6 +14,8 @@ Scope priorities:
 - one current Study Pack per note (`1 Note <-> 1 current Study Pack`)
 - regenerate replaces the current Study Pack for that same note
 - no visible Study Pack version history in V2
+- Premium Challenge Quiz (timed exam-style mode using existing Study Pack quiz data)
+- separate Premium review quotas for Challenge Quiz and Adaptive Practice (50/month each)
 - public study library support and sharing flow continuity
 - library UX improvements (browse, filtering, sorting, scanability, low-friction revisit)
 

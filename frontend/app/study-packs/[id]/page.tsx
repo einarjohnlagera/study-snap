@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Check, X } from "lucide-react";
+import { Check, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { getAuthUser } from "@/lib/auth";
+import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   createStudyPackShareLink,
@@ -84,6 +86,8 @@ export default function StudyPackDetailPage() {
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
   const [showOriginalNotes, setShowOriginalNotes] = useState(false);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
+  const [challengeHint, setChallengeHint] = useState<string | null>(null);
   const shareToastTimeoutRef = useRef<number | null>(null);
   const navigationOrigin = searchParams.get("from");
   const backNavigation = useMemo(() => {
@@ -186,7 +190,20 @@ export default function StudyPackDetailPage() {
     setMetadataSubject(studyPack.subject ?? "");
     setMetadataError(null);
     setShowOriginalNotes(false);
+    setChallengeHint(null);
   }, [studyPack]);
+
+  useEffect(() => {
+    const syncPlan = () => {
+      const authUser = getAuthUser();
+      setIsPremiumUser(authUser?.planType === "PREMIUM");
+    };
+    syncPlan();
+    window.addEventListener("studysnap-auth-change", syncPlan);
+    return () => {
+      window.removeEventListener("studysnap-auth-change", syncPlan);
+    };
+  }, []);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
@@ -254,6 +271,19 @@ export default function StudyPackDetailPage() {
     } finally {
       setStartingQuickReview(false);
     }
+  };
+
+  const handleStartChallengeQuiz = () => {
+    if (!studyPack) {
+      return;
+    }
+    if (!isPremiumUser) {
+      setChallengeHint("This feature is available in the Premium plan");
+      router.push(PLAN_BILLING_PATH);
+      return;
+    }
+    setChallengeHint(null);
+    router.push(`/study-packs/${studyPack.id}/challenge-quiz`);
   };
 
   const showShareToast = useCallback((message: string) => {
@@ -646,12 +676,21 @@ export default function StudyPackDetailPage() {
               {tagError ? <p className="text-xs text-red-600 dark:text-red-400">{tagError}</p> : null}
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <Button type="button" className="w-full sm:w-auto" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
-                  {startingQuickReview
-                    ? (hasInProgressQuickReview ? "Resuming..." : "Starting...")
-                    : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
-                </Button>
+              <div className="space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button type="button" className="w-full sm:w-auto" onClick={() => void handleStartQuickReview()} disabled={startingQuickReview}>
+                    {startingQuickReview
+                      ? (hasInProgressQuickReview ? "Resuming..." : "Starting...")
+                      : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
+                  </Button>
+                  <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleStartChallengeQuiz}>
+                    {!isPremiumUser ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
+                    Start Challenge Quiz
+                  </Button>
+                </div>
+                {!isPremiumUser && challengeHint ? (
+                  <p className="text-xs text-foreground/70">{challengeHint}</p>
+                ) : null}
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Share Study Pack</p>

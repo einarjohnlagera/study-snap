@@ -18,6 +18,7 @@ It is designed to feel:
 - low-pressure
 
 Quick Review is not intended to be a formal exam mode.
+For exam-style timed practice, use Challenge Quiz (Premium).
 
 ---
 
@@ -126,6 +127,7 @@ Plan gating:
 - core Quick Review (question flow, retry, score) is available on Free and Premium
 - Weak Concept Detection is Premium-only
 - Adaptive Practice is Premium-only
+- Challenge Quiz is Premium-only
 
 ---
 
@@ -291,6 +293,26 @@ After completion:
 - secondary action: `Practice Again` (optional, lower emphasis)
 
 `Practice Again` is not the primary post-review action, especially for short quizzes.
+
+## Challenge Quiz (Premium)
+
+Challenge Quiz is a separate Premium review mode for longer timed practice.
+
+Behavior:
+
+- uses existing Study Pack quiz data only
+- no new LLM generation request
+- serves 10-20 shuffled questions
+- uses a fixed 10-minute timer
+- returns a final score and percentage at completion
+
+Gating and usage:
+
+- Free users should see an upgrade prompt instead of challenge launch
+- Premium users can start Challenge Quiz
+- Challenge Quiz usage limit is 50/month
+- usage is counted on quiz start
+- Challenge Quiz usage does not deduct from monthly Study Pack generation credits
 
 ---
 

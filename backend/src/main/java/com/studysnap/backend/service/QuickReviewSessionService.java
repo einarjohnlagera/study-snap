@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
@@ -53,9 +54,10 @@ public class QuickReviewSessionService {
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         QuickReviewSessionStatus.IN_PROGRESS
                 )
                 .orElse(null);
@@ -67,6 +69,7 @@ public class QuickReviewSessionService {
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
+        session.setSessionMode(QuickReviewSessionMode.QUICK_REVIEW);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -96,9 +99,10 @@ public class QuickReviewSessionService {
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
         return quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         QuickReviewSessionStatus.IN_PROGRESS
                 )
                 .map(this::toStartResponse)
@@ -116,7 +120,11 @@ public class QuickReviewSessionService {
                 "Quick Review session not found.",
                 HttpStatus.NOT_FOUND
         );
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        sessionId,
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW
+                )
                 .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Quick Review session not found.", HttpStatus.NOT_FOUND));
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
@@ -143,7 +151,11 @@ public class QuickReviewSessionService {
                 "Quick Review session not found.",
                 HttpStatus.NOT_FOUND
         );
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        sessionId,
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW
+                )
                 .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Quick Review session not found.", HttpStatus.NOT_FOUND));
 
         if (request.correctAnswers() > request.totalQuestions()) {
@@ -187,7 +199,11 @@ public class QuickReviewSessionService {
                 "Quick Review session not found.",
                 HttpStatus.NOT_FOUND
         );
-        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        sessionId,
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW
+                )
                 .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Quick Review session not found.", HttpStatus.NOT_FOUND));
 
         if (session.getStatus() != QuickReviewSessionStatus.COMPLETED) {
@@ -217,9 +233,10 @@ public class QuickReviewSessionService {
 
         int normalizedLimit = Math.max(1, Math.min(limit, 10));
         PlanType planType = subscriptionService.resolvePlan(userId);
-        return quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        return quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, normalizedLimit)
                 ).stream()
                 .map(session -> toResponse(session, planType))
@@ -237,15 +254,24 @@ public class QuickReviewSessionService {
         studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
 
-        long attempts = quickReviewSessionRepository.countByUserIdAndStudyPackIdAndCompletedAtIsNotNull(userId, studyPackId);
+        long attempts = quickReviewSessionRepository.countByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNull(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.QUICK_REVIEW
+        );
         if (attempts == 0) {
             return new QuickReviewPerformanceSummaryResponse(null, 0L, null, null);
         }
 
-        BigDecimal bestScore = quickReviewSessionRepository.findBestScorePercentageByUserIdAndStudyPackId(userId, studyPackId);
-        QuickReviewSessionEntity latest = quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        BigDecimal bestScore = quickReviewSessionRepository.findBestScorePercentageByUserIdAndStudyPackIdAndSessionMode(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.QUICK_REVIEW
+        );
+        QuickReviewSessionEntity latest = quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 1)
                 ).stream()
                 .findFirst()
