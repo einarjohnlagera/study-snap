@@ -21,6 +21,7 @@ export type StudyPackResponse = {
   extractedText: string | null;
   title: string;
   summary: string;
+  sourceText?: string | null;
   subject?: string | null;
   keyConcepts: string[];
   tags: string[];

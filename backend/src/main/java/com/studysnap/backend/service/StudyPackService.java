@@ -374,6 +374,7 @@ public class StudyPackService {
                 extractedText,
                 entity.getTitle(),
                 entity.getSummary(),
+                entity.getSourceText(),
                 entity.getSubject(),
                 entity.getKeyConcepts(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),

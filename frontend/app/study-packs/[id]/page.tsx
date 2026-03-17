@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
@@ -73,7 +74,7 @@ export default function StudyPackDetailPage() {
   const [creatingShareLink, setCreatingShareLink] = useState(false);
   const [updatingTags, setUpdatingTags] = useState(false);
   const [updatingMetadata, setUpdatingMetadata] = useState(false);
-  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [editingField, setEditingField] = useState<"title" | "subject" | null>(null);
   const [metadataTitle, setMetadataTitle] = useState("");
   const [metadataSubject, setMetadataSubject] = useState("");
   const [metadataError, setMetadataError] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export default function StudyPackDetailPage() {
   const [tagError, setTagError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
+  const [showOriginalNotes, setShowOriginalNotes] = useState(false);
   const shareToastTimeoutRef = useRef<number | null>(null);
   const navigationOrigin = searchParams.get("from");
   const backNavigation = useMemo(() => {
@@ -183,6 +185,7 @@ export default function StudyPackDetailPage() {
     setMetadataTitle(studyPack.title);
     setMetadataSubject(studyPack.subject ?? "");
     setMetadataError(null);
+    setShowOriginalNotes(false);
   }, [studyPack]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
@@ -210,6 +213,11 @@ export default function StudyPackDetailPage() {
       year: "numeric",
     });
   }, [studyPack?.createdAt]);
+  const originalNotesText = useMemo(() => {
+    return studyPack?.sourceText?.trim() ?? "";
+  }, [studyPack?.sourceText]);
+  const hasOriginalNotes = originalNotesText.length > 0;
+  const editingMetadata = editingField !== null;
 
   const latestCompletedSession = recentSessions[0] ?? null;
   const focusAreas = Array.from(
@@ -343,7 +351,7 @@ export default function StudyPackDetailPage() {
         subject: nextSubject.length > 0 ? nextSubject : null,
       });
       setStudyPack(updatedStudyPack);
-      setEditingMetadata(false);
+      setEditingField(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update Study Pack metadata.";
       setMetadataError(message);
@@ -351,6 +359,15 @@ export default function StudyPackDetailPage() {
       setUpdatingMetadata(false);
     }
   }, [metadataSubject, metadataTitle, studyPack, updatingMetadata]);
+
+  const handleCancelMetadataEdit = useCallback(() => {
+    if (studyPack) {
+      setMetadataTitle(studyPack.title);
+      setMetadataSubject(studyPack.subject ?? "");
+    }
+    setEditingField(null);
+    setMetadataError(null);
+  }, [studyPack]);
 
   const handleAddTag = useCallback(async () => {
     if (!studyPack) {
@@ -435,7 +452,8 @@ export default function StudyPackDetailPage() {
             </p>
             {editingMetadata ? (
               <div className="space-y-3">
-                <div className="space-y-1">
+                {editingField === "title" ? (
+                  <div className="space-y-1">
                   <label htmlFor="study-pack-title" className="text-xs font-medium uppercase tracking-wide text-foreground/60">
                     Title
                   </label>
@@ -446,9 +464,21 @@ export default function StudyPackDetailPage() {
                     onChange={(event) => setMetadataTitle(event.target.value)}
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-base text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
                     disabled={updatingMetadata}
+                    autoFocus
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleSaveMetadata();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        handleCancelMetadataEdit();
+                      }
+                    }}
                   />
-                </div>
-                <div className="space-y-1">
+                  </div>
+                ) : null}
+                {editingField === "subject" ? (
+                  <div className="space-y-1">
                   <label htmlFor="study-pack-subject" className="text-xs font-medium uppercase tracking-wide text-foreground/60">
                     Subject
                   </label>
@@ -460,35 +490,74 @@ export default function StudyPackDetailPage() {
                     placeholder="Optional subject"
                     className="h-10 w-full rounded-md border border-border bg-background px-3 text-base text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
                     disabled={updatingMetadata}
+                    autoFocus
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void handleSaveMetadata();
+                      } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        handleCancelMetadataEdit();
+                      }
+                    }}
                   />
-                </div>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" onClick={() => void handleSaveMetadata()} disabled={updatingMetadata}>
-                    {updatingMetadata ? "Saving..." : "Save metadata"}
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void handleSaveMetadata()}
+                    disabled={updatingMetadata}
+                    aria-label="Save metadata"
+                    className="h-9 w-9 px-0"
+                  >
+                    <Check className="h-4 w-4" />
                   </Button>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                      setEditingMetadata(false);
-                      setMetadataTitle(studyPack.title);
-                      setMetadataSubject(studyPack.subject ?? "");
-                      setMetadataError(null);
-                    }}
+                    onClick={handleCancelMetadataEdit}
                     disabled={updatingMetadata}
+                    aria-label="Cancel metadata edit"
+                    className="h-9 w-9 px-0"
                   >
-                    Cancel
+                    <X className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             ) : (
               <>
-                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{studyPack.title}</h1>
-            <p className="text-sm text-foreground/75">
-              {studyPack.subject?.trim() ? `${studyPack.subject.trim()} • ` : ""}
-              {studyPack.keyConcepts.length} concepts • {studyPack.quiz.length} questions
-            </p>
+                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                  <button
+                    type="button"
+                    className="cursor-text text-left hover:text-blue-600 dark:hover:text-blue-400"
+                    onClick={() => {
+                      setEditingField("title");
+                      setMetadataError(null);
+                    }}
+                    disabled={updatingMetadata}
+                  >
+                    {studyPack.title}
+                  </button>
+                </h1>
+                <p>
+                  <button
+                    type="button"
+                    className={`text-sm ${studyPack.subject?.trim() ? "text-foreground/75" : "text-foreground/55"} hover:text-blue-600 dark:hover:text-blue-400`}
+                    onClick={() => {
+                      setEditingField("subject");
+                      setMetadataError(null);
+                    }}
+                    disabled={updatingMetadata}
+                  >
+                    {studyPack.subject?.trim() || "Add subject"}
+                  </button>
+                </p>
+                <p className="text-sm text-foreground/75">
+                  {studyPack.keyConcepts.length} concepts | {studyPack.quiz.length} questions
+                </p>
               </>
             )}
             <p className="text-sm text-foreground/65">Created {formattedCreatedDate}</p>
@@ -584,19 +653,7 @@ export default function StudyPackDetailPage() {
                     : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
                 </Button>
               </div>
-              <div className="space-y-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => {
-                    setEditingMetadata((previous) => !previous);
-                    setMetadataError(null);
-                  }}
-                  disabled={updatingMetadata}
-                >
-                  {editingMetadata ? "Close Metadata Editor" : "Edit Metadata"}
-                </Button>
+              <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Share Study Pack</p>
                 <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleCopyShareLink()} disabled={creatingShareLink}>
                   {creatingShareLink ? "Copying..." : "Copy Link"}
@@ -609,6 +666,34 @@ export default function StudyPackDetailPage() {
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{studyPack.summary}</p>
+          </Card>
+
+          <Card className="space-y-3 p-4 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold sm:text-xl">Original Notes</h2>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setShowOriginalNotes((previous) => !previous)}
+                disabled={!hasOriginalNotes}
+              >
+                {showOriginalNotes ? "Hide original notes" : "Show original notes"}
+              </Button>
+            </div>
+            {showOriginalNotes ? (
+              hasOriginalNotes ? (
+                <div className="max-h-80 overflow-y-auto rounded-md border border-border bg-background p-3">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">{originalNotesText}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-foreground/75">Original notes are not available for this Study Pack.</p>
+              )
+            ) : (
+              <p className="text-sm text-foreground/75">
+                Review the original text used to generate this Study Pack.
+              </p>
+            )}
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
