@@ -65,11 +65,11 @@ function toFriendlyOcrErrorMessage(message: string) {
   return "We could not extract text from this image right now. Try another image or paste notes manually.";
 }
 
-export function useStudyPack(demoMode: boolean, noteEditorMode = false): UseStudyPackResult {
+export function useStudyPack(demoMode: boolean, noteEditorMode = false, initialNotesText = ""): UseStudyPackResult {
   const demoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ocrStageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [notesText, setNotesText] = useState("");
+  const [notesText, setNotesText] = useState(initialNotesText);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageInputKey, setImageInputKey] = useState(0);
   const [loading, setLoading] = useState(false);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { getSampleNotePreset } from "@/lib/sample-notes";
 import { ConfirmTextCard } from "./confirm-text-card";
 import { StudyPackResults } from "./study-pack-results";
 import { StudyInputCard } from "./study-input-card";
@@ -17,9 +18,11 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const demoMode = forcedDemoMode || searchParams.get("demo") === "true";
   const noteEditorMode = searchParams.get("editor") === "note";
   const focusUpload = searchParams.get("focus") === "upload";
-  const [noteTitle, setNoteTitle] = useState("");
-  const [noteSubject, setNoteSubject] = useState("");
-  const [noteTags, setNoteTags] = useState("");
+  const samplePreset = getSampleNotePreset(searchParams.get("sample"));
+  const isSampleNote = Boolean(samplePreset);
+  const [noteTitle, setNoteTitle] = useState(() => samplePreset?.title ?? "");
+  const [noteSubject, setNoteSubject] = useState(() => samplePreset?.subject ?? "");
+  const [noteTags, setNoteTags] = useState(() => samplePreset?.tags.join(", ") ?? "");
 
   const {
     notesText,
@@ -41,7 +44,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,
-  } = useStudyPack(demoMode, noteEditorMode);
+  } = useStudyPack(demoMode, noteEditorMode, samplePreset?.content ?? "");
 
   const handleClearAll = () => {
     handleClearNotes();
@@ -72,6 +75,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
 
       <StudyInputCard
         noteEditorMode={noteEditorMode}
+        isSampleNote={isSampleNote}
         focusUpload={focusUpload}
         noteTitle={noteTitle}
         onNoteTitleChange={setNoteTitle}
