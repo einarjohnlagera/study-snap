@@ -63,7 +63,7 @@ function getPageTitle(pathname: string): string {
     return "Demo";
   }
   if (pathname === "/study" || pathname.startsWith("/study/")) {
-    return "Create Note";
+    return "Create Study Pack";
   }
   if (pathname.includes("/quick-review")) {
     return "Quick Review";

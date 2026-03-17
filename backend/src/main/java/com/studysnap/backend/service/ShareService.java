@@ -85,6 +85,7 @@ public class ShareService {
         remixed.setTitle(remixedTitle);
         remixed.setSummary(source.getSummary());
         remixed.setSubject(source.getSubject());
+        remixed.setSourceText(source.getSourceText());
         remixed.setKeyConcepts(copyKeyConcepts(source.getKeyConcepts()));
         remixed.setQuiz(copyQuiz(source.getQuiz()));
         remixed.setOcrConfidence(source.getOcrConfidence());

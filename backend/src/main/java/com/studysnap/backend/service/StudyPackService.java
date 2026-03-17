@@ -38,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -49,6 +50,7 @@ public class StudyPackService {
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/png", "image/webp");
     private static final int DEFAULT_LIST_LIMIT = 20;
     private static final int MAX_LIST_LIMIT = 100;
+    private static final int MAX_TITLE_LENGTH = 180;
     private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_TAGS_PER_STUDY_PACK = 30;
 
@@ -67,7 +69,7 @@ public class StudyPackService {
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
 
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated, ownerUserId, planType);
+        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated, normalizedText, ownerUserId, planType);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
@@ -104,7 +106,7 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(extractedText);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated, ownerUserId, planType);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated, normalizedText, ownerUserId, planType);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
@@ -139,7 +141,7 @@ public class StudyPackService {
         String normalizedText = normalizeAndValidateText(request.notesText());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated, ownerUserId, planType);
+        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated, normalizedText, ownerUserId, planType);
         studyPackDraftRepository.delete(draft);
         long latency = System.currentTimeMillis() - startedAt;
 
@@ -218,6 +220,30 @@ public class StudyPackService {
         StudyPackEntity targetEntity = entity;
         if (!Arrays.equals(currentTags, nextTags)) {
             entity.setTags(nextTags);
+            entity.setUpdatedAt(OffsetDateTime.now());
+            targetEntity = studyPackRepository.save(entity);
+        }
+
+        return mapToResponse(targetEntity, null, null);
+    }
+
+    public StudyPackResponse updateMetadata(String id, UUID ownerUserId, String title, String subject) {
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
+        StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+
+        String normalizedTitle = normalizeEditableTitle(title);
+        String normalizedSubject = normalizeSubject(subject);
+
+        StudyPackEntity targetEntity = entity;
+        if (!Objects.equals(entity.getTitle(), normalizedTitle) || !Objects.equals(entity.getSubject(), normalizedSubject)) {
+            entity.setTitle(normalizedTitle);
+            entity.setSubject(normalizedSubject);
             entity.setUpdatedAt(OffsetDateTime.now());
             targetEntity = studyPackRepository.save(entity);
         }
@@ -310,6 +336,7 @@ public class StudyPackService {
             InputType inputType,
             Double ocrConfidence,
             GeneratedStudyPackContent generated,
+            String sourceText,
             UUID ownerUserId,
             PlanType planType
     ) {
@@ -320,6 +347,7 @@ public class StudyPackService {
         entity.setTitle(generated.title());
         entity.setSummary(generated.summary());
         entity.setSubject(normalizeSubject(generated.subject()));
+        entity.setSourceText(sourceText);
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());
         entity.setOcrConfidence(ocrConfidence);
@@ -453,6 +481,24 @@ public class StudyPackService {
         }
         String normalized = subject.trim();
         return normalized.isBlank() ? null : normalized;
+    }
+
+    private String normalizeEditableTitle(String title) {
+        if (title == null) {
+            throw new AppException("INVALID_TITLE", "Title is required.", HttpStatus.BAD_REQUEST);
+        }
+        String normalized = title.trim();
+        if (normalized.isEmpty()) {
+            throw new AppException("INVALID_TITLE", "Title is required.", HttpStatus.BAD_REQUEST);
+        }
+        if (normalized.length() > MAX_TITLE_LENGTH) {
+            throw new AppException(
+                    "TITLE_TOO_LONG",
+                    "Title must be 180 characters or fewer.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return normalized;
     }
 
     private PlanType assertMonthlyStudyPackQuotaAvailable(UUID ownerUserId) {

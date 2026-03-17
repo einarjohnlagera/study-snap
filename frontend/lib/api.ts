@@ -270,6 +270,11 @@ export type BillingCheckoutSessionResponse = {
   checkoutUrl: string;
 };
 
+export type UpdateStudyPackMetadataRequest = {
+  title: string;
+  subject?: string | null;
+};
+
 export type UpsertNoteRequest = {
   title?: string | null;
   subject?: string | null;
@@ -660,6 +665,22 @@ export async function updateStudyPackTags(studyPackId: string, tags: string[]): 
     true,
   );
   return parseApiResponse<StudyPackResponse>(response, "Could not update tags.");
+}
+
+export async function updateStudyPackMetadata(
+  studyPackId: string,
+  request: UpdateStudyPackMetadataRequest,
+): Promise<StudyPackResponse> {
+  const response = await fetchWithAuth(
+    `/study-packs/${studyPackId}/metadata`,
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<StudyPackResponse>(response, "Could not update Study Pack metadata.");
 }
 
 export async function deleteMyStudyPack(id: string): Promise<void> {

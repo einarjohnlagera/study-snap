@@ -83,7 +83,15 @@ export function StudyPackResults({
             </Link>
           </div>
         </Card>
-      ) : null}
+      ) : (
+        <div className="flex">
+          <Link href={`/study-packs/${studyPackResult.id}`} className="w-full sm:w-auto">
+            <Button type="button" variant="outline" className="w-full sm:w-auto">
+              Open Study Pack
+            </Button>
+          </Link>
+        </div>
+      )}
       <p className="text-sm text-foreground/65">
         {generatedLabel} • {studyPackResult.quiz.length} quiz questions • Topic
         detected: {detectedTopic}
