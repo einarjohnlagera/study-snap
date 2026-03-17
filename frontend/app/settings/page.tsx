@@ -7,10 +7,11 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import {
   createPremiumCheckoutSession,
+  getBillingUsageSummary,
   getMe,
-  listMyStudyPacks,
   logout,
   updateEngagementMode,
+  type BillingUsageSummaryResponse,
   type EngagementMode,
   type MeResponse,
 } from "@/lib/api";
@@ -18,8 +19,6 @@ import { getAuthUser } from "@/lib/auth";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
   PLAN_BILLING_SECTION_ID,
-  getCurrentMonthStudyPackUsage,
-  getMonthlyStudyPackLimit,
   getUsageProgressPercent,
 } from "@/lib/plans";
 
@@ -33,12 +32,37 @@ function SettingsLoading() {
   );
 }
 
+function UsageMetric({
+  label,
+  used,
+  limit,
+}: {
+  label: string;
+  used: number;
+  limit: number;
+}) {
+  const progressPercent = getUsageProgressPercent(used, limit);
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-foreground/80">
+        {label}: {used} / {limit}
+      </p>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
-  const [usedThisMonth, setUsedThisMonth] = useState(0);
+  const [usageSummary, setUsageSummary] = useState<BillingUsageSummaryResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [planMessage, setPlanMessage] = useState<string | null>(null);
@@ -65,18 +89,18 @@ export default function SettingsPage() {
     setError(null);
     setEngagementModeMessage(null);
     try {
-      const [me, studyPacks] = await Promise.all([
+      const [me, usage] = await Promise.all([
         getMe(),
-        listMyStudyPacks(),
+        getBillingUsageSummary(),
       ]);
       setProfile(me);
-      setUsedThisMonth(getCurrentMonthStudyPackUsage(studyPacks));
+      setUsageSummary(usage);
       setSelectedEngagementMode(me.engagementMode);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
       setProfile(null);
-      setUsedThisMonth(0);
+      setUsageSummary(null);
     } finally {
       setLoading(false);
     }
@@ -140,9 +164,13 @@ export default function SettingsPage() {
     }
   };
 
-  const monthlyStudyPackLimit = profile ? getMonthlyStudyPackLimit(profile.planType) : 0;
-  const usageProgressPercent = getUsageProgressPercent(usedThisMonth, monthlyStudyPackLimit);
-  const hasReachedMonthlyLimit = usedThisMonth >= monthlyStudyPackLimit && monthlyStudyPackLimit > 0;
+  const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
+  const studyPacksLimit = usageSummary?.studyPacksLimit ?? 0;
+  const challengeQuizUsed = usageSummary?.challengeQuizUsed ?? 0;
+  const challengeQuizLimit = usageSummary?.challengeQuizLimit ?? 50;
+  const adaptivePracticeUsed = usageSummary?.adaptivePracticeUsed ?? 0;
+  const adaptivePracticeLimit = usageSummary?.adaptivePracticeLimit ?? 50;
+  const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
   const isPremiumPlan = profile?.planType === "PREMIUM";
 
   return (
@@ -188,17 +216,16 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
-                <p className="text-sm text-foreground/80">
-                  {usedThisMonth} / {monthlyStudyPackLimit} Study Packs used this month
-                </p>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
-                    style={{ width: `${usageProgressPercent}%` }}
-                  />
-                </div>
+                <UsageMetric label="Study Packs" used={studyPacksUsed} limit={studyPacksLimit} />
+                <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
+                <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
                 {hasReachedMonthlyLimit ? (
                   <p className="text-sm text-foreground/80">You have reached your monthly Study Pack limit.</p>
+                ) : null}
+                {!isPremiumPlan ? (
+                  <p className="text-xs text-foreground/65">
+                    Challenge Quiz and Adaptive Practice are Premium features with separate monthly limits.
+                  </p>
                 ) : null}
               </div>
             </div>

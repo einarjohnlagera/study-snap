@@ -339,10 +339,10 @@ export default function Home() {
           <Card className="space-y-3 p-4 sm:p-6">
             <h3 className="text-xl font-semibold">Free</h3>
             <ul className="space-y-1 text-sm text-foreground/80">
-              <li>5 Study Packs per month</li>
+              <li>5 Study Packs/month</li>
               <li>AI summaries</li>
               <li>Key concepts</li>
-              <li>Quick Review quizzes</li>
+              <li>Quick Review</li>
               <li>Retry incorrect answers</li>
               <li>Study Library</li>
               <li>Today&apos;s Focus</li>
@@ -353,7 +353,7 @@ export default function Home() {
             <h3 className="text-xl font-semibold">Premium</h3>
             <p className="text-sm text-foreground/75">Everything in Free plus:</p>
             <ul className="space-y-1 text-sm text-foreground/80">
-              <li>100 Study Packs per month</li>
+              <li>100 Study Packs/month</li>
               <li>Challenge Quiz (50/month)</li>
               <li>Adaptive Practice (50/month)</li>
               <li>Weak concept insights</li>

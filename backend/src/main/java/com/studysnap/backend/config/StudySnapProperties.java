@@ -71,6 +71,7 @@ public class StudySnapProperties {
         private int freeMonthlyStudyPackLimit = 5;
         private int premiumMonthlyStudyPackLimit = 100;
         private int premiumMonthlyChallengeQuizLimit = 50;
+        private int premiumMonthlyAdaptivePracticeLimit = 50;
     }
 
     @Getter
