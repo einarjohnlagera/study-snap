@@ -123,11 +123,19 @@ export default function AuthPage() {
       <Card className="space-y-6 p-4 sm:p-6">
         <div className="flex justify-center">
           <Image
-            src="/notelib-logo-login.svg"
+            src="/notelib-logo-full-light.svg"
             alt="NoteLib"
             width={192}
-            height={52}
+            height={40}
             priority
+            className="dark:hidden"
+          />
+          <Image
+            src="/notelib-logo-full-dark.svg"
+            alt="NoteLib"
+            width={192}
+            height={40}
+            className="hidden dark:block"
           />
         </div>
         <div className="space-y-2">
