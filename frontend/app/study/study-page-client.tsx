@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { createNote, updateNote } from "@/lib/api";
 import { getSampleNotePreset } from "@/lib/sample-notes";
 import { ConfirmTextCard } from "./confirm-text-card";
 import { StudyPackResults } from "./study-pack-results";
@@ -15,6 +16,7 @@ type StudyPageClientProps = {
 
 type NoteEditorSaveState = "saving" | "saved";
 type NoteEditorDraft = {
+  id: string | null;
   title: string;
   subject: string;
   tags: string;
@@ -45,6 +47,7 @@ function readNoteEditorDraft(): NoteEditorDraft | null {
       return null;
     }
     return {
+      id: typeof parsed.id === "string" ? parsed.id : null,
       title: parsed.title,
       subject: parsed.subject,
       tags: parsed.tags,
@@ -54,6 +57,21 @@ function readNoteEditorDraft(): NoteEditorDraft | null {
   } catch {
     return null;
   }
+}
+
+function normalizeTagList(rawTags: string): string[] {
+  const uniqueByKey = new Map<string, string>();
+  rawTags
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0)
+    .forEach((tag) => {
+      const key = tag.toLowerCase();
+      if (!uniqueByKey.has(key)) {
+        uniqueByKey.set(key, tag);
+      }
+    });
+  return Array.from(uniqueByKey.values());
 }
 
 export default function StudyPageClient({ forcedDemoMode = false }: StudyPageClientProps) {
@@ -67,16 +85,109 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const [noteTitle, setNoteTitle] = useState(() => samplePreset?.title ?? initialDraft?.title ?? "");
   const [noteSubject, setNoteSubject] = useState(() => samplePreset?.subject ?? initialDraft?.subject ?? "");
   const [noteTags, setNoteTags] = useState(() => samplePreset?.tags.join(", ") ?? initialDraft?.tags ?? "");
+  const [noteId, setNoteId] = useState<string | null>(() => samplePreset ? null : initialDraft?.id ?? null);
   const [saveState, setSaveState] = useState<NoteEditorSaveState>("saved");
+  const isMountedRef = useRef(true);
+  const noteIdRef = useRef<string | null>(noteId);
+  const pendingDraftRef = useRef<Omit<NoteEditorDraft, "updatedAt"> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    noteIdRef.current = noteId;
+  }, [noteId]);
+
+  const persistDraftToLocalStorage = useCallback((draft: Omit<NoteEditorDraft, "updatedAt">, persistedNoteId: string | null) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(
+        NOTE_EDITOR_DRAFT_KEY,
+        JSON.stringify({
+          ...draft,
+          id: persistedNoteId,
+          updatedAt: new Date().toISOString(),
+        } satisfies NoteEditorDraft),
+      );
+    } catch {
+      // Ignore local storage failures and keep editing flow alive.
+    }
+  }, []);
+
+  const persistDraft = useCallback(async (
+    draft: Omit<NoteEditorDraft, "updatedAt">,
+    keepalive = false,
+  ) => {
+    persistDraftToLocalStorage(draft, noteIdRef.current);
+
+    const normalizedContent = draft.content.trim();
+    if (normalizedContent.length === 0) {
+      if (isMountedRef.current) {
+        setSaveState("saved");
+      }
+      return;
+    }
+
+    try {
+      const request = {
+        title: draft.title.trim().length > 0 ? draft.title.trim() : null,
+        subject: draft.subject.trim().length > 0 ? draft.subject.trim() : null,
+        tags: normalizeTagList(draft.tags),
+        content: normalizedContent,
+      };
+      const savedNote = noteIdRef.current
+        ? await updateNote(noteIdRef.current, request, { keepalive })
+        : await createNote(request, { keepalive });
+
+      noteIdRef.current = savedNote.id;
+      if (isMountedRef.current) {
+        setNoteId(savedNote.id);
+      }
+      persistDraftToLocalStorage(draft, savedNote.id);
+    } catch {
+      // Keep local draft fallback if remote save fails.
+    } finally {
+      if (isMountedRef.current) {
+        setSaveState("saved");
+      }
+    }
+  }, [persistDraftToLocalStorage]);
+
+  const flushPendingSave = useCallback((keepalive = false) => {
+    if (!noteEditorMode || demoMode) {
+      return;
+    }
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const pendingDraft = pendingDraftRef.current;
+    if (!pendingDraft) {
+      return;
+    }
+    pendingDraftRef.current = null;
+    void persistDraft(pendingDraft, keepalive);
+  }, [demoMode, noteEditorMode, persistDraft]);
+
+  useEffect(() => {
+    if (!noteEditorMode || demoMode) {
+      return;
+    }
+
+    const handleBeforeUnload = () => {
+      flushPendingSave(true);
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      isMountedRef.current = false;
+      flushPendingSave(false);
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, []);
+  }, [demoMode, flushPendingSave, noteEditorMode]);
 
   const queueDraftSave = useCallback((draft: Omit<NoteEditorDraft, "updatedAt">) => {
     if (!noteEditorMode || demoMode) {
@@ -89,24 +200,20 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     }
 
     setSaveState("saving");
+    pendingDraftRef.current = draft;
     saveTimerRef.current = setTimeout(() => {
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(
-            NOTE_EDITOR_DRAFT_KEY,
-            JSON.stringify({
-              ...draft,
-              updatedAt: new Date().toISOString(),
-            } satisfies NoteEditorDraft),
-          );
-        } catch {
-          // Ignore storage write failures and keep editor usable.
+      const pending = pendingDraftRef.current;
+      pendingDraftRef.current = null;
+      if (!pending) {
+        if (isMountedRef.current) {
+          setSaveState("saved");
         }
+        return;
       }
-      setSaveState("saved");
       saveTimerRef.current = null;
-    }, 400);
-  }, [demoMode, noteEditorMode]);
+      void persistDraft(pending, false);
+    }, 1200);
+  }, [demoMode, noteEditorMode, persistDraft]);
 
   const {
     notesText,
@@ -133,6 +240,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const handleNoteTitleChange = useCallback((value: string) => {
     setNoteTitle(value);
     queueDraftSave({
+      id: noteIdRef.current,
       title: value,
       subject: noteSubject,
       tags: noteTags,
@@ -143,6 +251,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const handleNoteSubjectChange = useCallback((value: string) => {
     setNoteSubject(value);
     queueDraftSave({
+      id: noteIdRef.current,
       title: noteTitle,
       subject: value,
       tags: noteTags,
@@ -153,6 +262,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const handleNoteTagsChange = useCallback((value: string) => {
     setNoteTags(value);
     queueDraftSave({
+      id: noteIdRef.current,
       title: noteTitle,
       subject: noteSubject,
       tags: value,
@@ -163,6 +273,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const handleNotesTextChange = useCallback((value: string) => {
     setNotesText(value);
     queueDraftSave({
+      id: noteIdRef.current,
       title: noteTitle,
       subject: noteSubject,
       tags: noteTags,
@@ -176,6 +287,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     setNoteSubject("");
     setNoteTags("");
     queueDraftSave({
+      id: noteIdRef.current,
       title: "",
       subject: "",
       tags: "",

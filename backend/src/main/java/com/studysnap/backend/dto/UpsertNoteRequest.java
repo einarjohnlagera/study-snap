@@ -1,0 +1,14 @@
+package com.studysnap.backend.dto;
+
+import jakarta.validation.constraints.NotBlank;
+
+import java.util.List;
+
+public record UpsertNoteRequest(
+        String title,
+        String subject,
+        List<String> tags,
+        @NotBlank(message = "Please provide note content before saving.")
+        String content
+) {
+}
