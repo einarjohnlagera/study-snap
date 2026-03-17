@@ -97,9 +97,12 @@ export function StudyInputCard({
       : "This note doesn\u2019t have a Study Pack yet.";
   const highlightedGenerateCta = isSampleNote && !hasStudyPack;
   const showOpenStudyPack = Boolean(hasStudyPack && currentStudyPackId);
+  const contentPlaceholder = noteEditorMode
+    ? "Start writing your study notes here. Keep one topic per note so your Study Pack stays clear and focused."
+    : "Paste your class notes here...";
 
   return (
-    <Card className="space-y-6 p-4 sm:p-6">
+    <Card className={`space-y-6 ${noteEditorMode ? "p-5 sm:p-7" : "p-4 sm:p-6"}`}>
       {noteEditorMode ? (
         <div className="space-y-4">
           <div className="space-y-2 sm:col-span-2">
@@ -121,58 +124,62 @@ export function StudyInputCard({
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="note-subject" className="text-sm font-medium text-foreground">
-                Subject
-              </label>
-              <input
-                id="note-subject"
-                type="text"
-                value={noteSubject}
-                onChange={(event) => onNoteSubjectChange(event.target.value)}
-                placeholder="e.g. Biology"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="note-tags" className="text-sm font-medium text-foreground">
-                Tags
-              </label>
-              <input
-                id="note-tags"
-                type="text"
-                value={noteTags}
-                onChange={(event) => onNoteTagsChange(event.target.value)}
-                placeholder="e.g. photosynthesis, chapter 3"
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
-              />
+          <div className="space-y-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Optional Details</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label htmlFor="note-subject" className="text-sm font-medium text-foreground/80">
+                  Subject
+                </label>
+                <input
+                  id="note-subject"
+                  type="text"
+                  value={noteSubject}
+                  onChange={(event) => onNoteSubjectChange(event.target.value)}
+                  placeholder="e.g. Biology"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="note-tags" className="text-sm font-medium text-foreground/80">
+                  Tags
+                </label>
+                <input
+                  id="note-tags"
+                  type="text"
+                  value={noteTags}
+                  onChange={(event) => onNoteTagsChange(event.target.value)}
+                  placeholder="e.g. photosynthesis, chapter 3"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+                />
+              </div>
             </div>
           </div>
         </div>
       ) : null}
+      {noteEditorMode ? <div className="h-px bg-border/70" /> : null}
 
       <div className="space-y-2">
         <label htmlFor="study-notes" className="text-sm font-medium text-foreground">
-          {noteEditorMode ? "Content" : "Study Notes"}
+          {noteEditorMode ? "Note Content" : "Study Notes"}
         </label>
         <textarea
           id="study-notes"
           value={notesText}
           onChange={(event) => onNotesTextChange(event.target.value)}
-          placeholder={noteEditorMode ? "Write or paste your note content..." : "Paste your class notes here..."}
-          className={`w-full rounded-lg border border-border bg-background px-3 py-2 text-base leading-relaxed text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600 ${noteEditorMode ? "min-h-72" : "min-h-40"}`}
+          placeholder={contentPlaceholder}
+          className={`w-full rounded-lg border border-border bg-background px-4 py-3 text-base text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600 ${noteEditorMode ? "min-h-80 leading-8 sm:text-[17px]" : "min-h-40 leading-relaxed"}`}
         />
         <p className="text-sm text-foreground/70">
           {noteEditorMode
-            ? "Keep it simple. You can refine this note later and regenerate any time."
+            ? "Use plain text. You can edit this note anytime before or after generating a Study Pack."
             : "Paste lecture notes, lesson notes text, or interview preparation notes. Best results when the notes focus on a single topic."}
         </p>
       </div>
 
       <div className="space-y-2">
         <label htmlFor="study-image" className="text-sm font-medium text-foreground">
-          Notes Photo (OCR, optional)
+          {noteEditorMode ? "Optional Source Photo (OCR)" : "Notes Photo (OCR, optional)"}
         </label>
         <div
           id="study-upload-section"
@@ -180,7 +187,11 @@ export function StudyInputCard({
         >
           <div className="flex items-start gap-2 text-sm text-foreground/75">
             <UploadCloud className="mt-0.5 h-4 w-4 text-foreground/60" />
-            <p>Upload a clear image of your notes. You can review and edit extracted text before generating.</p>
+            <p>
+              {noteEditorMode
+                ? "Add a notes photo for OCR help. You can review and edit extracted text before generating."
+                : "Upload a clear image of your notes. You can review and edit extracted text before generating."}
+            </p>
           </div>
           <div className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
             <FileImage className="h-4 w-4 text-foreground/60" />
@@ -226,7 +237,7 @@ export function StudyInputCard({
       </div>
 
       {noteEditorMode ? (
-        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+        <div className="space-y-3 rounded-xl bg-muted/30 p-4">
           <p className="text-sm text-foreground/80">{helperText}</p>
           {hasStudyPack ? (
             <p className="text-xs text-foreground/60">
