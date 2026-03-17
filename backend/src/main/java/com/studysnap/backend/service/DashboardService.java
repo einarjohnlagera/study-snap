@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
@@ -137,7 +138,11 @@ public class DashboardService {
 
     public MasterySnapshotResponse getMasterySnapshot(UUID userId) {
         List<QuickReviewSessionEntity> recentCompletedSessions = quickReviewSessionRepository
-                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 30))
+                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        PageRequest.of(0, 30)
+                )
                 .stream()
                 .filter(session -> session.getStatus() == QuickReviewSessionStatus.COMPLETED)
                 .toList();
@@ -173,7 +178,11 @@ public class DashboardService {
 
     private Optional<TodayFocusResponse> resolveTodayFocusInProgress(UUID userId) {
         Optional<QuickReviewSessionEntity> inProgress = quickReviewSessionRepository
-                .findTopByUserIdAndStatusOrderByCreatedAtDesc(userId, QuickReviewSessionStatus.IN_PROGRESS);
+                .findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS
+                );
         if (inProgress.isEmpty()) {
             return Optional.empty();
         }
@@ -230,7 +239,11 @@ public class DashboardService {
         }
 
         QuickReviewSessionEntity latestCompletedSession = quickReviewSessionRepository
-                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 1))
+                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        PageRequest.of(0, 1)
+                )
                 .stream()
                 .findFirst()
                 .orElse(null);
@@ -310,7 +323,11 @@ public class DashboardService {
 
     private Optional<StudyPackEntity> findMostRecentlyReviewedStudyPack(UUID userId) {
         List<QuickReviewSessionEntity> recentCompleted = quickReviewSessionRepository
-                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 30));
+                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        PageRequest.of(0, 30)
+                );
 
         for (QuickReviewSessionEntity session : recentCompleted) {
             Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
@@ -324,7 +341,11 @@ public class DashboardService {
 
     private Optional<ContinueStudyingResponse> resolveInProgressRecommendation(UUID userId) {
         Optional<QuickReviewSessionEntity> inProgress = quickReviewSessionRepository
-                .findTopByUserIdAndStatusOrderByCreatedAtDesc(userId, QuickReviewSessionStatus.IN_PROGRESS);
+                .findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionStatus.IN_PROGRESS
+                );
         if (inProgress.isEmpty()) {
             return Optional.empty();
         }
@@ -361,7 +382,11 @@ public class DashboardService {
 
     private Optional<ContinueStudyingResponse> resolveLowScoreRecentRecommendation(UUID userId) {
         List<QuickReviewSessionEntity> recentSessions = quickReviewSessionRepository
-                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, PageRequest.of(0, 50));
+                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        PageRequest.of(0, 50)
+                );
 
         Map<UUID, QuickReviewSessionEntity> latestSessionByStudyPack = new LinkedHashMap<>();
         for (QuickReviewSessionEntity session : recentSessions) {
@@ -433,9 +458,10 @@ public class DashboardService {
             }
 
             Optional<QuickReviewSessionEntity> latestSession = quickReviewSessionRepository
-                    .findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                    .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                             userId,
                             studyPackId,
+                            QuickReviewSessionMode.QUICK_REVIEW,
                             PageRequest.of(0, 1)
                     )
                     .stream()

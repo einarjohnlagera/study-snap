@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
@@ -70,6 +71,35 @@ class DashboardServiceTest {
                 subscriptionService,
                 featureGateService
         );
+        lenient().when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        any(UUID.class),
+                        any(QuickReviewSessionMode.class),
+                        any(QuickReviewSessionStatus.class)
+                ))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
+                        invocation.getArgument(0),
+                        invocation.getArgument(2)
+                ));
+        lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        any(UUID.class),
+                        any(QuickReviewSessionMode.class),
+                        any(Pageable.class)
+                ))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        invocation.getArgument(0),
+                        invocation.getArgument(2)
+                ));
+        lenient().when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(QuickReviewSessionMode.class),
+                        any(Pageable.class)
+                ))
+                .thenAnswer(invocation -> quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.getArgument(3)
+                ));
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
         lenient().when(activityEventRepository.findTopByUserIdAndStudyPackIdAndActivityTypeOrderByCreatedAtDesc(
                         any(UUID.class),

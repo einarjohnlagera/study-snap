@@ -250,6 +250,35 @@ export type QuickReviewAdaptiveQuizResponse = {
   message: string;
 };
 
+export type ChallengeQuizStartResponse = {
+  sessionId: string;
+  studyPackId: string;
+  title: string;
+  totalQuestions: number;
+  timeLimitSeconds: number;
+  usedThisMonth: number;
+  monthlyLimit: number;
+  quiz: QuizItem[];
+};
+
+export type ChallengeQuizCompleteRequest = {
+  correctAnswers: number;
+  totalQuestions: number;
+  durationSeconds: number;
+};
+
+export type ChallengeQuizSessionResponse = {
+  sessionId: string;
+  studyPackId: string;
+  status: "IN_PROGRESS" | "COMPLETED";
+  totalQuestions: number;
+  correctAnswers: number;
+  scorePercentage: number;
+  durationSeconds: number | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
 export type ShareLinkResponse = {
   token: string;
   shareUrl: string;
@@ -896,6 +925,36 @@ export async function generateAdaptiveQuickReviewQuiz(
     response,
     "Could not generate adaptive practice quiz.",
   );
+}
+
+export async function startChallengeQuizSession(
+  studyPackId: string,
+): Promise<ChallengeQuizStartResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/study-packs/${studyPackId}/challenge/start`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not start Challenge Quiz.");
+}
+
+export async function completeChallengeQuizSession(
+  sessionId: string,
+  request: ChallengeQuizCompleteRequest,
+): Promise<ChallengeQuizSessionResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review-sessions/challenge/${sessionId}/complete`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizSessionResponse>(response, "Could not save Challenge Quiz results.");
 }
 
 export async function getTodayFocus(): Promise<TodayFocusResponse> {

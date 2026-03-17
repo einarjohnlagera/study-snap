@@ -207,8 +207,9 @@ export default function SettingsPage() {
               <p className="text-sm font-semibold">Premium</p>
               <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
                 <li>100 Study Packs per month</li>
+                <li>Challenge Quiz (50/month)</li>
+                <li>Adaptive Practice (50/month)</li>
                 <li>Weak Concept Detection</li>
-                <li>Adaptive Quiz Generation</li>
               </ul>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Button

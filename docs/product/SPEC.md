@@ -247,6 +247,26 @@ docs/features/quick-review.md
 
 ---
 
+## Challenge Quiz (Premium)
+
+Challenge Quiz is a timed, exam-style review mode for Premium users.
+
+Behavior:
+
+* uses existing Study Pack quiz data only (no new LLM generation request)
+* serves a longer shuffled set (10-20 questions)
+* runs with a 10-minute timer
+* stores a dedicated challenge session result with score and percentage
+
+Gating and limits:
+
+* Free users cannot start Challenge Quiz and should see an upgrade path
+* Premium users can start Challenge Quiz up to 50 times per month
+* when the monthly limit is reached, show: `You've reached your monthly Challenge Quiz limit.`
+* Challenge Quiz usage is tracked separately and does not deduct from Study Pack generation credits
+
+---
+
 ## Study Pack AI Study Coach
 
 The Study Pack detail page includes a compact `AI Study Coach` panel.

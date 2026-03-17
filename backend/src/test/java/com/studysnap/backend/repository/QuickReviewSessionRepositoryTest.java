@@ -2,6 +2,7 @@ package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.testutil.builders.QuickReviewSessionEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,6 +37,7 @@ class QuickReviewSessionRepositoryTest {
                     id uuid primary key,
                     user_id uuid not null,
                     study_pack_id uuid not null,
+                    session_mode varchar(32) not null,
                     status varchar(32) not null,
                     current_question_index integer not null,
                     current_round varchar(16) not null,
@@ -71,9 +73,10 @@ class QuickReviewSessionRepositoryTest {
         );
 
         List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository
-                .findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 1)
                 );
 
@@ -96,9 +99,10 @@ class QuickReviewSessionRepositoryTest {
         );
 
         Optional<QuickReviewSessionEntity> found = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         QuickReviewSessionStatus.IN_PROGRESS
                 );
 
@@ -122,9 +126,10 @@ class QuickReviewSessionRepositoryTest {
         );
 
         Optional<QuickReviewSessionEntity> found = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         QuickReviewSessionStatus.IN_PROGRESS
                 );
 
@@ -164,8 +169,9 @@ class QuickReviewSessionRepositoryTest {
         );
 
         List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository
-                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 10)
                 );
 
@@ -197,8 +203,9 @@ class QuickReviewSessionRepositoryTest {
         );
 
         List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository
-                .findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         targetUserId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 10)
                 );
 
@@ -231,9 +238,10 @@ class QuickReviewSessionRepositoryTest {
         );
 
         List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository
-                .findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         targetStudyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 10)
                 );
 
@@ -266,9 +274,10 @@ class QuickReviewSessionRepositoryTest {
         );
 
         List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository
-                .findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
                         studyPackId,
+                        QuickReviewSessionMode.QUICK_REVIEW,
                         PageRequest.of(0, 1)
                 );
 

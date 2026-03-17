@@ -1,5 +1,8 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
+import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionConfidenceRequest;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
@@ -11,6 +14,7 @@ import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
+import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
@@ -37,6 +41,7 @@ public class QuickReviewSessionController {
     private final QuickReviewSessionService quickReviewSessionService;
     private final QuickReviewStudyTipService quickReviewStudyTipService;
     private final QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
+    private final ChallengeQuizService challengeQuizService;
 
     @PostMapping("/start")
     public QuickReviewSessionStartResponse startSession(
@@ -122,5 +127,24 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId);
+    }
+
+    @PostMapping("/study-packs/{studyPackId}/challenge/start")
+    public ChallengeQuizStartResponse startChallengeQuiz(
+            @PathVariable String studyPackId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return challengeQuizService.startSession(studyPackId, userId);
+    }
+
+    @PostMapping("/challenge/{sessionId}/complete")
+    public ChallengeQuizSessionResponse completeChallengeQuiz(
+            @PathVariable String sessionId,
+            @Valid @RequestBody ChallengeQuizCompleteRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return challengeQuizService.completeSession(sessionId, userId, request);
     }
 }

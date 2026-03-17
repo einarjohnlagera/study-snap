@@ -3,6 +3,7 @@ package com.studysnap.backend.testutil.builders;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
+import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -21,6 +22,7 @@ public final class QuickReviewSessionEntityBuilder {
     private final UUID id;
     private final UUID userId;
     private final UUID studyPackId;
+    private final QuickReviewSessionMode sessionMode;
     private final QuickReviewSessionStatus status;
     private final Integer currentQuestionIndex;
     private final QuickReviewRound currentRound;
@@ -40,6 +42,7 @@ public final class QuickReviewSessionEntityBuilder {
                 UUID.randomUUID(),
                 UUID.randomUUID(),
                 UUID.randomUUID(),
+                QuickReviewSessionMode.QUICK_REVIEW,
                 QuickReviewSessionStatus.IN_PROGRESS,
                 0,
                 QuickReviewRound.INITIAL,
@@ -86,6 +89,7 @@ public final class QuickReviewSessionEntityBuilder {
         session.setId(id);
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
+        session.setSessionMode(sessionMode);
         session.setStatus(status);
         session.setCurrentQuestionIndex(currentQuestionIndex);
         session.setCurrentRound(currentRound);

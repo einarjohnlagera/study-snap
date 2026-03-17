@@ -71,6 +71,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes("/adaptive-practice")) {
     return "Adaptive Practice";
   }
+  if (pathname.includes("/challenge-quiz")) {
+    return "Challenge Quiz";
+  }
   if (pathname.startsWith("/study-packs")) {
     return "Study Pack";
   }

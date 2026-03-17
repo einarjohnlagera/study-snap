@@ -4,6 +4,10 @@ import lombok.Getter;
 
 @Getter
 public enum Feature {
+    CHALLENGE_QUIZ(
+            PlanType.PREMIUM,
+            "Challenge Quiz is available in the Premium plan."
+    ),
     ADAPTIVE_QUIZ(
             PlanType.PREMIUM,
             "Adaptive Quiz Generation is a Premium feature. Upgrade to Premium to continue."

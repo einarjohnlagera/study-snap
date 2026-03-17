@@ -70,6 +70,7 @@ public class StudySnapProperties {
     public static class Pricing {
         private int freeMonthlyStudyPackLimit = 5;
         private int premiumMonthlyStudyPackLimit = 100;
+        private int premiumMonthlyChallengeQuizLimit = 50;
     }
 
     @Getter

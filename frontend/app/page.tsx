@@ -48,7 +48,7 @@ const featureHighlights = [
   },
   {
     title: "Adaptive Learning",
-    description: "Adaptive quizzes target the topics you struggle with so you improve faster.",
+    description: "Challenge Quiz and Adaptive Practice help you train weak areas with focused exam-style review.",
     icon: TrendingUp,
   },
 ];
@@ -354,8 +354,9 @@ export default function Home() {
             <p className="text-sm text-foreground/75">Everything in Free plus:</p>
             <ul className="space-y-1 text-sm text-foreground/80">
               <li>100 Study Packs per month</li>
-              <li>Weak concept detection</li>
-              <li>Adaptive quiz generation</li>
+              <li>Challenge Quiz (50/month)</li>
+              <li>Adaptive Practice (50/month)</li>
+              <li>Weak concept insights</li>
               <li>Advanced review tools</li>
             </ul>
           </Card>
