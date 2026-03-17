@@ -65,7 +65,7 @@ function toFriendlyOcrErrorMessage(message: string) {
   return "We could not extract text from this image right now. Try another image or paste notes manually.";
 }
 
-export function useStudyPack(demoMode: boolean): UseStudyPackResult {
+export function useStudyPack(demoMode: boolean, noteEditorMode = false): UseStudyPackResult {
   const demoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ocrStageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -83,10 +83,12 @@ export function useStudyPack(demoMode: boolean): UseStudyPackResult {
     useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
   const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
 
-  const canGenerate = useMemo(
-    () => notesText.trim().length > 0 || imageFile !== null,
-    [imageFile, notesText],
-  );
+  const canGenerate = useMemo(() => {
+    if (noteEditorMode) {
+      return notesText.trim().length > 0;
+    }
+    return notesText.trim().length > 0 || imageFile !== null;
+  }, [imageFile, noteEditorMode, notesText]);
 
   const startDemoGeneration = () => {
     setLoading(true);

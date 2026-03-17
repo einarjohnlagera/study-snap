@@ -29,7 +29,7 @@ export function StudyPackResults({
         <Card className="space-y-3">
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-            <CardTitle>Creating your study pack...</CardTitle>
+            <CardTitle>Generating your study pack...</CardTitle>
           </div>
           <ul className="space-y-2 text-sm text-foreground/75">
             <li>Summarizing notes</li>
