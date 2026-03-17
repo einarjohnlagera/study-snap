@@ -47,6 +47,9 @@ public class StudyPackEntity {
     @Column(length = 64)
     private String subject;
 
+    @Column(name = "source_text")
+    private String sourceText;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "key_concepts", nullable = false, columnDefinition = "jsonb")
     private List<String> keyConcepts;

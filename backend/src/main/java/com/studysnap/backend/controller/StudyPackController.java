@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuickReviewActivityRequest;
 import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.dto.UpdateStudyPackMetadataRequest;
 import com.studysnap.backend.dto.UpdateStudyPackTagsRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
@@ -103,6 +104,16 @@ public class StudyPackController {
 	) {
 		UUID userId = user.userId();
 		return studyPackService.updateTags(id, userId, request.tags());
+	}
+
+	@PutMapping("/{id}/metadata")
+	public StudyPackResponse updateMetadata(
+			@PathVariable String id,
+			@Valid @RequestBody UpdateStudyPackMetadataRequest request,
+			@AuthenticationPrincipal AuthenticatedUser user
+	) {
+		UUID userId = user.userId();
+		return studyPackService.updateMetadata(id, userId, request.title(), request.subject());
 	}
 
 	@PostMapping("/{id}/quick-review/activity")

@@ -14,6 +14,7 @@ import {
   getMyStudyPack,
   listRecentQuickReviewSessions,
   startQuickReviewSession,
+  updateStudyPackMetadata,
   updateStudyPackTags,
   type QuickReviewPerformanceSummaryResponse,
   type QuickReviewSessionSummaryResponse,
@@ -71,6 +72,11 @@ export default function StudyPackDetailPage() {
   const [hasInProgressQuickReview, setHasInProgressQuickReview] = useState(false);
   const [creatingShareLink, setCreatingShareLink] = useState(false);
   const [updatingTags, setUpdatingTags] = useState(false);
+  const [updatingMetadata, setUpdatingMetadata] = useState(false);
+  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [metadataTitle, setMetadataTitle] = useState("");
+  const [metadataSubject, setMetadataSubject] = useState("");
+  const [metadataError, setMetadataError] = useState<string | null>(null);
   const [addingTag, setAddingTag] = useState(false);
   const [newTagValue, setNewTagValue] = useState("");
   const [tagError, setTagError] = useState<string | null>(null);
@@ -169,6 +175,15 @@ export default function StudyPackDetailPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!studyPack) {
+      return;
+    }
+    setMetadataTitle(studyPack.title);
+    setMetadataSubject(studyPack.subject ?? "");
+    setMetadataError(null);
+  }, [studyPack]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
@@ -305,6 +320,35 @@ export default function StudyPackDetailPage() {
     }
   }, [studyPack, updatingTags]);
 
+  const handleSaveMetadata = useCallback(async () => {
+    if (!studyPack || updatingMetadata) {
+      return;
+    }
+
+    const nextTitle = metadataTitle.trim();
+    const nextSubject = metadataSubject.trim();
+    if (!nextTitle) {
+      setMetadataError("Title is required.");
+      return;
+    }
+
+    setUpdatingMetadata(true);
+    setMetadataError(null);
+    try {
+      const updatedStudyPack = await updateStudyPackMetadata(studyPack.id, {
+        title: nextTitle,
+        subject: nextSubject.length > 0 ? nextSubject : null,
+      });
+      setStudyPack(updatedStudyPack);
+      setEditingMetadata(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update Study Pack metadata.";
+      setMetadataError(message);
+    } finally {
+      setUpdatingMetadata(false);
+    }
+  }, [metadataSubject, metadataTitle, studyPack, updatingMetadata]);
+
   const handleAddTag = useCallback(async () => {
     if (!studyPack) {
       return;
@@ -386,12 +430,66 @@ export default function StudyPackDetailPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
               Study Pack
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{studyPack.title}</h1>
+            {editingMetadata ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label htmlFor="study-pack-title" className="text-xs font-medium uppercase tracking-wide text-foreground/60">
+                    Title
+                  </label>
+                  <input
+                    id="study-pack-title"
+                    type="text"
+                    value={metadataTitle}
+                    onChange={(event) => setMetadataTitle(event.target.value)}
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-base text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                    disabled={updatingMetadata}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="study-pack-subject" className="text-xs font-medium uppercase tracking-wide text-foreground/60">
+                    Subject
+                  </label>
+                  <input
+                    id="study-pack-subject"
+                    type="text"
+                    value={metadataSubject}
+                    onChange={(event) => setMetadataSubject(event.target.value)}
+                    placeholder="Optional subject"
+                    className="h-10 w-full rounded-md border border-border bg-background px-3 text-base text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                    disabled={updatingMetadata}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" onClick={() => void handleSaveMetadata()} disabled={updatingMetadata}>
+                    {updatingMetadata ? "Saving..." : "Save metadata"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingMetadata(false);
+                      setMetadataTitle(studyPack.title);
+                      setMetadataSubject(studyPack.subject ?? "");
+                      setMetadataError(null);
+                    }}
+                    disabled={updatingMetadata}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{studyPack.title}</h1>
             <p className="text-sm text-foreground/75">
               {studyPack.subject?.trim() ? `${studyPack.subject.trim()} • ` : ""}
               {studyPack.keyConcepts.length} concepts • {studyPack.quiz.length} questions
             </p>
+              </>
+            )}
             <p className="text-sm text-foreground/65">Created {formattedCreatedDate}</p>
+            {metadataError ? <p className="text-xs text-red-600 dark:text-red-400">{metadataError}</p> : null}
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 {studyPack.tags.map((tag, index) => (
@@ -483,7 +581,19 @@ export default function StudyPackDetailPage() {
                     : (hasInProgressQuickReview ? "Resume Quick Review" : "Start Quick Review")}
                 </Button>
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => {
+                    setEditingMetadata((previous) => !previous);
+                    setMetadataError(null);
+                  }}
+                  disabled={updatingMetadata}
+                >
+                  {editingMetadata ? "Close Metadata Editor" : "Edit Metadata"}
+                </Button>
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Share Study Pack</p>
                 <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleCopyShareLink()} disabled={creatingShareLink}>
                   {creatingShareLink ? "Copying..." : "Copy Link"}
