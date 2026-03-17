@@ -37,6 +37,9 @@ function shouldUseAuthenticatedShell(pathname: string, hasAuthUser: boolean): bo
   if (pathname.startsWith("/p/")) {
     return hasAuthUser;
   }
+  if (pathname.startsWith("/demo")) {
+    return hasAuthUser;
+  }
   return isAuthenticatedRoute(pathname);
 }
 
@@ -55,6 +58,9 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/settings")) {
     return "Settings";
+  }
+  if (pathname === "/demo") {
+    return "Demo";
   }
   if (pathname === "/study" || pathname.startsWith("/study/")) {
     return "Create Note";
