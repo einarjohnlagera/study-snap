@@ -37,6 +37,9 @@ function shouldUseAuthenticatedShell(pathname: string, hasAuthUser: boolean): bo
   if (pathname.startsWith("/p/")) {
     return hasAuthUser;
   }
+  if (pathname.startsWith("/demo")) {
+    return hasAuthUser;
+  }
   return isAuthenticatedRoute(pathname);
 }
 
@@ -55,6 +58,9 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/settings")) {
     return "Settings";
+  }
+  if (pathname === "/demo") {
+    return "Demo";
   }
   if (pathname === "/study" || pathname.startsWith("/study/")) {
     return "Create Note";
@@ -131,6 +137,7 @@ export function AppShell({ children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [hasAuthUser, setHasAuthUser] = useState(false);
   const [user, setUser] = useState<ShellUser>({
     displayName: null,
     firstName: null,
@@ -138,13 +145,26 @@ export function AppShell({ children }: AppShellProps) {
   });
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    const syncAuthState = () => {
+      setHasAuthUser(Boolean(getAuthUser()));
+    };
+
+    syncAuthState();
+    window.addEventListener("studysnap-auth-change", syncAuthState);
+    window.addEventListener("storage", syncAuthState);
+    return () => {
+      window.removeEventListener("studysnap-auth-change", syncAuthState);
+      window.removeEventListener("storage", syncAuthState);
+    };
+  }, []);
+
   const shouldUseShell = useMemo(() => {
     if (!pathname) {
       return false;
     }
-    const hasAuthUser = Boolean(getAuthUser());
     return shouldUseAuthenticatedShell(pathname, hasAuthUser);
-  }, [pathname]);
+  }, [hasAuthUser, pathname]);
 
   useEffect(() => {
     if (!shouldUseShell) {
