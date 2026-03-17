@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import Link from "next/link";
 import { AlertCircle, CheckCircle2, FileImage, Loader2, Sparkles, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -6,6 +7,7 @@ import { Card } from "@/components/ui/card";
 type StudyInputCardProps = {
   noteEditorMode: boolean;
   isSampleNote: boolean;
+  saveState: "saving" | "saved";
   focusUpload: boolean;
   noteTitle: string;
   onNoteTitleChange: (value: string) => void;
@@ -19,6 +21,7 @@ type StudyInputCardProps = {
   onImageFileChange: (file: File | null) => void;
   imageInputKey: number;
   hasStudyPack: boolean;
+  currentStudyPackId: string | null;
   canGenerate: boolean;
   loading: boolean;
   ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
@@ -30,6 +33,7 @@ type StudyInputCardProps = {
 export function StudyInputCard({
   noteEditorMode,
   isSampleNote,
+  saveState,
   focusUpload,
   noteTitle,
   onNoteTitleChange,
@@ -43,6 +47,7 @@ export function StudyInputCard({
   onImageFileChange,
   imageInputKey,
   hasStudyPack,
+  currentStudyPackId,
   canGenerate,
   loading,
   ocrFlowState,
@@ -86,54 +91,63 @@ export function StudyInputCard({
       : Loader2;
   const actionLabel = hasStudyPack ? "Regenerate Study Pack" : "Generate Study Pack";
   const helperText = hasStudyPack
-    ? "This will replace the current Study Pack."
+    ? "Current Study Pack is linked to this note."
     : isSampleNote
       ? "This is a sample note. Try generating a Study Pack."
       : "This note doesn\u2019t have a Study Pack yet.";
   const highlightedGenerateCta = isSampleNote && !hasStudyPack;
+  const showOpenStudyPack = Boolean(hasStudyPack && currentStudyPackId);
 
   return (
     <Card className="space-y-6 p-4 sm:p-6">
       {noteEditorMode ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-4">
           <div className="space-y-2 sm:col-span-2">
-            <label htmlFor="note-title" className="text-sm font-medium text-foreground">
-              Title
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="note-title" className="text-sm font-medium text-foreground">
+                Title
+              </label>
+              <span className="text-xs text-foreground/60">
+                {saveState === "saving" ? "Saving..." : "Saved"}
+              </span>
+            </div>
             <input
               id="note-title"
               type="text"
               value={noteTitle}
               onChange={(event) => onNoteTitleChange(event.target.value)}
               placeholder="Enter note title"
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-base font-medium text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
             />
           </div>
-          <div className="space-y-2">
-            <label htmlFor="note-subject" className="text-sm font-medium text-foreground">
-              Subject (optional)
-            </label>
-            <input
-              id="note-subject"
-              type="text"
-              value={noteSubject}
-              onChange={(event) => onNoteSubjectChange(event.target.value)}
-              placeholder="e.g. Biology"
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="note-tags" className="text-sm font-medium text-foreground">
-              Tags (optional)
-            </label>
-            <input
-              id="note-tags"
-              type="text"
-              value={noteTags}
-              onChange={(event) => onNoteTagsChange(event.target.value)}
-              placeholder="e.g. exam, chapter 3"
-              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
-            />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="note-subject" className="text-sm font-medium text-foreground">
+                Subject
+              </label>
+              <input
+                id="note-subject"
+                type="text"
+                value={noteSubject}
+                onChange={(event) => onNoteSubjectChange(event.target.value)}
+                placeholder="e.g. Biology"
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="note-tags" className="text-sm font-medium text-foreground">
+                Tags
+              </label>
+              <input
+                id="note-tags"
+                type="text"
+                value={noteTags}
+                onChange={(event) => onNoteTagsChange(event.target.value)}
+                placeholder="e.g. photosynthesis, chapter 3"
+                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+              />
+            </div>
           </div>
         </div>
       ) : null}
@@ -147,7 +161,7 @@ export function StudyInputCard({
           value={notesText}
           onChange={(event) => onNotesTextChange(event.target.value)}
           placeholder={noteEditorMode ? "Write or paste your note content..." : "Paste your class notes here..."}
-          className="min-h-40 w-full rounded-lg border border-border bg-background px-3 py-2 text-base leading-relaxed text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+          className={`w-full rounded-lg border border-border bg-background px-3 py-2 text-base leading-relaxed text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600 ${noteEditorMode ? "min-h-72" : "min-h-40"}`}
         />
         <p className="text-sm text-foreground/70">
           {noteEditorMode
@@ -214,7 +228,19 @@ export function StudyInputCard({
       {noteEditorMode ? (
         <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
           <p className="text-sm text-foreground/80">{helperText}</p>
+          {hasStudyPack ? (
+            <p className="text-xs text-foreground/60">
+              Regenerating will replace the current Study Pack for this note.
+            </p>
+          ) : null}
           <div className="hidden flex-wrap gap-3 sm:flex">
+            {showOpenStudyPack ? (
+              <Link href={`/study-packs/${currentStudyPackId}`} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  Open Study Pack
+                </Button>
+              </Link>
+            ) : null}
             <Button
               type="button"
               disabled={!canGenerate || loading}
@@ -243,6 +269,15 @@ export function StudyInputCard({
               Clear Inputs
             </Button>
           </div>
+          {showOpenStudyPack ? (
+            <div className="sm:hidden">
+              <Link href={`/study-packs/${currentStudyPackId}`} className="w-full">
+                <Button type="button" variant="outline" className="w-full">
+                  Open Study Pack
+                </Button>
+              </Link>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { getSampleNotePreset } from "@/lib/sample-notes";
@@ -13,6 +13,49 @@ type StudyPageClientProps = {
   forcedDemoMode?: boolean;
 };
 
+type NoteEditorSaveState = "saving" | "saved";
+type NoteEditorDraft = {
+  title: string;
+  subject: string;
+  tags: string;
+  content: string;
+  updatedAt: string;
+};
+
+const NOTE_EDITOR_DRAFT_KEY = "notelib:note-editor-draft:v1";
+
+function readNoteEditorDraft(): NoteEditorDraft | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(NOTE_EDITOR_DRAFT_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<NoteEditorDraft>;
+    if (
+      typeof parsed.title !== "string"
+      || typeof parsed.subject !== "string"
+      || typeof parsed.tags !== "string"
+      || typeof parsed.content !== "string"
+    ) {
+      return null;
+    }
+    return {
+      title: parsed.title,
+      subject: parsed.subject,
+      tags: parsed.tags,
+      content: parsed.content,
+      updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function StudyPageClient({ forcedDemoMode = false }: StudyPageClientProps) {
   const searchParams = useSearchParams();
   const demoMode = forcedDemoMode || searchParams.get("demo") === "true";
@@ -20,9 +63,50 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const focusUpload = searchParams.get("focus") === "upload";
   const samplePreset = getSampleNotePreset(searchParams.get("sample"));
   const isSampleNote = Boolean(samplePreset);
-  const [noteTitle, setNoteTitle] = useState(() => samplePreset?.title ?? "");
-  const [noteSubject, setNoteSubject] = useState(() => samplePreset?.subject ?? "");
-  const [noteTags, setNoteTags] = useState(() => samplePreset?.tags.join(", ") ?? "");
+  const [initialDraft] = useState<NoteEditorDraft | null>(() => readNoteEditorDraft());
+  const [noteTitle, setNoteTitle] = useState(() => samplePreset?.title ?? initialDraft?.title ?? "");
+  const [noteSubject, setNoteSubject] = useState(() => samplePreset?.subject ?? initialDraft?.subject ?? "");
+  const [noteTags, setNoteTags] = useState(() => samplePreset?.tags.join(", ") ?? initialDraft?.tags ?? "");
+  const [saveState, setSaveState] = useState<NoteEditorSaveState>("saved");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const queueDraftSave = useCallback((draft: Omit<NoteEditorDraft, "updatedAt">) => {
+    if (!noteEditorMode || demoMode) {
+      return;
+    }
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    setSaveState("saving");
+    saveTimerRef.current = setTimeout(() => {
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            NOTE_EDITOR_DRAFT_KEY,
+            JSON.stringify({
+              ...draft,
+              updatedAt: new Date().toISOString(),
+            } satisfies NoteEditorDraft),
+          );
+        } catch {
+          // Ignore storage write failures and keep editor usable.
+        }
+      }
+      setSaveState("saved");
+      saveTimerRef.current = null;
+    }, 400);
+  }, [demoMode, noteEditorMode]);
 
   const {
     notesText,
@@ -44,13 +128,59 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,
-  } = useStudyPack(demoMode, noteEditorMode, samplePreset?.content ?? "");
+  } = useStudyPack(demoMode, noteEditorMode, samplePreset?.content ?? initialDraft?.content ?? "");
+
+  const handleNoteTitleChange = useCallback((value: string) => {
+    setNoteTitle(value);
+    queueDraftSave({
+      title: value,
+      subject: noteSubject,
+      tags: noteTags,
+      content: notesText,
+    });
+  }, [noteSubject, noteTags, notesText, queueDraftSave]);
+
+  const handleNoteSubjectChange = useCallback((value: string) => {
+    setNoteSubject(value);
+    queueDraftSave({
+      title: noteTitle,
+      subject: value,
+      tags: noteTags,
+      content: notesText,
+    });
+  }, [noteTags, noteTitle, notesText, queueDraftSave]);
+
+  const handleNoteTagsChange = useCallback((value: string) => {
+    setNoteTags(value);
+    queueDraftSave({
+      title: noteTitle,
+      subject: noteSubject,
+      tags: value,
+      content: notesText,
+    });
+  }, [noteSubject, noteTitle, notesText, queueDraftSave]);
+
+  const handleNotesTextChange = useCallback((value: string) => {
+    setNotesText(value);
+    queueDraftSave({
+      title: noteTitle,
+      subject: noteSubject,
+      tags: noteTags,
+      content: value,
+    });
+  }, [noteSubject, noteTags, noteTitle, queueDraftSave, setNotesText]);
 
   const handleClearAll = () => {
     handleClearNotes();
     setNoteTitle("");
     setNoteSubject("");
     setNoteTags("");
+    queueDraftSave({
+      title: "",
+      subject: "",
+      tags: "",
+      content: "",
+    });
   };
 
   return (
@@ -76,19 +206,21 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
       <StudyInputCard
         noteEditorMode={noteEditorMode}
         isSampleNote={isSampleNote}
+        saveState={saveState}
         focusUpload={focusUpload}
         noteTitle={noteTitle}
-        onNoteTitleChange={setNoteTitle}
+        onNoteTitleChange={handleNoteTitleChange}
         noteSubject={noteSubject}
-        onNoteSubjectChange={setNoteSubject}
+        onNoteSubjectChange={handleNoteSubjectChange}
         noteTags={noteTags}
-        onNoteTagsChange={setNoteTags}
+        onNoteTagsChange={handleNoteTagsChange}
         notesText={notesText}
-        onNotesTextChange={setNotesText}
+        onNotesTextChange={handleNotesTextChange}
         imageFile={imageFile}
         onImageFileChange={setImageFile}
         imageInputKey={imageInputKey}
         hasStudyPack={Boolean(studyPackResult)}
+        currentStudyPackId={studyPackResult?.id ?? null}
         canGenerate={canGenerate}
         loading={loading}
         ocrFlowState={ocrFlowState}
