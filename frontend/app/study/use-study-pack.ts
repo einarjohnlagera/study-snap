@@ -33,8 +33,8 @@ type UseStudyPackResult = {
   detectedTopic: string | null;
   ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
   ocrStatusMessage: string | null;
-  handleGenerateStudyPack: () => Promise<void>;
-  handleConfirmText: () => Promise<void>;
+  handleGenerateStudyPack: () => Promise<StudyPackResponse | null>;
+  handleConfirmText: () => Promise<StudyPackResponse | null>;
   handleClearNotes: () => void;
 };
 
@@ -161,14 +161,14 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     setOcrStatusMessage("Image selected. OCR will start when you generate the Study Pack.");
   };
 
-  const handleGenerateStudyPack = async () => {
+  const handleGenerateStudyPack = async (): Promise<StudyPackResponse | null> => {
     if (!canGenerate || loading) {
-      return;
+      return null;
     }
 
     if (demoMode) {
       startDemoGeneration();
-      return;
+      return DEMO_STUDY_PACK_RESULT;
     }
     if (!getCurrentUserId()) {
       setErrorMessage("Sign up and log in to start generating your Study Pack.");
@@ -176,7 +176,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
         setOcrFlowState("failure");
         setOcrStatusMessage("Sign in first, then upload and extract text from your image.");
       }
-      return;
+      return null;
     }
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
@@ -185,7 +185,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
         setOcrFlowState("failure");
         setOcrStatusMessage("Verify your email before running OCR from image notes.");
       }
-      return;
+      return null;
     }
     if (!authUser.profileType) {
       setErrorMessage("Complete onboarding to start generating your Study Pack.");
@@ -193,7 +193,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
         setOcrFlowState("failure");
         setOcrStatusMessage("Complete onboarding before running OCR from image notes.");
       }
-      return;
+      return null;
     }
 
     setLoading(true);
@@ -218,18 +218,19 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
           setOcrStatusMessage("Text extracted. Review and edit it before generating your Study Pack.");
           setNeedsConfirmation(response);
           setConfirmedText(response.extractedText);
-          return;
+          return null;
         }
         setOcrFlowState("success");
         setOcrStatusMessage("Text extracted successfully. Your Study Pack is ready.");
         setStudyPackResult(response);
         setGeneratedAt(new Date());
-        return;
+        return response;
       }
 
       const response = await createStudyPackFromText(notesText);
       setStudyPackResult(response);
       setGeneratedAt(new Date());
+      return response;
     } catch (error) {
       clearOcrStageTimer();
       const message =
@@ -244,31 +245,32 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       } else {
         setErrorMessage(message);
       }
+      return null;
     } finally {
       clearOcrStageTimer();
       setLoading(false);
     }
   };
 
-  const handleConfirmText = async () => {
+  const handleConfirmText = async (): Promise<StudyPackResponse | null> => {
     if (!needsConfirmation || confirmedText.trim().length === 0 || loading) {
-      return;
+      return null;
     }
     if (demoMode) {
-      return;
+      return null;
     }
     if (!getCurrentUserId()) {
       setErrorMessage("Sign up and log in to start generating your Study Pack.");
-      return;
+      return null;
     }
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
       setErrorMessage("Verify your email to start generating your Study Pack.");
-      return;
+      return null;
     }
     if (!authUser.profileType) {
       setErrorMessage("Complete onboarding to start generating your Study Pack.");
-      return;
+      return null;
     }
 
     setLoading(true);
@@ -284,6 +286,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       setNeedsConfirmation(null);
       setOcrFlowState("success");
       setOcrStatusMessage("Done. Your Study Pack was generated from your edited text.");
+      return response;
     } catch (error) {
       const message =
         error instanceof Error
@@ -292,6 +295,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       setOcrFlowState("failure");
       setOcrStatusMessage("Could not continue with edited text. Update the text and try again.");
       setErrorMessage(message);
+      return null;
     } finally {
       setLoading(false);
     }
