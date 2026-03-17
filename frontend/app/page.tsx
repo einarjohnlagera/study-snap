@@ -225,10 +225,10 @@ export default function Home() {
         <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="space-y-5">
             <Image
-              src="/note-lib-logo-full.svg"
+              src="/notelib-logo-full.svg"
               alt="NoteLib"
-              width={240}
-              height={48}
+              width={176}
+              height={36}
               priority
             />
             <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 text-xs text-foreground/80 sm:text-sm">

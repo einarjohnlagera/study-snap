@@ -38,7 +38,7 @@ export function Navbar() {
         <Link href="/" className="flex items-center gap-3">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border">
             <Image
-              src="/note-lib-logo-icon.svg"
+              src="/notelib-favicon.svg"
               alt="NoteLib logo"
               width={20}
               height={20}

@@ -234,7 +234,7 @@ export function AppShell({ children }: AppShellProps) {
       <aside className="hidden border-r border-border bg-background md:sticky md:top-0 md:flex md:h-screen md:w-64 md:flex-col">
         <div className="flex h-16 items-center gap-3 border-b border-border px-4">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border">
-            <Image src="/note-lib-logo-icon.svg" alt="NoteLib logo" width={20} height={20} priority />
+            <Image src="/notelib-favicon.svg" alt="NoteLib logo" width={20} height={20} priority />
           </span>
           <span className="text-sm font-semibold">NoteLib</span>
         </div>
@@ -311,7 +311,7 @@ export function AppShell({ children }: AppShellProps) {
             <div className="flex h-16 items-center justify-between border-b border-border px-4">
               <div className="flex items-center gap-3">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border">
-                  <Image src="/note-lib-logo-icon.svg" alt="NoteLib logo" width={20} height={20} />
+                  <Image src="/notelib-favicon.svg" alt="NoteLib logo" width={20} height={20} />
                 </span>
                 <span className="text-sm font-semibold">NoteLib</span>
               </div>

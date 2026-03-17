@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { login, signup } from "@/lib/api";
@@ -120,6 +121,15 @@ export default function AuthPage() {
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6 sm:py-10">
       <Card className="space-y-6 p-4 sm:p-6">
+        <div className="flex justify-center">
+          <Image
+            src="/notelib-logo-login.svg"
+            alt="NoteLib"
+            width={192}
+            height={52}
+            priority
+          />
+        </div>
         <div className="space-y-2">
           <CardTitle>{mode === "login" ? "Log in to NoteLib" : "Create your NoteLib account"}</CardTitle>
           <CardDescription>
