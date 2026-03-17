@@ -125,6 +125,7 @@ export default function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_CREATED");
   const [reviewSummaryByPackId, setReviewSummaryByPackId] = useState<Record<string, ReviewSummaryMeta>>({});
   const [error, setError] = useState<string | null>(null);
@@ -264,6 +265,12 @@ export default function LibraryPage() {
     };
   }, [tagFilterOpen]);
 
+  useEffect(() => {
+    if (!tagFilterOpen && tagSearchQuery.length > 0) {
+      setTagSearchQuery("");
+    }
+  }, [tagFilterOpen, tagSearchQuery]);
+
   const handleConfirmDelete = useCallback(async () => {
     if (!pendingDeleteItem) {
       return;
@@ -308,6 +315,14 @@ export default function LibraryPage() {
     });
     return Array.from(tagSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
+
+  const visibleTagOptions = useMemo(() => {
+    const query = tagSearchQuery.trim().toLowerCase();
+    if (query.length === 0) {
+      return availableTags;
+    }
+    return availableTags.filter((tag) => tag.toLowerCase().includes(query));
+  }, [availableTags, tagSearchQuery]);
 
   useEffect(() => {
     if (selectedSubject === ALL_SUBJECTS) {
@@ -470,11 +485,22 @@ export default function LibraryPage() {
                     role="listbox"
                     aria-multiselectable="true"
                   >
+                    <div className="space-y-2">
+                      <input
+                        type="search"
+                        value={tagSearchQuery}
+                        onChange={(event) => setTagSearchQuery(event.target.value)}
+                        placeholder="Search tags..."
+                        className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
                     {availableTags.length === 0 ? (
-                      <p className="px-2 py-1 text-sm text-foreground/65">No tags available yet.</p>
+                      <p className="px-2 py-2 text-sm text-foreground/65">No tags available yet.</p>
+                    ) : visibleTagOptions.length === 0 ? (
+                      <p className="px-2 py-2 text-sm text-foreground/65">No tags match your search.</p>
                     ) : (
-                      <div className="max-h-56 space-y-1 overflow-y-auto">
-                        {availableTags.map((tag) => {
+                      <div className="mt-2 max-h-56 space-y-1 overflow-y-auto">
+                        {visibleTagOptions.map((tag) => {
                           const isSelected = selectedTags.includes(tag);
                           return (
                             <label
@@ -589,6 +615,10 @@ export default function LibraryPage() {
                 const reviewStatus = getStudyPackStatus(reviewSummary.lastScorePercentage);
                 const itemTags = normalizeTags(item.tags);
                 const subject = normalizeSubject(item.subject);
+                const subjectLabel = subject ?? "Uncategorized";
+                const subjectClassName = subject
+                  ? "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                  : "border-border bg-muted/40 text-foreground/65";
 
                 return (
                   <Card
@@ -606,11 +636,11 @@ export default function LibraryPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-2">
-                        {subject ? (
-                          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                            {subject}
-                          </p>
-                        ) : null}
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${subjectClassName}`}
+                        >
+                          {subjectLabel}
+                        </span>
                         <h3 className="text-base font-semibold transition-colors sm:text-lg">
                           {item.title}
                         </h3>

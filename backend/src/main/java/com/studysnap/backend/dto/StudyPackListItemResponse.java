@@ -8,6 +8,7 @@ public record StudyPackListItemResponse(
         String title,
         String summaryPreview,
         int quizCount,
+        String subject,
         List<String> tags,
         OffsetDateTime createdAt
 ) {
