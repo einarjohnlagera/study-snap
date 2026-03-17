@@ -1,14 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { AlertCircle, CheckCircle2, FileImage, Loader2, Sparkles, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 type StudyInputCardProps = {
+  noteEditorMode: boolean;
+  focusUpload: boolean;
+  noteTitle: string;
+  onNoteTitleChange: (value: string) => void;
+  noteSubject: string;
+  onNoteSubjectChange: (value: string) => void;
+  noteTags: string;
+  onNoteTagsChange: (value: string) => void;
   notesText: string;
   onNotesTextChange: (value: string) => void;
   imageFile: File | null;
   onImageFileChange: (file: File | null) => void;
   imageInputKey: number;
+  hasStudyPack: boolean;
   canGenerate: boolean;
   loading: boolean;
   ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
@@ -18,11 +27,20 @@ type StudyInputCardProps = {
 };
 
 export function StudyInputCard({
+  noteEditorMode,
+  focusUpload,
+  noteTitle,
+  onNoteTitleChange,
+  noteSubject,
+  onNoteSubjectChange,
+  noteTags,
+  onNoteTagsChange,
   notesText,
   onNotesTextChange,
   imageFile,
   onImageFileChange,
   imageInputKey,
+  hasStudyPack,
   canGenerate,
   loading,
   ocrFlowState,
@@ -30,19 +48,28 @@ export function StudyInputCard({
   onGenerate,
   onClear,
 }: StudyInputCardProps) {
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const imagePreviewUrl = useMemo(() => {
+    if (!imageFile) {
+      return null;
+    }
+    return URL.createObjectURL(imageFile);
+  }, [imageFile]);
 
   useEffect(() => {
-    if (!imageFile) {
-      setImagePreviewUrl(null);
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
+
+  useEffect(() => {
+    if (!focusUpload) {
       return;
     }
-    const objectUrl = URL.createObjectURL(imageFile);
-    setImagePreviewUrl(objectUrl);
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [imageFile]);
+    const uploadSection = document.getElementById("study-upload-section");
+    uploadSection?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusUpload]);
 
   const statusTone = ocrFlowState === "failure"
     ? "border-red-500/40 bg-red-50/70 text-red-800 dark:bg-red-950/30 dark:text-red-200"
@@ -55,23 +82,72 @@ export function StudyInputCard({
     : ocrFlowState === "success"
       ? CheckCircle2
       : Loader2;
+  const actionLabel = hasStudyPack ? "Regenerate Study Pack" : "Generate Study Pack";
+  const helperText = hasStudyPack
+    ? "This will replace the current Study Pack."
+    : "This note doesn\u2019t have a Study Pack yet.";
 
   return (
     <Card className="space-y-6 p-4 sm:p-6">
+      {noteEditorMode ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <label htmlFor="note-title" className="text-sm font-medium text-foreground">
+              Title
+            </label>
+            <input
+              id="note-title"
+              type="text"
+              value={noteTitle}
+              onChange={(event) => onNoteTitleChange(event.target.value)}
+              placeholder="Enter note title"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="note-subject" className="text-sm font-medium text-foreground">
+              Subject (optional)
+            </label>
+            <input
+              id="note-subject"
+              type="text"
+              value={noteSubject}
+              onChange={(event) => onNoteSubjectChange(event.target.value)}
+              placeholder="e.g. Biology"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="note-tags" className="text-sm font-medium text-foreground">
+              Tags (optional)
+            </label>
+            <input
+              id="note-tags"
+              type="text"
+              value={noteTags}
+              onChange={(event) => onNoteTagsChange(event.target.value)}
+              placeholder="e.g. exam, chapter 3"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         <label htmlFor="study-notes" className="text-sm font-medium text-foreground">
-          Study Notes
+          {noteEditorMode ? "Content" : "Study Notes"}
         </label>
         <textarea
           id="study-notes"
           value={notesText}
           onChange={(event) => onNotesTextChange(event.target.value)}
-          placeholder="Paste your class notes here..."
+          placeholder={noteEditorMode ? "Write or paste your note content..." : "Paste your class notes here..."}
           className="min-h-40 w-full rounded-lg border border-border bg-background px-3 py-2 text-base leading-relaxed text-foreground outline-none transition focus-visible:ring-2 focus-visible:ring-blue-600"
         />
         <p className="text-sm text-foreground/70">
-          Paste lecture notes, lesson notes text, or interview preparation notes.
-          Best results when the notes focus on a single topic.
+          {noteEditorMode
+            ? "Keep it simple. You can refine this note later and regenerate any time."
+            : "Paste lecture notes, lesson notes text, or interview preparation notes. Best results when the notes focus on a single topic."}
         </p>
       </div>
 
@@ -79,7 +155,10 @@ export function StudyInputCard({
         <label htmlFor="study-image" className="text-sm font-medium text-foreground">
           Notes Photo (OCR, optional)
         </label>
-        <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+        <div
+          id="study-upload-section"
+          className={`space-y-3 rounded-lg border bg-background p-3 ${focusUpload ? "border-blue-500/60 ring-2 ring-blue-500/20" : "border-border"}`}
+        >
           <div className="flex items-start gap-2 text-sm text-foreground/75">
             <UploadCloud className="mt-0.5 h-4 w-4 text-foreground/60" />
             <p>Upload a clear image of your notes. You can review and edit extracted text before generating.</p>
@@ -127,35 +206,99 @@ export function StudyInputCard({
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          disabled={!canGenerate || loading}
-          onClick={onGenerate}
-          className="w-full sm:w-auto"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating study pack materials...
-            </>
-          ) : (
-            <>
-              <Sparkles className="mr-2 h-4 w-4" />
-              Generate Study Pack
-            </>
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onClear}
-          disabled={loading}
-          className="w-full sm:w-auto"
-        >
-          Clear Inputs
-        </Button>
-      </div>
+      {noteEditorMode ? (
+        <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+          <p className="text-sm text-foreground/80">{helperText}</p>
+          <div className="hidden flex-wrap gap-3 sm:flex">
+            <Button
+              type="button"
+              disabled={!canGenerate || loading}
+              onClick={onGenerate}
+              className="w-full sm:w-auto"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating your study pack...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {actionLabel}
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClear}
+              disabled={loading}
+              className="w-full sm:w-auto"
+            >
+              Clear Inputs
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {!noteEditorMode ? (
+        <div className="flex flex-wrap gap-3">
+          <Button
+            type="button"
+            disabled={!canGenerate || loading}
+            onClick={onGenerate}
+            className="w-full sm:w-auto"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating study pack materials...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate Study Pack
+              </>
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClear}
+            disabled={loading}
+            className="w-full sm:w-auto"
+          >
+            Clear Inputs
+          </Button>
+        </div>
+      ) : null}
+
+      {noteEditorMode ? (
+        <div className="h-16 sm:hidden" aria-hidden="true" />
+      ) : null}
+
+      {noteEditorMode ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 p-3 backdrop-blur sm:hidden">
+          <Button
+            type="button"
+            disabled={!canGenerate || loading}
+            onClick={onGenerate}
+            className="w-full"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating your study pack...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                {actionLabel}
+              </>
+            )}
+          </Button>
+        </div>
+      ) : null}
     </Card>
   );
 }

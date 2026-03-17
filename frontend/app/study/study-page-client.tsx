@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { ConfirmTextCard } from "./confirm-text-card";
@@ -14,6 +15,11 @@ type StudyPageClientProps = {
 export default function StudyPageClient({ forcedDemoMode = false }: StudyPageClientProps) {
   const searchParams = useSearchParams();
   const demoMode = forcedDemoMode || searchParams.get("demo") === "true";
+  const noteEditorMode = searchParams.get("editor") === "note";
+  const focusUpload = searchParams.get("focus") === "upload";
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteSubject, setNoteSubject] = useState("");
+  const [noteTags, setNoteTags] = useState("");
 
   const {
     notesText,
@@ -35,14 +41,21 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,
-  } = useStudyPack(demoMode);
+  } = useStudyPack(demoMode, noteEditorMode);
+
+  const handleClearAll = () => {
+    handleClearNotes();
+    setNoteTitle("");
+    setNoteSubject("");
+    setNoteTags("");
+  };
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       <section className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold text-foreground sm:text-3xl md:text-4xl">
-            Turn Notes Into Study Pack Materials
+            {noteEditorMode ? "Create your first note" : "Turn Notes Into Study Pack Materials"}
           </h1>
           {demoMode ? (
             <span className="inline-flex items-center rounded-full border border-blue-500/40 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
@@ -51,17 +64,27 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
           ) : null}
         </div>
         <p className="text-base leading-relaxed text-foreground/75">
-          Paste your notes or upload a photo. We'll organize everything
-          into a clean summary, key concepts, and a quick practice quiz.
+          {noteEditorMode
+            ? "Write your note, then generate your first Study Pack when you're ready."
+            : "Paste your notes or upload a photo. We'll organize everything into a clean summary, key concepts, and a quick practice quiz."}
         </p>
       </section>
 
       <StudyInputCard
+        noteEditorMode={noteEditorMode}
+        focusUpload={focusUpload}
+        noteTitle={noteTitle}
+        onNoteTitleChange={setNoteTitle}
+        noteSubject={noteSubject}
+        onNoteSubjectChange={setNoteSubject}
+        noteTags={noteTags}
+        onNoteTagsChange={setNoteTags}
         notesText={notesText}
         onNotesTextChange={setNotesText}
         imageFile={imageFile}
         onImageFileChange={setImageFile}
         imageInputKey={imageInputKey}
+        hasStudyPack={Boolean(studyPackResult)}
         canGenerate={canGenerate}
         loading={loading}
         ocrFlowState={ocrFlowState}
@@ -69,7 +92,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
         onGenerate={() => {
           void handleGenerateStudyPack();
         }}
-        onClear={handleClearNotes}
+        onClear={handleClearAll}
       />
 
       {errorMessage ? (
