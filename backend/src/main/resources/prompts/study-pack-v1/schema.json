@@ -7,7 +7,8 @@
       "type": "string"
     },
     "summary": {
-      "type": "string"
+      "type": "string",
+      "minLength": 20
     },
     "subject": {
       "type": "string",
@@ -26,12 +27,18 @@
     },
     "keyConcepts": {
       "type": "array",
+      "minItems": 8,
+      "maxItems": 10,
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 80
       }
     },
     "quiz": {
       "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -39,8 +46,7 @@
           "question",
           "choices",
           "answerIndex",
-          "concept",
-          "explanation"
+          "concept"
         ],
         "properties": {
           "question": {
@@ -63,9 +69,6 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 48
-          },
-          "explanation": {
-            "type": "string"
           }
         }
       }

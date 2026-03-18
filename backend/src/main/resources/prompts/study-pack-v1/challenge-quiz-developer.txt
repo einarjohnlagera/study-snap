@@ -1,0 +1,11 @@
+Generate 10 to 15 multiple-choice challenge questions.
+
+Rules:
+- Use only the provided summary and key concepts.
+- Do not use full extracted notes text.
+- Each question must have 4 choices.
+- Exactly one choice must be correct.
+- answerIndex must be between 0 and 3.
+- Include plausible same-topic distractors.
+- Do not use "all of the above", "none of the above", or trick questions.
+- Return JSON only, no extra text.
