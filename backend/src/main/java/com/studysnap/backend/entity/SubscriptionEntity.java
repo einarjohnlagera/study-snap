@@ -57,14 +57,6 @@ public class SubscriptionEntity {
     @Column(name = "provider_subscription_id", length = 128)
     private String providerSubscriptionId;
 
-    // Legacy Stripe fields kept for backward compatibility during provider-agnostic transition.
-    @Column(name = "stripe_customer_id", length = 128)
-    private String stripeCustomerId;
-
-    // Legacy Stripe fields kept for backward compatibility during provider-agnostic transition.
-    @Column(name = "stripe_subscription_id", length = 128)
-    private String stripeSubscriptionId;
-
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

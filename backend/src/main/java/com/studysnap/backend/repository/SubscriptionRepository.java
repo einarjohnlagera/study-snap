@@ -35,6 +35,4 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
             BillingProvider provider,
             String providerSubscriptionId
     );
-
-    Optional<SubscriptionEntity> findFirstByStripeCustomerIdOrderByUpdatedAtDesc(String stripeCustomerId);
 }

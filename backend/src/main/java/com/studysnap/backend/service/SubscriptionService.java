@@ -43,8 +43,6 @@ public class SubscriptionService {
         subscription.setProvider(BillingProvider.NONE);
         subscription.setProviderCustomerId(null);
         subscription.setProviderSubscriptionId(null);
-        subscription.setStripeCustomerId(null);
-        subscription.setStripeSubscriptionId(null);
         subscription.setStartAt(now);
         subscription.setEndAt(null);
         subscription.setCreatedAt(now);
@@ -62,7 +60,7 @@ public class SubscriptionService {
                 ).stream()
                 .filter(subscription -> hasActivePremiumAccess(subscription, now))
                 .findFirst()
-                .map(subscription -> PlanType.PREMIUM)
+                .map(_ -> PlanType.PREMIUM)
                 .orElse(PlanType.FREE);
     }
 
@@ -96,9 +94,6 @@ public class SubscriptionService {
 
         target.setProvider(provider);
         target.setProviderCustomerId(createdCustomerId);
-        if (provider == BillingProvider.STRIPE) {
-            target.setStripeCustomerId(createdCustomerId);
-        }
         target.setUpdatedAt(OffsetDateTime.now());
         subscriptionRepository.save(target);
         return createdCustomerId;
@@ -166,14 +161,6 @@ public class SubscriptionService {
         }
         target.setStartAt(effectiveStartAt);
         target.setEndAt(endAt);
-        if (provider == BillingProvider.STRIPE) {
-            if (normalizedProviderCustomerId != null) {
-                target.setStripeCustomerId(normalizedProviderCustomerId);
-            }
-            if (normalizedProviderSubscriptionId != null) {
-                target.setStripeSubscriptionId(normalizedProviderSubscriptionId);
-            }
-        }
         target.setUpdatedAt(now);
         return subscriptionRepository.save(target);
     }
@@ -216,7 +203,6 @@ public class SubscriptionService {
         target.setProviderSubscriptionId(null);
         target.setStartAt(now);
         target.setEndAt(null);
-        target.setStripeSubscriptionId(null);
         target.setUpdatedAt(now);
         return subscriptionRepository.save(target);
     }
@@ -230,15 +216,7 @@ public class SubscriptionService {
 
         Optional<SubscriptionEntity> byProvider = subscriptionRepository
                 .findFirstByProviderAndProviderCustomerIdOrderByUpdatedAtDesc(provider, providerCustomerId);
-        if (byProvider.isPresent()) {
-            return byProvider.map(subscription -> subscription.getUser().getId());
-        }
-
-        if (provider == BillingProvider.STRIPE) {
-            return subscriptionRepository.findFirstByStripeCustomerIdOrderByUpdatedAtDesc(providerCustomerId)
-                    .map(subscription -> subscription.getUser().getId());
-        }
-        return Optional.empty();
+        return byProvider.map(subscription -> subscription.getUser().getId());
     }
 
     @Transactional(readOnly = true)
