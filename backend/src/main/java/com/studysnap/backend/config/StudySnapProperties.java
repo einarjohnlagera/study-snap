@@ -15,6 +15,9 @@ public class StudySnapProperties {
     private final Billing billing = new Billing();
     private final Email email = new Email();
 
+    @Setter
+    private String appName;
+
     @Getter
     @Setter
     public static class Settings {

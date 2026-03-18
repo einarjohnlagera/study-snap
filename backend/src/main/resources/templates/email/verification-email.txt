@@ -1,0 +1,12 @@
+Welcome to {{app_name}}.
+
+Please verify your email to start generating Study Packs.
+
+Verify your email:
+{{verification_url}}
+
+{{expiration_text}}
+
+If you did not create an account, you can safely ignore this email.
+
+— {{app_name}}
