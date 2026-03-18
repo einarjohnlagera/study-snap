@@ -163,6 +163,10 @@ Behavior:
 * campaign or blast email systems are future work and separate from transactional email
 * unverified users must not generate Study Packs until `email_verified_at` is set
 * authenticated unverified users should see a verification banner with resend action in the app shell
+* generation attempts by unverified users return `403` with structured API error:
+  * `code`: `EMAIL_VERIFICATION_REQUIRED`
+  * `message`: `Verify your email to generate Study Packs.`
+  * `action`: `RESEND_VERIFICATION`
 
 ---
 

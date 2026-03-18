@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ApiRequestError,
   confirmStudyPackText,
   createStudyPackFromImage,
   createStudyPackFromText,
@@ -33,6 +34,8 @@ type UseStudyPackResult = {
   detectedTopic: string | null;
   ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
   ocrStatusMessage: string | null;
+  toastMessage: string | null;
+  toastTone: "success" | "error" | "info";
   handleGenerateStudyPack: () => Promise<StudyPackResponse | null>;
   handleConfirmText: () => Promise<StudyPackResponse | null>;
   handleClearNotes: () => void;
@@ -82,6 +85,8 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
   const [ocrFlowState, setOcrFlowState] =
     useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
   const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
 
   const canGenerate = useMemo(() => {
     return notesText.trim().length > 0 || imageFile !== null;
@@ -127,6 +132,23 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       clearOcrStageTimer();
     };
   }, [demoMode]);
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 3200);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toastMessage]);
+
+  const showToast = (message: string, tone: "success" | "error" | "info" = "info") => {
+    setToastTone(tone);
+    setToastMessage(message);
+  };
 
   const setImageFileWithValidation = (file: File | null) => {
     setErrorMessage(null);
@@ -180,11 +202,8 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     }
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
-      setErrorMessage("Verify your email to start generating your Study Pack.");
-      if (imageFile) {
-        setOcrFlowState("failure");
-        setOcrStatusMessage("Verify your email before running OCR from image notes.");
-      }
+      setErrorMessage(null);
+      showToast("Verify your email before generating a Study Pack.");
       return null;
     }
     if (!authUser.profileType) {
@@ -233,6 +252,11 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       return response;
     } catch (error) {
       clearOcrStageTimer();
+      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+        setErrorMessage(null);
+        showToast("Verify your email before generating a Study Pack.");
+        return null;
+      }
       const message =
         error instanceof Error
           ? error.message
@@ -265,7 +289,8 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     }
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
-      setErrorMessage("Verify your email to start generating your Study Pack.");
+      setErrorMessage(null);
+      showToast("Verify your email before generating a Study Pack.");
       return null;
     }
     if (!authUser.profileType) {
@@ -288,6 +313,11 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       setOcrStatusMessage("Done. Your Study Pack was generated from your edited text.");
       return response;
     } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+        setErrorMessage(null);
+        showToast("Verify your email before generating a Study Pack.");
+        return null;
+      }
       const message =
         error instanceof Error
           ? error.message
@@ -318,6 +348,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     setLoading(false);
     setOcrFlowState("idle");
     setOcrStatusMessage(null);
+    setToastMessage(null);
   };
 
   const generatedLabel = useMemo(() => {
@@ -362,6 +393,8 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     detectedTopic,
     ocrFlowState,
     ocrStatusMessage,
+    toastMessage,
+    toastTone,
     handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,

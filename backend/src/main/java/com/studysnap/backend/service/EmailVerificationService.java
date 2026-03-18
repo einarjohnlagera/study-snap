@@ -61,7 +61,7 @@ public class EmailVerificationService {
         EmailTemplateService.RenderedEmailTemplate renderedTemplate = emailTemplateService.render(
                 "verification-email",
                 Map.of(
-                        "app_name", properties.getAppName(),
+                        "app_name", resolveAppName(),
                         "verification_url", verificationUrl,
                         "email_from", resolveEmailFrom(),
                         "expiration_text", resolveExpirationText()
@@ -180,6 +180,14 @@ public class EmailVerificationService {
             return "";
         }
         return emailFrom.trim();
+    }
+
+    private String resolveAppName() {
+        String appName = properties.getAppName();
+        if (appName == null || appName.isBlank()) {
+            return "NoteLib";
+        }
+        return appName.trim();
     }
 
     private String generateRawToken() {

@@ -333,8 +333,23 @@ type ApiErrorPayload = {
     code?: string;
     message?: string;
     details?: string;
+    action?: string;
   };
 };
+
+export class ApiRequestError extends Error {
+  readonly code: string | null;
+  readonly action: string | null;
+  readonly status: number;
+
+  constructor(message: string, options: { code?: string | null; action?: string | null; status: number }) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.code = options.code ?? null;
+    this.action = options.action ?? null;
+    this.status = options.status;
+  }
+}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
@@ -376,7 +391,11 @@ async function parseApiResponse<T>(
   }
 
   const message = errorPayload?.error?.message ?? fallbackMessage;
-  throw new Error(message);
+  throw new ApiRequestError(message, {
+    code: errorPayload?.error?.code ?? null,
+    action: errorPayload?.error?.action ?? null,
+    status: response.status,
+  });
 }
 
 function toAuthUser(payload: AuthResponse): AuthUser {

@@ -33,7 +33,12 @@ public class ApiAccessDeniedHandler implements AccessDeniedHandler {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getWriter(), new ApiErrorResponse(
                 requestId,
-                new ApiErrorResponse.ApiError("FORBIDDEN", "You do not have permission to access this endpoint.", null)
+                new ApiErrorResponse.ApiError(
+                        "FORBIDDEN",
+                        "You do not have permission to access this endpoint.",
+                        null,
+                        null
+                )
         ));
     }
 }

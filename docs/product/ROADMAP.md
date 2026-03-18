@@ -20,6 +20,7 @@ Scope priorities:
 - real email verification (tokenized links + resend flow) using provider-agnostic email service abstraction
 - file-based parameterized transactional email templates for verification flows
 - unverified users can access account flows but are blocked from Study Pack generation until verified
+- verification-required generation actions should use a consistent structured 403 contract (`EMAIL_VERIFICATION_REQUIRED` + `RESEND_VERIFICATION`)
 - campaign/blast email infrastructure remains out of current scope
 - guided review entry hierarchy:
   - Study Pack detail: Quick Review primary, Challenge secondary, Adaptive only when weak concepts exist

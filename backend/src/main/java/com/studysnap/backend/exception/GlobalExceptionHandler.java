@@ -31,7 +31,8 @@ public class GlobalExceptionHandler {
 				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(
 						ex.getCode(),
 						ex.getMessage(),
-						safeDetails(ex)
+						safeDetails(ex),
+						ex.getAction()
 				))
 		);
 	}
@@ -43,7 +44,7 @@ public class GlobalExceptionHandler {
 		String message = fieldError != null ? fieldError.getDefaultMessage() : "Invalid request.";
 		log.warn("validation_exception requestId={} message={}", requestId, message);
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError("VALIDATION_ERROR", message, null))
+				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError("VALIDATION_ERROR", message, null, null))
 		);
 	}
 
@@ -55,7 +56,8 @@ public class GlobalExceptionHandler {
 				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(
 						"VALIDATION_ERROR",
 						"Invalid request.",
-						ex.getMessage()
+						ex.getMessage(),
+						null
 				))
 		);
 	}
@@ -68,6 +70,7 @@ public class GlobalExceptionHandler {
 				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(
 						"INTERNAL_ERROR",
 						"Something went wrong while processing your request. Please try again.",
+						null,
 						null
 				))
 		);

@@ -7,7 +7,8 @@ public record ApiErrorResponse(
 	public record ApiError(
 			String code,
 			String message,
-			String details
+			String details,
+			String action
 	) {
 	}
 }

@@ -193,8 +193,10 @@ public class AuthService {
                 .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
         if (user.getEmailVerifiedAt() == null) {
             throw new AppException(
-                    "EMAIL_NOT_VERIFIED",
-                    "Verify your email to start generating a Study Pack.",
+                    "EMAIL_VERIFICATION_REQUIRED",
+                    "Verify your email to generate Study Packs.",
+                    null,
+                    "RESEND_VERIFICATION",
                     HttpStatus.FORBIDDEN
             );
         }

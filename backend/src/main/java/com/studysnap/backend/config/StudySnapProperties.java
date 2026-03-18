@@ -16,7 +16,7 @@ public class StudySnapProperties {
     private final Email email = new Email();
 
     @Setter
-    private String appName;
+    private String appName = "NoteLib";
 
     @Getter
     @Setter
@@ -106,4 +106,3 @@ public class StudySnapProperties {
         private int resendCooldownSeconds = 60;
     }
 }
-
