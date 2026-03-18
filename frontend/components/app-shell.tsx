@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { logout, getMe } from "@/lib/api";
+import { getMe, logout, requestEmailVerification } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ type ShellUser = {
   displayName: string | null;
   firstName: string | null;
   email: string | null;
+  emailVerifiedAt: string | null;
 };
 
 function isAuthenticatedRoute(pathname: string): boolean {
@@ -145,12 +146,32 @@ export function AppShell({ children }: AppShellProps) {
     displayName: null,
     firstName: null,
     email: null,
+    emailVerifiedAt: null,
   });
+  const [resendingVerification, setResendingVerification] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const syncAuthState = () => {
-      setHasAuthUser(Boolean(getAuthUser()));
+      const authUser = getAuthUser();
+      setHasAuthUser(Boolean(authUser));
+      if (!authUser) {
+        setUser({
+          displayName: null,
+          firstName: null,
+          email: null,
+          emailVerifiedAt: null,
+        });
+        return;
+      }
+      setUser((previous) => ({
+        displayName: authUser.displayName ?? previous.displayName,
+        firstName: previous.firstName,
+        email: authUser.email ?? previous.email,
+        emailVerifiedAt: authUser.emailVerifiedAt,
+      }));
     };
 
     syncAuthState();
@@ -178,6 +199,7 @@ export function AppShell({ children }: AppShellProps) {
       displayName: authUser?.displayName ?? null,
       firstName: null,
       email: authUser?.email ?? null,
+      emailVerifiedAt: authUser?.emailVerifiedAt ?? null,
     });
   }, [shouldUseShell, pathname]);
 
@@ -195,6 +217,7 @@ export function AppShell({ children }: AppShellProps) {
           displayName: me.displayName?.trim() || null,
           firstName: me.firstName?.trim() || null,
           email: me.email,
+          emailVerifiedAt: me.emailVerifiedAt,
         });
       })
       .catch(() => {
@@ -241,12 +264,30 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, [router]);
 
+  const handleResendVerification = useCallback(async () => {
+    if (resendingVerification) {
+      return;
+    }
+    setResendingVerification(true);
+    setVerificationError(null);
+    setVerificationNotice(null);
+    try {
+      const response = await requestEmailVerification();
+      setVerificationNotice(response.message);
+    } catch (error) {
+      setVerificationError(error instanceof Error ? error.message : "Could not send verification email.");
+    } finally {
+      setResendingVerification(false);
+    }
+  }, [resendingVerification]);
+
   const avatarSeed = useMemo(() => {
     return user.displayName || user.firstName || user.email || "U";
   }, [user.displayName, user.email, user.firstName]);
 
   const avatarLetter = avatarSeed.charAt(0).toUpperCase();
   const pageTitle = getPageTitle(pathname || "");
+  const showVerificationBanner = shouldUseShell && hasAuthUser && !user.emailVerifiedAt;
 
   if (!shouldUseShell) {
     return (
@@ -323,6 +364,33 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           </div>
         </header>
+
+        {showVerificationBanner ? (
+          <div className="border-b border-amber-300/50 bg-amber-50/70 px-4 py-3 dark:border-amber-700/50 dark:bg-amber-950/20 sm:px-6">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <p className="text-sm text-amber-900 dark:text-amber-200">
+                Verify your email to generate Study Packs.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void handleResendVerification();
+                }}
+                disabled={resendingVerification}
+              >
+                {resendingVerification ? "Sending..." : "Resend verification email"}
+              </Button>
+            </div>
+            {verificationNotice ? (
+              <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{verificationNotice}</p>
+            ) : null}
+            {verificationError ? (
+              <p className="mt-2 text-xs text-red-700 dark:text-red-300">{verificationError}</p>
+            ) : null}
+          </div>
+        ) : null}
 
         <main>{children}</main>
       </div>

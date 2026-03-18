@@ -156,6 +156,11 @@ Behavior:
 * session-expired redirects include a user-friendly login hint (`Your session has expired. Please log in again.`)
 * after successful login, verified/onboarded users are returned to the preserved destination when available
 * unauthenticated access to protected routes is redirected to login with destination preservation
+* users can sign up and log in before email verification is complete
+* email verification uses tokenized email links with one-time, expiring tokens
+* transactional verification email delivery uses Resend behind a provider-agnostic email service abstraction
+* unverified users must not generate Study Packs until `email_verified_at` is set
+* authenticated unverified users should see a verification banner with resend action in the app shell
 
 ---
 

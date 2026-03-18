@@ -127,6 +127,11 @@ Rules:
 - Preserve destination on login redirects using `redirect` query (for example `/login?redirect=/study-packs/{id}`).
 - Include a session-expired hint on login when redirecting after invalid session (`reason=session_expired`).
 - Protected routes should use shared route guards so unauthenticated access is redirected consistently.
+- Users may sign up and log in before email verification is completed.
+- Unverified users must not generate Study Packs; generation endpoints should enforce `email_verified_at`.
+- Show a non-disruptive verification banner in authenticated shell pages until verified.
+- Verification email flow should use a provider-agnostic `EmailService`; keep provider-specific logic in implementation classes (for example Resend).
+- Email campaigns/blasts are out of scope unless explicitly requested.
 
 ### Theme + Navbar requirements
 - Support light/dark theme with a toggle in the navbar.

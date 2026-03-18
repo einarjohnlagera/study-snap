@@ -13,6 +13,7 @@ public class StudySnapProperties {
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
     private final Billing billing = new Billing();
+    private final Email email = new Email();
 
     @Getter
     @Setter
@@ -89,6 +90,17 @@ public class StudySnapProperties {
         private String premiumPriceId = "";
         private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
         private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
+    }
+
+    @Getter
+    @Setter
+    public static class Email {
+        private String resendApiKey = "";
+        private String resendApiBaseUrl = "https://api.resend.com";
+        private String from = "";
+        private String appBaseUrl = "http://localhost:3000";
+        private int verificationTokenHours = 24;
+        private int resendCooldownSeconds = 60;
     }
 }
 
