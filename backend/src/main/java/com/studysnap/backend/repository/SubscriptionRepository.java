@@ -1,14 +1,40 @@
 package com.studysnap.backend.repository;
 
+import com.studysnap.backend.entity.BillingProvider;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity, UUID> {
     Optional<SubscriptionEntity> findFirstByUser_IdAndStatusOrderByCreatedAtDesc(UUID userId, SubscriptionStatus status);
     Optional<SubscriptionEntity> findFirstByUser_IdOrderByCreatedAtDesc(UUID userId);
+
+    Optional<SubscriptionEntity> findFirstByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+            UUID userId,
+            PlanType planType,
+            SubscriptionStatus status
+    );
+
+    List<SubscriptionEntity> findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+            UUID userId,
+            PlanType planType,
+            SubscriptionStatus status
+    );
+
+    Optional<SubscriptionEntity> findFirstByProviderAndProviderCustomerIdOrderByUpdatedAtDesc(
+            BillingProvider provider,
+            String providerCustomerId
+    );
+
+    Optional<SubscriptionEntity> findFirstByProviderAndProviderSubscriptionIdOrderByUpdatedAtDesc(
+            BillingProvider provider,
+            String providerSubscriptionId
+    );
+
     Optional<SubscriptionEntity> findFirstByStripeCustomerIdOrderByUpdatedAtDesc(String stripeCustomerId);
 }

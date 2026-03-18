@@ -43,9 +43,25 @@ public class SubscriptionEntity {
     @Column(name = "end_at")
     private OffsetDateTime endAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_type", nullable = false, length = 32)
+    private BillingType billingType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private BillingProvider provider;
+
+    @Column(name = "provider_customer_id", length = 128)
+    private String providerCustomerId;
+
+    @Column(name = "provider_subscription_id", length = 128)
+    private String providerSubscriptionId;
+
+    // Legacy Stripe fields kept for backward compatibility during provider-agnostic transition.
     @Column(name = "stripe_customer_id", length = 128)
     private String stripeCustomerId;
 
+    // Legacy Stripe fields kept for backward compatibility during provider-agnostic transition.
     @Column(name = "stripe_subscription_id", length = 128)
     private String stripeSubscriptionId;
 
