@@ -9,7 +9,6 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
-import com.studysnap.backend.dto.VerifyEmailRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
 import com.studysnap.backend.service.AuthService;
@@ -20,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -76,13 +76,15 @@ public class AuthController {
         return authService.requestEmailVerification(user.userId());
     }
 
-    @PostMapping("/verify-email/confirm")
+    @PostMapping("/resend-verification")
     @PreAuthorize("isAuthenticated()")
-    public MeResponse verifyEmail(
-            @AuthenticationPrincipal AuthenticatedUser user,
-            @Valid @RequestBody VerifyEmailRequest request
-    ) {
-        return authService.verifyEmail(user.userId(), request);
+    public SimpleMessageResponse resendVerification(@AuthenticationPrincipal AuthenticatedUser user) {
+        return authService.requestEmailVerification(user.userId());
+    }
+
+    @GetMapping("/verify-email")
+    public SimpleMessageResponse verifyEmail(@RequestParam("token") String token) {
+        return authService.verifyEmailToken(token);
     }
 
     @PostMapping("/preferences/engagement-mode")

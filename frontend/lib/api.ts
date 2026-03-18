@@ -154,10 +154,6 @@ export type SimpleMessageResponse = {
   message: string;
 };
 
-export type VerifyEmailRequest = {
-  token: string;
-};
-
 export type NeedsTextConfirmationResponse = {
   status: "needs_text_confirmation";
   id: string;
@@ -521,7 +517,7 @@ export async function completeOnboardingProfileType(
 
 export async function requestEmailVerification(): Promise<SimpleMessageResponse> {
   const response = await fetchWithAuth(
-    "/auth/verify-email/request",
+    "/auth/resend-verification",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -531,17 +527,28 @@ export async function requestEmailVerification(): Promise<SimpleMessageResponse>
   return parseApiResponse<SimpleMessageResponse>(response, "Could not send verification email. Please try again.");
 }
 
-export async function confirmEmailVerification(request: VerifyEmailRequest): Promise<MeResponse> {
+export async function verifyEmailToken(token: string): Promise<SimpleMessageResponse> {
+  const query = new URLSearchParams({ token }).toString();
+  const response = await fetch(buildUrl(`/auth/verify-email?${query}`), {
+    method: "GET",
+  });
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not verify email. Please try again.");
+}
+
+export async function confirmEmailVerification(token: string): Promise<SimpleMessageResponse> {
+  return verifyEmailToken(token);
+}
+
+export async function requestEmailVerificationLegacy(): Promise<SimpleMessageResponse> {
   const response = await fetchWithAuth(
-    "/auth/verify-email/confirm",
+    "/auth/verify-email/request",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify(request),
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not verify email. Please try again.");
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not send verification email. Please try again.");
 }
 
 export async function updateEngagementMode(request: UpdateEngagementModeRequest): Promise<MeResponse> {

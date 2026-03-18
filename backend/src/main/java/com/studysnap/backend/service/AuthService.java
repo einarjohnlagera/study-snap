@@ -9,7 +9,6 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
-import com.studysnap.backend.dto.VerifyEmailRequest;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.RefreshTokenEntity;
@@ -21,8 +20,6 @@ import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -36,14 +33,13 @@ import java.util.UUID;
 @Transactional
 @RequiredArgsConstructor
 public class AuthService {
-    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
-
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final SecurityProperties securityProperties;
+    private final EmailVerificationService emailVerificationService;
 
     public AuthResponse signup(SignupRequest request, String ipAddress, String userAgent) {
         String email = normalizeEmail(request.email());
@@ -74,7 +70,7 @@ public class AuthService {
 
         UserEntity saved = userRepository.save(user);
         subscriptionService.createDefaultFreeSubscription(saved);
-        sendVerificationEmailPlaceholder(saved);
+        emailVerificationService.sendVerificationEmail(saved, false);
         return buildAuthResponse(saved, PlanType.FREE, false, null, ipAddress, userAgent);
     }
 
@@ -152,24 +148,16 @@ public class AuthService {
     public SimpleMessageResponse requestEmailVerification(UUID userId) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
-        sendVerificationEmailPlaceholder(user);
+        if (user.getEmailVerifiedAt() != null) {
+            return new SimpleMessageResponse("Your email is already verified.");
+        }
+        emailVerificationService.sendVerificationEmail(user, true);
         return new SimpleMessageResponse("Verification email sent. Please check your inbox.");
     }
 
-    public MeResponse verifyEmail(UUID userId, VerifyEmailRequest request) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
-
-        if (!request.token().trim().equals(user.getId().toString())) {
-            throw new AppException("INVALID_VERIFICATION_TOKEN", "Invalid verification token.", HttpStatus.BAD_REQUEST);
-        }
-
-        if (user.getEmailVerifiedAt() == null) {
-            user.setEmailVerifiedAt(OffsetDateTime.now());
-            user.setUpdatedAt(OffsetDateTime.now());
-        }
-
-        return toMeResponse(user);
+    public SimpleMessageResponse verifyEmailToken(String token) {
+        EmailVerificationService.EmailVerificationResult result = emailVerificationService.verifyToken(token);
+        return new SimpleMessageResponse(result.message());
     }
 
     public MeResponse updateEngagementMode(UUID userId, UpdateEngagementModeRequest request) {
@@ -272,14 +260,5 @@ public class AuthService {
             return displayName.trim();
         }
         return firstName == null ? null : firstName.trim();
-    }
-
-    private void sendVerificationEmailPlaceholder(UserEntity user) {
-        log.info(
-                "email_verification_placeholder userId={} email={} token={} (future: replace with token table + email provider)",
-                user.getId(),
-                user.getEmail(),
-                user.getId()
-        );
     }
 }

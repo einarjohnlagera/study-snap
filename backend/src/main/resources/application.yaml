@@ -78,6 +78,13 @@ studysnap:
       premium-price-id: ${STRIPE_PREMIUM_PRICE_ID:}
       checkout-success-url: ${STRIPE_CHECKOUT_SUCCESS_URL:http://localhost:3000/settings?checkout=success}
       checkout-cancel-url: ${STRIPE_CHECKOUT_CANCEL_URL:http://localhost:3000/settings?checkout=cancel}
+  email:
+    resend-api-key: ${RESEND_API_KEY:}
+    resend-api-base-url: ${RESEND_API_BASE_URL:https://api.resend.com}
+    from: ${EMAIL_FROM:}
+    app-base-url: ${APP_BASE_URL:http://localhost:3000}
+    verification-token-hours: ${EMAIL_VERIFICATION_TOKEN_HOURS:24}
+    resend-cooldown-seconds: ${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:60}
   security:
     jwt:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}

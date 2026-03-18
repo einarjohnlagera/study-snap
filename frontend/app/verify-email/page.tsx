@@ -1,37 +1,97 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { confirmEmailVerification, requestEmailVerification } from "@/lib/api";
-import { getAuthUser, setAuthUser } from "@/lib/auth";
-import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
+import { getMe, requestEmailVerification, verifyEmailToken } from "@/lib/api";
+import { buildLoginPath, getAuthUser, setAuthUser, type AuthUser } from "@/lib/auth";
 
-export default function VerifyEmailPage() {
+function VerifyEmailPageContent() {
   const router = useRouter();
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token");
+
+  const [authUser, setAuthUserState] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const authUser = getAuthUser();
-    if (!authUser) {
-      redirectToLoginWithCurrentDestination(router);
-      return;
-    }
-    if (authUser.emailVerifiedAt) {
-      router.replace(authUser.profileType ? "/dashboard" : "/onboarding");
-      return;
-    }
-    setAuthUserId(authUser.id);
-  }, [router]);
+    const existingAuthUser = getAuthUser();
+    setAuthUserState(existingAuthUser);
+  }, []);
 
-  const canSubmit = useMemo(() => authUserId !== null && !loading, [authUserId, loading]);
+  useEffect(() => {
+    const existingAuthUser = getAuthUser();
+    setAuthUserState(existingAuthUser);
+
+    if (!token) {
+      if (existingAuthUser?.emailVerifiedAt) {
+        router.replace(existingAuthUser.profileType ? "/dashboard" : "/onboarding");
+      }
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
+    void verifyEmailToken(token)
+      .then(async (response) => {
+        if (cancelled) {
+          return;
+        }
+        setMessage(response.message);
+        const activeAuthUser = getAuthUser();
+        if (!activeAuthUser) {
+          return;
+        }
+
+        try {
+          const me = await getMe();
+          const nextAuthUser: AuthUser = {
+            ...activeAuthUser,
+            displayName: me.displayName,
+            profileType: me.profileType,
+            emailVerifiedAt: me.emailVerifiedAt,
+          };
+          setAuthUser(nextAuthUser);
+          setAuthUserState(nextAuthUser);
+        } catch {
+          const fallbackAuthUser: AuthUser = {
+            ...activeAuthUser,
+            emailVerifiedAt: new Date().toISOString(),
+          };
+          setAuthUser(fallbackAuthUser);
+          setAuthUserState(fallbackAuthUser);
+        }
+      })
+      .catch((verificationError) => {
+        if (cancelled) {
+          return;
+        }
+        setError(
+          verificationError instanceof Error
+            ? verificationError.message
+            : "Could not verify email.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, token]);
 
   const handleResend = async () => {
-    if (!canSubmit) {
+    if (!authUser || authUser.emailVerifiedAt || loading) {
       return;
     }
     setLoading(true);
@@ -40,39 +100,27 @@ export default function VerifyEmailPage() {
     try {
       const response = await requestEmailVerification();
       setMessage(response.message);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not send verification email.");
+    } catch (resendError) {
+      setError(resendError instanceof Error ? resendError.message : "Could not send verification email.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleConfirm = async () => {
-    if (!canSubmit || !authUserId) {
-      return;
+  const continueHref = useMemo(() => {
+    if (!authUser) {
+      return "/login";
     }
-    setLoading(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const me = await confirmEmailVerification({ token: authUserId });
-      const authUser = getAuthUser();
-      if (authUser) {
-        setAuthUser({
-          ...authUser,
-          emailVerifiedAt: me.emailVerifiedAt,
-          profileType: me.profileType,
-          displayName: me.displayName,
-        });
-      }
-      router.push(me.profileType ? "/dashboard" : "/onboarding");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not verify email.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    return authUser.profileType ? "/dashboard" : "/onboarding";
+  }, [authUser]);
+
+  const loginToVerifyHref = useMemo(
+    () =>
+      buildLoginPath({
+        redirectTo: "/verify-email",
+      }),
+    [],
+  );
 
   return (
     <div className="mx-auto w-full max-w-xl px-6 py-10">
@@ -80,23 +128,62 @@ export default function VerifyEmailPage() {
         <div className="space-y-2">
           <CardTitle>Verify your email</CardTitle>
           <CardDescription>
-            Check your inbox and verify your email before generating a Study Pack.
+            Email verification is required before generating Study Packs.
           </CardDescription>
         </div>
-        <p className="text-sm text-foreground/70">
-          Placeholder flow in local/dev: use the confirm button below while tokenized verification is being integrated.
-        </p>
+
+        {token ? (
+          <p className="text-sm text-foreground/80">
+            {loading ? "Verifying your email..." : "Verification request processed."}
+          </p>
+        ) : (
+          <p className="text-sm text-foreground/80">
+            Check your inbox and open your verification link. You can resend the email if needed.
+          </p>
+        )}
+
         {message ? <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p> : null}
         {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => void handleResend()} disabled={!canSubmit}>
-            Resend verification email
-          </Button>
-          <Button type="button" onClick={() => void handleConfirm()} disabled={!canSubmit}>
-            I have verified my email
-          </Button>
+          {authUser && !authUser.emailVerifiedAt ? (
+            <Button type="button" variant="outline" onClick={() => void handleResend()} disabled={loading}>
+              {loading ? "Sending..." : "Resend verification email"}
+            </Button>
+          ) : null}
+
+          {token && !loading ? (
+            <Link href={continueHref} className={buttonVariants({ variant: "default" })}>
+              Continue
+            </Link>
+          ) : null}
+
+          {!authUser ? (
+            <Link href={loginToVerifyHref} className={buttonVariants({ variant: "outline" })}>
+              Log in to resend email
+            </Link>
+          ) : null}
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={(
+        <div className="mx-auto w-full max-w-xl px-6 py-10">
+          <Card className="space-y-5">
+            <div className="space-y-2">
+              <CardTitle>Verify your email</CardTitle>
+              <CardDescription>Preparing verification page...</CardDescription>
+            </div>
+          </Card>
+        </div>
+      )}
+    >
+      <VerifyEmailPageContent />
+    </Suspense>
   );
 }

@@ -17,6 +17,8 @@ Scope priorities:
 - Premium Challenge Quiz (timed exam-style mode using existing Study Pack quiz data)
 - separate Premium review quotas for Challenge Quiz and Adaptive Practice (50/month each)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
+- real email verification (tokenized links + resend flow) using provider-agnostic email service abstraction
+- unverified users can access account flows but are blocked from Study Pack generation until verified
 - guided review entry hierarchy:
   - Study Pack detail: Quick Review primary, Challenge secondary, Adaptive only when weak concepts exist
   - Quick Review results: recommend Adaptive when struggling, Challenge when strong
