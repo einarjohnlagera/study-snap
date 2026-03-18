@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.util.TextNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -136,14 +137,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     );
                 }
                 String normalizedConcept = normalizeAndValidateConcept(item.concept());
-                if (!normalizedQuestions.add(normalizeForDuplicateCheck(item.question()))) {
+                if (!normalizedQuestions.add(TextNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned repetitive quiz questions. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (!normalizedConcepts.add(normalizeForDuplicateCheck(normalizedConcept))) {
+                if (!normalizedConcepts.add(TextNormalizationUtils.normalizeForDuplicateCheck(normalizedConcept))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned repetitive quiz concepts. Please try again.",
@@ -370,7 +371,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String normalizeAndValidateSubject(String subject) {
         String normalized = normalizeMetadataValue(subject);
-        if (!containsAlphaNumeric(normalized) || !hasWordCountBetween(normalized, 1, 4)) {
+        if (!TextNormalizationUtils.containsAlphaNumeric(normalized) || !hasWordCountBetween(normalized, 1, 4)) {
             throw new AppException(
                     "LLM_INVALID_OUTPUT",
                     "The study pack service returned invalid subject metadata. Please try again.",
@@ -389,12 +390,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             );
         }
 
-        String normalizedTitle = normalizeForDuplicateCheck(title);
+        String normalizedTitle = TextNormalizationUtils.normalizeForDuplicateCheck(title);
         Set<String> normalizedSeenTags = new HashSet<>();
         List<String> normalizedTags = new ArrayList<>();
         for (String tag : tags) {
             String normalizedTag = normalizeMetadataValue(tag);
-            if (!containsAlphaNumeric(normalizedTag)
+            if (!TextNormalizationUtils.containsAlphaNumeric(normalizedTag)
                     || !hasWordCountBetween(normalizedTag, 1, 3)) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
@@ -403,7 +404,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 );
             }
 
-            String normalizedTagForComparison = normalizeForDuplicateCheck(normalizedTag);
+            String normalizedTagForComparison = TextNormalizationUtils.normalizeForDuplicateCheck(normalizedTag);
             if (normalizedTagForComparison.isBlank()
                     || normalizedTagForComparison.equals(normalizedTitle)
                     || !normalizedSeenTags.add(normalizedTagForComparison)) {
@@ -432,7 +433,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         List<String> normalizedConcepts = new ArrayList<>();
         for (String keyConcept : keyConcepts) {
             String normalized = normalizeMetadataValue(keyConcept);
-            if (!containsAlphaNumeric(normalized)) {
+            if (!TextNormalizationUtils.containsAlphaNumeric(normalized)) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
                         "The study pack service returned invalid key concepts. Please try again.",
@@ -440,7 +441,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 );
             }
 
-            String duplicateKey = normalizeForDuplicateCheck(normalized);
+            String duplicateKey = TextNormalizationUtils.normalizeForDuplicateCheck(normalized);
             if (duplicateKey.isBlank() || !normalizedSeen.add(duplicateKey)) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
@@ -479,21 +480,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return wordCount >= minWords && wordCount <= maxWords;
     }
 
-    private boolean containsAlphaNumeric(String value) {
-        return value != null && value.matches(".*[A-Za-z0-9].*");
-    }
-
-    private String normalizeForDuplicateCheck(String value) {
-        return value == null ? "" : value.toLowerCase().replaceAll("[^a-z0-9 ]", "").replaceAll("\\s+", " ").trim();
-    }
-
     private boolean hasBlankOrDuplicateChoices(List<String> choices) {
         Set<String> normalizedChoices = new HashSet<>();
         for (String choice : choices) {
             if (isBlank(choice)) {
                 return true;
             }
-            if (!normalizedChoices.add(normalizeForDuplicateCheck(choice))) {
+            if (!normalizedChoices.add(TextNormalizationUtils.normalizeForDuplicateCheck(choice))) {
                 return true;
             }
         }
@@ -516,7 +509,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private List<String> randomizeChoices(List<String> choices, String question) {
         List<String> shuffled = new ArrayList<>(choices);
-        long seed = normalizeForDuplicateCheck(question).hashCode();
+        long seed = TextNormalizationUtils.normalizeForDuplicateCheck(question).hashCode();
         Collections.shuffle(shuffled, new Random(seed));
         return shuffled;
     }
@@ -774,7 +767,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (!normalizedQuestions.add(normalizeForDuplicateCheck(item.question()))) {
+                if (!normalizedQuestions.add(TextNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "Adaptive quiz generation returned repetitive questions. Please try again.",
