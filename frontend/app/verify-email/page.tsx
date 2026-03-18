@@ -5,8 +5,9 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { getMe, requestEmailVerification, verifyEmailToken } from "@/lib/api";
+import { ApiRequestError, getMe, requestEmailVerification, verifyEmailToken } from "@/lib/api";
 import { buildLoginPath, getAuthUser, setAuthUser, type AuthUser } from "@/lib/auth";
+import { ToastMessage } from "@/components/ui/toast-message";
 
 function VerifyEmailPageContent() {
   const router = useRouter();
@@ -17,11 +18,25 @@ function VerifyEmailPageContent() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
 
   useEffect(() => {
     const existingAuthUser = getAuthUser();
     setAuthUserState(existingAuthUser);
   }, []);
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 3200);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toastMessage]);
 
   useEffect(() => {
     const existingAuthUser = getAuthUser();
@@ -45,6 +60,8 @@ function VerifyEmailPageContent() {
           return;
         }
         setMessage(response.message);
+        setToastTone("success");
+        setToastMessage("Your email has been verified. You can now generate Study Packs.");
         const activeAuthUser = getAuthUser();
         if (!activeAuthUser) {
           return;
@@ -98,10 +115,16 @@ function VerifyEmailPageContent() {
     setError(null);
     setMessage(null);
     try {
-      const response = await requestEmailVerification();
-      setMessage(response.message);
+      await requestEmailVerification();
+      setToastTone("success");
+      setToastMessage("Verification email sent. Check your inbox.");
     } catch (resendError) {
-      setError(resendError instanceof Error ? resendError.message : "Could not send verification email.");
+      if (resendError instanceof ApiRequestError && (resendError.code === "VERIFICATION_EMAIL_COOLDOWN" || resendError.status === 429)) {
+        setToastTone("info");
+        setToastMessage("You can resend again in a moment.");
+      } else {
+        setError(resendError instanceof Error ? resendError.message : "Could not send verification email.");
+      }
     } finally {
       setLoading(false);
     }
@@ -165,6 +188,7 @@ function VerifyEmailPageContent() {
           ) : null}
         </div>
       </Card>
+      {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { ConfirmTextCard } from "./confirm-text-card";
 import { StudyPackResults } from "./study-pack-results";
 import { StudyInputCard } from "./study-input-card";
 import { useStudyPack } from "./use-study-pack";
+import { ToastMessage } from "@/components/ui/toast-message";
 
 type StudyPageClientProps = {
   forcedDemoMode?: boolean;
@@ -39,6 +40,8 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     detectedTopic,
     ocrFlowState,
     ocrStatusMessage,
+    toastMessage,
+    toastTone,
     handleGenerateStudyPack,
     handleConfirmText,
   } = useStudyPack(demoMode, samplePreset?.content ?? "");
@@ -128,6 +131,8 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
           detectedTopic={detectedTopic}
         />
       ) : null}
+
+      {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
     </main>
   );
 }

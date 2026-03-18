@@ -5,10 +5,11 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { getMe, logout, requestEmailVerification } from "@/lib/api";
+import { ApiRequestError, getMe, logout, requestEmailVerification } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
 
 type AppShellProps = {
@@ -149,8 +150,8 @@ export function AppShell({ children }: AppShellProps) {
     emailVerifiedAt: null,
   });
   const [resendingVerification, setResendingVerification] = useState(false);
-  const [verificationNotice, setVerificationNotice] = useState<string | null>(null);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -234,6 +235,18 @@ export function AppShell({ children }: AppShellProps) {
   }, [pathname]);
 
   useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      setToastMessage(null);
+    }, 3200);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toastMessage]);
+
+  useEffect(() => {
     if (!avatarMenuOpen) {
       return;
     }
@@ -269,13 +282,18 @@ export function AppShell({ children }: AppShellProps) {
       return;
     }
     setResendingVerification(true);
-    setVerificationError(null);
-    setVerificationNotice(null);
     try {
-      const response = await requestEmailVerification();
-      setVerificationNotice(response.message);
+      await requestEmailVerification();
+      setToastTone("success");
+      setToastMessage("Verification email sent. Check your inbox.");
     } catch (error) {
-      setVerificationError(error instanceof Error ? error.message : "Could not send verification email.");
+      if (error instanceof ApiRequestError && (error.code === "VERIFICATION_EMAIL_COOLDOWN" || error.status === 429)) {
+        setToastTone("info");
+        setToastMessage("You can resend again in a moment.");
+      } else {
+        setToastTone("error");
+        setToastMessage("Could not send verification email. Please try again.");
+      }
     } finally {
       setResendingVerification(false);
     }
@@ -368,9 +386,14 @@ export function AppShell({ children }: AppShellProps) {
         {showVerificationBanner ? (
           <div className="border-b border-amber-300/50 bg-amber-50/70 px-4 py-3 dark:border-amber-700/50 dark:bg-amber-950/20 sm:px-6">
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <p className="text-sm text-amber-900 dark:text-amber-200">
-                Verify your email to generate Study Packs.
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-amber-900 dark:text-amber-200">
+                  Verify your email to start generating Study Packs.
+                </p>
+                <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                  Check your inbox for the verification link, or resend it below.
+                </p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -383,12 +406,6 @@ export function AppShell({ children }: AppShellProps) {
                 {resendingVerification ? "Sending..." : "Resend verification email"}
               </Button>
             </div>
-            {verificationNotice ? (
-              <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300">{verificationNotice}</p>
-            ) : null}
-            {verificationError ? (
-              <p className="mt-2 text-xs text-red-700 dark:text-red-300">{verificationError}</p>
-            ) : null}
           </div>
         ) : null}
 
@@ -437,6 +454,8 @@ export function AppShell({ children }: AppShellProps) {
           </aside>
         </>
       ) : null}
+
+      {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
     </div>
   );
 }

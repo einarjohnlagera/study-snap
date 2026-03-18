@@ -30,7 +30,12 @@ public class ApiAuthenticationEntryPoint implements AuthenticationEntryPoint {
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getWriter(), new ApiErrorResponse(
                 requestId,
-                new ApiErrorResponse.ApiError("AUTH_REQUIRED", "You need to log in to use this endpoint.", null)
+                new ApiErrorResponse.ApiError(
+                        "AUTH_REQUIRED",
+                        "You need to log in to use this endpoint.",
+                        null,
+                        null
+                )
         ));
     }
 }
