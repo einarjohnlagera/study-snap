@@ -159,6 +159,8 @@ Behavior:
 * users can sign up and log in before email verification is complete
 * email verification uses tokenized email links with one-time, expiring tokens
 * transactional verification email delivery uses Resend behind a provider-agnostic email service abstraction
+* transactional email subject/body rendering uses file-based parameterized templates (not database-backed templates)
+* campaign or blast email systems are future work and separate from transactional email
 * unverified users must not generate Study Packs until `email_verified_at` is set
 * authenticated unverified users should see a verification banner with resend action in the app shell
 

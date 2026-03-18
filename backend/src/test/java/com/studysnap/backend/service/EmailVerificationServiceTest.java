@@ -20,6 +20,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -39,6 +40,8 @@ class EmailVerificationServiceTest {
     private UserRepository userRepository;
     @Mock
     private EmailService emailService;
+    @Mock
+    private EmailTemplateService emailTemplateService;
 
     private EmailVerificationService service;
 
@@ -48,7 +51,7 @@ class EmailVerificationServiceTest {
         properties.getEmail().setAppBaseUrl("https://app.notelib.test");
         properties.getEmail().setVerificationTokenHours(24);
         properties.getEmail().setResendCooldownSeconds(60);
-        service = new EmailVerificationService(tokenRepository, userRepository, emailService, properties);
+        service = new EmailVerificationService(tokenRepository, userRepository, emailService, emailTemplateService, properties);
     }
 
     @Test
@@ -58,8 +61,20 @@ class EmailVerificationServiceTest {
         when(tokenRepository.findByUserIdAndUsedAtIsNull(user.getId())).thenReturn(List.of());
         when(tokenRepository.save(any(EmailVerificationTokenEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(emailTemplateService.render(any(), any())).thenReturn(new EmailTemplateService.RenderedEmailTemplate(
+                "Verify your email for NoteLib",
+                "<p>Verify</p>",
+                "Verify"
+        ));
 
         service.sendVerificationEmail(user, false);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailTemplateService).render(any(), paramsCaptor.capture());
+        Map<String, String> templateParams = paramsCaptor.getValue();
+        assertThat(templateParams.get("verification_url")).startsWith("https://app.notelib.test/verify-email?token=");
+        assertThat(templateParams.get("app_name")).isEqualTo("NoteLib");
 
         ArgumentCaptor<EmailVerificationTokenEntity> tokenCaptor = ArgumentCaptor.forClass(EmailVerificationTokenEntity.class);
         verify(tokenRepository).save(tokenCaptor.capture());
@@ -73,8 +88,8 @@ class EmailVerificationServiceTest {
         verify(emailService).sendEmail(emailCaptor.capture());
         EmailMessage sentEmail = emailCaptor.getValue();
         assertThat(sentEmail.to()).isEqualTo(user.getEmail());
-        assertThat(sentEmail.subject()).isEqualTo("Verify your NoteLib email");
-        assertThat(sentEmail.htmlBody()).contains("https://app.notelib.test/verify-email?token=");
+        assertThat(sentEmail.subject()).isEqualTo("Verify your email for NoteLib");
+        assertThat(sentEmail.htmlBody()).isEqualTo("<p>Verify</p>");
     }
 
     @Test

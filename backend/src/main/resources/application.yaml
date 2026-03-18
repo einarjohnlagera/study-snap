@@ -40,6 +40,7 @@ management:
         include: health
 
 studysnap:
+  app-name: NoteLib
   settings:
     max-notes-chars: ${MAX_NOTES_CHARS_FREE:12000}
     max-image-bytes: ${MAX_IMAGE_BYTES:5000000}

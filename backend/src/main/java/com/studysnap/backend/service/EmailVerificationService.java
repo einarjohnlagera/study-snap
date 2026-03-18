@@ -20,6 +20,7 @@ import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,6 +33,7 @@ public class EmailVerificationService {
     private final EmailVerificationTokenRepository emailVerificationTokenRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final EmailTemplateService emailTemplateService;
     private final StudySnapProperties properties;
 
     public void sendVerificationEmail(UserEntity user, boolean enforceCooldown) {
@@ -56,11 +58,21 @@ public class EmailVerificationService {
         emailVerificationTokenRepository.save(tokenEntity);
 
         String verificationUrl = buildVerificationUrl(rawToken);
+        EmailTemplateService.RenderedEmailTemplate renderedTemplate = emailTemplateService.render(
+                "verification-email",
+                Map.of(
+                        "app_name", properties.getAppName(),
+                        "verification_url", verificationUrl,
+                        "email_from", resolveEmailFrom(),
+                        "expiration_text", resolveExpirationText()
+                )
+        );
+
         emailService.sendEmail(new EmailMessage(
                 user.getEmail(),
-                "Verify your NoteLib email",
-                buildHtmlEmailBody(verificationUrl),
-                buildTextEmailBody(verificationUrl)
+                renderedTemplate.subject(),
+                renderedTemplate.htmlBody(),
+                renderedTemplate.textBody()
         ));
     }
 
@@ -154,21 +166,20 @@ public class EmailVerificationService {
         return normalized;
     }
 
-    private String buildHtmlEmailBody(String verificationUrl) {
-        return """
-                <p>Verify your NoteLib email to continue generating Study Packs.</p>
-                <p><a href="%s">Verify email</a></p>
-                <p>If the button does not work, open this link:</p>
-                <p>%s</p>
-                """.formatted(verificationUrl, verificationUrl);
+    private String resolveExpirationText() {
+        int hours = Math.max(1, properties.getEmail().getVerificationTokenHours());
+        if (hours == 1) {
+            return "This verification link expires in 1 hour.";
+        }
+        return "This verification link expires in " + hours + " hours.";
     }
 
-    private String buildTextEmailBody(String verificationUrl) {
-        return """
-                Verify your NoteLib email to continue generating Study Packs.
-
-                Verify email: %s
-                """.formatted(verificationUrl);
+    private String resolveEmailFrom() {
+        String emailFrom = properties.getEmail().getFrom();
+        if (emailFrom == null) {
+            return "";
+        }
+        return emailFrom.trim();
     }
 
     private String generateRawToken() {
