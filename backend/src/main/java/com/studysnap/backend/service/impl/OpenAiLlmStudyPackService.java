@@ -10,7 +10,9 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
-import com.studysnap.backend.util.TextNormalizationUtils;
+import com.studysnap.backend.util.LlmResponseUtils;
+import com.studysnap.backend.util.QuizValidationUtils;
+import com.studysnap.backend.util.StringNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,11 +26,9 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Random;
 import java.util.Set;
 
 @Service
@@ -91,7 +91,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
 
             JsonNode responseJson = objectMapper.readTree(responseBody);
-            String outputJson = extractOutputJson(responseJson);
+            String outputJson = LlmResponseUtils.findOutputJson(responseJson)
+                    .orElseThrow(() -> new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "The study pack service returned an unexpected format. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    ));
             PromptStudyPack promptStudyPack = objectMapper.readValue(outputJson, PromptStudyPack.class);
             if (promptStudyPack.quiz().size() != STUDY_PACK_QUIZ_QUESTION_COUNT) {
                 throw new AppException(
@@ -100,7 +105,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         HttpStatus.BAD_GATEWAY
                 );
             }
-            if (countWords(promptStudyPack.summary()) > MAX_SUMMARY_WORDS) {
+            if (StringNormalizationUtils.countWords(promptStudyPack.summary()) > MAX_SUMMARY_WORDS) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
                         "The study pack service returned an invalid summary format. Please try again.",
@@ -129,7 +134,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (isBlank(item.question())) {
+                if (StringNormalizationUtils.isBlank(item.question())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned an invalid quiz format. Please try again.",
@@ -137,21 +142,21 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     );
                 }
                 String normalizedConcept = normalizeAndValidateConcept(item.concept());
-                if (!normalizedQuestions.add(TextNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
+                if (!normalizedQuestions.add(StringNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned repetitive quiz questions. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (!normalizedConcepts.add(TextNormalizationUtils.normalizeForDuplicateCheck(normalizedConcept))) {
+                if (!normalizedConcepts.add(StringNormalizationUtils.normalizeForDuplicateCheck(normalizedConcept))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned repetitive quiz concepts. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (hasBlankOrDuplicateChoices(item.choices())) {
+                if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "The study pack service returned an invalid quiz format. Please try again.",
@@ -159,7 +164,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     );
                 }
 
-                List<String> randomizedChoices = randomizeChoices(item.choices(), item.question());
+                List<String> randomizedChoices = QuizValidationUtils.randomizeChoices(item.choices(), item.question());
                 String correctAnswer = item.choices().get(item.answerIndex());
 
                 quizItems.add(new QuizItem(
@@ -167,14 +172,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         randomizedChoices,
                         correctAnswer,
                         normalizedConcept,
-                        buildQuizExplanation(normalizedConcept)
+                        QuizValidationUtils.buildFallbackExplanation(normalizedConcept)
                 ));
             }
 
             JsonNode usage = responseJson.path("usage");
-            Integer inputTokens = asNullableInt(usage.get("input_tokens"));
-            Integer outputTokens = asNullableInt(usage.get("output_tokens"));
-            Integer cachedInputTokens = asNullableInt(usage.path("input_tokens_details").get("cached_tokens"));
+            Integer inputTokens = LlmResponseUtils.asNullableInt(usage.get("input_tokens"));
+            Integer outputTokens = LlmResponseUtils.asNullableInt(usage.get("output_tokens"));
+            Integer cachedInputTokens = LlmResponseUtils.asNullableInt(usage.path("input_tokens_details").get("cached_tokens"));
             String modelUsed = responseJson.path("model").asText(model);
 
             return new GeneratedStudyPackContent(
@@ -192,7 +197,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             );
         } catch (RestClientResponseException ex) {
             String requestId = MDC.get("requestId");
-            String upstreamMessage = extractUpstreamErrorMessage(ex.getResponseBodyAsString());
+            String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
             log.warn(
                     "openai_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
                     requestId,
@@ -340,38 +345,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return message;
     }
 
-    private String extractOutputJson(JsonNode responseJson) {
-        JsonNode outputTextNode = responseJson.get("output_text");
-        if (outputTextNode != null && outputTextNode.isTextual()) {
-            return outputTextNode.asText();
-        }
-
-        for (JsonNode outputNode : responseJson.path("output")) {
-            for (JsonNode contentNode : outputNode.path("content")) {
-                if ("output_text".equals(contentNode.path("type").asText()) && contentNode.hasNonNull("text")) {
-                    return contentNode.path("text").asText();
-                }
-            }
-        }
-
-        throw new AppException(
-                "LLM_INVALID_OUTPUT",
-                "The study pack service returned an unexpected format. Please try again.",
-                HttpStatus.BAD_GATEWAY
-        );
-    }
-
-    private Integer asNullableInt(JsonNode node) {
-        return node != null && node.isNumber() ? node.intValue() : null;
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
-    }
-
     private String normalizeAndValidateSubject(String subject) {
-        String normalized = normalizeMetadataValue(subject);
-        if (!TextNormalizationUtils.containsAlphaNumeric(normalized) || !hasWordCountBetween(normalized, 1, 4)) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(subject);
+        if (!StringNormalizationUtils.containsAlphaNumeric(normalized) || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
             throw new AppException(
                     "LLM_INVALID_OUTPUT",
                     "The study pack service returned invalid subject metadata. Please try again.",
@@ -390,13 +366,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             );
         }
 
-        String normalizedTitle = TextNormalizationUtils.normalizeForDuplicateCheck(title);
+        String normalizedTitle = StringNormalizationUtils.normalizeForDuplicateCheck(title);
         Set<String> normalizedSeenTags = new HashSet<>();
         List<String> normalizedTags = new ArrayList<>();
         for (String tag : tags) {
-            String normalizedTag = normalizeMetadataValue(tag);
-            if (!TextNormalizationUtils.containsAlphaNumeric(normalizedTag)
-                    || !hasWordCountBetween(normalizedTag, 1, 3)) {
+            String normalizedTag = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(tag);
+            if (!StringNormalizationUtils.containsAlphaNumeric(normalizedTag)
+                    || !StringNormalizationUtils.hasWordCountBetween(normalizedTag, 1, 3)) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
                         "The study pack service returned invalid tag metadata. Please try again.",
@@ -404,7 +380,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 );
             }
 
-            String normalizedTagForComparison = TextNormalizationUtils.normalizeForDuplicateCheck(normalizedTag);
+            String normalizedTagForComparison = StringNormalizationUtils.normalizeForDuplicateCheck(normalizedTag);
             if (normalizedTagForComparison.isBlank()
                     || normalizedTagForComparison.equals(normalizedTitle)
                     || !normalizedSeenTags.add(normalizedTagForComparison)) {
@@ -432,8 +408,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         Set<String> normalizedSeen = new HashSet<>();
         List<String> normalizedConcepts = new ArrayList<>();
         for (String keyConcept : keyConcepts) {
-            String normalized = normalizeMetadataValue(keyConcept);
-            if (!TextNormalizationUtils.containsAlphaNumeric(normalized)) {
+            String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(keyConcept);
+            if (!StringNormalizationUtils.containsAlphaNumeric(normalized)) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
                         "The study pack service returned invalid key concepts. Please try again.",
@@ -441,7 +417,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 );
             }
 
-            String duplicateKey = TextNormalizationUtils.normalizeForDuplicateCheck(normalized);
+            String duplicateKey = StringNormalizationUtils.normalizeForDuplicateCheck(normalized);
             if (duplicateKey.isBlank() || !normalizedSeen.add(duplicateKey)) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
@@ -456,8 +432,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private String normalizeAndValidateConcept(String concept) {
-        String normalized = normalizeMetadataValue(concept);
-        if (normalized == null || !hasWordCountBetween(normalized, 1, 4)) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(concept);
+        if (normalized == null || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
             throw new AppException(
                     "LLM_INVALID_OUTPUT",
                     "The study pack service returned an invalid quiz concept. Please try again.",
@@ -465,95 +441,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             );
         }
         return normalized;
-    }
-
-    private String normalizeMetadataValue(String value) {
-        if (value == null) {
-            return null;
-        }
-        String normalized = value.trim().replaceAll("\\s+", " ");
-        return normalized.isBlank() ? null : normalized;
-    }
-
-    private boolean hasWordCountBetween(String value, int minWords, int maxWords) {
-        int wordCount = value.trim().split("\\s+").length;
-        return wordCount >= minWords && wordCount <= maxWords;
-    }
-
-    private boolean hasBlankOrDuplicateChoices(List<String> choices) {
-        Set<String> normalizedChoices = new HashSet<>();
-        for (String choice : choices) {
-            if (isBlank(choice)) {
-                return true;
-            }
-            if (!normalizedChoices.add(TextNormalizationUtils.normalizeForDuplicateCheck(choice))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private String buildQuizExplanation(String concept) {
-        if (concept == null || concept.isBlank()) {
-            return "Review this question in your notes.";
-        }
-        return "Review the " + concept + " concept in your notes.";
-    }
-
-    private int countWords(String value) {
-        if (value == null || value.isBlank()) {
-            return 0;
-        }
-        return value.trim().split("\\s+").length;
-    }
-
-    private List<String> randomizeChoices(List<String> choices, String question) {
-        List<String> shuffled = new ArrayList<>(choices);
-        long seed = TextNormalizationUtils.normalizeForDuplicateCheck(question).hashCode();
-        Collections.shuffle(shuffled, new Random(seed));
-        return shuffled;
-    }
-
-    private String extractUpstreamErrorMessage(String responseBody) {
-        if (responseBody == null || responseBody.isBlank()) {
-            return "n/a";
-        }
-        try {
-            JsonNode node = objectMapper.readTree(responseBody);
-            String message = node.path("error").path("message").asText();
-            if (message == null || message.isBlank()) {
-                return "n/a";
-            }
-            return message;
-        } catch (IOException ex) {
-            return "unparseable_upstream_error";
-        }
-    }
-
-    private String sanitizeStudyTip(String rawTip) {
-        if (rawTip == null) {
-            return null;
-        }
-
-        String normalized = rawTip
-                .replaceAll("\\s+", " ")
-                .trim();
-        if (normalized.isBlank()) {
-            return null;
-        }
-
-        String[] sentences = normalized.split("(?<=[.!?])\\s+");
-        if (sentences.length > 0) {
-            normalized = sentences[0].trim();
-        }
-
-        String[] words = normalized.split("\\s+");
-        if (words.length > MAX_STUDY_TIP_WORDS) {
-            normalized = String.join(" ", List.of(words).subList(0, MAX_STUDY_TIP_WORDS)).trim();
-        }
-
-        normalized = normalized.replaceAll("[\\r\\n]+", " ").trim();
-        return normalized.isBlank() ? null : normalized;
     }
 
     @Override
@@ -615,12 +502,17 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
 
             JsonNode responseJson = objectMapper.readTree(responseBody);
-            String outputJson = extractOutputJson(responseJson);
+            String outputJson = LlmResponseUtils.findOutputJson(responseJson)
+                    .orElseThrow(() -> new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "The study tip service returned an unexpected format. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    ));
             PromptStudyTip promptStudyTip = objectMapper.readValue(outputJson, PromptStudyTip.class);
-            return sanitizeStudyTip(promptStudyTip.tip());
+            return LlmResponseUtils.sanitizeStudyTip(promptStudyTip.tip(), MAX_STUDY_TIP_WORDS);
         } catch (RestClientResponseException ex) {
             String requestId = MDC.get("requestId");
-            String upstreamMessage = extractUpstreamErrorMessage(ex.getResponseBodyAsString());
+            String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
             log.warn(
                     "openai_study_tip_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
                     requestId,
@@ -732,7 +624,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
 
             JsonNode responseJson = objectMapper.readTree(responseBody);
-            String outputJson = extractOutputJson(responseJson);
+            String outputJson = LlmResponseUtils.findOutputJson(responseJson)
+                    .orElseThrow(() -> new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            "Adaptive quiz generation returned an unexpected format. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    ));
             PromptAdaptiveQuiz promptAdaptiveQuiz = objectMapper.readValue(outputJson, PromptAdaptiveQuiz.class);
 
             if (promptAdaptiveQuiz.quiz() == null || promptAdaptiveQuiz.quiz().size() != normalizedQuestionCount) {
@@ -760,21 +657,21 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (isBlank(item.question()) || isBlank(item.concept())) {
+                if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.concept())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "Adaptive quiz generation returned an invalid format. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (!normalizedQuestions.add(TextNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
+                if (!normalizedQuestions.add(StringNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "Adaptive quiz generation returned repetitive questions. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (hasBlankOrDuplicateChoices(item.choices())) {
+                if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
                             "Adaptive quiz generation returned invalid choices. Please try again.",
@@ -782,7 +679,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     );
                 }
 
-                List<String> randomizedChoices = randomizeChoices(item.choices(), item.question());
+                List<String> randomizedChoices = QuizValidationUtils.randomizeChoices(item.choices(), item.question());
                 String correctAnswer = item.choices().get(item.answerIndex());
                 String normalizedConcept = normalizeAndValidateConcept(item.concept());
                 quizItems.add(new QuizItem(
@@ -790,14 +687,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         randomizedChoices,
                         correctAnswer,
                         normalizedConcept,
-                        buildQuizExplanation(normalizedConcept)
+                        QuizValidationUtils.buildFallbackExplanation(normalizedConcept)
                 ));
             }
 
             return quizItems;
         } catch (RestClientResponseException ex) {
             String requestId = MDC.get("requestId");
-            String upstreamMessage = extractUpstreamErrorMessage(ex.getResponseBodyAsString());
+            String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
             log.warn(
                     "openai_adaptive_quiz_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
                     requestId,
