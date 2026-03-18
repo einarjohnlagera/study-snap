@@ -264,10 +264,16 @@ Challenge Quiz is a timed, exam-style review mode for Premium users.
 
 Behavior:
 
-* uses existing Study Pack quiz data only (no new LLM generation request)
-* serves a longer shuffled set (10-20 questions)
+* generates new quiz questions via LLM
+* generation input uses only Study Pack `summary` and `keyConcepts` (never extracted OCR text)
+* question count and difficulty adapt from latest completed Quick Review score:
+  * score < 50%: 10 questions, `easy-medium`
+  * score < 80%: 12 questions, `medium`
+  * score >= 80%: 15 questions, `medium-hard`
+* generated questions must not duplicate stored Study Pack quiz questions
 * runs with a 10-minute timer
 * stores a dedicated challenge session result with score and percentage
+* reuses existing in-progress challenge sessions to avoid unnecessary LLM regeneration
 
 Gating and limits:
 
@@ -287,6 +293,30 @@ Quick Review results next-step behavior:
 * if the user struggles (for example weak concepts or a lower score), results should recommend `Adaptive Practice`
 * if the user performs well, results should recommend `Challenge Quiz`
 * keep `Back to Study Pack` as the primary completion action
+
+---
+
+## Adaptive Practice (Premium)
+
+Adaptive Practice is a targeted Premium follow-up mode generated from weak concepts.
+
+Behavior:
+
+* source weak concepts from latest completed Quick Review for the same Study Pack
+* generate new questions via LLM using only `summary`, `keyConcepts`, and weak concepts
+* never send extracted OCR text for adaptive generation
+* adaptive question count follows weak-concept volume:
+  * weak concepts <= 2: 5 questions
+  * weak concepts <= 4: 7 questions
+  * weak concepts >= 5: 10 questions
+* generated adaptive questions must not duplicate stored Study Pack quiz questions
+* in-progress adaptive sessions are reused to avoid unnecessary LLM regeneration
+
+Gating and limits:
+
+* Free users cannot start Adaptive Practice and should see an upgrade path
+* Premium users can start Adaptive Practice up to 50 times per month
+* Adaptive usage is tracked separately and does not deduct from Study Pack generation credits
 
 ---
 

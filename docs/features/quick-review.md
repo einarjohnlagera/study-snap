@@ -272,8 +272,15 @@ Behavior:
 - adaptive practice is available only when weak concepts exist
 - adaptive practice is Premium-only
 - adaptive quiz is newly generated and separate from the original Study Pack quiz
-- adaptive set contains 3-5 questions, each with 4 choices, one correct answer, and explanation
+- adaptive set contains 5, 7, or 10 questions based on weak-concept count:
+  - weak concepts <= 2: 5 questions
+  - weak concepts <= 4: 7 questions
+  - weak concepts >= 5: 10 questions
+- each adaptive question has 4 choices and one correct answer
 - adaptive questions target weak concepts and prioritize understanding over wording recall
+- adaptive generation uses summary + key concepts + weak concepts only (no extracted OCR text)
+- adaptive generation must not duplicate stored Study Pack quiz questions
+- adaptive in-progress sessions must be reused to avoid unnecessary LLM regeneration
 - generation failure should not break Quick Review results; the UI should fail gracefully
 
 Entry point:
@@ -309,11 +316,16 @@ Challenge Quiz is a separate Premium review mode for longer timed practice.
 
 Behavior:
 
-- uses existing Study Pack quiz data only
-- no new LLM generation request
-- serves 10-20 shuffled questions
+- generates new questions via LLM (not from stored Study Pack quiz reuse/shuffle)
+- generation input is summary + key concepts only (no extracted OCR text)
+- question count and difficulty adapt from latest completed Quick Review score:
+  - score < 50%: 10 questions, easy-medium
+  - score < 80%: 12 questions, medium
+  - score >= 80%: 15 questions, medium-hard
+- generated questions must not duplicate stored Study Pack quiz questions
 - uses a fixed 10-minute timer
 - returns a final score and percentage at completion
+- in-progress challenge sessions must be reused to prevent duplicate LLM calls
 
 Gating and usage:
 

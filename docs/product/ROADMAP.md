@@ -14,7 +14,7 @@ Scope priorities:
 - one current Study Pack per note (`1 Note <-> 1 current Study Pack`)
 - regenerate replaces the current Study Pack for that same note
 - no visible Study Pack version history in V2
-- Premium Challenge Quiz (timed exam-style mode using existing Study Pack quiz data)
+- Premium Challenge Quiz (timed exam-style mode with LLM-generated questions from Study Pack summary + key concepts)
 - separate Premium review quotas for Challenge Quiz and Adaptive Practice (50/month each)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
 - real email verification (tokenized links + resend flow) using provider-agnostic email service abstraction
@@ -25,6 +25,10 @@ Scope priorities:
 - guided review entry hierarchy:
   - Study Pack detail: Quick Review primary, Challenge secondary, Adaptive only when weak concepts exist
   - Quick Review results: recommend Adaptive when struggling, Challenge when strong
+- quiz cost controls:
+  - Quick Review remains stored-quiz only (no LLM)
+  - Challenge/Adaptive generate only on new session creation and reuse in-progress sessions
+  - Challenge/Adaptive generation uses summary + key concepts (+ weak concepts for Adaptive), never extracted text
 - public study library support and sharing flow continuity
 - library UX improvements (browse, filtering, sorting, scanability, low-friction revisit)
 

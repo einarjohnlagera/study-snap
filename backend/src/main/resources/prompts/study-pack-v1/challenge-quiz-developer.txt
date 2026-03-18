@@ -1,11 +1,15 @@
-Generate 10 to 15 multiple-choice challenge questions.
+TASK:
+Generate exactly {QUESTION_COUNT} NEW multiple-choice questions.
 
-Rules:
-- Use only the provided summary and key concepts.
-- Do not use full extracted notes text.
+RULES:
+- Base ONLY on the provided summary and key concepts.
+- Difficulty target: {DIFFICULTY}.
+- Questions must test understanding, not memorization.
+- Questions must be unique.
+- Do NOT repeat or rephrase existing questions.
+- Avoid similar wording.
 - Each question must have 4 choices.
-- Exactly one choice must be correct.
-- answerIndex must be between 0 and 3.
-- Include plausible same-topic distractors.
-- Do not use "all of the above", "none of the above", or trick questions.
-- Return JSON only, no extra text.
+- Exactly 1 choice must be correct.
+- Use the provided excluded question list as hard constraints.
+- No explanations.
+- JSON only.

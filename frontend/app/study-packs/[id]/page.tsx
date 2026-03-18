@@ -698,7 +698,7 @@ export default function StudyPackDetailPage() {
                   </Button>
                   {showAdaptivePracticeEntry ? (
                     <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleStartAdaptivePractice}>
-                      Start Adaptive Practice
+                      Practice Weak Concepts
                     </Button>
                   ) : null}
                 </div>

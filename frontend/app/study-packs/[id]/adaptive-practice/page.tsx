@@ -10,6 +10,7 @@ import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
+  completeAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
   trackQuickReviewActivity,
   type QuickReviewAdaptiveQuizResponse,
@@ -40,6 +41,7 @@ export default function AdaptivePracticePage() {
   const [completionTracked, setCompletionTracked] = useState(false);
   const [premiumLocked, setPremiumLocked] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -77,6 +79,7 @@ export default function AdaptivePracticePage() {
       setSelectedChoices({});
       setCompletionTracked(false);
       setQuizStarted(false);
+      setSessionStartedAt(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate adaptive practice.";
       setError(message);
@@ -108,13 +111,10 @@ export default function AdaptivePracticePage() {
     return Number(((score / quiz.length) * 100).toFixed(0));
   }, [quiz.length, score]);
   const completionMessage = useMemo(() => {
-    if (scorePercentage >= 85) {
-      return "Great work. You're mastering this concept.";
+    if (scorePercentage >= 80) {
+      return "Great work. You're mastering this.";
     }
-    if (scorePercentage >= 60) {
-      return "You're improving on this concept.";
-    }
-    return "More practice will help strengthen this concept.";
+    return "Keep going - you're improving.";
   }, [scorePercentage]);
 
   const handleSelectChoice = (choice: string) => {
@@ -134,6 +134,18 @@ export default function AdaptivePracticePage() {
     const nextIndex = currentIndex + 1;
     if (nextIndex >= quiz.length && !completionTracked && studyPackId) {
       setCompletionTracked(true);
+      const durationSeconds = sessionStartedAt
+        ? Math.max(0, Math.round((Date.now() - sessionStartedAt) / 1000))
+        : undefined;
+      if (adaptiveQuiz?.sessionId) {
+        void completeAdaptivePracticeSession(adaptiveQuiz.sessionId, {
+          correctAnswers: score,
+          totalQuestions: quiz.length,
+          durationSeconds,
+        }).catch(() => {
+          // Completion persistence should not block adaptive practice flow.
+        });
+      }
       void trackQuickReviewActivity(studyPackId, "COMPLETED_ADAPTIVE_QUIZ").catch(() => {
         // Keep adaptive practice flow non-blocking if activity tracking fails.
       });
@@ -214,7 +226,7 @@ export default function AdaptivePracticePage() {
           <h1 className="text-xl font-semibold sm:text-2xl">{adaptiveQuiz.title}</h1>
           <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-foreground/85">
             <p className="font-medium text-foreground">
-              We noticed you may need more practice with these concepts.
+              Focusing on concepts you need to improve.
             </p>
           </div>
           <div className="space-y-2 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
@@ -230,7 +242,14 @@ export default function AdaptivePracticePage() {
             )}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="w-full sm:w-auto" onClick={() => setQuizStarted(true)}>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setQuizStarted(true);
+                setSessionStartedAt(Date.now());
+              }}
+            >
               Start Adaptive Practice
             </Button>
             <Link href={`/study-packs/${studyPackId}`} className="w-full sm:w-auto">

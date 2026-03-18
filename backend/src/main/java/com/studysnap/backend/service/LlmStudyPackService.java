@@ -15,7 +15,17 @@ public interface LlmStudyPackService {
 			String studyPackSummary,
 			List<String> keyConcepts,
 			List<String> weakConcepts,
+			List<String> disallowedQuestions,
 			int questionCount
+	);
+
+	List<QuizItem> generateChallengeQuiz(
+			String studyPackTitle,
+			String studyPackSummary,
+			List<String> keyConcepts,
+			List<String> disallowedQuestions,
+			int questionCount,
+			String difficulty
 	);
 }
 

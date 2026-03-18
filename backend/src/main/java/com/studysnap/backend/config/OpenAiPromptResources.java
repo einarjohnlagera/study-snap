@@ -6,6 +6,8 @@ public record OpenAiPromptResources(
         String systemPrompt,
         String developerPromptTemplate,
         JsonNode responseSchema,
+        String challengeQuizSystemPrompt,
+        String challengeQuizDeveloperPromptTemplate,
         String adaptivePracticeSystemPrompt,
         String adaptivePracticeDeveloperPromptTemplate
 ) {

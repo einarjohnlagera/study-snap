@@ -239,11 +239,18 @@ export type QuickReviewStudyTipResponse = {
 };
 
 export type QuickReviewAdaptiveQuizResponse = {
+  sessionId: string | null;
   studyPackId: string;
   title: string;
   weakConcepts: string[];
   quiz: QuizItem[];
   message: string;
+};
+
+export type AdaptivePracticeCompleteRequest = {
+  correctAnswers: number;
+  totalQuestions: number;
+  durationSeconds?: number;
 };
 
 export type ChallengeQuizStartResponse = {
@@ -816,7 +823,7 @@ export async function startQuickReviewSession(
   studyPackId: string,
 ): Promise<QuickReviewSessionStartResponse> {
   const response = await fetchWithAuth(
-    "/quick-review-sessions/start",
+    "/quick-review/start",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -831,7 +838,7 @@ export async function getInProgressQuickReviewSession(
   studyPackId: string,
 ): Promise<QuickReviewSessionStartResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/study-packs/${studyPackId}/in-progress`,
+    `/quick-review/study-packs/${studyPackId}/in-progress`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -846,7 +853,7 @@ export async function updateQuickReviewSessionProgress(
   request: QuickReviewSessionProgressRequest,
 ): Promise<QuickReviewSessionSummaryResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/${sessionId}/progress`,
+    `/quick-review/${sessionId}/progress`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -865,7 +872,7 @@ export async function completeQuickReviewSession(
   request: QuickReviewSessionCompleteRequest,
 ): Promise<QuickReviewSessionSummaryResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/${sessionId}/complete`,
+    `/quick-review/${sessionId}/complete`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -881,7 +888,7 @@ export async function saveQuickReviewConfidence(
   confidenceLevel: QuickReviewConfidenceLevel,
 ): Promise<QuickReviewSessionSummaryResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/${sessionId}/confidence`,
+    `/quick-review/${sessionId}/confidence`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -900,7 +907,7 @@ export async function listRecentQuickReviewSessions(
   limit = 5,
 ): Promise<QuickReviewSessionSummaryResponse[]> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/study-packs/${studyPackId}/recent?limit=${limit}`,
+    `/quick-review/study-packs/${studyPackId}/recent?limit=${limit}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -917,7 +924,7 @@ export async function getQuickReviewPerformanceSummary(
   studyPackId: string,
 ): Promise<QuickReviewPerformanceSummaryResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/study-packs/${studyPackId}/performance-summary`,
+    `/quick-review/study-packs/${studyPackId}/performance-summary`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -935,7 +942,7 @@ export async function generateQuickReviewStudyTip(
   request: QuickReviewStudyTipRequest,
 ): Promise<QuickReviewStudyTipResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/study-packs/${studyPackId}/study-tip`,
+    `/quick-review/study-packs/${studyPackId}/study-tip`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -950,7 +957,7 @@ export async function generateAdaptiveQuickReviewQuiz(
   studyPackId: string,
 ): Promise<QuickReviewAdaptiveQuizResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/study-packs/${studyPackId}/adaptive-practice`,
+    `/adaptive-practice/study-packs/${studyPackId}/start`,
     {
       method: "POST",
       headers: buildAuthHeaders(),
@@ -963,11 +970,30 @@ export async function generateAdaptiveQuickReviewQuiz(
   );
 }
 
+export async function completeAdaptivePracticeSession(
+  sessionId: string,
+  request: AdaptivePracticeCompleteRequest,
+): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/adaptive-practice/sessions/${sessionId}/complete`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(
+    response,
+    "Could not complete adaptive practice session.",
+  );
+}
+
 export async function startChallengeQuizSession(
   studyPackId: string,
 ): Promise<ChallengeQuizStartResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/study-packs/${studyPackId}/challenge/start`,
+    `/challenge-quiz/study-packs/${studyPackId}/start`,
     {
       method: "POST",
       headers: buildAuthHeaders(),
@@ -982,7 +1008,7 @@ export async function completeChallengeQuizSession(
   request: ChallengeQuizCompleteRequest,
 ): Promise<ChallengeQuizSessionResponse> {
   const response = await fetchWithAuth(
-    `/quick-review-sessions/challenge/${sessionId}/complete`,
+    `/challenge-quiz/sessions/${sessionId}/complete`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
