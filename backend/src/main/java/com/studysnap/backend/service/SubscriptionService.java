@@ -1,5 +1,7 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.entity.BillingProvider;
+import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
@@ -15,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 @Service
@@ -24,110 +27,244 @@ public class SubscriptionService {
     private final SubscriptionRepository subscriptionRepository;
     private final UserRepository userRepository;
 
+    public record ProviderMetadata(
+            String providerCustomerId,
+            String providerSubscriptionId
+    ) {
+    }
+
     public SubscriptionEntity createDefaultFreeSubscription(UserEntity user) {
+        OffsetDateTime now = OffsetDateTime.now();
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setId(UUID.randomUUID());
         subscription.setUser(user);
-        subscription.setPlanType(PlanType.FREE);
-        subscription.setStatus(SubscriptionStatus.ACTIVE);
-        subscription.setStartAt(OffsetDateTime.now());
-        subscription.setCreatedAt(OffsetDateTime.now());
-        subscription.setUpdatedAt(OffsetDateTime.now());
+        applyFreeAccess(subscription, now);
+        subscription.setCreatedAt(now);
+        subscription.setUpdatedAt(now);
         return subscriptionRepository.save(subscription);
     }
 
     @Transactional(readOnly = true)
     public PlanType resolvePlan(UUID userId) {
-        return subscriptionRepository.findFirstByUser_IdAndStatusOrderByCreatedAtDesc(userId, SubscriptionStatus.ACTIVE)
-                .map(SubscriptionEntity::getPlanType)
+        OffsetDateTime now = OffsetDateTime.now();
+        return subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+                        userId,
+                        PlanType.PREMIUM,
+                        SubscriptionStatus.ACTIVE
+                ).stream()
+                .filter(subscription -> hasActivePremiumAccess(subscription, now))
+                .findFirst()
+                .map(_ -> PlanType.PREMIUM)
                 .orElse(PlanType.FREE);
     }
 
-    public String ensureStripeCustomerId(UserEntity user, Supplier<String> customerIdSupplier) {
-        SubscriptionEntity subscription = ensureActiveSubscription(user);
-        String existingCustomerId = normalizeStripeId(subscription.getStripeCustomerId());
-        if (existingCustomerId != null) {
+    public String ensureProviderCustomerId(
+            UserEntity user,
+            BillingProvider provider,
+            Supplier<String> customerIdSupplier
+    ) {
+        requireBillableProvider(provider, "Billing provider is required.");
+
+        SubscriptionEntity target = ensureLatestSubscription(user);
+        String existingCustomerId = normalizeReference(target.getProviderCustomerId());
+        if (provider == target.getProvider() && existingCustomerId != null) {
             return existingCustomerId;
         }
 
-        String createdCustomerId = normalizeStripeId(customerIdSupplier.get());
-        subscription.setStripeCustomerId(createdCustomerId);
-        subscription.setUpdatedAt(OffsetDateTime.now());
-        subscriptionRepository.save(subscription);
+        String createdCustomerId = normalizeReference(customerIdSupplier.get());
+        if (createdCustomerId == null) {
+            throw new AppException(
+                    "PROVIDER_CUSTOMER_ID_MISSING",
+                    "Could not create billing customer.",
+                    HttpStatus.BAD_GATEWAY
+            );
+        }
+
+        target.setProvider(provider);
+        target.setProviderCustomerId(createdCustomerId);
+        target.setUpdatedAt(OffsetDateTime.now());
+        subscriptionRepository.save(target);
         return createdCustomerId;
     }
 
-    public void activatePremium(UUID userId, String stripeCustomerId, String stripeSubscriptionId) {
-        Optional<SubscriptionEntity> existing = subscriptionRepository.findFirstByUser_IdAndStatusOrderByCreatedAtDesc(
+    public SubscriptionEntity activatePremiumSubscription(
+            UUID userId,
+            BillingType billingType,
+            BillingProvider provider,
+            OffsetDateTime startAt,
+            OffsetDateTime endAt,
+            ProviderMetadata providerMetadata
+    ) {
+        if (billingType == null || billingType == BillingType.NONE) {
+            throw new AppException(
+                    "INVALID_BILLING_TYPE",
+                    "Billing type must be SUBSCRIPTION or PREPAID for Premium activation.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        requireBillableProvider(provider, "Billing provider is required for Premium activation.");
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime effectiveStartAt = startAt == null ? now : startAt;
+        if (billingType == BillingType.PREPAID && endAt == null) {
+            throw new AppException(
+                    "INVALID_PREPAID_SUBSCRIPTION",
+                    "Prepaid subscriptions require an end date.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        if (endAt != null && !endAt.isAfter(effectiveStartAt)) {
+            throw new AppException(
+                    "INVALID_SUBSCRIPTION_WINDOW",
+                    "Subscription end date must be after start date.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+        UserEntity user = requireUser(userId);
+        SubscriptionEntity target = ensureLatestSubscription(user);
+
+        String normalizedProviderCustomerId = providerMetadata == null
+                ? null
+                : normalizeReference(providerMetadata.providerCustomerId());
+        String normalizedProviderSubscriptionId = providerMetadata == null
+                ? null
+                : normalizeReference(providerMetadata.providerSubscriptionId());
+
+        target.setPlanType(PlanType.PREMIUM);
+        target.setStatus(SubscriptionStatus.ACTIVE);
+        target.setBillingType(billingType);
+        target.setProvider(provider);
+        if (normalizedProviderCustomerId != null) {
+            target.setProviderCustomerId(normalizedProviderCustomerId);
+        }
+        if (normalizedProviderSubscriptionId != null) {
+            target.setProviderSubscriptionId(normalizedProviderSubscriptionId);
+        }
+        target.setStartAt(effectiveStartAt);
+        target.setEndAt(endAt);
+        target.setUpdatedAt(now);
+        return subscriptionRepository.save(target);
+    }
+
+    public SubscriptionEntity activatePrepaidSubscription(
+            UUID userId,
+            int durationDays,
+            BillingProvider provider,
+            ProviderMetadata providerMetadata
+    ) {
+        if (durationDays <= 0) {
+            throw new AppException(
+                    "INVALID_PREPAID_DURATION",
+                    "Prepaid duration must be greater than zero.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        return activatePremiumSubscription(
                 userId,
-                SubscriptionStatus.ACTIVE
+                BillingType.PREPAID,
+                provider,
+                now,
+                now.plusDays(durationDays),
+                providerMetadata
         );
-        SubscriptionEntity target = existing.orElseGet(() -> userRepository.findById(userId)
-                .map(this::createDefaultFreeSubscription)
+    }
+
+    public SubscriptionEntity downgradeToFree(UUID userId) {
+        UserEntity user = requireUser(userId);
+        SubscriptionEntity target = ensureLatestSubscription(user);
+
+        OffsetDateTime now = OffsetDateTime.now();
+        applyFreeAccess(target, now);
+        target.setUpdatedAt(now);
+        return subscriptionRepository.save(target);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<UUID> findUserIdByProviderCustomerId(BillingProvider provider, String providerCustomerIdRaw) {
+        return findUserIdByProviderReference(
+                provider,
+                providerCustomerIdRaw,
+                subscriptionRepository::findFirstByProviderAndProviderCustomerIdOrderByUpdatedAtDesc
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<UUID> findUserIdByProviderSubscriptionId(BillingProvider provider, String providerSubscriptionIdRaw) {
+        return findUserIdByProviderReference(
+                provider,
+                providerSubscriptionIdRaw,
+                subscriptionRepository::findFirstByProviderAndProviderSubscriptionIdOrderByUpdatedAtDesc
+        );
+    }
+
+    private boolean hasActivePremiumAccess(SubscriptionEntity subscription, OffsetDateTime now) {
+        if (subscription.getPlanType() != PlanType.PREMIUM || subscription.getStatus() != SubscriptionStatus.ACTIVE) {
+            return false;
+        }
+        OffsetDateTime endAt = subscription.getEndAt();
+        return endAt == null || now.isBefore(endAt);
+    }
+
+    private SubscriptionEntity ensureLatestSubscription(UserEntity user) {
+        return subscriptionRepository.findFirstByUser_IdOrderByCreatedAtDesc(user.getId())
+                .orElseGet(() -> createDefaultFreeSubscription(user));
+    }
+
+    private UserEntity requireUser(UUID userId) {
+        return userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(
                         "USER_NOT_FOUND",
                         "User not found.",
                         HttpStatus.NOT_FOUND
-                )));
-
-        target.setPlanType(PlanType.PREMIUM);
-        target.setStatus(SubscriptionStatus.ACTIVE);
-        if (normalizeStripeId(stripeCustomerId) != null) {
-            target.setStripeCustomerId(normalizeStripeId(stripeCustomerId));
-        }
-        target.setStripeSubscriptionId(normalizeStripeId(stripeSubscriptionId));
-        target.setEndAt(null);
-        target.setUpdatedAt(OffsetDateTime.now());
-        subscriptionRepository.save(target);
+                ));
     }
 
-    public void activatePremiumByStripeCustomer(String stripeCustomerId, String stripeSubscriptionId) {
-        String normalizedCustomerId = normalizeStripeId(stripeCustomerId);
-        if (normalizedCustomerId == null) {
-            return;
-        }
-
-        subscriptionRepository.findFirstByStripeCustomerIdOrderByUpdatedAtDesc(normalizedCustomerId)
-                .ifPresent(subscription -> {
-                    subscription.setPlanType(PlanType.PREMIUM);
-                    subscription.setStatus(SubscriptionStatus.ACTIVE);
-                    subscription.setStripeSubscriptionId(normalizeStripeId(stripeSubscriptionId));
-                    subscription.setEndAt(null);
-                    subscription.setUpdatedAt(OffsetDateTime.now());
-                    subscriptionRepository.save(subscription);
-                });
-    }
-
-    public void revertToFreeByStripeCustomer(String stripeCustomerId) {
-        String normalizedCustomerId = normalizeStripeId(stripeCustomerId);
-        if (normalizedCustomerId == null) {
-            return;
-        }
-
-        subscriptionRepository.findFirstByStripeCustomerIdOrderByUpdatedAtDesc(normalizedCustomerId)
-                .ifPresent(subscription -> {
-                    subscription.setPlanType(PlanType.FREE);
-                    subscription.setStatus(SubscriptionStatus.ACTIVE);
-                    subscription.setStripeSubscriptionId(null);
-                    subscription.setEndAt(OffsetDateTime.now());
-                    subscription.setUpdatedAt(OffsetDateTime.now());
-                    subscriptionRepository.save(subscription);
-                });
-    }
-
-    private SubscriptionEntity ensureActiveSubscription(UserEntity user) {
-        return subscriptionRepository.findFirstByUser_IdAndStatusOrderByCreatedAtDesc(
-                        user.getId(),
-                        SubscriptionStatus.ACTIVE
-                )
-                .orElseGet(() -> createDefaultFreeSubscription(user));
-    }
-
-    private String normalizeStripeId(String raw) {
+    private String normalizeReference(String raw) {
         if (raw == null) {
             return null;
         }
         String normalized = raw.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private void requireBillableProvider(BillingProvider provider, String message) {
+        if (!isBillableProvider(provider)) {
+            throw new AppException(
+                    "INVALID_BILLING_PROVIDER",
+                    message,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+    }
+
+    private boolean isBillableProvider(BillingProvider provider) {
+        return provider != null && provider != BillingProvider.NONE;
+    }
+
+    private Optional<UUID> findUserIdByProviderReference(
+            BillingProvider provider,
+            String rawReference,
+            BiFunction<BillingProvider, String, Optional<SubscriptionEntity>> lookup
+    ) {
+        String normalizedReference = normalizeReference(rawReference);
+        if (!isBillableProvider(provider) || normalizedReference == null) {
+            return Optional.empty();
+        }
+        return lookup.apply(provider, normalizedReference)
+                .map(subscription -> subscription.getUser().getId());
+    }
+
+    private void applyFreeAccess(SubscriptionEntity target, OffsetDateTime now) {
+        target.setPlanType(PlanType.FREE);
+        target.setStatus(SubscriptionStatus.ACTIVE);
+        target.setBillingType(BillingType.NONE);
+        target.setProvider(BillingProvider.NONE);
+        target.setProviderCustomerId(null);
+        target.setProviderSubscriptionId(null);
+        target.setStartAt(now);
+        target.setEndAt(null);
     }
 }

@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
+import com.studysnap.backend.entity.BillingProvider;
+import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.UserRepository;
@@ -17,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -26,10 +31,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -42,12 +50,21 @@ public class StripeBillingService {
     private static final String EVENT_INVOICE_PAYMENT_FAILED = "invoice.payment_failed";
     private static final String EVENT_CUSTOMER_SUBSCRIPTION_UPDATED = "customer.subscription.updated";
     private static final String EVENT_CUSTOMER_SUBSCRIPTION_DELETED = "customer.subscription.deleted";
+    private static final BillingProvider STRIPE_PROVIDER = BillingProvider.STRIPE;
 
     private final StudySnapProperties properties;
     private final SubscriptionService subscriptionService;
+    private final PaymentTransactionService paymentTransactionService;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newHttpClient();
+
+    private record StripeTransactionMetadata(
+            BillingType billingType,
+            BigDecimal amount,
+            String currency
+    ) {
+    }
 
     public BillingCheckoutSessionResponse createPremiumCheckoutSession(UUID userId) {
         ensureCheckoutConfigured();
@@ -62,7 +79,11 @@ public class StripeBillingService {
             );
         }
 
-        String customerId = subscriptionService.ensureStripeCustomerId(user, () -> createStripeCustomer(user));
+        String customerId = subscriptionService.ensureProviderCustomerId(
+                user,
+                STRIPE_PROVIDER,
+                () -> createStripeCustomer(user)
+        );
 
         Map<String, String> form = new LinkedHashMap<>();
         form.put("mode", "subscription");
@@ -97,84 +118,270 @@ public class StripeBillingService {
             return new SimpleMessageResponse("Ignored.");
         }
 
-        if (EVENT_CHECKOUT_SESSION_COMPLETED.equals(eventType)) {
-            handleCheckoutSessionCompleted(eventObject);
-        } else if (EVENT_INVOICE_PAID.equals(eventType)) {
-            handleInvoicePaid(eventObject);
-        } else if (EVENT_INVOICE_PAYMENT_FAILED.equals(eventType)) {
-            handleInvoicePaymentFailed(eventObject);
-        } else if (EVENT_CUSTOMER_SUBSCRIPTION_UPDATED.equals(eventType)) {
-            handleCustomerSubscriptionUpdated(eventObject);
-        } else if (EVENT_CUSTOMER_SUBSCRIPTION_DELETED.equals(eventType)) {
-            handleCustomerSubscriptionDeleted(eventObject);
+        StripeTransactionMetadata transactionMetadata = resolveTransactionMetadata(eventType, eventObject);
+        if (transactionMetadata == null) {
+            return new SimpleMessageResponse("Ignored.");
+        }
+
+        String providerReferenceId = resolveProviderReferenceId(event, payload);
+        UUID targetUserId = resolveTargetUserId(eventObject).orElse(null);
+        if (targetUserId == null) {
+            return new SimpleMessageResponse("Ignored.");
+        }
+
+        Optional<PaymentTransactionEntity> pending = paymentTransactionService.createPending(
+                targetUserId,
+                STRIPE_PROVIDER,
+                transactionMetadata.billingType(),
+                PlanType.PREMIUM,
+                transactionMetadata.amount(),
+                transactionMetadata.currency(),
+                providerReferenceId
+        );
+        if (pending.isEmpty()) {
+            return new SimpleMessageResponse("Received.");
+        }
+
+        PaymentTransactionEntity transaction = pending.get();
+        try {
+            applyStripeEvent(eventType, eventObject, targetUserId);
+            paymentTransactionService.markSuccess(transaction.getId());
+        } catch (RuntimeException ex) {
+            paymentTransactionService.markFailed(transaction.getId());
+            throw ex;
         }
 
         return new SimpleMessageResponse("Received.");
     }
 
-    private void handleCheckoutSessionCompleted(JsonNode eventObject) {
-        String mode = textValue(eventObject, "mode");
-        if (!"subscription".equals(mode)) {
-            return;
+    private Optional<UUID> resolveTargetUserId(JsonNode eventObject) {
+        UUID fromClientReference = parseUuid(textValue(eventObject, "client_reference_id"));
+        if (fromClientReference != null) {
+            return Optional.of(fromClientReference);
         }
 
-        String customerId = textValue(eventObject, "customer");
-        if (customerId == null) {
-            return;
+        String providerSubscriptionId = textValue(eventObject, "subscription");
+        if (providerSubscriptionId == null) {
+            providerSubscriptionId = textValue(eventObject, "id");
+        }
+        if (providerSubscriptionId != null) {
+            Optional<UUID> fromSubscription = subscriptionService.findUserIdByProviderSubscriptionId(
+                    STRIPE_PROVIDER,
+                    providerSubscriptionId
+            );
+            if (fromSubscription.isPresent()) {
+                return fromSubscription;
+            }
         }
 
-        String stripeSubscriptionId = textValue(eventObject, "subscription");
-        String clientReferenceId = textValue(eventObject, "client_reference_id");
-        UUID userId = parseUuid(clientReferenceId);
-        if (userId != null) {
-            subscriptionService.activatePremium(userId, customerId, stripeSubscriptionId);
-            return;
+        String providerCustomerId = textValue(eventObject, "customer");
+        if (providerCustomerId == null) {
+            return Optional.empty();
         }
-        subscriptionService.activatePremiumByStripeCustomer(customerId, stripeSubscriptionId);
+        return subscriptionService.findUserIdByProviderCustomerId(STRIPE_PROVIDER, providerCustomerId);
     }
 
-    private void handleInvoicePaid(JsonNode eventObject) {
-        String customerId = textValue(eventObject, "customer");
-        if (customerId == null) {
-            return;
+    private StripeTransactionMetadata resolveTransactionMetadata(String eventType, JsonNode eventObject) {
+        if (EVENT_CHECKOUT_SESSION_COMPLETED.equals(eventType)) {
+            if (!"subscription".equals(textValue(eventObject, "mode"))) {
+                return null;
+            }
+            return new StripeTransactionMetadata(
+                    BillingType.SUBSCRIPTION,
+                    toMajorAmount(longValue(eventObject, "amount_total")),
+                    textValue(eventObject, "currency")
+            );
         }
-        String stripeSubscriptionId = textValue(eventObject, "subscription");
-        subscriptionService.activatePremiumByStripeCustomer(customerId, stripeSubscriptionId);
+        if (EVENT_INVOICE_PAID.equals(eventType)) {
+            Long amountMinor = longValue(eventObject, "amount_paid");
+            if (amountMinor == null) {
+                amountMinor = longValue(eventObject, "amount_due");
+            }
+            return new StripeTransactionMetadata(
+                    BillingType.SUBSCRIPTION,
+                    toMajorAmount(amountMinor),
+                    textValue(eventObject, "currency")
+            );
+        }
+        if (EVENT_INVOICE_PAYMENT_FAILED.equals(eventType)) {
+            return new StripeTransactionMetadata(
+                    BillingType.SUBSCRIPTION,
+                    toMajorAmount(longValue(eventObject, "amount_due")),
+                    textValue(eventObject, "currency")
+            );
+        }
+        if (EVENT_CUSTOMER_SUBSCRIPTION_UPDATED.equals(eventType) || EVENT_CUSTOMER_SUBSCRIPTION_DELETED.equals(eventType)) {
+            return new StripeTransactionMetadata(
+                    BillingType.SUBSCRIPTION,
+                    BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
+                    textValue(eventObject, "currency")
+            );
+        }
+        return null;
     }
 
-    private void handleInvoicePaymentFailed(JsonNode eventObject) {
+    private void applyStripeEvent(String eventType, JsonNode eventObject, UUID userId) {
         String customerId = textValue(eventObject, "customer");
-        if (customerId == null) {
-            return;
+        String providerSubscriptionId = textValue(eventObject, "subscription");
+        if (providerSubscriptionId == null) {
+            providerSubscriptionId = textValue(eventObject, "id");
         }
-        subscriptionService.revertToFreeByStripeCustomer(customerId);
-    }
+        SubscriptionService.ProviderMetadata providerMetadata = new SubscriptionService.ProviderMetadata(
+                customerId,
+                providerSubscriptionId
+        );
 
-    private void handleCustomerSubscriptionUpdated(JsonNode eventObject) {
-        String customerId = textValue(eventObject, "customer");
-        if (customerId == null) {
+        if (EVENT_CHECKOUT_SESSION_COMPLETED.equals(eventType)) {
+            if (!"subscription".equals(textValue(eventObject, "mode"))) {
+                return;
+            }
+            subscriptionService.activatePremiumSubscription(
+                    userId,
+                    BillingType.SUBSCRIPTION,
+                    STRIPE_PROVIDER,
+                    OffsetDateTime.now(),
+                    null,
+                    providerMetadata
+            );
             return;
         }
-        String stripeSubscriptionId = textValue(eventObject, "id");
-        String subscriptionStatus = textValue(eventObject, "status");
 
-        if (isPremiumActiveStatus(subscriptionStatus)) {
-            subscriptionService.activatePremiumByStripeCustomer(customerId, stripeSubscriptionId);
-            return;
-        }
-        subscriptionService.revertToFreeByStripeCustomer(customerId);
-    }
+        OffsetDateTime periodStart = toOffsetDateTime(longValue(eventObject, "current_period_start"));
+        OffsetDateTime periodEnd = toOffsetDateTime(longValue(eventObject, "current_period_end"));
 
-    private void handleCustomerSubscriptionDeleted(JsonNode eventObject) {
-        String customerId = textValue(eventObject, "customer");
-        if (customerId == null) {
+        if (EVENT_INVOICE_PAID.equals(eventType)) {
+            subscriptionService.activatePremiumSubscription(
+                    userId,
+                    BillingType.SUBSCRIPTION,
+                    STRIPE_PROVIDER,
+                    periodStart == null ? OffsetDateTime.now() : periodStart,
+                    null,
+                    providerMetadata
+            );
             return;
         }
-        subscriptionService.revertToFreeByStripeCustomer(customerId);
+
+        if (EVENT_INVOICE_PAYMENT_FAILED.equals(eventType)) {
+            if (periodEnd != null && OffsetDateTime.now().isBefore(periodEnd)) {
+                subscriptionService.activatePremiumSubscription(
+                        userId,
+                        BillingType.SUBSCRIPTION,
+                        STRIPE_PROVIDER,
+                        periodStart == null ? OffsetDateTime.now() : periodStart,
+                        periodEnd,
+                        providerMetadata
+                );
+            } else {
+                subscriptionService.downgradeToFree(userId);
+            }
+            return;
+        }
+
+        if (EVENT_CUSTOMER_SUBSCRIPTION_UPDATED.equals(eventType)) {
+            String subscriptionStatus = textValue(eventObject, "status");
+            boolean cancelAtPeriodEnd = booleanValue(eventObject, "cancel_at_period_end");
+            if (isPremiumActiveStatus(subscriptionStatus)) {
+                subscriptionService.activatePremiumSubscription(
+                        userId,
+                        BillingType.SUBSCRIPTION,
+                        STRIPE_PROVIDER,
+                        periodStart == null ? OffsetDateTime.now() : periodStart,
+                        cancelAtPeriodEnd ? periodEnd : null,
+                        providerMetadata
+                );
+                return;
+            }
+
+            if (periodEnd != null && OffsetDateTime.now().isBefore(periodEnd)) {
+                subscriptionService.activatePremiumSubscription(
+                        userId,
+                        BillingType.SUBSCRIPTION,
+                        STRIPE_PROVIDER,
+                        periodStart == null ? OffsetDateTime.now() : periodStart,
+                        periodEnd,
+                        providerMetadata
+                );
+                return;
+            }
+            subscriptionService.downgradeToFree(userId);
+            return;
+        }
+
+        if (EVENT_CUSTOMER_SUBSCRIPTION_DELETED.equals(eventType)) {
+            if (periodEnd != null && OffsetDateTime.now().isBefore(periodEnd)) {
+                subscriptionService.activatePremiumSubscription(
+                        userId,
+                        BillingType.SUBSCRIPTION,
+                        STRIPE_PROVIDER,
+                        periodStart == null ? OffsetDateTime.now() : periodStart,
+                        periodEnd,
+                        providerMetadata
+                );
+                return;
+            }
+            subscriptionService.downgradeToFree(userId);
+        }
     }
 
     private boolean isPremiumActiveStatus(String status) {
         return "active".equals(status) || "trialing".equals(status);
+    }
+
+    private String resolveProviderReferenceId(JsonNode event, String payload) {
+        String eventId = textValue(event, "id");
+        if (eventId != null) {
+            return eventId;
+        }
+
+        String eventType = textValue(event, "type");
+        String objectId = textValue(event.path("data").path("object"), "id");
+        if (eventType != null && objectId != null) {
+            return eventType + ":" + objectId;
+        }
+
+        String normalizedPayload = payload == null ? "" : payload;
+        return "stripe:" + Integer.toHexString(normalizedPayload.hashCode());
+    }
+
+    private BigDecimal toMajorAmount(Long amountMinor) {
+        if (amountMinor == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        return BigDecimal.valueOf(amountMinor)
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+
+    private OffsetDateTime toOffsetDateTime(Long unixSeconds) {
+        if (unixSeconds == null || unixSeconds <= 0) {
+            return null;
+        }
+        return OffsetDateTime.ofInstant(Instant.ofEpochSecond(unixSeconds), ZoneOffset.UTC);
+    }
+
+    private Long longValue(JsonNode node, String fieldName) {
+        JsonNode valueNode = node.path(fieldName);
+        if (valueNode.isMissingNode() || valueNode.isNull()) {
+            return null;
+        }
+        if (valueNode.isNumber()) {
+            return valueNode.longValue();
+        }
+        try {
+            return Long.parseLong(valueNode.asText().trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private boolean booleanValue(JsonNode node, String fieldName) {
+        JsonNode valueNode = node.path(fieldName);
+        if (valueNode.isMissingNode() || valueNode.isNull()) {
+            return false;
+        }
+        if (valueNode.isBoolean()) {
+            return valueNode.booleanValue();
+        }
+        return Boolean.parseBoolean(valueNode.asText().trim());
     }
 
     private String createStripeCustomer(UserEntity user) {

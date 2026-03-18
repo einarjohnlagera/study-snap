@@ -12,16 +12,16 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "subscriptions")
+@Table(name = "payment_transactions")
 @Getter
 @Setter
 @NoArgsConstructor
-public class SubscriptionEntity {
-
+public class PaymentTransactionEntity {
     @Id
     private UUID id;
 
@@ -30,36 +30,30 @@ public class SubscriptionEntity {
     private UserEntity user;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "plan_type", nullable = false, length = 32)
-    private PlanType planType;
-
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
-    private SubscriptionStatus status;
-
-    @Column(name = "start_at", nullable = false)
-    private OffsetDateTime startAt;
-
-    @Column(name = "end_at")
-    private OffsetDateTime endAt;
+    private BillingProvider provider;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "billing_type", nullable = false, length = 32)
     private BillingType billingType;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "plan_type", nullable = false, length = 32)
+    private PlanType planType;
+
+    @Column(nullable = false, precision = 14, scale = 2)
+    private BigDecimal amount;
+
+    @Column(nullable = false, length = 16)
+    private String currency;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
-    private BillingProvider provider;
+    private PaymentTransactionStatus status;
 
-    @Column(name = "provider_customer_id", length = 128)
-    private String providerCustomerId;
-
-    @Column(name = "provider_subscription_id", length = 128)
-    private String providerSubscriptionId;
+    @Column(name = "provider_reference_id", nullable = false, length = 191)
+    private String providerReferenceId;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private OffsetDateTime updatedAt;
 }

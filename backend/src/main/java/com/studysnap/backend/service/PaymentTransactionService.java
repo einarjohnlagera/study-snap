@@ -1,0 +1,88 @@
+package com.studysnap.backend.service;
+
+import com.studysnap.backend.entity.BillingProvider;
+import com.studysnap.backend.entity.BillingType;
+import com.studysnap.backend.entity.PaymentTransactionEntity;
+import com.studysnap.backend.entity.PaymentTransactionStatus;
+import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.repository.PaymentTransactionRepository;
+import com.studysnap.backend.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.Optional;
+import java.util.UUID;
+
+@Service
+@Transactional
+@RequiredArgsConstructor
+public class PaymentTransactionService {
+    private final PaymentTransactionRepository paymentTransactionRepository;
+    private final UserRepository userRepository;
+
+    @Transactional(readOnly = true)
+    public boolean isAlreadyProcessed(BillingProvider provider, String providerReferenceId) {
+        return paymentTransactionRepository.findByProviderAndProviderReferenceId(provider, providerReferenceId).isPresent();
+    }
+
+    public Optional<PaymentTransactionEntity> createPending(
+            UUID userId,
+            BillingProvider provider,
+            BillingType billingType,
+            PlanType planType,
+            BigDecimal amount,
+            String currency,
+            String providerReferenceId
+    ) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+
+        PaymentTransactionEntity transaction = new PaymentTransactionEntity();
+        transaction.setId(UUID.randomUUID());
+        transaction.setUser(user);
+        transaction.setProvider(provider);
+        transaction.setBillingType(billingType);
+        transaction.setPlanType(planType);
+        transaction.setAmount(amount == null ? BigDecimal.ZERO : amount);
+        transaction.setCurrency(normalizeCurrency(currency));
+        transaction.setStatus(PaymentTransactionStatus.PENDING);
+        transaction.setProviderReferenceId(providerReferenceId);
+        transaction.setCreatedAt(OffsetDateTime.now());
+
+        try {
+            return Optional.of(paymentTransactionRepository.save(transaction));
+        } catch (DataIntegrityViolationException ex) {
+            return Optional.empty();
+        }
+    }
+
+    public void markSuccess(UUID transactionId) {
+        paymentTransactionRepository.findById(transactionId)
+                .ifPresent(transaction -> {
+                    transaction.setStatus(PaymentTransactionStatus.SUCCESS);
+                    paymentTransactionRepository.save(transaction);
+                });
+    }
+
+    public void markFailed(UUID transactionId) {
+        paymentTransactionRepository.findById(transactionId)
+                .ifPresent(transaction -> {
+                    transaction.setStatus(PaymentTransactionStatus.FAILED);
+                    paymentTransactionRepository.save(transaction);
+                });
+    }
+
+    private String normalizeCurrency(String rawCurrency) {
+        if (rawCurrency == null || rawCurrency.isBlank()) {
+            return "USD";
+        }
+        return rawCurrency.trim().toUpperCase();
+    }
+}
