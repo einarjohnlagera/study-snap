@@ -34,9 +34,28 @@ class LlmResponseUtilsTest {
     }
 
     @Test
+    void findOutputJson_prefersTopLevelOutputTextWhenBothExist() throws Exception {
+        JsonNode node = OBJECT_MAPPER.readTree("""
+                {
+                  "output_text": "{\\"tip\\":\\"Top level\\"}",
+                  "output": [
+                    {
+                      "content": [
+                        {"type": "output_text", "text": "{\\"tip\\":\\"Nested\\"}"}
+                      ]
+                    }
+                  ]
+                }
+                """);
+
+        assertThat(LlmResponseUtils.findOutputJson(node)).contains("{\"tip\":\"Top level\"}");
+    }
+
+    @Test
     void findOutputJson_returnsEmptyWhenMissing() throws Exception {
         JsonNode node = OBJECT_MAPPER.readTree("{\"output\":[]}");
         assertThat(LlmResponseUtils.findOutputJson(node)).isEmpty();
+        assertThat(LlmResponseUtils.findOutputJson(null)).isEmpty();
     }
 
     @Test
@@ -65,6 +84,11 @@ class LlmResponseUtilsTest {
                 "invalid-json",
                 OBJECT_MAPPER
         )).isEqualTo("unparseable_upstream_error");
+
+        assertThat(LlmResponseUtils.extractUpstreamErrorMessage(
+                "   ",
+                OBJECT_MAPPER
+        )).isEqualTo("n/a");
     }
 
     @Test
@@ -72,5 +96,11 @@ class LlmResponseUtilsTest {
         String raw = "Review ATP synthesis and enzyme control first. Then revisit glycolysis examples.";
         assertThat(LlmResponseUtils.sanitizeStudyTip(raw, 6))
                 .isEqualTo("Review ATP synthesis and enzyme control");
+    }
+
+    @Test
+    void sanitizeStudyTip_returnsNullForNullOrBlankInput() {
+        assertThat(LlmResponseUtils.sanitizeStudyTip(null, 20)).isNull();
+        assertThat(LlmResponseUtils.sanitizeStudyTip("   ", 20)).isNull();
     }
 }

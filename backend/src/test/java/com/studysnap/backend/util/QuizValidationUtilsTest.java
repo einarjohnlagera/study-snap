@@ -30,6 +30,16 @@ class QuizValidationUtilsTest {
     }
 
     @Test
+    void randomizeChoices_doesNotMutateOriginalList() {
+        List<String> original = new java.util.ArrayList<>(List.of("A", "B", "C", "D"));
+
+        List<String> shuffled = QuizValidationUtils.randomizeChoices(original, "What is ATP?");
+
+        assertThat(original).containsExactly("A", "B", "C", "D");
+        assertThat(shuffled).containsExactlyInAnyOrder("A", "B", "C", "D");
+    }
+
+    @Test
     void buildFallbackExplanation_returnsExpectedText() {
         assertThat(QuizValidationUtils.buildFallbackExplanation(null))
                 .isEqualTo("Review this question in your notes.");

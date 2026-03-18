@@ -47,6 +47,8 @@ class StringNormalizationUtilsTest {
         assertThat(StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull("   ")).isNull();
         assertThat(StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull("  biology   basics  "))
                 .isEqualTo("biology basics");
+        assertThat(StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull("photosynthesis\n  uses\tlight"))
+                .isEqualTo("photosynthesis uses light");
     }
 
     @Test
