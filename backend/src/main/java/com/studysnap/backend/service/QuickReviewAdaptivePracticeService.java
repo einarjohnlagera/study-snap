@@ -85,15 +85,7 @@ public class QuickReviewAdaptivePracticeService {
             quickReviewSessionRepository.save(existing);
         }
 
-        QuickReviewSessionEntity latestCompletedSession = quickReviewSessionRepository
-                .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                        userId,
-                        studyPackId,
-                        QuickReviewSessionMode.QUICK_REVIEW,
-                        PageRequest.of(0, 1)
-                ).stream()
-                .findFirst()
-                .orElse(null);
+        QuickReviewSessionEntity latestCompletedSession = resolveLatestAdaptiveSourceSession(userId, studyPackId);
 
         if (latestCompletedSession == null) {
             return new QuickReviewAdaptiveQuizResponse(
@@ -102,7 +94,7 @@ public class QuickReviewAdaptivePracticeService {
                     studyPack.getTitle(),
                     List.of(),
                     List.of(),
-                    "Complete a Quick Review first to unlock adaptive practice."
+                    "Complete a Quick Review or Challenge Quiz first to unlock adaptive practice."
             );
         }
 
@@ -114,7 +106,7 @@ public class QuickReviewAdaptivePracticeService {
                     studyPack.getTitle(),
                     List.of(),
                     List.of(),
-                    "No weak concepts found from your latest Quick Review."
+                    "No weak concepts found from your latest review."
             );
         }
 
@@ -285,5 +277,52 @@ public class QuickReviewAdaptivePracticeService {
                 "You've reached your monthly Adaptive Practice limit.",
                 HttpStatus.FORBIDDEN
         );
+    }
+
+    private QuickReviewSessionEntity resolveLatestAdaptiveSourceSession(UUID userId, UUID studyPackId) {
+        QuickReviewSessionEntity latestQuickReview = fetchLatestCompletedSession(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.QUICK_REVIEW
+        );
+        QuickReviewSessionEntity latestChallenge = fetchLatestCompletedSession(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.CHALLENGE
+        );
+
+        if (latestQuickReview == null) {
+            return latestChallenge;
+        }
+        if (latestChallenge == null) {
+            return latestQuickReview;
+        }
+
+        OffsetDateTime quickReviewCompletedAt = latestQuickReview.getCompletedAt();
+        OffsetDateTime challengeCompletedAt = latestChallenge.getCompletedAt();
+        if (quickReviewCompletedAt == null) {
+            return latestChallenge;
+        }
+        if (challengeCompletedAt == null) {
+            return latestQuickReview;
+        }
+
+        return challengeCompletedAt.isAfter(quickReviewCompletedAt) ? latestChallenge : latestQuickReview;
+    }
+
+    private QuickReviewSessionEntity fetchLatestCompletedSession(
+            UUID userId,
+            UUID studyPackId,
+            QuickReviewSessionMode sessionMode
+    ) {
+        return quickReviewSessionRepository
+                .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        studyPackId,
+                        sessionMode,
+                        PageRequest.of(0, 1)
+                ).stream()
+                .findFirst()
+                .orElse(null);
     }
 }

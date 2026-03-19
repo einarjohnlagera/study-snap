@@ -4,6 +4,7 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 public record ChallengeQuizSessionResponse(
         String sessionId,
@@ -12,6 +13,9 @@ public record ChallengeQuizSessionResponse(
         int totalQuestions,
         int correctAnswers,
         BigDecimal scorePercentage,
+        String performanceLevel,
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown,
+        List<String> weakConcepts,
         Integer durationSeconds,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt
