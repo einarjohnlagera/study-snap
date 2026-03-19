@@ -37,7 +37,6 @@ import java.util.Set;
 public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final Logger log = LoggerFactory.getLogger(OpenAiLlmStudyPackService.class);
     private static final int STUDY_PACK_QUIZ_QUESTION_COUNT = 5;
-    private static final int ADAPTIVE_QUIZ_QUESTION_COUNT = 5;
     private static final int MAX_SUMMARY_WORDS = 120;
     private static final int MAX_STUDY_TIP_WORDS = 20;
 
@@ -267,30 +266,55 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private ArrayNode buildAdaptivePracticeInputMessages(
             String studyPackSummary,
             List<String> keyConcepts,
-            List<String> weakConcepts
+            List<String> weakConcepts,
+            List<String> disallowedQuestions,
+            int questionCount
     ) {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.adaptivePracticeSystemPrompt()));
         String adaptivePracticeDeveloperPrompt = promptResources.adaptivePracticeDeveloperPromptTemplate()
-                .replace("{QUESTION_COUNT}", String.valueOf(ADAPTIVE_QUIZ_QUESTION_COUNT));
+                .replace("{QUESTION_COUNT}", String.valueOf(questionCount));
         input.add(buildTextMessage("developer", adaptivePracticeDeveloperPrompt));
         input.add(buildTextMessage(
                 "user",
                 "Summary: " + studyPackSummary + "\n" +
                         "Key concepts: " + String.join(", ", keyConcepts) + "\n" +
-                        "Weak concepts to target: " + String.join(", ", weakConcepts)
+                        "Weak concepts to target: " + String.join(", ", weakConcepts) + "\n" +
+                        "Excluded questions (must not be repeated): " + String.join(" || ", disallowedQuestions)
         ));
         return input;
     }
 
-    private JsonNode buildAdaptivePracticeSchema(int questionCount) {
+    private ArrayNode buildChallengeQuizInputMessages(
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty
+    ) {
+        ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage("system", promptResources.challengeQuizSystemPrompt()));
+        String challengeQuizDeveloperPrompt = promptResources.challengeQuizDeveloperPromptTemplate()
+                .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
+                .replace("{DIFFICULTY}", difficulty);
+        input.add(buildTextMessage("developer", challengeQuizDeveloperPrompt));
+        input.add(buildTextMessage(
+                "user",
+                "Summary: " + studyPackSummary + "\n" +
+                        "Key concepts: " + String.join(", ", keyConcepts) + "\n" +
+                        "Excluded questions (must not be repeated): " + String.join(" || ", disallowedQuestions)
+        ));
+        return input;
+    }
+
+    private JsonNode buildGeneratedQuizSchema(int questionCount) {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("type", "object");
         root.put("additionalProperties", false);
-        root.putArray("required").add("quiz");
+        root.putArray("required").add("questions");
 
         ObjectNode properties = root.putObject("properties");
-        ObjectNode quiz = properties.putObject("quiz");
+        ObjectNode quiz = properties.putObject("questions");
         quiz.put("type", "array");
         quiz.put("minItems", questionCount);
         quiz.put("maxItems", questionCount);
@@ -301,23 +325,17 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode required = item.putArray("required");
         required.add("question");
         required.add("choices");
-        required.add("answerIndex");
-        required.add("concept");
+        required.add("answer");
 
         ObjectNode itemProps = item.putObject("properties");
         itemProps.putObject("question").put("type", "string");
-        itemProps.putObject("concept").put("type", "string");
+        itemProps.putObject("answer").put("type", "string");
 
         ObjectNode choices = itemProps.putObject("choices");
         choices.put("type", "array");
         choices.put("minItems", 4);
         choices.put("maxItems", 4);
         choices.putObject("items").put("type", "string");
-
-        ObjectNode answerIndex = itemProps.putObject("answerIndex");
-        answerIndex.put("type", "integer");
-        answerIndex.put("minimum", 0);
-        answerIndex.put("maximum", 3);
 
         return root;
     }
@@ -553,11 +571,63 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String studyPackSummary,
             List<String> keyConcepts,
             List<String> weakConcepts,
+            List<String> disallowedQuestions,
             int questionCount
     ) {
-        if (weakConcepts == null || weakConcepts.isEmpty()) {
+        List<String> normalizedWeakConcepts = sanitizeConceptList(weakConcepts);
+        if (normalizedWeakConcepts.isEmpty()) {
             return List.of();
         }
+        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
+        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
+        return generateQuizWithSchema(
+                buildAdaptivePracticeInputMessages(
+                        studyPackSummary == null ? "" : studyPackSummary,
+                        normalizedKeyConcepts,
+                        normalizedWeakConcepts,
+                        normalizedDisallowedQuestions,
+                        questionCount
+                ),
+                questionCount,
+                "note_lib_adaptive_quiz",
+                "Adaptive practice quiz generation",
+                normalizedWeakConcepts
+        );
+    }
+
+    @Override
+    public List<QuizItem> generateChallengeQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty
+    ) {
+        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
+        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
+        return generateQuizWithSchema(
+                buildChallengeQuizInputMessages(
+                        studyPackSummary == null ? "" : studyPackSummary,
+                        normalizedKeyConcepts,
+                        normalizedDisallowedQuestions,
+                        questionCount,
+                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty
+                ),
+                questionCount,
+                "note_lib_challenge_quiz",
+                "Challenge quiz generation",
+                normalizedKeyConcepts
+        );
+    }
+
+    private List<QuizItem> generateQuizWithSchema(
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool
+    ) {
         if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
             throw new AppException(
                     "LLM_CONFIGURATION_ERROR",
@@ -574,37 +644,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             );
         }
 
-        int normalizedQuestionCount = ADAPTIVE_QUIZ_QUESTION_COUNT;
-        List<String> normalizedWeakConcepts = weakConcepts.stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .distinct()
-                .toList();
-        if (normalizedWeakConcepts.isEmpty()) {
-            return List.of();
-        }
-        List<String> normalizedKeyConcepts = keyConcepts == null ? List.of() : keyConcepts.stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .toList();
-
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", model);
-        requestBody.set(
-                "input",
-                buildAdaptivePracticeInputMessages(
-                        studyPackSummary == null ? "" : studyPackSummary,
-                        normalizedKeyConcepts,
-                        normalizedWeakConcepts
-                )
-        );
+        requestBody.set("input", inputMessages);
         ObjectNode textNode = requestBody.putObject("text");
         ObjectNode formatNode = textNode.putObject("format");
         formatNode.put("type", "json_schema");
-        formatNode.put("name", "note_lib_adaptive_quiz");
-        formatNode.set("schema", buildAdaptivePracticeSchema(normalizedQuestionCount));
+        formatNode.put("name", schemaName);
+        formatNode.set("schema", buildGeneratedQuizSchema(questionCount));
         formatNode.put("strict", true);
 
         try {
@@ -618,7 +665,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             if (responseBody == null || responseBody.isBlank()) {
                 throw new AppException(
                         "LLM_EMPTY_RESPONSE",
-                        "Adaptive quiz generation returned an empty response. Please try again.",
+                        operationLabel + " returned an empty response. Please try again.",
                         HttpStatus.BAD_GATEWAY
                 );
             }
@@ -627,106 +674,128 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String outputJson = LlmResponseUtils.findOutputJson(responseJson)
                     .orElseThrow(() -> new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "Adaptive quiz generation returned an unexpected format. Please try again.",
+                            operationLabel + " returned an unexpected format. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     ));
-            PromptAdaptiveQuiz promptAdaptiveQuiz = objectMapper.readValue(outputJson, PromptAdaptiveQuiz.class);
+            PromptGeneratedQuiz promptGeneratedQuiz = objectMapper.readValue(outputJson, PromptGeneratedQuiz.class);
 
-            if (promptAdaptiveQuiz.quiz() == null || promptAdaptiveQuiz.quiz().size() != normalizedQuestionCount) {
+            if (promptGeneratedQuiz.questions() == null || promptGeneratedQuiz.questions().size() != questionCount) {
                 throw new AppException(
                         "LLM_INVALID_OUTPUT",
-                        "Adaptive quiz generation returned an invalid format. Please try again.",
+                        operationLabel + " returned an invalid format. Please try again.",
                         HttpStatus.BAD_GATEWAY
                 );
             }
 
             List<QuizItem> quizItems = new ArrayList<>();
-            Set<String> normalizedQuestions = new HashSet<>();
-            for (PromptQuizItem item : promptAdaptiveQuiz.quiz()) {
+            int conceptIndex = 0;
+            for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
                 if (item.choices() == null || item.choices().size() != 4) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "Adaptive quiz generation returned an invalid format. Please try again.",
+                            operationLabel + " returned invalid choices. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
-                if (item.answerIndex() < 0 || item.answerIndex() >= item.choices().size()) {
+                if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.answer())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "Adaptive quiz generation returned an invalid answer. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.concept())) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "Adaptive quiz generation returned an invalid format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (!normalizedQuestions.add(StringNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "Adaptive quiz generation returned repetitive questions. Please try again.",
+                            operationLabel + " returned an invalid question. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
                 if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
                     throw new AppException(
                             "LLM_INVALID_OUTPUT",
-                            "Adaptive quiz generation returned invalid choices. Please try again.",
+                            operationLabel + " returned invalid choices. Please try again.",
                             HttpStatus.BAD_GATEWAY
                     );
                 }
 
-                List<String> randomizedChoices = QuizValidationUtils.randomizeChoices(item.choices(), item.question());
-                String correctAnswer = item.choices().get(item.answerIndex());
-                String normalizedConcept = normalizeAndValidateConcept(item.concept());
+                String answer = item.answer().trim();
+                boolean answerInChoices = item.choices().stream().anyMatch(choice -> choice.trim().equals(answer));
+                if (!answerInChoices) {
+                    throw new AppException(
+                            "LLM_INVALID_OUTPUT",
+                            operationLabel + " returned an invalid answer mapping. Please try again.",
+                            HttpStatus.BAD_GATEWAY
+                    );
+                }
+
+                String conceptFallback = conceptFallbackPool.isEmpty()
+                        ? null
+                        : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
+                conceptIndex += 1;
                 quizItems.add(new QuizItem(
-                        item.question(),
-                        randomizedChoices,
-                        correctAnswer,
-                        normalizedConcept,
-                        QuizValidationUtils.buildFallbackExplanation(normalizedConcept)
+                        item.question().trim(),
+                        item.choices().stream().map(String::trim).toList(),
+                        answer,
+                        conceptFallback,
+                        QuizValidationUtils.buildFallbackExplanation(conceptFallback)
                 ));
             }
-
             return quizItems;
         } catch (RestClientResponseException ex) {
             String requestId = MDC.get("requestId");
             String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
             log.warn(
-                    "openai_adaptive_quiz_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
+                    "openai_quiz_request_failed requestId={} operation={} status={} errorCode={} upstreamMessage={}",
                     requestId,
+                    operationLabel,
                     ex.getStatusCode().value(),
                     ex.getClass().getSimpleName(),
                     upstreamMessage
             );
             throw new AppException(
                     "LLM_REQUEST_FAILED",
-                    "Adaptive quiz generation failed. Please try again in a moment.",
+                    operationLabel + " failed. Please try again in a moment.",
                     HttpStatus.BAD_GATEWAY
             );
         } catch (IOException ex) {
             throw new AppException(
                     "LLM_INVALID_OUTPUT",
-                    "Adaptive quiz generation returned an unexpected format. Please try again.",
+                    operationLabel + " returned an unexpected format. Please try again.",
                     HttpStatus.BAD_GATEWAY
             );
         } catch (RestClientException ex) {
             String requestId = MDC.get("requestId");
             log.warn(
-                    "openai_adaptive_quiz_unavailable requestId={} errorCode={} message={}",
+                    "openai_quiz_unavailable requestId={} operation={} errorCode={} message={}",
                     requestId,
+                    operationLabel,
                     ex.getClass().getSimpleName(),
                     ex.getMessage()
             );
             throw new AppException(
                     "LLM_UNAVAILABLE",
-                    "Adaptive quiz generation is temporarily unavailable. Please try again.",
+                    operationLabel + " is temporarily unavailable. Please try again.",
                     HttpStatus.BAD_GATEWAY
             );
         }
+    }
+
+    private List<String> sanitizeConceptList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .toList();
+    }
+
+    private List<String> sanitizeQuestionList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isEmpty())
+                .distinct()
+                .toList();
     }
 
     private record PromptStudyPack(
@@ -756,8 +825,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     ) {
     }
 
-    private record PromptAdaptiveQuiz(
-            List<PromptQuizItem> quiz
+    private record PromptGeneratedQuiz(
+            List<PromptGeneratedQuizItem> questions
+    ) {
+    }
+
+    private record PromptGeneratedQuizItem(
+            String question,
+            List<String> choices,
+            String answer
     ) {
     }
 

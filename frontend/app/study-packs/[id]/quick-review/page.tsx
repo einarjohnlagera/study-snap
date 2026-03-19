@@ -753,13 +753,13 @@ export default function QuickReviewPage() {
               isPremiumPlan ? (
                 <Link href={`/study-packs/${studyPack.id}/adaptive-practice`} className="w-full sm:w-auto">
                   <Button type="button" variant="outline" className="w-full sm:w-auto">
-                    Practice Weak Areas
+                    Practice Weak Concepts
                   </Button>
                 </Link>
               ) : (
                 <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
                   <Button type="button" variant="outline" className="w-full sm:w-auto">
-                    Unlock Adaptive Practice
+                    Unlock Practice Weak Concepts
                   </Button>
                 </Link>
               )

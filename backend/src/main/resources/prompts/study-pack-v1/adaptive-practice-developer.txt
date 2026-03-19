@@ -1,16 +1,13 @@
-Generate exactly {QUESTION_COUNT} multiple-choice questions for adaptive practice.
+TASK:
+Generate exactly {QUESTION_COUNT} NEW multiple-choice questions.
 
-Rules:
-- Target weak concepts from the latest Quick Review.
-- Base questions only on the provided weak concepts list.
+RULES:
+- Questions MUST focus ONLY on the provided weak concepts.
+- Do NOT include unrelated topics.
+- Do NOT repeat or rephrase questions.
+- Questions must reinforce understanding.
 - Each question must have 4 choices.
-- Exactly one choice must be correct.
-- answerIndex must be between 0 and 3.
-- Include plausible same-topic distractors.
-- Do not use "all of the above", "none of the above", or trick questions.
-- Each quiz item must include:
-  - question
-  - choices (4)
-  - answerIndex
-  - concept
-- Use different weak concepts across questions whenever possible.
+- Exactly 1 choice must be correct.
+- Use the provided excluded question list as hard constraints.
+- No explanations.
+- JSON only.

@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.AdaptivePracticeCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionConfidenceRequest;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
@@ -13,6 +14,7 @@ import com.studysnap.backend.dto.QuickReviewSessionStartRequest;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
+import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.QuickReviewSessionService;
@@ -34,7 +36,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/quick-review-sessions")
+@RequestMapping({"/quick-review-sessions", "/quick-review"})
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('USER','ADMIN')")
 public class QuickReviewSessionController {
@@ -127,6 +129,22 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId);
+    }
+
+    @PostMapping("/adaptive-practice/{sessionId}/complete")
+    public SimpleMessageResponse completeAdaptivePracticeQuiz(
+            @PathVariable String sessionId,
+            @Valid @RequestBody AdaptivePracticeCompleteRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewAdaptivePracticeService.completeAdaptiveSession(
+                sessionId,
+                userId,
+                request.correctAnswers(),
+                request.totalQuestions(),
+                request.durationSeconds()
+        );
     }
 
     @PostMapping("/study-packs/{studyPackId}/challenge/start")

@@ -329,8 +329,25 @@ Quiz answer feedback semantics (Quick Review and Adaptive Quiz):
 
 Challenge Quiz guidance:
 - Challenge Quiz is Premium-only and timed
-- use existing Study Pack quiz data (no new LLM generation call)
+- Challenge Quiz generates new questions via LLM
+- Challenge input must use only Study Pack summary + key concepts (never extracted OCR text)
+- question count and difficulty should adapt to the latest Quick Review score:
+  - score < 50: 10 questions, easy-medium
+  - score < 80: 12 questions, medium
+  - otherwise: 15 questions, medium-hard
+- Challenge generation must not duplicate stored Study Pack quiz questions
+- Challenge sessions must reuse existing generated quiz when an in-progress session exists (avoid extra LLM calls)
 - Challenge Quiz usage must be tracked separately from Study Pack generation quota
+
+Adaptive Practice guidance:
+- Adaptive Practice is Premium-only and LLM-generated
+- Adaptive input must use summary + key concepts + weak concepts only
+- adaptive question count should follow weak-concept volume:
+  - <= 2 weak concepts: 5 questions
+  - <= 4 weak concepts: 7 questions
+  - otherwise: 10 questions
+- Adaptive generation must avoid duplicates with stored quiz questions
+- Adaptive sessions must reuse existing generated quiz while in progress (avoid extra LLM calls)
 
 Quick Review post-results confidence feedback:
 - results should include an optional confidence prompt (`Very confident`, `Somewhat confident`, `Not confident`)

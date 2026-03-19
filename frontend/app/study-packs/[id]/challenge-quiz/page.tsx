@@ -37,6 +37,13 @@ function ChallengeQuizLoading() {
   );
 }
 
+function getChallengeResultMessage(scorePercentage: number) {
+  if (scorePercentage >= 80) {
+    return "Great work. You're mastering this.";
+  }
+  return "Keep going - you're improving.";
+}
+
 export default function ChallengeQuizPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -259,13 +266,13 @@ export default function ChallengeQuizPage() {
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">{studyPack?.title ?? "Challenge Quiz"}</h1>
           <p className="text-sm text-foreground/80">
-            Timed exam-style quiz based on this Study Pack&apos;s existing questions. No new generation call is made.
+            We tailored this quiz based on your recent performance.
           </p>
           <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
             <p>Rules:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>10-minute timer</li>
-              <li>10 to 20 shuffled questions</li>
+              <li>10 to 15 AI-generated questions</li>
               <li>Submit before time runs out for your final score</li>
             </ul>
           </div>
@@ -351,6 +358,7 @@ export default function ChallengeQuizPage() {
             {timedOut ? (
               <p className="mt-2 text-sm text-foreground/75">Time ran out. Your answers were submitted automatically.</p>
             ) : null}
+            <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage)}</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" className="w-full sm:w-auto" onClick={handleRetry}>

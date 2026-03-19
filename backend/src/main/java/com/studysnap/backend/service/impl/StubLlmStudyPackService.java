@@ -68,12 +68,13 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
             String studyPackSummary,
             List<String> keyConcepts,
             List<String> weakConcepts,
+            List<String> disallowedQuestions,
             int questionCount
     ) {
         if (weakConcepts == null || weakConcepts.isEmpty()) {
             return List.of();
         }
-        int normalizedCount = Math.max(3, Math.min(5, questionCount));
+        int normalizedCount = Math.max(5, Math.min(10, questionCount));
         return IntStream.range(0, normalizedCount)
                 .mapToObj(index -> {
                     String concept = weakConcepts.get(index % weakConcepts.size());
@@ -88,7 +89,40 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                             ),
                             correctAnswer,
                             concept,
-                            "The correct option matches the central idea of " + concept + "."
+                            "Review the " + concept + " concept in your notes."
+                    );
+                })
+                .toList();
+    }
+
+    @Override
+    public List<QuizItem> generateChallengeQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            int questionCount,
+            String difficulty
+    ) {
+        List<String> concepts = keyConcepts == null || keyConcepts.isEmpty()
+                ? List.of("Core Concept")
+                : keyConcepts;
+        int normalizedCount = Math.max(10, Math.min(15, questionCount));
+        return IntStream.range(0, normalizedCount)
+                .mapToObj(index -> {
+                    String concept = concepts.get(index % concepts.size());
+                    String correctAnswer = concept + " applied understanding";
+                    return new QuizItem(
+                            "In a " + difficulty + " scenario, what best represents " + concept + "?",
+                            List.of(
+                                    correctAnswer,
+                                    concept + " superficial detail",
+                                    concept + " unrelated association",
+                                    concept + " incorrect assumption"
+                            ),
+                            correctAnswer,
+                            concept,
+                            "Review the " + concept + " concept in your notes."
                     );
                 })
                 .toList();
