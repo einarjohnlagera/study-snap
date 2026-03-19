@@ -54,7 +54,7 @@ public class SubscriptionService {
                 ).stream()
                 .filter(subscription -> hasActivePremiumAccess(subscription, now))
                 .findFirst()
-                .map(_ -> PlanType.PREMIUM)
+                .map(e -> PlanType.PREMIUM)
                 .orElse(PlanType.FREE);
     }
 
