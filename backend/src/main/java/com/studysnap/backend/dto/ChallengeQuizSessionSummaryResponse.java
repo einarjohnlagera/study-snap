@@ -10,6 +10,7 @@ public record ChallengeQuizSessionSummaryResponse(
         int correctAnswers,
         BigDecimal scorePercentage,
         String performanceLevel,
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown,
         List<String> weakConcepts,
         OffsetDateTime createdAt,
         OffsetDateTime completedAt

@@ -121,6 +121,7 @@ export default function StudyPackDetailPage() {
   const [startingQuickReview, setStartingQuickReview] = useState(false);
   const [hasInProgressQuickReview, setHasInProgressQuickReview] = useState(false);
   const [hasInProgressChallengeQuiz, setHasInProgressChallengeQuiz] = useState(false);
+  const [showPerformanceDetails, setShowPerformanceDetails] = useState(false);
   const [creatingShareLink, setCreatingShareLink] = useState(false);
   const [updatingTags, setUpdatingTags] = useState(false);
   const [updatingMetadata, setUpdatingMetadata] = useState(false);
@@ -299,6 +300,7 @@ export default function StudyPackDetailPage() {
     setMetadataError(null);
     setShowOriginalNotes(false);
     setChallengeHint(null);
+    setShowPerformanceDetails(false);
   }, [studyPack]);
 
   useEffect(() => {
@@ -344,7 +346,8 @@ export default function StudyPackDetailPage() {
     ),
   ).slice(0, 4);
   const hasWeakConcepts = focusAreas.length > 0;
-  const showAdaptivePracticeEntry = isPremiumUser && hasWeakConcepts;
+  const showAdaptivePracticeEntry = hasWeakConcepts;
+  const canStartAdaptivePractice = isPremiumUser && hasWeakConcepts;
 
   const suggestedNextStep = (() => {
     if (!latestQuickReviewSession && (challengePerformanceSummary?.attempts ?? 0) === 0) {
@@ -355,6 +358,57 @@ export default function StudyPackDetailPage() {
     }
     return "Continue reviewing this Study Pack.";
   })();
+
+  const latestChallengeSession = challengeSessions[0] ?? null;
+  const latestChallengeScore = challengePerformanceSummary?.lastScorePercentage ?? null;
+  const latestChallengePerformanceLevel = challengePerformanceSummary?.latestPerformanceLevel ?? null;
+  const latestChallengeConceptBreakdown = useMemo(
+    () => latestChallengeSession?.conceptBreakdown ?? [],
+    [latestChallengeSession],
+  );
+
+  const challengeStrongestConcept = useMemo(() => {
+    if (latestChallengeConceptBreakdown.length === 0) {
+      return null;
+    }
+    return [...latestChallengeConceptBreakdown]
+      .filter((item) => item.totalQuestions > 0)
+      .sort((a, b) => b.accuracyPercentage - a.accuracyPercentage)[0] ?? null;
+  }, [latestChallengeConceptBreakdown]);
+
+  const challengeWeakestConcept = useMemo(() => {
+    if (latestChallengeConceptBreakdown.length === 0) {
+      return null;
+    }
+    return [...latestChallengeConceptBreakdown]
+      .filter((item) => item.totalQuestions > 0)
+      .sort((a, b) => a.accuracyPercentage - b.accuracyPercentage)[0] ?? null;
+  }, [latestChallengeConceptBreakdown]);
+
+  const performanceInsight = useMemo(() => {
+    if (latestChallengePerformanceLevel && latestChallengeScore !== null) {
+      if (challengeWeakestConcept && challengeWeakestConcept.accuracyPercentage < 60) {
+        if (
+          challengeStrongestConcept &&
+          challengeStrongestConcept.concept.toLowerCase() !== challengeWeakestConcept.concept.toLowerCase()
+        ) {
+          return `You're strong in ${challengeStrongestConcept.concept} and need more practice in ${challengeWeakestConcept.concept}.`;
+        }
+        return `Focus next on ${challengeWeakestConcept.concept} to improve your Challenge Quiz performance.`;
+      }
+      return `Your latest Challenge Quiz was ${formatScore(latestChallengeScore)} (${latestChallengePerformanceLevel}).`;
+    }
+    if (focusAreas.length > 0) {
+      return `Start with ${focusAreas[0]} to strengthen this Study Pack.`;
+    }
+    return "Take a Challenge Quiz to unlock deeper performance insights.";
+  }, [
+    challengeStrongestConcept,
+    challengeWeakestConcept,
+    focusAreas,
+    latestChallengePerformanceLevel,
+    latestChallengeScore,
+  ]);
 
   const combinedRecentSessions = useMemo(() => {
     const quickRows = quickReviewSessions.map((session) => ({
@@ -426,6 +480,12 @@ export default function StudyPackDetailPage() {
     if (!studyPack || !showAdaptivePracticeEntry) {
       return;
     }
+    if (!isPremiumUser) {
+      setChallengeHint("Practice Weak Areas is available in the Premium plan");
+      router.push(PLAN_BILLING_PATH);
+      return;
+    }
+    setChallengeHint(null);
     router.push(`/study-packs/${studyPack.id}/adaptive-practice`);
   };
 
@@ -832,6 +892,7 @@ export default function StudyPackDetailPage() {
                   </Button>
                   {showAdaptivePracticeEntry ? (
                     <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleStartAdaptivePractice}>
+                      {!canStartAdaptivePractice ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
                       Practice Weak Concepts
                     </Button>
                   ) : null}
@@ -894,145 +955,157 @@ export default function StudyPackDetailPage() {
 
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="space-y-3 rounded-md border border-border bg-background p-3">
-                <p className="text-sm font-semibold text-foreground">Quick Review</p>
-                {quickReviewPerformanceError ? (
-                  <p className="text-sm text-foreground/75">{quickReviewPerformanceError}</p>
-                ) : !quickReviewPerformanceSummary || quickReviewPerformanceSummary.attempts === 0 ? (
-                  <p className="text-sm text-foreground/75">No Quick Reviews yet. Start your first review.</p>
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Best Score</p>
-                      <p className="mt-1 text-lg font-semibold">{formatScore(quickReviewPerformanceSummary.bestScorePercentage)}</p>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Attempts</p>
-                      <p className="mt-1 text-lg font-semibold">{quickReviewPerformanceSummary.attempts}</p>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Score</p>
-                      <p className="mt-1 text-lg font-semibold">{formatScore(quickReviewPerformanceSummary.lastScorePercentage)}</p>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Completed</p>
-                      <p className="mt-1 text-sm font-medium">
-                        {formatUtcDateTime(quickReviewPerformanceSummary.lastReviewedAt)}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-3 rounded-md border border-border bg-background p-3">
-                <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
+            <div className="space-y-4 rounded-md border border-border bg-background p-4">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                  Your Latest Performance
+                </p>
                 {challengePerformanceError ? (
                   <p className="text-sm text-foreground/75">{challengePerformanceError}</p>
-                ) : !challengePerformanceSummary || challengePerformanceSummary.attempts === 0 ? (
-                  <p className="text-sm text-foreground/75">No Challenge Quiz attempts yet.</p>
+                ) : (challengePerformanceSummary?.attempts ?? 0) > 0 && latestChallengeScore !== null ? (
+                  <p className="text-base font-semibold text-foreground sm:text-lg">
+                    Challenge Quiz: {formatScore(latestChallengeScore)} ({latestChallengePerformanceLevel ?? "Unrated"})
+                  </p>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Best Score</p>
-                      <p className="mt-1 text-lg font-semibold">{formatScore(challengePerformanceSummary.bestScorePercentage)}</p>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Attempts</p>
-                      <p className="mt-1 text-lg font-semibold">{challengePerformanceSummary.attempts}</p>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Score</p>
-                      <p className="mt-1 text-lg font-semibold">{formatScore(challengePerformanceSummary.lastScorePercentage)}</p>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Completed</p>
-                      <p className="mt-1 text-sm font-medium">
-                        {formatUtcDateTime(challengePerformanceSummary.lastCompletedAt)}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-border bg-background p-3 sm:col-span-2">
-                      <p className="text-xs uppercase tracking-wide text-foreground/60">Latest Performance</p>
-                      <p className="mt-1 text-sm font-medium">
-                        {challengePerformanceSummary.latestPerformanceLevel ?? "-"}
-                      </p>
-                    </div>
+                  <div className="space-y-2">
+                    <p className="text-sm text-foreground/75">
+                      No Challenge Quiz yet. Take your first Challenge Quiz to unlock deeper insights.
+                    </p>
+                    <Button type="button" variant="outline" onClick={handleStartChallengeQuiz} className="w-full sm:w-auto">
+                      {!isPremiumUser ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
+                      Start Challenge Quiz
+                    </Button>
                   </div>
                 )}
               </div>
-            </div>
-          </Card>
 
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">AI Study Coach</h2>
-            {quickReviewHistoryError && challengeHistoryError ? (
-              <p className="text-sm text-foreground/75">
-                Could not load recent review context right now.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {focusAreas.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                      Focus Areas
-                    </p>
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
-                      {focusAreas.map((concept) => (
-                        <li key={`focus-area-${concept}`}>{concept}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
+              <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-md border border-border bg-background p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                    Suggested Next Step
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    Last: {quickReviewPerformanceError
+                      ? "-"
+                      : formatScore(quickReviewPerformanceSummary?.lastScorePercentage ?? null)}
                   </p>
-                  <p className="mt-2 text-sm text-foreground/80">{suggestedNextStep}</p>
+                  <p className="text-sm text-foreground/80">
+                    Attempts: {quickReviewPerformanceError ? "-" : (quickReviewPerformanceSummary?.attempts ?? 0)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
+                  <p className="mt-1 text-sm text-foreground/80">
+                    Best: {challengePerformanceError
+                      ? "-"
+                      : formatScore(challengePerformanceSummary?.bestScorePercentage ?? null)}
+                  </p>
+                  <p className="text-sm text-foreground/80">
+                    Attempts: {challengePerformanceError ? "-" : (challengePerformanceSummary?.attempts ?? 0)}
+                  </p>
                 </div>
               </div>
-            )}
-          </Card>
 
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Recent Review Sessions</h2>
-            {combinedRecentSessions.length === 0 ? (
-              <p className="text-sm text-foreground/75">No completed review sessions yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {combinedRecentSessions.map((session) => (
-                  <div
-                    key={session.id}
-                    className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                          session.mode === "Challenge Quiz"
-                            ? "border border-blue-600/40 bg-blue-600/10 text-blue-700 dark:text-blue-300"
-                            : "border border-border bg-muted/40 text-foreground/70"
-                        }`}
-                      >
-                        {session.mode}
-                      </span>
-                      <span className="text-foreground/75">
-                        {session.completedAt
-                          ? formatUtcDateTime(session.completedAt)
-                          : formatUtcDateTime(session.createdAt)}
-                      </span>
-                    </div>
-                    <span className="font-medium text-foreground">
-                      {session.correctAnswers}/{session.totalQuestions} ({formatScore(session.scorePercentage)})
-                    </span>
-                  </div>
-                ))}
+              <div className="rounded-md border border-border bg-background p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Insight</p>
+                <p className="mt-2 text-sm text-foreground/80">{performanceInsight}</p>
+                {focusAreas.length > 0 ? (
+                  <p className="mt-2 text-xs text-foreground/70">
+                    Weak areas: {focusAreas.join(", ")}
+                  </p>
+                ) : null}
               </div>
-            )}
-            {quickReviewHistoryError ? (
-              <p className="text-xs text-foreground/65">Quick Review history unavailable: {quickReviewHistoryError}</p>
-            ) : null}
-            {challengeHistoryError ? (
-              <p className="text-xs text-foreground/65">Challenge history unavailable: {challengeHistoryError}</p>
-            ) : null}
+
+              {showAdaptivePracticeEntry ? (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-foreground/75">Ready to focus on weak areas?</p>
+                  <Button type="button" variant="outline" onClick={handleStartAdaptivePractice} className="w-full sm:w-auto">
+                    {!canStartAdaptivePractice ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
+                    Practice Weak Areas
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-foreground/75">{suggestedNextStep}</p>
+              )}
+
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-auto px-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  onClick={() => setShowPerformanceDetails((previous) => !previous)}
+                >
+                  {showPerformanceDetails ? "Hide Detailed Breakdown" : "View Detailed Breakdown"}
+                </Button>
+              </div>
+
+              {showPerformanceDetails ? (
+                <div className="space-y-4 rounded-md border border-border bg-background p-3">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      Challenge Concept Breakdown
+                    </p>
+                    {latestChallengeConceptBreakdown.length === 0 ? (
+                      <p className="text-sm text-foreground/75">Complete a Challenge Quiz to see concept breakdown.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {latestChallengeConceptBreakdown.map((conceptStat) => (
+                          <div
+                            key={`challenge-concept-${conceptStat.concept}`}
+                            className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                          >
+                            <span className="text-foreground/85">{conceptStat.concept}</span>
+                            <span className="font-medium text-foreground">
+                              {conceptStat.correctAnswers}/{conceptStat.totalQuestions} ({conceptStat.accuracyPercentage}%)
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Recent Sessions</p>
+                    {combinedRecentSessions.length === 0 ? (
+                      <p className="text-sm text-foreground/75">No completed review sessions yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {combinedRecentSessions.slice(0, 6).map((session) => (
+                          <div
+                            key={session.id}
+                            className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                  session.mode === "Challenge Quiz"
+                                    ? "border border-blue-600/40 bg-blue-600/10 text-blue-700 dark:text-blue-300"
+                                    : "border border-border bg-muted/40 text-foreground/70"
+                                }`}
+                              >
+                                {session.mode}
+                              </span>
+                              <span className="text-foreground/75">
+                                {session.completedAt
+                                  ? formatUtcDateTime(session.completedAt)
+                                  : formatUtcDateTime(session.createdAt)}
+                              </span>
+                            </div>
+                            <span className="font-medium text-foreground">
+                              {session.correctAnswers}/{session.totalQuestions} ({formatScore(session.scorePercentage)})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {quickReviewHistoryError ? (
+                      <p className="text-xs text-foreground/65">Quick Review history unavailable: {quickReviewHistoryError}</p>
+                    ) : null}
+                    {challengeHistoryError ? (
+                      <p className="text-xs text-foreground/65">Challenge history unavailable: {challengeHistoryError}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </Card>
 
           <PracticeQuizCard quiz={studyPack.quiz} />
