@@ -25,6 +25,42 @@ import {
 } from "@/lib/api";
 
 const TAG_MAX_LENGTH = 30;
+const UTC_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const UTC_DATETIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+
+function formatUtcDate(value: string | null | undefined): string {
+  if (!value) {
+    return "Not available";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not available";
+  }
+  return UTC_DATE_FORMATTER.format(date);
+}
+
+function formatUtcDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return UTC_DATETIME_FORMATTER.format(date);
+}
 
 function StudyPackDetailLoading() {
   return (
@@ -88,8 +124,9 @@ export default function StudyPackDetailPage() {
   const [showOriginalNotes, setShowOriginalNotes] = useState(false);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [challengeHint, setChallengeHint] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [navigationOrigin, setNavigationOrigin] = useState<string | null>(null);
   const shareToastTimeoutRef = useRef<number | null>(null);
-  const navigationOrigin = searchParams.get("from");
   const backNavigation = useMemo(() => {
     if (navigationOrigin === "dashboard") {
       return {
@@ -171,6 +208,17 @@ export default function StudyPackDetailPage() {
   }, [router, studyPackId]);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+    setNavigationOrigin(searchParams.get("from"));
+  }, [mounted, searchParams]);
+
+  useEffect(() => {
     void loadStudyPack();
   }, [loadStudyPack]);
 
@@ -209,27 +257,17 @@ export default function StudyPackDetailPage() {
 
   const formatScore = (value: number | null) => {
     if (value === null) {
-      return "—";
+      return "-";
     }
     if (Number.isInteger(value)) {
       return `${value}%`;
     }
     return `${value.toFixed(2).replace(/\.?0+$/, "")}%`;
   };
-  const formattedCreatedDate = useMemo(() => {
-    if (!studyPack?.createdAt) {
-      return "Not available";
-    }
-    const date = new Date(studyPack.createdAt);
-    if (Number.isNaN(date.getTime())) {
-      return "Not available";
-    }
-    return date.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }, [studyPack?.createdAt]);
+  const formattedCreatedDate = useMemo(
+    () => formatUtcDate(studyPack?.createdAt),
+    [studyPack?.createdAt],
+  );
   const originalNotesText = useMemo(() => {
     return studyPack?.sourceText?.trim() ?? "";
   }, [studyPack?.sourceText]);
@@ -781,9 +819,7 @@ export default function StudyPackDetailPage() {
                 <div className="rounded-md border border-border bg-background p-3">
                   <p className="text-xs uppercase tracking-wide text-foreground/60">Last Reviewed</p>
                   <p className="mt-1 text-sm font-medium">
-                    {performanceSummary.lastReviewedAt
-                      ? new Date(performanceSummary.lastReviewedAt).toLocaleString()
-                      : "—"}
+                    {formatUtcDateTime(performanceSummary.lastReviewedAt)}
                   </p>
                 </div>
               </div>
@@ -833,8 +869,8 @@ export default function StudyPackDetailPage() {
                   >
                     <span className="text-foreground/75">
                       {session.completedAt
-                        ? new Date(session.completedAt).toLocaleString()
-                        : new Date(session.createdAt).toLocaleString()}
+                        ? formatUtcDateTime(session.completedAt)
+                        : formatUtcDateTime(session.createdAt)}
                     </span>
                     <span className="font-medium text-foreground">
                       {session.correctAnswers}/{session.totalQuestions} ({session.scorePercentage}%)
