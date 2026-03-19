@@ -1029,8 +1029,8 @@ export default function StudyPackDetailPage() {
               <div className="pt-1">
                 <Button
                   type="button"
-                  variant="ghost"
-                  className="h-auto px-0 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  variant="outline"
+                  className="h-auto border-0 px-0 text-sm font-medium text-blue-600 hover:bg-transparent hover:text-blue-700 dark:text-blue-400 dark:hover:bg-transparent dark:hover:text-blue-300"
                   onClick={() => setShowPerformanceDetails((previous) => !previous)}
                 >
                   {showPerformanceDetails ? "Hide Detailed Breakdown" : "View Detailed Breakdown"}
