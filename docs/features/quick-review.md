@@ -326,6 +326,22 @@ Behavior:
 - uses a fixed 10-minute timer
 - returns a final score and percentage at completion
 - in-progress challenge sessions must be reused to prevent duplicate LLM calls
+- discourage accidental exits while in progress:
+  - remove casual back affordances on the active challenge screen
+  - show leave confirmation where supported by browser/app navigation APIs
+- persist challenge progress continuously for recovery:
+  - current question index
+  - selected answers
+  - timing state
+- timer continues in real time while active; leaving/reloading does not pause timer
+- on return to an unfinished challenge session:
+  - resume if time remains
+  - auto-complete if timer has already expired
+- during active answering (before submit), selected answer must use full-box neutral highlight for clear visibility
+- post-completion review should use correctness colors:
+  - correct answers highlighted green
+  - selected incorrect answers highlighted red
+  - unrelated unselected options remain neutral
 
 Gating and usage:
 

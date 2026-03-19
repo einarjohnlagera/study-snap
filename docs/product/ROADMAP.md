@@ -15,6 +15,12 @@ Scope priorities:
 - regenerate replaces the current Study Pack for that same note
 - no visible Study Pack version history in V2
 - Premium Challenge Quiz (timed exam-style mode with LLM-generated questions from Study Pack summary + key concepts)
+- Challenge Quiz session resilience and seriousness UX:
+  - discourage accidental exits while in progress
+  - persist progress for refresh/crash recovery
+  - resume unfinished sessions with real-time timer recalculation
+  - auto-complete resumed sessions when timer has already expired
+  - stronger full-box selected-answer highlight styling
 - separate Premium review quotas for Challenge Quiz and Adaptive Practice (50/month each)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
 - real email verification (tokenized links + resend flow) using provider-agnostic email service abstraction

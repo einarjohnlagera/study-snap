@@ -1,6 +1,7 @@
 package com.studysnap.backend.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public record ChallengeQuizStartResponse(
         String sessionId,
@@ -10,6 +11,8 @@ public record ChallengeQuizStartResponse(
         int timeLimitSeconds,
         int usedThisMonth,
         int monthlyLimit,
-        List<QuizItem> quiz
+        List<QuizItem> quiz,
+        int currentQuestionIndex,
+        Map<String, Object> sessionState
 ) {
 }

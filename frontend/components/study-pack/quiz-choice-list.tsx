@@ -6,6 +6,7 @@ type QuizChoiceListProps = {
   selectedChoice?: string | null;
   revealAnswer: boolean;
   onSelectChoice?: (choice: string) => void;
+  selectionStyle?: "default" | "exam";
 };
 
 export function QuizChoiceList({
@@ -14,6 +15,7 @@ export function QuizChoiceList({
   selectedChoice = null,
   revealAnswer,
   onSelectChoice,
+  selectionStyle = "default",
 }: QuizChoiceListProps) {
   if (choices.length === 0) {
     return null;
@@ -40,7 +42,9 @@ export function QuizChoiceList({
                   : isSelected
                     ? isIncorrectSelection
                       ? "border-red-500/50 bg-red-500/10 text-foreground"
-                      : "border-foreground/30 bg-muted/60 text-foreground"
+                      : selectionStyle === "exam"
+                        ? "border-blue-600/70 bg-blue-500/15 text-foreground ring-1 ring-blue-500/35"
+                        : "border-foreground/30 bg-muted/60 text-foreground"
                     : "border-border text-foreground/75",
                 isInteractive ? "cursor-pointer" : "cursor-default",
               )}
