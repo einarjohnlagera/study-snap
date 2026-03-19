@@ -26,6 +26,9 @@ Scope priorities:
   - concept accuracy breakdown
   - weak concept extraction (< 60% accuracy)
   - weak concept handoff for Adaptive Practice targeting
+- Study Pack detail performance visibility:
+  - show Quick Review + Challenge Quiz stats together in a unified Performance Overview
+  - show recent review history across quiz modes for the same Study Pack
 - separate Premium review quotas for Challenge Quiz and Adaptive Practice (50/month each)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
 - real email verification (tokenized links + resend flow) using provider-agnostic email service abstraction

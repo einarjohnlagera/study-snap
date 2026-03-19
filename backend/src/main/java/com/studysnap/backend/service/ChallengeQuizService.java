@@ -3,8 +3,10 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
+import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
+import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.Feature;
@@ -29,7 +31,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -165,6 +169,73 @@ public class ChallengeQuizService {
                         0,
                         null
                 ));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ChallengeQuizSessionSummaryResponse> listRecentSessions(String studyPackIdRaw, UUID userId, int limit) {
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                studyPackIdRaw,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
+        studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+
+        int normalizedLimit = Math.max(1, Math.min(limit, 10));
+        return quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        studyPackId,
+                        QuickReviewSessionMode.CHALLENGE,
+                        PageRequest.of(0, normalizedLimit)
+                ).stream()
+                .map(this::toSessionSummaryResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ChallengeQuizPerformanceSummaryResponse getPerformanceSummary(String studyPackIdRaw, UUID userId) {
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
+                studyPackIdRaw,
+                "STUDY_PACK_NOT_FOUND",
+                "Study pack not found.",
+                HttpStatus.NOT_FOUND
+        );
+        studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+
+        long attempts = quickReviewSessionRepository.countByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNull(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.CHALLENGE
+        );
+        if (attempts == 0) {
+            return new ChallengeQuizPerformanceSummaryResponse(null, 0L, null, null, null, List.of());
+        }
+
+        BigDecimal bestScore = quickReviewSessionRepository.findBestScorePercentageByUserIdAndStudyPackIdAndSessionMode(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.CHALLENGE
+        );
+        QuickReviewSessionEntity latest = quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        studyPackId,
+                        QuickReviewSessionMode.CHALLENGE,
+                        PageRequest.of(0, 1)
+                ).stream()
+                .findFirst()
+                .orElse(null);
+
+        BigDecimal latestScore = latest == null ? null : latest.getScorePercentage();
+        return new ChallengeQuizPerformanceSummaryResponse(
+                bestScore,
+                attempts,
+                latestScore,
+                latest == null ? null : latest.getCompletedAt(),
+                latestScore == null ? null : resolvePerformanceLevel(latestScore),
+                latest == null ? List.of() : extractWeakConcepts(latest)
+        );
     }
 
     public ChallengeQuizStartResponse updateSessionProgress(
@@ -363,6 +434,20 @@ public class ChallengeQuizService {
         );
     }
 
+    private ChallengeQuizSessionSummaryResponse toSessionSummaryResponse(QuickReviewSessionEntity session) {
+        BigDecimal score = session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage();
+        return new ChallengeQuizSessionSummaryResponse(
+                session.getId().toString(),
+                session.getTotalQuestions() == null ? 0 : session.getTotalQuestions(),
+                session.getCorrectAnswers() == null ? 0 : session.getCorrectAnswers(),
+                score,
+                resolvePerformanceLevel(score),
+                extractWeakConcepts(session),
+                session.getCreatedAt(),
+                session.getCompletedAt()
+        );
+    }
+
     private Map<String, Object> buildInitialSessionState(String difficulty) {
         Map<String, Object> state = new LinkedHashMap<>();
         state.put(SESSION_STATE_TIME_LIMIT_SECONDS, DEFAULT_TIME_LIMIT_SECONDS);
@@ -457,6 +542,31 @@ public class ChallengeQuizService {
             }
         }
         return selectedChoices;
+    }
+
+    private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
+        if (session.getSessionMetadata() == null) {
+            return List.of();
+        }
+        Object weakConceptsRaw = session.getSessionMetadata().get(SESSION_METADATA_WEAK_CONCEPTS);
+        if (!(weakConceptsRaw instanceof List<?> weakConceptsList) || weakConceptsList.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> normalized = new ArrayList<>(weakConceptsList.size());
+        for (Object value : weakConceptsList) {
+            if (!(value instanceof String concept)) {
+                continue;
+            }
+            String trimmed = concept.trim();
+            if (!trimmed.isBlank()) {
+                normalized.add(trimmed);
+            }
+        }
+        if (normalized.isEmpty()) {
+            return List.of();
+        }
+        return List.copyOf(new LinkedHashSet<>(normalized));
     }
 
     private ChallengeStatistics computeStatistics(

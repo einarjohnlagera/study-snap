@@ -374,6 +374,7 @@ Study Pack detail quiz entry hierarchy:
 - `Start Quick Review` is the primary action
 - `Challenge Quiz` is secondary and visible (premium-gated for Free users)
 - `Adaptive Practice` should be shown only when weak concepts are available
+- Study Pack detail performance/history should reflect both Quick Review and Challenge Quiz (not Quick Review only)
 
 ## Legacy preservation note
 
