@@ -284,6 +284,14 @@ export type ChallengeQuizSessionResponse = {
   totalQuestions: number;
   correctAnswers: number;
   scorePercentage: number;
+  performanceLevel: "Excellent" | "Good" | "Fair" | "Needs Improvement";
+  conceptBreakdown: {
+    concept: string;
+    correctAnswers: number;
+    totalQuestions: number;
+    accuracyPercentage: number;
+  }[];
+  weakConcepts: string[];
   durationSeconds: number | null;
   createdAt: string;
   completedAt: string | null;

@@ -52,6 +52,19 @@ function getChallengeResultMessage(scorePercentage: number) {
   return "Keep going - you're improving.";
 }
 
+function getPerformanceBadgeClass(performanceLevel: string): string {
+  if (performanceLevel === "Excellent") {
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  }
+  if (performanceLevel === "Good") {
+    return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  }
+  if (performanceLevel === "Fair") {
+    return "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+  return "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+}
+
 function toChoiceRecord(value: unknown): Record<number, string> {
   if (!value || typeof value !== "object") {
     return {};
@@ -550,11 +563,67 @@ export default function ChallengeQuizPage() {
               <p className="mt-2 text-sm text-foreground/75">Time ran out. Your answers were submitted automatically.</p>
             ) : null}
             <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage)}</p>
+            <div className={`mt-3 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getPerformanceBadgeClass(result.performanceLevel)}`}>
+              {result.performanceLevel}
+            </div>
           </div>
+          <Card className="space-y-3 p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Score Summary</h2>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-md border border-border bg-background px-3 py-2">
+                <p className="text-xs text-foreground/65">Correct</p>
+                <p className="text-sm font-semibold">{result.correctAnswers}</p>
+              </div>
+              <div className="rounded-md border border-border bg-background px-3 py-2">
+                <p className="text-xs text-foreground/65">Total</p>
+                <p className="text-sm font-semibold">{result.totalQuestions}</p>
+              </div>
+              <div className="rounded-md border border-border bg-background px-3 py-2">
+                <p className="text-xs text-foreground/65">Percentage</p>
+                <p className="text-sm font-semibold">{result.scorePercentage}%</p>
+              </div>
+            </div>
+          </Card>
+          <Card className="space-y-3 p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Concept Breakdown</h2>
+            {result.conceptBreakdown.length > 0 ? (
+              <div className="space-y-2">
+                {result.conceptBreakdown.map((stat) => (
+                  <div key={stat.concept} className="rounded-md border border-border bg-background px-3 py-2">
+                    <p className="text-sm font-medium">{stat.concept}</p>
+                    <p className="text-xs text-foreground/70">
+                      {stat.correctAnswers}/{stat.totalQuestions} correct ({stat.accuracyPercentage}%)
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-foreground/70">No concept breakdown is available for this session.</p>
+            )}
+          </Card>
+          <Card className="space-y-3 p-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Weak Concepts</h2>
+            {result.weakConcepts.length > 0 ? (
+              <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
+                {result.weakConcepts.map((concept) => (
+                  <li key={concept}>{concept}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-foreground/70">No weak concepts identified in this challenge.</p>
+            )}
+          </Card>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>
+            {result.weakConcepts.length > 0 ? (
+              <Link href={studyPackId ? `/study-packs/${studyPackId}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  Practice Weak Concepts
+                </Button>
+              </Link>
+            ) : null}
             <Button type="button" className="w-full sm:w-auto" onClick={handleRetry}>
               Start Another Challenge
             </Button>

@@ -342,6 +342,12 @@ Behavior:
   - correct answers highlighted green
   - selected incorrect answers highlighted red
   - unrelated unselected options remain neutral
+- challenge completion statistics are computed from session data only (no LLM):
+  - score summary (`correct`, `total`, `%`)
+  - performance label (`Excellent`, `Good`, `Fair`, `Needs Improvement`)
+  - concept breakdown (`correct/total` and accuracy per concept)
+  - weak concepts where concept accuracy is below 60%
+- weak concepts from challenge completion should be available for Adaptive Practice targeting
 
 Gating and usage:
 

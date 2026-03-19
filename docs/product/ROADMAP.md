@@ -21,6 +21,11 @@ Scope priorities:
   - resume unfinished sessions with real-time timer recalculation
   - auto-complete resumed sessions when timer has already expired
   - stronger full-box selected-answer highlight styling
+- Challenge Quiz post-completion statistics:
+  - score summary + performance level
+  - concept accuracy breakdown
+  - weak concept extraction (< 60% accuracy)
+  - weak concept handoff for Adaptive Practice targeting
 - separate Premium review quotas for Challenge Quiz and Adaptive Practice (50/month each)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
 - real email verification (tokenized links + resend flow) using provider-agnostic email service abstraction

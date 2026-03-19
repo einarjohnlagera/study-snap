@@ -342,6 +342,12 @@ Challenge Quiz guidance:
 - Challenge sessions must reuse existing generated quiz when an in-progress session exists (avoid extra LLM calls)
 - Challenge Quiz usage must be tracked separately from Study Pack generation quota
 - During active Challenge answering, selected options should use a full-box neutral highlight (not subtle text-only change)
+- Challenge results should include computed exam statistics (no LLM):
+  - score summary (correct, total, percentage)
+  - performance level (`Excellent`, `Good`, `Fair`, `Needs Improvement`)
+  - concept breakdown (correct/total + accuracy per concept)
+  - weak concepts list (concept accuracy < 60%)
+- persist Challenge weak concepts so Adaptive Practice can target them
 
 Adaptive Practice guidance:
 - Adaptive Practice is Premium-only and LLM-generated

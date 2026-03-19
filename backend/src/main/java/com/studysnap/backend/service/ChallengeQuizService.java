@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
@@ -41,6 +42,9 @@ public class ChallengeQuizService {
     private static final String SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS = "timerStartedAtEpochSeconds";
     private static final String SESSION_STATE_SELECTED_CHOICES = "selectedChoices";
     private static final String SESSION_STATE_COMPLETED = "completed";
+    private static final String SESSION_METADATA_WEAK_CONCEPTS = "weakConcepts";
+    private static final String SESSION_METADATA_CONCEPT_BREAKDOWN = "conceptBreakdown";
+    private static final String UNKNOWN_CONCEPT_LABEL = "Uncategorized";
     private static final int LOW_SCORE_QUESTION_COUNT = 10;
     private static final int MID_SCORE_QUESTION_COUNT = 12;
     private static final int HIGH_SCORE_QUESTION_COUNT = 15;
@@ -231,20 +235,30 @@ public class ChallengeQuizService {
             );
         }
 
-        BigDecimal scorePercentage = BigDecimal.valueOf(request.correctAnswers())
+        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        Map<Integer, String> selectedChoices = extractSelectedChoices(session.getSessionState());
+        ChallengeStatistics statistics = computeStatistics(
+                quiz,
+                selectedChoices,
+                request.correctAnswers(),
+                totalQuestions
+        );
+
+        BigDecimal scorePercentage = BigDecimal.valueOf(statistics.correctAnswers())
                 .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(statistics.totalQuestions()), 2, RoundingMode.HALF_UP);
 
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
-        session.setCurrentQuestionIndex(totalQuestions);
+        session.setCurrentQuestionIndex(statistics.totalQuestions());
         session.setCurrentRound(QuickReviewRound.INITIAL);
-        session.setTotalQuestions(totalQuestions);
-        session.setCorrectAnswers(request.correctAnswers());
+        session.setTotalQuestions(statistics.totalQuestions());
+        session.setCorrectAnswers(statistics.correctAnswers());
         session.setScorePercentage(scorePercentage);
         session.setRetryCount(0);
         session.setDurationSeconds(request.durationSeconds());
         session.setCompletedAt(OffsetDateTime.now());
         session.setSessionState(markSessionStateCompleted(session.getSessionState()));
+        session.setSessionMetadata(buildCompletionSessionMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
         return new ChallengeQuizSessionResponse(
@@ -254,6 +268,9 @@ public class ChallengeQuizService {
                 saved.getTotalQuestions() == null ? 0 : saved.getTotalQuestions(),
                 saved.getCorrectAnswers() == null ? 0 : saved.getCorrectAnswers(),
                 saved.getScorePercentage() == null ? BigDecimal.ZERO : saved.getScorePercentage(),
+                statistics.performanceLevel(),
+                statistics.conceptBreakdown(),
+                statistics.weakConcepts(),
                 saved.getDurationSeconds(),
                 saved.getCreatedAt(),
                 saved.getCompletedAt()
@@ -412,6 +429,163 @@ public class ChallengeQuizService {
         }
         nextState.put(SESSION_STATE_COMPLETED, true);
         return nextState;
+    }
+
+    private Map<Integer, String> extractSelectedChoices(Map<String, Object> sessionState) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Object raw = sessionState.get(SESSION_STATE_SELECTED_CHOICES);
+        if (!(raw instanceof Map<?, ?> rawMap) || rawMap.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, String> selectedChoices = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            Object key = entry.getKey();
+            Object value = entry.getValue();
+            if (!(key instanceof String keyString) || !(value instanceof String selectedChoice)) {
+                continue;
+            }
+            try {
+                int questionIndex = Integer.parseInt(keyString);
+                if (questionIndex >= 0) {
+                    selectedChoices.put(questionIndex, selectedChoice);
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid question index keys.
+            }
+        }
+        return selectedChoices;
+    }
+
+    private ChallengeStatistics computeStatistics(
+            List<QuizItem> quiz,
+            Map<Integer, String> selectedChoices,
+            int fallbackCorrectAnswers,
+            int fallbackTotalQuestions
+    ) {
+        if (quiz == null || quiz.isEmpty()) {
+            int totalQuestions = Math.max(1, fallbackTotalQuestions);
+            int correctAnswers = Math.max(0, Math.min(fallbackCorrectAnswers, totalQuestions));
+            BigDecimal percentage = BigDecimal.valueOf(correctAnswers)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
+            return new ChallengeStatistics(
+                    correctAnswers,
+                    totalQuestions,
+                    resolvePerformanceLevel(percentage),
+                    List.of(),
+                    List.of()
+            );
+        }
+
+        Map<String, ConceptCounter> conceptCounters = new LinkedHashMap<>();
+        int correctAnswers = 0;
+        for (int index = 0; index < quiz.size(); index++) {
+            QuizItem item = quiz.get(index);
+            if (item == null) {
+                continue;
+            }
+            String concept = normalizeConcept(item.concept());
+            ConceptCounter counter = conceptCounters.computeIfAbsent(concept, unused -> new ConceptCounter());
+            counter.totalQuestions += 1;
+
+            String selectedChoice = selectedChoices.get(index);
+            if (selectedChoice != null && selectedChoice.equals(item.answer())) {
+                counter.correctAnswers += 1;
+                correctAnswers += 1;
+            }
+        }
+
+        int totalQuestions = quiz.size();
+        BigDecimal percentage = BigDecimal.valueOf(correctAnswers)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
+
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown = conceptCounters.entrySet()
+                .stream()
+                .map(entry -> {
+                    int accuracy = calculateAccuracy(entry.getValue().correctAnswers, entry.getValue().totalQuestions);
+                    return new ChallengeQuizConceptStatResponse(
+                            entry.getKey(),
+                            entry.getValue().correctAnswers,
+                            entry.getValue().totalQuestions,
+                            accuracy
+                    );
+                })
+                .toList();
+
+        List<String> weakConcepts = conceptBreakdown.stream()
+                .filter(stat -> stat.accuracyPercentage() < 60)
+                .map(ChallengeQuizConceptStatResponse::concept)
+                .toList();
+
+        return new ChallengeStatistics(
+                correctAnswers,
+                totalQuestions,
+                resolvePerformanceLevel(percentage),
+                conceptBreakdown,
+                weakConcepts
+        );
+    }
+
+    private String normalizeConcept(String value) {
+        if (value == null) {
+            return UNKNOWN_CONCEPT_LABEL;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? UNKNOWN_CONCEPT_LABEL : normalized;
+    }
+
+    private int calculateAccuracy(int correctAnswers, int totalQuestions) {
+        if (totalQuestions <= 0) {
+            return 0;
+        }
+        return (int) Math.round((correctAnswers * 100.0) / totalQuestions);
+    }
+
+    private String resolvePerformanceLevel(BigDecimal scorePercentage) {
+        if (scorePercentage.compareTo(BigDecimal.valueOf(90)) >= 0) {
+            return "Excellent";
+        }
+        if (scorePercentage.compareTo(BigDecimal.valueOf(75)) >= 0) {
+            return "Good";
+        }
+        if (scorePercentage.compareTo(BigDecimal.valueOf(50)) >= 0) {
+            return "Fair";
+        }
+        return "Needs Improvement";
+    }
+
+    private Map<String, Object> buildCompletionSessionMetadata(ChallengeStatistics statistics) {
+        List<Map<String, Object>> conceptBreakdown = statistics.conceptBreakdown().stream()
+                .map(stat -> Map.<String, Object>of(
+                        "concept", stat.concept(),
+                        "correctAnswers", stat.correctAnswers(),
+                        "totalQuestions", stat.totalQuestions(),
+                        "accuracyPercentage", stat.accuracyPercentage()
+                ))
+                .toList();
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put(SESSION_METADATA_WEAK_CONCEPTS, statistics.weakConcepts());
+        metadata.put(SESSION_METADATA_CONCEPT_BREAKDOWN, conceptBreakdown);
+        return metadata;
+    }
+
+    private static final class ConceptCounter {
+        private int correctAnswers;
+        private int totalQuestions;
+    }
+
+    private record ChallengeStatistics(
+            int correctAnswers,
+            int totalQuestions,
+            String performanceLevel,
+            List<ChallengeQuizConceptStatResponse> conceptBreakdown,
+            List<String> weakConcepts
+    ) {
     }
 
     private record ChallengeGenerationProfile(int questionCount, String difficulty) {
