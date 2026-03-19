@@ -1,0 +1,17 @@
+spring:
+  config:
+    import: ""
+
+server:
+  port: ${PORT:8080}
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+
+studysnap:
+  ocr:
+    provider: ${OCR_PROVIDER:google}
+  quick-review:
+    study-tip:
+      enabled: ${QUICK_REVIEW_STUDY_TIP_ENABLED:true}
