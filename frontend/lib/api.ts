@@ -254,7 +254,7 @@ export type AdaptivePracticeCompleteRequest = {
 };
 
 export type ChallengeQuizStartResponse = {
-  sessionId: string;
+  sessionId: string | null;
   studyPackId: string;
   title: string;
   totalQuestions: number;
@@ -262,6 +262,13 @@ export type ChallengeQuizStartResponse = {
   usedThisMonth: number;
   monthlyLimit: number;
   quiz: QuizItem[];
+  currentQuestionIndex: number;
+  sessionState: Record<string, unknown> | null;
+};
+
+export type ChallengeQuizProgressRequest = {
+  currentQuestionIndex: number;
+  sessionState?: Record<string, unknown>;
 };
 
 export type ChallengeQuizCompleteRequest = {
@@ -1001,6 +1008,44 @@ export async function startChallengeQuizSession(
     true,
   );
   return parseApiResponse<ChallengeQuizStartResponse>(response, "Could not start Challenge Quiz.");
+}
+
+export async function getInProgressChallengeQuizSession(
+  studyPackId: string,
+): Promise<ChallengeQuizStartResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/study-packs/${studyPackId}/in-progress`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizStartResponse>(
+    response,
+    "Could not load in-progress Challenge Quiz.",
+  );
+}
+
+export async function updateChallengeQuizSessionProgress(
+  sessionId: string,
+  request: ChallengeQuizProgressRequest,
+  options: { keepalive?: boolean } = {},
+): Promise<ChallengeQuizStartResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}/progress`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+      keepalive: options.keepalive ?? false,
+    },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizStartResponse>(
+    response,
+    "Could not save Challenge Quiz progress.",
+  );
 }
 
 export async function completeChallengeQuizSession(

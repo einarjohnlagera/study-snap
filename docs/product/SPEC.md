@@ -274,6 +274,22 @@ Behavior:
 * runs with a 10-minute timer
 * stores a dedicated challenge session result with score and percentage
 * reuses existing in-progress challenge sessions to avoid unnecessary LLM regeneration
+* discourages accidental exit while in progress:
+  * hide casual back affordances on the active quiz screen
+  * show leave confirmation where technically supported
+* persists in-progress state for recovery:
+  * current question index
+  * selected answers
+  * timing state (original start time + time limit)
+* timer continues in real time while active, even if user leaves or refreshes
+* when returning to an unfinished session:
+  * resume if time remains
+  * auto-complete if time has already expired
+* selected answer state before submission should use clear full-choice-box highlighting (neutral accent)
+* correctness colors remain post-grading:
+  * correct answer: green
+  * selected incorrect answer: red
+  * unrelated options: neutral
 
 Gating and limits:
 

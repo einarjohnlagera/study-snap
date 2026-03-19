@@ -331,6 +331,9 @@ Challenge Quiz guidance:
 - Challenge Quiz is Premium-only and timed
 - Challenge Quiz generates new questions via LLM
 - Challenge input must use only Study Pack summary + key concepts (never extracted OCR text)
+- Challenge Quiz should discourage accidental exit while in progress (leave confirmation where supported)
+- Challenge progress must be persisted continuously (at minimum current index + selected answers)
+- Challenge timer must continue in real time even if user leaves/reloads, and resumed sessions must recalculate remaining time from original start
 - question count and difficulty should adapt to the latest Quick Review score:
   - score < 50: 10 questions, easy-medium
   - score < 80: 12 questions, medium
@@ -338,6 +341,7 @@ Challenge Quiz guidance:
 - Challenge generation must not duplicate stored Study Pack quiz questions
 - Challenge sessions must reuse existing generated quiz when an in-progress session exists (avoid extra LLM calls)
 - Challenge Quiz usage must be tracked separately from Study Pack generation quota
+- During active Challenge answering, selected options should use a full-box neutral highlight (not subtle text-only change)
 
 Adaptive Practice guidance:
 - Adaptive Practice is Premium-only and LLM-generated

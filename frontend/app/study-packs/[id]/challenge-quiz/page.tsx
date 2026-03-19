@@ -11,14 +11,22 @@ import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   completeChallengeQuizSession,
+  getInProgressChallengeQuizSession,
   getMyStudyPack,
   startChallengeQuizSession,
+  updateChallengeQuizSessionProgress,
   type ChallengeQuizSessionResponse,
   type ChallengeQuizStartResponse,
   type StudyPackResponse,
 } from "@/lib/api";
 
 type ChallengePhase = "prestart" | "running" | "complete" | "premium-locked" | "limit-reached";
+type ChallengeSessionStatePayload = {
+  selectedChoices?: Record<string, string>;
+  timerStartedAtEpochSeconds?: number;
+};
+
+const LEAVE_WARNING_MESSAGE = "Leave Challenge Quiz?\nYour progress is saved, but the timer will continue.";
 
 function formatTimer(seconds: number): string {
   const safeSeconds = Math.max(0, seconds);
@@ -44,6 +52,40 @@ function getChallengeResultMessage(scorePercentage: number) {
   return "Keep going - you're improving.";
 }
 
+function toChoiceRecord(value: unknown): Record<number, string> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => typeof v === "string")
+    .map(([k, v]) => [Number(k), v as string] as const)
+    .filter(([k]) => Number.isInteger(k) && k >= 0);
+  return Object.fromEntries(entries);
+}
+
+function resolveTimerStartedAtEpochSeconds(
+  session: ChallengeQuizStartResponse,
+  sessionState: ChallengeSessionStatePayload,
+): number {
+  if (typeof sessionState.timerStartedAtEpochSeconds === "number") {
+    return sessionState.timerStartedAtEpochSeconds;
+  }
+  return Math.floor(Date.now() / 1000);
+}
+
+function resolveDeadlineEpochSeconds(
+  session: ChallengeQuizStartResponse,
+  sessionState: ChallengeSessionStatePayload,
+): number {
+  const startedAtEpochSeconds = resolveTimerStartedAtEpochSeconds(session, sessionState);
+  return startedAtEpochSeconds + session.timeLimitSeconds;
+}
+
+function resolveRemainingSeconds(deadlineEpochSeconds: number): number {
+  const nowEpochSeconds = Math.floor(Date.now() / 1000);
+  return Math.max(0, deadlineEpochSeconds - nowEpochSeconds);
+}
+
 export default function ChallengeQuizPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -56,9 +98,12 @@ export default function ChallengeQuizPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [deadlineEpochSeconds, setDeadlineEpochSeconds] = useState<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
   const [timedOut, setTimedOut] = useState(false);
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [showAnswerReview, setShowAnswerReview] = useState(false);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -66,6 +111,49 @@ export default function ChallengeQuizPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+
+  const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
+    const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
+    const restoredChoices = toChoiceRecord(state.selectedChoices);
+    const normalizedIndex = Math.max(0, Math.min(started.currentQuestionIndex ?? 0, Math.max(0, started.quiz.length - 1)));
+    const nextDeadlineEpochSeconds = resolveDeadlineEpochSeconds(started, state);
+
+    setChallengeSession(started);
+    setResult(null);
+    setSelectedChoices(restoredChoices);
+    setCurrentIndex(normalizedIndex);
+    setDeadlineEpochSeconds(nextDeadlineEpochSeconds);
+    setRemainingSeconds(resolveRemainingSeconds(nextDeadlineEpochSeconds));
+    setTimedOut(false);
+    setShowAnswerReview(false);
+    setPhase(forceRunning || Boolean(started.sessionId) ? "running" : "prestart");
+  }, []);
+
+  const persistProgress = useCallback(
+    (nextIndex: number, nextSelectedChoices: Record<number, string>, keepalive = false) => {
+      if (!challengeSession?.sessionId) {
+        return;
+      }
+
+      const sessionState = {
+        selectedChoices: Object.fromEntries(
+          Object.entries(nextSelectedChoices).map(([key, value]) => [String(key), value]),
+        ),
+      };
+
+      void updateChallengeQuizSessionProgress(
+        challengeSession.sessionId,
+        {
+          currentQuestionIndex: nextIndex,
+          sessionState,
+        },
+        { keepalive },
+      ).catch(() => {
+        // Challenge should continue even if a progress sync fails.
+      });
+    },
+    [challengeSession?.sessionId],
+  );
 
   const loadStudyPack = useCallback(async () => {
     if (!studyPackId) {
@@ -84,7 +172,25 @@ export default function ChallengeQuizPage() {
       const detail = await getMyStudyPack(studyPackId);
       setStudyPack(detail);
       const planType = getAuthUser()?.planType ?? "FREE";
-      setPhase(planType === "PREMIUM" ? "prestart" : "premium-locked");
+      if (planType !== "PREMIUM") {
+        setPhase("premium-locked");
+        return;
+      }
+
+      const inProgress = await getInProgressChallengeQuizSession(studyPackId);
+      if (inProgress.sessionId) {
+        applyStartedSession(inProgress, true);
+      } else {
+        setChallengeSession(null);
+        setResult(null);
+        setSelectedChoices({});
+        setCurrentIndex(0);
+        setDeadlineEpochSeconds(null);
+        setRemainingSeconds(0);
+        setTimedOut(false);
+        setShowAnswerReview(false);
+        setPhase("prestart");
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
       setError(message);
@@ -92,7 +198,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [router, studyPackId]);
+  }, [applyStartedSession, router, studyPackId]);
 
   useEffect(() => {
     void loadStudyPack();
@@ -105,7 +211,7 @@ export default function ChallengeQuizPage() {
   const selectedChoice = selectedChoices[currentIndex] ?? null;
 
   const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
-    if (!challengeSession || submitting) {
+    if (!challengeSession?.sessionId || submitting) {
       return;
     }
 
@@ -135,22 +241,64 @@ export default function ChallengeQuizPage() {
   }, [challengeSession, remainingSeconds, selectedChoices, submitting]);
 
   useEffect(() => {
-    if (phase !== "running" || !challengeSession || submitting) {
-      return;
-    }
-    if (remainingSeconds <= 0) {
-      void handleSubmit(true);
+    if (phase !== "running" || !challengeSession || submitting || deadlineEpochSeconds === null) {
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      setRemainingSeconds((previous) => Math.max(0, previous - 1));
-    }, 1000);
+    const tick = () => {
+      const nextRemainingSeconds = resolveRemainingSeconds(deadlineEpochSeconds);
+      setRemainingSeconds(nextRemainingSeconds);
+      if (nextRemainingSeconds <= 0) {
+        void handleSubmit(true);
+      }
+    };
+
+    tick();
+    const timer = window.setInterval(tick, 1000);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearInterval(timer);
     };
-  }, [challengeSession, handleSubmit, phase, remainingSeconds, submitting]);
+  }, [challengeSession, deadlineEpochSeconds, handleSubmit, phase, submitting]);
+
+  useEffect(() => {
+    if (phase !== "running") {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      persistProgress(currentIndex, selectedChoices, true);
+      event.preventDefault();
+      event.returnValue = LEAVE_WARNING_MESSAGE;
+      return LEAVE_WARNING_MESSAGE;
+    };
+
+    const handlePopState = () => {
+      const shouldLeave = window.confirm(LEAVE_WARNING_MESSAGE);
+      if (!shouldLeave) {
+        window.history.pushState(null, "", window.location.href);
+        return;
+      }
+      persistProgress(currentIndex, selectedChoices, true);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        persistProgress(currentIndex, selectedChoices, true);
+      }
+    };
+
+    window.history.pushState(null, "", window.location.href);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("popstate", handlePopState);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [currentIndex, persistProgress, phase, selectedChoices]);
 
   const handleStartChallenge = useCallback(async () => {
     if (!studyPack || starting) {
@@ -161,13 +309,10 @@ export default function ChallengeQuizPage() {
     setError(null);
     try {
       const started = await startChallengeQuizSession(studyPack.id);
-      setChallengeSession(started);
-      setResult(null);
-      setSelectedChoices({});
-      setCurrentIndex(0);
-      setRemainingSeconds(started.timeLimitSeconds);
-      setTimedOut(false);
-      setPhase("running");
+      if (!started.sessionId) {
+        throw new Error("Could not start Challenge Quiz.");
+      }
+      applyStartedSession(started, true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not start Challenge Quiz.";
       setError(message);
@@ -179,17 +324,25 @@ export default function ChallengeQuizPage() {
     } finally {
       setStarting(false);
     }
-  }, [starting, studyPack]);
+  }, [applyStartedSession, starting, studyPack]);
 
   const handleRetry = () => {
     setChallengeSession(null);
     setResult(null);
     setSelectedChoices({});
     setCurrentIndex(0);
+    setDeadlineEpochSeconds(null);
     setRemainingSeconds(0);
     setTimedOut(false);
     setError(null);
+    setShowAnswerReview(false);
     setPhase("prestart");
+  };
+
+  const handleLeaveQuiz = () => {
+    persistProgress(currentIndex, selectedChoices, true);
+    setShowLeaveDialog(false);
+    router.push(studyPackId ? `/study-packs/${studyPackId}` : "/dashboard");
   };
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
@@ -197,13 +350,37 @@ export default function ChallengeQuizPage() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"}
-          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
-          Back to Study Pack
-        </Link>
+        {phase === "running" ? (
+          <>
+            <p className="text-sm font-medium text-foreground/80">Challenge Quiz in progress</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setShowLeaveDialog(true)}>
+              Leave Quiz
+            </Button>
+          </>
+        ) : (
+          <Link
+            href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"}
+            className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Back to Study Pack
+          </Link>
+        )}
       </div>
+
+      {showLeaveDialog ? (
+        <Card className="space-y-3 p-4 sm:p-6">
+          <p className="text-sm font-semibold text-foreground">Leave Challenge Quiz?</p>
+          <p className="text-sm text-foreground/75">Your progress is saved, but the timer will continue.</p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setShowLeaveDialog(false)}>
+              Stay
+            </Button>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleLeaveQuiz}>
+              Leave Quiz
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {loading ? (
         <ChallengeQuizLoading />
@@ -273,7 +450,7 @@ export default function ChallengeQuizPage() {
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>10-minute timer</li>
               <li>10 to 15 AI-generated questions</li>
-              <li>Submit before time runs out for your final score</li>
+              <li>If you leave, the timer still continues</li>
             </ul>
           </div>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
@@ -303,10 +480,16 @@ export default function ChallengeQuizPage() {
                 correctAnswer={currentQuestion.answer}
                 selectedChoice={selectedChoice}
                 revealAnswer={false}
+                selectionStyle="exam"
                 onSelectChoice={(choice) => {
-                  setSelectedChoices((previous) => ({ ...previous, [currentIndex]: choice }));
+                  setSelectedChoices((previous) => {
+                    const next = { ...previous, [currentIndex]: choice };
+                    persistProgress(currentIndex, next);
+                    return next;
+                  });
                 }}
               />
+              <p className="text-xs text-foreground/65">Answers are graded only after submission.</p>
             </div>
           ) : null}
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
@@ -315,7 +498,11 @@ export default function ChallengeQuizPage() {
               type="button"
               variant="outline"
               className="w-full sm:w-auto"
-              onClick={() => setCurrentIndex((previous) => Math.max(0, previous - 1))}
+              onClick={() => {
+                const nextIndex = Math.max(0, currentIndex - 1);
+                setCurrentIndex(nextIndex);
+                persistProgress(nextIndex, selectedChoices);
+              }}
               disabled={currentIndex <= 0 || submitting}
             >
               Previous
@@ -324,7 +511,11 @@ export default function ChallengeQuizPage() {
               <Button
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={() => setCurrentIndex((previous) => Math.min(totalQuestions - 1, previous + 1))}
+                onClick={() => {
+                  const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
+                  setCurrentIndex(nextIndex);
+                  persistProgress(nextIndex, selectedChoices);
+                }}
                 disabled={submitting}
               >
                 Next
@@ -361,6 +552,9 @@ export default function ChallengeQuizPage() {
             <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage)}</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
+              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
+            </Button>
             <Button type="button" className="w-full sm:w-auto" onClick={handleRetry}>
               Start Another Challenge
             </Button>
@@ -370,6 +564,23 @@ export default function ChallengeQuizPage() {
               </Button>
             </Link>
           </div>
+          {showAnswerReview ? (
+            <div className="space-y-3 pt-2">
+              {quiz.map((item, index) => (
+                <Card key={`${item.question}-${index}`} className="space-y-3 p-4">
+                  <h2 className="text-sm font-semibold">
+                    {index + 1}. {item.question}
+                  </h2>
+                  <QuizChoiceList
+                    choices={item.choices}
+                    correctAnswer={item.answer}
+                    selectedChoice={selectedChoices[index] ?? null}
+                    revealAnswer
+                  />
+                </Card>
+              ))}
+            </div>
+          ) : null}
         </Card>
       ) : null}
     </main>
