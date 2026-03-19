@@ -442,6 +442,7 @@ public class ChallengeQuizService {
                 session.getCorrectAnswers() == null ? 0 : session.getCorrectAnswers(),
                 score,
                 resolvePerformanceLevel(score),
+                extractConceptBreakdown(session),
                 extractWeakConcepts(session),
                 session.getCreatedAt(),
                 session.getCompletedAt()
@@ -567,6 +568,61 @@ public class ChallengeQuizService {
             return List.of();
         }
         return List.copyOf(new LinkedHashSet<>(normalized));
+    }
+
+    private List<ChallengeQuizConceptStatResponse> extractConceptBreakdown(QuickReviewSessionEntity session) {
+        if (session.getSessionMetadata() == null) {
+            return List.of();
+        }
+        Object conceptBreakdownRaw = session.getSessionMetadata().get(SESSION_METADATA_CONCEPT_BREAKDOWN);
+        if (!(conceptBreakdownRaw instanceof List<?> conceptBreakdownList) || conceptBreakdownList.isEmpty()) {
+            return List.of();
+        }
+
+        List<ChallengeQuizConceptStatResponse> conceptStats = new ArrayList<>(conceptBreakdownList.size());
+        for (Object entry : conceptBreakdownList) {
+            if (!(entry instanceof Map<?, ?> valueMap)) {
+                continue;
+            }
+
+            String concept = readString(valueMap.get("concept"));
+            Integer correctAnswers = readInteger(valueMap.get("correctAnswers"));
+            Integer totalQuestions = readInteger(valueMap.get("totalQuestions"));
+            Integer accuracyPercentage = readInteger(valueMap.get("accuracyPercentage"));
+            if (concept == null || correctAnswers == null || totalQuestions == null || accuracyPercentage == null) {
+                continue;
+            }
+
+            conceptStats.add(new ChallengeQuizConceptStatResponse(
+                    concept,
+                    correctAnswers,
+                    totalQuestions,
+                    accuracyPercentage
+            ));
+        }
+        return conceptStats.isEmpty() ? List.of() : List.copyOf(conceptStats);
+    }
+
+    private String readString(Object value) {
+        if (!(value instanceof String raw)) {
+            return null;
+        }
+        String normalized = raw.trim();
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private Integer readInteger(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String raw) {
+            try {
+                return Integer.parseInt(raw.trim());
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private ChallengeStatistics computeStatistics(
