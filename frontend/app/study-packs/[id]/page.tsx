@@ -12,13 +12,18 @@ import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   createStudyPackShareLink,
+  getChallengeQuizPerformanceSummary,
+  getInProgressChallengeQuizSession,
   getQuickReviewPerformanceSummary,
-  getInProgressQuickReviewSession,
   getMyStudyPack,
+  getInProgressQuickReviewSession,
+  listRecentChallengeQuizSessions,
   listRecentQuickReviewSessions,
   startQuickReviewSession,
   updateStudyPackMetadata,
   updateStudyPackTags,
+  type ChallengeQuizPerformanceSummaryResponse,
+  type ChallengeQuizSessionSummaryResponse,
   type QuickReviewPerformanceSummaryResponse,
   type QuickReviewSessionSummaryResponse,
   type StudyPackResponse,
@@ -101,14 +106,21 @@ export default function StudyPackDetailPage() {
   const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
-  const [recentSessions, setRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
-  const [performanceSummary, setPerformanceSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
+  const [quickReviewSessions, setQuickReviewSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
+  const [challengeSessions, setChallengeSessions] = useState<ChallengeQuizSessionSummaryResponse[]>([]);
+  const [quickReviewPerformanceSummary, setQuickReviewPerformanceSummary] =
+    useState<QuickReviewPerformanceSummaryResponse | null>(null);
+  const [challengePerformanceSummary, setChallengePerformanceSummary] =
+    useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [performanceError, setPerformanceError] = useState<string | null>(null);
+  const [quickReviewHistoryError, setQuickReviewHistoryError] = useState<string | null>(null);
+  const [challengeHistoryError, setChallengeHistoryError] = useState<string | null>(null);
+  const [quickReviewPerformanceError, setQuickReviewPerformanceError] = useState<string | null>(null);
+  const [challengePerformanceError, setChallengePerformanceError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingQuickReview, setStartingQuickReview] = useState(false);
   const [hasInProgressQuickReview, setHasInProgressQuickReview] = useState(false);
+  const [hasInProgressChallengeQuiz, setHasInProgressChallengeQuiz] = useState(false);
   const [creatingShareLink, setCreatingShareLink] = useState(false);
   const [updatingTags, setUpdatingTags] = useState(false);
   const [updatingMetadata, setUpdatingMetadata] = useState(false);
@@ -166,39 +178,87 @@ export default function StudyPackDetailPage() {
       setTagError(null);
       setAddingTag(false);
       setNewTagValue("");
-      try {
-        const history = await listRecentQuickReviewSessions(studyPackId, 5);
-        setRecentSessions(history);
-        setHistoryError(null);
-      } catch (historyErr) {
-        const message = historyErr instanceof Error ? historyErr.message : "Could not load recent sessions.";
-        setHistoryError(message);
-        setRecentSessions([]);
+
+      const [
+        quickHistoryResult,
+        challengeHistoryResult,
+        quickSummaryResult,
+        challengeSummaryResult,
+        quickInProgressResult,
+        challengeInProgressResult,
+      ] = await Promise.allSettled([
+        listRecentQuickReviewSessions(studyPackId, 5),
+        listRecentChallengeQuizSessions(studyPackId, 5),
+        getQuickReviewPerformanceSummary(studyPackId),
+        getChallengeQuizPerformanceSummary(studyPackId),
+        getInProgressQuickReviewSession(studyPackId),
+        getInProgressChallengeQuizSession(studyPackId),
+      ]);
+
+      if (quickHistoryResult.status === "fulfilled") {
+        setQuickReviewSessions(quickHistoryResult.value);
+        setQuickReviewHistoryError(null);
+      } else {
+        const message = quickHistoryResult.reason instanceof Error
+          ? quickHistoryResult.reason.message
+          : "Could not load recent Quick Review sessions.";
+        setQuickReviewHistoryError(message);
+        setQuickReviewSessions([]);
       }
-      try {
-        const summary = await getQuickReviewPerformanceSummary(studyPackId);
-        setPerformanceSummary(summary);
-        setPerformanceError(null);
-      } catch (performanceErr) {
-        const message = performanceErr instanceof Error ? performanceErr.message : "Could not load review performance.";
-        setPerformanceError(message);
-        setPerformanceSummary(null);
+
+      if (challengeHistoryResult.status === "fulfilled") {
+        setChallengeSessions(challengeHistoryResult.value);
+        setChallengeHistoryError(null);
+      } else {
+        const message = challengeHistoryResult.reason instanceof Error
+          ? challengeHistoryResult.reason.message
+          : "Could not load recent Challenge Quiz sessions.";
+        setChallengeHistoryError(message);
+        setChallengeSessions([]);
       }
-      try {
-        const inProgress = await getInProgressQuickReviewSession(studyPackId);
-        setHasInProgressQuickReview(Boolean(inProgress.sessionId));
-      } catch {
-        setHasInProgressQuickReview(false);
+
+      if (quickSummaryResult.status === "fulfilled") {
+        setQuickReviewPerformanceSummary(quickSummaryResult.value);
+        setQuickReviewPerformanceError(null);
+      } else {
+        const message = quickSummaryResult.reason instanceof Error
+          ? quickSummaryResult.reason.message
+          : "Could not load Quick Review performance.";
+        setQuickReviewPerformanceError(message);
+        setQuickReviewPerformanceSummary(null);
       }
+
+      if (challengeSummaryResult.status === "fulfilled") {
+        setChallengePerformanceSummary(challengeSummaryResult.value);
+        setChallengePerformanceError(null);
+      } else {
+        const message = challengeSummaryResult.reason instanceof Error
+          ? challengeSummaryResult.reason.message
+          : "Could not load Challenge Quiz performance.";
+        setChallengePerformanceError(message);
+        setChallengePerformanceSummary(null);
+      }
+
+      setHasInProgressQuickReview(
+        quickInProgressResult.status === "fulfilled" && Boolean(quickInProgressResult.value.sessionId),
+      );
+      setHasInProgressChallengeQuiz(
+        challengeInProgressResult.status === "fulfilled" && Boolean(challengeInProgressResult.value.sessionId),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
       setError(message);
       setStudyPack(null);
-      setRecentSessions([]);
-      setPerformanceSummary(null);
-      setHistoryError(null);
-      setPerformanceError(null);
+      setQuickReviewSessions([]);
+      setChallengeSessions([]);
+      setQuickReviewPerformanceSummary(null);
+      setChallengePerformanceSummary(null);
+      setQuickReviewHistoryError(null);
+      setChallengeHistoryError(null);
+      setQuickReviewPerformanceError(null);
+      setChallengePerformanceError(null);
       setHasInProgressQuickReview(false);
+      setHasInProgressChallengeQuiz(false);
       setTagError(null);
       setAddingTag(false);
       setNewTagValue("");
@@ -274,10 +334,11 @@ export default function StudyPackDetailPage() {
   const hasOriginalNotes = originalNotesText.length > 0;
   const editingMetadata = editingField !== null;
 
-  const latestCompletedSession = recentSessions[0] ?? null;
+  const latestQuickReviewSession = quickReviewSessions[0] ?? null;
+  const challengeWeakConcepts = challengePerformanceSummary?.latestWeakConcepts ?? [];
   const focusAreas = Array.from(
     new Set(
-      (latestCompletedSession?.weakConcepts ?? [])
+      [...(latestQuickReviewSession?.weakConcepts ?? []), ...challengeWeakConcepts]
         .map((concept) => concept.trim())
         .filter((concept) => concept.length > 0),
     ),
@@ -286,14 +347,49 @@ export default function StudyPackDetailPage() {
   const showAdaptivePracticeEntry = isPremiumUser && hasWeakConcepts;
 
   const suggestedNextStep = (() => {
-    if (!latestCompletedSession) {
+    if (!latestQuickReviewSession && (challengePerformanceSummary?.attempts ?? 0) === 0) {
       return "Start your first Quick Review to discover which concepts need more work.";
     }
     if (hasWeakConcepts) {
-      return "Practice weak concepts to strengthen this topic.";
+      return "Practice weak areas to strengthen this topic.";
     }
     return "Continue reviewing this Study Pack.";
   })();
+
+  const combinedRecentSessions = useMemo(() => {
+    const quickRows = quickReviewSessions.map((session) => ({
+      id: `quick-${session.id}`,
+      mode: "Quick Review" as const,
+      createdAt: session.createdAt,
+      completedAt: session.completedAt,
+      correctAnswers: session.correctAnswers,
+      totalQuestions: session.totalQuestions,
+      scorePercentage: session.scorePercentage,
+      performanceLevel: null as string | null,
+    }));
+
+    const challengeRows = challengeSessions.map((session) => ({
+      id: `challenge-${session.sessionId}`,
+      mode: "Challenge Quiz" as const,
+      createdAt: session.createdAt,
+      completedAt: session.completedAt,
+      correctAnswers: session.correctAnswers,
+      totalQuestions: session.totalQuestions,
+      scorePercentage: session.scorePercentage,
+      performanceLevel: session.performanceLevel,
+    }));
+
+    return [...quickRows, ...challengeRows]
+      .sort((a, b) => {
+        const aTime = Date.parse(a.completedAt ?? a.createdAt);
+        const bTime = Date.parse(b.completedAt ?? b.createdAt);
+        if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+          return 0;
+        }
+        return bTime - aTime;
+      })
+      .slice(0, 8);
+  }, [challengeSessions, quickReviewSessions]);
 
   const handleStartQuickReview = async () => {
     if (!studyPack) {
@@ -307,7 +403,7 @@ export default function StudyPackDetailPage() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not start Quick Review.";
-      setHistoryError(message);
+      setQuickReviewHistoryError(message);
     } finally {
       setStartingQuickReview(false);
     }
@@ -732,7 +828,7 @@ export default function StudyPackDetailPage() {
                   </Button>
                   <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleStartChallengeQuiz}>
                     {!isPremiumUser ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
-                    Start Challenge Quiz
+                    {hasInProgressChallengeQuiz ? "Resume Challenge Quiz" : "Start Challenge Quiz"}
                   </Button>
                   {showAdaptivePracticeEntry ? (
                     <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleStartAdaptivePractice}>
@@ -797,39 +893,82 @@ export default function StudyPackDetailPage() {
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Review Performance</h2>
-            {performanceError ? (
-              <p className="text-sm text-foreground/75">{performanceError}</p>
-            ) : !performanceSummary || performanceSummary.attempts === 0 ? (
-              <p className="text-sm text-foreground/75">No Quick Reviews yet. Start your first review.</p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-md border border-border bg-background p-3">
-                  <p className="text-xs uppercase tracking-wide text-foreground/60">Best Score</p>
-                  <p className="mt-1 text-lg font-semibold">{formatScore(performanceSummary.bestScorePercentage)}</p>
-                </div>
-                <div className="rounded-md border border-border bg-background p-3">
-                  <p className="text-xs uppercase tracking-wide text-foreground/60">Attempts</p>
-                  <p className="mt-1 text-lg font-semibold">{performanceSummary.attempts}</p>
-                </div>
-                <div className="rounded-md border border-border bg-background p-3">
-                  <p className="text-xs uppercase tracking-wide text-foreground/60">Last Score</p>
-                  <p className="mt-1 text-lg font-semibold">{formatScore(performanceSummary.lastScorePercentage)}</p>
-                </div>
-                <div className="rounded-md border border-border bg-background p-3">
-                  <p className="text-xs uppercase tracking-wide text-foreground/60">Last Reviewed</p>
-                  <p className="mt-1 text-sm font-medium">
-                    {formatUtcDateTime(performanceSummary.lastReviewedAt)}
-                  </p>
-                </div>
+            <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-3 rounded-md border border-border bg-background p-3">
+                <p className="text-sm font-semibold text-foreground">Quick Review</p>
+                {quickReviewPerformanceError ? (
+                  <p className="text-sm text-foreground/75">{quickReviewPerformanceError}</p>
+                ) : !quickReviewPerformanceSummary || quickReviewPerformanceSummary.attempts === 0 ? (
+                  <p className="text-sm text-foreground/75">No Quick Reviews yet. Start your first review.</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Best Score</p>
+                      <p className="mt-1 text-lg font-semibold">{formatScore(quickReviewPerformanceSummary.bestScorePercentage)}</p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Attempts</p>
+                      <p className="mt-1 text-lg font-semibold">{quickReviewPerformanceSummary.attempts}</p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Score</p>
+                      <p className="mt-1 text-lg font-semibold">{formatScore(quickReviewPerformanceSummary.lastScorePercentage)}</p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Completed</p>
+                      <p className="mt-1 text-sm font-medium">
+                        {formatUtcDateTime(quickReviewPerformanceSummary.lastReviewedAt)}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+
+              <div className="space-y-3 rounded-md border border-border bg-background p-3">
+                <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
+                {challengePerformanceError ? (
+                  <p className="text-sm text-foreground/75">{challengePerformanceError}</p>
+                ) : !challengePerformanceSummary || challengePerformanceSummary.attempts === 0 ? (
+                  <p className="text-sm text-foreground/75">No Challenge Quiz attempts yet.</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Best Score</p>
+                      <p className="mt-1 text-lg font-semibold">{formatScore(challengePerformanceSummary.bestScorePercentage)}</p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Attempts</p>
+                      <p className="mt-1 text-lg font-semibold">{challengePerformanceSummary.attempts}</p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Score</p>
+                      <p className="mt-1 text-lg font-semibold">{formatScore(challengePerformanceSummary.lastScorePercentage)}</p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background p-3">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Last Completed</p>
+                      <p className="mt-1 text-sm font-medium">
+                        {formatUtcDateTime(challengePerformanceSummary.lastCompletedAt)}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-border bg-background p-3 sm:col-span-2">
+                      <p className="text-xs uppercase tracking-wide text-foreground/60">Latest Performance</p>
+                      <p className="mt-1 text-sm font-medium">
+                        {challengePerformanceSummary.latestPerformanceLevel ?? "-"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">AI Study Coach</h2>
-            {historyError ? (
-              <p className="text-sm text-foreground/75">{historyError}</p>
+            {quickReviewHistoryError && challengeHistoryError ? (
+              <p className="text-sm text-foreground/75">
+                Could not load recent review context right now.
+              </p>
             ) : (
               <div className="space-y-3">
                 {focusAreas.length > 0 ? (
@@ -856,29 +995,44 @@ export default function StudyPackDetailPage() {
 
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Recent Review Sessions</h2>
-            {historyError ? (
-              <p className="text-sm text-foreground/75">{historyError}</p>
-            ) : recentSessions.length === 0 ? (
-              <p className="text-sm text-foreground/75">No completed Quick Review sessions yet.</p>
+            {combinedRecentSessions.length === 0 ? (
+              <p className="text-sm text-foreground/75">No completed review sessions yet.</p>
             ) : (
               <div className="space-y-2">
-                {recentSessions.map((session) => (
+                {combinedRecentSessions.map((session) => (
                   <div
                     key={session.id}
                     className="flex flex-col gap-1 rounded-md border border-border bg-background px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <span className="text-foreground/75">
-                      {session.completedAt
-                        ? formatUtcDateTime(session.completedAt)
-                        : formatUtcDateTime(session.createdAt)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          session.mode === "Challenge Quiz"
+                            ? "border border-blue-600/40 bg-blue-600/10 text-blue-700 dark:text-blue-300"
+                            : "border border-border bg-muted/40 text-foreground/70"
+                        }`}
+                      >
+                        {session.mode}
+                      </span>
+                      <span className="text-foreground/75">
+                        {session.completedAt
+                          ? formatUtcDateTime(session.completedAt)
+                          : formatUtcDateTime(session.createdAt)}
+                      </span>
+                    </div>
                     <span className="font-medium text-foreground">
-                      {session.correctAnswers}/{session.totalQuestions} ({session.scorePercentage}%)
+                      {session.correctAnswers}/{session.totalQuestions} ({formatScore(session.scorePercentage)})
                     </span>
                   </div>
                 ))}
               </div>
             )}
+            {quickReviewHistoryError ? (
+              <p className="text-xs text-foreground/65">Quick Review history unavailable: {quickReviewHistoryError}</p>
+            ) : null}
+            {challengeHistoryError ? (
+              <p className="text-xs text-foreground/65">Challenge history unavailable: {challengeHistoryError}</p>
+            ) : null}
           </Card>
 
           <PracticeQuizCard quiz={studyPack.quiz} />

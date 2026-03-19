@@ -1,8 +1,10 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
+import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.ChallengeQuizService;
@@ -15,8 +17,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -42,6 +46,25 @@ public class ChallengeQuizController {
     ) {
         UUID userId = user.userId();
         return challengeQuizService.getInProgressSession(studyPackId, userId);
+    }
+
+    @GetMapping("/study-packs/{studyPackId}/recent")
+    public List<ChallengeQuizSessionSummaryResponse> listRecentChallengeQuizSessions(
+            @PathVariable String studyPackId,
+            @RequestParam(value = "limit", defaultValue = "5") int limit,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return challengeQuizService.listRecentSessions(studyPackId, userId, limit);
+    }
+
+    @GetMapping("/study-packs/{studyPackId}/performance-summary")
+    public ChallengeQuizPerformanceSummaryResponse getChallengeQuizPerformanceSummary(
+            @PathVariable String studyPackId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return challengeQuizService.getPerformanceSummary(studyPackId, userId);
     }
 
     @PostMapping("/sessions/{sessionId}/progress")

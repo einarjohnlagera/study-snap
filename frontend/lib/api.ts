@@ -297,6 +297,26 @@ export type ChallengeQuizSessionResponse = {
   completedAt: string | null;
 };
 
+export type ChallengeQuizSessionSummaryResponse = {
+  sessionId: string;
+  totalQuestions: number;
+  correctAnswers: number;
+  scorePercentage: number;
+  performanceLevel: "Excellent" | "Good" | "Fair" | "Needs Improvement";
+  weakConcepts: string[];
+  createdAt: string;
+  completedAt: string | null;
+};
+
+export type ChallengeQuizPerformanceSummaryResponse = {
+  bestScorePercentage: number | null;
+  attempts: number;
+  lastScorePercentage: number | null;
+  lastCompletedAt: string | null;
+  latestPerformanceLevel: "Excellent" | "Good" | "Fair" | "Needs Improvement" | null;
+  latestWeakConcepts: string[];
+};
+
 export type ShareLinkResponse = {
   token: string;
   shareUrl: string;
@@ -1070,6 +1090,41 @@ export async function completeChallengeQuizSession(
     true,
   );
   return parseApiResponse<ChallengeQuizSessionResponse>(response, "Could not save Challenge Quiz results.");
+}
+
+export async function listRecentChallengeQuizSessions(
+  studyPackId: string,
+  limit = 5,
+): Promise<ChallengeQuizSessionSummaryResponse[]> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/study-packs/${studyPackId}/recent?limit=${limit}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizSessionSummaryResponse[]>(
+    response,
+    "Could not load recent Challenge Quiz sessions.",
+  );
+}
+
+export async function getChallengeQuizPerformanceSummary(
+  studyPackId: string,
+): Promise<ChallengeQuizPerformanceSummaryResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/study-packs/${studyPackId}/performance-summary`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<ChallengeQuizPerformanceSummaryResponse>(
+    response,
+    "Could not load Challenge Quiz performance summary.",
+  );
 }
 
 export async function getTodayFocus(): Promise<TodayFocusResponse> {

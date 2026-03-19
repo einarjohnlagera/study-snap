@@ -313,6 +313,8 @@ Study Pack detail entry behavior:
 * `Start Quick Review` is the primary quiz action
 * `Challenge Quiz` is shown as a secondary action (premium-gated for Free users)
 * `Adaptive Practice` is shown only when weak concepts are available
+* Study Pack detail `Performance Overview` should include both Quick Review and Challenge Quiz stats
+* recent review history on Study Pack detail should include entries across quiz modes, not Quick Review only
 
 Quick Review results next-step behavior:
 

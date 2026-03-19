@@ -369,25 +369,33 @@ The Study Pack detail page can display recent review sessions such as:
 - completed date
 - score
 - percentage
+- mode label (`Quick Review` or `Challenge Quiz`)
 
 This history helps users see their progress over time.
 
-The Study Pack detail page also includes a compact `Review Performance` summary based on completed sessions for the current Study Pack:
+The Study Pack detail page includes a broader `Performance Overview` for the current Study Pack with separate stats for both quiz modes:
 
-- `Best Score` (highest `scorePercentage`)
-- `Attempts` (total completed sessions)
-- `Last Score` (most recent completed session score)
-- `Last Reviewed` (most recent completed session timestamp)
+- Quick Review stats:
+  - `Best Score` (highest `scorePercentage`)
+  - `Attempts` (total completed sessions)
+  - `Last Score` (most recent completed session score)
+  - `Last Completed` (most recent completed session timestamp)
+- Challenge Quiz stats:
+  - `Best Score`
+  - `Attempts`
+  - `Last Score`
+  - `Last Completed`
+  - `Latest Performance` (`Excellent`, `Good`, `Fair`, `Needs Improvement`)
 
 If there are no completed sessions yet, the page shows a simple empty prompt to start the first Quick Review.
 
 ### AI Study Coach (Study Pack detail)
 
-The Study Pack detail page includes a compact `AI Study Coach` panel powered by existing Quick Review data.
+The Study Pack detail page includes a compact `AI Study Coach` panel powered by existing session data.
 
 Behavior:
 
-- focus areas come from weak concepts in the latest completed Quick Review session
+- focus areas come from latest weak concepts from Quick Review and/or Challenge Quiz
 - focus areas are shown concisely (up to 4 concepts)
 - suggested next step adapts to learning state:
   - weak concepts available: practice weak concepts
