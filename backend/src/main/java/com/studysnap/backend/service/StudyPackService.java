@@ -11,11 +11,13 @@ import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackDraftEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
@@ -56,6 +58,7 @@ public class StudyPackService {
 
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
+    private final NoteRepository noteRepository;
     private final OcrService ocrService;
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
@@ -65,11 +68,22 @@ public class StudyPackService {
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
-        String normalizedText = normalizeAndValidateText(request.notesText());
+        NoteEntity sourceNote = resolveSourceNoteForGeneration(request.noteId(), ownerUserId);
+        String normalizedText = sourceNote == null
+                ? normalizeAndValidateText(request.notesText())
+                : normalizeAndValidateText(sourceNote.getContent());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
 
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.TEXT, null, generated, normalizedText, ownerUserId, planType);
+        StudyPackEntity saved = saveStudyPack(
+                InputType.TEXT,
+                null,
+                generated,
+                normalizedText,
+                ownerUserId,
+                planType,
+                sourceNote == null ? null : sourceNote.getId()
+        );
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
@@ -106,7 +120,15 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(extractedText);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, ocrResult.confidence(), generated, normalizedText, ownerUserId, planType);
+        StudyPackEntity saved = saveStudyPack(
+                InputType.IMAGE,
+                ocrResult.confidence(),
+                generated,
+                normalizedText,
+                ownerUserId,
+                planType,
+                null
+        );
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
@@ -141,7 +163,15 @@ public class StudyPackService {
         String normalizedText = normalizeAndValidateText(request.notesText());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
-        StudyPackEntity saved = saveStudyPack(InputType.IMAGE, draft.getOcrConfidence(), generated, normalizedText, ownerUserId, planType);
+        StudyPackEntity saved = saveStudyPack(
+                InputType.IMAGE,
+                draft.getOcrConfidence(),
+                generated,
+                normalizedText,
+                ownerUserId,
+                planType,
+                null
+        );
         studyPackDraftRepository.delete(draft);
         long latency = System.currentTimeMillis() - startedAt;
 
@@ -338,11 +368,20 @@ public class StudyPackService {
             GeneratedStudyPackContent generated,
             String sourceText,
             UUID ownerUserId,
-            PlanType planType
+            PlanType planType,
+            UUID noteId
     ) {
-        StudyPackEntity entity = new StudyPackEntity();
-        entity.setId(UUID.randomUUID());
-        entity.setOwnerUserId(ownerUserId);
+        StudyPackEntity entity = noteId == null
+                ? new StudyPackEntity()
+                : studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).orElseGet(StudyPackEntity::new);
+
+        if (entity.getId() == null) {
+            entity.setId(UUID.randomUUID());
+            entity.setOwnerUserId(ownerUserId);
+            entity.setCreatedAt(OffsetDateTime.now());
+        }
+
+        entity.setNoteId(noteId);
         entity.setInputType(inputType);
         entity.setTitle(generated.title());
         entity.setSummary(generated.summary());
@@ -359,12 +398,28 @@ public class StudyPackService {
         entity.setCachedInputTokens(generated.cachedInputTokens());
         entity.setEstimatedCost(generated.estimatedCost());
         entity.setStatus(StudyPackStatus.DONE);
-        entity.setCreatedAt(OffsetDateTime.now());
+        entity.setErrorCode(null);
         entity.setUpdatedAt(OffsetDateTime.now());
         entity.setTags(resolveTags(generated.tags(), generated.title()));
         StudyPackEntity savedEntity = studyPackRepository.save(entity);
         activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, savedEntity.getId());
         return savedEntity;
+    }
+
+    private NoteEntity resolveSourceNoteForGeneration(String noteIdRaw, UUID ownerUserId) {
+        if (noteIdRaw == null || noteIdRaw.isBlank()) {
+            return null;
+        }
+
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
+                noteIdRaw,
+                "NOTE_NOT_FOUND",
+                "Note not found.",
+                HttpStatus.NOT_FOUND
+        );
+
+        return noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
     }
 
     private StudyPackResponse mapToResponse(StudyPackEntity entity, String extractedText, Long latencyMs) {

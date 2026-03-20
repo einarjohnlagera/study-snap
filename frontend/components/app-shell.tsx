@@ -26,6 +26,7 @@ type ShellUser = {
 function isAuthenticatedRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
+    || pathname.startsWith("/notes")
     || pathname.startsWith("/library")
     || pathname.startsWith("/profile")
     || pathname.startsWith("/settings")
@@ -54,6 +55,15 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/library")) {
     return "Study Library";
+  }
+  if (pathname === "/notes/new") {
+    return "New Note";
+  }
+  if (pathname.startsWith("/notes/")) {
+    return "Note";
+  }
+  if (pathname.startsWith("/notes")) {
+    return "Notes";
   }
   if (pathname.startsWith("/profile")) {
     return "Profile";
@@ -89,6 +99,7 @@ type NavLinkItem = {
 
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/notes", label: "Notes" },
   { href: "/library", label: "Library" },
 ];
 

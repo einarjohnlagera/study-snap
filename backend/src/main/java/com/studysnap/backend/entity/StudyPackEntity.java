@@ -31,6 +31,9 @@ public class StudyPackEntity {
     @Column(name = "owner_user_id")
     private UUID ownerUserId;
 
+    @Column(name = "note_id")
+    private UUID noteId;
+
     @Column(name = "anon_id")
     private String anonId;
 

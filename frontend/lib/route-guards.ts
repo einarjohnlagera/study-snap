@@ -30,3 +30,18 @@ export function requireVerifiedOnboardedUser(
   }
   return true;
 }
+
+export function requireAuthenticatedOnboardedUser(
+  router: RouterLike,
+): boolean {
+  const authUser = getAuthUser();
+  if (!authUser) {
+    redirectToLoginWithCurrentDestination(router);
+    return false;
+  }
+  if (!authUser.profileType) {
+    router.replace("/onboarding");
+    return false;
+  }
+  return true;
+}

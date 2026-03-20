@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,17 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
             Pageable pageable
     );
     Optional<StudyPackEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
+    Optional<StudyPackEntity> findByOwnerUserIdAndNoteId(UUID ownerUserId, UUID noteId);
+    @Query("""
+            select s
+            from StudyPackEntity s
+            where s.ownerUserId = :ownerUserId
+              and s.noteId in :noteIds
+            """)
+    List<StudyPackEntity> findByOwnerUserIdAndNoteIdIn(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("noteIds") Collection<UUID> noteIds
+    );
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from StudyPackEntity s where s.id = :id and s.ownerUserId = :ownerUserId")
     Optional<StudyPackEntity> findByIdAndOwnerUserIdForUpdate(UUID id, UUID ownerUserId);

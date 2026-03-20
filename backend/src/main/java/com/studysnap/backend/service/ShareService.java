@@ -80,6 +80,7 @@ public class ShareService {
         StudyPackEntity remixed = new StudyPackEntity();
         remixed.setId(UUID.randomUUID());
         remixed.setOwnerUserId(ownerUserId);
+        remixed.setNoteId(null);
         remixed.setAnonId(null);
         remixed.setInputType(source.getInputType());
         remixed.setTitle(remixedTitle);
