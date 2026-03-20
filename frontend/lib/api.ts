@@ -376,6 +376,19 @@ export type NoteResponse = {
   updatedAt: string;
 };
 
+export type NoteStudyPackStatus = "NO_STUDY_PACK" | "STUDY_PACK_READY" | "NEEDS_REGENERATION";
+
+export type NoteListItemResponse = {
+  id: string;
+  title: string | null;
+  subject: string | null;
+  tags: string[];
+  contentPreview: string;
+  studyPackId: string | null;
+  studyPackStatus: NoteStudyPackStatus;
+  updatedAt: string;
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -648,6 +661,27 @@ export async function createStudyPackFromText(notesText: string): Promise<StudyP
   );
   if (isNeedsTextConfirmationResponse(payload)) {
     throw new Error("Unexpected OCR confirmation response for text input.");
+  }
+  return payload;
+}
+
+export async function createStudyPackFromNote(noteId: string): Promise<StudyPackResponse> {
+  const response = await fetchWithAuth(
+    "/study-packs",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ noteId }),
+    },
+    true,
+  );
+
+  const payload = await parseApiResponse<StudyPackApiResponse>(
+    response,
+    "We could not generate your study pack right now. Please try again.",
+  );
+  if (isNeedsTextConfirmationResponse(payload)) {
+    throw new Error("Unexpected OCR confirmation response for note generation.");
   }
   return payload;
 }
@@ -1214,6 +1248,30 @@ export async function createNote(
     true,
   );
   return parseApiResponse<NoteResponse>(response, "Could not save note.");
+}
+
+export async function getNote(noteId: string): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(response, "Could not load note.");
+}
+
+export async function listNotes(): Promise<NoteListItemResponse[]> {
+  const response = await fetchWithAuth(
+    "/notes",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
 }
 
 export async function updateNote(

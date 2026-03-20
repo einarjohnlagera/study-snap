@@ -11,7 +11,7 @@ export function DashboardEmpty() {
         Write, paste, or upload notes, then turn them into a Study Pack.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Link href="/study" className="w-full sm:w-auto">
+        <Link href="/notes/new" className="w-full sm:w-auto">
           <Button type="button" className="w-full sm:w-auto">Create Note</Button>
         </Link>
         <Link href="/study?focus=upload" className="w-full sm:w-auto">
