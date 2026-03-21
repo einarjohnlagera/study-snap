@@ -4,6 +4,7 @@ import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.event.ActivityTrackingRequestedEvent;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class ActivityTrackingEventListener {
     );
 
     private final ActivityEventRepository activityEventRepository;
+    private final StudyPackRepository studyPackRepository;
     private final UserRepository userRepository;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -48,6 +50,7 @@ public class ActivityTrackingEventListener {
             activityEvent.setId(UUID.randomUUID());
             activityEvent.setUserId(event.userId());
             activityEvent.setStudyPackId(event.studyPackId());
+            activityEvent.setNoteId(resolveNoteId(event.studyPackId()));
             activityEvent.setActivityType(event.activityType());
             activityEvent.setCreatedAt(eventTimestamp);
             activityEventRepository.save(activityEvent);
@@ -62,6 +65,15 @@ public class ActivityTrackingEventListener {
                     ex
             );
         }
+    }
+
+    private UUID resolveNoteId(UUID studyPackId) {
+        if (studyPackId == null) {
+            return null;
+        }
+        return studyPackRepository.findById(studyPackId)
+                .map(studyPack -> studyPack.getNoteId())
+                .orElse(null);
     }
 
     private void updateStudyStreak(UUID userId, ActivityType activityType, OffsetDateTime eventTimestamp) {

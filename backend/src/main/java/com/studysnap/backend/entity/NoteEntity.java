@@ -43,7 +43,14 @@ public class NoteEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
+    private NoteStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
     private NoteVisibility visibility;
+
+    @Column(name = "source_note_id")
+    private UUID sourceNoteId;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

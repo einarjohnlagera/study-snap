@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.ShareRemixResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ShareLinkEntity;
 import com.studysnap.backend.exception.AppException;
@@ -125,7 +126,9 @@ public class ShareService {
                 : source.getSourceText();
         String normalizedContent = sourceContent == null ? "" : sourceContent.trim();
         note.setContent(normalizedContent.isEmpty() ? "Copied from shared Study Pack." : normalizedContent);
+        note.setStatus(NoteStatus.GENERATED);
         note.setVisibility(NoteVisibility.PRIVATE);
+        note.setSourceNoteId(source.getNoteId());
         note.setCreatedAt(OffsetDateTime.now());
         note.setUpdatedAt(OffsetDateTime.now());
         return noteRepository.save(note);

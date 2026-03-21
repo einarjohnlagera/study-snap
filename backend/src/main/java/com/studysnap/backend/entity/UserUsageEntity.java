@@ -2,8 +2,6 @@ package com.studysnap.backend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -14,26 +12,31 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_activity_events")
+@Table(name = "user_usage")
 @Getter
 @Setter
 @NoArgsConstructor
-public class UserActivityEventEntity {
+public class UserUsageEntity {
     @Id
     private UUID id;
 
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "study_pack_id")
-    private UUID studyPackId;
+    @Column(nullable = false)
+    private Integer month;
 
-    @Column(name = "note_id")
-    private UUID noteId;
+    @Column(nullable = false)
+    private Integer year;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "activity_type", nullable = false, length = 64)
-    private ActivityType activityType;
+    @Column(name = "study_pack_generations", nullable = false)
+    private Integer studyPackGenerations;
+
+    @Column(name = "challenge_quiz_generations", nullable = false)
+    private Integer challengeQuizGenerations;
+
+    @Column(name = "adaptive_quiz_generations", nullable = false)
+    private Integer adaptiveQuizGenerations;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

@@ -32,6 +32,9 @@ public class QuickReviewSessionEntity {
     @Column(name = "study_pack_id", nullable = false)
     private UUID studyPackId;
 
+    @Column(name = "note_id", nullable = false)
+    private UUID noteId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "session_mode", nullable = false, length = 32)
     private QuickReviewSessionMode sessionMode;
