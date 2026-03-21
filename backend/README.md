@@ -51,16 +51,18 @@ This starts:
 - `postgres` on `localhost:5432`
 - `backend` on `localhost:8080` (API base path `/api`)
 
-## MVP endpoint
-### POST /api/study-packs
-Input:
-- JSON `{ "notesText": "..." }` OR multipart with `image`
+## Primary API Surface (Note-First)
+- `POST /api/notes`
+- `GET /api/notes/{id}`
+- `POST /api/notes/{id}/generate`
+- `POST /api/notes/{id}/quick-review/start`
+- `POST /api/notes/{id}/challenge-quiz/start`
+- `POST /api/notes/{id}/adaptive-practice/start`
+- `POST /api/notes/{id}/copy`
+- `POST /api/notes/{id}/visibility`
+- `DELETE /api/notes/{id}`
 
-Output:
-- title
-- summary
-- keyConcepts[]
-- quiz[] (default 5)
+Legacy compatibility endpoints under `/api/study-packs` still exist for OCR-first and backward-compatible flows.
 
 ## Rules (MVP)
 - Controllers thin; services orchestrate.

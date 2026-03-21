@@ -11,12 +11,12 @@ type TodayFocusCardProps = {
 function resolveActionHref(focus: TodayFocusResponse) {
   if (
     (focus.type === "RESUME_REVIEW" || focus.type === "RETRY_REVIEW" || focus.type === "REVIEW_PACK")
-    && focus.studyPackId
+    && focus.noteId
   ) {
-    return `/study-packs/${focus.studyPackId}/quick-review`;
+    return `/notes/${focus.noteId}/quick-review`;
   }
-  if (focus.type === "PRACTICE_WEAK_CONCEPT" && focus.studyPackId) {
-    return `/study-packs/${focus.studyPackId}/adaptive-practice`;
+  if (focus.type === "PRACTICE_WEAK_CONCEPT" && focus.noteId) {
+    return `/notes/${focus.noteId}/adaptive-practice`;
   }
   if (focus.type === "STUDY_SUGGESTION") {
     return "/study";

@@ -85,6 +85,19 @@ public class NoteService {
         return mapToResponse(entity, linkedStudyPack);
     }
 
+    @Transactional(readOnly = true)
+    public String getOwnedStudyPackIdOrThrow(String noteIdRaw, UUID ownerUserId) {
+        NoteResponse note = getById(noteIdRaw, ownerUserId);
+        if (note.studyPackId() == null || STUDY_PACK_STATUS_DRAFT.equals(note.studyPackStatus())) {
+            throw new AppException(
+                    "NOTE_STUDY_PACK_NOT_READY",
+                    "Generate a Study Pack for this note first.",
+                    HttpStatus.CONFLICT
+            );
+        }
+        return note.studyPackId();
+    }
+
     public NoteResponse copyNote(String id, UUID ownerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(
                 id,
@@ -234,6 +247,14 @@ public class NoteService {
     }
 
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
+        List<String> keyConcepts = studyPack == null || studyPack.getKeyConcepts() == null
+                ? List.of()
+                : studyPack.getKeyConcepts();
+        List<com.studysnap.backend.dto.QuizItem> quiz = studyPack == null || studyPack.getQuiz() == null
+                ? List.of()
+                : studyPack.getQuiz();
+        int quizCount = quiz.size();
+        boolean hasGeneratedQuiz = !quiz.isEmpty();
         return new NoteResponse(
                 entity.getId().toString(),
                 entity.getTitle(),
@@ -244,7 +265,14 @@ public class NoteService {
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 studyPack == null ? null : studyPack.getId().toString(),
-                resolveStudyPackStatus(studyPack)
+                resolveStudyPackStatus(studyPack),
+                studyPack == null ? null : studyPack.getSummary(),
+                keyConcepts,
+                quiz,
+                quizCount,
+                hasGeneratedQuiz,
+                hasGeneratedQuiz,
+                hasGeneratedQuiz
         );
     }
 
@@ -258,6 +286,7 @@ public class NoteService {
                 resolveVisibility(note).name(),
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(studyPack),
+                studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
                 note.getUpdatedAt()
         );
     }

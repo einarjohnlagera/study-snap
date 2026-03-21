@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -13,7 +13,8 @@ import {
   completeAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
   getMyStudyPack,
-  trackQuickReviewActivity,
+  getNote,
+  type NoteResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
 
@@ -33,10 +34,11 @@ function AdaptivePracticeLoading() {
 
 export default function AdaptivePracticePage() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const requestInFlightRef = useRef(false);
-  const loadedForStudyPackRef = useRef<string | null>(null);
+  const loadedForNoteRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adaptiveQuiz, setAdaptiveQuiz] = useState<QuickReviewAdaptiveQuizResponse | null>(null);
@@ -46,33 +48,22 @@ export default function AdaptivePracticePage() {
   const [premiumLocked, setPremiumLocked] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
-  const [resolvedNoteId, setResolvedNoteId] = useState<string | null>(null);
+  const [note, setNote] = useState<NoteResponse | null>(null);
 
-  const studyPackId = useMemo(() => {
+  const noteId = useMemo(() => {
     if (!params?.id) {
       return "";
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
-  const noteIdParam = searchParams.get("noteId")?.trim() ?? null;
-  const noteDetailHref = useMemo(() => {
-    const targetNoteId = noteIdParam || resolvedNoteId;
-    if (targetNoteId) {
-      return `/notes/${targetNoteId}`;
-    }
-    return "/library";
-  }, [noteIdParam, resolvedNoteId]);
-  const noteDetailQuery = useMemo(() => {
-    const targetNoteId = noteIdParam || resolvedNoteId;
-    return targetNoteId ? `?noteId=${encodeURIComponent(targetNoteId)}` : "";
-  }, [noteIdParam, resolvedNoteId]);
+  const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
 
   const loadAdaptiveQuiz = useCallback(async () => {
     if (requestInFlightRef.current) {
       return;
     }
-    if (!studyPackId) {
-      setError("Study Pack not found.");
+    if (!noteId) {
+      setError("Note not found.");
       setLoading(false);
       return;
     }
@@ -95,13 +86,15 @@ export default function AdaptivePracticePage() {
     }
 
     try {
-      if (!noteIdParam) {
-        const detail = await getMyStudyPack(studyPackId);
-        setResolvedNoteId(detail.noteId ?? null);
-      } else {
-        setResolvedNoteId(noteIdParam);
+      const detail = await getNote(noteId);
+      if (detail.studyPackStatus !== "STUDY_PACK_READY") {
+        setNote(detail);
+        setError("Generate a Study Pack first.");
+        setAdaptiveQuiz(null);
+        return;
       }
-      const response = await generateAdaptiveQuickReviewQuiz(studyPackId);
+      setNote(detail);
+      const response = await generateAdaptiveQuickReviewQuiz(detail.id);
       setAdaptiveQuiz(response);
       setCurrentIndex(0);
       setSelectedChoices({});
@@ -109,6 +102,18 @@ export default function AdaptivePracticePage() {
       setQuizStarted(false);
       setSessionStartedAt(null);
     } catch (err) {
+      if (pathname.startsWith("/study-packs/")) {
+        const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
+        if (byStudyPack?.noteId) {
+          const nextQuery = searchParams.toString();
+          router.replace(
+            nextQuery
+              ? `/notes/${byStudyPack.noteId}/adaptive-practice?${nextQuery}`
+              : `/notes/${byStudyPack.noteId}/adaptive-practice`,
+          );
+          return;
+        }
+      }
       const message = err instanceof Error ? err.message : "Could not generate adaptive practice.";
       setError(message);
       setAdaptiveQuiz(null);
@@ -116,18 +121,18 @@ export default function AdaptivePracticePage() {
       setLoading(false);
       requestInFlightRef.current = false;
     }
-  }, [noteIdParam, router, studyPackId]);
+  }, [noteId, pathname, router, searchParams]);
 
   useEffect(() => {
-    if (!studyPackId) {
+    if (!noteId) {
       return;
     }
-    if (loadedForStudyPackRef.current === studyPackId) {
+    if (loadedForNoteRef.current === noteId) {
       return;
     }
-    loadedForStudyPackRef.current = studyPackId;
+    loadedForNoteRef.current = noteId;
     void loadAdaptiveQuiz();
-  }, [loadAdaptiveQuiz, studyPackId]);
+  }, [loadAdaptiveQuiz, noteId]);
 
   const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
@@ -168,7 +173,7 @@ export default function AdaptivePracticePage() {
       return;
     }
     const nextIndex = currentIndex + 1;
-    if (nextIndex >= quiz.length && !completionTracked && studyPackId) {
+    if (nextIndex >= quiz.length && !completionTracked && noteId) {
       setCompletionTracked(true);
       const durationSeconds = sessionStartedAt
         ? Math.max(0, Math.round((Date.now() - sessionStartedAt) / 1000))
@@ -182,9 +187,6 @@ export default function AdaptivePracticePage() {
           // Completion persistence should not block adaptive practice flow.
         });
       }
-      void trackQuickReviewActivity(studyPackId, "COMPLETED_ADAPTIVE_QUIZ").catch(() => {
-        // Keep adaptive practice flow non-blocking if activity tracking fails.
-      });
     }
     setCurrentIndex(nextIndex);
   };
@@ -248,7 +250,7 @@ export default function AdaptivePracticePage() {
           <p className="text-sm text-foreground/75">
             {adaptiveQuiz?.message ?? "Adaptive practice is unavailable right now."}
           </p>
-          <Link href={studyPackId ? `/study-packs/${studyPackId}/quick-review${noteDetailQuery}` : "/dashboard"} className="w-full sm:w-auto">
+          <Link href={note ? `/notes/${note.id}/quick-review` : "/dashboard"} className="w-full sm:w-auto">
             <Button type="button" className="w-full sm:w-auto">
               Start Quick Review
             </Button>

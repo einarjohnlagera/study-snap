@@ -7,6 +7,7 @@ import java.time.OffsetDateTime;
 
 public record ContinueStudyingResponse(
         String studyPackId,
+        String noteId,
         String title,
         String summaryPreview,
         ContinueStudyingReason reason,

@@ -46,6 +46,7 @@ public class QuickReviewSessionController {
     private final ChallengeQuizService challengeQuizService;
 
     @PostMapping("/start")
+    @Deprecated
     public QuickReviewSessionStartResponse startSession(
             @Valid @RequestBody QuickReviewSessionStartRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -85,6 +86,7 @@ public class QuickReviewSessionController {
     }
 
     @GetMapping("/study-packs/{studyPackId}/in-progress")
+    @Deprecated
     public QuickReviewSessionStartResponse getInProgressSession(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -94,6 +96,7 @@ public class QuickReviewSessionController {
     }
 
     @GetMapping("/study-packs/{studyPackId}/recent")
+    @Deprecated
     public List<QuickReviewSessionResponse> listRecentSessions(
             @PathVariable String studyPackId,
             @RequestParam(value = "limit", defaultValue = "5") int limit,
@@ -104,6 +107,7 @@ public class QuickReviewSessionController {
     }
 
     @GetMapping("/study-packs/{studyPackId}/performance-summary")
+    @Deprecated
     public QuickReviewPerformanceSummaryResponse getPerformanceSummary(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -113,6 +117,7 @@ public class QuickReviewSessionController {
     }
 
     @PostMapping("/study-packs/{studyPackId}/study-tip")
+    @Deprecated
     public QuickReviewStudyTipResponse generateStudyTip(
             @PathVariable String studyPackId,
             @Valid @RequestBody QuickReviewStudyTipRequest request,
@@ -123,6 +128,7 @@ public class QuickReviewSessionController {
     }
 
     @PostMapping("/study-packs/{studyPackId}/adaptive-practice")
+    @Deprecated
     public QuickReviewAdaptiveQuizResponse generateAdaptivePracticeQuiz(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -148,6 +154,7 @@ public class QuickReviewSessionController {
     }
 
     @PostMapping("/study-packs/{studyPackId}/challenge/start")
+    @Deprecated
     public ChallengeQuizStartResponse startChallengeQuiz(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user

@@ -94,7 +94,22 @@ public class DashboardService {
         }
 
         // No Study Packs or usable activity context -> no recommendation.
-        return new ContinueStudyingResponse(null, null, null, null, null, null, null, null, null, null, null, null, null);
+        return new ContinueStudyingResponse(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
     }
 
     public TodayFocusResponse getTodayFocus(UUID userId) {
@@ -112,6 +127,7 @@ public class DashboardService {
         Optional<TodayFocusResponse> reviewPackFocus = resolveTodayFocusReviewPack(userId);
         return reviewPackFocus.orElseGet(() -> new TodayFocusResponse(
                 TodayFocusType.STUDY_SUGGESTION,
+                null,
                 null,
                 "Start your first review",
                 "Create your first Study Pack to begin your daily focus.",
@@ -203,6 +219,7 @@ public class DashboardService {
             return Optional.of(new TodayFocusResponse(
                     TodayFocusType.RESUME_REVIEW,
                     studyPack.get().getId().toString(),
+                    studyPack.get().getNoteId() == null ? null : studyPack.get().getNoteId().toString(),
                     "Resume Quick Review",
                     "You left off on Question " + normalizedQuestion + " of " + normalizedTotal + " in \""
                             + studyPack.get().getTitle() + "\".",
@@ -224,6 +241,7 @@ public class DashboardService {
             return Optional.of(new TodayFocusResponse(
                     TodayFocusType.RETRY_REVIEW,
                     studyPack.get().getId().toString(),
+                    studyPack.get().getNoteId() == null ? null : studyPack.get().getNoteId().toString(),
                     "Retry Incorrect Questions",
                     message,
                     "Retry Questions"
@@ -269,6 +287,7 @@ public class DashboardService {
         return Optional.of(new TodayFocusResponse(
                 TodayFocusType.PRACTICE_WEAK_CONCEPT,
                 studyPack.get().getId().toString(),
+                studyPack.get().getNoteId() == null ? null : studyPack.get().getNoteId().toString(),
                 "Practice Weak Concepts",
                 "Your latest Quick Review in \"" + studyPack.get().getTitle() + "\" showed " + weakConceptCount + " weak "
                         + conceptLabel + ". Practice them now.",
@@ -289,6 +308,7 @@ public class DashboardService {
         return Optional.of(new TodayFocusResponse(
                 TodayFocusType.REVIEW_PACK,
                 studyPack.getId().toString(),
+                studyPack.getNoteId() == null ? null : studyPack.getNoteId().toString(),
                 "Reinforce \"" + studyPack.getTitle() + "\"",
                 "A quick review today can strengthen your understanding.",
                 "Start Quick Review"
@@ -511,6 +531,7 @@ public class DashboardService {
     ) {
         return new ContinueStudyingResponse(
                 studyPack.getId().toString(),
+                studyPack.getNoteId() == null ? null : studyPack.getNoteId().toString(),
                 studyPack.getTitle(),
                 SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), 140),
                 reason,

@@ -31,6 +31,7 @@ public class ChallengeQuizController {
     private final ChallengeQuizService challengeQuizService;
 
     @PostMapping("/study-packs/{studyPackId}/start")
+    @Deprecated
     public ChallengeQuizStartResponse startChallengeQuiz(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -40,6 +41,7 @@ public class ChallengeQuizController {
     }
 
     @GetMapping("/study-packs/{studyPackId}/in-progress")
+    @Deprecated
     public ChallengeQuizStartResponse getInProgressChallengeQuiz(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -49,6 +51,7 @@ public class ChallengeQuizController {
     }
 
     @GetMapping("/study-packs/{studyPackId}/recent")
+    @Deprecated
     public List<ChallengeQuizSessionSummaryResponse> listRecentChallengeQuizSessions(
             @PathVariable String studyPackId,
             @RequestParam(value = "limit", defaultValue = "5") int limit,
@@ -59,6 +62,7 @@ public class ChallengeQuizController {
     }
 
     @GetMapping("/study-packs/{studyPackId}/performance-summary")
+    @Deprecated
     public ChallengeQuizPerformanceSummaryResponse getChallengeQuizPerformanceSummary(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user

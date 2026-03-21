@@ -138,7 +138,7 @@ export default function LibraryPage() {
           return [note.id, { lastReviewedAt: null }] as const;
         }
         try {
-          const summary = await getQuickReviewPerformanceSummary(note.studyPackId);
+          const summary = await getQuickReviewPerformanceSummary(note.id);
           return [note.id, {
             lastReviewedAt: summary.lastReviewedAt,
           }] as const;
@@ -682,7 +682,7 @@ export default function LibraryPage() {
                           className="w-full sm:w-auto"
                           onClick={(event) => {
                             event.stopPropagation();
-                            router.push(`/study-packs/${item.studyPackId}/quick-review?noteId=${item.id}`);
+                            router.push(`/notes/${item.id}/quick-review`);
                           }}
                           onKeyDown={(event) => event.stopPropagation()}
                         >

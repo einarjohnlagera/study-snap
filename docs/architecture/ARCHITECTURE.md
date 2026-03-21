@@ -101,18 +101,19 @@ Versioning model:
 
 ### Controllers
 
-- `StudyPackController` (legacy naming retained)
-  - generate from text/image
-  - confirm OCR text
-  - fetch generated Study Pack view
 - `NoteController` (current/future surface)
   - create/update note
-  - OCR extract for note authoring (Create/Edit Note flow)
+  - generate Study Pack from note (`POST /notes/{id}/generate`)
+  - note-scoped quiz entry/performance APIs (`/notes/{id}/quick-review/*`, `/notes/{id}/challenge-quiz/*`, `/notes/{id}/adaptive-practice/start`)
   - copy note
   - update visibility (`PUBLIC`/`PRIVATE`)
   - list My Library notes
   - list Public Library notes
   - get public note detail
+- `StudyPackController` (legacy/compatibility surface)
+  - text/image generation endpoints used by OCR-first and legacy flows
+  - OCR confirmation endpoint
+  - legacy Study Pack read/update/delete/share endpoints
 - `ShareController`
   - create share token
   - resolve shared content
@@ -163,27 +164,37 @@ Recommended flow:
 
 ## API Endpoints (Current and Near-Future)
 
-Generation:
-
-- `POST /api/study-packs` (text or image generation)
-- `POST /api/study-packs/confirm-text` (OCR confirmation input)
-
 Notes:
 
 - `POST /api/notes` (create note draft)
 - `PUT /api/notes/{id}` (update note content/metadata)
-- `POST /api/notes/ocr/extract` (optional OCR extraction for note content)
+- `GET /api/notes/{id}` (unified note detail payload: note content + generated fields + quiz availability flags)
+- `POST /api/notes/{id}/generate` (generate Study Pack for this note)
 - `POST /api/notes/{id}/copy` (make a copy)
 - `POST /api/notes/{id}/visibility` (set `PUBLIC` or `PRIVATE`)
+- `POST /api/notes/{id}/quick-review/start`
+- `GET /api/notes/{id}/quick-review/in-progress`
+- `GET /api/notes/{id}/quick-review/recent?limit={n}`
+- `GET /api/notes/{id}/quick-review/performance-summary`
+- `POST /api/notes/{id}/quick-review/study-tip`
+- `POST /api/notes/{id}/challenge-quiz/start`
+- `GET /api/notes/{id}/challenge-quiz/in-progress`
+- `GET /api/notes/{id}/challenge-quiz/recent?limit={n}`
+- `GET /api/notes/{id}/challenge-quiz/performance-summary`
+- `POST /api/notes/{id}/adaptive-practice/start`
+- `DELETE /api/notes/{id}`
 - `GET /api/notes` (My Library list)
 - `GET /api/notes/public` (Public Library list)
 - `GET /api/notes/public/{id}` (public read-only note detail)
 
-Study Pack access (generated view):
+Legacy/Compatibility Study Pack APIs:
 
+- `POST /api/study-packs` (legacy text/image generation + OCR upload flow)
+- `POST /api/study-packs/confirm-text` (legacy OCR confirmation flow)
 - `GET /api/study-packs/{id}`
 - `GET /api/study-packs?limit={n}&cursor={token}`
 - `DELETE /api/study-packs/{id}`
+- `POST /api/quick-review/start` and `/api/*/study-packs/{studyPackId}/...` quiz entry endpoints are deprecated in favor of note-scoped endpoints above.
 
 Share:
 

@@ -25,6 +25,7 @@ public class AdaptivePracticeController {
     private final QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
 
     @PostMapping("/study-packs/{studyPackId}/start")
+    @Deprecated
     public QuickReviewAdaptiveQuizResponse startAdaptivePractice(
             @PathVariable String studyPackId,
             @AuthenticationPrincipal AuthenticatedUser user

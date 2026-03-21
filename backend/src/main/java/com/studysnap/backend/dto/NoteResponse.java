@@ -13,6 +13,13 @@ public record NoteResponse(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         String studyPackId,
-        String studyPackStatus
+        String studyPackStatus,
+        String summary,
+        List<String> keyConcepts,
+        List<QuizItem> quiz,
+        Integer quizCount,
+        boolean quickReviewAvailable,
+        boolean challengeQuizAvailable,
+        boolean adaptivePracticeAvailable
 ) {
 }

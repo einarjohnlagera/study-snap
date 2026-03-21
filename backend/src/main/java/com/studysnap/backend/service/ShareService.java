@@ -5,10 +5,13 @@ import com.studysnap.backend.dto.ShareLinkResponse;
 import com.studysnap.backend.dto.ShareRemixResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ShareLinkEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.ShareLinkRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ public class ShareService {
 
     private final ShareLinkRepository shareLinkRepository;
     private final StudyPackRepository studyPackRepository;
+    private final NoteRepository noteRepository;
     private final ActivityTrackingService activityTrackingService;
 
     public ShareLinkResponse createShareLink(String studyPackId, UUID ownerUserId) {
@@ -77,10 +81,11 @@ public class ShareService {
     public ShareRemixResponse remixSharedStudyPack(String token, UUID ownerUserId) {
         StudyPackEntity source = resolveSharedStudyPack(token);
         String remixedTitle = resolveRemixedTitle(ownerUserId, source.getTitle());
+        NoteEntity remixedNote = createRemixedNote(source, remixedTitle, ownerUserId);
         StudyPackEntity remixed = new StudyPackEntity();
         remixed.setId(UUID.randomUUID());
         remixed.setOwnerUserId(ownerUserId);
-        remixed.setNoteId(null);
+        remixed.setNoteId(remixedNote.getId());
         remixed.setAnonId(null);
         remixed.setInputType(source.getInputType());
         remixed.setTitle(remixedTitle);
@@ -105,7 +110,25 @@ public class ShareService {
 
         StudyPackEntity saved = studyPackRepository.save(remixed);
         activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, saved.getId());
-        return new ShareRemixResponse(saved.getId().toString());
+        return new ShareRemixResponse(saved.getId().toString(), remixedNote.getId().toString());
+    }
+
+    private NoteEntity createRemixedNote(StudyPackEntity source, String remixedTitle, UUID ownerUserId) {
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setOwnerUserId(ownerUserId);
+        note.setTitle(remixedTitle);
+        note.setSubject(source.getSubject());
+        note.setTags(copyTags(source.getTags()));
+        String sourceContent = source.getSourceText() == null || source.getSourceText().isBlank()
+                ? source.getSummary()
+                : source.getSourceText();
+        String normalizedContent = sourceContent == null ? "" : sourceContent.trim();
+        note.setContent(normalizedContent.isEmpty() ? "Copied from shared Study Pack." : normalizedContent);
+        note.setVisibility(NoteVisibility.PRIVATE);
+        note.setCreatedAt(OffsetDateTime.now());
+        note.setUpdatedAt(OffsetDateTime.now());
+        return noteRepository.save(note);
     }
 
     private String resolveRemixedTitle(UUID ownerUserId, String baseTitle) {
