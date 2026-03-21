@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.InputType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -63,6 +64,12 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     );
     long countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
             UUID ownerUserId,
+            OffsetDateTime createdAtFromInclusive,
+            OffsetDateTime createdAtToExclusive
+    );
+    long countByOwnerUserIdAndInputTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            UUID ownerUserId,
+            InputType inputType,
             OffsetDateTime createdAtFromInclusive,
             OffsetDateTime createdAtToExclusive
     );

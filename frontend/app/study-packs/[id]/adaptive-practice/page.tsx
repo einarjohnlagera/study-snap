@@ -8,12 +8,13 @@ import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
-import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
   getMyStudyPack,
   getNote,
+  isEmailNotVerifiedError,
   type NoteResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
@@ -68,7 +69,7 @@ export default function AdaptivePracticePage() {
       return;
     }
 
-    if (!requireVerifiedOnboardedUser(router)) {
+    if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
 
@@ -77,6 +78,13 @@ export default function AdaptivePracticePage() {
     setError(null);
     setPremiumLocked(false);
     const authUser = getAuthUser();
+    if (!authUser?.emailVerifiedAt) {
+      setAdaptiveQuiz(null);
+      setError("Verify your email to use this feature.");
+      setLoading(false);
+      requestInFlightRef.current = false;
+      return;
+    }
     if (authUser?.planType !== "PREMIUM") {
       setAdaptiveQuiz(null);
       setPremiumLocked(true);
@@ -114,7 +122,11 @@ export default function AdaptivePracticePage() {
           return;
         }
       }
-      const message = err instanceof Error ? err.message : "Could not generate adaptive practice.";
+      const message = isEmailNotVerifiedError(err)
+        ? "Verify your email to use this feature."
+        : err instanceof Error
+          ? err.message
+          : "Could not generate adaptive practice.";
       setError(message);
       setAdaptiveQuiz(null);
     } finally {

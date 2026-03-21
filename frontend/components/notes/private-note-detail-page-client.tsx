@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
-import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   copyNote,
   createStudyPackFromNote,
@@ -16,6 +16,7 @@ import {
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
+  isEmailNotVerifiedError,
   updateNoteVisibility,
   getQuickReviewPerformanceSummary,
   startQuickReviewSession,
@@ -75,6 +76,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const [shareFeedbackUrl, setShareFeedbackUrl] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
 
@@ -84,7 +86,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       setLoading(false);
       return;
     }
-    if (!requireVerifiedOnboardedUser(router)) {
+    if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
 
@@ -131,13 +133,15 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   }, [loadDetail]);
 
   useEffect(() => {
-    const syncPlan = () => {
-      setIsPremiumPlan((getAuthUser()?.planType ?? "FREE") === "PREMIUM");
+    const syncAuthState = () => {
+      const authUser = getAuthUser();
+      setIsPremiumPlan((authUser?.planType ?? "FREE") === "PREMIUM");
+      setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
     };
-    syncPlan();
-    window.addEventListener("studysnap-auth-change", syncPlan);
+    syncAuthState();
+    window.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncPlan);
+      window.removeEventListener("studysnap-auth-change", syncAuthState);
     };
   }, []);
 
@@ -207,6 +211,10 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     if (!note || generating || !isDraft) {
       return;
     }
+    if (!isEmailVerified) {
+      setToast("Email verification is required before generating Study Packs.");
+      return;
+    }
     setGenerating(true);
     try {
       await createStudyPackFromNote(note.id);
@@ -215,8 +223,12 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       router.replace(`${pathname}?${next.toString()}`);
       void loadDetail();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not generate Study Pack.";
-      setError(message);
+      if (isEmailNotVerifiedError(err)) {
+        setToast("Email verification is required before generating Study Packs.");
+      } else {
+        const message = err instanceof Error ? err.message : "Could not generate Study Pack.";
+        setError(message);
+      }
     } finally {
       setGenerating(false);
     }
@@ -243,6 +255,10 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     if (!note || togglingVisibility || visibility === nextVisibility) {
       return;
     }
+    if (nextVisibility === "PUBLIC" && !isEmailVerified) {
+      setToast("Verify your email before publishing notes to the Public Library.");
+      return;
+    }
     setTogglingVisibility(true);
     setVisibilityMenuOpen(false);
     try {
@@ -250,8 +266,12 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       setNote(updated);
       setToast(nextVisibility === "PUBLIC" ? "Note is now public." : "Note is now private.");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update note visibility.";
-      setError(message);
+      if (isEmailNotVerifiedError(err)) {
+        setToast("Verify your email before publishing notes to the Public Library.");
+      } else {
+        const message = err instanceof Error ? err.message : "Could not update note visibility.";
+        setError(message);
+      }
     } finally {
       setTogglingVisibility(false);
     }
@@ -263,6 +283,11 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     if (nextVisibility === "PUBLIC") {
+      if (!isEmailVerified) {
+        setVisibilityMenuOpen(false);
+        setToast("Verify your email before publishing notes to the Public Library.");
+        return;
+      }
       setVisibilityMenuOpen(false);
       setShowMakePublicConfirm(true);
       return;
@@ -300,6 +325,10 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     if (!note) {
       return;
     }
+    if (!isEmailVerified) {
+      setToast("Verify your email to use this feature.");
+      return;
+    }
     if (!isPremiumPlan) {
       router.push(PLAN_BILLING_PATH);
       return;
@@ -309,6 +338,10 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
 
   const handleStartAdaptivePractice = () => {
     if (!note) {
+      return;
+    }
+    if (!isEmailVerified) {
+      setToast("Verify your email to use this feature.");
       return;
     }
     if (!isPremiumPlan) {

@@ -12,7 +12,7 @@ import {
   type NoteListItemResponse,
   type TodayFocusResponse,
 } from "@/lib/api";
-import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DashboardHero } from "./dashboard-hero";
 import { DashboardStats } from "./dashboard-stats";
 import { StudyPackGrid } from "./study-pack-grid";
@@ -34,7 +34,7 @@ export default function DashboardPage() {
   const [contentVisible, setContentVisible] = useState(false);
 
   const loadDashboard = useCallback(async () => {
-    if (!requireVerifiedOnboardedUser(router)) {
+    if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
 

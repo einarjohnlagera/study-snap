@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ApiRequestError,
   confirmStudyPackText,
   createNote,
   createStudyPackFromImage,
   createStudyPackFromNote,
   getNote,
+  isEmailNotVerifiedError,
   isNeedsTextConfirmationResponse,
   type NoteResponse,
   type StudyPackResponse,
@@ -279,8 +279,8 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         tags: generated.tags ?? [],
       });
     } catch (error) {
-      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
-        showToast("Verify your email before generating a Study Pack.", "info");
+      if (isEmailNotVerifiedError(error)) {
+        showToast("Email verification is required before generating Study Packs.", "info");
       } else {
         const message = error instanceof Error ? error.message : "Could not generate Study Pack.";
         showToast(message, "error");
@@ -402,7 +402,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       showToast("OCR text added to Content.", "success");
     } catch (error) {
       window.clearTimeout(extractingTimer);
-      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+      if (isEmailNotVerifiedError(error)) {
         const message = "Verify your email before using OCR upload.";
         setOcrFlowState("failure");
         setOcrStatusMessage(message);
@@ -453,7 +453,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       setOcrStatusMessage("Confirmed text added to Content.");
       showToast("OCR text added to Content.", "success");
     } catch (error) {
-      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+      if (isEmailNotVerifiedError(error)) {
         const message = "Verify your email before using OCR upload.";
         setOcrFlowState("failure");
         setOcrStatusMessage(message);

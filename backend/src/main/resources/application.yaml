@@ -56,6 +56,13 @@ studysnap:
     min-detected-chars: ${OCR_MIN_DETECTED_CHARS:30}
     min-detected-words: ${OCR_MIN_DETECTED_WORDS:6}
     hard-reject-confidence: ${OCR_HARD_REJECT_CONFIDENCE:0.45}
+    free-monthly-upload-limit: ${OCR_FREE_MONTHLY_UPLOAD_LIMIT:20}
+    premium-monthly-upload-limit: ${OCR_PREMIUM_MONTHLY_UPLOAD_LIMIT:200}
+    free-max-image-bytes: ${OCR_FREE_MAX_IMAGE_BYTES:5000000}
+    premium-max-image-bytes: ${OCR_PREMIUM_MAX_IMAGE_BYTES:10000000}
+    max-pages-per-upload: ${OCR_MAX_PAGES_PER_UPLOAD:1}
+    free-rate-limit-per-minute: ${OCR_FREE_RATE_LIMIT_PER_MINUTE:6}
+    premium-rate-limit-per-minute: ${OCR_PREMIUM_RATE_LIMIT_PER_MINUTE:20}
     google-application-credentials: ${GOOGLE_APPLICATION_CREDENTIALS:}
     google-application-credentials-json: ${GOOGLE_APPLICATION_CREDENTIALS_JSON:}
   llm:

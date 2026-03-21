@@ -9,6 +9,7 @@ import {
   createPremiumCheckoutSession,
   getBillingUsageSummary,
   getMe,
+  isEmailNotVerifiedError,
   logout,
   updateEngagementMode,
   type BillingUsageSummaryResponse,
@@ -76,10 +77,6 @@ export default function SettingsPage() {
       redirectToLoginWithCurrentDestination(router);
       return;
     }
-    if (!authUser.emailVerifiedAt) {
-      router.replace("/verify-email");
-      return;
-    }
     if (!authUser.profileType) {
       router.replace("/onboarding");
       return;
@@ -124,14 +121,24 @@ export default function SettingsPage() {
     setPlanMessage(null);
   }, []);
 
+  const isEmailVerified = Boolean(profile?.emailVerifiedAt);
+
   const handleUpgradeClick = async () => {
+    if (!isEmailVerified) {
+      setPlanMessage("Verify your email before purchasing Premium.");
+      return;
+    }
     setStartingCheckout(true);
     setPlanMessage(null);
     try {
       const payload = await createPremiumCheckoutSession();
       window.location.assign(payload.checkoutUrl);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not start checkout. Please try again.";
+      const message = isEmailNotVerifiedError(err)
+        ? "Verify your email before purchasing Premium."
+        : err instanceof Error
+          ? err.message
+          : "Could not start checkout. Please try again.";
       setPlanMessage(message);
       setStartingCheckout(false);
     }

@@ -23,31 +23,8 @@ type ShellUser = {
   emailVerifiedAt: string | null;
 };
 
-function isAuthenticatedRoute(pathname: string): boolean {
-  return (
-    pathname.startsWith("/dashboard")
-    || pathname.startsWith("/library")
-    || pathname.startsWith("/profile")
-    || pathname.startsWith("/settings")
-    || pathname === "/study"
-    || pathname.startsWith("/study/")
-    || pathname.startsWith("/study-packs")
-    || pathname === "/notes/new"
-    || (pathname.startsWith("/notes/") && !pathname.startsWith("/notes/public/"))
-  );
-}
-
-function shouldUseAuthenticatedShell(pathname: string, hasAuthUser: boolean): boolean {
-  if (pathname.startsWith("/public/notes/")) {
-    return hasAuthUser;
-  }
-  if (pathname.startsWith("/p/")) {
-    return hasAuthUser;
-  }
-  if (pathname.startsWith("/demo")) {
-    return hasAuthUser;
-  }
-  return isAuthenticatedRoute(pathname);
+function shouldUseAuthenticatedShell(hasAuthUser: boolean): boolean {
+  return hasAuthUser;
 }
 
 function getPageTitle(pathname: string): string {
@@ -89,6 +66,9 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/settings")) {
     return "Settings";
+  }
+  if (pathname.startsWith("/verify-email")) {
+    return "Verify Email";
   }
   if (pathname === "/demo") {
     return "Demo";
@@ -208,11 +188,15 @@ export function AppShell({ children }: AppShellProps) {
   }, []);
 
   const shouldUseShell = useMemo(() => {
-    if (!pathname) {
-      return false;
+    return shouldUseAuthenticatedShell(hasAuthUser);
+  }, [hasAuthUser]);
+
+  useEffect(() => {
+    if (!hasAuthUser || pathname !== "/") {
+      return;
     }
-    return shouldUseAuthenticatedShell(pathname, hasAuthUser);
-  }, [hasAuthUser, pathname]);
+    router.replace("/dashboard");
+  }, [hasAuthUser, pathname, router]);
 
   useEffect(() => {
     if (!shouldUseShell) {
@@ -411,10 +395,7 @@ export function AppShell({ children }: AppShellProps) {
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
                 <p className="text-sm text-amber-900 dark:text-amber-200">
-                  Verify your email to start generating Study Packs.
-                </p>
-                <p className="text-xs text-amber-800/90 dark:text-amber-300/90">
-                  Check your inbox for the verification link, or resend it below.
+                  Verify your email to generate Study Packs, use OCR, and publish notes.
                 </p>
               </div>
               <Button

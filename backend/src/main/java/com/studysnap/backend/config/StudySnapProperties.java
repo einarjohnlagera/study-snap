@@ -37,6 +37,13 @@ public class StudySnapProperties {
         private int minDetectedChars = 30;
         private int minDetectedWords = 6;
         private double hardRejectConfidence = 0.45;
+        private int freeMonthlyUploadLimit = 20;
+        private int premiumMonthlyUploadLimit = 200;
+        private long freeMaxImageBytes = 5_000_000;
+        private long premiumMaxImageBytes = 10_000_000;
+        private int maxPagesPerUpload = 1;
+        private int freeRateLimitPerMinute = 6;
+        private int premiumRateLimitPerMinute = 20;
         private String googleApplicationCredentials = "";
         private String googleApplicationCredentialsJson = "";
     }

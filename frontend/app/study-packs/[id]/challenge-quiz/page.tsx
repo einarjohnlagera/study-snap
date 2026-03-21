@@ -8,12 +8,13 @@ import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
-import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeChallengeQuizSession,
   getInProgressChallengeQuizSession,
   getMyStudyPack,
   getNote,
+  isEmailNotVerifiedError,
   startChallengeQuizSession,
   updateChallengeQuizSessionProgress,
   type NoteResponse,
@@ -120,6 +121,7 @@ export default function ChallengeQuizPage() {
   const [timedOut, setTimedOut] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -128,6 +130,17 @@ export default function ChallengeQuizPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+
+  useEffect(() => {
+    const syncVerification = () => {
+      setIsEmailVerified(Boolean(getAuthUser()?.emailVerifiedAt));
+    };
+    syncVerification();
+    window.addEventListener("studysnap-auth-change", syncVerification);
+    return () => {
+      window.removeEventListener("studysnap-auth-change", syncVerification);
+    };
+  }, []);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
@@ -179,7 +192,7 @@ export default function ChallengeQuizPage() {
       return;
     }
 
-    if (!requireVerifiedOnboardedUser(router)) {
+    if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
 
@@ -193,7 +206,21 @@ export default function ChallengeQuizPage() {
         return;
       }
       setNote(detail);
-      const planType = getAuthUser()?.planType ?? "FREE";
+      const authUser = getAuthUser();
+      setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
+      if (!authUser?.emailVerifiedAt) {
+        setChallengeSession(null);
+        setResult(null);
+        setSelectedChoices({});
+        setCurrentIndex(0);
+        setDeadlineEpochSeconds(null);
+        setRemainingSeconds(0);
+        setTimedOut(false);
+        setShowAnswerReview(false);
+        setPhase("prestart");
+        return;
+      }
+      const planType = authUser?.planType ?? "FREE";
       if (planType !== "PREMIUM") {
         setPhase("premium-locked");
         return;
@@ -338,6 +365,10 @@ export default function ChallengeQuizPage() {
     if (!note || starting) {
       return;
     }
+    if (!isEmailVerified) {
+      setError("Verify your email to use this feature.");
+      return;
+    }
 
     setStarting(true);
     setError(null);
@@ -348,7 +379,11 @@ export default function ChallengeQuizPage() {
       }
       applyStartedSession(started, true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not start Challenge Quiz.";
+      const message = isEmailNotVerifiedError(err)
+        ? "Verify your email to use this feature."
+        : err instanceof Error
+          ? err.message
+          : "Could not start Challenge Quiz.";
       setError(message);
       if (message.toLowerCase().includes("monthly challenge quiz limit")) {
         setPhase("limit-reached");

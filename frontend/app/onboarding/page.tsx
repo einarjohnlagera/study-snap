@@ -26,10 +26,6 @@ export default function OnboardingPage() {
       redirectToLoginWithCurrentDestination(router);
       return;
     }
-    if (!authUser.emailVerifiedAt) {
-      router.replace("/verify-email");
-      return;
-    }
     if (authUser.profileType) {
       router.replace("/dashboard");
     }

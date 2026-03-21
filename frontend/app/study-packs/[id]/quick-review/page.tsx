@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
-import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeQuickReviewSession,
   generateQuickReviewStudyTip,
@@ -155,6 +155,7 @@ export default function QuickReviewPage() {
   const [confidenceAcknowledged, setConfidenceAcknowledged] = useState(false);
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -188,7 +189,7 @@ export default function QuickReviewPage() {
       return;
     }
 
-    if (!requireVerifiedOnboardedUser(router)) {
+    if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
 
@@ -322,13 +323,15 @@ export default function QuickReviewPage() {
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
 
   useEffect(() => {
-    const syncPlan = () => {
-      setIsPremiumPlan((getAuthUser()?.planType ?? "FREE") === "PREMIUM");
+    const syncAuthState = () => {
+      const authUser = getAuthUser();
+      setIsPremiumPlan((authUser?.planType ?? "FREE") === "PREMIUM");
+      setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
     };
-    syncPlan();
-    window.addEventListener("studysnap-auth-change", syncPlan);
+    syncAuthState();
+    window.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncPlan);
+      window.removeEventListener("studysnap-auth-change", syncAuthState);
     };
   }, []);
 
@@ -451,6 +454,10 @@ export default function QuickReviewPage() {
     if (!isComplete || !note) {
       return;
     }
+    if (!isEmailVerified) {
+      setStudyTip(null);
+      return;
+    }
     if (incorrectQuestionsForStudyTip.length === 0) {
       setStudyTip(null);
       return;
@@ -475,7 +482,7 @@ export default function QuickReviewPage() {
     return () => {
       isMounted = false;
     };
-  }, [incorrectQuestionsForStudyTip, isComplete, note]);
+  }, [incorrectQuestionsForStudyTip, isComplete, isEmailVerified, note]);
 
   const handleSelectChoice = (choice: string) => {
     if (!currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent) {

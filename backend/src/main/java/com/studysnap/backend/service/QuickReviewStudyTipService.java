@@ -27,12 +27,14 @@ public class QuickReviewStudyTipService {
     private final StudySnapProperties properties;
     private final StudyPackRepository studyPackRepository;
     private final LlmStudyPackService llmStudyPackService;
+    private final AuthService authService;
 
     public QuickReviewStudyTipResponse generateStudyTip(
             String studyPackIdRaw,
             UUID userId,
             QuickReviewStudyTipRequest request
     ) {
+        authService.requireEmailVerified(userId);
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
                 studyPackIdRaw,
                 "STUDY_PACK_NOT_FOUND",
