@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { getSampleNotePreset } from "@/lib/sample-notes";
+import { createNote } from "@/lib/api";
 import { ConfirmTextCard } from "./confirm-text-card";
 import { StudyPackResults } from "./study-pack-results";
 import { StudyInputCard } from "./study-input-card";
@@ -22,6 +23,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const samplePreset = getSampleNotePreset(searchParams.get("sample"));
   const isSampleNote = Boolean(samplePreset);
   const [redirecting, setRedirecting] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
 
   const {
     notesText,
@@ -42,9 +44,34 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     ocrStatusMessage,
     toastMessage,
     toastTone,
+    showToast,
     handleGenerateStudyPack,
     handleConfirmText,
   } = useStudyPack(demoMode, samplePreset?.content ?? "");
+
+  const canSaveNote = notesText.trim().length > 0;
+
+  const handleSaveNote = async () => {
+    if (demoMode || redirecting || savingNote || !canSaveNote) {
+      return;
+    }
+    setSavingNote(true);
+    try {
+      const saved = await createNote({
+        title: null,
+        subject: null,
+        tags: [],
+        content: notesText,
+      });
+      setRedirecting(true);
+      router.push(`/study-packs/${saved.id}?from=study&saved=1`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not save note.";
+      showToast(message, "error");
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (redirecting) {
@@ -53,7 +80,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     const created = await handleGenerateStudyPack();
     if (!demoMode && created) {
       setRedirecting(true);
-      router.push(`/study-packs/${created.id}?from=study&created=1`);
+      router.push(`/study-packs/${created.noteId ?? created.id}?from=study&created=1`);
     }
   };
 
@@ -64,7 +91,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     const created = await handleConfirmText();
     if (!demoMode && created) {
       setRedirecting(true);
-      router.push(`/study-packs/${created.id}?from=study&created=1`);
+      router.push(`/study-packs/${created.noteId ?? created.id}?from=study&created=1`);
     }
   };
 
@@ -72,7 +99,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       <section className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-foreground sm:text-3xl md:text-4xl">Create Study Pack</h1>
+          <h1 className="text-2xl font-semibold text-foreground sm:text-3xl md:text-4xl">Create Note</h1>
           {demoMode ? (
             <span className="inline-flex items-center rounded-full border border-blue-500/40 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
               Demo mode
@@ -80,7 +107,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
           ) : null}
         </div>
         <p className="text-base leading-relaxed text-foreground/75">
-          Paste your notes, then generate a Study Pack. You can edit title, subject, and tags after generation.
+          Paste your notes, save them as a draft, or generate a Study Pack when ready.
         </p>
       </section>
 
@@ -92,10 +119,15 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
         imageFile={imageFile}
         onImageFileChange={setImageFile}
         imageInputKey={imageInputKey}
+        canSaveNote={canSaveNote}
+        saving={savingNote}
         canGenerate={canGenerate}
         loading={loading || redirecting}
         ocrFlowState={ocrFlowState}
         ocrStatusMessage={ocrStatusMessage}
+        onSaveNote={() => {
+          void handleSaveNote();
+        }}
         onGenerate={() => {
           void handleGenerate();
         }}

@@ -17,6 +17,7 @@ export type QuizItem = {
 
 export type StudyPackResponse = {
   id: string;
+  noteId: string | null;
   inputType: "text" | "image";
   extractedText: string | null;
   title: string;
@@ -374,9 +375,11 @@ export type NoteResponse = {
   content: string;
   createdAt: string;
   updatedAt: string;
+  studyPackId?: string | null;
+  studyPackStatus?: NoteStudyPackStatus;
 };
 
-export type NoteStudyPackStatus = "NO_STUDY_PACK" | "STUDY_PACK_READY" | "NEEDS_REGENERATION";
+export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
 
 export type NoteListItemResponse = {
   id: string;
@@ -1290,4 +1293,16 @@ export async function updateNote(
     true,
   );
   return parseApiResponse<NoteResponse>(response, "Could not save note.");
+}
+
+export async function cloneNote(noteId: string): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/clone`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(response, "Could not clone note.");
 }

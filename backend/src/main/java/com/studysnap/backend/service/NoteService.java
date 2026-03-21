@@ -27,9 +27,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NoteService {
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
-    private static final String STUDY_PACK_STATUS_NO_PACK = "NO_STUDY_PACK";
+    private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
     private static final String STUDY_PACK_STATUS_READY = "STUDY_PACK_READY";
-    private static final String STUDY_PACK_STATUS_NEEDS_REGENERATION = "NEEDS_REGENERATION";
 
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
@@ -45,7 +44,7 @@ public class NoteService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
-        return mapToResponse(saved);
+        return mapToResponse(saved, null);
     }
 
     public NoteResponse update(String id, UpsertNoteRequest request, UUID ownerUserId) {
@@ -65,7 +64,8 @@ public class NoteService {
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
-        return mapToResponse(saved);
+        StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId(), ownerUserId);
+        return mapToResponse(saved, linkedStudyPack);
     }
 
     @Transactional(readOnly = true)
@@ -78,7 +78,32 @@ public class NoteService {
         );
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
-        return mapToResponse(entity);
+        StudyPackEntity linkedStudyPack = findLinkedStudyPack(entity.getId(), ownerUserId);
+        return mapToResponse(entity, linkedStudyPack);
+    }
+
+    public NoteResponse cloneNote(String id, UUID ownerUserId) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "NOTE_NOT_FOUND",
+                "Note not found.",
+                HttpStatus.NOT_FOUND
+        );
+        NoteEntity source = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+
+        NoteEntity clone = new NoteEntity();
+        clone.setId(UUID.randomUUID());
+        clone.setOwnerUserId(ownerUserId);
+        clone.setTitle(source.getTitle());
+        clone.setSubject(source.getSubject());
+        clone.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
+        clone.setContent(source.getContent());
+        clone.setCreatedAt(OffsetDateTime.now());
+        clone.setUpdatedAt(OffsetDateTime.now());
+
+        NoteEntity saved = noteRepository.save(clone);
+        return mapToResponse(saved, null);
     }
 
     @Transactional(readOnly = true)
@@ -140,7 +165,7 @@ public class NoteService {
         return List.copyOf(normalizedByKey.values());
     }
 
-    private NoteResponse mapToResponse(NoteEntity entity) {
+    private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
         return new NoteResponse(
                 entity.getId().toString(),
                 entity.getTitle(),
@@ -148,7 +173,9 @@ public class NoteService {
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getContent(),
                 entity.getCreatedAt(),
-                entity.getUpdatedAt()
+                entity.getUpdatedAt(),
+                studyPack == null ? null : studyPack.getId().toString(),
+                resolveStudyPackStatus(studyPack)
         );
     }
 
@@ -160,21 +187,20 @@ public class NoteService {
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 toContentPreview(note.getContent()),
                 studyPack == null ? null : studyPack.getId().toString(),
-                resolveStudyPackStatus(note, studyPack),
+                resolveStudyPackStatus(studyPack),
                 note.getUpdatedAt()
         );
     }
 
-    private String resolveStudyPackStatus(NoteEntity note, StudyPackEntity studyPack) {
+    private String resolveStudyPackStatus(StudyPackEntity studyPack) {
         if (studyPack == null) {
-            return STUDY_PACK_STATUS_NO_PACK;
-        }
-        OffsetDateTime noteUpdatedAt = note.getUpdatedAt();
-        OffsetDateTime studyPackUpdatedAt = studyPack.getUpdatedAt();
-        if (noteUpdatedAt != null && studyPackUpdatedAt != null && noteUpdatedAt.isAfter(studyPackUpdatedAt)) {
-            return STUDY_PACK_STATUS_NEEDS_REGENERATION;
+            return STUDY_PACK_STATUS_DRAFT;
         }
         return STUDY_PACK_STATUS_READY;
+    }
+
+    private StudyPackEntity findLinkedStudyPack(UUID noteId, UUID ownerUserId) {
+        return studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).orElse(null);
     }
 
     private String toContentPreview(String content) {

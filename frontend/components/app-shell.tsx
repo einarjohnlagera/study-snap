@@ -54,7 +54,7 @@ function getPageTitle(pathname: string): string {
     return "Dashboard";
   }
   if (pathname.startsWith("/library")) {
-    return "Study Library";
+    return "My Notes";
   }
   if (pathname === "/notes/new") {
     return "New Note";
@@ -75,7 +75,7 @@ function getPageTitle(pathname: string): string {
     return "Demo";
   }
   if (pathname === "/study" || pathname.startsWith("/study/")) {
-    return "Create Study Pack";
+    return "Create Note";
   }
   if (pathname.includes("/quick-review")) {
     return "Quick Review";
@@ -87,7 +87,7 @@ function getPageTitle(pathname: string): string {
     return "Challenge Quiz";
   }
   if (pathname.startsWith("/study-packs")) {
-    return "Study Pack";
+    return "Note";
   }
   return "NoteLib";
 }
@@ -100,7 +100,7 @@ type NavLinkItem = {
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/notes", label: "Notes" },
-  { href: "/library", label: "Library" },
+  { href: "/library", label: "My Notes" },
 ];
 
 const SECONDARY_NAV: NavLinkItem[] = [

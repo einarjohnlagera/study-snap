@@ -5,6 +5,7 @@ import java.util.List;
 
 public record StudyPackResponse(
 		String id,
+		String noteId,
 		String inputType,
 		String extractedText,
 		String title,

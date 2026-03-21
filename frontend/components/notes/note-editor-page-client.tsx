@@ -23,7 +23,6 @@ type NoteEditorPageClientProps = {
 
 type PendingSuggestion = {
   noteId: string;
-  studyPackId: string;
   title: string;
   subject: string | null;
   tags: string[];
@@ -177,8 +176,8 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     }
   }, [contentEmpty, isDetailPage, isGenerating, isSaving, router, showToast, upsertNote]);
 
-  const finalizeGenerationRedirect = useCallback((studyPackId: string) => {
-    router.push(`/study-packs/${studyPackId}?from=notes`);
+  const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
+    router.push(`/study-packs/${noteIdToOpen}?from=notes&created=1`);
   }, [router]);
 
   const handleGenerate = useCallback(async () => {
@@ -206,13 +205,12 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         const updated = await updateNote(saved.id, autoFillPayload);
         setDraft(toDraft(updated));
         setCurrentNoteId(updated.id);
-        finalizeGenerationRedirect(generated.id);
+        finalizeGenerationRedirect(saved.id);
         return;
       }
 
       setPendingSuggestion({
         noteId: saved.id,
-        studyPackId: generated.id,
         title: generated.title,
         subject: generated.subject ?? null,
         tags: generated.tags ?? [],
@@ -245,7 +243,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       setDraft(toDraft(updated));
       setCurrentNoteId(updated.id);
       setPendingSuggestion(null);
-      finalizeGenerationRedirect(pendingSuggestion.studyPackId);
+      finalizeGenerationRedirect(pendingSuggestion.noteId);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not apply suggestions.";
       showToast(message, "error");
@@ -258,9 +256,9 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     if (!pendingSuggestion) {
       return;
     }
-    const studyPackId = pendingSuggestion.studyPackId;
+    const noteIdToOpen = pendingSuggestion.noteId;
     setPendingSuggestion(null);
-    finalizeGenerationRedirect(studyPackId);
+    finalizeGenerationRedirect(noteIdToOpen);
   }, [finalizeGenerationRedirect, pendingSuggestion]);
 
   const pageTitle = isDetailPage ? "Note" : "New Note";

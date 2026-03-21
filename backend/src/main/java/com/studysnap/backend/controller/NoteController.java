@@ -56,6 +56,15 @@ public class NoteController {
         return noteService.getById(id, userId);
     }
 
+    @PostMapping("/{id}/clone")
+    public NoteResponse cloneNote(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return noteService.cloneNote(id, userId);
+    }
+
     @GetMapping
     public List<NoteListItemResponse> listMine(
             @AuthenticationPrincipal AuthenticatedUser user

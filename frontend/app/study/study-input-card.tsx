@@ -11,10 +11,13 @@ type StudyInputCardProps = {
   imageFile: File | null;
   onImageFileChange: (file: File | null) => void;
   imageInputKey: number;
+  canSaveNote: boolean;
   canGenerate: boolean;
+  saving: boolean;
   loading: boolean;
   ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
   ocrStatusMessage: string | null;
+  onSaveNote: () => void;
   onGenerate: () => void;
 };
 
@@ -26,10 +29,13 @@ export function StudyInputCard({
   imageFile,
   onImageFileChange,
   imageInputKey,
+  canSaveNote,
+  saving,
   canGenerate,
   loading,
   ocrFlowState,
   ocrStatusMessage,
+  onSaveNote,
   onGenerate,
 }: StudyInputCardProps) {
   const imagePreviewUrl = useMemo(() => {
@@ -143,7 +149,23 @@ export function StudyInputCard({
       <div className="flex flex-wrap gap-3">
         <Button
           type="button"
-          disabled={!canGenerate || loading}
+          variant="outline"
+          disabled={!canSaveNote || saving || loading}
+          onClick={onSaveNote}
+          className="w-full sm:w-auto"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Saving Note...
+            </>
+          ) : (
+            "Save Note"
+          )}
+        </Button>
+        <Button
+          type="button"
+          disabled={!canGenerate || loading || saving}
           onClick={onGenerate}
           className={`w-full sm:w-auto ${isSampleNote ? "ring-2 ring-blue-300 dark:ring-blue-700" : ""}`}
         >
