@@ -2,20 +2,20 @@
 
 Use the existing project docs as the primary source of truth:
 - `README.md`
-- `SPEC.md`
-- `ROADMAP.md`
-- `ARCHITECTURE.md`
+- `docs/product/SPEC.md`
+- `docs/product/ROADMAP.md`
+- `docs/architecture/ARCHITECTURE.md`
 - `AGENTS.md`
-- `STUDY_SNAP_USER_ACCOUNTS_CONTEXT.md` (or the latest user-accounts context file)
+- `docs/features/authentication.md`
 
 You are implementing the **User Accounts foundation** for NoteLib.
 
 ## Product reminder
-NoteLib turns notes into reusable **Study Packs**.
+NoteLib is note-first: users save Notes, then generate Study Pack content for those Notes.
 The next major product direction is:
 - authenticated users
-- user-owned study packs
-- future Study Library dashboard
+- user-owned notes and generated study content
+- future My Library / Public Library workflows
 - future usage limits by plan
 
 This implementation is a foundation for those features.
@@ -120,12 +120,11 @@ Use enums where appropriate for:
 - `PlanType`
 - `SubscriptionStatus`
 
-### 3. Relationship preparation for Study Packs
-Prepare the design so that saved study packs/study packs can later belong to a user via:
+### 3. Relationship preparation for Notes
+Prepare the design so saved Notes are owned by users via:
 - `owner_user_id`
 
-If the project currently still uses `study packs`, keep the implementation incremental and safe.
-Do not force a giant rename if it would create unnecessary churn.
+Generated study content should be attached to Note ownership. Keep compatibility with legacy study-pack naming where needed.
 
 ### 4. API design proposal
 Propose or scaffold minimal endpoints for user accounts, such as:
@@ -175,12 +174,12 @@ Follow existing project conventions from `AGENTS.md` and `ARCHITECTURE.md`:
 - business logic belongs in services
 - prefer DTOs for request/response models
 - keep naming aligned with NoteLib product language
-- keep the path clean for the future Study Library feature
+- keep the path clean for future My Library and Public Library features
 
 Make decisions that support this product sequence:
 1. User accounts
-2. User-owned study packs
-3. Study Library dashboard
+2. User-owned notes
+3. My Library dashboard
 4. Usage limits by plan
 5. Launch prep / premium evolution
 

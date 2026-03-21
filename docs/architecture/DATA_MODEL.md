@@ -51,6 +51,11 @@ State transition:
 
 - generating validated output sets Note state from `DRAFT` to `STUDY_PACK_READY`
 
+Ownership rule:
+
+- summaries, key concepts, quizzes, and practice/performance data are owned by `note_id`
+- legacy `study_pack_id` references can remain for compatibility, but `note_id` is canonical
+
 ## Copy-Based Versioning
 
 Copy creates a new Note row.
@@ -129,6 +134,12 @@ Recommended fields:
 - `ocr_confidence`
 - `created_at`
 - `expires_at`
+
+Create/Edit Note OCR flow:
+
+- OCR extraction is triggered from note authoring UI
+- extracted text is inserted into Note `content` for user review/edit before generation
+- OCR extraction must not auto-save and must not auto-generate
 
 ## Share Links
 
@@ -242,3 +253,4 @@ Suggested migration direction:
 5. add copy endpoint for versioning behavior
 6. shift feature code to Note-centric ownership checks
 7. keep legacy naming compatibility where required by existing schema
+8. ensure generated/practice ownership paths consistently resolve through `note_id`

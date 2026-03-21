@@ -1,411 +1,59 @@
-# STUDY_SNAP_USER_ACCOUNTS_CONTEXT.md
+# authentication.md - NoteLib Feature Context
 
-This file extends the existing NoteLib project docs and defines the agreed direction for the **User Accounts foundation**.
+## Goal
 
-It should be read together with:
-- `README.md`
-- `SPEC.md`
-- `ROADMAP.md`
-- `ARCHITECTURE.md`
-- `AGENTS.md`
+Provide account/session behavior that supports Note-first ownership and safe generation controls.
 
----
+## Core Ownership Model
 
-## Why this exists
+- Notes are owned by authenticated users (`owner_user_id`).
+- Generated Study Pack content is attached to owned Notes.
+- Quiz/practice sessions are note-scoped (`noteId`).
 
-NoteLib is evolving from a one-shot study pack generator into a reusable study workspace.
+## Auth Flows
 
-The product already treats generated outputs as **study packs** that users can revisit later in My Library.
-Because of that, user accounts should be introduced **before** fully implementing the My Library dashboard.
+Required endpoints:
 
-This keeps ownership, saved history, plan limits, and future premium features consistent.
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `POST /api/auth/resend-verification`
+- `GET /api/auth/verify-email?token=...`
 
----
+## Session Behavior (Frontend)
 
-## Product alignment
+- All protected API calls go through `frontend/lib/api.ts`.
+- On `401`, clear auth state and redirect to `/login`.
+- Preserve destination with `redirect` query.
+- For expired sessions, include `reason=session_expired`.
 
-NoteLib core value remains:
+## Verification Gating Rules
 
-**Notes → Study Pack → Revisit later**
+Users may sign up/login before email verification, but:
 
-A Study Pack contains:
-- title
-- summary
-- key concepts
-- practice quiz
+- unverified users cannot generate Study Packs
+- unverified users cannot use OCR upload in Create/Edit Note
 
-The User Accounts foundation exists to support:
-- saved study packs
-- authenticated My Library access
-- future usage limits by plan
-- future subscription analytics
-- future premium feature access
+Verification-gated responses should be structured:
 
-This is intentionally **not** a full classroom/family management system in the first version.
+- status `403`
+- `code=EMAIL_VERIFICATION_REQUIRED`
+- `action=RESEND_VERIFICATION`
 
----
+Frontend OCR gate message:
 
-## Naming decisions
+- `Verify your email before using OCR upload.`
 
-### Review → Study Pack
+## Navigation Expectations (Authenticated Shell)
 
-The backend/domain should use **StudyPack** as the default term for this entity.
+- Main: Dashboard, My Library, Public Library
+- Account: Profile, Settings
 
-Reason:
-- "Review" is becoming vague as the product grows.
-- “Study Pack” matches product language in README, SPEC, and roadmap.
-- My Library is conceptually a library of note-owned study outputs.
+## Non-Goals
 
-Transitional note:
-- Existing code may still use `Review` in some classes/endpoints.
-- New schema and future-facing design should prefer **StudyPack** naming.
-
----
-
-## User account design principles
-
-The user account system should separate concerns instead of putting all business logic into one table.
-
-Recommended separation:
-- **users**: identity + core profile
-- **subscriptions**: plan history and billing state
-- **study_packs**: user-owned generated content
-- future tables later for usage tracking, account links, etc.
-
-This separation is preferred because NoteLib is expected to grow into:
-- freemium plan controls
-- premium subscriptions
-- library/history
-- analytics
-
----
-
-## Agreed MVP-friendly user structure
-
-### users
-
-Purpose:
-- store authentication identity
-- store lightweight personal profile
-- support ownership of saved study packs
-
-Recommended fields:
-- `id`
-- `email`
-- `password_hash` (or auth provider fields later)
-- `first_name`
-- `last_name` (optional, for profile completion)
-- `display_name` (optional)
-- `country_code` (optional, ISO-style such as `PH`, `US`)
-- `profile_type` (nullable enum)
-- `role` (`USER` or `ADMIN`)
-- `token_version`
-- `failed_login_attempts`
-- `locked_until`
-- `status`
-- `created_at`
-- `updated_at`
-- `last_login_at` (nullable)
-- `email_verified_at` (nullable)
-
-### display_name behavior
-
-`display_name` is optional.
-
-Frontend behavior:
-- when the user types `firstName`, auto-fill `displayName`
-- if the user later customizes `displayName`, preserve the customized value
-- if `displayName` is blank, UI should fall back to `firstName`
-
-Backend/API behavior:
-- treat `displayName` as optional
-- when building response DTOs, expose a resolved display label if needed:
-  - `displayName` if present
-  - otherwise `firstName`
-
-This keeps onboarding simple while still allowing user-friendly personalization.
-
-Signup fields for current flow:
-- `firstName` (required)
-- `email` (required)
-- `password` (required)
-- `displayName` (optional)
-
-Deferred to onboarding/profile completion:
-- `profileType`
-- `countryCode`
-- `lastName`
-
----
-
-## profile_type
-
-Internal field name:
-- `profileType`
-
-Purpose:
-- lightweight onboarding / segmentation / personalization
-- not authorization
-- not billing
-- not permissions
-
-UI copy:
-- **“I’m using NoteLib as a…”**
-
-Allowed initial values:
-- `STUDENT`
-- `PARENT`
-- `PROFESSIONAL`
-
-Notes:
-- `TEACHER` is intentionally parked for now
-- `profileType` is a product/profile classification, not a security role
-- a more user-friendly label can be shown in UI while keeping `profileType` as the technical field name
-
----
-
-## subscriptions
-
-A dedicated `subscriptions` table is preferred instead of storing only a plan enum on `users`.
-
-Reason:
-- easier subscription history tracking
-- better analytics
-- cleaner future integration with billing providers
-- easier to reason about active vs expired subscriptions
-
-Recommended fields:
-- `id`
-- `user_id`
-- `plan_type`
-- `status`
-- `start_at`
-- `end_at` (nullable)
-- `created_at`
-- `updated_at`
-
-Possible future additions:
-- `provider`
-- `provider_customer_id`
-- `provider_subscription_id`
-- `cancelled_at`
-- `renewal_at`
-- `trial_ends_at`
-
-UI naming:
-- The product/UI can say **Plan Type**
-- The database/history model can remain **subscriptions**
-
-Initial plan direction:
-- `FREE`
-- `PREMIUM`
-
-Demo mode remains separate from authenticated account subscriptions.
-
----
-
-## Study Packs ownership
-
-Each authenticated user should own many Study Packs.
-
-Relationship:
-- `User` 1 → many `StudyPack`
-
-Recommended ownership field on study packs:
-- `owner_user_id`
-
-Current direction:
-- `owner_user_id` should be non-null for real product Study Pack rows.
-- Demo mode remains frontend-only and does not require backend anonymous persistence.
-
-This should power the future My Library dashboard for:
-- list my study packs
-- open a study pack
-- delete a study pack
-
-## Email verification direction
-
-Email verification is required before real Study Pack generation.
-
-Current implementation direction:
-- signup triggers a placeholder verification send flow
-- generation endpoints are blocked until `email_verified_at` is set
-
-Future direction:
-- token table-backed verification
-- provider-backed email delivery
-- dedicated verify and resend flows with expiring tokens
-
-## Session security direction
-
-- short-lived JWT access tokens for API authorization
-- hashed rotating refresh tokens for session continuity
-- keep-signed-in extends refresh token TTL (target: 30 days)
-- login rate limiting + account lockout policy for brute-force defense
-
----
-
-## Deferred features (parked, not in v1 schema)
-
-### Family plan / parent-child linking
-
-This is a valid future direction, but should **not** be implemented in the first user-account schema.
-
-Why it is deferred:
-- adds permission complexity
-- adds invitation/linking flows
-- adds privacy considerations
-- adds questions about ownership and visibility
-
-Keep it in roadmap/context as a future feature.
-
-Potential future design direction:
-- `account_links`
-  - `id`
-  - `owner_user_id`
-  - `linked_user_id`
-  - `relationship_type`
-  - `status`
-
-Possible future relationship types:
-- `PARENT_OF`
-- `GUARDIAN_OF`
-
-This should only be introduced when family plans or managed learner accounts become a real product need.
-
-## Tags direction
-
-For Study Pack categorization and search:
-- use a simple string array for tags
-- support multiple tags per Study Pack (subject/topic friendly)
-
-### Teacher mode
-
-Teacher-oriented functionality is also intentionally deferred.
-
-It may return later as:
-- classroom sharing
-- teacher-owned collections
-- student progress visibility
-
-But it is out of scope for the first user-account implementation.
-
----
-
-## Recommended implementation order
-
-### Phase 1
-Build user accounts foundation:
-- signup
-- login
-- profile fields
-- account status fields
-
-### Phase 2
-Link generated Study Packs to authenticated users.
-
-### Phase 3
-Build the My Library dashboard on top of authenticated ownership.
-
-### Phase 4
-Add rate limiting / usage limits by plan.
-
-### Phase 5
-Add subscription lifecycle improvements and analytics.
-
-This order is preferred because it minimizes rework in library queries and ownership handling.
-
----
-
-## Codex / implementation guidance
-
-When implementing this feature, prefer:
-- thin controllers
-- service-layer orchestration
-- DTOs for API responses
-- migrations before entity wiring
-- clean naming aligned with Study Pack terminology
-
-Do not overbuild yet:
-- no family-account logic
-- no teacher flows
-- no multi-user linked dashboards
-- no advanced billing provider integration in first pass
-
-Focus on:
-- user identity
-- authenticated ownership
-- plan/subscription history shape
-- clean path to My Library
-
----
-
-## Final direction snapshot
-
-NoteLib should now move toward this structure:
-
-- **users** = identity + basic profile
-- **subscriptions** = plan history
-- **study_packs** = saved generated content
-
-And the agreed UX details are:
-- `displayName` is optional
-- auto-fill `displayName` from `firstName`
-- if empty, fall back to `firstName`
-- technical field name: `profileType`
-- UI label: **“I’m using NoteLib as a…”**
-- values for now: Student, Parent, Professional
-
-This context should guide the next implementation work for User Accounts and the future authenticated My Library.
-
-
-## Placement in the refactored docs
-
-This file now lives under `docs/features/` because it is a feature-specific context file.
-
----
-
-## Profile page
-
-Authenticated users have a dedicated profile page at:
-
-- `/profile`
-
-The profile page shows:
-
-- initial-letter avatar (computed from `displayName`, fallback to `firstName`, fallback to `email`)
-- resolved display name and email
-- account information from existing user data:
-  - profile type
-  - plan type
-  - email verification timestamp
-  - account status
-
-`Member Since` is shown as unavailable until account creation date is exposed by the current API contract.
-
-Profile actions are lightweight:
-
-- Edit Profile (safe stub)
-- Manage Plan (safe stub)
-- Sign Out (active)
-
----
-
-## Engagement mode preference
-
-Users have a configurable `engagementMode` preference that controls dashboard motivation behavior.
-
-Allowed values:
-
-- `FOCUSED` (default)
-- `CONSISTENCY`
-- `STREAK`
-
-API support:
-
-- `GET /api/auth/me` returns current `engagementMode`
-- `POST /api/auth/preferences/engagement-mode` updates the value
-
-This preference is user-controlled so NoteLib can support both calm exam-time usage and optional consistency/streak motivation styles.
-
-
+- social login
+- classroom/family linking
+- advanced admin permission systems
+- campaign email tooling

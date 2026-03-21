@@ -6,8 +6,8 @@ Support public discovery and safe reuse of learning content while keeping the no
 
 ## Public Surfaces
 
-- Public Library route: `/notes`
-- Public Note Detail route: `/notes/public/{id}`
+- Public Library route: `/library/public`
+- Public Note Detail route: `/public/notes/{id}`
 - Token share route (existing): `/p/{token}`
 
 ## Public Note Rules

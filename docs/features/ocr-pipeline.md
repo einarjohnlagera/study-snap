@@ -6,6 +6,13 @@ This file consolidates the OCR-related context from the legacy docs.
 
 Support image-based note uploads and convert them into Study Packs.
 
+Current product placement:
+
+- OCR upload is optional in Create Note / Edit Note.
+- OCR fills Note content for user review/edit before save/generate.
+- OCR must not auto-save and must not auto-generate.
+- Unverified users are blocked from OCR upload.
+
 ## OCR provider direction
 
 NoteLib uses Google Cloud Vision OCR for image-based notes.

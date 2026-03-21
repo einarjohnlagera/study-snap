@@ -23,7 +23,7 @@ Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 
 NoteLib does not overwrite generated content on the same Note.
 
-Users create a new version by copying a Note, editing it, and generating a new Study Pack from that copy.
+Users create a new version by using `Make a Copy`, editing the copied Note, and generating a new Study Pack from that copy.
 
 Copy includes user-authored fields only:
 
@@ -44,10 +44,21 @@ Copy does not include generated/performance fields:
 
 Sidebar navigation:
 
-- Dashboard
-- My Library
-- Public Library
-- Settings
+- Main: Dashboard, My Library, Public Library
+- Account: Profile, Settings
+
+Primary routes:
+
+- `/library`
+- `/library/public`
+- `/notes/{id}` (Note Detail)
+- `/public/notes/{id}` (Public Note Detail, read-only)
+
+## Verification and OCR
+
+- Unverified users are blocked from Study Pack generation.
+- Unverified users are blocked from OCR upload.
+- OCR is optional in Create/Edit Note and populates Note content for manual review before save/generate.
 
 ## Tech Stack
 
@@ -64,6 +75,8 @@ OCR: Google Vision
 - Study Pack (generated Note state)
 - QuickReviewSession
 - ActivityEvent
+
+All generated outputs and quiz/practice sessions are note-scoped (`noteId`).
 
 ## Feature Documentation
 
