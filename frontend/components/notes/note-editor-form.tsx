@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles, Tag } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileImage, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -27,6 +27,16 @@ type NoteEditorFormProps = {
   helperText: string;
   showTagsSection: boolean;
   studyPackMessage?: string | null;
+  ocrImageFile: File | null;
+  ocrImageInputKey: number;
+  ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
+  ocrStatusMessage: string | null;
+  ocrConfirmedText: string;
+  ocrNeedsConfirmation: boolean;
+  isConfirmingOcrText: boolean;
+  onOcrImageFileChange: (file: File | null) => void;
+  onOcrConfirmedTextChange: (value: string) => void;
+  onConfirmOcrText: () => void;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -49,11 +59,32 @@ export function NoteEditorForm({
   helperText,
   showTagsSection,
   studyPackMessage,
+  ocrImageFile,
+  ocrImageInputKey,
+  ocrFlowState,
+  ocrStatusMessage,
+  ocrConfirmedText,
+  ocrNeedsConfirmation,
+  isConfirmingOcrText,
+  onOcrImageFileChange,
+  onOcrConfirmedTextChange,
+  onConfirmOcrText,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const contentEmpty = note.content.trim().length === 0;
   const actionsDisabled = contentEmpty || isSaving || isGenerating;
+  const ocrInFlight = ocrFlowState === "uploading" || ocrFlowState === "extracting";
+  const OcrStatusIcon = ocrFlowState === "failure"
+    ? AlertCircle
+    : ocrFlowState === "success"
+      ? CheckCircle2
+      : Loader2;
+  const ocrStatusTone = ocrFlowState === "failure"
+    ? "border-red-500/40 bg-red-50/70 text-red-800 dark:bg-red-950/30 dark:text-red-200"
+    : ocrFlowState === "success"
+      ? "border-emerald-500/40 bg-emerald-50/70 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
+      : "border-blue-500/40 bg-blue-50/70 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200";
 
   const handleAddTag = () => {
     if (!onTagsChange) {
@@ -232,6 +263,80 @@ export function NoteEditorForm({
           />
           <p className="text-xs text-foreground/60">
             Keep this note focused on one topic for better Study Pack quality.
+          </p>
+        </section>
+
+        <section className="space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Upload Note Photo (optional OCR)</p>
+            <p className="text-xs text-foreground/65">
+              Upload a clear note image to extract text into Content. You can edit it before saving or generating.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
+            <UploadCloud className="h-4 w-4 text-foreground/60" />
+            <FileImage className="h-4 w-4 text-foreground/60" />
+            <input
+              key={ocrImageInputKey}
+              id="note-ocr-image"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                onOcrImageFileChange(file);
+              }}
+              className="w-full cursor-pointer text-sm text-foreground/75 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+            />
+          </div>
+          {ocrImageFile ? (
+            <p className="text-xs text-foreground/65">
+              Selected: {ocrImageFile.name} ({(ocrImageFile.size / (1024 * 1024)).toFixed(2)} MB)
+            </p>
+          ) : null}
+          {ocrStatusMessage ? (
+            <div className={`rounded-md border px-3 py-2 text-sm ${ocrStatusTone}`}>
+              <div className="flex items-start gap-2">
+                <OcrStatusIcon
+                  className={`mt-0.5 h-4 w-4 ${ocrInFlight ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                />
+                <p>{ocrStatusMessage}</p>
+              </div>
+            </div>
+          ) : null}
+          {ocrNeedsConfirmation ? (
+            <div className="space-y-2 rounded-md border border-border bg-background p-3">
+              <label htmlFor="ocr-confirmed-text" className="text-sm font-medium text-foreground">
+                Review Extracted Text
+              </label>
+              <textarea
+                id="ocr-confirmed-text"
+                value={ocrConfirmedText}
+                onChange={(event) => onOcrConfirmedTextChange(event.target.value)}
+                placeholder="Review and edit extracted OCR text..."
+                className="min-h-36 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onConfirmOcrText}
+                  disabled={isConfirmingOcrText || ocrConfirmedText.trim().length === 0}
+                >
+                  {isConfirmingOcrText ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Applying OCR Text...
+                    </>
+                  ) : (
+                    "Use OCR Text"
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          <p className="text-xs text-foreground/60">
+            Supported formats: PNG, JPEG, WEBP. Max file size: 5 MB.
           </p>
         </section>
       </Card>
