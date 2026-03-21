@@ -37,6 +37,8 @@ type NoteEditorFormProps = {
   onOcrImageFileChange: (file: File | null) => void;
   onOcrConfirmedTextChange: (value: string) => void;
   onConfirmOcrText: () => void;
+  disableContentEditing?: boolean;
+  contentLockHint?: string | null;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -69,6 +71,8 @@ export function NoteEditorForm({
   onOcrImageFileChange,
   onOcrConfirmedTextChange,
   onConfirmOcrText,
+  disableContentEditing = false,
+  contentLockHint = null,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -259,11 +263,20 @@ export function NoteEditorForm({
             value={note.content}
             onChange={(event) => onContentChange(event.target.value)}
             placeholder="Write or paste your notes here..."
-            className="min-h-[340px] w-full rounded-lg border border-border bg-background px-4 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600 sm:text-base"
+            readOnly={disableContentEditing}
+            className={`min-h-[340px] w-full rounded-lg border border-border bg-background px-4 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600 sm:text-base ${
+              disableContentEditing ? "cursor-not-allowed bg-muted/30 text-foreground/80" : ""
+            }`}
           />
-          <p className="text-xs text-foreground/60">
-            Keep this note focused on one topic for better Study Pack quality.
-          </p>
+          {disableContentEditing ? (
+            <p className="text-xs text-foreground/60">
+              {contentLockHint ?? "Note content is locked after generating a Study Pack. Make a copy to change the note itself."}
+            </p>
+          ) : (
+            <p className="text-xs text-foreground/60">
+              Keep this note focused on one topic for better Study Pack quality.
+            </p>
+          )}
         </section>
 
         <section className="space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4">
@@ -281,6 +294,7 @@ export function NoteEditorForm({
               id="note-ocr-image"
               type="file"
               accept="image/png,image/jpeg,image/webp"
+              disabled={disableContentEditing}
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 onOcrImageFileChange(file);
@@ -321,7 +335,7 @@ export function NoteEditorForm({
                   type="button"
                   variant="outline"
                   onClick={onConfirmOcrText}
-                  disabled={isConfirmingOcrText || ocrConfirmedText.trim().length === 0}
+                  disabled={disableContentEditing || isConfirmingOcrText || ocrConfirmedText.trim().length === 0}
                 >
                   {isConfirmingOcrText ? (
                     <>

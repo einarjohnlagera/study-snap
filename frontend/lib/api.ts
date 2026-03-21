@@ -379,6 +379,11 @@ export type NoteResponse = {
   visibility: NoteVisibility;
   createdAt: string;
   updatedAt: string;
+  copiedFromNoteId: string | null;
+  copiedFromUserId: string | null;
+  copiedFromTitle: string | null;
+  copiedFromPublic: boolean;
+  copiedAt: string | null;
   studyPackId?: string | null;
   studyPackStatus?: NoteStudyPackStatus;
   summary: string | null;

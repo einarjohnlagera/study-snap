@@ -91,6 +91,7 @@ function hasExistingMetadata(note: NoteResponse): boolean {
 export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const router = useRouter();
   const isDetailPage = Boolean(noteId);
+  const [studyPackStatus, setStudyPackStatus] = useState<NoteResponse["studyPackStatus"] | null>(null);
   const [draft, setDraft] = useState<NoteEditorDraft>({
     title: "",
     subject: "",
@@ -168,6 +169,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         }
         setDraft(toDraft(note));
         setCurrentNoteId(note.id);
+        setStudyPackStatus(note.studyPackStatus ?? "DRAFT");
       })
       .catch((error) => {
         if (!active) {
@@ -188,6 +190,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   }, [noteId, router]);
 
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
+  const contentLocked = isDetailPage && studyPackStatus === "STUDY_PACK_READY";
 
   const buildRequest = useCallback(() => ({
     title: normalizeOptional(draft.title),
@@ -209,6 +212,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
 
     setCurrentNoteId(saved.id);
     setDraft(toDraft(saved));
+    setStudyPackStatus(saved.studyPackStatus ?? "DRAFT");
     return saved;
   }, [buildRequest, contentEmpty, currentNoteId, showToast]);
 
@@ -325,6 +329,15 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   }, [finalizeGenerationRedirect, pendingSuggestion]);
 
   const handleOcrImageFileChange = useCallback(async (file: File | null) => {
+    if (contentLocked) {
+      setOcrImageFile(null);
+      setOcrImageInputKey((previous) => previous + 1);
+      setOcrFlowState("failure");
+      setOcrStatusMessage("Note content is locked after generating a Study Pack. Make a copy to change the note itself.");
+      showToast("Note content is locked after generating a Study Pack. Make a copy to change the note itself.", "info");
+      return;
+    }
+
     if (!file) {
       setOcrImageFile(null);
       setOcrFlowState("idle");
@@ -416,9 +429,16 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       setOcrStatusMessage(message);
       showToast(message, "error");
     }
-  }, [appendExtractedTextToContent, showToast]);
+  }, [appendExtractedTextToContent, contentLocked, showToast]);
 
   const handleConfirmOcrText = useCallback(async () => {
+    if (contentLocked) {
+      setOcrFlowState("failure");
+      setOcrStatusMessage("Note content is locked after generating a Study Pack. Make a copy to change the note itself.");
+      showToast("Note content is locked after generating a Study Pack. Make a copy to change the note itself.", "info");
+      return;
+    }
+
     if (!ocrDraftId || isConfirmingOcrText || ocrConfirmedText.trim().length === 0) {
       return;
     }
@@ -468,7 +488,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     } finally {
       setIsConfirmingOcrText(false);
     }
-  }, [appendExtractedTextToContent, isConfirmingOcrText, ocrConfirmedText, ocrDraftId, showToast]);
+  }, [appendExtractedTextToContent, contentLocked, isConfirmingOcrText, ocrConfirmedText, ocrDraftId, showToast]);
 
   const pageTitle = isDetailPage ? "Note" : "New Note";
   const studyPackMessage = isDetailPage
@@ -540,6 +560,8 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         onConfirmOcrText={() => {
           void handleConfirmOcrText();
         }}
+        disableContentEditing={contentLocked}
+        contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."
       />
 
       <AiSuggestionModal

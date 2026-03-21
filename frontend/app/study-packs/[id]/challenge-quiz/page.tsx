@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -105,7 +105,12 @@ export default function ChallengeQuizPage() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams<{ id: string }>();
-  const searchParams = useSearchParams();
+  const progressRef = useRef<{ currentIndex: number; selectedChoices: Record<number, string> }>({
+    currentIndex: 0,
+    selectedChoices: {},
+  });
+  const leaveGuardInsertedRef = useRef(false);
+  const legacyRedirectTargetRef = useRef<string | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
@@ -244,12 +249,16 @@ export default function ChallengeQuizPage() {
       if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
         if (byStudyPack?.noteId) {
-          const nextQuery = searchParams.toString();
-          router.replace(
-            nextQuery
-              ? `/notes/${byStudyPack.noteId}/challenge-quiz?${nextQuery}`
-              : `/notes/${byStudyPack.noteId}/challenge-quiz`,
-          );
+          const nextQuery = typeof window === "undefined"
+            ? ""
+            : window.location.search.replace(/^\?/, "");
+          const targetHref = nextQuery
+            ? `/notes/${byStudyPack.noteId}/challenge-quiz?${nextQuery}`
+            : `/notes/${byStudyPack.noteId}/challenge-quiz`;
+          if (legacyRedirectTargetRef.current !== targetHref) {
+            legacyRedirectTargetRef.current = targetHref;
+            router.replace(targetHref);
+          }
           return;
         }
       }
@@ -259,7 +268,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, noteId, pathname, router, searchParams]);
+  }, [applyStartedSession, noteId, pathname, router]);
 
   useEffect(() => {
     void loadNote();
@@ -270,6 +279,13 @@ export default function ChallengeQuizPage() {
   const answeredCount = useMemo(() => Object.keys(selectedChoices).length, [selectedChoices]);
   const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
   const selectedChoice = selectedChoices[currentIndex] ?? null;
+
+  useEffect(() => {
+    progressRef.current = {
+      currentIndex,
+      selectedChoices,
+    };
+  }, [currentIndex, selectedChoices]);
 
   const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
     if (!challengeSession?.sessionId || submitting) {
@@ -324,11 +340,17 @@ export default function ChallengeQuizPage() {
 
   useEffect(() => {
     if (phase !== "running") {
+      leaveGuardInsertedRef.current = false;
       return;
     }
 
+    const persistLatestProgress = (keepalive = false) => {
+      const latest = progressRef.current;
+      persistProgress(latest.currentIndex, latest.selectedChoices, keepalive);
+    };
+
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      persistProgress(currentIndex, selectedChoices, true);
+      persistLatestProgress(true);
       event.preventDefault();
       event.returnValue = LEAVE_WARNING_MESSAGE;
       return LEAVE_WARNING_MESSAGE;
@@ -340,16 +362,20 @@ export default function ChallengeQuizPage() {
         window.history.pushState(null, "", window.location.href);
         return;
       }
-      persistProgress(currentIndex, selectedChoices, true);
+      leaveGuardInsertedRef.current = false;
+      persistLatestProgress(true);
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        persistProgress(currentIndex, selectedChoices, true);
+        persistLatestProgress(true);
       }
     };
 
-    window.history.pushState(null, "", window.location.href);
+    if (!leaveGuardInsertedRef.current) {
+      window.history.pushState(null, "", window.location.href);
+      leaveGuardInsertedRef.current = true;
+    }
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("popstate", handlePopState);
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -359,7 +385,7 @@ export default function ChallengeQuizPage() {
       window.removeEventListener("popstate", handlePopState);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [currentIndex, persistProgress, phase, selectedChoices]);
+  }, [persistProgress, phase]);
 
   const handleStartChallenge = useCallback(async () => {
     if (!note || starting) {

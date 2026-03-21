@@ -47,6 +47,11 @@ public class NoteService {
         entity.setStatus(NoteStatus.DRAFT);
         entity.setVisibility(NoteVisibility.PRIVATE);
         entity.setSourceNoteId(null);
+        entity.setCopiedFromNoteId(null);
+        entity.setCopiedFromUserId(null);
+        entity.setCopiedFromTitle(null);
+        entity.setCopiedFromPublic(Boolean.FALSE);
+        entity.setCopiedAt(null);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
@@ -63,18 +68,24 @@ public class NoteService {
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
 
-        if (resolveStatus(entity) == NoteStatus.GENERATED) {
-            throw new AppException(
-                    "NOTE_LOCKED",
-                    "This note is locked because it already has a Study Pack. Make a copy to edit.",
-                    HttpStatus.CONFLICT
-            );
+        String normalizedRequestedContent = normalizeRequiredContent(request.content());
+        NoteStatus currentStatus = resolveStatus(entity);
+        if (currentStatus == NoteStatus.GENERATED) {
+            String currentContent = entity.getContent() == null ? "" : entity.getContent().trim();
+            if (!currentContent.equals(normalizedRequestedContent)) {
+                throw new AppException(
+                        "NOTE_CONTENT_LOCKED",
+                        "Note content is locked after generating a Study Pack. Make a copy to change the note itself.",
+                        HttpStatus.CONFLICT
+                );
+            }
+        } else {
+            entity.setContent(normalizedRequestedContent);
         }
 
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(normalizeOptionalText(request.subject()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
-        entity.setContent(normalizeRequiredContent(request.content()));
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
@@ -133,6 +144,19 @@ public class NoteService {
         copy.setStatus(NoteStatus.DRAFT);
         copy.setVisibility(NoteVisibility.PRIVATE);
         copy.setSourceNoteId(source.getId());
+        if (isOwner) {
+            copy.setCopiedFromNoteId(null);
+            copy.setCopiedFromUserId(null);
+            copy.setCopiedFromTitle(null);
+            copy.setCopiedFromPublic(Boolean.FALSE);
+            copy.setCopiedAt(null);
+        } else {
+            copy.setCopiedFromNoteId(source.getId());
+            copy.setCopiedFromUserId(source.getOwnerUserId());
+            copy.setCopiedFromTitle(source.getTitle());
+            copy.setCopiedFromPublic(Boolean.TRUE);
+            copy.setCopiedAt(OffsetDateTime.now());
+        }
         copy.setCreatedAt(OffsetDateTime.now());
         copy.setUpdatedAt(OffsetDateTime.now());
 
@@ -277,6 +301,11 @@ public class NoteService {
                 resolveVisibility(entity).name(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
+                entity.getCopiedFromNoteId() == null ? null : entity.getCopiedFromNoteId().toString(),
+                entity.getCopiedFromUserId() == null ? null : entity.getCopiedFromUserId().toString(),
+                entity.getCopiedFromTitle(),
+                Boolean.TRUE.equals(entity.getCopiedFromPublic()),
+                entity.getCopiedAt(),
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(entity, studyPack),
                 studyPack == null ? null : studyPack.getSummary(),

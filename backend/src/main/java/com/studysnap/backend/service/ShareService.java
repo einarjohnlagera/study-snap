@@ -24,9 +24,7 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -36,8 +34,6 @@ public class ShareService {
     private static final int SHARE_TOKEN_BYTES = 18;
     private static final int MAX_TOKEN_GENERATION_ATTEMPTS = 10;
     private static final SecureRandom TOKEN_RANDOM = new SecureRandom();
-    private static final String COPY_SUFFIX = " (Copy)";
-    private static final String COPY_NUMBERED_TEMPLATE = " (Copy %d)";
 
     private final ShareLinkRepository shareLinkRepository;
     private final StudyPackRepository studyPackRepository;
@@ -81,7 +77,7 @@ public class ShareService {
 
     public ShareRemixResponse remixSharedStudyPack(String token, UUID ownerUserId) {
         StudyPackEntity source = resolveSharedStudyPack(token);
-        String remixedTitle = resolveRemixedTitle(ownerUserId, source.getTitle());
+        String remixedTitle = source.getTitle();
         NoteEntity remixedNote = createRemixedNote(source, remixedTitle, ownerUserId);
         StudyPackEntity remixed = new StudyPackEntity();
         remixed.setId(UUID.randomUUID());
@@ -129,34 +125,22 @@ public class ShareService {
         note.setStatus(NoteStatus.GENERATED);
         note.setVisibility(NoteVisibility.PRIVATE);
         note.setSourceNoteId(source.getNoteId());
+        if (ownerUserId.equals(source.getOwnerUserId())) {
+            note.setCopiedFromNoteId(null);
+            note.setCopiedFromUserId(null);
+            note.setCopiedFromTitle(null);
+            note.setCopiedFromPublic(Boolean.FALSE);
+            note.setCopiedAt(null);
+        } else {
+            note.setCopiedFromNoteId(source.getNoteId());
+            note.setCopiedFromUserId(source.getOwnerUserId());
+            note.setCopiedFromTitle(source.getTitle());
+            note.setCopiedFromPublic(Boolean.TRUE);
+            note.setCopiedAt(OffsetDateTime.now());
+        }
         note.setCreatedAt(OffsetDateTime.now());
         note.setUpdatedAt(OffsetDateTime.now());
         return noteRepository.save(note);
-    }
-
-    private String resolveRemixedTitle(UUID ownerUserId, String baseTitle) {
-        List<String> matchingTitles = studyPackRepository.findOwnedTitlesForCopyConflict(
-                ownerUserId,
-                baseTitle,
-                baseTitle + " (Copy%"
-        );
-        Set<String> existingTitles = new HashSet<>(matchingTitles);
-        if (!existingTitles.contains(baseTitle)) {
-            return baseTitle;
-        }
-
-        String firstCopyTitle = baseTitle + COPY_SUFFIX;
-        if (!existingTitles.contains(firstCopyTitle)) {
-            return firstCopyTitle;
-        }
-
-        int copyNumber = 2;
-        String candidateTitle = baseTitle + String.format(COPY_NUMBERED_TEMPLATE, copyNumber);
-        while (existingTitles.contains(candidateTitle)) {
-            copyNumber++;
-            candidateTitle = baseTitle + String.format(COPY_NUMBERED_TEMPLATE, copyNumber);
-        }
-        return candidateTitle;
     }
 
     private StudyPackEntity resolveSharedStudyPack(String token) {
