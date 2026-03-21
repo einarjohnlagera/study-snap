@@ -1,19 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
-import { getAuthUser } from "@/lib/auth";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   copyNote,
   createStudyPackFromNote,
-  createStudyPackShareLink,
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
@@ -34,22 +30,32 @@ function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
   return "border-border bg-muted/50 text-foreground/70";
 }
 
+function visibilityChip(visibility: NoteVisibility) {
+  if (visibility === "PUBLIC") {
+    return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  }
+  return "border-border bg-muted/50 text-foreground/70";
+}
+
 export default function NoteDetailPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
+  const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [copying, setCopying] = useState(false);
   const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
+  const [showMakePublicConfirm, setShowMakePublicConfirm] = useState(false);
+  const [showLockedEditModal, setShowLockedEditModal] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -59,16 +65,6 @@ export default function NoteDetailPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
-
-  useEffect(() => {
-    const syncPlan = () => {
-      const authUser = getAuthUser();
-      setIsPremiumUser(authUser?.planType === "PREMIUM");
-    };
-    syncPlan();
-    window.addEventListener("studysnap-auth-change", syncPlan);
-    return () => window.removeEventListener("studysnap-auth-change", syncPlan);
-  }, []);
 
   const loadDetail = useCallback(async () => {
     if (!routeId) {
@@ -140,6 +136,22 @@ export default function NoteDetailPage() {
   }, [toast]);
 
   useEffect(() => {
+    if (!visibilityMenuOpen) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (!visibilityMenuRef.current) {
+        return;
+      }
+      if (!visibilityMenuRef.current.contains(event.target as Node)) {
+        setVisibilityMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, [visibilityMenuOpen]);
+
+  useEffect(() => {
     const created = searchParams.get("created") === "1";
     const copied = searchParams.get("copied") === "1";
     const saved = searchParams.get("saved") === "1";
@@ -187,14 +199,14 @@ export default function NoteDetailPage() {
     }
   };
 
-  const handleCopy = async () => {
+  const handleCopyAndEdit = async () => {
     if (!note || copying) {
       return;
     }
     setCopying(true);
     try {
       const copied = await copyNote(note.id);
-      router.push(`/study-packs/${copied.id}?from=library&copied=1`);
+      router.push(`/notes/${copied.id}?from=library&copied=1`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not copy note.";
       setError(message);
@@ -203,12 +215,12 @@ export default function NoteDetailPage() {
     }
   };
 
-  const handleToggleVisibility = async () => {
-    if (!note || togglingVisibility) {
+  const performVisibilityUpdate = async (nextVisibility: NoteVisibility) => {
+    if (!note || togglingVisibility || visibility === nextVisibility) {
       return;
     }
     setTogglingVisibility(true);
-    const nextVisibility: NoteVisibility = isPublic ? "PRIVATE" : "PUBLIC";
+    setVisibilityMenuOpen(false);
     try {
       const updated = await updateNoteVisibility(note.id, nextVisibility);
       setNote(updated);
@@ -219,6 +231,30 @@ export default function NoteDetailPage() {
     } finally {
       setTogglingVisibility(false);
     }
+  };
+
+  const handleSelectVisibility = (nextVisibility: NoteVisibility) => {
+    if (nextVisibility === visibility || togglingVisibility) {
+      setVisibilityMenuOpen(false);
+      return;
+    }
+    if (nextVisibility === "PUBLIC") {
+      setVisibilityMenuOpen(false);
+      setShowMakePublicConfirm(true);
+      return;
+    }
+    void performVisibilityUpdate("PRIVATE");
+  };
+
+  const handleEdit = () => {
+    if (!note) {
+      return;
+    }
+    if (isDraft) {
+      router.push(`/notes/${note.id}`);
+      return;
+    }
+    setShowLockedEditModal(true);
   };
 
   const handleStartQuickReview = async () => {
@@ -232,16 +268,17 @@ export default function NoteDetailPage() {
   };
 
   const handleCopyLink = async () => {
-    if (!linkedStudyPackId || sharing) {
+    if (!note || sharing) {
       return;
     }
     setSharing(true);
     setShareError(null);
     try {
-      const share = await createStudyPackShareLink(linkedStudyPackId);
-      const shareUrl = share.shareUrl.startsWith("http")
-        ? share.shareUrl
-        : new URL(share.shareUrl, window.location.origin).toString();
+      if (!isPublic) {
+        setShareError("Make this note public to share it.");
+        return;
+      }
+      const shareUrl = new URL(`/notes/public/${note.id}`, window.location.origin).toString();
       await navigator.clipboard.writeText(shareUrl);
       setToast("Share link copied");
     } catch (err) {
@@ -267,13 +304,51 @@ export default function NoteDetailPage() {
       ) : note ? (
         <div className="space-y-6">
           <Card className="space-y-4 p-4 sm:p-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Note</span>
-              <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(isDraft ? "DRAFT" : "STUDY_PACK_READY")}`}>
-                {isDraft ? "Draft" : "Study Pack Ready"}
-              </span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-3">
+                <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(isDraft ? "DRAFT" : "STUDY_PACK_READY")}`}>
+                    {isDraft ? "📝 Draft" : "✨ Study Pack"}
+                  </span>
+                  <div className="relative" ref={visibilityMenuRef}>
+                    <button
+                      type="button"
+                      className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${visibilityChip(visibility)}`}
+                      onClick={() => setVisibilityMenuOpen((open) => !open)}
+                      aria-haspopup="menu"
+                      aria-expanded={visibilityMenuOpen}
+                      disabled={togglingVisibility}
+                    >
+                      {visibility === "PUBLIC" ? "🌍 Public ▼" : "🔒 Private ▼"}
+                    </button>
+                    {visibilityMenuOpen ? (
+                      <div className="absolute left-0 top-8 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
+                        <button
+                          type="button"
+                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          onClick={() => handleSelectVisibility("PRIVATE")}
+                        >
+                          <p className="text-sm font-medium">🔒 Private</p>
+                          <p className="text-xs text-foreground/70">Only visible in My Library</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          onClick={() => handleSelectVisibility("PUBLIC")}
+                        >
+                          <p className="text-sm font-medium">🌍 Public</p>
+                          <p className="text-xs text-foreground/70">Visible in Public Library</p>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={handleEdit}>
+                Edit
+              </Button>
             </div>
-            <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
             <p className="text-sm text-foreground/75">{subject}</p>
             <div className="flex flex-wrap gap-2">
               {tags.length > 0 ? tags.map((tag, index) => (
@@ -282,55 +357,31 @@ export default function NoteDetailPage() {
                 <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">No tags</span>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => void handleCopy()} disabled={copying}>
-                {copying ? "Copying..." : "Make a Copy"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => void handleToggleVisibility()} disabled={togglingVisibility}>
-                {togglingVisibility ? "Updating..." : isPublic ? "Make Private" : "Make Public"}
-              </Button>
-              {isDraft ? (
-                <Button type="button" onClick={() => void handleGenerate()} disabled={generating}>
-                  {generating ? "Generating..." : "Generate Study Pack (1 credit)"}
+            {isDraft ? (
+              <p className="text-xs text-foreground/70">
+                Generating locks this note to preserve its Study Pack. Need changes later? Use Copy and Edit.
+              </p>
+            ) : null}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                {isDraft ? (
+                  <Button type="button" onClick={() => void handleGenerate()} disabled={generating}>
+                    {generating ? "Generating..." : "Generate Study Pack"}
+                  </Button>
+                ) : (
+                  <Button type="button" onClick={() => void handleStartQuickReview()}>
+                    Start Quick Review
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="button" variant="outline" onClick={() => void handleCopyAndEdit()} disabled={copying}>
+                  {copying ? "Copying..." : "Copy and Edit"}
                 </Button>
-              ) : (
-                <>
-                  <Button type="button" onClick={() => void handleStartQuickReview()}>Start Quick Review</Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      if (!linkedStudyPackId) return;
-                      if (!isPremiumUser) {
-                        router.push(PLAN_BILLING_PATH);
-                        return;
-                      }
-                      router.push(`/study-packs/${linkedStudyPackId}/challenge-quiz`);
-                    }}
-                  >
-                    {!isPremiumUser ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
-                    Challenge Quiz
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      if (!linkedStudyPackId) return;
-                      if (!isPremiumUser) {
-                        router.push(PLAN_BILLING_PATH);
-                        return;
-                      }
-                      router.push(`/study-packs/${linkedStudyPackId}/adaptive-practice`);
-                    }}
-                  >
-                    {!isPremiumUser ? <Lock className="h-4 w-4" aria-hidden="true" /> : null}
-                    Adaptive Practice
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => void handleCopyLink()} disabled={sharing}>
-                    {sharing ? "Copying..." : "Copy Link"}
-                  </Button>
-                </>
-              )}
+                <Button type="button" variant="outline" onClick={() => void handleCopyLink()} disabled={sharing}>
+                  {sharing ? "Sharing..." : "Share"}
+                </Button>
+              </div>
             </div>
             {shareError ? <p className="text-xs text-red-600 dark:text-red-400">{shareError}</p> : null}
           </Card>
@@ -396,6 +447,65 @@ export default function NoteDetailPage() {
       {toast ? (
         <div role="status" aria-live="polite" className="fixed right-4 bottom-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
           {toast}
+        </div>
+      ) : null}
+
+      {showMakePublicConfirm ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+          <Card className="w-full max-w-md space-y-4 p-5">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold">Make this note public?</h2>
+              <p className="text-sm text-foreground/75">
+                This will make your note visible in the Public Library. Other students will be able to view and copy this note.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowMakePublicConfirm(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setShowMakePublicConfirm(false);
+                  void performVisibilityUpdate("PUBLIC");
+                }}
+                disabled={togglingVisibility}
+              >
+                {togglingVisibility ? "Updating..." : "Make Public"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {showLockedEditModal ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+          <Card className="w-full max-w-md space-y-4 p-5">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold">This note is locked</h2>
+              <p className="text-sm text-foreground/75">
+                This note already has a Study Pack. To preserve your summary, concepts, and quizzes, editing is disabled.
+              </p>
+              <p className="text-sm text-foreground/75">
+                If you want to make changes, create a copy of this note and generate a new Study Pack.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowLockedEditModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setShowLockedEditModal(false);
+                  void handleCopyAndEdit();
+                }}
+                disabled={copying}
+              >
+                {copying ? "Copying..." : "Copy and Edit"}
+              </Button>
+            </div>
+          </Card>
         </div>
       ) : null}
     </main>
