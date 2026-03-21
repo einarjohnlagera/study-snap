@@ -344,7 +344,7 @@ export default function Home() {
               <li>Key concepts</li>
               <li>Quick Review</li>
               <li>Retry incorrect answers</li>
-              <li>Study Library</li>
+              <li>My Library</li>
               <li>Today&apos;s Focus</li>
               <li>AI Study Coach</li>
             </ul>

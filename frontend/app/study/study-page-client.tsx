@@ -99,7 +99,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     <main className="mx-auto w-full max-w-3xl space-y-8 px-4 py-6 sm:px-6 sm:py-10">
       <section className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-foreground sm:text-3xl md:text-4xl">Create Note</h1>
+          <h1 className="text-2xl font-semibold text-foreground sm:text-3xl md:text-4xl">New Note</h1>
           {demoMode ? (
             <span className="inline-flex items-center rounded-full border border-blue-500/40 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
               Demo mode

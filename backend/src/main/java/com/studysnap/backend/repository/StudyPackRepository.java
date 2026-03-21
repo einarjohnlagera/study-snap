@@ -32,6 +32,7 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     );
     Optional<StudyPackEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     Optional<StudyPackEntity> findByOwnerUserIdAndNoteId(UUID ownerUserId, UUID noteId);
+    Optional<StudyPackEntity> findByNoteId(UUID noteId);
     @Query("""
             select s
             from StudyPackEntity s
@@ -42,6 +43,7 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
             @Param("ownerUserId") UUID ownerUserId,
             @Param("noteIds") Collection<UUID> noteIds
     );
+    List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from StudyPackEntity s where s.id = :id and s.ownerUserId = :ownerUserId")
     Optional<StudyPackEntity> findByIdAndOwnerUserIdForUpdate(UUID id, UUID ownerUserId);

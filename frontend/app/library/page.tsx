@@ -283,7 +283,7 @@ export default function LibraryPage() {
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <PageHeader
         eyebrow="LIBRARY"
-        title="My Notes"
+        title="My Library"
         description="Browse and revisit all of your saved notes."
       />
 
@@ -305,7 +305,7 @@ export default function LibraryPage() {
           </p>
           <Link href="/study" className="w-full sm:w-auto">
             <Button type="button" className="w-full sm:w-auto">
-              Create Note
+              New Note
             </Button>
           </Link>
         </Card>

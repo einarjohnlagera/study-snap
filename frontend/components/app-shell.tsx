@@ -26,17 +26,21 @@ type ShellUser = {
 function isAuthenticatedRoute(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
-    || pathname.startsWith("/notes")
     || pathname.startsWith("/library")
     || pathname.startsWith("/profile")
     || pathname.startsWith("/settings")
     || pathname === "/study"
     || pathname.startsWith("/study/")
     || pathname.startsWith("/study-packs")
+    || pathname === "/notes/new"
+    || (pathname.startsWith("/notes/") && !pathname.startsWith("/notes/public/"))
   );
 }
 
 function shouldUseAuthenticatedShell(pathname: string, hasAuthUser: boolean): boolean {
+  if (pathname === "/notes" || pathname.startsWith("/notes/public/")) {
+    return hasAuthUser;
+  }
   if (pathname.startsWith("/p/")) {
     return hasAuthUser;
   }
@@ -54,7 +58,10 @@ function getPageTitle(pathname: string): string {
     return "Dashboard";
   }
   if (pathname.startsWith("/library")) {
-    return "My Notes";
+    return "My Library";
+  }
+  if (pathname.startsWith("/notes/public/")) {
+    return "Public Note";
   }
   if (pathname === "/notes/new") {
     return "New Note";
@@ -63,7 +70,7 @@ function getPageTitle(pathname: string): string {
     return "Note";
   }
   if (pathname.startsWith("/notes")) {
-    return "Notes";
+    return "Public Library";
   }
   if (pathname.startsWith("/profile")) {
     return "Profile";
@@ -75,7 +82,7 @@ function getPageTitle(pathname: string): string {
     return "Demo";
   }
   if (pathname === "/study" || pathname.startsWith("/study/")) {
-    return "Create Note";
+    return "New Note";
   }
   if (pathname.includes("/quick-review")) {
     return "Quick Review";
@@ -99,8 +106,8 @@ type NavLinkItem = {
 
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/notes", label: "Notes" },
-  { href: "/library", label: "My Notes" },
+  { href: "/library", label: "My Library" },
+  { href: "/notes", label: "Public Library" },
 ];
 
 const SECONDARY_NAV: NavLinkItem[] = [

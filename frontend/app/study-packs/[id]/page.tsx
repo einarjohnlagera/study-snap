@@ -11,15 +11,17 @@ import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
-  cloneNote,
+  copyNote,
   createStudyPackFromNote,
   createStudyPackShareLink,
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
+  updateNoteVisibility,
   getQuickReviewPerformanceSummary,
   startQuickReviewSession,
   type ChallengeQuizPerformanceSummaryResponse,
+  type NoteVisibility,
   type NoteResponse,
   type QuickReviewPerformanceSummaryResponse,
   type StudyPackResponse,
@@ -45,7 +47,8 @@ export default function NoteDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [cloning, setCloning] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -138,21 +141,21 @@ export default function NoteDetailPage() {
 
   useEffect(() => {
     const created = searchParams.get("created") === "1";
-    const cloned = searchParams.get("cloned") === "1";
+    const copied = searchParams.get("copied") === "1";
     const saved = searchParams.get("saved") === "1";
-    if (!created && !cloned && !saved) {
+    if (!created && !copied && !saved) {
       return;
     }
     if (created) {
       setToast("Study Pack generated successfully.");
-    } else if (cloned) {
-      setToast("Note cloned. You can edit and generate a new Study Pack.");
+    } else if (copied) {
+      setToast("Copied to My Library");
     } else {
       setToast("Note saved.");
     }
     const next = new URLSearchParams(searchParams.toString());
     next.delete("created");
-    next.delete("cloned");
+    next.delete("copied");
     next.delete("saved");
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname);
   }, [pathname, router, searchParams]);
@@ -162,6 +165,8 @@ export default function NoteDetailPage() {
   const title = note?.title?.trim() || studyPack?.title || "Untitled note";
   const subject = note?.subject?.trim() || studyPack?.subject?.trim() || "No subject";
   const tags = note?.tags ?? [];
+  const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
+  const isPublic = visibility === "PUBLIC";
 
   const handleGenerate = async () => {
     if (!note || generating || !isDraft) {
@@ -182,19 +187,37 @@ export default function NoteDetailPage() {
     }
   };
 
-  const handleClone = async () => {
-    if (!note || cloning) {
+  const handleCopy = async () => {
+    if (!note || copying) {
       return;
     }
-    setCloning(true);
+    setCopying(true);
     try {
-      const cloned = await cloneNote(note.id);
-      router.push(`/study-packs/${cloned.id}?from=library&cloned=1`);
+      const copied = await copyNote(note.id);
+      router.push(`/study-packs/${copied.id}?from=library&copied=1`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not clone note.";
+      const message = err instanceof Error ? err.message : "Could not copy note.";
       setError(message);
     } finally {
-      setCloning(false);
+      setCopying(false);
+    }
+  };
+
+  const handleToggleVisibility = async () => {
+    if (!note || togglingVisibility) {
+      return;
+    }
+    setTogglingVisibility(true);
+    const nextVisibility: NoteVisibility = isPublic ? "PRIVATE" : "PUBLIC";
+    try {
+      const updated = await updateNoteVisibility(note.id, nextVisibility);
+      setNote(updated);
+      setToast(nextVisibility === "PUBLIC" ? "Note is now public." : "Note is now private.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update note visibility.";
+      setError(message);
+    } finally {
+      setTogglingVisibility(false);
     }
   };
 
@@ -231,7 +254,7 @@ export default function NoteDetailPage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">Back to My Notes</Link>
+      <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">Back to My Library</Link>
 
       {loading ? (
         <Card className="p-6">Loading note...</Card>
@@ -260,8 +283,11 @@ export default function NoteDetailPage() {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => void handleClone()} disabled={cloning}>
-                {cloning ? "Cloning..." : "Clone Note"}
+              <Button type="button" variant="outline" onClick={() => void handleCopy()} disabled={copying}>
+                {copying ? "Copying..." : "Make a Copy"}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => void handleToggleVisibility()} disabled={togglingVisibility}>
+                {togglingVisibility ? "Updating..." : isPublic ? "Make Private" : "Make Public"}
               </Button>
               {isDraft ? (
                 <Button type="button" onClick={() => void handleGenerate()} disabled={generating}>

@@ -9,6 +9,7 @@ public record NoteResponse(
         String subject,
         List<String> tags,
         String content,
+        String visibility,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         String studyPackId,

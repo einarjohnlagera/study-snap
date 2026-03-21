@@ -241,7 +241,7 @@ export function NoteEditorForm({
           {studyPackMessage ?? "This note doesn't have a Study Pack yet."}
         </p>
         <p className="text-xs text-foreground/60">
-          Generate when you&apos;re ready. To create a new version later, clone the note first.
+          Generate when you&apos;re ready. To create a new version later, make a copy first.
         </p>
       </Card>
     </main>

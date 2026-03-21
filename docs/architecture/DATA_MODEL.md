@@ -27,7 +27,7 @@ Recommended fields:
 - `content` (text, required)
 - `tags` (text[] or json array, default empty)
 - `state` (`DRAFT` | `STUDY_PACK_READY`)
-- `source_note_id` (nullable, for clone lineage)
+- `visibility` (`PRIVATE` | `PUBLIC`)
 - `created_at`
 - `updated_at`
 
@@ -51,27 +51,23 @@ State transition:
 
 - generating validated output sets Note state from `DRAFT` to `STUDY_PACK_READY`
 
-## Clone-Based Versioning
+## Copy-Based Versioning
 
-Clone creates a new Note row.
+Copy creates a new Note row.
 
-Clone copies:
+Copy includes:
 
 - `title`
 - `subject`
 - `tags`
 - `content`
 
-Clone does not copy:
+Copy does not include:
 
 - generated summary/key concepts/quiz
 - review sessions and performance history
+- quiz sessions
 - share links
-
-Recommended lineage fields:
-
-- `source_note_id` (points to original note)
-- optional `clone_depth` (computed or stored if needed later)
 
 ## Users
 
@@ -242,6 +238,7 @@ Suggested migration direction:
 1. keep legacy tables functioning
 2. introduce/confirm `notes` as primary owned entity
 3. map generated output to Note lifecycle (`DRAFT` -> `STUDY_PACK_READY`)
-4. add clone endpoint + clone lineage fields
-5. shift feature code to Note-centric ownership checks
-6. keep legacy naming compatibility where required by existing schema
+4. add visibility field and public-note query surface
+5. add copy endpoint for versioning behavior
+6. shift feature code to Note-centric ownership checks
+7. keep legacy naming compatibility where required by existing schema

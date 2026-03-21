@@ -135,7 +135,7 @@ export default function PublicSharePage() {
             <div className="space-y-2">
               {isAuthenticated ? (
                 <Button type="button" className="w-full sm:w-auto" onClick={() => void handleCopyToLibrary()} disabled={remixing}>
-                  {remixing ? "Copying..." : "Copy to my Study Library"}
+                  {remixing ? "Copying..." : "Copy to My Library"}
                 </Button>
               ) : (
                 <Link href="/auth" className="w-full sm:w-auto">

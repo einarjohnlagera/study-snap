@@ -20,6 +20,7 @@ Note states:
 
 - `Draft` (no AI-generated content yet)
 - `Study Pack Ready` (AI-generated content exists)
+- visibility: `PRIVATE` or `PUBLIC`
 
 Generated Study Pack outputs include:
 
@@ -32,24 +33,25 @@ Generated Study Pack outputs include:
 - Challenge Quiz
 - Adaptive Practice
 
-## Versioning Model (Clone Instead of Regenerate)
+## Versioning Model (Copy)
 
 NoteLib does not overwrite existing generated content.
 
-Instead of regenerating from the same Note, users clone a Note, edit the clone, and generate a new Study Pack from the cloned Note.
+Users make a copy of a Note, edit that copy, and generate a new Study Pack from the copied Note.
 
-Clone behavior:
+Copy behavior:
 
-- Clone copies user-authored fields:
+- Copy includes user-authored fields:
   - title
   - subject
   - tags
   - note content
-- Clone does not copy AI/generated history fields:
+- Copy does not include AI/generated history fields:
   - summary
   - key concepts
   - quizzes
   - performance history
+  - quiz sessions
 
 This supports iterative learning and avoids accidental overwrites.
 
@@ -60,22 +62,25 @@ This supports iterative learning and avoids accidental overwrites.
 3. User clicks `Generate Study Pack`.
 4. AI generates summary, key concepts, and quizzes.
 5. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice.
-6. If the user wants to improve the note, they clone the note, edit it, and generate a new Study Pack from the clone.
+6. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
+7. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
+8. Public notes can be copied into My Library as new Draft notes.
 
 ## Architecture Overview
 
 High-level model:
 
 - `notes` table stores user-authored fields (`title`, `subject`, `content`, `tags`).
+- `notes.visibility` controls whether notes are private or listed in Public Library.
 - Generated fields are stored and linked to the same Note (`summary`, `key concepts`, `quizzes`).
 - Quiz sessions and performance are linked to the Note.
-- Clone creates a new Note row with copied user-authored fields only.
+- Copy creates a new Draft Note row with copied user-authored fields only.
 
 ## Product Philosophy
 
 Learning loop:
 
-Capture -> Generate -> Review -> Improve -> Clone -> Repeat
+Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 
 NoteLib is designed to help users iteratively improve understanding, not just generate summaries once.
 
@@ -111,22 +116,33 @@ CTA behavior:
   - `code=EMAIL_VERIFICATION_REQUIRED`
   - `action=RESEND_VERIFICATION`
 
-### Study Library
+### My Library
 
-The Study Library is where users revisit generated content.
+My Library is where users manage and revisit their own notes (Draft and Study Pack Ready).
 
 Users can:
 
-- view saved Study Packs
-- search by title/tags
+- view their saved notes
+- search by title/tags/content preview
 - filter by subject (single select, `All subjects` default)
 - filter by tags (multi-select OR matching)
 - combine search + subject + tag filters (frontend-only on loaded items)
-- sort by recent/title
+- sort by recent/title/recently reviewed
 - open by clicking card/title
-- start Quick Review
-- delete Study Packs (Library only, explicit confirmation)
-- load paginated results (cursor-based, default `20`, explicit `Load More`)
+- start Quick Review for Study Pack Ready notes
+- manage note visibility (`Make Public` / `Make Private`)
+- make a copy (`Make a Copy`) to create a new Draft version
+
+### Public Library
+
+Public Library lists notes where `visibility=PUBLIC` and `owner != current user`.
+
+Users can:
+
+- browse public notes
+- filter by search, subject, and tags
+- open read-only public note detail
+- copy a public note into My Library (`Copy to My Library`)
 
 Dashboard guidance rules:
 
@@ -145,6 +161,15 @@ Dashboard guidance rules:
   - `{Title} (Copy)`
   - `{Title} (Copy 2)`, `{Title} (Copy 3)`, ...
 - Success feedback: `Study Pack copied to your library.`
+
+### Navigation
+
+Sidebar:
+
+- Dashboard
+- My Library
+- Public Library
+- Settings
 
 ### Quick Review
 

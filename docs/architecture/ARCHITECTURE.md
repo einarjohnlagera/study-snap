@@ -4,7 +4,7 @@ This document describes the NoteLib system architecture and how backend services
 
 Core workflow:
 
-Notes (Draft) -> Generate Study Pack -> Review (Quick/Challenge/Adaptive) -> Improve -> Clone Note -> Generate again
+Notes (Draft) -> Generate Study Pack -> Review (Quick/Challenge/Adaptive) -> Improve -> Make a Copy -> Generate again
 
 ## Goals (MVP)
 
@@ -30,8 +30,11 @@ Routes:
 
 - `/` landing
 - `/demo` demo walkthrough (no real generation)
-- `/study` create/edit notes and generate Study Pack
+- `/study` New Note flow (save and/or generate)
 - `/dashboard` guidance + library entry
+- `/library` My Library (owned notes)
+- `/notes` Public Library (public notes from other users)
+- `/notes/public/{id}` public read-only note detail
 - `/settings` plan/billing and account controls
 - `/p/{token}` public shared Study Pack
 
@@ -70,22 +73,25 @@ NoteLib uses a note-first model.
 - A Note can be:
   - `Draft` (user-authored content only)
   - `Study Pack Ready` (generated content exists)
+- A Note also has visibility:
+  - `PRIVATE`
+  - `PUBLIC`
 
 Versioning model:
 
 - Generation does not overwrite existing generated content.
-- Users create a new version by cloning a Note and generating from the clone.
-- Clone creates a new Note row with copied user-authored fields only:
+- Users create a new version by copying a Note and generating from the copy.
+- Copy creates a new Note row with copied user-authored fields only:
   - copied: `title`, `subject`, `tags`, `content`
-  - not copied: `summary`, `key concepts`, `quizzes`, performance history
+  - not copied: `summary`, `key concepts`, `quizzes`, performance history, quiz sessions
 
 ## High-Level Data Ownership
 
-- `notes` stores user-authored fields (`title`, `subject`, `content`, `tags`, ownership metadata, state)
+- `notes` stores user-authored fields (`title`, `subject`, `content`, `tags`, ownership metadata, state, visibility)
 - generated fields (`summary`, `key_concepts`, `quiz`) are linked to the same Note
 - review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context
 - share links reference generated Study Pack view data
-- clone creates a new Note identity and lineage reference (optional `source_note_id`)
+- copy creates a new Draft Note identity with user-authored fields only
 
 ## Backend Modules
 
@@ -97,8 +103,11 @@ Versioning model:
   - fetch generated Study Pack view
 - `NoteController` (current/future surface)
   - create/update note
-  - clone note
-  - list notes/library
+  - copy note
+  - update visibility (`PUBLIC`/`PRIVATE`)
+  - list My Library notes
+  - list Public Library notes
+  - get public note detail
 - `ShareController`
   - create share token
   - resolve shared content
@@ -111,7 +120,8 @@ Versioning model:
   - validate -> OCR (if image) -> normalize -> LLM -> validate output -> persist -> return
 - `NoteService`
   - note CRUD
-  - clone behavior
+  - copy behavior
+  - visibility behavior
   - state transitions (`Draft` -> `Study Pack Ready`)
 - `OcrService`
 - `LlmStudyPackService`
@@ -156,9 +166,12 @@ Generation:
 Notes:
 
 - `POST /api/notes` (create note draft)
-- `PATCH /api/notes/{id}` (update note content/metadata)
-- `POST /api/notes/{id}/clone` (clone note for new version)
-- `GET /api/notes` (library list; cursor pagination)
+- `PUT /api/notes/{id}` (update note content/metadata)
+- `POST /api/notes/{id}/copy` (make a copy)
+- `POST /api/notes/{id}/visibility` (set `PUBLIC` or `PRIVATE`)
+- `GET /api/notes` (My Library list)
+- `GET /api/notes/public` (Public Library list)
+- `GET /api/notes/public/{id}` (public read-only note detail)
 
 Study Pack access:
 
@@ -193,27 +206,28 @@ Auth and onboarding:
   - `code=EMAIL_VERIFICATION_REQUIRED`
   - `action=RESEND_VERIFICATION`
 
-## Study Library Architecture
+## Library Architecture
 
-Library is a retrieval and revisit surface for generated Note outputs.
+My Library is the owner workspace for Draft and Study Pack Ready notes.
+Public Library is the discovery surface for notes where `visibility=PUBLIC`.
 
 Required backend behavior:
 
-- list note-linked Study Packs with cursor pagination (`limit` default `20`)
-- return `items`, `nextCursor`, `hasMore`
-- support delete action (Library only with explicit confirmation in UI)
-- include metadata for scanning/filtering (`title`, `subject`, `tags`, summary preview, timestamps)
+- list owned notes for My Library
+- list public notes excluding owner notes for Public Library
+- include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
+- support public read-only note detail payload for copy flow
 
 Filtering model:
 
 - search + subject + tag filtering remains frontend-side for loaded items
 
-## Share and Remix Architecture
+## Share and Public-Copy Architecture
 
 - shared links use unguessable tokens
 - public page is read-only
 - shared payload omits private/raw input where not needed
-- remix/copy duplicates into current user library without LLM generation
+- copy duplicates into current user My Library without LLM generation
 - title collisions are auto-resolved with `(Copy)`, `(Copy 2)`, ...
 
 ## Quiz Architecture
