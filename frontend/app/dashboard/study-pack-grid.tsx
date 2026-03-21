@@ -30,8 +30,8 @@ function toFormattedDate(value: string | null | undefined) {
 
 export function StudyPackGrid({ notes, totalNotes, recentNoteMetaById }: StudyPackGridProps) {
   return (
-    <section className="space-y-4">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <section className="space-y-3 sm:space-y-4">
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold sm:text-xl">Recent Notes</h2>
         <p className="text-xs text-foreground/65">{totalNotes} saved</p>
       </div>
@@ -107,6 +107,12 @@ export function StudyPackGrid({ notes, totalNotes, recentNoteMetaById }: StudyPa
             </div>
           </Card>
         ))}
+      </div>
+
+      <div className="pt-0.5">
+        <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+          View All in Library &rarr;
+        </Link>
       </div>
     </section>
   );
