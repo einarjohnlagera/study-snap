@@ -50,8 +50,10 @@ public class QuickReviewAdaptivePracticeService {
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
+    private final AuthService authService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
+        authService.requireEmailVerified(userId);
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
                 studyPackIdRaw,
                 "STUDY_PACK_NOT_FOUND",

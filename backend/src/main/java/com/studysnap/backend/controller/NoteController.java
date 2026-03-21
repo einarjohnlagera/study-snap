@@ -169,6 +169,7 @@ public class NoteController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return quickReviewStudyTipService.generateStudyTip(studyPackId, userId, request);
     }
@@ -180,6 +181,7 @@ public class NoteController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return challengeQuizService.startSession(studyPackId, userId);
     }
@@ -225,6 +227,7 @@ public class NoteController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId);
     }
@@ -237,6 +240,9 @@ public class NoteController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
+        if ("PUBLIC".equalsIgnoreCase(request.visibility())) {
+            authService.requireEmailVerified(userId);
+        }
         return noteService.updateVisibility(id, request.visibility(), userId);
     }
 

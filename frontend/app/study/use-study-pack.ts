@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ApiRequestError,
   confirmStudyPackText,
   createStudyPackFromImage,
   createStudyPackFromText,
+  isEmailNotVerifiedError,
   isNeedsTextConfirmationResponse,
   type NeedsTextConfirmationResponse,
   type StudyPackResponse,
@@ -204,7 +204,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
       setErrorMessage(null);
-      showToast("Verify your email before generating a Study Pack.");
+      showToast("Email verification is required before generating Study Packs.");
       return null;
     }
     if (!authUser.profileType) {
@@ -253,9 +253,9 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       return response;
     } catch (error) {
       clearOcrStageTimer();
-      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+      if (isEmailNotVerifiedError(error)) {
         setErrorMessage(null);
-        showToast("Verify your email before generating a Study Pack.");
+        showToast("Email verification is required before generating Study Packs.");
         return null;
       }
       const message =
@@ -291,7 +291,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
       setErrorMessage(null);
-      showToast("Verify your email before generating a Study Pack.");
+      showToast("Email verification is required before generating Study Packs.");
       return null;
     }
     if (!authUser.profileType) {
@@ -314,9 +314,9 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       setOcrStatusMessage("Done. Your Study Pack was generated from your edited text.");
       return response;
     } catch (error) {
-      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+      if (isEmailNotVerifiedError(error)) {
         setErrorMessage(null);
-        showToast("Verify your email before generating a Study Pack.");
+        showToast("Email verification is required before generating Study Packs.");
         return null;
       }
       const message =

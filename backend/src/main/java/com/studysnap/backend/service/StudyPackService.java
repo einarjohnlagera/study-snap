@@ -22,6 +22,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
 import com.studysnap.backend.util.CreatedAtIdCursorUtils;
@@ -67,6 +68,7 @@ public class StudyPackService {
     private final ActivityTrackingService activityTrackingService;
     private final SubscriptionService subscriptionService;
     private final UserUsageService userUsageService;
+    private final OcrRateLimitService ocrRateLimitService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -103,7 +105,9 @@ public class StudyPackService {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
-        validateImage(image);
+        assertMonthlyOcrUploadQuotaAvailable(ownerUserId, planType);
+        ocrRateLimitService.assertAllowed(ownerUserId, planType);
+        validateImage(image, planType);
 
         OcrResult ocrResult = ocrService.extractText(image);
         String extractedText = mergeSubject(ocrResult.extractedText(), subject);
@@ -338,15 +342,24 @@ public class StudyPackService {
         );
     }
 
-    private void validateImage(MultipartFile image) {
+    private void validateImage(MultipartFile image, PlanType planType) {
         if (image == null || image.isEmpty()) {
             throw new AppException("INVALID_IMAGE", "Please upload an image to continue.", HttpStatus.BAD_REQUEST);
         }
+        if (properties.getOcr().getMaxPagesPerUpload() < 1) {
+            throw new AppException(
+                    "OCR_CONFIGURATION_ERROR",
+                    "OCR upload is temporarily unavailable. Please try again later.",
+                    HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
 
-        if (image.getSize() > properties.getSettings().getMaxImageBytes()) {
+        long maxImageBytes = resolveMaxImageBytes(planType);
+        if (image.getSize() > maxImageBytes) {
+            long maxSizeMb = Math.max(1, maxImageBytes / (1024 * 1024));
             throw new AppException(
                     "IMAGE_TOO_LARGE",
-                    "Image is too large. Please upload an image under 5MB.",
+                    "Image is too large. Please upload an image under " + maxSizeMb + "MB.",
                     HttpStatus.BAD_REQUEST
             );
         }
@@ -359,6 +372,54 @@ public class StudyPackService {
                     HttpStatus.BAD_REQUEST
             );
         }
+    }
+
+    private void assertMonthlyOcrUploadQuotaAvailable(UUID ownerUserId, PlanType planType) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
+
+        long usedFromImageStudyPacks = studyPackRepository
+                .countByOwnerUserIdAndInputTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        ownerUserId,
+                        InputType.IMAGE,
+                        monthStart,
+                        nextMonthStart
+                );
+        long usedFromPendingDrafts = studyPackDraftRepository
+                .countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                        ownerUserId,
+                        monthStart,
+                        nextMonthStart
+                );
+        long usedThisMonth = usedFromImageStudyPacks + usedFromPendingDrafts;
+        int monthlyLimit = resolveMonthlyOcrUploadLimit(planType);
+        if (usedThisMonth < monthlyLimit) {
+            return;
+        }
+
+        throw new AppException(
+                "MONTHLY_OCR_UPLOAD_LIMIT_REACHED",
+                "You've reached your monthly OCR upload limit.",
+                HttpStatus.FORBIDDEN
+        );
+    }
+
+    private int resolveMonthlyOcrUploadLimit(PlanType planType) {
+        int configuredLimit = planType == PlanType.PREMIUM
+                ? properties.getOcr().getPremiumMonthlyUploadLimit()
+                : properties.getOcr().getFreeMonthlyUploadLimit();
+        return Math.max(1, configuredLimit);
+    }
+
+    private long resolveMaxImageBytes(PlanType planType) {
+        long configured = planType == PlanType.PREMIUM
+                ? properties.getOcr().getPremiumMaxImageBytes()
+                : properties.getOcr().getFreeMaxImageBytes();
+        if (configured > 0) {
+            return configured;
+        }
+        return properties.getSettings().getMaxImageBytes();
     }
 
     private String normalizeAndValidateText(String raw) {

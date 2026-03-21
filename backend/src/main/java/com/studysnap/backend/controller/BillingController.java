@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.dto.BillingUsageSummaryResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
+import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingUsageService;
 import com.studysnap.backend.service.StripeBillingService;
 import lombok.RequiredArgsConstructor;
@@ -22,12 +23,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class BillingController {
     private final StripeBillingService stripeBillingService;
     private final BillingUsageService billingUsageService;
+    private final AuthService authService;
 
     @PostMapping("/checkout-session")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BillingCheckoutSessionResponse createCheckoutSession(
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
+        authService.requireEmailVerified(user.userId());
         return stripeBillingService.createPremiumCheckoutSession(user.userId());
     }
 

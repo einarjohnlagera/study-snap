@@ -14,7 +14,7 @@ import {
   listNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
-import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
+import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 
 type LibrarySortOption = "RECENTLY_UPDATED" | "RECENTLY_REVIEWED" | "TITLE";
 const LIBRARY_PAGE_SIZE = 20;
@@ -152,7 +152,7 @@ export default function LibraryPage() {
   }, []);
 
   const loadLibrary = useCallback(async () => {
-    if (!requireVerifiedOnboardedUser(router)) {
+    if (!requireAuthenticatedOnboardedUser(router)) {
       return;
     }
 

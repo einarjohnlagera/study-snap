@@ -1345,6 +1345,11 @@ export async function deleteNote(noteId: string): Promise<void> {
   }
 }
 
+export function isEmailNotVerifiedError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError
+    && (error.code === "EMAIL_NOT_VERIFIED" || error.code === "EMAIL_VERIFICATION_REQUIRED");
+}
+
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/visibility`,

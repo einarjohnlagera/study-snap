@@ -134,7 +134,7 @@ function VerifyEmailPageContent() {
     if (!authUser) {
       return "/login";
     }
-    return authUser.profileType ? "/dashboard" : "/onboarding";
+    return "/dashboard";
   }, [authUser]);
 
   const loginToVerifyHref = useMemo(
