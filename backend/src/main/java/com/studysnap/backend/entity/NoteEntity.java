@@ -52,6 +52,21 @@ public class NoteEntity {
     @Column(name = "source_note_id")
     private UUID sourceNoteId;
 
+    @Column(name = "copied_from_note_id")
+    private UUID copiedFromNoteId;
+
+    @Column(name = "copied_from_user_id")
+    private UUID copiedFromUserId;
+
+    @Column(name = "copied_from_title")
+    private String copiedFromTitle;
+
+    @Column(name = "copied_from_public")
+    private Boolean copiedFromPublic;
+
+    @Column(name = "copied_at")
+    private OffsetDateTime copiedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

@@ -56,7 +56,6 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
-  const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
@@ -68,9 +67,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
-  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [showMakePublicConfirm, setShowMakePublicConfirm] = useState(false);
-  const [showLockedEditModal, setShowLockedEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareFeedbackUrl, setShareFeedbackUrl] = useState<string | null>(null);
@@ -162,7 +159,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   }, [shareFeedbackUrl]);
 
   useEffect(() => {
-    if (!visibilityMenuOpen && !actionMenuOpen) {
+    if (!visibilityMenuOpen) {
       return;
     }
     const handleOutsideClick = (event: MouseEvent) => {
@@ -170,13 +167,10 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       if (visibilityMenuOpen && visibilityMenuRef.current && !visibilityMenuRef.current.contains(target)) {
         setVisibilityMenuOpen(false);
       }
-      if (actionMenuOpen && actionMenuRef.current && !actionMenuRef.current.contains(target)) {
-        setActionMenuOpen(false);
-      }
     };
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [actionMenuOpen, visibilityMenuOpen]);
+  }, [visibilityMenuOpen]);
 
   useEffect(() => {
     const created = searchParams.get("created") === "1";
@@ -206,6 +200,8 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
   const isPublic = visibility === "PUBLIC";
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
+  const hasCopyAttribution = Boolean(note?.copiedFromUserId && note?.copiedFromNoteId);
+  const copiedSourceTitle = note?.copiedFromTitle?.trim() || "Untitled note";
 
   const handleGenerate = async () => {
     if (!note || generating || !isDraft) {
@@ -239,7 +235,6 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     setCopying(true);
-    setActionMenuOpen(false);
     try {
       const copied = await copyNote(note.id);
       router.push(`/notes/${copied.id}?copied=1`);
@@ -299,11 +294,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     if (!note) {
       return;
     }
-    if (isDraft) {
-      router.push(`/notes/${note.id}/edit`);
-      return;
-    }
-    setShowLockedEditModal(true);
+    router.push(`/notes/${note.id}/edit`);
   };
 
   const handleStartQuickReview = async () => {
@@ -409,6 +400,22 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-3">
                 <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
+                {hasCopyAttribution ? (
+                  <p className="text-xs text-foreground/70">
+                    Source: Public Library - {copiedSourceTitle}
+                    {note?.copiedFromPublic && note.copiedFromNoteId ? (
+                      <>
+                        {" "}
+                        <Link
+                          href={`/public/notes/${note.copiedFromNoteId}`}
+                          className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                          View Original
+                        </Link>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(isDraft ? "DRAFT" : "STUDY_PACK_READY")}`}>
                     {isDraft ? "📝 Draft" : "✨ Study Pack"}
@@ -451,33 +458,16 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                 <Button type="button" variant="outline" size="sm" onClick={handleEdit}>
                   Edit
                 </Button>
-                <div className="relative" ref={actionMenuRef}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActionMenuOpen((open) => !open)}
-                    aria-haspopup="menu"
-                    aria-expanded={actionMenuOpen}
-                  >
-                    More
-                  </Button>
-                  {actionMenuOpen ? (
-                    <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">
-                      <button
-                        type="button"
-                        className="w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                        onClick={() => {
-                          setActionMenuOpen(false);
-                          setShowDeleteConfirm(true);
-                        }}
-                        disabled={deleting}
-                      >
-                        Delete note
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleting}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
             <p className="text-sm text-foreground/75">{subject}</p>
@@ -621,37 +611,6 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                 disabled={togglingVisibility}
               >
                 {togglingVisibility ? "Updating..." : "Make Public"}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      ) : null}
-
-      {showLockedEditModal ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
-          <Card className="w-full max-w-md space-y-4 p-5">
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold">This note is locked</h2>
-              <p className="text-sm text-foreground/75">
-                This note already has a Study Pack. To preserve your summary, concepts, and quizzes, editing is disabled.
-              </p>
-              <p className="text-sm text-foreground/75">
-                If you want to make changes, make a copy of this note and generate a new Study Pack.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setShowLockedEditModal(false)}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  setShowLockedEditModal(false);
-                  void handleMakeCopy();
-                }}
-                disabled={copying}
-              >
-                {copying ? "Copying..." : "Make a Copy"}
               </Button>
             </div>
           </Card>
