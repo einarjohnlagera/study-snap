@@ -199,6 +199,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const tags = note?.tags ?? [];
   const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
   const isPublic = visibility === "PUBLIC";
+  const canManageVisibility = isEmailVerified || isPublic;
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
   const hasCopyAttribution = Boolean(note?.copiedFromUserId && note?.copiedFromNoteId);
   const copiedSourceTitle = note?.copiedFromTitle?.trim() || "Untitled note";
@@ -427,7 +428,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                       onClick={() => setVisibilityMenuOpen((open) => !open)}
                       aria-haspopup="menu"
                       aria-expanded={visibilityMenuOpen}
-                      disabled={togglingVisibility}
+                      disabled={togglingVisibility || !canManageVisibility}
                     >
                       {visibility === "PUBLIC" ? "🌍 Public ▼" : "🔒 Private ▼"}
                     </button>
@@ -443,8 +444,9 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                         </button>
                         <button
                           type="button"
-                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          className={`w-full rounded px-3 py-2 text-left hover:bg-muted/60 ${!isEmailVerified ? "cursor-not-allowed opacity-60" : ""}`}
                           onClick={() => handleSelectVisibility("PUBLIC")}
+                          disabled={!isEmailVerified}
                         >
                           <p className="text-sm font-medium">🌍 Public</p>
                           <p className="text-xs text-foreground/70">Visible in Public Library</p>
@@ -486,7 +488,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex flex-col gap-2 sm:flex-row">
                 {isDraft ? (
-                  <Button type="button" onClick={() => void handleGenerate()} disabled={generating}>
+                  <Button type="button" onClick={() => void handleGenerate()} disabled={generating || !isEmailVerified}>
                     {generating ? "Generating..." : "Generate Study Pack"}
                   </Button>
                 ) : (

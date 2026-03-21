@@ -1,0 +1,140 @@
+package com.studysnap.backend.controller;
+
+import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.StudyPackMeta;
+import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.security.AuthenticatedUser;
+import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.ChallengeQuizService;
+import com.studysnap.backend.service.NoteService;
+import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
+import com.studysnap.backend.service.QuickReviewSessionService;
+import com.studysnap.backend.service.QuickReviewStudyTipService;
+import com.studysnap.backend.service.StudyPackService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class NoteControllerTest {
+
+    @Mock
+    private AuthService authService;
+    @Mock
+    private NoteService noteService;
+    @Mock
+    private StudyPackService studyPackService;
+    @Mock
+    private QuickReviewSessionService quickReviewSessionService;
+    @Mock
+    private QuickReviewStudyTipService quickReviewStudyTipService;
+    @Mock
+    private ChallengeQuizService challengeQuizService;
+    @Mock
+    private QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
+
+    private NoteController noteController;
+
+    @BeforeEach
+    void setUp() {
+        noteController = new NoteController(
+                authService,
+                noteService,
+                studyPackService,
+                quickReviewSessionService,
+                quickReviewStudyTipService,
+                challengeQuizService,
+                quickReviewAdaptivePracticeService
+        );
+    }
+
+    @Test
+    void generate_callsEmailVerificationBeforeGeneration() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        StudyPackResponse expected = new StudyPackResponse(
+                UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
+                "TEXT",
+                null,
+                "Generated",
+                "Summary",
+                "Source",
+                "Biology",
+                List.of("Concept"),
+                List.of("tag"),
+                List.of(),
+                OffsetDateTime.now(),
+                new StudyPackMeta(null, null)
+        );
+        when(studyPackService.createFromText(any(CreateStudyPackRequest.class), any(UUID.class))).thenReturn(expected);
+
+        StudyPackResponse response = noteController.generate("note-1", user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(studyPackService).createFromText(new CreateStudyPackRequest(null, "note-1"), userId);
+        assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void generate_blocksUnverifiedUsers() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, false, 1);
+        AppException verificationError = new AppException(
+                "EMAIL_VERIFICATION_REQUIRED",
+                "Email verification required.",
+                HttpStatus.FORBIDDEN
+        );
+        doThrow(verificationError).when(authService).requireEmailVerified(userId);
+
+        assertThatThrownBy(() -> noteController.generate("note-1", user))
+                .isSameAs(verificationError);
+
+        verify(studyPackService, never()).createFromText(any(CreateStudyPackRequest.class), any(UUID.class));
+    }
+
+    @Test
+    void updateVisibility_publicRequiresEmailVerification() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, false, 1);
+        NoteResponse updated = null;
+        when(noteService.updateVisibility("note-1", "PUBLIC", userId)).thenReturn(updated);
+
+        noteController.updateVisibility("note-1", new UpdateNoteVisibilityRequest("PUBLIC"), user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(noteService).updateVisibility("note-1", "PUBLIC", userId);
+    }
+
+    @Test
+    void updateVisibility_privateDoesNotRequireEmailVerification() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, false, 1);
+        NoteResponse updated = null;
+        when(noteService.updateVisibility("note-1", "PRIVATE", userId)).thenReturn(updated);
+
+        noteController.updateVisibility("note-1", new UpdateNoteVisibilityRequest("PRIVATE"), user);
+
+        verify(authService, never()).requireEmailVerified(userId);
+        verify(noteService).updateVisibility("note-1", "PRIVATE", userId);
+    }
+}

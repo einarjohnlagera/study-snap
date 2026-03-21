@@ -7,6 +7,7 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.event.ActivityTrackingRequestedEvent;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,13 +35,15 @@ class ActivityTrackingEventListenerTest {
     @Mock
     private ActivityEventRepository activityEventRepository;
     @Mock
+    private StudyPackRepository studyPackRepository;
+    @Mock
     private UserRepository userRepository;
 
     private ActivityTrackingEventListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new ActivityTrackingEventListener(activityEventRepository, userRepository);
+        listener = new ActivityTrackingEventListener(activityEventRepository, studyPackRepository, userRepository);
         when(activityEventRepository.save(any(UserActivityEventEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }

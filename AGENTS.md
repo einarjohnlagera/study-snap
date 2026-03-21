@@ -174,3 +174,25 @@ If conflicts appear:
 
 1. Follow current product docs under `docs/`.
 2. Use `docs/legacy/` only for historical reference.
+
+## Testing Rules
+
+All new features must include unit tests.
+
+When modifying existing behavior:
+- Update existing tests if behavior changes
+- Add new tests for new rules
+
+Critical business rules that must always have tests:
+- Note state (Draft vs Study Pack)
+- Copy note behavior and attribution
+- Email verification gating
+- Study Pack credit usage
+- Public visibility rules
+- Quiz session rules (only one in-progress session)
+- OCR limits and verification gating
+
+A feature is not complete unless:
+- Code compiles
+- Tests pass
+- New behavior has test coverage

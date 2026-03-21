@@ -39,6 +39,8 @@ type NoteEditorFormProps = {
   onConfirmOcrText: () => void;
   disableContentEditing?: boolean;
   contentLockHint?: string | null;
+  disableGenerateAction?: boolean;
+  disableOcrUpload?: boolean;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -73,6 +75,8 @@ export function NoteEditorForm({
   onConfirmOcrText,
   disableContentEditing = false,
   contentLockHint = null,
+  disableGenerateAction = false,
+  disableOcrUpload = false,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -135,7 +139,7 @@ export function NoteEditorForm({
               <Button
                 type="button"
                 onClick={onGenerate}
-                disabled={actionsDisabled}
+                disabled={actionsDisabled || disableGenerateAction}
                 className="w-full sm:w-auto"
               >
                 {isGenerating ? (
@@ -294,7 +298,7 @@ export function NoteEditorForm({
               id="note-ocr-image"
               type="file"
               accept="image/png,image/jpeg,image/webp"
-              disabled={disableContentEditing}
+              disabled={disableContentEditing || disableOcrUpload}
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 onOcrImageFileChange(file);
@@ -335,7 +339,7 @@ export function NoteEditorForm({
                   type="button"
                   variant="outline"
                   onClick={onConfirmOcrText}
-                  disabled={disableContentEditing || isConfirmingOcrText || ocrConfirmedText.trim().length === 0}
+                  disabled={disableContentEditing || disableOcrUpload || isConfirmingOcrText || ocrConfirmedText.trim().length === 0}
                 >
                   {isConfirmingOcrText ? (
                     <>
