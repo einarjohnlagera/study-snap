@@ -1,56 +1,112 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import type { StudyPackListItemResponse } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import type { NoteListItemResponse } from "@/lib/api";
 
 type StudyPackGridProps = {
-  studyPacks: StudyPackListItemResponse[];
-  totalStudyPacks: number;
+  notes: NoteListItemResponse[];
+  totalNotes: number;
+  recentNoteMetaById: Record<string, { lastReviewedAt: string | null; quizCount: number | null }>;
 };
 
-export function StudyPackGrid({ studyPacks, totalStudyPacks }: StudyPackGridProps) {
+function toPreview(contentPreview: string, maxLength = 160) {
+  const clean = contentPreview.trim();
+  if (clean.length <= maxLength) {
+    return clean;
+  }
+  return `${clean.slice(0, maxLength - 3)}...`;
+}
+
+function toFormattedDate(value: string | null | undefined) {
+  if (!value) {
+    return "Unavailable";
+  }
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return "Unavailable";
+  }
+  return timestamp.toLocaleString();
+}
+
+export function StudyPackGrid({ notes, totalNotes, recentNoteMetaById }: StudyPackGridProps) {
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold sm:text-xl">Recent Study Packs</h2>
-        <p className="text-xs text-foreground/65">{totalStudyPacks} saved</p>
+        <h2 className="text-lg font-semibold sm:text-xl">Recent Notes</h2>
+        <p className="text-xs text-foreground/65">{totalNotes} saved</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {studyPacks.map((item) => (
-          <Link key={item.id} href={`/study-packs/${item.id}?from=dashboard`} className="group block">
-            <Card className="cursor-pointer space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
-              <div className="space-y-2">
-                <h3 className="text-base font-semibold transition-colors group-hover:text-foreground sm:text-lg">
-                  {item.title}
-                </h3>
-                <p className="text-sm leading-relaxed text-foreground/75">{item.summaryPreview}</p>
-              </div>
-
-              <p className="break-words text-xs text-foreground/65">
-                {new Date(item.createdAt).toLocaleString()} · {item.quizCount} quiz questions
+        {notes.map((item) => (
+          <Card key={item.id} className="space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
+            <div className="space-y-2">
+              <h3 className="text-base font-semibold sm:text-lg">
+                {item.title?.trim() || "Untitled note"}
+              </h3>
+              <p className="text-xs text-foreground/65">
+                {item.subject?.trim() || "No subject"}
               </p>
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${
+                  item.studyPackStatus === "STUDY_PACK_READY"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "border-border bg-muted/50 text-foreground/70"
+                }`}
+              >
+                {item.studyPackStatus === "STUDY_PACK_READY" ? "✨ Study Pack" : "📝 Draft"}
+              </span>
+              <p className="text-sm leading-relaxed text-foreground/75">
+                {toPreview(item.contentPreview)}
+              </p>
+            </div>
 
-              {item.tags.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {item.tags.map((tag) => (
+            {item.studyPackStatus === "STUDY_PACK_READY" ? (
+              <div className="space-y-1">
+                <p className="break-words text-xs text-foreground/65">
+                  {recentNoteMetaById[item.id]?.lastReviewedAt
+                    ? `Last studied ${toFormattedDate(recentNoteMetaById[item.id]?.lastReviewedAt)}`
+                    : `Last opened ${toFormattedDate(item.updatedAt)}`}
+                </p>
+                {recentNoteMetaById[item.id]?.quizCount !== null && recentNoteMetaById[item.id]?.quizCount !== undefined ? (
+                  <p className="text-xs text-foreground/65">
+                    {recentNoteMetaById[item.id]?.quizCount} quiz questions
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="break-words text-xs text-foreground/65">
+                Last edited {toFormattedDate(item.updatedAt)}
+              </p>
+            )}
+
+            {item.studyPackStatus === "STUDY_PACK_READY" ? (
+              <div className="flex flex-wrap gap-2">
+                {item.tags.length > 0 ? (
+                  item.tags.map((tag) => (
                     <span
                       key={`${item.id}-${tag}`}
                       className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
                     >
                       {tag}
                     </span>
-                  ))}
-                </div>
-              ) : null}
-            </Card>
-          </Link>
-        ))}
-      </div>
+                  ))
+                ) : (
+                  <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
+                    No tags
+                  </span>
+                )}
+              </div>
+            ) : null}
 
-      <div>
-        <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          View All in Library &rarr;
-        </Link>
+            <div className="pt-1">
+              <Link href={`/notes/${item.id}?from=dashboard`} className="w-full sm:w-auto">
+                <Button type="button" variant={item.studyPackStatus === "STUDY_PACK_READY" ? "default" : "outline"}>
+                  {item.studyPackStatus === "STUDY_PACK_READY" ? "Open Study Pack" : "Open Note"}
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        ))}
       </div>
     </section>
   );

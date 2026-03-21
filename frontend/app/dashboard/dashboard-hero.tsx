@@ -36,9 +36,11 @@ export function DashboardHero({ greetingName }: DashboardHeroProps) {
       <Card className="space-y-3 p-4 sm:p-6">
         <h2 className="text-lg font-semibold sm:text-xl">New Note</h2>
         <p className="text-sm text-foreground/75">
-          Save your notes, then generate a Study Pack with summaries and quizzes.
+          Write now, study smarter later.
+          <br />
+          Save your notes and turn them into a Study Pack anytime.
         </p>
-        <Link href="/study" className="w-full sm:w-auto">
+        <Link href="/notes/new" className="w-full sm:w-auto">
           <Button type="button" className="w-full sm:w-auto">New Note</Button>
         </Link>
       </Card>
