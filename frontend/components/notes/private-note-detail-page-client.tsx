@@ -6,10 +6,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { getAuthUser } from "@/lib/auth";
+import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   copyNote,
   createStudyPackFromNote,
+  deleteNote,
   getChallengeQuizPerformanceSummary,
   getMyStudyPack,
   getNote,
@@ -37,6 +40,13 @@ function visibilityChip(visibility: NoteVisibility) {
   return "border-border bg-muted/50 text-foreground/70";
 }
 
+function truncateShareUrl(url: string, maxLength = 58) {
+  if (url.length <= maxLength) {
+    return url;
+  }
+  return `${url.slice(0, maxLength - 3)}...`;
+}
+
 type PrivateNoteDetailPageClientProps = {
   routeId: string;
 };
@@ -46,6 +56,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
@@ -54,13 +65,18 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const [error, setError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [togglingVisibility, setTogglingVisibility] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [showMakePublicConfirm, setShowMakePublicConfirm] = useState(false);
   const [showLockedEditModal, setShowLockedEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [shareFeedbackUrl, setShareFeedbackUrl] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [isPremiumPlan, setIsPremiumPlan] = useState(false);
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
 
@@ -126,6 +142,17 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   }, [loadDetail]);
 
   useEffect(() => {
+    const syncPlan = () => {
+      setIsPremiumPlan((getAuthUser()?.planType ?? "FREE") === "PREMIUM");
+    };
+    syncPlan();
+    window.addEventListener("studysnap-auth-change", syncPlan);
+    return () => {
+      window.removeEventListener("studysnap-auth-change", syncPlan);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!toast) {
       return;
     }
@@ -134,20 +161,29 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   }, [toast]);
 
   useEffect(() => {
-    if (!visibilityMenuOpen) {
+    if (!shareFeedbackUrl) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setShareFeedbackUrl(null), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [shareFeedbackUrl]);
+
+  useEffect(() => {
+    if (!visibilityMenuOpen && !actionMenuOpen) {
       return;
     }
     const handleOutsideClick = (event: MouseEvent) => {
-      if (!visibilityMenuRef.current) {
-        return;
-      }
-      if (!visibilityMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (visibilityMenuOpen && visibilityMenuRef.current && !visibilityMenuRef.current.contains(target)) {
         setVisibilityMenuOpen(false);
+      }
+      if (actionMenuOpen && actionMenuRef.current && !actionMenuRef.current.contains(target)) {
+        setActionMenuOpen(false);
       }
     };
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
-  }, [visibilityMenuOpen]);
+  }, [actionMenuOpen, visibilityMenuOpen]);
 
   useEffect(() => {
     const created = searchParams.get("created") === "1";
@@ -177,6 +213,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const tags = note?.tags ?? [];
   const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
   const isPublic = visibility === "PUBLIC";
+  const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
 
   const handleGenerate = async () => {
     if (!note || generating || !isDraft) {
@@ -197,14 +234,15 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     }
   };
 
-  const handleCopyAndEdit = async () => {
+  const handleMakeCopy = async () => {
     if (!note || copying) {
       return;
     }
     setCopying(true);
+    setActionMenuOpen(false);
     try {
       const copied = await copyNote(note.id);
-      router.push(`/notes/${copied.id}/edit?copied=1`);
+      router.push(`/notes/${copied.id}?copied=1`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not copy note.";
       setError(message);
@@ -256,13 +294,40 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   };
 
   const handleStartQuickReview = async () => {
-    if (!linkedStudyPackId) {
+    if (!linkedStudyPackId || !note) {
       return;
     }
-    const started = await startQuickReviewSession(linkedStudyPackId);
-    if (started.sessionId) {
-      router.push(`/study-packs/${linkedStudyPackId}/quick-review?sessionId=${started.sessionId}`);
+    try {
+      const started = await startQuickReviewSession(linkedStudyPackId);
+      if (started.sessionId) {
+        router.push(`/study-packs/${linkedStudyPackId}/quick-review?sessionId=${started.sessionId}&noteId=${note.id}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not start Quick Review.";
+      setError(message);
     }
+  };
+
+  const handleStartChallengeQuiz = () => {
+    if (!linkedStudyPackId || !note) {
+      return;
+    }
+    if (!isPremiumPlan) {
+      router.push(PLAN_BILLING_PATH);
+      return;
+    }
+    router.push(`/study-packs/${linkedStudyPackId}/challenge-quiz?noteId=${note.id}`);
+  };
+
+  const handleStartAdaptivePractice = () => {
+    if (!linkedStudyPackId || !note) {
+      return;
+    }
+    if (!isPremiumPlan) {
+      router.push(PLAN_BILLING_PATH);
+      return;
+    }
+    router.push(`/study-packs/${linkedStudyPackId}/adaptive-practice?noteId=${note.id}`);
   };
 
   const handleCopyLink = async () => {
@@ -271,6 +336,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     }
     setSharing(true);
     setShareError(null);
+    setShareFeedbackUrl(null);
     try {
       if (!isPublic) {
         setShareError("Make this note public to share it.");
@@ -278,12 +344,29 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       }
       const shareUrl = new URL(`/public/notes/${note.id}`, window.location.origin).toString();
       await navigator.clipboard.writeText(shareUrl);
-      setToast("Share link copied");
+      setShareFeedbackUrl(shareUrl);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not copy share link.";
       setShareError(message);
     } finally {
       setSharing(false);
+    }
+  };
+
+  const handleDeleteNote = async () => {
+    if (!note || deleting) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteNote(note.id);
+      router.push("/library");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not delete note.";
+      setError(message);
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -343,9 +426,38 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                   </div>
                 </div>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={handleEdit}>
-                Edit
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleEdit}>
+                  Edit
+                </Button>
+                <div className="relative" ref={actionMenuRef}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActionMenuOpen((open) => !open)}
+                    aria-haspopup="menu"
+                    aria-expanded={actionMenuOpen}
+                  >
+                    More
+                  </Button>
+                  {actionMenuOpen ? (
+                    <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">
+                      <button
+                        type="button"
+                        className="w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                        onClick={() => {
+                          setActionMenuOpen(false);
+                          setShowDeleteConfirm(true);
+                        }}
+                        disabled={deleting}
+                      >
+                        Delete note
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
             </div>
             <p className="text-sm text-foreground/75">{subject}</p>
             <div className="flex flex-wrap gap-2">
@@ -357,28 +469,46 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
             </div>
             {isDraft ? (
               <p className="text-xs text-foreground/70">
-                Generating locks this note to preserve its Study Pack. Need changes later? Use Copy and Edit.
+                Generating locks this note to preserve its Study Pack. Need changes later? Use Make a Copy.
               </p>
             ) : null}
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 {isDraft ? (
                   <Button type="button" onClick={() => void handleGenerate()} disabled={generating}>
                     {generating ? "Generating..." : "Generate Study Pack"}
                   </Button>
                 ) : (
-                  <Button type="button" onClick={() => void handleStartQuickReview()}>
-                    Start Quick Review
-                  </Button>
+                  <>
+                    <Button type="button" onClick={() => void handleStartQuickReview()}>
+                      Start Quick Review
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleStartChallengeQuiz}>
+                      {isPremiumPlan ? "Challenge Quiz" : "Challenge Quiz (Premium)"}
+                    </Button>
+                    {hasAdaptiveTargets ? (
+                      <Button type="button" variant="outline" onClick={handleStartAdaptivePractice}>
+                        {isPremiumPlan ? "Adaptive Practice" : "Adaptive Practice (Premium)"}
+                      </Button>
+                    ) : null}
+                  </>
                 )}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button type="button" variant="outline" onClick={() => void handleCopyAndEdit()} disabled={copying}>
-                  {copying ? "Copying..." : "Copy and Edit"}
+                <Button type="button" variant="outline" onClick={() => void handleMakeCopy()} disabled={copying}>
+                  {copying ? "Copying..." : "Make a Copy"}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => void handleCopyLink()} disabled={sharing}>
-                  {sharing ? "Sharing..." : "Share"}
-                </Button>
+                <div className="relative">
+                  <Button type="button" variant="outline" onClick={() => void handleCopyLink()} disabled={sharing}>
+                    Share
+                  </Button>
+                  {shareFeedbackUrl ? (
+                    <div className="absolute right-0 top-full z-20 mt-2 w-64 max-w-[80vw] rounded-md border border-border bg-background px-3 py-2 text-xs shadow-sm">
+                      <p className="font-medium text-foreground">Link copied</p>
+                      <p className="mt-1 truncate text-foreground/70">{truncateShareUrl(shareFeedbackUrl)}</p>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
             {shareError ? <p className="text-xs text-red-600 dark:text-red-400">{shareError}</p> : null}
@@ -443,7 +573,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       ) : null}
 
       {toast ? (
-        <div role="status" aria-live="polite" className="fixed right-4 bottom-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
+        <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
           {toast}
         </div>
       ) : null}
@@ -485,7 +615,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                 This note already has a Study Pack. To preserve your summary, concepts, and quizzes, editing is disabled.
               </p>
               <p className="text-sm text-foreground/75">
-                If you want to make changes, create a copy of this note and generate a new Study Pack.
+                If you want to make changes, make a copy of this note and generate a new Study Pack.
               </p>
             </div>
             <div className="flex justify-end gap-2">
@@ -496,11 +626,38 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                 type="button"
                 onClick={() => {
                   setShowLockedEditModal(false);
-                  void handleCopyAndEdit();
+                  void handleMakeCopy();
                 }}
                 disabled={copying}
               >
-                {copying ? "Copying..." : "Copy and Edit"}
+                {copying ? "Copying..." : "Make a Copy"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {showDeleteConfirm ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
+          <Card className="w-full max-w-md space-y-4 p-5">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold">Delete this note?</h2>
+              <p className="text-sm text-foreground/75">
+                This will permanently delete this note and its generated Study Pack data.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+                onClick={() => void handleDeleteNote()}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete note"}
               </Button>
             </div>
           </Card>

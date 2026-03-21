@@ -114,6 +114,21 @@ public class NoteService {
         return mapToResponse(saved, null);
     }
 
+    public void deleteById(String id, UUID ownerUserId) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "NOTE_NOT_FOUND",
+                "Note not found.",
+                HttpStatus.NOT_FOUND
+        );
+        NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+
+        studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId)
+                .ifPresent(studyPackRepository::delete);
+        noteRepository.delete(entity);
+    }
+
     public NoteResponse updateVisibility(String id, String visibilityRaw, UUID ownerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(
                 id,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -102,6 +102,7 @@ function resolveRemainingSeconds(deadlineEpochSeconds: number): number {
 export default function ChallengeQuizPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
@@ -124,6 +125,18 @@ export default function ChallengeQuizPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+  const noteIdParam = searchParams.get("noteId")?.trim() ?? null;
+  const noteDetailHref = useMemo(() => {
+    const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
+    if (resolvedNoteId) {
+      return `/notes/${resolvedNoteId}`;
+    }
+    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
+  }, [noteIdParam, studyPack?.noteId, studyPackId]);
+  const noteDetailQuery = useMemo(() => {
+    const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
+    return resolvedNoteId ? `?noteId=${encodeURIComponent(resolvedNoteId)}` : "";
+  }, [noteIdParam, studyPack?.noteId]);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
@@ -355,7 +368,7 @@ export default function ChallengeQuizPage() {
   const handleLeaveQuiz = () => {
     persistProgress(currentIndex, selectedChoices, true);
     setShowLeaveDialog(false);
-    router.push(studyPackId ? `/study-packs/${studyPackId}` : "/dashboard");
+    router.push(noteDetailHref);
   };
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
@@ -372,10 +385,10 @@ export default function ChallengeQuizPage() {
           </>
         ) : (
           <Link
-            href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"}
+            href={noteDetailHref}
             className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
           >
-            Back to Study Pack
+            Back to Note
           </Link>
         )}
       </div>
@@ -409,9 +422,9 @@ export default function ChallengeQuizPage() {
                 Retry
               </Button>
             ) : null}
-            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
           </div>
@@ -429,9 +442,9 @@ export default function ChallengeQuizPage() {
                 Upgrade to Premium
               </Button>
             </Link>
-            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
           </div>
@@ -443,9 +456,9 @@ export default function ChallengeQuizPage() {
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">Monthly limit reached</h1>
           <p className="text-sm text-foreground/75">You&apos;ve reached your monthly Challenge Quiz limit.</p>
-          <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+          <Link href={noteDetailHref} className="w-full sm:w-auto">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
-              Back to Study Pack
+              Back to Note
             </Button>
           </Link>
         </Card>
@@ -618,7 +631,7 @@ export default function ChallengeQuizPage() {
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>
             {result.weakConcepts.length > 0 ? (
-              <Link href={studyPackId ? `/study-packs/${studyPackId}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
+              <Link href={studyPackId ? `/study-packs/${studyPackId}/adaptive-practice${noteDetailQuery}` : "/dashboard"} className="w-full sm:w-auto">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Practice Weak Concepts
                 </Button>
@@ -627,9 +640,9 @@ export default function ChallengeQuizPage() {
             <Button type="button" className="w-full sm:w-auto" onClick={handleRetry}>
               Start Another Challenge
             </Button>
-            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
           </div>

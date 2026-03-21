@@ -1327,6 +1327,20 @@ export async function updateNote(
   return parseApiResponse<NoteResponse>(response, "Could not save note.");
 }
 
+export async function deleteNote(noteId: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}`,
+    {
+      method: "DELETE",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (!response.ok) {
+    await parseApiResponse<void>(response, "Could not delete note.");
+  }
+}
+
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/visibility`,

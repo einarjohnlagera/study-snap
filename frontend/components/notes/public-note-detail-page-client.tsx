@@ -137,7 +137,7 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
             <div className="space-y-2">
               {isAuthenticated ? (
                 <Button type="button" onClick={() => void handleCopy()} disabled={copying}>
-                  {copying ? "Copying..." : "Copy and Edit"}
+                  {copying ? "Copying..." : "Copy to My Library"}
                 </Button>
               ) : (
                 <Link href="/auth" className="w-full sm:w-auto">
