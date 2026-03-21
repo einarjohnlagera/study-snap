@@ -280,7 +280,7 @@ Behavior:
 - adaptive questions target weak concepts and prioritize understanding over wording recall
 - adaptive generation uses summary + key concepts + weak concepts only (no extracted OCR text)
 - adaptive generation must not duplicate stored Study Pack quiz questions
-- adaptive in-progress sessions must be reused to avoid unnecessary LLM regeneration
+- adaptive in-progress sessions must be reused to avoid duplicate LLM generation calls
 - generation failure should not break Quick Review results; the UI should fail gracefully
 
 Entry point:
