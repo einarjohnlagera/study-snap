@@ -64,7 +64,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
         content: notesText,
       });
       setRedirecting(true);
-      router.push(`/study-packs/${saved.id}?from=study&saved=1`);
+      router.push(`/notes/${saved.id}?from=study&saved=1`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save note.";
       showToast(message, "error");
@@ -80,7 +80,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     const created = await handleGenerateStudyPack();
     if (!demoMode && created) {
       setRedirecting(true);
-      router.push(`/study-packs/${created.noteId ?? created.id}?from=study&created=1`);
+      router.push(`/notes/${created.noteId ?? created.id}?from=study&created=1`);
     }
   };
 
@@ -91,7 +91,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
     const created = await handleConfirmText();
     if (!demoMode && created) {
       setRedirecting(true);
-      router.push(`/study-packs/${created.noteId ?? created.id}?from=study&created=1`);
+      router.push(`/notes/${created.noteId ?? created.id}?from=study&created=1`);
     }
   };
 
