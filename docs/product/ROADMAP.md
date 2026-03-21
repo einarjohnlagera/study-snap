@@ -23,18 +23,23 @@ Scope priorities:
   - do not copy generated outputs or performance history
   - do not copy quiz sessions
 - navigation structure:
-  - Dashboard
-  - My Library
-  - Public Library
-  - Settings
+  - Main: Dashboard, My Library, Public Library
+  - Account: Profile, Settings
+- route structure:
+  - `/library` (My Library)
+  - `/library/public` (Public Library)
+  - `/notes/{id}` (Note Detail)
+  - `/public/notes/{id}` (Public Note Detail)
 - Premium Challenge Quiz (timed mode generated from Study Pack summary + key concepts)
 - Premium Adaptive Practice (targeted generation from weak concepts)
 - session resilience for Challenge/Adaptive (resume in-progress sessions)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
 - real email verification + generation gating for unverified users
+- OCR upload gating for unverified users on Create/Edit Note
 - My Library continuity (browse, filter, sort, revisit)
 - Public Library continuity (browse public notes and copy into My Library)
 - sharing and remixing continuity (`/p/{token}`, copy to library without LLM call)
+- note-centric ownership across generated content and quiz sessions (`noteId`)
 
 Implementation stance:
 

@@ -73,7 +73,7 @@ High-level model:
 - `notes` table stores user-authored fields (`title`, `subject`, `content`, `tags`).
 - `notes.visibility` controls whether notes are private or listed in Public Library.
 - Generated fields are stored and linked to the same Note (`summary`, `key concepts`, `quizzes`).
-- Quiz sessions and performance are linked to the Note.
+- Quiz sessions and performance are linked by `noteId`.
 - Copy creates a new Draft Note row with copied user-authored fields only.
 
 ## Product Philosophy
@@ -111,10 +111,13 @@ CTA behavior:
 
 - Input modes: pasted notes text or uploaded image notes (OCR)
 - Output: title, summary, key concepts, quiz questions, metadata (`subject`, `tags`)
+- OCR upload is part of Note authoring (Create/Edit Note) and populates Note `content` for manual review.
+- OCR upload does not auto-save and does not auto-generate.
 - Demo mode must not call real generation pipeline, persist data, or consume usage
 - Unverified users are blocked from generation with structured `403`:
   - `code=EMAIL_VERIFICATION_REQUIRED`
   - `action=RESEND_VERIFICATION`
+- Unverified users are also blocked from OCR upload in Create/Edit Note.
 
 ### My Library
 
@@ -164,16 +167,21 @@ Dashboard guidance rules:
 
 ### Navigation
 
-Sidebar:
+Sidebar groups:
 
-- Dashboard
-- My Library
-- Public Library
-- Settings
+- Main: Dashboard, My Library, Public Library
+- Account: Profile, Settings
+
+Primary routes:
+
+- `/library` (My Library)
+- `/library/public` (Public Library)
+- `/notes/{id}` (Note Detail)
+- `/public/notes/{id}` (Public Note Detail, read-only)
 
 ### Quick Review
 
-- Primary quiz mode for a Study Pack
+- Primary quiz mode for a Study Pack-ready Note
 - Immediate correctness feedback (`green = correct`, `red = incorrect`)
 - Retry incorrect questions once
 - Optional confidence feedback (`HIGH`, `MEDIUM`, `LOW`)
@@ -208,6 +216,7 @@ Sidebar:
 - Preserve destination with `redirect` query param
 - Session-expired redirects include `reason=session_expired`
 - Users can sign up/login before verification; unverified users are blocked from generation
+- Unverified users are also blocked from OCR upload
 - Verification email delivery uses provider-agnostic `EmailService`
 - Transactional email content uses file-based templates
 
@@ -240,7 +249,12 @@ Track lightweight events such as:
 - `COMPLETED_QUICK_REVIEW`
 - `COMPLETED_ADAPTIVE_QUIZ`
 
-Events are linked to user + Note/Study Pack context and timestamp.
+Events are linked to user + note context and timestamp.
+
+Canonical ownership rule:
+
+- Generated summaries, key concepts, quiz content, and all practice sessions are note-scoped (`noteId`).
+- Any legacy `studyPackId` fields are compatibility fields only.
 
 ---
 

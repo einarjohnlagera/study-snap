@@ -47,7 +47,7 @@ Generated Study Pack outputs include:
 
 NoteLib does not overwrite existing generated content.
 
-Users make a copy of a Note, edit the copy, and generate a new Study Pack from that copied Note.
+Users use `Make a Copy` on a Note, edit the copied Note, and generate a new Study Pack from that copied Note.
 
 Copy behavior:
 
@@ -82,10 +82,15 @@ This supports iterative learning and avoids accidental overwrites.
 
 Sidebar structure:
 
-- Dashboard
-- My Library
-- Public Library
-- Settings
+- Main: Dashboard, My Library, Public Library
+- Account: Profile, Settings
+
+Primary product pages:
+
+- My Library: `/library`
+- Public Library: `/library/public`
+- Note Detail: `/notes/{id}`
+- Public Note Detail (read-only): `/public/notes/{id}`
 
 ## Architecture Overview
 
@@ -94,8 +99,14 @@ High-level model:
 - `notes` table stores user-authored fields (`title`, `subject`, `content`, `tags`).
 - `notes.visibility` controls listing behavior (`PRIVATE` or `PUBLIC`).
 - AI-generated fields are linked to the same Note (`summary`, `key concepts`, `quizzes`).
-- quiz sessions and performance history are linked to the Note.
+- quiz sessions and performance history are linked by `noteId`.
 - copying creates a new Draft Note row and copies only user-authored fields.
+
+## Verification and OCR
+
+- Unverified users can access the app but cannot generate Study Packs.
+- Unverified users also cannot use OCR upload.
+- OCR is optional on Create/Edit Note and is used to populate Note content for review before save/generate.
 
 ## Product Philosophy
 

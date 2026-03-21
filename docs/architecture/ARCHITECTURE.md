@@ -30,12 +30,16 @@ Routes:
 
 - `/` landing
 - `/demo` demo walkthrough (no real generation)
-- `/study` New Note flow (save and/or generate)
+- `/study` quick note input flow (legacy-compatible)
+- `/notes/new` New Note
+- `/notes/{id}/edit` Edit Note
 - `/dashboard` guidance + library entry
 - `/library` My Library (owned notes)
-- `/notes` Public Library (public notes from other users)
-- `/notes/public/{id}` public read-only note detail
+- `/library/public` Public Library (public notes from other users)
+- `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
+- `/public/notes/{id}` public read-only note detail
 - `/settings` plan/billing and account controls
+- `/profile` account profile
 - `/p/{token}` public shared Study Pack
 
 Frontend calls backend via `NEXT_PUBLIC_API_BASE_URL`.
@@ -89,7 +93,7 @@ Versioning model:
 
 - `notes` stores user-authored fields (`title`, `subject`, `content`, `tags`, ownership metadata, state, visibility)
 - generated fields (`summary`, `key_concepts`, `quiz`) are linked to the same Note
-- review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context
+- review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context via `noteId`
 - share links reference generated Study Pack view data
 - copy creates a new Draft Note identity with user-authored fields only
 
@@ -103,6 +107,7 @@ Versioning model:
   - fetch generated Study Pack view
 - `NoteController` (current/future surface)
   - create/update note
+  - OCR extract for note authoring (Create/Edit Note flow)
   - copy note
   - update visibility (`PUBLIC`/`PRIVATE`)
   - list My Library notes
@@ -167,13 +172,14 @@ Notes:
 
 - `POST /api/notes` (create note draft)
 - `PUT /api/notes/{id}` (update note content/metadata)
+- `POST /api/notes/ocr/extract` (optional OCR extraction for note content)
 - `POST /api/notes/{id}/copy` (make a copy)
 - `POST /api/notes/{id}/visibility` (set `PUBLIC` or `PRIVATE`)
 - `GET /api/notes` (My Library list)
 - `GET /api/notes/public` (Public Library list)
 - `GET /api/notes/public/{id}` (public read-only note detail)
 
-Study Pack access:
+Study Pack access (generated view):
 
 - `GET /api/study-packs/{id}`
 - `GET /api/study-packs?limit={n}&cursor={token}`
@@ -191,8 +197,8 @@ Auth and onboarding:
 - `POST /api/auth/refresh`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
-- `POST /api/auth/verify-email/request`
-- `POST /api/auth/verify-email/confirm`
+- `POST /api/auth/resend-verification`
+- `GET /api/auth/verify-email?token=...`
 
 ## API Security Model
 
@@ -201,6 +207,7 @@ Auth and onboarding:
 - refresh token is hashed in DB and rotated on refresh
 - protected-route 401 handling is centralized in frontend `lib/api.ts`
 - unverified users are authenticated but generation-blocked
+- unverified users are also blocked from OCR upload/extract endpoints
 - generation-block response contract:
   - status: `403`
   - `code=EMAIL_VERIFICATION_REQUIRED`
@@ -237,17 +244,20 @@ Quick Review:
 - uses stored Study Pack quiz
 - retry incorrect questions once
 - persists session and confidence feedback
+- session ownership is note-scoped (`noteId`)
 
 Challenge Quiz (Premium):
 
 - generated from summary + key concepts only
 - timed and continuously persisted
 - resumes in-progress session if present (no duplicate generation call)
+- session ownership is note-scoped (`noteId`)
 
 Adaptive Practice (Premium):
 
 - generated from summary + key concepts + weak concepts only
 - resumes in-progress session if present (no duplicate generation call)
+- session ownership is note-scoped (`noteId`)
 
 Usage tracking:
 
@@ -270,7 +280,8 @@ Hybrid OCR flow:
 
 1. quick text detection
 2. full OCR only if text is detected
-3. normalize extracted text before LLM use
+3. insert extracted text into Note content for user review/edit
+4. generate only when user explicitly chooses `Generate Study Pack`
 
 Normalization rules:
 

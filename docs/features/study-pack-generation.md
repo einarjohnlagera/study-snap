@@ -70,7 +70,13 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 
 ## OCR input flow (image notes)
 
-Study Pack generation supports an OCR-first flow when users upload image notes.
+Study Pack generation supports an OCR-assisted flow when users upload image notes from Create/Edit Note.
+
+Authoring behavior:
+- OCR upload is optional and secondary to the main note form
+- extracted text is inserted into note content for manual review/edit
+- OCR upload does not auto-save and does not auto-generate
+- unverified users are blocked from OCR upload
 
 Frontend OCR UX goals:
 - clear upload guidance before OCR starts

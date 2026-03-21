@@ -1,6 +1,6 @@
 # Quick Review
 
-Quick Review is the lightweight quiz-based review mode for a Study Pack.
+Quick Review is the lightweight quiz-based review mode for a Study Pack-ready Note.
 
 Its goal is to help users reinforce learning through active recall and repeated practice.
 
@@ -8,7 +8,7 @@ Its goal is to help users reinforce learning through active recall and repeated 
 
 ## Purpose
 
-Quick Review turns a saved Study Pack into an interactive review session.
+Quick Review turns a saved Study Pack-ready Note into an interactive review session.
 
 It is designed to feel:
 
@@ -26,11 +26,11 @@ For exam-style timed practice, use Challenge Quiz (Premium).
 
 Users can start Quick Review from:
 
-- Study Pack detail page
+- Note Detail page
 - dashboard recommendation card
 - resume prompt if an unfinished session exists
 
-Study Pack detail quiz-entry hierarchy:
+Note Detail quiz-entry hierarchy:
 
 - primary action: `Start Quick Review`
 - secondary action: `Challenge Quiz` (Premium-gated for Free users)
@@ -40,7 +40,7 @@ Study Pack detail quiz-entry hierarchy:
 
 ## Core Flow
 
-Study Pack  
+Study Pack-ready Note  
 → Quick Review  
 → immediate answer feedback  
 → retry incorrect questions once  
@@ -52,7 +52,7 @@ Study Pack
 
 ## Session Model
 
-Quick Review uses a separate session model from the Study Pack itself.
+Quick Review uses a separate session model from the generated Study Pack content attached to a Note.
 
 StudyPack stores static learning content:
 
@@ -85,7 +85,7 @@ Quick Review sessions support:
 - IN_PROGRESS
 - COMPLETED
 
-Only one IN_PROGRESS session may exist per user per Study Pack.
+Only one IN_PROGRESS session may exist per user per Note.
 
 If a user leaves an unfinished session, they can resume it later.
 
@@ -100,7 +100,7 @@ If the user leaves Quick Review before finishing:
 - current round state is preserved
 - retry state is preserved if the user left during retry
 
-When the user starts Quick Review again for that Study Pack:
+When the user starts Quick Review again for that Note:
 
 - existing IN_PROGRESS session should be reused
 - a new session should not be created unless the previous one is already COMPLETED
@@ -268,7 +268,7 @@ Quick Review can offer a follow-up adaptive practice set based on weak concepts 
 
 Behavior:
 
-- weak concepts are sourced from the most recent completed Quick Review for the same Study Pack
+- weak concepts are sourced from the most recent completed Quick Review for the same Note
 - adaptive practice is available only when weak concepts exist
 - adaptive practice is Premium-only
 - adaptive quiz is newly generated and separate from the original Study Pack quiz
@@ -303,7 +303,7 @@ This keeps retry as the main reinforcement mechanic while allowing users to end 
 
 After completion:
 
-- primary action: `Back to Study Pack`
+- primary action: `Back to Note`
 - guided next step when struggling: `Practice Weak Areas` (Adaptive Practice, Premium-gated)
 - guided next step when performing well: `Start Challenge Quiz` (Premium-gated)
 - secondary action: `Practice Again` (optional, lower emphasis)
@@ -364,7 +364,7 @@ Gating and usage:
 
 Quick Review attempts are persisted as session history.
 
-The Study Pack detail page can display recent review sessions such as:
+The Note Detail page can display recent review sessions such as:
 
 - completed date
 - score
@@ -373,7 +373,7 @@ The Study Pack detail page can display recent review sessions such as:
 
 This history helps users see their progress over time.
 
-The Study Pack detail page includes a broader `Performance Overview` for the current Study Pack with separate stats for both quiz modes:
+The Note Detail page includes a broader `Performance Overview` for the current note with separate stats for both quiz modes:
 
 - Quick Review stats:
   - `Best Score` (highest `scorePercentage`)
@@ -389,9 +389,9 @@ The Study Pack detail page includes a broader `Performance Overview` for the cur
 
 If there are no completed sessions yet, the page shows a simple empty prompt to start the first Quick Review.
 
-### AI Study Coach (Study Pack detail)
+### AI Study Coach (Note Detail)
 
-The Study Pack detail page includes a compact `AI Study Coach` panel powered by existing session data.
+The Note Detail page includes a compact `AI Study Coach` panel powered by existing session data.
 
 Behavior:
 
