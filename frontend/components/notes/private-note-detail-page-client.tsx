@@ -394,14 +394,14 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
             <p className="text-sm text-foreground/75">
-              {isDraft ? "Generate a Study Pack to see the summary." : studyPack.summary}
+              {isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : studyPack.summary}
             </p>
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
             {isDraft ? (
-              <p className="text-sm text-foreground/75">Generate a Study Pack to see key concepts.</p>
+              <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
             ) : (
               <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
                 {studyPack.keyConcepts.map((concept, index) => (
@@ -434,7 +434,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
           {isDraft ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
-              <p className="text-sm text-foreground/75">Generate a Study Pack to see quiz questions.</p>
+              <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
             </Card>
           ) : (
             <PracticeQuizCard quiz={studyPack.quiz} />
