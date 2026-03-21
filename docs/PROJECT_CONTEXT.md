@@ -1,44 +1,63 @@
 # NoteLib Project Context
 
-## What NoteLib is
+## What NoteLib Is
 
-NoteLib is an AI-powered study assistant that converts notes into Study Packs containing summaries, key concepts, and quiz questions.
+NoteLib is an AI-powered study workspace that turns user-authored notes into structured study materials and review modes.
 
-The system emphasizes active recall and repeated practice.
+## Core Product Model
 
-## Core Learning Loop
+- Note is the primary entity.
+- Study Pack is the generated enhancement state of a Note.
+- Note states:
+  - `Draft`
+  - `Study Pack Ready`
 
-Notes → Study Pack → Quick Review → Retry mistakes → Dashboard recommendation → Repeat
+## Learning Loop
+
+Capture -> Generate -> Review -> Improve -> Clone -> Repeat
+
+## Versioning Rule
+
+NoteLib does not overwrite generated content on the same Note.
+
+Users create a new version by cloning a Note, editing it, and generating a new Study Pack from that clone.
+
+Clone copies user-authored fields only:
+
+- title
+- subject
+- tags
+- note content
+
+Clone does not copy generated/performance fields:
+
+- summary
+- key concepts
+- quizzes
+- review performance history
 
 ## Tech Stack
 
-Backend
-Spring Boot
-
-Frontend
-Next.js
-
-Database
-PostgreSQL
-
-AI
-OpenAI LLM
-
-OCR
-Google Vision
+Backend: Spring Boot  
+Frontend: Next.js  
+Database: PostgreSQL  
+AI: OpenAI LLM  
+OCR: Google Vision
 
 ## Core Domain Models
 
-User
-StudyPack
-QuickReviewSession
-ActivityEvent
+- User
+- Note
+- Study Pack (generated Note state)
+- QuickReviewSession
+- ActivityEvent
 
 ## Feature Documentation
 
+- docs/features/study-pack-generation.md
 - docs/features/quick-review.md
 - docs/features/dashboard-recommendation.md
 
 ## Architecture
 
-See docs/architecture/ARCHITECTURE.md
+See `docs/architecture/ARCHITECTURE.md`.

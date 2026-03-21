@@ -1,282 +1,247 @@
-# DATA_MODEL.md — NoteLib
+# DATA_MODEL.md - NoteLib
 
-This document consolidates the data model direction for NoteLib from the legacy architecture docs, project context, and later user-account decisions.
+This document defines the NoteLib data model direction for the note-first product model.
 
-## Naming direction
+## Naming and Compatibility
 
-### Legacy term
-- `Review`
+- Product language is Note-first.
+- Database schema/table names are preserved unless explicitly migrated.
+- Legacy table names such as `study_packs` may remain while domain ownership shifts to Notes.
 
-### Preferred forward-looking term
-- `StudyPack`
+## Core Entity: Note
 
-Reason:
-- "Review" is becoming vague as the product grows.
-- "Study Pack" matches product language, Study Library behavior, and user-facing terminology.
-
-Transitional note:
-- legacy code, tables, or endpoints may still use `Review` terminology
-- future-facing schema and docs should prefer `StudyPack`
-
-## Core entities
-
-### users
+`notes` is the primary product entity.
 
 Purpose:
-- authentication identity
-- lightweight personal profile
-- ownership of saved Study Packs
+
+- store user-authored learning input
+- track note lifecycle state
+- anchor generated study outputs and review history
 
 Recommended fields:
+
+- `id`
+- `owner_user_id`
+- `title` (nullable)
+- `subject` (nullable)
+- `content` (text, required)
+- `tags` (text[] or json array, default empty)
+- `state` (`DRAFT` | `STUDY_PACK_READY`)
+- `source_note_id` (nullable, for clone lineage)
+- `created_at`
+- `updated_at`
+
+## Generated Study Pack Fields
+
+Generated fields are linked to the same Note.
+
+Depending on current schema, these can be:
+
+- embedded/generated columns on `notes`, or
+- stored in legacy `study_packs` rows with a 1:1 link to `notes.id`
+
+Generated fields:
+
+- `summary`
+- `key_concepts`
+- `quiz`
+- optional generation metadata (`model_used`, token usage, estimated cost, timestamps)
+
+State transition:
+
+- generating validated output sets Note state from `DRAFT` to `STUDY_PACK_READY`
+
+## Clone-Based Versioning
+
+Clone creates a new Note row.
+
+Clone copies:
+
+- `title`
+- `subject`
+- `tags`
+- `content`
+
+Clone does not copy:
+
+- generated summary/key concepts/quiz
+- review sessions and performance history
+- share links
+
+Recommended lineage fields:
+
+- `source_note_id` (points to original note)
+- optional `clone_depth` (computed or stored if needed later)
+
+## Users
+
+Purpose:
+
+- authentication identity
+- profile data
+- ownership of notes and generated study outputs
+
+Recommended fields:
+
 - `id`
 - `email`
 - `password_hash`
 - `first_name`
-- `last_name` (optional, profile completion)
+- `last_name` (optional)
 - `display_name` (optional)
-- `country_code` (optional, ISO-style such as `PH`, `US`)
+- `country_code` (optional)
 - `profile_type` (nullable enum)
 - `role` (`USER` | `ADMIN`)
-- `token_version` (integer for access-token invalidation)
-- `failed_login_attempts` (integer)
-- `locked_until` (nullable)
 - `status`
+- `token_version`
+- `failed_login_attempts`
+- `locked_until`
+- `email_verified_at` (nullable)
 - `created_at`
 - `updated_at`
 - `last_login_at` (nullable)
-- `email_verified_at` (nullable)
 
-Current signup payload direction:
-- `first_name`
-- `email`
-- `password_hash` (from password input)
-- `display_name` (optional, fallback to `first_name`)
-
-Fields deferred to onboarding/profile completion:
-- `profile_type`
-- `country_code`
-- `last_name`
-
-### display_name behavior
-- optional field
-- frontend may auto-fill it from `first_name`
-- if blank, UI may fall back to `first_name`
-- customized value should be preserved if the user edits it
-
-### profile_type
-Purpose:
-- onboarding / segmentation / personalization
-- not authorization
-- not permissions
-- not billing
-
-Initial values:
-- `STUDENT`
-- `PARENT`
-- `PROFESSIONAL`
-
-Teacher mode is intentionally deferred.
-
-### subscriptions
+## Subscriptions
 
 Purpose:
-- plan history
-- billing state
-- future analytics
-- future integration with billing providers
+
+- plan state and billing history
 
 Recommended fields:
+
 - `id`
 - `user_id`
-- `plan_type`
+- `plan_type` (`FREE` | `PREMIUM`)
 - `status`
 - `start_at`
 - `end_at` (nullable)
+- `provider_customer_id` (nullable)
+- `provider_subscription_id` (nullable)
 - `created_at`
 - `updated_at`
 
-Possible future additions:
-- `provider`
-- `provider_customer_id`
-- `provider_subscription_id`
-- `cancelled_at`
-- `renewal_at`
-- `trial_ends_at`
+## OCR Confirmation Drafts
 
-Initial plan direction:
-- `FREE`
-- `PREMIUM`
-
-Demo mode is separate from authenticated subscriptions.
-
-### study_packs
-
-Purpose:
-- store generated reusable study content
-
-Implemented direction:
-- `id`
-- `owner_user_id` (uuid, not null, references `users.id`)
-- `input_type` (`TEXT` | `IMAGE`)
-- `title`
-- `summary`
-- `key_concepts` (json/jsonb array)
-- `quiz` (json/jsonb array)
-- `tags` (text[], not null, default empty array)
-- `ocr_confidence` (nullable numeric)
-- `status`
-- `error_code` (nullable)
-- `model_used` (nullable)
-- `input_tokens` (nullable)
-- `output_tokens` (nullable)
-- `cached_input_tokens` (nullable)
-- `estimated_cost` (nullable)
-- `created_at`
-- `updated_at`
-
-Legacy architecture also referenced:
-- `model_tier` (`FREE | PREMIUM`)
-
-Recommendation:
-- long term, prefer tying effective plan behavior to subscriptions / usage rules rather than only storing `model_tier` on the Study Pack row.
-
-### study_pack_drafts
-
-Purpose:
-- store OCR low-confidence extracted text for user confirmation flow
+`study_pack_drafts` (or equivalent legacy table) stores low-confidence OCR extraction for confirmation flow.
 
 Recommended fields:
+
 - `id`
-- `owner_user_id` (uuid, not null when draft belongs to authenticated flow)
+- `owner_user_id` (nullable for anonymous flow)
 - `anon_id` (nullable)
 - `extracted_text`
 - `ocr_confidence`
 - `created_at`
 - `expires_at`
 
-### share_links
+## Share Links
 
 Purpose:
-- public sharing of generated Study Packs
 
-Fields:
+- public token sharing of Study Pack-ready Note output
+
+Recommended fields:
+
 - `token`
-- `study_pack_id`
+- `note_id` (or `study_pack_id` in legacy schema)
 - `is_public`
 - `created_at`
 - `expires_at` (nullable)
 - `view_count` (optional)
 
-### usage_daily (legacy optional direction)
+## Quiz Sessions and Performance
+
+Quick Review sessions:
+
+- linked to Note (`note_id`) and user
+- store progress/completion, score, retry count, confidence feedback
+
+Challenge Quiz sessions:
+
+- linked to Note and user
+- store generated challenge quiz payload, timer basis, answers, completion stats, weak concepts
+
+Adaptive Practice sessions:
+
+- linked to Note and user
+- store generated adaptive payload, progress/completion, score data
+
+## Usage Tracking
+
+Track usage buckets independently:
+
+- Study Pack generation quota
+- Challenge Quiz quota
+- Adaptive Practice quota
+
+Possible schemas:
+
+- `usage_daily` (counter style)
+- `usage_events` (analytics-ready event style)
+
+## Refresh Tokens
 
 Purpose:
-- simple counter-based usage tracking for MVP
 
-Fields:
-- `user_id` or `anon_id`
-- `date`
-- `count`
+- secure refresh-token rotation and keep-signed-in sessions
 
-### usage_events (future recommended direction)
+Recommended fields:
 
-Purpose:
-- analytics-ready usage tracking
-
-Potential fields:
 - `id`
 - `user_id`
-- `study_pack_id` (nullable)
-- `event_type`
-- `request_units`
-- `created_at`
-
-### refresh_tokens
-
-Purpose:
-- keep-signed-in sessions and secure token rotation
-
-Fields:
-- `id`
-- `user_id`
-- `token_hash` (sha256 hash of refresh token)
+- `token_hash`
 - `expires_at`
 - `revoked_at` (nullable)
 - `created_at`
 - `last_used_at` (nullable)
-- `keep_signed_in` (boolean)
+- `keep_signed_in`
 - `device_name` (nullable)
 - `ip_address` (nullable)
 - `user_agent` (nullable)
 
 ## Relationships
 
-### User → StudyPack
-- one user owns many Study Packs
+- User -> Notes: one-to-many
+- Note -> Generated Study Pack fields: one-to-one enhancement state
+- Note -> QuickReviewSession: one-to-many
+- Note -> ChallengeSession: one-to-many
+- Note -> AdaptiveSession: one-to-many
+- Note/StudyPack -> ShareLink: one-to-many over time
+- User -> Subscription: one-to-many history (typically one active)
 
-### User → Subscription
-- one user can have many subscription records over time
-- typically one active subscription at a time should be enforced by service logic and/or constraints later
+## JSON Structures
 
-### StudyPack → ShareLink
-- one Study Pack can have one or more share links over time
+Quiz item:
 
-### StudyPackDraft → User
-- draft rows are expected to be user-owned in real API flows
-
-## JSON structures
-
-### Quiz item
-Preferred prompt-contract structure:
 ```json
 {
   "question": "string",
   "choices": ["string", "string", "string", "string"],
   "answerIndex": 0,
-  "explanation": "string"
+  "explanation": "string",
+  "concept": "string"
 }
 ```
 
-### keyConcepts
-Simple string array:
+Key concepts:
+
 ```json
 ["Photosynthesis", "Chlorophyll", "Glucose"]
 ```
 
-### tags
-Simple string array:
+Tags:
+
 ```json
 ["Biology", "Photosynthesis"]
 ```
 
-## Deferred entities
+## Migration Guidance
 
-### account_links
-Parked for future family plans / linked learners.
+Suggested migration direction:
 
-Potential fields:
-- `id`
-- `owner_user_id`
-- `linked_user_id`
-- `relationship_type`
-- `status`
-
-Potential relationship types:
-- `PARENT_OF`
-- `GUARDIAN_OF`
-
-Not part of v1 user accounts.
-
-### teacher/classroom entities
-Deferred.
-
-## Migration guidance
-
-Suggested implementation order:
-1. keep legacy `Review` entities working where they still exist
-2. introduce Study Pack naming in DTOs/docs/new code
-3. add users
-4. add subscriptions
-5. link saved Study Packs to authenticated owners
-6. evolve the Study Library on top of owned Study Packs
-
-
+1. keep legacy tables functioning
+2. introduce/confirm `notes` as primary owned entity
+3. map generated output to Note lifecycle (`DRAFT` -> `STUDY_PACK_READY`)
+4. add clone endpoint + clone lineage fields
+5. shift feature code to Note-centric ownership checks
+6. keep legacy naming compatibility where required by existing schema

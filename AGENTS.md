@@ -34,16 +34,19 @@ Tone:
 
 ## V2 Notes and Study Pack architecture (required)
 
-- V2 uses a strict `1 Note <-> 1 current Study Pack` relationship.
-- Users can create and save notes.
-- Each note has one current Study Pack.
-- Regenerating a Study Pack replaces the current Study Pack for that same note.
-- Do not implement visible Study Pack version history in V2.
+- Note is the primary entity.
+- Study Pack is the AI-generated enhancement state of a Note.
+- Users can create and save notes before generation.
+- Note states:
+  - `DRAFT` (no generated content yet)
+  - `STUDY_PACK_READY` (generated content exists)
+- Do not overwrite generated content for an existing note.
+- Instead of regeneration, create a new version through `Clone Note`.
 
-Future direction (not V2):
-- If versioning is required later, use a dedicated `study_pack_history` snapshot table.
-- Do not turn V2 into a multi-pack-per-note architecture.
-- Candidate snapshot fields may include: `id`, `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`.
+Clone rules:
+- Clone copies: `title`, `subject`, `tags`, `content`.
+- Clone does not copy: generated `summary`, `key concepts`, `quizzes`, or performance history.
+- New Study Pack generation runs from the cloned note.
 
 Refer to:
 - `docs/product/SPEC.md` for product behavior

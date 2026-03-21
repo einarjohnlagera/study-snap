@@ -4,6 +4,12 @@ This file consolidates quiz-quality and prompt-quality guidance.
 
 Practice quizzes should feel like real study reviewers, not generic AI trivia.
 
+## Note-first generation context
+
+- Notes are saved first and remain the primary entity.
+- Study Pack output is the generated enhancement state of a Note.
+- New versions are created via `Clone Note`, not regeneration/overwrite on the same Note.
+
 ## Output structure
 
 The LLM should produce:
@@ -129,4 +135,4 @@ Adaptive quiz generation is a separate follow-up flow:
 - triggered from Quick Review results when weak concepts are detected
 - generated from weak concepts in the latest completed Quick Review session
 - returns a new short practice set (3-5 questions) with concept labels and explanations
-- does not overwrite or mutate the original Study Pack quiz
+- does not modify the original baseline Study Pack quiz

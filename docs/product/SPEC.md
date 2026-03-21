@@ -1,519 +1,230 @@
 # NoteLib Product Specification
 
-Rebrand note: StudySnap has been rebranded to NoteLib. Product behavior and database schema remain unchanged.
+Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table names remain unchanged unless explicitly requested.
 
 ## Product Overview
 
-NoteLib is an AI-powered study assistant that transforms notes into structured Study Packs containing summaries, key concepts, and quiz questions.
+NoteLib is an AI-powered study workspace that helps users turn their notes into structured study materials such as summaries, key concepts, and quizzes.
 
-The goal of NoteLib is to help students quickly convert raw learning material into a format that supports active recall and repeated practice.
+The goal is to support active recall and repeated practice through a calm, iterative learning workflow.
 
-NoteLib focuses on simplicity and fast study loops rather than complex study planning tools.
+## Core Concept
 
----
+Note-first model:
 
-# Core Learning Loop
+- Note is the main entity.
+- Study Pack is the AI-generated enhancement of a Note.
+- Users first save Notes, then generate Study Packs from those Notes.
 
-NoteLib is designed around a lightweight learning cycle:
+Note states:
 
-Notes → Study Pack → Quick Review → Retry mistakes → Dashboard recommendation → Repeat
+- `Draft` (no AI-generated content yet)
+- `Study Pack Ready` (AI-generated content exists)
 
-Users upload or capture notes which are converted into Study Packs.
-They review the material, test themselves through Quick Review, and the dashboard recommends what to study next.
+Generated Study Pack outputs include:
 
-This loop encourages consistent practice and reinforcement.
+- AI-generated title (optional)
+- subject (optional)
+- tags (optional)
+- summary
+- key concepts
+- practice quiz
+- Challenge Quiz
+- Adaptive Practice
 
----
+## Versioning Model (Clone Instead of Regenerate)
 
-# V2 Notes And Study Pack Architecture Decision
+NoteLib does not overwrite existing generated content.
 
-NoteLib V2 uses a strict `1 Note <-> 1 current Study Pack` relationship.
+Instead of regenerating from the same Note, users clone a Note, edit the clone, and generate a new Study Pack from the cloned Note.
 
-V2 behavior:
+Clone behavior:
 
-* users can create and save notes
-* each note has one current Study Pack
-* regenerating replaces the current Study Pack for that same note
-* V2 does not include visible Study Pack version history
+- Clone copies user-authored fields:
+  - title
+  - subject
+  - tags
+  - note content
+- Clone does not copy AI/generated history fields:
+  - summary
+  - key concepts
+  - quizzes
+  - performance history
 
-Rationale:
+This supports iterative learning and avoids accidental overwrites.
 
-* keeps the UX simple and calm
-* keeps the data model simple and implementation-aligned
-* avoids overengineering while the product evolves into a note-based study workspace
+## User Flow
 
-Future versioning direction (not V2):
+1. User creates or saves a Note.
+2. Note is stored in the system.
+3. User clicks `Generate Study Pack`.
+4. AI generates summary, key concepts, and quizzes.
+5. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice.
+6. If the user wants to improve the note, they clone the note, edit it, and generate a new Study Pack from the clone.
 
-* if versioning is needed later, implement a dedicated `study_pack_history` snapshot table
-* do not convert V2 into multi-pack-per-note architecture
-* potential snapshot fields:
-  * `id`
-  * `parent_study_pack_id`
-  * `note_id`
-  * `title`
-  * `summary`
-  * `subject`
-  * `concepts_json`
-  * `questions_json`
-  * `version_number`
-  * `archived_at`
+## Architecture Overview
 
----
+High-level model:
 
-# Key Features
+- `notes` table stores user-authored fields (`title`, `subject`, `content`, `tags`).
+- Generated fields are stored and linked to the same Note (`summary`, `key concepts`, `quizzes`).
+- Quiz sessions and performance are linked to the Note.
+- Clone creates a new Note row with copied user-authored fields only.
 
-## Feature Documentation
+## Product Philosophy
 
-Detailed feature behavior is documented in:
+Learning loop:
 
-- docs/features/*
+Capture -> Generate -> Review -> Improve -> Clone -> Repeat
 
-## Public Landing Page
-
-NoteLib includes a public landing page at `/` for unauthenticated users.
-
-Purpose:
-
-* communicate core product value quickly
-* explain how NoteLib works
-* drive signup and demo exploration
-
-Landing page sections:
-
-* hero (headline, supporting subheadline, primary + secondary CTAs)
-* Study Pack output preview (summary, key concepts, quick review)
-* how-it-works (3 steps)
-* feature highlights
-* pricing teaser (Free vs Premium overview)
-* final CTA section
-* FAQ section before the footer, using a lightweight accordion layout
-
-Demo mode:
-
-* public route `/demo` provides a prebuilt Study Pack walkthrough
-* demo does not create a real user session
-* demo does not trigger new LLM generation cost
-
-## Study Pack Generation
-
-Study Packs are generated from user-provided notes using AI.
-
-Each Study Pack contains:
-
-* Title
-* Summary
-* Key Concepts
-* Quiz Questions
-
-Study Packs act as the main unit of learning inside the system.
+NoteLib is designed to help users iteratively improve understanding, not just generate summaries once.
 
 ---
 
-## Study Library
+## Key Features
 
-The Study Library allows users to access and manage all generated Study Packs.
+### Public Landing Page
+
+Route: `/`
+
+Required sections:
+
+- hero
+- Study Pack preview
+- how-it-works
+- feature highlights
+- pricing teaser
+- final CTA
+- FAQ (before footer; lightweight accordion)
+
+CTA behavior:
+
+- primary CTA: account creation
+- secondary CTA: demo exploration (`/demo`)
+
+### Study Pack Generation
+
+- Input modes: pasted notes text or uploaded image notes (OCR)
+- Output: title, summary, key concepts, quiz questions, metadata (`subject`, `tags`)
+- Demo mode must not call real generation pipeline, persist data, or consume usage
+- Unverified users are blocked from generation with structured `403`:
+  - `code=EMAIL_VERIFICATION_REQUIRED`
+  - `action=RESEND_VERIFICATION`
+
+### Study Library
+
+The Study Library is where users revisit generated content.
 
 Users can:
 
-* view saved Study Packs
-* search Study Packs by title or tags
-* filter by one subject at a time (`All subjects` default)
-* filter by multiple tags using a scalable multi-select dropdown with OR matching (a pack matches if any selected tag is present)
-* combine search, subject filter, and tag filters together
-* sort Study Packs (recently created, recently reviewed, title)
-* open a Study Pack by clicking the card or title
-* start Quick Review from a Study Pack card
-* read summaries and key concepts
-* view tag chips for quick scanning
-* load Study Packs in paginated batches (default 20) with a `Load More` control
-* start Quick Review sessions
-* delete Study Packs
+- view saved Study Packs
+- search by title/tags
+- filter by subject (single select, `All subjects` default)
+- filter by tags (multi-select OR matching)
+- combine search + subject + tag filters (frontend-only on loaded items)
+- sort by recent/title
+- open by clicking card/title
+- start Quick Review
+- delete Study Packs (Library only, explicit confirmation)
+- load paginated results (cursor-based, default `20`, explicit `Load More`)
 
-The Study Library acts as the central location for accessing learning material.
+Dashboard guidance rules:
 
-Library filter implementation note:
+- Dashboard is non-destructive and guidance-first.
+- Deletion is not available from Dashboard.
+- Dashboard may show `Mastery Snapshot` based on existing completed Quick Review data.
 
-* subject and tag filters are frontend-only on currently loaded Study Packs
-* selected tags are shown as removable active chips
-* filtering safely handles missing/empty `subject` and `tags` values on older Study Packs
-* sorting is applied after search/filtering on the visible set
+### Shareable Study Packs
 
-Dashboard behavior note:
+- Public share links use `/p/{token}`
+- Shared pages are read-only and auth-aware
+- Share page can show title, summary, key concepts, and quiz preview
+- Remix/copy duplicates into current user library and must not call LLM
+- Duplicate title resolution:
+  - `{Title}`
+  - `{Title} (Copy)`
+  - `{Title} (Copy 2)`, `{Title} (Copy 3)`, ...
+- Success feedback: `Study Pack copied to your library.`
 
-* Dashboard is guidance-first and non-destructive
-* Study Pack deletion is handled in the Library page, not the Dashboard
-* Dashboard Study Pack previews open by clicking the card/title (no explicit `Open` button)
-* Study Pack deletion from the Library must require an explicit confirmation step
+### Quick Review
 
-## Authentication Session Handling
+- Primary quiz mode for a Study Pack
+- Immediate correctness feedback (`green = correct`, `red = incorrect`)
+- Retry incorrect questions once
+- Optional confidence feedback (`HIGH`, `MEDIUM`, `LOW`)
+- Session history persists for progress tracking
 
-Protected app routes require authentication.
+### Challenge Quiz (Premium)
 
-Behavior:
+- Timed exam-style mode (10 minutes)
+- Generated from Study Pack summary + key concepts only
+- Difficulty and question count adapt by latest Quick Review score:
+  - `<50`: 10 questions, easy-medium
+  - `<80`: 12 questions, medium
+  - `>=80`: 15 questions, medium-hard
+- Reuse existing in-progress session to avoid duplicate LLM calls
+- Persist in-progress state (answers, index, timer basis)
+- Usage limit: 50/month (separate from Study Pack generation quota)
 
-* when protected API requests return `401 Unauthorized`, NoteLib clears local auth state and redirects to `/login`
-* login redirect preserves destination using `redirect` query parameter (example: `/login?redirect=/study-packs/{id}`)
-* session-expired redirects include a user-friendly login hint (`Your session has expired. Please log in again.`)
-* after successful login, verified/onboarded users are returned to the preserved destination when available
-* unauthenticated access to protected routes is redirected to login with destination preservation
-* users can sign up and log in before email verification is complete
-* email verification uses tokenized email links with one-time, expiring tokens
-* transactional verification email delivery uses Resend behind a provider-agnostic email service abstraction
-* transactional email subject/body rendering uses file-based parameterized templates (not database-backed templates)
-* campaign or blast email systems are future work and separate from transactional email
-* unverified users must not generate Study Packs until `email_verified_at` is set
-* authenticated unverified users should see a verification banner with resend action in the app shell
-* generation attempts by unverified users return `403` with structured API error:
-  * `code`: `EMAIL_VERIFICATION_REQUIRED`
-  * `message`: `Verify your email to generate Study Packs.`
-  * `action`: `RESEND_VERIFICATION`
+### Adaptive Practice (Premium)
 
----
+- Generated from Study Pack summary + key concepts + weak concepts only
+- Question count by weak-concept volume:
+  - `<=2`: 5
+  - `<=4`: 7
+  - `>=5`: 10
+- Reuse existing in-progress session to avoid duplicate LLM calls
+- Usage limit: 50/month (separate from Study Pack generation quota)
 
-## Profile And Settings Responsibilities
+### Authentication Session Handling
 
-Profile page scope:
+- Protected routes require auth
+- `401` on protected API calls clears auth and redirects to `/login`
+- Preserve destination with `redirect` query param
+- Session-expired redirects include `reason=session_expired`
+- Users can sign up/login before verification; unverified users are blocked from generation
+- Verification email delivery uses provider-agnostic `EmailService`
+- Transactional email content uses file-based templates
 
-* focuses on user identity information and profile type
-* includes editable identity fields (`Name`, `Email`)
-* includes editable `Profile Type`
-* includes read-only `Account Information`:
-  * `Member since` (readable month/year format)
-  * `Plan`
-  * `Study Packs created`
-* does not include a separate `Actions` section
+### Plan and Billing
 
-Settings page scope:
+Settings route section: `Plan & Billing`
 
-* owns account configuration and behavior controls
-* owns plan management under `Plan & Billing`
-* upgrade and billing-related actions should stay in Settings, not Profile
+- show plan (`FREE` or `PREMIUM`)
+- show usage buckets separately:
+  - Study Packs (monthly quota)
+  - Challenge Quiz (50/month)
+  - Adaptive Practice (50/month)
+- Stripe Checkout for upgrade
+- Stripe webhook sync keeps plan state aligned
+- Premium-gated upgrade prompts should link to `/settings#plan-billing`
 
----
+Plan limits:
 
-## Shareable Study Packs
-
-Study Packs can be shared publicly using token links.
-
-Share behavior:
-
-* owners can generate or reuse a tokenized share link for a Study Pack
-* public share route is `/p/{token}`
-* shared page layout is auth-aware:
-  * unauthenticated viewers use the public minimal navbar
-  * authenticated viewers use the app shell/sidebar layout
-* shared Study Pack pages are read-only (no direct editing)
-* shared pages show title, summary, key concepts, and quiz preview
-* Study Pack detail includes an in-product share action (`Copy Link`)
-* copying a share link confirms with `Share link copied`
-
-Remix behavior:
-
-* shared pages support `Copy to my Study Library` for authenticated users
-* remix duplicates the Study Pack under the current user
-* copied Study Packs auto-resolve duplicate titles per user:
-  * first duplicate: `{Title} (Copy)`
-  * next duplicates: `{Title} (Copy 2)`, `{Title} (Copy 3)`, ...
-* remix does not trigger a new LLM generation request
-* successful remix shows `Study Pack copied to your library.` after redirect
-* unauthenticated users see a signup/login CTA to copy
-* original shared Study Pack remains immutable
+- Free: 5 Study Packs/month, includes summaries/key concepts/Quick Review/retry/Library/Today's Focus/AI Study Coach
+- Premium: 100 Study Packs/month + Challenge Quiz + Adaptive Practice + weak concept insights
 
 ---
 
-## Quick Review
+## Activity Tracking
 
-Quick Review allows users to actively practice a Study Pack through an interactive quiz.
+Track lightweight events such as:
 
-Users answer questions one at a time and receive immediate feedback. After the first pass, incorrectly answered questions may appear again in a retry round to reinforce learning.
+- `CREATED_STUDY_PACK`
+- `STARTED_QUICK_REVIEW`
+- `COMPLETED_QUICK_REVIEW`
+- `COMPLETED_ADAPTIVE_QUIZ`
 
-Answer feedback semantics (Quick Review and Adaptive Practice):
-
-* correct answers are highlighted in green with `✓ Correct`
-* selected incorrect answers are highlighted in red with `✗ Incorrect`
-* when a user answers incorrectly, both the wrong selected option (red) and the correct option (green) are shown
-* non-selected, non-correct options remain neutral
-* blue is not used for correct/incorrect answer states
-
-Quick Review sessions track:
-
-* correct answers
-* total questions
-* score percentage
-* session history
-* optional post-review confidence feedback (`HIGH`, `MEDIUM`, `LOW`)
-
-Confidence feedback behavior:
-
-* results screen includes `How confident did you feel about this topic?`
-* options: `Very confident`, `Somewhat confident`, `Not confident`
-* confidence is optional and does not block review completion
-* saved confidence supports future learning analytics and adaptive recommendations
-
-Users can leave a review session and resume it later if it remains unfinished.
-
-For detailed behavior including retry logic, scoring rules, and session states, see:
-
-docs/features/quick-review.md
+Events are linked to user + Note/Study Pack context and timestamp.
 
 ---
 
-## Challenge Quiz (Premium)
-
-Challenge Quiz is a timed, exam-style review mode for Premium users.
-
-Behavior:
-
-* generates new quiz questions via LLM
-* generation input uses only Study Pack `summary` and `keyConcepts` (never extracted OCR text)
-* question count and difficulty adapt from latest completed Quick Review score:
-  * score < 50%: 10 questions, `easy-medium`
-  * score < 80%: 12 questions, `medium`
-  * score >= 80%: 15 questions, `medium-hard`
-* generated questions must not duplicate stored Study Pack quiz questions
-* runs with a 10-minute timer
-* stores a dedicated challenge session result with score and percentage
-* reuses existing in-progress challenge sessions to avoid unnecessary LLM regeneration
-* discourages accidental exit while in progress:
-  * hide casual back affordances on the active quiz screen
-  * show leave confirmation where technically supported
-* persists in-progress state for recovery:
-  * current question index
-  * selected answers
-  * timing state (original start time + time limit)
-* timer continues in real time while active, even if user leaves or refreshes
-* when returning to an unfinished session:
-  * resume if time remains
-  * auto-complete if time has already expired
-* selected answer state before submission should use clear full-choice-box highlighting (neutral accent)
-* correctness colors remain post-grading:
-  * correct answer: green
-  * selected incorrect answer: red
-  * unrelated options: neutral
-* challenge completion includes statistics computed from session data (no LLM):
-  * score summary (`correctAnswers`, `totalQuestions`, `scorePercentage`)
-  * performance level mapping:
-    * 90-100: `Excellent`
-    * 75-89: `Good`
-    * 50-74: `Fair`
-    * below 50: `Needs Improvement`
-  * concept breakdown (`correct/total` + accuracy per concept)
-  * weak concepts list (concept accuracy < 60%)
-* weak concepts from Challenge completion are persisted and can be used by Adaptive Practice
-
-Gating and limits:
-
-* Free users cannot start Challenge Quiz and should see an upgrade path
-* Premium users can start Challenge Quiz up to 50 times per month
-* when the monthly limit is reached, show: `You've reached your monthly Challenge Quiz limit.`
-* Challenge Quiz usage is tracked separately and does not deduct from Study Pack generation credits
-
-Study Pack detail entry behavior:
-
-* `Start Quick Review` is the primary quiz action
-* `Challenge Quiz` is shown as a secondary action (premium-gated for Free users)
-* `Adaptive Practice` is shown only when weak concepts are available
-* Study Pack detail `Performance Overview` should include both Quick Review and Challenge Quiz stats
-* recent review history on Study Pack detail should include entries across quiz modes, not Quick Review only
-
-Quick Review results next-step behavior:
-
-* if the user struggles (for example weak concepts or a lower score), results should recommend `Adaptive Practice`
-* if the user performs well, results should recommend `Challenge Quiz`
-* keep `Back to Study Pack` as the primary completion action
-
----
-
-## Adaptive Practice (Premium)
-
-Adaptive Practice is a targeted Premium follow-up mode generated from weak concepts.
-
-Behavior:
-
-* source weak concepts from latest completed Quick Review for the same Study Pack
-* generate new questions via LLM using only `summary`, `keyConcepts`, and weak concepts
-* never send extracted OCR text for adaptive generation
-* adaptive question count follows weak-concept volume:
-  * weak concepts <= 2: 5 questions
-  * weak concepts <= 4: 7 questions
-  * weak concepts >= 5: 10 questions
-* generated adaptive questions must not duplicate stored Study Pack quiz questions
-* in-progress adaptive sessions are reused to avoid unnecessary LLM regeneration
-
-Gating and limits:
-
-* Free users cannot start Adaptive Practice and should see an upgrade path
-* Premium users can start Adaptive Practice up to 50 times per month
-* Adaptive usage is tracked separately and does not deduct from Study Pack generation credits
-
----
-
-## Study Pack AI Study Coach
-
-The Study Pack detail page includes a compact `AI Study Coach` panel.
-
-The panel uses existing Quick Review context (latest completed session and weak concepts) to show:
-
-* focus areas (when weak concepts exist)
-* a suggested next step
-
-If no completed Quick Review exists yet, the panel shows a supportive prompt to start the first review.
-
-This guidance layer is data-driven and does not require an additional LLM call.
-
----
-
-## Smart Continue Studying
-
-The dashboard includes a recommendation card that suggests the most useful next study action.
-
-The system analyzes recent activity and may recommend:
-
-* resuming an unfinished Quick Review
-* revisiting a Study Pack with a low recent score
-* continuing a recently opened Study Pack
-* starting review of a newly created Study Pack
-
-The messaging adapts to the user’s learning progress to encourage continued study.
-
-For detailed recommendation logic and messaging rules, see:
-
-docs/features/dashboard-recommendation.md
-
----
-
-## Study Engagement Modes
-
-NoteLib uses a user-controlled engagement model so motivation stays supportive and flexible.
-
-Available engagement modes:
-
-* FOCUSED (default)
-* CONSISTENCY
-* STREAK
-
-Behavior:
-
-* FOCUSED: no streak/consistency card, keep a calm guidance-first dashboard
-* CONSISTENCY: show a lightweight weekly consistency summary
-* STREAK: show consecutive-day streak progress
-
-Today’s Focus remains the primary dashboard guidance card in all modes.
-
----
-
-## Mastery Snapshot (Dashboard)
-
-The dashboard includes a compact `Mastery Snapshot` card that summarizes recent learning performance using existing completed Quick Review session data.
-
-Displayed metrics:
-
-* average recent score
-* best recent score
-* Study Packs reviewed (distinct packs in the recent session window)
-
-Behavior:
-
-* metrics use lightweight existing session data only (no heavy analytics pipeline)
-* if no completed Quick Review sessions exist, show a supportive empty-state prompt to complete the first review
-* placement is below `Today's Focus` and below Study Consistency/Streak (when shown), and above `Continue studying`
-
----
-
-# Activity Tracking
-
-NoteLib records key learning actions as activity events.
-
-These events help support:
-
-* future analytics
-* learning insights
-* recommendation improvements
-
-Examples of tracked events include:
-
-* CREATED_STUDY_PACK
-* STARTED_QUICK_REVIEW
-* COMPLETED_QUICK_REVIEW
-* COMPLETED_ADAPTIVE_QUIZ
-
-Activity events store the related user, Study Pack, and timestamp.
-
----
-
-# Pricing Model (Initial)
-
-NoteLib will launch with a simple usage-based model.
-
-Free Plan:
-
-* up to 5 Study Packs generated per month
-* includes Study Pack generation, summaries, key concepts, Quick Review, retry, Library, Today's Focus, and AI Study Coach
-* does not include Weak Concept Detection
-* does not include Adaptive Practice
-* does not include Challenge Quiz
-
-Premium Plan:
-
-* up to 100 Study Packs generated per month
-* includes everything in Free
-* includes Challenge Quiz (50/month)
-* includes Adaptive Practice (50/month)
-* includes Weak Concept Detection / weak concept insights
-* includes advanced review tools
-
-Feature-gating behavior:
-
-* premium-only features should show a clear upgrade path when accessed on Free
-* gating should not break core review or study flows
-* upgrade prompts for Premium-only flows should direct users to Settings `Plan & Billing` (`/settings#plan-billing`)
-
----
-
-## Plan & Billing (Settings)
-
-Settings includes a dedicated `Plan & Billing` section.
-
-Users can:
-
-* view current plan (`FREE` or `PREMIUM`)
-* view monthly usage with separate progress indicators:
-  * Study Packs (`used / monthly limit`)
-  * Challenge Quiz (`used / 50`)
-  * Adaptive Practice (`used / 50`)
-* review Premium feature highlights (100 Study Packs/month, Challenge Quiz, Adaptive Practice, Weak Concept insights)
-* upgrade with Stripe Checkout from `Upgrade to Premium`
-
-Usage policy:
-
-* Study Pack usage, Challenge Quiz usage, and Adaptive Practice usage are tracked independently
-* quiz usage must not deduct from Study Pack generation credits
-
-Stripe billing behavior:
-
-* upgrading creates/uses a Stripe customer linked to the user
-* checkout completion and recurring payment events are processed via Stripe webhooks
-* confirmed active subscription sets plan to `PREMIUM`
-* canceled/ended/failed subscription reverts plan to `FREE`
-
-Dashboard usage indicator:
-
-* Free users see a monthly plan usage card (`Free Plan`, `used / 5`)
-* card includes a subtle upgrade action linking to Settings `Plan & Billing`
-* when limit is reached, show a supportive quota-reached message and upgrade CTA
-
----
-
-# Non-Goals (Initial Version)
-
-The first version of NoteLib intentionally avoids complex learning management features.
-
-Not included in the initial release:
-
-* spaced repetition scheduling
-* full exam simulation modes
-* advanced learning analytics dashboards
-* classroom or teacher management tools
-* collaborative study features
-
-These may be explored in future versions.
+## Non-Goals (Current Scope)
+
+Not included unless explicitly requested:
+
+- spaced repetition scheduling
+- full exam simulation grading engine
+- heavy analytics dashboards
+- classroom/teacher management
+- collaborative/family linking features

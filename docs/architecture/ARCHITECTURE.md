@@ -1,202 +1,278 @@
-# ARCHITECTURE.md — NoteLib
+# ARCHITECTURE.md - NoteLib
 
-This document describes the NoteLib system architecture and how the backend connects to the web frontend.
+This document describes the NoteLib system architecture and how backend services connect to the web frontend.
 
-NoteLib core workflow:
+Core workflow:
 
-**Notes (text or photo) → Study Pack (summary + key concepts + practice quiz) → save / revisit / optional sharing**
+Notes (Draft) -> Generate Study Pack -> Review (Quick/Challenge/Adaptive) -> Improve -> Clone Note -> Generate again
 
 ## Goals (MVP)
+
 - convert notes into structured study materials
 - support pasted text and image upload (OCR)
-- provide low-confidence OCR fallback where the user can edit extracted text
-- persist generated outputs so users can revisit them later
-- enable shareable Study Pack links
-- prepare for authenticated ownership and future plans
+- provide low-confidence OCR fallback with editable extracted text
+- persist generated outputs for revisit and review
+- support shareable Study Pack links and remix/copy
+- enforce auth ownership and usage limits
 
 Non-goals for current MVP:
-- full exam simulation with grading analytics
-- complex classroom roles
-- gamification, streaks, leaderboards
-- heavy dashboards
 
-## System overview
+- heavy analytics pipelines
+- classroom/teacher management
+- gamification-heavy loops
+- full exam simulation grading engine
+
+## System Overview
 
 ### Frontend (Next.js)
+
 Routes:
+
 - `/` landing
-- `/study` create Study Pack from notes
-- `/share/[token]` public shared Study Pack page
-- `/dashboard` Study Library destination
+- `/demo` demo walkthrough (no real generation)
+- `/study` create/edit notes and generate Study Pack
+- `/dashboard` guidance + library entry
+- `/settings` plan/billing and account controls
+- `/p/{token}` public shared Study Pack
 
 Frontend calls backend via `NEXT_PUBLIC_API_BASE_URL`.
 
 ### Backend (Spring Boot)
-Responsibilities:
-- orchestrate OCR + LLM
-- validate inputs and enforce limits
-- delete images after OCR
-- store Study Pack output and share tokens
-- support authenticated ownership and subscription-aware behavior
-- run under servlet context path `/api`
 
-### Local infrastructure
-`docker-compose.yml` can provide local PostgreSQL 16 and optionally the backend container.
+Responsibilities:
+
+- validate input and enforce limits
+- orchestrate OCR + LLM generation
+- persist note-authored fields and generated Study Pack fields
+- persist review sessions and performance
+- enforce plan usage limits and premium gates
+- support sharing/remix operations
+- avoid logging raw images and full extracted text
+
+### Local Infrastructure
+
+`docker-compose.yml` can provide local PostgreSQL 16 and optional backend container.
 
 Typical datasource env vars:
+
 - `DB_HOST=localhost`
 - `DB_PORT=5432`
 - `DB_NAME=study_snap`
 - `DB_USER=ss_user`
 - `DB_PASSWORD=ss#20260305`
 
-Typical local runs:
-- `docker compose up -d postgres`
-- start backend; Flyway applies migrations on startup
+## Note-First Domain Model
 
-## Backend modules
+NoteLib uses a note-first model.
+
+- Note is the primary entity.
+- Study Pack is the generated enhancement state of a Note.
+- A Note can be:
+  - `Draft` (user-authored content only)
+  - `Study Pack Ready` (generated content exists)
+
+Versioning model:
+
+- Generation does not overwrite existing generated content.
+- Users create a new version by cloning a Note and generating from the clone.
+- Clone creates a new Note row with copied user-authored fields only:
+  - copied: `title`, `subject`, `tags`, `content`
+  - not copied: `summary`, `key concepts`, `quizzes`, performance history
+
+## High-Level Data Ownership
+
+- `notes` stores user-authored fields (`title`, `subject`, `content`, `tags`, ownership metadata, state)
+- generated fields (`summary`, `key_concepts`, `quiz`) are linked to the same Note
+- review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context
+- share links reference generated Study Pack view data
+- clone creates a new Note identity and lineage reference (optional `source_note_id`)
+
+## Backend Modules
 
 ### Controllers
-- `StudyPackController` (legacy naming, can evolve later)
-  - creates Study Packs from text or image
-  - handles OCR-confirmation resubmits
+
+- `StudyPackController` (legacy naming retained)
+  - generate from text/image
+  - confirm OCR text
+  - fetch generated Study Pack view
+- `NoteController` (current/future surface)
+  - create/update note
+  - clone note
+  - list notes/library
 - `ShareController`
-  - creates share links
-  - serves public shared content
+  - create share token
+  - resolve shared content
 - `HealthController` (optional)
-- future auth controllers
+- auth controllers (`/api/auth/*`)
 
 ### Services
-- `StudyPackService` / future `StudyPackService`
-  - validate → OCR (if image) → normalize → LLM → validate output → persist → return
+
+- `StudyPackService` orchestrator
+  - validate -> OCR (if image) -> normalize -> LLM -> validate output -> persist -> return
+- `NoteService`
+  - note CRUD
+  - clone behavior
+  - state transitions (`Draft` -> `Study Pack Ready`)
 - `OcrService`
 - `LlmStudyPackService`
 - `UsageLimitService`
 - `ShareService`
-- future `UserAccountService`
-- future `SubscriptionService`
+- `QuickReviewService`
+- `ChallengeQuizService`
+- `AdaptivePracticeService`
 
 ### Persistence
-- `StudyPackRepository` / future `StudyPackRepository`
+
+- `NoteRepository`
+- `StudyPackRepository` (transitional naming where still present)
 - `ShareLinkRepository`
-- optional `StudyPackDraftRepository`
-- future `UserRepository`
-- future `SubscriptionRepository`
+- optional `StudyPackDraftRepository` (OCR text confirmation flow)
+- quiz session repositories
+- user/subscription repositories
 
-## V2 Notes And Study Pack Relationship
+## Generation Pipeline
 
-Architecture decision for NoteLib V2:
+Recommended flow:
 
-- one note maps to one current Study Pack (`1 Note <-> 1 Study Pack`)
-- users can create and save notes
-- generating for a note creates or updates that note's current Study Pack
-- regenerating replaces the current Study Pack for that same note
-- V2 does not expose visible Study Pack version history
+1. validate note ownership and input size
+2. if image input: OCR detect/extract
+3. if OCR low confidence: return confirmation draft payload
+4. normalize note text
+5. build LLM prompt
+6. call LLM
+7. parse and schema-validate JSON
+8. run one repair pass on validation failure
+9. persist validated generated output linked to Note
+10. set Note state to `Study Pack Ready`
+11. return generated payload
 
-Rationale:
+## API Endpoints (Current and Near-Future)
 
-- preserve a calm and simple user workflow
-- keep persistence and retrieval logic straightforward
-- avoid overengineering while NoteLib is still converging on the note-based workspace model
+Generation:
 
-Future versioning direction (post-V2):
+- `POST /api/study-packs` (text or image generation)
+- `POST /api/study-packs/confirm-text` (OCR confirmation input)
 
-- if version history is needed, add a dedicated `study_pack_history` snapshot table
-- keep the primary V2 relationship unchanged rather than switching to multi-pack-per-note
-- expected snapshot fields can include:
-  - `id`
-  - `parent_study_pack_id`
-  - `note_id`
-  - `title`
-  - `summary`
-  - `subject`
-  - `concepts_json`
-  - `questions_json`
-  - `version_number`
-  - `archived_at`
+Notes:
 
-## API endpoints
+- `POST /api/notes` (create note draft)
+- `PATCH /api/notes/{id}` (update note content/metadata)
+- `POST /api/notes/{id}/clone` (clone note for new version)
+- `GET /api/notes` (library list; cursor pagination)
 
-Note:
-- Real product endpoints are designed for authenticated usage.
-- Current implementation prepares ownership logic via user context resolution and can be wired to full auth middleware next.
-- Study Pack generation is blocked until account email is verified.
-- Security uses Spring Security + JWT access tokens + rotating refresh tokens.
+Study Pack access:
 
-### Create StudyPack from text
-`POST /api/study-packs`
-Content-Type: `application/json`
+- `GET /api/study-packs/{id}`
+- `GET /api/study-packs?limit={n}&cursor={token}`
+- `DELETE /api/study-packs/{id}`
 
-Request example:
-```json
-{ "notesText": "..." }
-```
+Share:
 
-### Create StudyPack from image
-`POST /api/study-packs`
-Content-Type: `multipart/form-data`
+- `POST /api/study-packs/{id}/share`
+- `GET /api/share/{token}`
 
-Form fields:
-- `image`: file (`jpeg/png/webp`)
-- `subject`: optional string
+Auth and onboarding:
 
-Low-confidence OCR response:
-```json
-{
-  "status": "needs_text_confirmation",
-  "id": "draftId",
-  "extractedText": "string",
-  "meta": { "ocrConfidence": 0.72 }
-}
-```
-
-### Confirm extracted text
-`POST /api/study-packs/confirm-text`
-
-Request example:
-```json
-{ "draftId": "string", "notesText": "user-edited text" }
-```
-
-### Auth onboarding and verification (current foundation)
 - `POST /api/auth/signup`
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
-- `POST /api/auth/onboarding/profile-type`
-- `POST /api/auth/verify-email/request` (placeholder send flow)
-- `POST /api/auth/verify-email/confirm` (placeholder confirm flow)
+- `POST /api/auth/verify-email/request`
+- `POST /api/auth/verify-email/confirm`
 
-Token-backed verification is planned as a future upgrade.
+## API Security Model
 
-## API security model
-
-- all non-public endpoints require Bearer access token
+- non-public endpoints require Bearer access token
 - access token is short-lived JWT
-- refresh token is stored hashed in database and rotated on refresh
-- keep-signed-in extends refresh token lifetime
-- role model includes `USER` and `ADMIN`
-- brute-force protection includes login rate limiting + lockout policy
+- refresh token is hashed in DB and rotated on refresh
+- protected-route 401 handling is centralized in frontend `lib/api.ts`
+- unverified users are authenticated but generation-blocked
+- generation-block response contract:
+  - status: `403`
+  - `code=EMAIL_VERIFICATION_REQUIRED`
+  - `action=RESEND_VERIFICATION`
 
-### Get saved StudyPack
-`GET /api/study-packs/{id}`
+## Study Library Architecture
 
-### Create share link
-`POST /api/study-packs/{id}/share`
+Library is a retrieval and revisit surface for generated Note outputs.
 
-### Resolve share link
-`GET /api/share/{token}`
+Required backend behavior:
 
-Response should return sanitized public data only.
+- list note-linked Study Packs with cursor pagination (`limit` default `20`)
+- return `items`, `nextCursor`, `hasMore`
+- support delete action (Library only with explicit confirmation in UI)
+- include metadata for scanning/filtering (`title`, `subject`, `tags`, summary preview, timestamps)
 
-## Error handling convention
+Filtering model:
 
-- every API error response includes `requestId`
-- backend also returns `X-Request-Id`
-- clients may surface the id to users for support/debugging
+- search + subject + tag filtering remains frontend-side for loaded items
+
+## Share and Remix Architecture
+
+- shared links use unguessable tokens
+- public page is read-only
+- shared payload omits private/raw input where not needed
+- remix/copy duplicates into current user library without LLM generation
+- title collisions are auto-resolved with `(Copy)`, `(Copy 2)`, ...
+
+## Quiz Architecture
+
+Quick Review:
+
+- uses stored Study Pack quiz
+- retry incorrect questions once
+- persists session and confidence feedback
+
+Challenge Quiz (Premium):
+
+- generated from summary + key concepts only
+- timed and continuously persisted
+- resumes in-progress session if present (no duplicate generation call)
+
+Adaptive Practice (Premium):
+
+- generated from summary + key concepts + weak concepts only
+- resumes in-progress session if present (no duplicate generation call)
+
+Usage tracking:
+
+- Study Pack generation quota and quiz-mode quotas are independent
+
+## Demo Guardrails
+
+Demo mode (`/demo` or `?demo=true`) must:
+
+- use static sample note input
+- simulate latency only
+- return placeholder payload
+- skip database writes
+- skip usage counting
+- skip OpenAI calls
+
+## OCR Strategy
+
+Hybrid OCR flow:
+
+1. quick text detection
+2. full OCR only if text is detected
+3. normalize extracted text before LLM use
+
+Normalization rules:
+
+- trim whitespace
+- collapse repeated spaces
+- reduce broken line wraps
+- preserve paragraph structure
+
+## Error Handling
+
+- all API errors include `requestId`
+- backend returns `X-Request-Id`
+- clients can surface request id for support/debugging
 
 Example:
+
 ```json
 {
   "requestId": "string",
@@ -208,269 +284,6 @@ Example:
 }
 ```
 
-## study pack generation output contract
+## Data Model Reference
 
-The backend should require the LLM to output strict JSON with:
-- `title`
-- `summary`
-- `keyConcepts`
-- `quiz`
-
-The stricter contract used going forward is documented in `docs/ai/PROMPTS.md`:
-- exactly four choices per quiz item
-- `answerIndex` between 0 and 3
-- schema validation + one repair pass on failure
-
-## LLM generation pipeline
-
-Recommended flow:
-1. validate input
-2. if image: OCR → extracted text
-3. normalize notes
-4. build prompt
-5. call LLM
-6. parse JSON
-7. validate JSON schema
-8. if validation fails, run one repair pass
-9. persist only validated output
-10. return response
-
-## Study Library architecture
-
-The Study Library is the persistence and retrieval layer for generated Study Packs.
-
-Each generated Study Pack should be retrievable for future study sessions.
-
-Required backend support:
-- list saved Study Packs
-- fetch Study Pack by id
-- delete Study Pack
-
-Study Pack list pagination:
-- endpoint: `GET /api/study-packs`
-- query params:
-  - `limit` (optional, default `20`)
-  - `cursor` (optional, opaque cursor token)
-- response:
-  - `items`: current page list
-  - `nextCursor`: cursor for the next page, nullable
-  - `hasMore`: whether additional pages are available
-
-Frontend pagination behavior:
-- initial Library load requests first page (`limit=20`)
-- `Load More` requests the next page using `nextCursor`
-- no infinite scroll; explicit button-driven pagination
-
-Recommended list metadata:
-- id
-- title
-- summary preview
-- createdAt
-- quiz question count
-- tags when available
-
-Future extensions:
-- rename
-- tags
-- folders / collections
-- reviewed status
-
-## Activity Tracking
-
-NoteLib records lightweight user activity events to support future study workflow features.
-
-Purpose:
-- capture key study actions without changing current product behavior
-- provide a reliable foundation for future streaks, continue-studying suggestions, Quick Review flows, and usage analytics
-
-Persistence:
-- table: `user_activity_events`
-- fields:
-  - `id`
-  - `user_id`
-  - `study_pack_id` (nullable)
-  - `activity_type`
-  - `created_at`
-
-Activity types:
-- `CREATED_STUDY_PACK`
-- `OPENED_STUDY_PACK`
-- `STARTED_QUICK_REVIEW`
-- `COMPLETED_QUICK_REVIEW`
-
-Recording model:
-- feature code calls a centralized `ActivityTrackingService`
-- the service handles event persistence details through `ActivityEventRepository`
-- activity write failures are logged and do not interrupt main Study Pack requests
-
-## Tags architecture
-
-Study Packs may support tags for organization and filtering.
-
-Purpose:
-- subject/topic categorization
-- dashboard filtering
-- future analytics and topic grouping
-
-Recommended MVP-friendly implementation:
-- store tags as a simple array field on the Study Pack record
-
-Example:
-```json
-["Biology", "Photosynthesis"]
-```
-
-## User accounts architecture direction
-
-User accounts should arrive before a fully authenticated Study Library implementation.
-
-Reason:
-- ownership of saved Study Packs becomes explicit
-- plan-based usage limits become easier to enforce
-- premium feature gating becomes easier
-- future subscription analytics become easier
-
-High-level separation:
-- `users`: identity + core profile
-- `subscriptions`: plan history and billing state
-- `study_packs`: user-owned generated content
-- future tables later: usage tracking, account links, etc.
-
-## Share architecture
-
-Shared Study Packs use unguessable tokens.
-
-Rules:
-- public endpoint exposes generated Study Pack content only
-- raw uploaded image must not be exposed
-- raw notes text should be omitted by default
-- expiration is optional later
-- view counts are optional
-
-## Demo architecture
-
-Demo mode is frontend-driven and does not use the real backend generation flow.
-
-Demo flow:
-Landing → `/demo` (or `/study?demo=true`) → simulated generation → static Study Pack
-
-Real flow:
-Landing → `/study` → `POST /api/study-packs` → OCR/LLM → database → response
-
-## Hybrid OCR strategy
-
-NoteLib uses a hybrid OCR strategy to reduce cost and avoid unnecessary OCR calls.
-
-### Processing pipeline
-Image upload
-↓
-Image validation
-↓
-Quick text detection (`TEXT_DETECTION`)
-↓
-If text detected:
-run `DOCUMENT_TEXT_DETECTION`
-↓
-Extract text
-↓
-Clean extracted text
-↓
-Send text to LLM generation
-
-### Benefits
-- reduces OCR costs
-- prevents processing useless images
-- improves reliability of note extraction
-
-### Image guardrails
-- maximum image size limit
-- allowed image formats
-- text detection before OCR extraction
-
-## OCR text normalization
-
-Before sending OCR text to the LLM, normalize it:
-- trim whitespace
-- collapse repeated spaces
-- replace single line breaks with spaces
-- preserve paragraph breaks
-- remove OCR artifacts where possible
-
-Pipeline:
-Image → OCR → text normalization → LLM prompt
-
-## Cost control strategy
-
-### Tiered model usage
-- cheap model: OCR cleanup / formatting (optional)
-- standard model: summary + key concepts + practice quiz
-- premium higher-quality model later: mock exam generation, analytics
-
-### Configuration knobs
-- `LLM_MODEL_FREE`
-- `LLM_MODEL_PREMIUM`
-- `QUIZ_QUESTIONS_FREE`
-- `QUIZ_QUESTIONS_PREMIUM`
-- `MAX_NOTES_CHARS_FREE`
-- `QUICK_REVIEW_STUDY_TIP_ENABLED`
-- `QUICK_REVIEW_STUDY_TIP_MIN_INCORRECT_COUNT`
-- `QUICK_REVIEW_STUDY_TIP_MAX_QUESTIONS`
-
-### Quick Review AI Study Tip cost controls
-
-Quick Review results can optionally request an AI-generated Study Tip based on missed questions.
-
-Backend guardrails:
-- feature flag can fully disable tip generation (`studysnap.quick-review.study-tip.enabled`)
-- tip generation runs only when incorrect answer count reaches the configured threshold
-- only incorrect questions are sent to the LLM
-- incorrect question input is capped by configured max-question count
-- failures are non-blocking; Quick Review completion/results always continue
-
-### Initial model mapping
-Demo:
-- `gpt-4.1-mini`
-
-Free:
-- `gpt-4.1-mini`
-
-Premium:
-- default may remain `gpt-4.1-mini` at first
-- premium-only features may upgrade later
-
-### Token limits
-- enforce max characters for free tier notes
-- truncate or reject overly long inputs
-- consider chunking long notes later
-
-## Demo guardrails
-
-Demo mode stays frontend-driven with pre-coded request/response behavior and does not call real generation APIs.
-
-## Privacy & security
-
-- uploaded images must be deleted immediately after OCR
-- avoid logging raw images or full extracted text
-- store only what is needed
-- share links must use unguessable tokens
-- public share endpoint must not expose private user data
-
-## Data model reference
-
-See `docs/architecture/DATA_MODEL.md` for the consolidated table/entity view.
-
-## Core Domain Models
-
-NoteLib revolves around several core domain models.
-
-User
-Represents an account using the platform.
-
-StudyPack
-Generated learning material derived from notes.
-
-QuickReviewSession
-Represents a user's attempt to review a Study Pack quiz.
-
-ActivityEvent
-Tracks learning activity such as starting or completing reviews.
+See `docs/architecture/DATA_MODEL.md` for table/entity details.

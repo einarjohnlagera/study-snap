@@ -2,60 +2,93 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-NoteLib is an AI-powered study assistant that turns messy notes into structured study materials and reusable Study Packs.
+NoteLib is an AI-powered study workspace that helps users turn their notes into structured study materials such as summaries, key concepts, and quizzes.
 
 Users can paste notes or upload photos of their study material, and NoteLib can generate:
 
-- Title
-- Summary
-- Key concepts
-- Practice quiz questions
-- Exam-focused summaries
+- AI-generated title (optional)
+- subject (optional)
+- tags (optional)
+- summary
+- key concepts
+- practice quiz questions
+- Challenge Quiz sets
+- Adaptive Practice sets
 
 ## One-liner
 
-Turn your notes into exam-ready study materials instantly.
+Write notes. Generate knowledge. Practice smarter.
 
-## Core value
+## Core Concept
 
-NoteLib helps users turn notes into reusable Study Packs.
+Note-first model:
 
-A Study Pack includes:
+- Note is the main entity.
+- Study Pack is the AI-generated enhancement state of a Note.
+- Users create and save Notes first, then generate Study Packs from those Notes.
 
+Note states:
+
+- `Draft`: Note exists with user-authored content only.
+- `Study Pack Ready`: AI-generated study outputs are linked to the Note.
+
+Generated Study Pack outputs include:
+
+- AI-generated title (optional)
+- subject (optional)
+- tags (optional)
 - summary
 - key concepts
 - practice quiz
+- Challenge Quiz
+- Adaptive Practice
 
-Users can save generated Study Packs in their personal Study Library for later study.
+## Versioning Model (Clone Instead of Regenerate)
 
-## Product direction
+NoteLib does not overwrite existing generated content.
 
-NoteLib is evolving from a one-shot study pack generator into a reusable note-based study workspace.
+Instead of regenerating from the same Note, users clone a Note, edit the clone, and generate a new Study Pack from that cloned Note.
 
-Core workflow:
+Clone behavior:
 
-**Notes -> Study Pack -> Revisit later**
+- Clone copies:
+  - title
+  - subject
+  - tags
+  - note content
+- Clone does not copy:
+  - summary
+  - key concepts
+  - quizzes
+  - performance history
 
-## V2 architecture decision
+This supports iterative learning and avoids accidental overwrites.
 
-NoteLib V2 uses a simple `1 Note <-> 1 current Study Pack` model:
+## User Flow
 
-- users can create and save notes
-- each note has one current Study Pack
-- regenerating replaces the current Study Pack for that note
-- V2 does not include visible Study Pack version history
+1. User creates or saves a Note.
+2. Note is stored in the system.
+3. User clicks `Generate Study Pack`.
+4. AI generates summary, key concepts, and quizzes.
+5. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice.
+6. To improve content, user clones the Note, edits it, and generates a new Study Pack from the clone.
 
-Rationale:
+## Architecture Overview
 
-- keep UX calm and straightforward
-- keep the data model simple for implementation and maintenance
-- avoid overengineering while NoteLib evolves
+High-level model:
 
-Future direction:
+- `notes` table stores user-authored fields (`title`, `subject`, `content`, `tags`).
+- AI-generated fields are linked to the same Note (`summary`, `key concepts`, `quizzes`).
+- quiz sessions and performance history are linked to the Note.
+- cloning creates a new Note row and copies only user-authored fields.
 
-- if versioning is needed later, NoteLib will add a dedicated `study_pack_history` snapshot table
-- this future path does not change V2 into multi-pack-per-note architecture
-- potential snapshot fields: `id`, `parent_study_pack_id`, `note_id`, `title`, `summary`, `subject`, `concepts_json`, `questions_json`, `version_number`, `archived_at`
+## Product Philosophy
+
+Learning loop:
+
+**Capture -> Generate -> Review -> Improve -> Clone -> Repeat**
+
+NoteLib is designed for iterative understanding, not one-time summary generation.
 
 This repo currently centers on:
 
@@ -121,7 +154,7 @@ The previous versions of the original markdown files are preserved under `/legac
 
 ## MVP goal
 
-Upload notes -> generate study pack materials -> save and revisit them as Study Packs.
+Capture notes -> generate Study Pack outputs -> review -> improve -> clone -> repeat.
 
 ## Privacy
 
