@@ -12,6 +12,7 @@ import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import {
   completeAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
+  getMyStudyPack,
   trackQuickReviewActivity,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
@@ -45,6 +46,7 @@ export default function AdaptivePracticePage() {
   const [premiumLocked, setPremiumLocked] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  const [resolvedNoteId, setResolvedNoteId] = useState<string | null>(null);
 
   const studyPackId = useMemo(() => {
     if (!params?.id) {
@@ -54,14 +56,16 @@ export default function AdaptivePracticePage() {
   }, [params]);
   const noteIdParam = searchParams.get("noteId")?.trim() ?? null;
   const noteDetailHref = useMemo(() => {
-    if (noteIdParam) {
-      return `/notes/${noteIdParam}`;
+    const targetNoteId = noteIdParam || resolvedNoteId;
+    if (targetNoteId) {
+      return `/notes/${targetNoteId}`;
     }
-    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
-  }, [noteIdParam, studyPackId]);
+    return "/library";
+  }, [noteIdParam, resolvedNoteId]);
   const noteDetailQuery = useMemo(() => {
-    return noteIdParam ? `?noteId=${encodeURIComponent(noteIdParam)}` : "";
-  }, [noteIdParam]);
+    const targetNoteId = noteIdParam || resolvedNoteId;
+    return targetNoteId ? `?noteId=${encodeURIComponent(targetNoteId)}` : "";
+  }, [noteIdParam, resolvedNoteId]);
 
   const loadAdaptiveQuiz = useCallback(async () => {
     if (requestInFlightRef.current) {
@@ -91,6 +95,12 @@ export default function AdaptivePracticePage() {
     }
 
     try {
+      if (!noteIdParam) {
+        const detail = await getMyStudyPack(studyPackId);
+        setResolvedNoteId(detail.noteId ?? null);
+      } else {
+        setResolvedNoteId(noteIdParam);
+      }
       const response = await generateAdaptiveQuickReviewQuiz(studyPackId);
       setAdaptiveQuiz(response);
       setCurrentIndex(0);
@@ -106,7 +116,7 @@ export default function AdaptivePracticePage() {
       setLoading(false);
       requestInFlightRef.current = false;
     }
-  }, [router, studyPackId]);
+  }, [noteIdParam, router, studyPackId]);
 
   useEffect(() => {
     if (!studyPackId) {

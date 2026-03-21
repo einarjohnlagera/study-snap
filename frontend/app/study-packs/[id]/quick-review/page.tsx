@@ -308,8 +308,8 @@ export default function QuickReviewPage() {
     if (studyPack?.noteId) {
       return `/notes/${studyPack.noteId}`;
     }
-    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
-  }, [noteIdParam, studyPack?.noteId, studyPackId]);
+    return "/library";
+  }, [noteIdParam, studyPack?.noteId]);
   const noteDetailQuery = useMemo(() => {
     const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
     return resolvedNoteId ? `?noteId=${encodeURIComponent(resolvedNoteId)}` : "";
@@ -694,7 +694,7 @@ export default function QuickReviewPage() {
                   <Trophy className="h-4 w-4" aria-hidden="true" />
                   <p className="font-medium">Excellent work! You mastered this topic.</p>
                 </div>
-                <p>Try another Study Pack to continue learning.</p>
+                <p>Try another note to continue learning.</p>
               </div>
             ) : (
               <p>{scoreFeedback}</p>

@@ -131,8 +131,8 @@ export default function ChallengeQuizPage() {
     if (resolvedNoteId) {
       return `/notes/${resolvedNoteId}`;
     }
-    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
-  }, [noteIdParam, studyPack?.noteId, studyPackId]);
+    return "/library";
+  }, [noteIdParam, studyPack?.noteId]);
   const noteDetailQuery = useMemo(() => {
     const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
     return resolvedNoteId ? `?noteId=${encodeURIComponent(resolvedNoteId)}` : "";
