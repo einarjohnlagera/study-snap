@@ -4,12 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ApiRequestError,
+  confirmStudyPackText,
   createNote,
+  createStudyPackFromImage,
   createStudyPackFromNote,
   getNote,
+  isNeedsTextConfirmationResponse,
   type NoteResponse,
+  type StudyPackResponse,
   updateNote,
 } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Card } from "@/components/ui/card";
@@ -28,9 +33,42 @@ type PendingSuggestion = {
   tags: string[];
 };
 
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 function normalizeOptional(value: string): string | null {
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function toFriendlyOcrErrorMessage(message: string): string {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("unsupported")
+    || normalized.includes("file type")
+    || normalized.includes("content type")
+    || normalized.includes("format")
+  ) {
+    return "Unsupported image type. Upload a PNG, JPEG, or WEBP image.";
+  }
+  if (normalized.includes("too large") || normalized.includes("max") || normalized.includes("size")) {
+    return "Image is too large. Try an image smaller than 5 MB.";
+  }
+  if (
+    normalized.includes("no readable text")
+    || normalized.includes("no text")
+    || normalized.includes("text detected")
+    || normalized.includes("text not detected")
+  ) {
+    return "No readable text was detected. Retake the photo with better lighting and focus, then try again.";
+  }
+  return "We could not extract text from this image right now. Try another image or paste notes manually.";
+}
+
+function resolveExtractedText(response: StudyPackResponse, confirmedTextFallback?: string): string {
+  const candidate = [response.extractedText, response.sourceText, confirmedTextFallback]
+    .find((value) => typeof value === "string" && value.trim().length > 0);
+  return candidate?.trim() ?? "";
 }
 
 function toDraft(note: NoteResponse): NoteEditorDraft {
@@ -69,6 +107,13 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
+  const [ocrImageFile, setOcrImageFile] = useState<File | null>(null);
+  const [ocrImageInputKey, setOcrImageInputKey] = useState(0);
+  const [ocrFlowState, setOcrFlowState] = useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
+  const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
+  const [ocrDraftId, setOcrDraftId] = useState<string | null>(null);
+  const [ocrConfirmedText, setOcrConfirmedText] = useState("");
+  const [isConfirmingOcrText, setIsConfirmingOcrText] = useState(false);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -83,6 +128,24 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     setToastTone(tone);
     setToastMessage(message);
+  }, []);
+
+  const appendExtractedTextToContent = useCallback((extractedText: string) => {
+    const normalized = extractedText.trim();
+    if (normalized.length === 0) {
+      return false;
+    }
+    setDraft((previous) => {
+      const currentContent = previous.content.trim();
+      const nextContent = currentContent.length === 0
+        ? normalized
+        : `${previous.content.trimEnd()}\n\n${normalized}`;
+      return {
+        ...previous,
+        content: nextContent,
+      };
+    });
+    return true;
   }, []);
 
   useEffect(() => {
@@ -261,6 +324,152 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     finalizeGenerationRedirect(noteIdToOpen);
   }, [finalizeGenerationRedirect, pendingSuggestion]);
 
+  const handleOcrImageFileChange = useCallback(async (file: File | null) => {
+    if (!file) {
+      setOcrImageFile(null);
+      setOcrFlowState("idle");
+      setOcrStatusMessage(null);
+      setOcrDraftId(null);
+      setOcrConfirmedText("");
+      return;
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      const message = "Unsupported image type. Upload a PNG, JPEG, or WEBP image.";
+      setOcrImageFile(null);
+      setOcrImageInputKey((previous) => previous + 1);
+      setOcrFlowState("failure");
+      setOcrStatusMessage(message);
+      showToast(message, "error");
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      const message = "Image is too large. Try an image smaller than 5 MB.";
+      setOcrImageFile(null);
+      setOcrImageInputKey((previous) => previous + 1);
+      setOcrFlowState("failure");
+      setOcrStatusMessage(message);
+      showToast(message, "error");
+      return;
+    }
+
+    const authUser = getAuthUser();
+    if (!authUser?.emailVerifiedAt) {
+      const message = "Verify your email before using OCR upload.";
+      setOcrImageFile(null);
+      setOcrImageInputKey((previous) => previous + 1);
+      setOcrFlowState("failure");
+      setOcrStatusMessage(message);
+      showToast(message, "info");
+      return;
+    }
+
+    setOcrImageFile(file);
+    setOcrDraftId(null);
+    setOcrConfirmedText("");
+    setOcrFlowState("uploading");
+    setOcrStatusMessage("Uploading image...");
+
+    const extractingTimer = window.setTimeout(() => {
+      setOcrFlowState("extracting");
+      setOcrStatusMessage("Extracting text from image...");
+    }, 500);
+
+    try {
+      const response = await createStudyPackFromImage(file);
+      window.clearTimeout(extractingTimer);
+
+      if (isNeedsTextConfirmationResponse(response)) {
+        setOcrDraftId(response.id);
+        setOcrConfirmedText(response.extractedText);
+        setOcrFlowState("success");
+        setOcrStatusMessage("Text extracted. Review and confirm before adding it to Content.");
+        return;
+      }
+
+      const extractedText = resolveExtractedText(response);
+      const didAppend = appendExtractedTextToContent(extractedText);
+      if (!didAppend) {
+        setOcrFlowState("failure");
+        setOcrStatusMessage("No readable text was extracted from this image.");
+        showToast("No readable text was detected. Retake the photo and try again.", "info");
+        return;
+      }
+
+      setOcrFlowState("success");
+      setOcrStatusMessage("Text extracted and added to Content.");
+      showToast("OCR text added to Content.", "success");
+    } catch (error) {
+      window.clearTimeout(extractingTimer);
+      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+        const message = "Verify your email before using OCR upload.";
+        setOcrFlowState("failure");
+        setOcrStatusMessage(message);
+        showToast(message, "info");
+        return;
+      }
+
+      const rawMessage = error instanceof Error ? error.message : "OCR request failed.";
+      const message = toFriendlyOcrErrorMessage(rawMessage);
+      setOcrFlowState("failure");
+      setOcrStatusMessage(message);
+      showToast(message, "error");
+    }
+  }, [appendExtractedTextToContent, showToast]);
+
+  const handleConfirmOcrText = useCallback(async () => {
+    if (!ocrDraftId || isConfirmingOcrText || ocrConfirmedText.trim().length === 0) {
+      return;
+    }
+
+    const authUser = getAuthUser();
+    if (!authUser?.emailVerifiedAt) {
+      const message = "Verify your email before using OCR upload.";
+      setOcrFlowState("failure");
+      setOcrStatusMessage(message);
+      showToast(message, "info");
+      return;
+    }
+
+    setIsConfirmingOcrText(true);
+    setOcrFlowState("extracting");
+    setOcrStatusMessage("Confirming OCR text...");
+
+    try {
+      const response = await confirmStudyPackText(ocrDraftId, ocrConfirmedText);
+      const extractedText = resolveExtractedText(response, ocrConfirmedText);
+      const didAppend = appendExtractedTextToContent(extractedText);
+      if (!didAppend) {
+        setOcrFlowState("failure");
+        setOcrStatusMessage("No readable text was extracted from this image.");
+        showToast("No readable text was detected. Try editing and confirming again.", "info");
+        return;
+      }
+
+      setOcrDraftId(null);
+      setOcrConfirmedText("");
+      setOcrFlowState("success");
+      setOcrStatusMessage("Confirmed text added to Content.");
+      showToast("OCR text added to Content.", "success");
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "EMAIL_VERIFICATION_REQUIRED") {
+        const message = "Verify your email before using OCR upload.";
+        setOcrFlowState("failure");
+        setOcrStatusMessage(message);
+        showToast(message, "info");
+        return;
+      }
+      const rawMessage = error instanceof Error ? error.message : "Could not confirm OCR text.";
+      const message = toFriendlyOcrErrorMessage(rawMessage);
+      setOcrFlowState("failure");
+      setOcrStatusMessage(message);
+      showToast(message, "error");
+    } finally {
+      setIsConfirmingOcrText(false);
+    }
+  }, [appendExtractedTextToContent, isConfirmingOcrText, ocrConfirmedText, ocrDraftId, showToast]);
+
   const pageTitle = isDetailPage ? "Note" : "New Note";
   const studyPackMessage = isDetailPage
     ? "Generate a Study Pack from this note when you are ready."
@@ -317,6 +526,20 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         helperText="Save your note for later, or generate a Study Pack instantly using 1 credit."
         showTagsSection={isDetailPage}
         studyPackMessage={studyPackMessage}
+        ocrImageFile={ocrImageFile}
+        ocrImageInputKey={ocrImageInputKey}
+        ocrFlowState={ocrFlowState}
+        ocrStatusMessage={ocrStatusMessage}
+        ocrConfirmedText={ocrConfirmedText}
+        ocrNeedsConfirmation={Boolean(ocrDraftId)}
+        isConfirmingOcrText={isConfirmingOcrText}
+        onOcrImageFileChange={(file) => {
+          void handleOcrImageFileChange(file);
+        }}
+        onOcrConfirmedTextChange={setOcrConfirmedText}
+        onConfirmOcrText={() => {
+          void handleConfirmOcrText();
+        }}
       />
 
       <AiSuggestionModal
