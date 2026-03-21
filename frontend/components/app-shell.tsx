@@ -38,7 +38,7 @@ function isAuthenticatedRoute(pathname: string): boolean {
 }
 
 function shouldUseAuthenticatedShell(pathname: string, hasAuthUser: boolean): boolean {
-  if (pathname === "/notes" || pathname.startsWith("/notes/public/")) {
+  if (pathname.startsWith("/public/notes/")) {
     return hasAuthUser;
   }
   if (pathname.startsWith("/p/")) {
@@ -57,10 +57,13 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/dashboard")) {
     return "Dashboard";
   }
+  if (pathname.startsWith("/library/public")) {
+    return "Public Library";
+  }
   if (pathname.startsWith("/library")) {
     return "My Library";
   }
-  if (pathname.startsWith("/notes/public/")) {
+  if (pathname.startsWith("/public/notes/")) {
     return "Public Note";
   }
   if (pathname === "/notes/new") {
@@ -70,7 +73,7 @@ function getPageTitle(pathname: string): string {
     return "Note";
   }
   if (pathname.startsWith("/notes")) {
-    return "Public Library";
+    return "Notes";
   }
   if (pathname.startsWith("/profile")) {
     return "Profile";
@@ -107,7 +110,7 @@ type NavLinkItem = {
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/library", label: "My Library" },
-  { href: "/notes", label: "Public Library" },
+  { href: "/library/public", label: "Public Library" },
 ];
 
 const SECONDARY_NAV: NavLinkItem[] = [
@@ -123,7 +126,9 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   const renderLink = (item: NavLinkItem) => {
-    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+    const active = item.href === "/library"
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(`${item.href}/`);
     return (
       <Link
         key={item.href}

@@ -1,4 +1,4 @@
-import { NoteEditorPageClient } from "@/components/notes/note-editor-page-client";
+import { PrivateNoteDetailPageClient } from "@/components/notes/private-note-detail-page-client";
 
 type NoteDetailPageProps = {
   params: Promise<{
@@ -8,5 +8,5 @@ type NoteDetailPageProps = {
 
 export default async function NoteDetailPage({ params }: NoteDetailPageProps) {
   const { id } = await params;
-  return <NoteEditorPageClient noteId={id} />;
+  return <PrivateNoteDetailPageClient routeId={id} />;
 }

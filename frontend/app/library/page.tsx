@@ -499,11 +499,11 @@ export default function LibraryPage() {
                     key={item.id}
                     role="link"
                     tabIndex={0}
-                    onClick={() => router.push(`/study-packs/${item.id}?from=library`)}
+                    onClick={() => router.push(`/notes/${item.id}?from=library`)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        router.push(`/study-packs/${item.id}?from=library`);
+                        router.push(`/notes/${item.id}?from=library`);
                       }
                     }}
                     className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"

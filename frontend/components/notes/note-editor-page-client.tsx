@@ -177,7 +177,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   }, [contentEmpty, isDetailPage, isGenerating, isSaving, router, showToast, upsertNote]);
 
   const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
-    router.push(`/study-packs/${noteIdToOpen}?from=notes&created=1`);
+    router.push(`/notes/${noteIdToOpen}?from=notes&created=1`);
   }, [router]);
 
   const handleGenerate = useCallback(async () => {
