@@ -68,13 +68,16 @@ public class StudyPackService {
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
-        NoteEntity sourceNote = resolveSourceNoteForGeneration(request.noteId(), ownerUserId);
-        String normalizedText = sourceNote == null
+        NoteEntity requestedSourceNote = resolveSourceNoteForGeneration(request.noteId(), ownerUserId);
+        String normalizedText = requestedSourceNote == null
                 ? normalizeAndValidateText(request.notesText())
-                : normalizeAndValidateText(sourceNote.getContent());
+                : normalizeAndValidateText(requestedSourceNote.getContent());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
 
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
+        NoteEntity sourceNote = requestedSourceNote == null
+                ? createGeneratedNote(ownerUserId, normalizedText, generated)
+                : requestedSourceNote;
         StudyPackEntity saved = saveStudyPack(
                 InputType.TEXT,
                 null,
@@ -82,7 +85,7 @@ public class StudyPackService {
                 normalizedText,
                 ownerUserId,
                 planType,
-                sourceNote == null ? null : sourceNote.getId()
+                sourceNote.getId()
         );
         long latency = System.currentTimeMillis() - startedAt;
 
@@ -120,6 +123,7 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(extractedText);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
+        NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated);
         StudyPackEntity saved = saveStudyPack(
                 InputType.IMAGE,
                 ocrResult.confidence(),
@@ -127,7 +131,7 @@ public class StudyPackService {
                 normalizedText,
                 ownerUserId,
                 planType,
-                null
+                generatedNote.getId()
         );
         long latency = System.currentTimeMillis() - startedAt;
 
@@ -163,6 +167,7 @@ public class StudyPackService {
         String normalizedText = normalizeAndValidateText(request.notesText());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
+        NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated);
         StudyPackEntity saved = saveStudyPack(
                 InputType.IMAGE,
                 draft.getOcrConfidence(),
@@ -170,7 +175,7 @@ public class StudyPackService {
                 normalizedText,
                 ownerUserId,
                 planType,
-                null
+                generatedNote.getId()
         );
         studyPackDraftRepository.delete(draft);
         long latency = System.currentTimeMillis() - startedAt;
@@ -371,15 +376,10 @@ public class StudyPackService {
             PlanType planType,
             UUID noteId
     ) {
-        StudyPackEntity entity = noteId == null
-                ? new StudyPackEntity()
-                : studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).orElseGet(StudyPackEntity::new);
-
-        if (entity.getId() == null) {
-            entity.setId(UUID.randomUUID());
-            entity.setOwnerUserId(ownerUserId);
-            entity.setCreatedAt(OffsetDateTime.now());
-        }
+        StudyPackEntity entity = new StudyPackEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setOwnerUserId(ownerUserId);
+        entity.setCreatedAt(OffsetDateTime.now());
 
         entity.setNoteId(noteId);
         entity.setInputType(inputType);
@@ -418,13 +418,42 @@ public class StudyPackService {
                 HttpStatus.NOT_FOUND
         );
 
-        return noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+        NoteEntity sourceNote = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+
+        boolean hasExistingStudyPack = studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).isPresent();
+        if (hasExistingStudyPack) {
+            throw new AppException(
+                    "NOTE_ALREADY_HAS_STUDY_PACK",
+                    "This note already has a Study Pack. Clone the note to generate a new version.",
+                    HttpStatus.CONFLICT
+            );
+        }
+
+        return sourceNote;
+    }
+
+    private NoteEntity createGeneratedNote(
+            UUID ownerUserId,
+            String normalizedContent,
+            GeneratedStudyPackContent generated
+    ) {
+        NoteEntity note = new NoteEntity();
+        note.setId(UUID.randomUUID());
+        note.setOwnerUserId(ownerUserId);
+        note.setTitle(generated.title());
+        note.setSubject(normalizeSubject(generated.subject()));
+        note.setTags(resolveTags(generated.tags(), generated.title()));
+        note.setContent(normalizedContent);
+        note.setCreatedAt(OffsetDateTime.now());
+        note.setUpdatedAt(OffsetDateTime.now());
+        return noteRepository.save(note);
     }
 
     private StudyPackResponse mapToResponse(StudyPackEntity entity, String extractedText, Long latencyMs) {
         return new StudyPackResponse(
                 entity.getId().toString(),
+                entity.getNoteId() == null ? null : entity.getNoteId().toString(),
                 entity.getInputType().name().toLowerCase(),
                 extractedText,
                 entity.getTitle(),

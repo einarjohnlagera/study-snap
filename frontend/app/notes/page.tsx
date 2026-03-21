@@ -16,14 +16,8 @@ function getStatusMeta(status: NoteStudyPackStatus) {
       className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
     };
   }
-  if (status === "NEEDS_REGENERATION") {
-    return {
-      label: "Needs Regeneration",
-      className: "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-    };
-  }
   return {
-    label: "No Study Pack",
+    label: "Draft",
     className: "border-border bg-muted/40 text-foreground/70",
   };
 }
@@ -163,11 +157,11 @@ export default function NotesLibraryPage() {
                   <p className="text-xs text-foreground/65">Updated {formatUpdatedAt(note.updatedAt)}</p>
                   {note.studyPackId ? (
                     <Link
-                      href={`/study-packs/${note.studyPackId}?from=notes`}
+                      href={`/study-packs/${note.id}?from=notes`}
                       onClick={(event) => event.stopPropagation()}
                       className="inline-block text-xs text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      Open Study Pack
+                      Open Note
                     </Link>
                   ) : null}
                 </div>

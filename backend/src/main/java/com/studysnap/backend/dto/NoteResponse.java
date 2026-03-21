@@ -10,6 +10,8 @@ public record NoteResponse(
         List<String> tags,
         String content,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        String studyPackId,
+        String studyPackStatus
 ) {
 }

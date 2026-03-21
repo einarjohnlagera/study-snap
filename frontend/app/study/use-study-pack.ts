@@ -36,6 +36,7 @@ type UseStudyPackResult = {
   ocrStatusMessage: string | null;
   toastMessage: string | null;
   toastTone: "success" | "error" | "info";
+  showToast: (message: string, tone?: "success" | "error" | "info") => void;
   handleGenerateStudyPack: () => Promise<StudyPackResponse | null>;
   handleConfirmText: () => Promise<StudyPackResponse | null>;
   handleClearNotes: () => void;
@@ -395,6 +396,7 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
     ocrStatusMessage,
     toastMessage,
     toastTone,
+    showToast,
     handleGenerateStudyPack,
     handleConfirmText,
     handleClearNotes,

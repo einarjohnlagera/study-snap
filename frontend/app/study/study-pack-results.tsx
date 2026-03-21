@@ -85,9 +85,9 @@ export function StudyPackResults({
         </Card>
       ) : (
         <div className="flex">
-          <Link href={`/study-packs/${studyPackResult.id}`} className="w-full sm:w-auto">
+          <Link href={`/study-packs/${studyPackResult.noteId ?? studyPackResult.id}`} className="w-full sm:w-auto">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
-              Open Study Pack
+              Open Note
             </Button>
           </Link>
         </div>

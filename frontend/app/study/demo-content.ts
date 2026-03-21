@@ -7,6 +7,7 @@ Plants absorb sunlight using chlorophyll in their leaves. Carbon dioxide and wat
 
 export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
   id: "demo-study-pack",
+  noteId: "demo-note",
   inputType: "text",
   extractedText: null,
   title: "Photosynthesis Fundamentals",
