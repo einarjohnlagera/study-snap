@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackDraftEntity;
@@ -65,6 +66,7 @@ public class StudyPackService {
     private final StudySnapProperties properties;
     private final ActivityTrackingService activityTrackingService;
     private final SubscriptionService subscriptionService;
+    private final UserUsageService userUsageService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -88,6 +90,9 @@ public class StudyPackService {
                 planType,
                 sourceNote.getId()
         );
+        if (requestedSourceNote != null) {
+            markNoteGenerated(sourceNote.getId(), sourceNote);
+        }
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
@@ -134,6 +139,7 @@ public class StudyPackService {
                 planType,
                 generatedNote.getId()
         );
+        markNoteGenerated(generatedNote.getId(), generatedNote);
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
@@ -178,6 +184,7 @@ public class StudyPackService {
                 planType,
                 generatedNote.getId()
         );
+        markNoteGenerated(generatedNote.getId(), generatedNote);
         studyPackDraftRepository.delete(draft);
         long latency = System.currentTimeMillis() - startedAt;
 
@@ -236,7 +243,15 @@ public class StudyPackService {
         );
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+        UUID linkedNoteId = entity.getNoteId();
         studyPackRepository.delete(entity);
+        if (linkedNoteId != null) {
+            noteRepository.findByIdAndOwnerUserId(linkedNoteId, ownerUserId).ifPresent(note -> {
+                note.setStatus(NoteStatus.DRAFT);
+                note.setUpdatedAt(OffsetDateTime.now());
+                noteRepository.save(note);
+            });
+        }
     }
 
     public StudyPackResponse updateTags(String id, UUID ownerUserId, List<String> tags) {
@@ -248,6 +263,7 @@ public class StudyPackService {
         );
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+        assertNoteEditable(entity.getNoteId(), ownerUserId);
 
         List<String> normalizedTags = normalizeEditableTags(tags);
         String[] currentTags = entity.getTags() == null ? new String[0] : entity.getTags();
@@ -258,6 +274,7 @@ public class StudyPackService {
             entity.setTags(nextTags);
             entity.setUpdatedAt(OffsetDateTime.now());
             targetEntity = studyPackRepository.save(entity);
+            syncNoteTags(targetEntity.getNoteId(), ownerUserId, nextTags);
         }
 
         return mapToResponse(targetEntity, null, null);
@@ -272,6 +289,7 @@ public class StudyPackService {
         );
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+        assertNoteEditable(entity.getNoteId(), ownerUserId);
 
         String normalizedTitle = normalizeEditableTitle(title);
         String normalizedSubject = normalizeSubject(subject);
@@ -282,6 +300,7 @@ public class StudyPackService {
             entity.setSubject(normalizedSubject);
             entity.setUpdatedAt(OffsetDateTime.now());
             targetEntity = studyPackRepository.save(entity);
+            syncNoteMetadata(targetEntity.getNoteId(), ownerUserId, normalizedTitle, normalizedSubject);
         }
 
         return mapToResponse(targetEntity, null, null);
@@ -403,6 +422,7 @@ public class StudyPackService {
         entity.setUpdatedAt(OffsetDateTime.now());
         entity.setTags(resolveTags(generated.tags(), generated.title()));
         StudyPackEntity savedEntity = studyPackRepository.save(entity);
+        userUsageService.incrementStudyPackGeneration(ownerUserId, savedEntity.getCreatedAt());
         activityTrackingService.recordActivity(ownerUserId, ActivityType.CREATED_STUDY_PACK, savedEntity.getId());
         return savedEntity;
     }
@@ -421,6 +441,14 @@ public class StudyPackService {
 
         NoteEntity sourceNote = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+
+        if (sourceNote.getStatus() == NoteStatus.GENERATED) {
+            throw new AppException(
+                    "NOTE_ALREADY_GENERATED",
+                    "This note is already generated. Make a copy to create a new Study Pack.",
+                    HttpStatus.CONFLICT
+            );
+        }
 
         boolean hasExistingStudyPack = studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).isPresent();
         if (hasExistingStudyPack) {
@@ -446,7 +474,9 @@ public class StudyPackService {
         note.setSubject(normalizeSubject(generated.subject()));
         note.setTags(resolveTags(generated.tags(), generated.title()));
         note.setContent(normalizedContent);
+        note.setStatus(NoteStatus.GENERATED);
         note.setVisibility(NoteVisibility.PRIVATE);
+        note.setSourceNoteId(null);
         note.setCreatedAt(OffsetDateTime.now());
         note.setUpdatedAt(OffsetDateTime.now());
         return noteRepository.save(note);
@@ -596,11 +626,13 @@ public class StudyPackService {
         OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
 
-        long usedThisMonth = studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        long usedFromStudyPacks = studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 ownerUserId,
                 monthStart,
                 nextMonthStart
         );
+        long usedFromUsage = userUsageService.getMonthlyUsage(ownerUserId, now).studyPackGenerations();
+        long usedThisMonth = Math.max(usedFromStudyPacks, usedFromUsage);
 
         int monthlyLimit = resolveMonthlyStudyPackLimit(planType);
         if (usedThisMonth < monthlyLimit) {
@@ -625,6 +657,59 @@ public class StudyPackService {
             return "You have reached your monthly Study Pack limit (" + limit + "). Please try again next month.";
         }
         return "You have reached your monthly Free plan limit (" + limit + " Study Packs). Upgrade to Premium for more monthly Study Packs.";
+    }
+
+    private void markNoteGenerated(UUID noteId, NoteEntity cachedNote) {
+        NoteEntity note = cachedNote == null
+                ? noteRepository.findById(noteId).orElse(null)
+                : cachedNote;
+        if (note == null) {
+            return;
+        }
+        if (note.getStatus() == NoteStatus.GENERATED) {
+            return;
+        }
+        note.setStatus(NoteStatus.GENERATED);
+        note.setUpdatedAt(OffsetDateTime.now());
+        noteRepository.save(note);
+    }
+
+    private void syncNoteTags(UUID noteId, UUID ownerUserId, String[] tags) {
+        if (noteId == null) {
+            return;
+        }
+        noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId).ifPresent(note -> {
+            note.setTags(tags == null ? new String[0] : Arrays.copyOf(tags, tags.length));
+            note.setUpdatedAt(OffsetDateTime.now());
+            noteRepository.save(note);
+        });
+    }
+
+    private void syncNoteMetadata(UUID noteId, UUID ownerUserId, String title, String subject) {
+        if (noteId == null) {
+            return;
+        }
+        noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId).ifPresent(note -> {
+            note.setTitle(title);
+            note.setSubject(subject);
+            note.setUpdatedAt(OffsetDateTime.now());
+            noteRepository.save(note);
+        });
+    }
+
+    private void assertNoteEditable(UUID noteId, UUID ownerUserId) {
+        if (noteId == null) {
+            return;
+        }
+        NoteEntity linkedNote = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+        if (linkedNote.getStatus() == NoteStatus.GENERATED) {
+            throw new AppException(
+                    "NOTE_LOCKED",
+                    "This note is locked because it already has a Study Pack. Make a copy to edit.",
+                    HttpStatus.CONFLICT
+            );
+        }
     }
 }
 

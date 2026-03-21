@@ -25,6 +25,7 @@ public class BillingUsageService {
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
     private final StudySnapProperties properties;
+    private final UserUsageService userUsageService;
 
     public BillingUsageSummaryResponse getMonthlyUsageSummary(UUID userId) {
         PlanType planType = subscriptionService.resolvePlan(userId);
@@ -33,23 +34,27 @@ public class BillingUsageService {
         OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
 
-        int studyPacksUsed = (int) studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        int studyPacksUsedFromStudyPacks = (int) studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 monthStart,
                 nextMonthStart
         );
-        int challengeQuizUsed = (int) quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        int challengeQuizUsedFromSessions = (int) quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 QuickReviewSessionMode.CHALLENGE,
                 monthStart,
                 nextMonthStart
         );
-        int adaptivePracticeUsed = (int) activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        int adaptivePracticeUsedFromEvents = (int) activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 ActivityType.STARTED_ADAPTIVE_PRACTICE,
                 monthStart,
                 nextMonthStart
         );
+        UserUsageService.MonthlyUsage monthlyUsage = userUsageService.getMonthlyUsage(userId, now);
+        int studyPacksUsed = Math.max(studyPacksUsedFromStudyPacks, monthlyUsage.studyPackGenerations());
+        int challengeQuizUsed = Math.max(challengeQuizUsedFromSessions, monthlyUsage.challengeQuizGenerations());
+        int adaptivePracticeUsed = Math.max(adaptivePracticeUsedFromEvents, monthlyUsage.adaptiveQuizGenerations());
 
         int studyPacksLimit = planType == PlanType.PREMIUM
                 ? properties.getPricing().getPremiumMonthlyStudyPackLimit()

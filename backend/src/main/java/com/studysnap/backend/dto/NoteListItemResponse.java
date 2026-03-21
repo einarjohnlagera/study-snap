@@ -12,6 +12,7 @@ public record NoteListItemResponse(
         String visibility,
         String studyPackId,
         String studyPackStatus,
+        Integer quizCount,
         OffsetDateTime updatedAt
 ) {
 }

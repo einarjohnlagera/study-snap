@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,14 +14,15 @@ import {
   completeQuickReviewSession,
   generateQuickReviewStudyTip,
   getMyStudyPack,
+  getNote,
   saveQuickReviewConfidence,
   startQuickReviewSession,
   updateQuickReviewSessionProgress,
+  type NoteResponse,
   type QuickReviewConfidenceLevel,
   type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
-  type StudyPackResponse,
 } from "@/lib/api";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
@@ -128,9 +129,10 @@ function toChoiceRecord(value: unknown): Record<number, string> {
 
 export default function QuickReviewPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
+  const [note, setNote] = useState<NoteResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionInitializing, setSessionInitializing] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,13 +156,12 @@ export default function QuickReviewPage() {
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
 
-  const studyPackId = useMemo(() => {
+  const noteId = useMemo(() => {
     if (!params?.id) {
       return "";
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
-  const noteIdParam = searchParams.get("noteId")?.trim() ?? null;
 
   const resetQuickReviewState = useCallback((allIndexes: number[]) => {
     setPhase("initial");
@@ -180,9 +181,9 @@ export default function QuickReviewPage() {
     setConfidenceError(null);
   }, []);
 
-  const loadStudyPack = useCallback(async () => {
-    if (!studyPackId) {
-      setError("Study Pack not found.");
+  const loadNote = useCallback(async () => {
+    if (!noteId) {
+      setError("Note not found.");
       setLoading(false);
       return;
     }
@@ -194,27 +195,44 @@ export default function QuickReviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const detail = await getMyStudyPack(studyPackId);
-      setStudyPack(detail);
+      const detail = await getNote(noteId);
+      if (detail.studyPackStatus !== "STUDY_PACK_READY") {
+        setNote(detail);
+        setError("Generate a Study Pack first.");
+        return;
+      }
+      setNote(detail);
       resetQuickReviewState(detail.quiz.map((_, index) => index));
       setRecentSessions([]);
       setCurrentSessionId(null);
       setSessionStartedAt(Date.now());
       setSessionInitializing(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
+      if (pathname.startsWith("/study-packs/")) {
+        const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
+        if (byStudyPack?.noteId) {
+          const nextQuery = searchParams.toString();
+          router.replace(
+            nextQuery
+              ? `/notes/${byStudyPack.noteId}/quick-review?${nextQuery}`
+              : `/notes/${byStudyPack.noteId}/quick-review`,
+          );
+          return;
+        }
+      }
+      const message = err instanceof Error ? err.message : "Could not load this note.";
       setError(message);
-      setStudyPack(null);
+      setNote(null);
     } finally {
       setLoading(false);
     }
-  }, [resetQuickReviewState, router, studyPackId]);
+  }, [noteId, pathname, resetQuickReviewState, router, searchParams]);
 
   useEffect(() => {
-    void loadStudyPack();
-  }, [loadStudyPack]);
+    void loadNote();
+  }, [loadNote]);
 
-  const quiz = useMemo(() => studyPack?.quiz ?? [], [studyPack]);
+  const quiz = useMemo(() => note?.quiz ?? [], [note]);
   const totalQuestions = quiz.length;
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
   const isComplete = phase === "complete";
@@ -301,19 +319,7 @@ export default function QuickReviewPage() {
   const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
   const showAdaptiveGuidedCta = isStruggling;
   const showChallengeGuidedCta = !isStruggling;
-  const noteDetailHref = useMemo(() => {
-    if (noteIdParam) {
-      return `/notes/${noteIdParam}`;
-    }
-    if (studyPack?.noteId) {
-      return `/notes/${studyPack.noteId}`;
-    }
-    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
-  }, [noteIdParam, studyPack?.noteId, studyPackId]);
-  const noteDetailQuery = useMemo(() => {
-    const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
-    return resolvedNoteId ? `?noteId=${encodeURIComponent(resolvedNoteId)}` : "";
-  }, [noteIdParam, studyPack?.noteId]);
+  const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
 
   useEffect(() => {
     const syncPlan = () => {
@@ -355,14 +361,14 @@ export default function QuickReviewPage() {
   }, [currentSessionId]);
 
   useEffect(() => {
-    if (!studyPack || !sessionInitializing) {
+    if (!note || !sessionInitializing) {
       return;
     }
 
     let isMounted = true;
     void (async () => {
       try {
-        const started = await startQuickReviewSession(studyPack.id);
+        const started = await startQuickReviewSession(note.id);
         if (!isMounted || !started.sessionId) {
           return;
         }
@@ -407,7 +413,7 @@ export default function QuickReviewPage() {
     return () => {
       isMounted = false;
     };
-  }, [quiz, sessionInitializing, studyPack]);
+  }, [note, quiz, sessionInitializing]);
 
   const completeSessionIfNeeded = useCallback(async (finalRetryCount?: number) => {
     if (!currentSessionId || completionTracked || completingSession) {
@@ -442,7 +448,7 @@ export default function QuickReviewPage() {
   }, [completingSession, completionTracked, currentSessionId, isPremiumPlan, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
-    if (!isComplete || !studyPack) {
+    if (!isComplete || !note) {
       return;
     }
     if (incorrectQuestionsForStudyTip.length === 0) {
@@ -451,7 +457,7 @@ export default function QuickReviewPage() {
     }
 
     let isMounted = true;
-    void generateQuickReviewStudyTip(studyPack.id, {
+    void generateQuickReviewStudyTip(note.id, {
       incorrectQuestions: incorrectQuestionsForStudyTip,
     })
       .then((response) => {
@@ -469,7 +475,7 @@ export default function QuickReviewPage() {
     return () => {
       isMounted = false;
     };
-  }, [incorrectQuestionsForStudyTip, isComplete, studyPack]);
+  }, [incorrectQuestionsForStudyTip, isComplete, note]);
 
   const handleSelectChoice = (choice: string) => {
     if (!currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent) {
@@ -569,12 +575,12 @@ export default function QuickReviewPage() {
     void completeSessionIfNeeded(0);
   };
 
-  const handleRetry = () => {
+  const handleRetry = useCallback(() => {
     const allIndexes = quiz.map((_, index) => index);
     resetQuickReviewState(allIndexes);
     setSessionStartedAt(Date.now());
-    if (studyPackId) {
-      void startQuickReviewSession(studyPackId)
+    if (note) {
+      void startQuickReviewSession(note.id)
         .then((result: QuickReviewSessionStartResponse) => {
           if (!result.sessionId) {
             setCurrentSessionId(null);
@@ -584,7 +590,7 @@ export default function QuickReviewPage() {
         })
         .catch(() => setCurrentSessionId(null));
     }
-  };
+  }, [note, quiz, resetQuickReviewState]);
 
   const handleSelectConfidence = useCallback(async (level: QuickReviewConfidenceLevel) => {
     if (!currentSessionId || savingConfidence || completingSession || !completionTracked) {
@@ -622,16 +628,16 @@ export default function QuickReviewPage() {
       ) : error ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">
-            {isNotFound ? "Study Pack not found" : "Could not start Quick Review"}
+            {isNotFound ? "Note not found" : "Could not start Quick Review"}
           </h1>
           <p className="text-sm text-foreground/75">
             {isNotFound
-              ? "This Study Pack is unavailable or does not belong to your account."
+              ? "This note is unavailable or does not belong to your account."
               : error}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             {!isNotFound ? (
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadStudyPack()}>
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadNote()}>
                 Retry
               </Button>
             ) : null}
@@ -642,11 +648,11 @@ export default function QuickReviewPage() {
             </Link>
           </div>
         </Card>
-      ) : studyPack && totalQuestions === 0 ? (
+      ) : note && totalQuestions === 0 ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">No quiz questions available</h1>
           <p className="text-sm text-foreground/75">
-            This Study Pack does not have quiz questions yet. Generate another Study Pack to try Quick Review.
+            This note does not have quiz questions yet. Generate a Study Pack to try Quick Review.
           </p>
           <Link href={noteDetailHref} className="w-full sm:w-auto">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
@@ -654,7 +660,7 @@ export default function QuickReviewPage() {
             </Button>
           </Link>
         </Card>
-      ) : studyPack && !currentSessionId ? (
+      ) : note && !currentSessionId ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">Quick Review not started</h1>
           <p className="text-sm text-foreground/75">
@@ -666,7 +672,7 @@ export default function QuickReviewPage() {
             </Button>
           </Link>
         </Card>
-      ) : studyPack && isComplete ? (
+      ) : note && isComplete ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Complete
@@ -694,7 +700,7 @@ export default function QuickReviewPage() {
                   <Trophy className="h-4 w-4" aria-hidden="true" />
                   <p className="font-medium">Excellent work! You mastered this topic.</p>
                 </div>
-                <p>Try another Study Pack to continue learning.</p>
+                <p>Try another note to continue learning.</p>
               </div>
             ) : (
               <p>{scoreFeedback}</p>
@@ -766,7 +772,7 @@ export default function QuickReviewPage() {
             </Link>
             {showAdaptiveGuidedCta ? (
               isPremiumPlan ? (
-                <Link href={`/study-packs/${studyPack.id}/adaptive-practice${noteDetailQuery}`} className="w-full sm:w-auto">
+                <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
                   <Button type="button" variant="outline" className="w-full sm:w-auto">
                     Practice Weak Concepts
                   </Button>
@@ -781,7 +787,7 @@ export default function QuickReviewPage() {
             ) : null}
             {showChallengeGuidedCta ? (
               isPremiumPlan ? (
-                <Link href={`/study-packs/${studyPack.id}/challenge-quiz${noteDetailQuery}`} className="w-full sm:w-auto">
+                <Link href={`/notes/${note.id}/challenge-quiz`} className="w-full sm:w-auto">
                   <Button type="button" variant="outline" className="w-full sm:w-auto">
                     Start Challenge Quiz
                   </Button>
@@ -801,7 +807,7 @@ export default function QuickReviewPage() {
             ) : null}
           </div>
         </Card>
-      ) : studyPack && phase === "retry-transition" ? (
+      ) : note && phase === "retry-transition" ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Quick Review Progress
@@ -826,13 +832,13 @@ export default function QuickReviewPage() {
             </Button>
           </div>
         </Card>
-      ) : studyPack && currentQuestion ? (
+      ) : note && currentQuestion ? (
         <div className="space-y-4">
           <Card className="space-y-2 p-4 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
               Quick Review
             </p>
-            <h1 className="text-xl font-semibold sm:text-2xl">{studyPack.title}</h1>
+            <h1 className="text-xl font-semibold sm:text-2xl">{note.title ?? "Untitled note"}</h1>
             <p className="text-sm text-foreground/75">
               {phase === "retry"
                 ? `Retry question ${currentRoundIndex + 1} of ${activeQuestionIndexes.length}`

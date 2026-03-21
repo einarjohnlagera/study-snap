@@ -90,6 +90,10 @@ export default function PublicSharePage() {
     setRemixError(null);
     try {
       const remixed = await remixSharedStudyPack(token);
+      if (remixed.noteId) {
+        router.push(`/notes/${remixed.noteId}?copied=1`);
+        return;
+      }
       router.push(`/study-packs/${remixed.studyPackId}?copied=1`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not copy this Study Pack.";

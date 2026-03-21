@@ -69,6 +69,7 @@ public class QuickReviewSessionService {
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
+        session.setNoteId(studyPack.getNoteId());
         session.setSessionMode(QuickReviewSessionMode.QUICK_REVIEW);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);

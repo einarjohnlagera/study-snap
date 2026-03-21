@@ -61,6 +61,7 @@ export type TodayFocusType =
 
 export type ContinueStudyingResponse = {
   studyPackId: string | null;
+  noteId: string | null;
   title: string | null;
   summaryPreview: string | null;
   reason: ContinueStudyingReason | null;
@@ -78,6 +79,7 @@ export type ContinueStudyingResponse = {
 export type TodayFocusResponse = {
   type: TodayFocusType;
   studyPackId: string | null;
+  noteId: string | null;
   title: string;
   message: string;
   actionLabel: string;
@@ -339,6 +341,7 @@ export type PublicShareResponse = {
 
 export type ShareRemixResponse = {
   studyPackId: string;
+  noteId: string | null;
 };
 
 export type BillingCheckoutSessionResponse = {
@@ -378,6 +381,13 @@ export type NoteResponse = {
   updatedAt: string;
   studyPackId?: string | null;
   studyPackStatus?: NoteStudyPackStatus;
+  summary: string | null;
+  keyConcepts: string[];
+  quiz: QuizItem[];
+  quizCount: number;
+  quickReviewAvailable: boolean;
+  challengeQuizAvailable: boolean;
+  adaptivePracticeAvailable: boolean;
 };
 
 export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
@@ -392,6 +402,7 @@ export type NoteListItemResponse = {
   visibility: NoteVisibility;
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
+  quizCount: number | null;
   updatedAt: string;
 };
 
@@ -686,23 +697,17 @@ export async function createStudyPackFromText(notesText: string): Promise<StudyP
 
 export async function createStudyPackFromNote(noteId: string): Promise<StudyPackResponse> {
   const response = await fetchWithAuth(
-    "/study-packs",
+    `/notes/${noteId}/generate`,
     {
       method: "POST",
-      headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ noteId }),
+      headers: buildAuthHeaders(),
     },
     true,
   );
-
-  const payload = await parseApiResponse<StudyPackApiResponse>(
+  return parseApiResponse<StudyPackResponse>(
     response,
     "We could not generate your study pack right now. Please try again.",
   );
-  if (isNeedsTextConfirmationResponse(payload)) {
-    throw new Error("Unexpected OCR confirmation response for note generation.");
-  }
-  return payload;
 }
 
 export async function createStudyPackFromImage(imageFile: File): Promise<StudyPackApiResponse> {
@@ -914,14 +919,13 @@ export async function trackQuickReviewActivity(
 }
 
 export async function startQuickReviewSession(
-  studyPackId: string,
+  noteId: string,
 ): Promise<QuickReviewSessionStartResponse> {
   const response = await fetchWithAuth(
-    "/quick-review/start",
+    `/notes/${noteId}/quick-review/start`,
     {
       method: "POST",
-      headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ studyPackId }),
+      headers: buildAuthHeaders(),
     },
     true,
   );
@@ -929,10 +933,10 @@ export async function startQuickReviewSession(
 }
 
 export async function getInProgressQuickReviewSession(
-  studyPackId: string,
+  noteId: string,
 ): Promise<QuickReviewSessionStartResponse> {
   const response = await fetchWithAuth(
-    `/quick-review/study-packs/${studyPackId}/in-progress`,
+    `/notes/${noteId}/quick-review/in-progress`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -997,11 +1001,11 @@ export async function saveQuickReviewConfidence(
 }
 
 export async function listRecentQuickReviewSessions(
-  studyPackId: string,
+  noteId: string,
   limit = 5,
 ): Promise<QuickReviewSessionSummaryResponse[]> {
   const response = await fetchWithAuth(
-    `/quick-review/study-packs/${studyPackId}/recent?limit=${limit}`,
+    `/notes/${noteId}/quick-review/recent?limit=${limit}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -1015,10 +1019,10 @@ export async function listRecentQuickReviewSessions(
 }
 
 export async function getQuickReviewPerformanceSummary(
-  studyPackId: string,
+  noteId: string,
 ): Promise<QuickReviewPerformanceSummaryResponse> {
   const response = await fetchWithAuth(
-    `/quick-review/study-packs/${studyPackId}/performance-summary`,
+    `/notes/${noteId}/quick-review/performance-summary`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -1032,11 +1036,11 @@ export async function getQuickReviewPerformanceSummary(
 }
 
 export async function generateQuickReviewStudyTip(
-  studyPackId: string,
+  noteId: string,
   request: QuickReviewStudyTipRequest,
 ): Promise<QuickReviewStudyTipResponse> {
   const response = await fetchWithAuth(
-    `/quick-review/study-packs/${studyPackId}/study-tip`,
+    `/notes/${noteId}/quick-review/study-tip`,
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
@@ -1048,10 +1052,10 @@ export async function generateQuickReviewStudyTip(
 }
 
 export async function generateAdaptiveQuickReviewQuiz(
-  studyPackId: string,
+  noteId: string,
 ): Promise<QuickReviewAdaptiveQuizResponse> {
   const response = await fetchWithAuth(
-    `/adaptive-practice/study-packs/${studyPackId}/start`,
+    `/notes/${noteId}/adaptive-practice/start`,
     {
       method: "POST",
       headers: buildAuthHeaders(),
@@ -1084,10 +1088,10 @@ export async function completeAdaptivePracticeSession(
 }
 
 export async function startChallengeQuizSession(
-  studyPackId: string,
+  noteId: string,
 ): Promise<ChallengeQuizStartResponse> {
   const response = await fetchWithAuth(
-    `/challenge-quiz/study-packs/${studyPackId}/start`,
+    `/notes/${noteId}/challenge-quiz/start`,
     {
       method: "POST",
       headers: buildAuthHeaders(),
@@ -1098,10 +1102,10 @@ export async function startChallengeQuizSession(
 }
 
 export async function getInProgressChallengeQuizSession(
-  studyPackId: string,
+  noteId: string,
 ): Promise<ChallengeQuizStartResponse> {
   const response = await fetchWithAuth(
-    `/challenge-quiz/study-packs/${studyPackId}/in-progress`,
+    `/notes/${noteId}/challenge-quiz/in-progress`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -1152,11 +1156,11 @@ export async function completeChallengeQuizSession(
 }
 
 export async function listRecentChallengeQuizSessions(
-  studyPackId: string,
+  noteId: string,
   limit = 5,
 ): Promise<ChallengeQuizSessionSummaryResponse[]> {
   const response = await fetchWithAuth(
-    `/challenge-quiz/study-packs/${studyPackId}/recent?limit=${limit}`,
+    `/notes/${noteId}/challenge-quiz/recent?limit=${limit}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
@@ -1170,10 +1174,10 @@ export async function listRecentChallengeQuizSessions(
 }
 
 export async function getChallengeQuizPerformanceSummary(
-  studyPackId: string,
+  noteId: string,
 ): Promise<ChallengeQuizPerformanceSummaryResponse> {
   const response = await fetchWithAuth(
-    `/challenge-quiz/study-packs/${studyPackId}/performance-summary`,
+    `/notes/${noteId}/challenge-quiz/performance-summary`,
     {
       method: "GET",
       headers: buildAuthHeaders(),

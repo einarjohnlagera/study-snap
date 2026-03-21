@@ -23,7 +23,6 @@ import {
   type NoteVisibility,
   type NoteResponse,
   type QuickReviewPerformanceSummaryResponse,
-  type StudyPackResponse,
 } from "@/lib/api";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
@@ -58,7 +57,6 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
-  const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,49 +91,40 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     setLoading(true);
     setError(null);
     try {
-      let loadedNote: NoteResponse | null = null;
-      try {
-        loadedNote = await getNote(normalizedRouteId);
-      } catch (noteError) {
+      const loadedNote = await getNote(normalizedRouteId);
+      setNote(loadedNote);
+      setShareError(null);
+
+      if (!loadedNote.quickReviewAvailable) {
+        setQuickSummary(null);
+        setChallengeSummary(null);
+        return;
+      }
+
+      const [quick, challenge] = await Promise.allSettled([
+        getQuickReviewPerformanceSummary(loadedNote.id),
+        getChallengeQuizPerformanceSummary(loadedNote.id),
+      ]);
+      setQuickSummary(quick.status === "fulfilled" ? quick.value : null);
+      setChallengeSummary(challenge.status === "fulfilled" ? challenge.value : null);
+    } catch (err) {
+      if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(normalizedRouteId).catch(() => null);
         if (byStudyPack?.noteId) {
           const nextQuery = searchParams.toString();
           router.replace(nextQuery ? `/notes/${byStudyPack.noteId}?${nextQuery}` : `/notes/${byStudyPack.noteId}`);
           return;
         }
-        throw noteError;
       }
-
-      setNote(loadedNote);
-      setShareError(null);
-
-      if (!loadedNote.studyPackId || loadedNote.studyPackStatus === "DRAFT") {
-        setStudyPack(null);
-        setQuickSummary(null);
-        setChallengeSummary(null);
-        return;
-      }
-
-      const linkedStudyPack = await getMyStudyPack(loadedNote.studyPackId);
-      setStudyPack(linkedStudyPack);
-
-      const [quick, challenge] = await Promise.allSettled([
-        getQuickReviewPerformanceSummary(linkedStudyPack.id),
-        getChallengeQuizPerformanceSummary(linkedStudyPack.id),
-      ]);
-      setQuickSummary(quick.status === "fulfilled" ? quick.value : null);
-      setChallengeSummary(challenge.status === "fulfilled" ? challenge.value : null);
-    } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load this note.";
       setError(message);
       setNote(null);
-      setStudyPack(null);
       setQuickSummary(null);
       setChallengeSummary(null);
     } finally {
       setLoading(false);
     }
-  }, [normalizedRouteId, router, searchParams]);
+  }, [normalizedRouteId, pathname, router, searchParams]);
 
   useEffect(() => {
     void loadDetail();
@@ -206,10 +195,9 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname);
   }, [pathname, router, searchParams]);
 
-  const isDraft = !studyPack || note?.studyPackStatus !== "STUDY_PACK_READY";
-  const linkedStudyPackId = studyPack?.id ?? note?.studyPackId ?? null;
-  const title = note?.title?.trim() || studyPack?.title || "Untitled note";
-  const subject = note?.subject?.trim() || studyPack?.subject?.trim() || "No subject";
+  const isDraft = note?.studyPackStatus !== "STUDY_PACK_READY";
+  const title = note?.title?.trim() || "Untitled note";
+  const subject = note?.subject?.trim() || "No subject";
   const tags = note?.tags ?? [];
   const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
   const isPublic = visibility === "PUBLIC";
@@ -294,13 +282,13 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   };
 
   const handleStartQuickReview = async () => {
-    if (!linkedStudyPackId || !note) {
+    if (!note) {
       return;
     }
     try {
-      const started = await startQuickReviewSession(linkedStudyPackId);
+      const started = await startQuickReviewSession(note.id);
       if (started.sessionId) {
-        router.push(`/study-packs/${linkedStudyPackId}/quick-review?sessionId=${started.sessionId}&noteId=${note.id}`);
+        router.push(`/notes/${note.id}/quick-review?sessionId=${started.sessionId}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not start Quick Review.";
@@ -309,25 +297,25 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   };
 
   const handleStartChallengeQuiz = () => {
-    if (!linkedStudyPackId || !note) {
+    if (!note) {
       return;
     }
     if (!isPremiumPlan) {
       router.push(PLAN_BILLING_PATH);
       return;
     }
-    router.push(`/study-packs/${linkedStudyPackId}/challenge-quiz?noteId=${note.id}`);
+    router.push(`/notes/${note.id}/challenge-quiz`);
   };
 
   const handleStartAdaptivePractice = () => {
-    if (!linkedStudyPackId || !note) {
+    if (!note) {
       return;
     }
     if (!isPremiumPlan) {
       router.push(PLAN_BILLING_PATH);
       return;
     }
-    router.push(`/study-packs/${linkedStudyPackId}/adaptive-practice?noteId=${note.id}`);
+    router.push(`/notes/${note.id}/adaptive-practice`);
   };
 
   const handleCopyLink = async () => {
@@ -524,7 +512,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
             <p className="text-sm text-foreground/75">
-              {isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : studyPack.summary}
+              {isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : note.summary}
             </p>
           </Card>
 
@@ -534,8 +522,8 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
               <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
             ) : (
               <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
-                {studyPack.keyConcepts.map((concept, index) => (
-                  <li key={`${studyPack.id}-concept-${index}`}>{concept}</li>
+                {note.keyConcepts.map((concept, index) => (
+                  <li key={`${note.id}-concept-${index}`}>{concept}</li>
                 ))}
               </ul>
             )}
@@ -567,7 +555,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
               <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
             </Card>
           ) : (
-            <PracticeQuizCard quiz={studyPack.quiz} />
+            <PracticeQuizCard quiz={note.quiz} />
           )}
         </div>
       ) : null}

@@ -59,6 +59,7 @@ public class ChallengeQuizService {
     private final LlmStudyPackService llmStudyPackService;
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
+    private final UserUsageService userUsageService;
 
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
@@ -117,6 +118,7 @@ public class ChallengeQuizService {
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
+        session.setNoteId(studyPack.getNoteId());
         session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
@@ -134,6 +136,7 @@ public class ChallengeQuizService {
         session.setCompletedAt(null);
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
         return toStartResponse(saved, studyPack, usedThisMonth + 1);
     }
 
@@ -366,12 +369,14 @@ public class ChallengeQuizService {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
-        return quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        long usedFromSessions = quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 QuickReviewSessionMode.CHALLENGE,
                 monthStart,
                 nextMonthStart
         );
+        long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).challengeQuizGenerations();
+        return Math.max(usedFromSessions, usedFromUsage);
     }
 
     private ChallengeGenerationProfile resolveGenerationProfile(UUID userId, UUID studyPackId) {

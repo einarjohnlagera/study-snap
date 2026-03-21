@@ -5,14 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   getMe,
   getMasterySnapshot,
-  getMyStudyPack,
   getTodayFocus,
   getQuickReviewPerformanceSummary,
-  listMyStudyPacks,
   listNotes,
   type MasterySnapshotResponse,
   type NoteListItemResponse,
-  type StudyPackListItemResponse,
   type TodayFocusResponse,
 } from "@/lib/api";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
@@ -29,7 +26,6 @@ import Link from "next/link";
 export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
-  const [studyPackItems, setStudyPackItems] = useState<StudyPackListItemResponse[]>([]);
   const [recentNoteMetaById, setRecentNoteMetaById] = useState<Record<string, { lastReviewedAt: string | null; quizCount: number | null }>>({});
   const [greetingName, setGreetingName] = useState("there");
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
@@ -57,16 +53,12 @@ export default function DashboardPage() {
       if (recentStudyPackNotes.length > 0) {
         const entries = await Promise.all(
           recentStudyPackNotes.map(async (note) => {
-            const studyPackId = note.studyPackId as string;
-            const [reviewResult, studyPackResult] = await Promise.allSettled([
-              getQuickReviewPerformanceSummary(studyPackId),
-              getMyStudyPack(studyPackId),
-            ]);
+            const quickReviewResult = await getQuickReviewPerformanceSummary(note.id).catch(() => null);
             return [
               note.id,
               {
-                lastReviewedAt: reviewResult.status === "fulfilled" ? reviewResult.value.lastReviewedAt : null,
-                quizCount: studyPackResult.status === "fulfilled" ? studyPackResult.value.quiz.length : null,
+                lastReviewedAt: quickReviewResult?.lastReviewedAt ?? null,
+                quizCount: note.quizCount,
               },
             ] as const;
           }),
@@ -76,11 +68,10 @@ export default function DashboardPage() {
         setRecentNoteMetaById({});
       }
 
-      const [meResult, todayFocusResult, masterySnapshotResult, studyPackResult] = await Promise.allSettled([
+      const [meResult, todayFocusResult, masterySnapshotResult] = await Promise.allSettled([
         getMe(),
         getTodayFocus(),
         getMasterySnapshot(),
-        listMyStudyPacks(),
       ]);
 
       if (meResult.status === "fulfilled") {
@@ -91,7 +82,6 @@ export default function DashboardPage() {
       }
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
       setMasterySnapshot(masterySnapshotResult.status === "fulfilled" ? masterySnapshotResult.value : null);
-      setStudyPackItems(studyPackResult.status === "fulfilled" ? studyPackResult.value : []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your notes.";
       setError(message);
@@ -120,8 +110,8 @@ export default function DashboardPage() {
     [items],
   );
   const totalQuizQuestions = useMemo(
-    () => studyPackItems.reduce((sum, item) => sum + item.quizCount, 0),
-    [studyPackItems],
+    () => items.reduce((sum, item) => sum + (item.quizCount ?? 0), 0),
+    [items],
   );
 
   return (

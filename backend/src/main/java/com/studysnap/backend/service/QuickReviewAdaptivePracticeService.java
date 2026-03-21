@@ -49,6 +49,7 @@ public class QuickReviewAdaptivePracticeService {
     private final ActivityTrackingService activityTrackingService;
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
+    private final UserUsageService userUsageService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
@@ -138,6 +139,7 @@ public class QuickReviewAdaptivePracticeService {
         session.setId(UUID.randomUUID());
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
+        session.setNoteId(studyPack.getNoteId());
         session.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
@@ -178,6 +180,7 @@ public class QuickReviewAdaptivePracticeService {
             }
             throw integrityViolationException;
         }
+        userUsageService.incrementAdaptiveQuizGeneration(userId, savedSession.getCreatedAt());
 
         activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
 
@@ -289,12 +292,14 @@ public class QuickReviewAdaptivePracticeService {
         OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
         int monthlyLimit = properties.getPricing().getPremiumMonthlyAdaptivePracticeLimit();
 
-        long usedThisMonth = activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        long usedFromActivityEvents = activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 ActivityType.STARTED_ADAPTIVE_PRACTICE,
                 monthStart,
                 nextMonthStart
         );
+        long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).adaptiveQuizGenerations();
+        long usedThisMonth = Math.max(usedFromActivityEvents, usedFromUsage);
         if (usedThisMonth < monthlyLimit) {
             return;
         }

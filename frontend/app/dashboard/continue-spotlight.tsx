@@ -84,7 +84,7 @@ function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
 export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
   const copy = getScoreAwareCopy(recommendation);
   const FeedbackIcon = copy.icon;
-  if (!recommendation.studyPackId) {
+  if (!recommendation.noteId) {
     return null;
   }
 
@@ -127,7 +127,7 @@ export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Link href={`/study-packs/${recommendation.studyPackId}/quick-review`} className="w-full sm:w-auto">
+        <Link href={`/notes/${recommendation.noteId}/quick-review`} className="w-full sm:w-auto">
           <Button type="button" className="w-full sm:w-auto">{copy.cta}</Button>
         </Link>
       </div>

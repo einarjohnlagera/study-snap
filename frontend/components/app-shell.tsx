@@ -66,6 +66,15 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/public/notes/")) {
     return "Public Note";
   }
+  if (pathname.includes("/quick-review")) {
+    return "Quick Review";
+  }
+  if (pathname.includes("/adaptive-practice")) {
+    return "Adaptive Practice";
+  }
+  if (pathname.includes("/challenge-quiz")) {
+    return "Challenge Quiz";
+  }
   if (pathname === "/notes/new") {
     return "New Note";
   }
@@ -86,15 +95,6 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname === "/study" || pathname.startsWith("/study/")) {
     return "New Note";
-  }
-  if (pathname.includes("/quick-review")) {
-    return "Quick Review";
-  }
-  if (pathname.includes("/adaptive-practice")) {
-    return "Adaptive Practice";
-  }
-  if (pathname.includes("/challenge-quiz")) {
-    return "Challenge Quiz";
   }
   if (pathname.startsWith("/study-packs")) {
     return "Note";

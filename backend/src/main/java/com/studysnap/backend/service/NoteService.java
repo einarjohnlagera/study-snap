@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
@@ -43,7 +44,9 @@ public class NoteService {
         entity.setSubject(normalizeOptionalText(request.subject()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
+        entity.setStatus(NoteStatus.DRAFT);
         entity.setVisibility(NoteVisibility.PRIVATE);
+        entity.setSourceNoteId(null);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
@@ -59,6 +62,14 @@ public class NoteService {
         );
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+
+        if (resolveStatus(entity) == NoteStatus.GENERATED) {
+            throw new AppException(
+                    "NOTE_LOCKED",
+                    "This note is locked because it already has a Study Pack. Make a copy to edit.",
+                    HttpStatus.CONFLICT
+            );
+        }
 
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(normalizeOptionalText(request.subject()));
@@ -85,6 +96,19 @@ public class NoteService {
         return mapToResponse(entity, linkedStudyPack);
     }
 
+    @Transactional(readOnly = true)
+    public String getOwnedStudyPackIdOrThrow(String noteIdRaw, UUID ownerUserId) {
+        NoteResponse note = getById(noteIdRaw, ownerUserId);
+        if (note.studyPackId() == null || STUDY_PACK_STATUS_DRAFT.equals(note.studyPackStatus())) {
+            throw new AppException(
+                    "NOTE_STUDY_PACK_NOT_READY",
+                    "Generate a Study Pack for this note first.",
+                    HttpStatus.CONFLICT
+            );
+        }
+        return note.studyPackId();
+    }
+
     public NoteResponse copyNote(String id, UUID ownerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(
                 id,
@@ -106,7 +130,9 @@ public class NoteService {
         copy.setSubject(source.getSubject());
         copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
         copy.setContent(source.getContent());
+        copy.setStatus(NoteStatus.DRAFT);
         copy.setVisibility(NoteVisibility.PRIVATE);
+        copy.setSourceNoteId(source.getId());
         copy.setCreatedAt(OffsetDateTime.now());
         copy.setUpdatedAt(OffsetDateTime.now());
 
@@ -234,6 +260,14 @@ public class NoteService {
     }
 
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
+        List<String> keyConcepts = studyPack == null || studyPack.getKeyConcepts() == null
+                ? List.of()
+                : studyPack.getKeyConcepts();
+        List<com.studysnap.backend.dto.QuizItem> quiz = studyPack == null || studyPack.getQuiz() == null
+                ? List.of()
+                : studyPack.getQuiz();
+        int quizCount = quiz.size();
+        boolean hasGeneratedQuiz = !quiz.isEmpty();
         return new NoteResponse(
                 entity.getId().toString(),
                 entity.getTitle(),
@@ -244,7 +278,14 @@ public class NoteService {
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 studyPack == null ? null : studyPack.getId().toString(),
-                resolveStudyPackStatus(studyPack)
+                resolveStudyPackStatus(entity, studyPack),
+                studyPack == null ? null : studyPack.getSummary(),
+                keyConcepts,
+                quiz,
+                quizCount,
+                hasGeneratedQuiz,
+                hasGeneratedQuiz,
+                hasGeneratedQuiz
         );
     }
 
@@ -257,7 +298,8 @@ public class NoteService {
                 toContentPreview(note.getContent()),
                 resolveVisibility(note).name(),
                 studyPack == null ? null : studyPack.getId().toString(),
-                resolveStudyPackStatus(studyPack),
+                resolveStudyPackStatus(note, studyPack),
+                studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
                 note.getUpdatedAt()
         );
     }
@@ -269,7 +311,7 @@ public class NoteService {
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 toContentPreview(note.getContent()),
-                resolveStudyPackStatus(studyPack),
+                resolveStudyPackStatus(note, studyPack),
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
@@ -277,7 +319,11 @@ public class NoteService {
         );
     }
 
-    private String resolveStudyPackStatus(StudyPackEntity studyPack) {
+    private String resolveStudyPackStatus(NoteEntity note, StudyPackEntity studyPack) {
+        NoteStatus noteStatus = resolveStatus(note);
+        if (noteStatus == NoteStatus.GENERATED) {
+            return STUDY_PACK_STATUS_READY;
+        }
         if (studyPack == null) {
             return STUDY_PACK_STATUS_DRAFT;
         }
@@ -301,6 +347,10 @@ public class NoteService {
 
     private NoteVisibility resolveVisibility(NoteEntity note) {
         return note.getVisibility() == null ? NoteVisibility.PRIVATE : note.getVisibility();
+    }
+
+    private NoteStatus resolveStatus(NoteEntity note) {
+        return note.getStatus() == null ? NoteStatus.DRAFT : note.getStatus();
     }
 
     private String toContentPreview(String content) {

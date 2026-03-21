@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -13,11 +13,12 @@ import {
   completeChallengeQuizSession,
   getInProgressChallengeQuizSession,
   getMyStudyPack,
+  getNote,
   startChallengeQuizSession,
   updateChallengeQuizSessionProgress,
+  type NoteResponse,
   type ChallengeQuizSessionResponse,
   type ChallengeQuizStartResponse,
-  type StudyPackResponse,
 } from "@/lib/api";
 
 type ChallengePhase = "prestart" | "running" | "complete" | "premium-locked" | "limit-reached";
@@ -101,9 +102,10 @@ function resolveRemainingSeconds(deadlineEpochSeconds: number): number {
 
 export default function ChallengeQuizPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
+  const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
   const [phase, setPhase] = useState<ChallengePhase>("prestart");
@@ -119,24 +121,13 @@ export default function ChallengeQuizPage() {
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
 
-  const studyPackId = useMemo(() => {
+  const noteId = useMemo(() => {
     if (!params?.id) {
       return "";
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
-  const noteIdParam = searchParams.get("noteId")?.trim() ?? null;
-  const noteDetailHref = useMemo(() => {
-    const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
-    if (resolvedNoteId) {
-      return `/notes/${resolvedNoteId}`;
-    }
-    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
-  }, [noteIdParam, studyPack?.noteId, studyPackId]);
-  const noteDetailQuery = useMemo(() => {
-    const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
-    return resolvedNoteId ? `?noteId=${encodeURIComponent(resolvedNoteId)}` : "";
-  }, [noteIdParam, studyPack?.noteId]);
+  const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
@@ -181,9 +172,9 @@ export default function ChallengeQuizPage() {
     [challengeSession?.sessionId],
   );
 
-  const loadStudyPack = useCallback(async () => {
-    if (!studyPackId) {
-      setError("Study Pack not found.");
+  const loadNote = useCallback(async () => {
+    if (!noteId) {
+      setError("Note not found.");
       setLoading(false);
       return;
     }
@@ -195,15 +186,20 @@ export default function ChallengeQuizPage() {
     setLoading(true);
     setError(null);
     try {
-      const detail = await getMyStudyPack(studyPackId);
-      setStudyPack(detail);
+      const detail = await getNote(noteId);
+      if (detail.studyPackStatus !== "STUDY_PACK_READY") {
+        setNote(detail);
+        setError("Generate a Study Pack first.");
+        return;
+      }
+      setNote(detail);
       const planType = getAuthUser()?.planType ?? "FREE";
       if (planType !== "PREMIUM") {
         setPhase("premium-locked");
         return;
       }
 
-      const inProgress = await getInProgressChallengeQuizSession(studyPackId);
+      const inProgress = await getInProgressChallengeQuizSession(detail.id);
       if (inProgress.sessionId) {
         applyStartedSession(inProgress, true);
       } else {
@@ -218,17 +214,29 @@ export default function ChallengeQuizPage() {
         setPhase("prestart");
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not load this Study Pack.";
+      if (pathname.startsWith("/study-packs/")) {
+        const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
+        if (byStudyPack?.noteId) {
+          const nextQuery = searchParams.toString();
+          router.replace(
+            nextQuery
+              ? `/notes/${byStudyPack.noteId}/challenge-quiz?${nextQuery}`
+              : `/notes/${byStudyPack.noteId}/challenge-quiz`,
+          );
+          return;
+        }
+      }
+      const message = err instanceof Error ? err.message : "Could not load this note.";
       setError(message);
-      setStudyPack(null);
+      setNote(null);
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, router, studyPackId]);
+  }, [applyStartedSession, noteId, pathname, router, searchParams]);
 
   useEffect(() => {
-    void loadStudyPack();
-  }, [loadStudyPack]);
+    void loadNote();
+  }, [loadNote]);
 
   const quiz = useMemo(() => challengeSession?.quiz ?? [], [challengeSession]);
   const totalQuestions = quiz.length;
@@ -327,14 +335,14 @@ export default function ChallengeQuizPage() {
   }, [currentIndex, persistProgress, phase, selectedChoices]);
 
   const handleStartChallenge = useCallback(async () => {
-    if (!studyPack || starting) {
+    if (!note || starting) {
       return;
     }
 
     setStarting(true);
     setError(null);
     try {
-      const started = await startChallengeQuizSession(studyPack.id);
+      const started = await startChallengeQuizSession(note.id);
       if (!started.sessionId) {
         throw new Error("Could not start Challenge Quiz.");
       }
@@ -350,7 +358,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setStarting(false);
     }
-  }, [applyStartedSession, starting, studyPack]);
+  }, [applyStartedSession, note, starting]);
 
   const handleRetry = () => {
     setChallengeSession(null);
@@ -410,15 +418,15 @@ export default function ChallengeQuizPage() {
 
       {loading ? (
         <ChallengeQuizLoading />
-      ) : error && !studyPack ? (
+      ) : error && !note ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">
-            {isNotFound ? "Study Pack not found" : "Could not load Challenge Quiz"}
+            {isNotFound ? "Note not found" : "Could not load Challenge Quiz"}
           </h1>
           <p className="text-sm text-foreground/75">{error}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             {!isNotFound ? (
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadStudyPack()}>
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadNote()}>
                 Retry
               </Button>
             ) : null}
@@ -467,7 +475,7 @@ export default function ChallengeQuizPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Challenge Quiz
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">{studyPack?.title ?? "Challenge Quiz"}</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? "Challenge Quiz"}</h1>
           <p className="text-sm text-foreground/80">
             We tailored this quiz based on your recent performance.
           </p>
@@ -563,7 +571,7 @@ export default function ChallengeQuizPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Challenge Quiz Result
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">{studyPack?.title ?? "Challenge Quiz"}</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? "Challenge Quiz"}</h1>
           <div className="rounded-md border border-border bg-background p-4">
             <p className="text-lg font-semibold">{result.scorePercentage}%</p>
             <p className="mt-1 text-sm text-foreground/80">
@@ -631,7 +639,7 @@ export default function ChallengeQuizPage() {
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
             </Button>
             {result.weakConcepts.length > 0 ? (
-              <Link href={studyPackId ? `/study-packs/${studyPackId}/adaptive-practice${noteDetailQuery}` : "/dashboard"} className="w-full sm:w-auto">
+              <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
                 <Button type="button" variant="outline" className="w-full sm:w-auto">
                   Practice Weak Concepts
                 </Button>
