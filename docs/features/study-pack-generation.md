@@ -8,7 +8,7 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 
 - Notes are saved first and remain the primary entity.
 - Study Pack output is the generated enhancement state of a Note.
-- New versions are created via `Clone Note`, not regeneration/overwrite on the same Note.
+- New versions are created via `Make a Copy`, not overwrite on the same Note.
 
 ## Output structure
 

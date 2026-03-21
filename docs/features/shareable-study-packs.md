@@ -1,31 +1,38 @@
-# shareable-study-packs.md — NoteLib Feature Context
+# shareable-study-packs.md - NoteLib Feature Context
 
 ## Goal
 
-Allow users to create public share links for generated Study Packs.
+Support public discovery and safe reuse of learning content while keeping the note-first model.
 
-## Public route
-- `/p/[token]`
+## Public Surfaces
 
-## Backend endpoints
-- `POST /api/study-packs/{id}/share`
-- `GET /api/p/{token}`
-- `POST /api/p/{token}/remix`
+- Public Library route: `/notes`
+- Public Note Detail route: `/notes/public/{id}`
+- Token share route (existing): `/p/{token}`
 
-## Rules
-- shared page shows generated content
-- shared page is read-only
-- raw uploaded image must not be exposed
-- raw notes text should be hidden by default
-- tokens must be unguessable
-- owners can generate token links on demand (reuse existing token when present)
-- authenticated users can copy/remix shared Study Packs into their own Study Library
-- remix must duplicate existing stored Study Pack content without triggering a new LLM generation request
-- expiration may be added later
-- optional view count may be tracked
+## Public Note Rules
 
-## Purpose
-- enable viral distribution
-- make Study Packs easier to share
-- support public viewing without exposing private user data
+- public list includes only notes where `visibility=PUBLIC`
+- owner notes are excluded from Public Library listing
+- public detail is read-only
+- public detail shows: title, subject, tags, summary, key concepts, practice quiz
+- public detail hides: challenge/adaptive/performance/edit controls
 
+## Copy Flow
+
+Public content can be copied into My Library using:
+
+- `Copy to My Library`
+
+Copy behavior:
+
+- copy only `title`, `subject`, `tags`, `content`
+- do not copy generated outputs or performance/session history
+- result is a new Draft note in current user ownership
+- copy must not trigger new LLM generation
+
+## Security and Privacy
+
+- public pages must not expose raw uploaded image data
+- avoid exposing private-only note metadata
+- non-public note endpoints remain authenticated

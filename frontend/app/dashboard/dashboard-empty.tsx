@@ -12,7 +12,7 @@ export function DashboardEmpty() {
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Link href="/notes/new" className="w-full sm:w-auto">
-          <Button type="button" className="w-full sm:w-auto">Create Note</Button>
+          <Button type="button" className="w-full sm:w-auto">New Note</Button>
         </Link>
         <Link href="/study?focus=upload" className="w-full sm:w-auto">
           <Button type="button" variant="outline" className="w-full sm:w-auto">Upload Notes</Button>

@@ -2,8 +2,10 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
@@ -41,6 +43,7 @@ public class NoteService {
         entity.setSubject(normalizeOptionalText(request.subject()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
+        entity.setVisibility(NoteVisibility.PRIVATE);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
@@ -64,7 +67,7 @@ public class NoteService {
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
-        StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId(), ownerUserId);
+        StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId());
         return mapToResponse(saved, linkedStudyPack);
     }
 
@@ -78,44 +81,94 @@ public class NoteService {
         );
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
-        StudyPackEntity linkedStudyPack = findLinkedStudyPack(entity.getId(), ownerUserId);
+        StudyPackEntity linkedStudyPack = findLinkedStudyPack(entity.getId());
         return mapToResponse(entity, linkedStudyPack);
     }
 
-    public NoteResponse cloneNote(String id, UUID ownerUserId) {
+    public NoteResponse copyNote(String id, UUID ownerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(
                 id,
                 "NOTE_NOT_FOUND",
                 "Note not found.",
                 HttpStatus.NOT_FOUND
         );
-        NoteEntity source = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
+        NoteEntity source = noteRepository.findById(noteId)
+                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+        boolean isOwner = source.getOwnerUserId() != null && source.getOwnerUserId().equals(ownerUserId);
+        if (!isOwner && resolveVisibility(source) != NoteVisibility.PUBLIC) {
+            throw new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND);
+        }
+
+        NoteEntity copy = new NoteEntity();
+        copy.setId(UUID.randomUUID());
+        copy.setOwnerUserId(ownerUserId);
+        copy.setTitle(source.getTitle());
+        copy.setSubject(source.getSubject());
+        copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
+        copy.setContent(source.getContent());
+        copy.setVisibility(NoteVisibility.PRIVATE);
+        copy.setCreatedAt(OffsetDateTime.now());
+        copy.setUpdatedAt(OffsetDateTime.now());
+
+        NoteEntity saved = noteRepository.save(copy);
+        return mapToResponse(saved, null);
+    }
+
+    public NoteResponse updateVisibility(String id, String visibilityRaw, UUID ownerUserId) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "NOTE_NOT_FOUND",
+                "Note not found.",
+                HttpStatus.NOT_FOUND
+        );
+        NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
 
-        NoteEntity clone = new NoteEntity();
-        clone.setId(UUID.randomUUID());
-        clone.setOwnerUserId(ownerUserId);
-        clone.setTitle(source.getTitle());
-        clone.setSubject(source.getSubject());
-        clone.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
-        clone.setContent(source.getContent());
-        clone.setCreatedAt(OffsetDateTime.now());
-        clone.setUpdatedAt(OffsetDateTime.now());
-
-        NoteEntity saved = noteRepository.save(clone);
-        return mapToResponse(saved, null);
+        NoteVisibility visibility = parseVisibility(visibilityRaw);
+        entity.setVisibility(visibility);
+        entity.setUpdatedAt(OffsetDateTime.now());
+        NoteEntity saved = noteRepository.save(entity);
+        StudyPackEntity linkedStudyPack = findLinkedStudyPack(saved.getId());
+        return mapToResponse(saved, linkedStudyPack);
     }
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
         List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
+        return toListItems(notes);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
+        List<NoteEntity> notes = noteRepository.findByVisibilityExcludingOwnerOrderByUpdatedAtDesc(
+                NoteVisibility.PUBLIC,
+                viewerUserId
+        );
+        return toListItems(notes);
+    }
+
+    @Transactional(readOnly = true)
+    public PublicNoteDetailResponse getPublicById(String id) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
+                id,
+                "NOTE_NOT_FOUND",
+                "Note not found.",
+                HttpStatus.NOT_FOUND
+        );
+        NoteEntity entity = noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)
+                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+        StudyPackEntity linkedStudyPack = findLinkedStudyPack(entity.getId());
+        return mapToPublicDetail(entity, linkedStudyPack);
+    }
+
+    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes) {
         if (notes.isEmpty()) {
             return List.of();
         }
 
         List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
         Map<UUID, StudyPackEntity> studyPackByNoteId = new HashMap<>();
-        for (StudyPackEntity studyPack : studyPackRepository.findByOwnerUserIdAndNoteIdIn(ownerUserId, noteIds)) {
+        for (StudyPackEntity studyPack : studyPackRepository.findByNoteIdIn(noteIds)) {
             if (studyPack.getNoteId() != null) {
                 studyPackByNoteId.put(studyPack.getNoteId(), studyPack);
             }
@@ -172,6 +225,7 @@ public class NoteService {
                 entity.getSubject(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getContent(),
+                resolveVisibility(entity).name(),
                 entity.getCreatedAt(),
                 entity.getUpdatedAt(),
                 studyPack == null ? null : studyPack.getId().toString(),
@@ -186,8 +240,24 @@ public class NoteService {
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 toContentPreview(note.getContent()),
+                resolveVisibility(note).name(),
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(studyPack),
+                note.getUpdatedAt()
+        );
+    }
+
+    private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack) {
+        return new PublicNoteDetailResponse(
+                note.getId().toString(),
+                note.getTitle(),
+                note.getSubject(),
+                note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
+                toContentPreview(note.getContent()),
+                resolveStudyPackStatus(studyPack),
+                studyPack == null ? null : studyPack.getSummary(),
+                studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
+                studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
                 note.getUpdatedAt()
         );
     }
@@ -199,8 +269,23 @@ public class NoteService {
         return STUDY_PACK_STATUS_READY;
     }
 
-    private StudyPackEntity findLinkedStudyPack(UUID noteId, UUID ownerUserId) {
-        return studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId).orElse(null);
+    private StudyPackEntity findLinkedStudyPack(UUID noteId) {
+        return studyPackRepository.findByNoteId(noteId).orElse(null);
+    }
+
+    private NoteVisibility parseVisibility(String visibilityRaw) {
+        if (visibilityRaw == null || visibilityRaw.isBlank()) {
+            throw new AppException("INVALID_VISIBILITY", "Visibility is required.", HttpStatus.BAD_REQUEST);
+        }
+        try {
+            return NoteVisibility.valueOf(visibilityRaw.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new AppException("INVALID_VISIBILITY", "Visibility must be PRIVATE or PUBLIC.", HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private NoteVisibility resolveVisibility(NoteEntity note) {
+        return note.getVisibility() == null ? NoteVisibility.PRIVATE : note.getVisibility();
     }
 
     private String toContentPreview(String content) {

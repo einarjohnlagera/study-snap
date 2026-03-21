@@ -13,17 +13,27 @@ Scope priorities:
 - Note lifecycle states:
   - `Draft`
   - `Study Pack Ready`
+- Note visibility states:
+  - `PRIVATE`
+  - `PUBLIC`
 - Study Pack generation from Note content
-- clone-based versioning (no overwrite/regenerate flow)
-- clone behavior:
+- copy-based versioning (no overwrite flow)
+- copy behavior:
   - copy user-authored fields (`title`, `subject`, `tags`, `content`)
   - do not copy generated outputs or performance history
+  - do not copy quiz sessions
+- navigation structure:
+  - Dashboard
+  - My Library
+  - Public Library
+  - Settings
 - Premium Challenge Quiz (timed mode generated from Study Pack summary + key concepts)
 - Premium Adaptive Practice (targeted generation from weak concepts)
 - session resilience for Challenge/Adaptive (resume in-progress sessions)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
 - real email verification + generation gating for unverified users
-- public Study Library continuity (browse, filter, sort, revisit)
+- My Library continuity (browse, filter, sort, revisit)
+- Public Library continuity (browse public notes and copy into My Library)
 - sharing and remixing continuity (`/p/{token}`, copy to library without LLM call)
 
 Implementation stance:
@@ -38,13 +48,13 @@ Potential expansion areas:
 
 - richer note workspace
 - advanced note editing and note comparison
-- clone lineage visualization
+- copy lineage visualization
 - deeper progress insights from quiz history
 - optional snapshot/history table if product value is proven
 
 ## Product learning loop
 
-Capture -> Generate -> Review -> Improve -> Clone -> Repeat
+Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 
 Roadmap decisions should reinforce this loop rather than one-time output generation.
 

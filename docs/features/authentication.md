@@ -15,8 +15,8 @@ It should be read together with:
 
 NoteLib is evolving from a one-shot study pack generator into a reusable study workspace.
 
-The product already treats generated outputs as **study packs** that users can revisit later in a Study Library.
-Because of that, user accounts should be introduced **before** fully implementing the Study Library dashboard.
+The product already treats generated outputs as **study packs** that users can revisit later in My Library.
+Because of that, user accounts should be introduced **before** fully implementing the My Library dashboard.
 
 This keeps ownership, saved history, plan limits, and future premium features consistent.
 
@@ -36,7 +36,7 @@ A Study Pack contains:
 
 The User Accounts foundation exists to support:
 - saved study packs
-- authenticated Study Library access
+- authenticated My Library access
 - future usage limits by plan
 - future subscription analytics
 - future premium feature access
@@ -54,7 +54,7 @@ The backend/domain should use **StudyPack** as the default term for this entity.
 Reason:
 - "Review" is becoming vague as the product grows.
 - “Study Pack” matches product language in README, SPEC, and roadmap.
-- The Study Library is conceptually a library of study packs.
+- My Library is conceptually a library of note-owned study outputs.
 
 Transitional note:
 - Existing code may still use `Review` in some classes/endpoints.
@@ -218,7 +218,7 @@ Current direction:
 - `owner_user_id` should be non-null for real product Study Pack rows.
 - Demo mode remains frontend-only and does not require backend anonymous persistence.
 
-This should power the future Study Library dashboard for:
+This should power the future My Library dashboard for:
 - list my study packs
 - open a study pack
 - delete a study pack
@@ -305,7 +305,7 @@ Build user accounts foundation:
 Link generated Study Packs to authenticated users.
 
 ### Phase 3
-Build the Study Library dashboard on top of authenticated ownership.
+Build the My Library dashboard on top of authenticated ownership.
 
 ### Phase 4
 Add rate limiting / usage limits by plan.
@@ -336,7 +336,7 @@ Focus on:
 - user identity
 - authenticated ownership
 - plan/subscription history shape
-- clean path to Study Library
+- clean path to My Library
 
 ---
 
@@ -356,7 +356,7 @@ And the agreed UX details are:
 - UI label: **“I’m using NoteLib as a…”**
 - values for now: Student, Parent, Professional
 
-This context should guide the next implementation work for User Accounts and the future authenticated Study Library.
+This context should guide the next implementation work for User Accounts and the future authenticated My Library.
 
 
 ## Placement in the refactored docs

@@ -43,24 +43,25 @@ Generated Study Pack outputs include:
 - Challenge Quiz
 - Adaptive Practice
 
-## Versioning Model (Clone Instead of Regenerate)
+## Copy Model
 
 NoteLib does not overwrite existing generated content.
 
-Instead of regenerating from the same Note, users clone a Note, edit the clone, and generate a new Study Pack from that cloned Note.
+Users make a copy of a Note, edit the copy, and generate a new Study Pack from that copied Note.
 
-Clone behavior:
+Copy behavior:
 
-- Clone copies:
+- Copy includes:
   - title
   - subject
   - tags
   - note content
-- Clone does not copy:
+- Copy does not include:
   - summary
   - key concepts
   - quizzes
   - performance history
+  - quiz sessions
 
 This supports iterative learning and avoids accidental overwrites.
 
@@ -71,22 +72,36 @@ This supports iterative learning and avoids accidental overwrites.
 3. User clicks `Generate Study Pack`.
 4. AI generates summary, key concepts, and quizzes.
 5. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice.
-6. To improve content, user clones the Note, edits it, and generates a new Study Pack from the clone.
+6. To improve content, user makes a copy, edits it, and generates a new Study Pack from the copy.
+7. User can set note visibility:
+   - `Make Public` -> appears in Public Library
+   - `Make Private` -> only visible in My Library
+8. User can copy public notes into My Library and continue studying.
+
+## Navigation
+
+Sidebar structure:
+
+- Dashboard
+- My Library
+- Public Library
+- Settings
 
 ## Architecture Overview
 
 High-level model:
 
 - `notes` table stores user-authored fields (`title`, `subject`, `content`, `tags`).
+- `notes.visibility` controls listing behavior (`PRIVATE` or `PUBLIC`).
 - AI-generated fields are linked to the same Note (`summary`, `key concepts`, `quizzes`).
 - quiz sessions and performance history are linked to the Note.
-- cloning creates a new Note row and copies only user-authored fields.
+- copying creates a new Draft Note row and copies only user-authored fields.
 
 ## Product Philosophy
 
 Learning loop:
 
-**Capture -> Generate -> Review -> Improve -> Clone -> Repeat**
+**Capture -> Generate -> Review -> Improve -> Copy -> Repeat**
 
 NoteLib is designed for iterative understanding, not one-time summary generation.
 
@@ -94,7 +109,7 @@ This repo currently centers on:
 
 - note-to-study-pack generation
 - OCR support for image-based notes
-- Study Library support
+- My Library and Public Library support
 - demo mode
 - shareable Study Pack links
 - freemium plans and subscriptions (Stripe Checkout)
@@ -154,7 +169,7 @@ The previous versions of the original markdown files are preserved under `/legac
 
 ## MVP goal
 
-Capture notes -> generate Study Pack outputs -> review -> improve -> clone -> repeat.
+Capture notes -> generate Study Pack outputs -> review -> improve -> copy -> repeat.
 
 ## Privacy
 

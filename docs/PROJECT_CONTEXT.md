@@ -11,30 +11,43 @@ NoteLib is an AI-powered study workspace that turns user-authored notes into str
 - Note states:
   - `Draft`
   - `Study Pack Ready`
+- Note visibility:
+  - `PRIVATE`
+  - `PUBLIC`
 
 ## Learning Loop
 
-Capture -> Generate -> Review -> Improve -> Clone -> Repeat
+Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 
 ## Versioning Rule
 
 NoteLib does not overwrite generated content on the same Note.
 
-Users create a new version by cloning a Note, editing it, and generating a new Study Pack from that clone.
+Users create a new version by copying a Note, editing it, and generating a new Study Pack from that copy.
 
-Clone copies user-authored fields only:
+Copy includes user-authored fields only:
 
 - title
 - subject
 - tags
 - note content
 
-Clone does not copy generated/performance fields:
+Copy does not include generated/performance fields:
 
 - summary
 - key concepts
 - quizzes
 - review performance history
+- quiz sessions
+
+## Library Structure
+
+Sidebar navigation:
+
+- Dashboard
+- My Library
+- Public Library
+- Settings
 
 ## Tech Stack
 

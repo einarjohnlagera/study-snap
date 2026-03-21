@@ -373,6 +373,7 @@ export type NoteResponse = {
   subject: string | null;
   tags: string[];
   content: string;
+  visibility: NoteVisibility;
   createdAt: string;
   updatedAt: string;
   studyPackId?: string | null;
@@ -380,6 +381,7 @@ export type NoteResponse = {
 };
 
 export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
+export type NoteVisibility = "PRIVATE" | "PUBLIC";
 
 export type NoteListItemResponse = {
   id: string;
@@ -387,8 +389,22 @@ export type NoteListItemResponse = {
   subject: string | null;
   tags: string[];
   contentPreview: string;
+  visibility: NoteVisibility;
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
+  updatedAt: string;
+};
+
+export type PublicNoteDetailResponse = {
+  id: string;
+  title: string | null;
+  subject: string | null;
+  tags: string[];
+  contentPreview: string;
+  studyPackStatus: NoteStudyPackStatus;
+  summary: string | null;
+  keyConcepts: string[];
+  quiz: QuizItem[];
   updatedAt: string;
 };
 
@@ -1277,6 +1293,22 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
 }
 
+export async function listPublicNotes(): Promise<NoteListItemResponse[]> {
+  const response = await fetch(buildUrl("/notes/public"), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<NoteListItemResponse[]>(response, "Could not load public notes.");
+}
+
+export async function getPublicNote(noteId: string): Promise<PublicNoteDetailResponse> {
+  const response = await fetch(buildUrl(`/notes/public/${noteId}`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicNoteDetailResponse>(response, "Could not load this public note.");
+}
+
 export async function updateNote(
   noteId: string,
   request: UpsertNoteRequest,
@@ -1295,14 +1327,27 @@ export async function updateNote(
   return parseApiResponse<NoteResponse>(response, "Could not save note.");
 }
 
-export async function cloneNote(noteId: string): Promise<NoteResponse> {
+export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {
   const response = await fetchWithAuth(
-    `/notes/${noteId}/clone`,
+    `/notes/${noteId}/visibility`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ visibility }),
+    },
+    true,
+  );
+  return parseApiResponse<NoteResponse>(response, "Could not update note visibility.");
+}
+
+export async function copyNote(noteId: string): Promise<NoteResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/copy`,
     {
       method: "POST",
       headers: buildAuthHeaders(),
     },
     true,
   );
-  return parseApiResponse<NoteResponse>(response, "Could not clone note.");
+  return parseApiResponse<NoteResponse>(response, "Could not copy note.");
 }

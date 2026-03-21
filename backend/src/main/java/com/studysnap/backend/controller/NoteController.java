@@ -2,6 +2,8 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.NoteService;
@@ -23,12 +25,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/notes")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('USER','ADMIN')")
 public class NoteController {
 
     private final NoteService noteService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public NoteResponse create(
             @Valid @RequestBody UpsertNoteRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -38,6 +40,7 @@ public class NoteController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public NoteResponse update(
             @PathVariable String id,
             @Valid @RequestBody UpsertNoteRequest request,
@@ -48,6 +51,7 @@ public class NoteController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public NoteResponse getById(
             @PathVariable String id,
             @AuthenticationPrincipal AuthenticatedUser user
@@ -56,20 +60,48 @@ public class NoteController {
         return noteService.getById(id, userId);
     }
 
-    @PostMapping("/{id}/clone")
-    public NoteResponse cloneNote(
+    @PostMapping("/{id}/copy")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteResponse copyNote(
             @PathVariable String id,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
-        return noteService.cloneNote(id, userId);
+        return noteService.copyNote(id, userId);
+    }
+
+    @PostMapping("/{id}/visibility")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public NoteResponse updateVisibility(
+            @PathVariable String id,
+            @Valid @RequestBody UpdateNoteVisibilityRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return noteService.updateVisibility(id, request.visibility(), userId);
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public List<NoteListItemResponse> listMine(
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         return noteService.listMine(userId);
+    }
+
+    @GetMapping("/public")
+    public List<NoteListItemResponse> listPublic(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID viewerUserId = user == null ? null : user.userId();
+        return noteService.listPublic(viewerUserId);
+    }
+
+    @GetMapping("/public/{id}")
+    public PublicNoteDetailResponse getPublicById(
+            @PathVariable String id
+    ) {
+        return noteService.getPublicById(id);
     }
 }

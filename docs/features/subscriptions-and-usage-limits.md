@@ -15,12 +15,12 @@ Support freemium usage control and future premium plan behavior.
 
 ### Free
 - 5 Study Packs per month
-- access to Study Library
+- access to My Library
 - includes Study Pack generation, summaries, key concepts, Quick Review, retry, Today’s Focus, and AI Study Coach
 
 ### Premium
 - up to 100 Study Packs per month
-- access to Study Library
+- access to My Library
 - includes everything in Free
 - Premium-only features:
   - Weak Concept Detection

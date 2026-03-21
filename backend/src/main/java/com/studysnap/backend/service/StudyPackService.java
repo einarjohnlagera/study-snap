@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackDraftEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -425,7 +426,7 @@ public class StudyPackService {
         if (hasExistingStudyPack) {
             throw new AppException(
                     "NOTE_ALREADY_HAS_STUDY_PACK",
-                    "This note already has a Study Pack. Clone the note to generate a new version.",
+                    "This note already has a Study Pack. Make a copy to generate a new version.",
                     HttpStatus.CONFLICT
             );
         }
@@ -445,6 +446,7 @@ public class StudyPackService {
         note.setSubject(normalizeSubject(generated.subject()));
         note.setTags(resolveTags(generated.tags(), generated.title()));
         note.setContent(normalizedContent);
+        note.setVisibility(NoteVisibility.PRIVATE);
         note.setCreatedAt(OffsetDateTime.now());
         note.setUpdatedAt(OffsetDateTime.now());
         return noteRepository.save(note);

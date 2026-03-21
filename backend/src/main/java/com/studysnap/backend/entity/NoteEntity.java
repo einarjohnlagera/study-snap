@@ -2,6 +2,8 @@ package com.studysnap.backend.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -38,6 +40,10 @@ public class NoteEntity {
 
     @Column(nullable = false)
     private String content;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private NoteVisibility visibility;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
