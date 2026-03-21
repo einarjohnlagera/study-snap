@@ -115,6 +115,17 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const [ocrDraftId, setOcrDraftId] = useState<string | null>(null);
   const [ocrConfirmedText, setOcrConfirmedText] = useState("");
   const [isConfirmingOcrText, setIsConfirmingOcrText] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      setIsEmailVerified(Boolean(getAuthUser()?.emailVerifiedAt));
+    };
+    window.addEventListener("studysnap-auth-change", syncAuthState);
+    return () => {
+      window.removeEventListener("studysnap-auth-change", syncAuthState);
+    };
+  }, []);
 
   useEffect(() => {
     if (!toastMessage) {
@@ -251,6 +262,10 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     if (isGenerating || isSaving || contentEmpty) {
       return;
     }
+    if (!isEmailVerified) {
+      showToast("Email verification is required before generating Study Packs.", "info");
+      return;
+    }
 
     setIsGenerating(true);
     try {
@@ -292,7 +307,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     } finally {
       setIsGenerating(false);
     }
-  }, [contentEmpty, finalizeGenerationRedirect, isGenerating, isSaving, showToast, upsertNote]);
+  }, [contentEmpty, finalizeGenerationRedirect, isEmailVerified, isGenerating, isSaving, showToast, upsertNote]);
 
   const applySuggestions = useCallback(async () => {
     if (!pendingSuggestion || applyingSuggestion) {
@@ -562,6 +577,8 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         }}
         disableContentEditing={contentLocked}
         contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."
+        disableGenerateAction={!isEmailVerified}
+        disableOcrUpload={!isEmailVerified}
       />
 
       <AiSuggestionModal
