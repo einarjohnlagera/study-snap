@@ -4,47 +4,41 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getMe,
-  getContinueStudyingRecommendation,
   getMasterySnapshot,
-  getStudyEngagement,
+  getMyStudyPack,
   getTodayFocus,
+  getQuickReviewPerformanceSummary,
   listMyStudyPacks,
-  type ContinueStudyingResponse,
+  listNotes,
   type MasterySnapshotResponse,
-  type PlanType,
-  type StudyEngagementResponse,
+  type NoteListItemResponse,
   type StudyPackListItemResponse,
   type TodayFocusResponse,
 } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
-import { getCurrentMonthStudyPackUsage, getMonthlyStudyPackLimit } from "@/lib/plans";
 import { requireVerifiedOnboardedUser } from "@/lib/route-guards";
 import { DashboardHero } from "./dashboard-hero";
-import { ContinueSpotlight } from "./continue-spotlight";
 import { DashboardStats } from "./dashboard-stats";
 import { StudyPackGrid } from "./study-pack-grid";
 import { DashboardLoading } from "./dashboard-loading";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
-import { StudyConsistencyCard } from "./study-consistency-card";
 import { TodayFocusCard } from "./today-focus-card";
-import { PlanUsageCard } from "./plan-usage-card";
 import { MasterySnapshotCard } from "./mastery-snapshot-card";
+import Link from "next/link";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [items, setItems] = useState<StudyPackListItemResponse[]>([]);
-  const [planType, setPlanType] = useState<PlanType>(() => getAuthUser()?.planType ?? "FREE");
+  const [items, setItems] = useState<NoteListItemResponse[]>([]);
+  const [studyPackItems, setStudyPackItems] = useState<StudyPackListItemResponse[]>([]);
+  const [recentNoteMetaById, setRecentNoteMetaById] = useState<Record<string, { lastReviewedAt: string | null; quizCount: number | null }>>({});
   const [greetingName, setGreetingName] = useState("there");
-  const [continueRecommendation, setContinueRecommendation] = useState<ContinueStudyingResponse | null>(null);
   const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
-  const [studyEngagement, setStudyEngagement] = useState<StudyEngagementResponse | null>(null);
   const [masterySnapshot, setMasterySnapshot] = useState<MasterySnapshotResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
 
-  const loadStudyPacks = useCallback(async () => {
+  const loadDashboard = useCallback(async () => {
     if (!requireVerifiedOnboardedUser(router)) {
       return;
     }
@@ -52,28 +46,54 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listMyStudyPacks();
-      setItems(data);
-      const [meResult, continueResult, todayFocusResult, engagementResult, masterySnapshotResult] = await Promise.allSettled([
+      const notes = await listNotes();
+      setItems(notes);
+
+      const recentStudyPackNotes = [...notes]
+        .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+        .slice(0, 4)
+        .filter((note) => note.studyPackStatus === "STUDY_PACK_READY" && Boolean(note.studyPackId));
+
+      if (recentStudyPackNotes.length > 0) {
+        const entries = await Promise.all(
+          recentStudyPackNotes.map(async (note) => {
+            const studyPackId = note.studyPackId as string;
+            const [reviewResult, studyPackResult] = await Promise.allSettled([
+              getQuickReviewPerformanceSummary(studyPackId),
+              getMyStudyPack(studyPackId),
+            ]);
+            return [
+              note.id,
+              {
+                lastReviewedAt: reviewResult.status === "fulfilled" ? reviewResult.value.lastReviewedAt : null,
+                quizCount: studyPackResult.status === "fulfilled" ? studyPackResult.value.quiz.length : null,
+              },
+            ] as const;
+          }),
+        );
+        setRecentNoteMetaById(Object.fromEntries(entries));
+      } else {
+        setRecentNoteMetaById({});
+      }
+
+      const [meResult, todayFocusResult, masterySnapshotResult, studyPackResult] = await Promise.allSettled([
         getMe(),
-        getContinueStudyingRecommendation(),
         getTodayFocus(),
-        getStudyEngagement(),
         getMasterySnapshot(),
+        listMyStudyPacks(),
       ]);
+
       if (meResult.status === "fulfilled") {
-        setPlanType(meResult.value.planType);
         const preferredName = meResult.value.firstName?.trim()
           || meResult.value.displayName?.trim()
           || "there";
         setGreetingName(preferredName);
       }
-      setContinueRecommendation(continueResult.status === "fulfilled" ? continueResult.value : null);
       setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
-      setStudyEngagement(engagementResult.status === "fulfilled" ? engagementResult.value : null);
       setMasterySnapshot(masterySnapshotResult.status === "fulfilled" ? masterySnapshotResult.value : null);
+      setStudyPackItems(studyPackResult.status === "fulfilled" ? studyPackResult.value : []);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not load your Study Packs.";
+      const message = err instanceof Error ? err.message : "Could not load your notes.";
       setError(message);
     } finally {
       setLoading(false);
@@ -81,8 +101,8 @@ export default function DashboardPage() {
   }, [router]);
 
   useEffect(() => {
-    void loadStudyPacks();
-  }, [loadStudyPacks]);
+    void loadDashboard();
+  }, [loadDashboard]);
 
   useEffect(() => {
     if (loading) {
@@ -93,14 +113,16 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [loading]);
 
-  const hasContinueRecommendation = useMemo(
-    () => Boolean(continueRecommendation?.studyPackId),
-    [continueRecommendation],
+  const recentNotes = useMemo(
+    () => [...items]
+      .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+      .slice(0, 4),
+    [items],
   );
-  const usedThisMonth = useMemo(() => getCurrentMonthStudyPackUsage(items), [items]);
-  const monthlyStudyPackLimit = useMemo(() => getMonthlyStudyPackLimit(planType), [planType]);
-  const isFreePlan = planType === "FREE";
-  const recentStudyPacks = useMemo(() => items.slice(0, 4), [items]);
+  const totalQuizQuestions = useMemo(
+    () => studyPackItems.reduce((sum, item) => sum + item.quizCount, 0),
+    [studyPackItems],
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -113,28 +135,26 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
-          <DashboardError message={error} onRetry={loadStudyPacks} />
+          <DashboardError message={error} onRetry={loadDashboard} />
         </div>
       ) : (
         <div
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
-          {isFreePlan ? (
-            <PlanUsageCard usedThisMonth={usedThisMonth} monthlyLimit={monthlyStudyPackLimit} />
-          ) : null}
           {todayFocus ? <TodayFocusCard focus={todayFocus} /> : null}
-          {studyEngagement ? <StudyConsistencyCard engagement={studyEngagement} /> : null}
-          <MasterySnapshotCard snapshot={masterySnapshot} />
-          {hasContinueRecommendation && continueRecommendation ? (
-            <ContinueSpotlight recommendation={continueRecommendation} />
-          ) : null}
-          <DashboardStats studyPacks={items} />
           {items.length === 0 ? (
             <DashboardEmpty />
           ) : (
-            <StudyPackGrid studyPacks={recentStudyPacks} totalStudyPacks={items.length} />
+            <StudyPackGrid notes={recentNotes} totalNotes={items.length} recentNoteMetaById={recentNoteMetaById} />
           )}
+          <MasterySnapshotCard snapshot={masterySnapshot} />
+          <DashboardStats notes={items} totalQuizQuestions={totalQuizQuestions} />
+          <section>
+            <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
+              View All in Library &rarr;
+            </Link>
+          </section>
         </div>
       )}
     </div>
