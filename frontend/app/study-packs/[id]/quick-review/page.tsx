@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -129,6 +129,7 @@ function toChoiceRecord(value: unknown): Record<number, string> {
 export default function QuickReviewPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const [studyPack, setStudyPack] = useState<StudyPackResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionInitializing, setSessionInitializing] = useState(true);
@@ -159,6 +160,7 @@ export default function QuickReviewPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+  const noteIdParam = searchParams.get("noteId")?.trim() ?? null;
 
   const resetQuickReviewState = useCallback((allIndexes: number[]) => {
     setPhase("initial");
@@ -299,6 +301,19 @@ export default function QuickReviewPage() {
   const isStruggling = !isPerfectScore && (displayedWeakConcepts.length > 0 || scorePercentage < 80);
   const showAdaptiveGuidedCta = isStruggling;
   const showChallengeGuidedCta = !isStruggling;
+  const noteDetailHref = useMemo(() => {
+    if (noteIdParam) {
+      return `/notes/${noteIdParam}`;
+    }
+    if (studyPack?.noteId) {
+      return `/notes/${studyPack.noteId}`;
+    }
+    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
+  }, [noteIdParam, studyPack?.noteId, studyPackId]);
+  const noteDetailQuery = useMemo(() => {
+    const resolvedNoteId = noteIdParam || studyPack?.noteId || null;
+    return resolvedNoteId ? `?noteId=${encodeURIComponent(resolvedNoteId)}` : "";
+  }, [noteIdParam, studyPack?.noteId]);
 
   useEffect(() => {
     const syncPlan = () => {
@@ -595,10 +610,10 @@ export default function QuickReviewPage() {
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
         <Link
-          href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"}
+          href={noteDetailHref}
           className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
         >
-          Back to Study Pack
+          Back to Note
         </Link>
       </div>
 
@@ -620,9 +635,9 @@ export default function QuickReviewPage() {
                 Retry
               </Button>
             ) : null}
-            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
           </div>
@@ -633,9 +648,9 @@ export default function QuickReviewPage() {
           <p className="text-sm text-foreground/75">
             This Study Pack does not have quiz questions yet. Generate another Study Pack to try Quick Review.
           </p>
-          <Link href={`/study-packs/${studyPack.id}`} className="w-full sm:w-auto">
+          <Link href={noteDetailHref} className="w-full sm:w-auto">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
-              Back to Study Pack
+              Back to Note
             </Button>
           </Link>
         </Card>
@@ -643,11 +658,11 @@ export default function QuickReviewPage() {
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">Quick Review not started</h1>
           <p className="text-sm text-foreground/75">
-            Start Quick Review from the Study Pack detail page to create a session.
+            Start Quick Review from the note detail page to create a session.
           </p>
-          <Link href={`/study-packs/${studyPack.id}`} className="w-full sm:w-auto">
+          <Link href={noteDetailHref} className="w-full sm:w-auto">
             <Button type="button" variant="outline" className="w-full sm:w-auto">
-              Back to Study Pack
+              Back to Note
             </Button>
           </Link>
         </Card>
@@ -744,14 +759,14 @@ export default function QuickReviewPage() {
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href={`/study-packs/${studyPack.id}`} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
             {showAdaptiveGuidedCta ? (
               isPremiumPlan ? (
-                <Link href={`/study-packs/${studyPack.id}/adaptive-practice`} className="w-full sm:w-auto">
+                <Link href={`/study-packs/${studyPack.id}/adaptive-practice${noteDetailQuery}`} className="w-full sm:w-auto">
                   <Button type="button" variant="outline" className="w-full sm:w-auto">
                     Practice Weak Concepts
                   </Button>
@@ -766,7 +781,7 @@ export default function QuickReviewPage() {
             ) : null}
             {showChallengeGuidedCta ? (
               isPremiumPlan ? (
-                <Link href={`/study-packs/${studyPack.id}/challenge-quiz`} className="w-full sm:w-auto">
+                <Link href={`/study-packs/${studyPack.id}/challenge-quiz${noteDetailQuery}`} className="w-full sm:w-auto">
                   <Button type="button" variant="outline" className="w-full sm:w-auto">
                     Start Challenge Quiz
                   </Button>

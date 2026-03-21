@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -33,6 +33,9 @@ function AdaptivePracticeLoading() {
 export default function AdaptivePracticePage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const requestInFlightRef = useRef(false);
+  const loadedForStudyPackRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adaptiveQuiz, setAdaptiveQuiz] = useState<QuickReviewAdaptiveQuizResponse | null>(null);
@@ -49,8 +52,21 @@ export default function AdaptivePracticePage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+  const noteIdParam = searchParams.get("noteId")?.trim() ?? null;
+  const noteDetailHref = useMemo(() => {
+    if (noteIdParam) {
+      return `/notes/${noteIdParam}`;
+    }
+    return studyPackId ? `/study-packs/${studyPackId}` : "/dashboard";
+  }, [noteIdParam, studyPackId]);
+  const noteDetailQuery = useMemo(() => {
+    return noteIdParam ? `?noteId=${encodeURIComponent(noteIdParam)}` : "";
+  }, [noteIdParam]);
 
   const loadAdaptiveQuiz = useCallback(async () => {
+    if (requestInFlightRef.current) {
+      return;
+    }
     if (!studyPackId) {
       setError("Study Pack not found.");
       setLoading(false);
@@ -62,6 +78,7 @@ export default function AdaptivePracticePage() {
     }
 
     setLoading(true);
+    requestInFlightRef.current = true;
     setError(null);
     setPremiumLocked(false);
     const authUser = getAuthUser();
@@ -69,6 +86,7 @@ export default function AdaptivePracticePage() {
       setAdaptiveQuiz(null);
       setPremiumLocked(true);
       setLoading(false);
+      requestInFlightRef.current = false;
       return;
     }
 
@@ -86,12 +104,20 @@ export default function AdaptivePracticePage() {
       setAdaptiveQuiz(null);
     } finally {
       setLoading(false);
+      requestInFlightRef.current = false;
     }
   }, [router, studyPackId]);
 
   useEffect(() => {
+    if (!studyPackId) {
+      return;
+    }
+    if (loadedForStudyPackRef.current === studyPackId) {
+      return;
+    }
+    loadedForStudyPackRef.current = studyPackId;
     void loadAdaptiveQuiz();
-  }, [loadAdaptiveQuiz]);
+  }, [loadAdaptiveQuiz, studyPackId]);
 
   const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
@@ -157,10 +183,10 @@ export default function AdaptivePracticePage() {
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
         <Link
-          href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"}
+          href={noteDetailHref}
           className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
         >
-          Back to Study Pack
+          Back to Note
         </Link>
       </div>
 
@@ -174,9 +200,9 @@ export default function AdaptivePracticePage() {
             <Button type="button" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()}>
               Try Again
             </Button>
-            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
           </div>
@@ -196,9 +222,9 @@ export default function AdaptivePracticePage() {
                 Upgrade to Premium
               </Button>
             </Link>
-            <Link href={studyPackId ? `/study-packs/${studyPackId}` : "/dashboard"} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
           </div>
@@ -212,7 +238,7 @@ export default function AdaptivePracticePage() {
           <p className="text-sm text-foreground/75">
             {adaptiveQuiz?.message ?? "Adaptive practice is unavailable right now."}
           </p>
-          <Link href={studyPackId ? `/study-packs/${studyPackId}/quick-review` : "/dashboard"} className="w-full sm:w-auto">
+          <Link href={studyPackId ? `/study-packs/${studyPackId}/quick-review${noteDetailQuery}` : "/dashboard"} className="w-full sm:w-auto">
             <Button type="button" className="w-full sm:w-auto">
               Start Quick Review
             </Button>
@@ -252,9 +278,9 @@ export default function AdaptivePracticePage() {
             >
               Start Adaptive Practice
             </Button>
-            <Link href={`/study-packs/${studyPackId}`} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
           </div>
@@ -284,12 +310,12 @@ export default function AdaptivePracticePage() {
             </div>
           ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href={`/study-packs/${studyPackId}`} className="w-full sm:w-auto">
+            <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
-                Back to Study Pack
+                Back to Note
               </Button>
             </Link>
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()}>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()} disabled={loading}>
               Generate New Set
             </Button>
           </div>

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import {
+  copyNote,
+  deleteNote,
   getQuickReviewPerformanceSummary,
   listNotes,
   type NoteListItemResponse,
@@ -119,6 +121,10 @@ export default function LibraryPage() {
   const [loading, setLoading] = useState(true);
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
+  const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null);
+  const [copyingNoteId, setCopyingNoteId] = useState<string | null>(null);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
     if (notes.length === 0) {
@@ -168,6 +174,29 @@ export default function LibraryPage() {
   useEffect(() => {
     void loadLibrary();
   }, [loadLibrary]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+    const timeout = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!cardMenuOpenId) {
+      return;
+    }
+    const closeMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-card-menu='true']")) {
+        return;
+      }
+      setCardMenuOpenId(null);
+    };
+    window.addEventListener("mousedown", closeMenu);
+    return () => window.removeEventListener("mousedown", closeMenu);
+  }, [cardMenuOpenId]);
 
   useEffect(() => {
     if (!tagFilterOpen && tagSearchQuery.length > 0) {
@@ -233,6 +262,50 @@ export default function LibraryPage() {
     setSelectedSubject(ALL_SUBJECTS);
     setSelectedTags([]);
   }, []);
+
+  const handleMakeCopy = useCallback(async (noteId: string) => {
+    if (copyingNoteId || deletingNoteId) {
+      return;
+    }
+    setCopyingNoteId(noteId);
+    setCardMenuOpenId(null);
+    try {
+      const copied = await copyNote(noteId);
+      router.push(`/notes/${copied.id}?copied=1`);
+    } catch (copyError) {
+      const message = copyError instanceof Error ? copyError.message : "Could not copy note.";
+      setError(message);
+    } finally {
+      setCopyingNoteId(null);
+    }
+  }, [copyingNoteId, deletingNoteId, router]);
+
+  const handleDelete = useCallback(async (noteId: string) => {
+    if (copyingNoteId || deletingNoteId) {
+      return;
+    }
+    const confirmed = window.confirm("Delete this note? This will remove its generated Study Pack data too.");
+    if (!confirmed) {
+      return;
+    }
+    setDeletingNoteId(noteId);
+    setCardMenuOpenId(null);
+    try {
+      await deleteNote(noteId);
+      setItems((previous) => previous.filter((item) => item.id !== noteId));
+      setReviewSummaryByNoteId((previous) => {
+        const next = { ...previous };
+        delete next[noteId];
+        return next;
+      });
+      setToast("Note deleted.");
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Could not delete note.";
+      setError(message);
+    } finally {
+      setDeletingNoteId(null);
+    }
+  }, [copyingNoteId, deletingNoteId]);
 
   const sortedFilteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -527,6 +600,46 @@ export default function LibraryPage() {
                           {toPreview(item.contentPreview)}
                         </p>
                       </div>
+                      <div className="relative" data-card-menu="true">
+                        <button
+                          type="button"
+                          aria-label="Open note actions"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-sm text-foreground/70 hover:bg-muted/60 hover:text-foreground"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setCardMenuOpenId((previous) => (previous === item.id ? null : item.id));
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          ⋯
+                        </button>
+                        {cardMenuOpenId === item.id ? (
+                          <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">
+                            <button
+                              type="button"
+                              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-muted/60"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleMakeCopy(item.id);
+                              }}
+                              disabled={copyingNoteId === item.id}
+                            >
+                              {copyingNoteId === item.id ? "Copying..." : "Make a Copy"}
+                            </button>
+                            <button
+                              type="button"
+                              className="w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDelete(item.id);
+                              }}
+                              disabled={deletingNoteId === item.id}
+                            >
+                              {deletingNoteId === item.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -569,7 +682,7 @@ export default function LibraryPage() {
                           className="w-full sm:w-auto"
                           onClick={(event) => {
                             event.stopPropagation();
-                            router.push(`/study-packs/${item.studyPackId}/quick-review`);
+                            router.push(`/study-packs/${item.studyPackId}/quick-review?noteId=${item.id}`);
                           }}
                           onKeyDown={(event) => event.stopPropagation()}
                         >
@@ -597,6 +710,11 @@ export default function LibraryPage() {
           ) : null}
         </div>
       )}
+      {toast ? (
+        <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
+          {toast}
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -162,11 +162,11 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         return;
       }
       setSaveStateLabel("Saved");
-      if (!isDetailPage) {
-        router.push(`/notes/${saved.id}`);
+      if (isDetailPage) {
+        router.push(`/notes/${saved.id}?saved=1`);
         return;
       }
-      showToast("Note saved.", "success");
+      router.push(`/notes/${saved.id}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not save note.";
       showToast(message, "error");

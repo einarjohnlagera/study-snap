@@ -19,6 +19,7 @@ import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -150,7 +151,33 @@ public class QuickReviewAdaptivePracticeService {
         session.setSessionState(QuizSessionStateUtils.withQuiz(adaptiveQuiz, null));
         session.setCreatedAt(OffsetDateTime.now());
         session.setCompletedAt(null);
-        QuickReviewSessionEntity savedSession = quickReviewSessionRepository.save(session);
+        QuickReviewSessionEntity savedSession;
+        try {
+            savedSession = quickReviewSessionRepository.save(session);
+        } catch (DataIntegrityViolationException integrityViolationException) {
+            QuickReviewSessionEntity resumed = quickReviewSessionRepository
+                    .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                            userId,
+                            studyPackId,
+                            QuickReviewSessionMode.ADAPTIVE,
+                            QuickReviewSessionStatus.IN_PROGRESS
+                    )
+                    .orElse(null);
+            if (resumed != null) {
+                List<QuizItem> resumedQuiz = QuizSessionStateUtils.extractQuiz(resumed.getSessionState());
+                if (!resumedQuiz.isEmpty()) {
+                    return new QuickReviewAdaptiveQuizResponse(
+                            resumed.getId().toString(),
+                            studyPack.getId().toString(),
+                            studyPack.getTitle(),
+                            extractWeakConcepts(resumed),
+                            resumedQuiz,
+                            "Focusing on concepts you need to improve."
+                    );
+                }
+            }
+            throw integrityViolationException;
+        }
 
         activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
 
