@@ -21,7 +21,6 @@ import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
 import { TodayFocusCard } from "./today-focus-card";
 import { MasterySnapshotCard } from "./mastery-snapshot-card";
-import Link from "next/link";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -140,11 +139,6 @@ export default function DashboardPage() {
           )}
           <MasterySnapshotCard snapshot={masterySnapshot} />
           <DashboardStats notes={items} totalQuizQuestions={totalQuizQuestions} />
-          <section>
-            <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-              View All in Library &rarr;
-            </Link>
-          </section>
         </div>
       )}
     </div>
