@@ -89,8 +89,9 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class Billing {
-        private BillingProvider provider = BillingProvider.STRIPE;
+        private BillingProvider provider = BillingProvider.PAYMONGO;
         private final Stripe stripe = new Stripe();
+        private final Paymongo paymongo = new Paymongo();
     }
 
     @Getter
@@ -100,6 +101,18 @@ public class StudySnapProperties {
         private String secretKey = "";
         private String webhookSecret = "";
         private String premiumPriceId = "";
+        private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
+        private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
+    }
+
+    @Getter
+    @Setter
+    public static class Paymongo {
+        private String apiBaseUrl = "https://api.paymongo.com/v1";
+        private String secretKey = "";
+        private String webhookSecret = "";
+        private String monthlyPlanId = "";
+        private String yearlyPlanId = "";
         private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
         private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
     }

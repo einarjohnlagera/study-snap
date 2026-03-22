@@ -146,6 +146,29 @@ Versioning model:
 - quiz session repositories
 - user/subscription repositories
 
+### Billing Architecture
+
+- `BillingController` exposes provider-agnostic billing endpoints:
+  - `POST /api/billing/checkout/premium`
+  - `POST /api/billing/webhook`
+  - `GET /api/billing/usage`
+- `BillingService` is the provider abstraction used by the controller.
+- Active provider is resolved by configuration (`studysnap.billing.provider`).
+- Current active provider: `PAYMONGO`.
+- Premium checkout supports billing cycle selection:
+  - `MONTHLY` -> configured `PAYMONGO_MONTHLY_PLAN_ID`
+  - `YEARLY` -> configured `PAYMONGO_YEARLY_PLAN_ID`
+- Subscription state changes are webhook-driven (source of truth):
+  - `subscription.activated`
+  - `subscription.invoice.paid`
+  - `subscription.invoice.payment_failed`
+  - `subscription.past_due`
+  - `subscription.unpaid`
+  - `subscription.updated`
+- Provider service maps external events to internal domain services only:
+  - `SubscriptionService` (activate/downgrade + provider IDs)
+  - `PaymentTransactionService` (transaction recording + idempotency by provider reference)
+
 ## Generation Pipeline
 
 Recommended flow:

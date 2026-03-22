@@ -12,6 +12,7 @@ import {
   isEmailNotVerifiedError,
   logout,
   updateEngagementMode,
+  type BillingCycle,
   type BillingUsageSummaryResponse,
   type EngagementMode,
   type MeResponse,
@@ -66,6 +67,7 @@ export default function SettingsPage() {
   const [usageSummary, setUsageSummary] = useState<BillingUsageSummaryResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [startingCheckout, setStartingCheckout] = useState(false);
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState<BillingCycle>("MONTHLY");
   const [planMessage, setPlanMessage] = useState<string | null>(null);
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [savingEngagementMode, setSavingEngagementMode] = useState(false);
@@ -107,7 +109,11 @@ export default function SettingsPage() {
     const params = new URLSearchParams(window.location.search);
     const checkoutStatus = params.get("checkout");
     if (checkoutStatus === "success") {
-      setPlanMessage("Payment received. Your Premium plan will be updated shortly.");
+      setPlanMessage("Payment submitted. Premium will be activated once PayMongo confirms your subscription.");
+      return;
+    }
+    if (checkoutStatus === "processing") {
+      setPlanMessage("Subscription is processing. We will refresh your plan once payment is confirmed.");
       return;
     }
     if (checkoutStatus === "cancel") {
@@ -127,7 +133,7 @@ export default function SettingsPage() {
     setStartingCheckout(true);
     setPlanMessage(null);
     try {
-      const payload = await createPremiumCheckoutSession();
+      const payload = await createPremiumCheckoutSession(selectedBillingCycle);
       window.location.assign(payload.checkoutUrl);
     } catch (err) {
       const message = isEmailNotVerifiedError(err)
@@ -175,6 +181,8 @@ export default function SettingsPage() {
   const adaptivePracticeUsed = usageSummary?.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.adaptivePracticeLimit ?? 50;
   const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
+  const monthlyPriceLabel = "USD 4.99 / month";
+  const yearlyPriceLabel = "USD 39.99 / year";
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -257,6 +265,37 @@ export default function SettingsPage() {
                       <li>Weak Concept Detection</li>
                       <li>Higher Study Pack limits</li>
                     </ul>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing Cycle</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBillingCycle("MONTHLY")}
+                        className={`rounded-md border p-3 text-left text-sm transition ${
+                          selectedBillingCycle === "MONTHLY"
+                            ? "border-blue-500 bg-blue-500/5"
+                            : "border-border bg-background"
+                        }`}
+                        disabled={startingCheckout}
+                      >
+                        <p className="font-medium">Monthly</p>
+                        <p className="text-xs text-foreground/60">{monthlyPriceLabel}</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBillingCycle("YEARLY")}
+                        className={`rounded-md border p-3 text-left text-sm transition ${
+                          selectedBillingCycle === "YEARLY"
+                            ? "border-blue-500 bg-blue-500/5"
+                            : "border-border bg-background"
+                        }`}
+                        disabled={startingCheckout}
+                      >
+                        <p className="font-medium">Yearly</p>
+                        <p className="text-xs text-foreground/60">{yearlyPriceLabel}</p>
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Button

@@ -1,6 +1,8 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
+import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -46,12 +48,27 @@ class BillingControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         BillingCheckoutSessionResponse expected = new BillingCheckoutSessionResponse("https://checkout.example");
-        when(billingService.createPremiumCheckoutSession(userId)).thenReturn(expected);
+        when(billingService.createPremiumCheckoutSession(userId, BillingCycle.MONTHLY)).thenReturn(expected);
 
-        BillingCheckoutSessionResponse response = billingController.createCheckoutSession(user);
+        BillingCheckoutSessionResponse response = billingController.createCheckoutSession(user, null);
 
         verify(authService).requireEmailVerified(userId);
-        verify(billingService).createPremiumCheckoutSession(userId);
+        verify(billingService).createPremiumCheckoutSession(userId, BillingCycle.MONTHLY);
+        assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void createCheckoutSession_usesRequestedBillingCycle() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        BillingCheckoutSessionResponse expected = new BillingCheckoutSessionResponse("https://checkout.example/yearly");
+        BillingCheckoutSessionRequest request = new BillingCheckoutSessionRequest(BillingCycle.YEARLY);
+        when(billingService.createPremiumCheckoutSession(userId, BillingCycle.YEARLY)).thenReturn(expected);
+
+        BillingCheckoutSessionResponse response = billingController.createCheckoutSession(user, request);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(billingService).createPremiumCheckoutSession(userId, BillingCycle.YEARLY);
         assertThat(response).isEqualTo(expected);
     }
 
@@ -66,9 +83,9 @@ class BillingControllerTest {
         );
         doThrow(verificationError).when(authService).requireEmailVerified(userId);
 
-        assertThatThrownBy(() -> billingController.createCheckoutSession(user))
+        assertThatThrownBy(() -> billingController.createCheckoutSession(user, null))
                 .isSameAs(verificationError);
 
-        verify(billingService, never()).createPremiumCheckoutSession(any(UUID.class));
+        verify(billingService, never()).createPremiumCheckoutSession(any(UUID.class), any(BillingCycle.class));
     }
 }

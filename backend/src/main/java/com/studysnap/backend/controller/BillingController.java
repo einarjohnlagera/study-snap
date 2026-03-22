@@ -1,8 +1,10 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.dto.BillingUsageSummaryResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
+import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingService;
@@ -28,10 +30,14 @@ public class BillingController {
     @PostMapping({"/checkout-session", "/checkout/premium"})
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BillingCheckoutSessionResponse createCheckoutSession(
-            @AuthenticationPrincipal AuthenticatedUser user
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody(required = false) BillingCheckoutSessionRequest request
     ) {
         authService.requireEmailVerified(user.userId());
-        return billingService.createPremiumCheckoutSession(user.userId());
+        BillingCycle billingCycle = request == null || request.billingCycle() == null
+                ? BillingCycle.MONTHLY
+                : request.billingCycle();
+        return billingService.createPremiumCheckoutSession(user.userId(), billingCycle);
     }
 
     @GetMapping({"/usage-summary", "/usage"})
@@ -46,11 +52,29 @@ public class BillingController {
     public SimpleMessageResponse handleBillingWebhook(
             @RequestBody String payload,
             @RequestHeader(value = "X-Billing-Signature", required = false) String billingSignature,
-            @RequestHeader(value = "Stripe-Signature", required = false) String stripeSignature
+            @RequestHeader(value = "Stripe-Signature", required = false) String stripeSignature,
+            @RequestHeader(value = "Paymongo-Signature", required = false) String payMongoSignature,
+            @RequestHeader(value = "X-Paymongo-Signature", required = false) String payMongoSignatureAlt
     ) {
-        String signature = billingSignature == null || billingSignature.isBlank()
-                ? stripeSignature
-                : billingSignature;
+        String signature = resolveSignature(billingSignature, stripeSignature, payMongoSignature, payMongoSignatureAlt);
         return billingService.handleWebhook(payload, signature);
+    }
+
+    private String resolveSignature(
+            String billingSignature,
+            String stripeSignature,
+            String payMongoSignature,
+            String payMongoSignatureAlt
+    ) {
+        if (billingSignature != null && !billingSignature.isBlank()) {
+            return billingSignature;
+        }
+        if (stripeSignature != null && !stripeSignature.isBlank()) {
+            return stripeSignature;
+        }
+        if (payMongoSignature != null && !payMongoSignature.isBlank()) {
+            return payMongoSignature;
+        }
+        return payMongoSignatureAlt;
     }
 }

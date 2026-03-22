@@ -123,8 +123,22 @@ This repo currently centers on:
 - My Library and Public Library support
 - demo mode
 - shareable Study Pack links
-- freemium plans and subscriptions (Stripe Checkout)
+- freemium plans and subscriptions (PayMongo recurring subscriptions)
 - future user accounts and authenticated ownership
+
+## Billing (Current)
+
+- Billing runtime is provider-agnostic (`BillingService` + provider resolver), with `PAYMONGO` as the active provider.
+- Premium plans are recurring:
+  - `MONTHLY` (configured by `PAYMONGO_MONTHLY_PLAN_ID`)
+  - `YEARLY` (configured by `PAYMONGO_YEARLY_PLAN_ID`)
+- Subscription activation/renewal is webhook-driven (backend source of truth), not redirect-only:
+  - `subscription.activated`
+  - `subscription.invoice.paid`
+  - `subscription.invoice.payment_failed`
+  - `subscription.past_due`
+  - `subscription.unpaid`
+  - `subscription.updated`
 
 ## Tech stack
 

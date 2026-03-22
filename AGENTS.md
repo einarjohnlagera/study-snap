@@ -219,6 +219,22 @@ Rules:
 - Premium Adaptive Practice: 50/month
 - Challenge/Adaptive quotas are separate from Study Pack generation quota.
 
+## Billing Provider (Current)
+
+- Active billing provider is `PAYMONGO` (provider-agnostic billing interface remains in place).
+- Premium recurring plans:
+  - `MONTHLY` (configured externally with `PAYMONGO_MONTHLY_PLAN_ID`)
+  - `YEARLY` (configured externally with `PAYMONGO_YEARLY_PLAN_ID`)
+- Webhook lifecycle is the source of truth for subscription state:
+  - `subscription.activated`
+  - `subscription.invoice.paid`
+  - `subscription.invoice.payment_failed`
+  - `subscription.past_due`
+  - `subscription.unpaid`
+  - `subscription.updated`
+- Do not create/update webhook registrations dynamically in app code.
+- Controllers must stay provider-agnostic; provider services map external events to `SubscriptionService` and `PaymentTransactionService`.
+
 ## Dashboard and Library Guardrails
 
 - Dashboard is guidance-first and non-destructive.

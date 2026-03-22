@@ -121,6 +121,13 @@ Recommended fields:
 - `created_at`
 - `updated_at`
 
+Billing notes:
+
+- Active provider is currently `PAYMONGO` (provider-agnostic interface remains in backend).
+- Recurring cadence (`MONTHLY` vs `YEARLY`) is selected at checkout and mapped to external plan IDs.
+- Plan cadence IDs stay in configuration/environment (`PAYMONGO_MONTHLY_PLAN_ID`, `PAYMONGO_YEARLY_PLAN_ID`), not as a required schema change.
+- Webhook event idempotency is enforced through `payment_transactions(provider, provider_reference_id)` uniqueness.
+
 ## OCR Confirmation Drafts
 
 `study_pack_drafts` (or equivalent legacy table) stores low-confidence OCR extraction for confirmation flow.
