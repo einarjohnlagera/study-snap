@@ -47,3 +47,14 @@ Webhook processing maps to:
 - Use provider reference IDs to avoid duplicate transaction inserts.
 - Keep webhook processing fast and deterministic.
 - Webhook registration is managed outside application runtime.
+- Store processed provider events in `webhook_events` and skip duplicate `event_id` values.
+
+## Lifecycle jobs
+
+- `SubscriptionExpiryJob` (daily):
+  - finds active Premium subscriptions past `endAt`
+  - marks them expired and downgrades users to Free
+- `BillingUsageResetJob` (daily):
+  - ensures each user has a usage row for the current billing period
+  - free users follow calendar month windows
+  - premium users follow their subscription billing window (`startAt` to `endAt`)

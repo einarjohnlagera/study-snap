@@ -50,6 +50,7 @@ public class QuickReviewAdaptivePracticeService {
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
+    private final BillingUsagePeriodService billingUsagePeriodService;
     private final AuthService authService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
@@ -290,15 +291,14 @@ public class QuickReviewAdaptivePracticeService {
 
     private void assertAdaptivePracticeQuotaAvailable(UUID userId) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
-        OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, now);
         int monthlyLimit = properties.getPricing().getPremiumMonthlyAdaptivePracticeLimit();
 
         long usedFromActivityEvents = activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 ActivityType.STARTED_ADAPTIVE_PRACTICE,
-                monthStart,
-                nextMonthStart
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd()
         );
         long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).adaptiveQuizGenerations();
         long usedThisMonth = Math.max(usedFromActivityEvents, usedFromUsage);

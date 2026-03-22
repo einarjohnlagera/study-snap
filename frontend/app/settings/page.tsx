@@ -7,12 +7,14 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import {
   createPremiumCheckoutSession,
+  getBillingHistory,
   getBillingUsageSummary,
   getMe,
   isEmailNotVerifiedError,
   logout,
   updateEngagementMode,
   type BillingCycle,
+  type BillingHistoryItemResponse,
   type BillingUsageSummaryResponse,
   type EngagementMode,
   type MeResponse,
@@ -65,6 +67,7 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [usageSummary, setUsageSummary] = useState<BillingUsageSummaryResponse | null>(null);
+  const [billingHistory, setBillingHistory] = useState<BillingHistoryItemResponse[]>([]);
   const [signingOut, setSigningOut] = useState(false);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [selectedBillingCycle, setSelectedBillingCycle] = useState<BillingCycle>("MONTHLY");
@@ -85,18 +88,21 @@ export default function SettingsPage() {
     setError(null);
     setEngagementModeMessage(null);
     try {
-      const [me, usage] = await Promise.all([
+      const [me, usage, history] = await Promise.all([
         getMe(),
         getBillingUsageSummary(),
+        getBillingHistory(),
       ]);
       setProfile(me);
       setUsageSummary(usage);
+      setBillingHistory(history);
       setSelectedEngagementMode(me.engagementMode);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
       setProfile(null);
       setUsageSummary(null);
+      setBillingHistory([]);
     } finally {
       setLoading(false);
     }
@@ -230,6 +236,14 @@ export default function SettingsPage() {
   const monthlyPriceLabel = "USD 4.99 / month";
   const yearlyPriceLabel = "USD 39.99 / year";
 
+  const formatBillingDate = (rawDate: string) => {
+    const value = new Date(rawDate);
+    if (Number.isNaN(value.getTime())) {
+      return rawDate;
+    }
+    return value.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  };
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       {loading ? (
@@ -361,6 +375,35 @@ export default function SettingsPage() {
               {isPremiumPlan && planMessage ? (
                 <p className="text-xs text-foreground/60">{planMessage}</p>
               ) : null}
+            </div>
+
+            <div className="space-y-2 rounded-md border border-border bg-background p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing History</p>
+              {billingHistory.length === 0 ? (
+                <p className="text-sm text-foreground/70">No billing transactions yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {billingHistory.slice(0, 10).map((item) => (
+                    <div key={item.referenceId} className="rounded-md border border-border p-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-medium">{item.description}</p>
+                        <p className="text-foreground/70">
+                          {Number(item.amount).toFixed(2)} {item.currency}
+                        </p>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-foreground/60">
+                        <span>{formatBillingDate(item.date)}</span>
+                        <span>•</span>
+                        <span>{item.status}</span>
+                        <span>•</span>
+                        <span>{item.provider}</span>
+                        <span>•</span>
+                        <span className="font-mono">{item.referenceId}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
 

@@ -6,6 +6,7 @@ import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,5 +35,11 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
     Optional<SubscriptionEntity> findFirstByProviderAndProviderSubscriptionIdOrderByUpdatedAtDesc(
             BillingProvider provider,
             String providerSubscriptionId
+    );
+
+    List<SubscriptionEntity> findByPlanTypeAndStatusAndEndAtBefore(
+            PlanType planType,
+            SubscriptionStatus status,
+            OffsetDateTime endAt
     );
 }

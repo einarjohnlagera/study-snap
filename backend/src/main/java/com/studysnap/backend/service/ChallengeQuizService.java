@@ -60,6 +60,7 @@ public class ChallengeQuizService {
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
+    private final BillingUsagePeriodService billingUsagePeriodService;
     private final AuthService authService;
 
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId) {
@@ -369,13 +370,12 @@ public class ChallengeQuizService {
 
     private long countChallengeQuizUsedThisMonth(UUID userId) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
-        OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, now);
         long usedFromSessions = quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 QuickReviewSessionMode.CHALLENGE,
-                monthStart,
-                nextMonthStart
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd()
         );
         long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).challengeQuizGenerations();
         return Math.max(usedFromSessions, usedFromUsage);

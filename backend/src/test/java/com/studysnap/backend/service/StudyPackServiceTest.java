@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
@@ -57,6 +58,8 @@ class StudyPackServiceTest {
     @Mock
     private UserUsageService userUsageService;
     @Mock
+    private BillingUsagePeriodService billingUsagePeriodService;
+    @Mock
     private OcrRateLimitService ocrRateLimitService;
 
     private StudyPackService studyPackService;
@@ -73,6 +76,7 @@ class StudyPackServiceTest {
                 activityTrackingService,
                 subscriptionService,
                 userUsageService,
+                billingUsagePeriodService,
                 ocrRateLimitService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -107,6 +111,15 @@ class StudyPackServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        2026,
+                        3
+                ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 eq(userId),

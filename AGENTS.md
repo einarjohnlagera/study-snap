@@ -234,6 +234,13 @@ Rules:
   - `subscription.updated`
 - Do not create/update webhook registrations dynamically in app code.
 - Controllers must stay provider-agnostic; provider services map external events to `SubscriptionService` and `PaymentTransactionService`.
+- Webhook processing safety:
+  - store provider webhook events in `webhook_events` with unique `(provider, event_id)`
+  - duplicate events must return success without reprocessing
+  - keep provider transaction inserts idempotent via provider reference IDs
+- Billing lifecycle safety jobs:
+  - `SubscriptionExpiryJob` (daily): expire overdue active Premium subscriptions and downgrade to Free
+  - `BillingUsageResetJob` (daily): ensure usage rows exist for the current billing period window
 
 ## Dashboard and Library Guardrails
 

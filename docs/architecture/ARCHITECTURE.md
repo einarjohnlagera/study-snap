@@ -168,6 +168,12 @@ Versioning model:
 - Provider service maps external events to internal domain services only:
   - `SubscriptionService` (activate/downgrade + provider IDs)
   - `PaymentTransactionService` (transaction recording + idempotency by provider reference)
+- Webhook idempotency:
+  - incoming provider events are persisted to `webhook_events`
+  - duplicate `(provider, event_id)` deliveries are acknowledged and skipped
+- Safety jobs:
+  - `SubscriptionExpiryJob` downgrades expired active Premium subscriptions
+  - `BillingUsageResetJob` ensures usage records exist for current period windows
 
 ## Generation Pipeline
 

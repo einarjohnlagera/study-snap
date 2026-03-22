@@ -359,6 +359,16 @@ export type BillingUsageSummaryResponse = {
   adaptivePracticeLimit: number;
 };
 
+export type BillingHistoryItemResponse = {
+  date: string;
+  description: string;
+  amount: number;
+  currency: string;
+  status: "PENDING" | "SUCCESS" | "FAILED";
+  provider: "NONE" | "STRIPE" | "PAYMONGO";
+  referenceId: string;
+};
+
 export type UpdateStudyPackMetadataRequest = {
   title: string;
   subject?: string | null;
@@ -1262,6 +1272,21 @@ export async function getBillingUsageSummary(): Promise<BillingUsageSummaryRespo
   return parseApiResponse<BillingUsageSummaryResponse>(
     response,
     "Could not load billing usage.",
+  );
+}
+
+export async function getBillingHistory(): Promise<BillingHistoryItemResponse[]> {
+  const response = await fetchWithAuth(
+    "/billing/history",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<BillingHistoryItemResponse[]>(
+    response,
+    "Could not load billing history.",
   );
 }
 

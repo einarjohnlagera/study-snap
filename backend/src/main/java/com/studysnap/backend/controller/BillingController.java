@@ -2,11 +2,13 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
+import com.studysnap.backend.dto.BillingHistoryItemResponse;
 import com.studysnap.backend.dto.BillingUsageSummaryResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.BillingHistoryService;
 import com.studysnap.backend.service.BillingService;
 import com.studysnap.backend.service.BillingUsageService;
 import lombok.RequiredArgsConstructor;
@@ -19,12 +21,15 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/billing")
 @RequiredArgsConstructor
 public class BillingController {
     private final BillingService billingService;
     private final BillingUsageService billingUsageService;
+    private final BillingHistoryService billingHistoryService;
     private final AuthService authService;
 
     @PostMapping({"/checkout-session", "/checkout/premium"})
@@ -46,6 +51,14 @@ public class BillingController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return billingUsageService.getMonthlyUsageSummary(user.userId());
+    }
+
+    @GetMapping("/history")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public List<BillingHistoryItemResponse> getHistory(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return billingHistoryService.getHistory(user.userId());
     }
 
     @PostMapping("/webhook")
