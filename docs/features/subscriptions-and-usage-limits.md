@@ -1,51 +1,49 @@
-# subscriptions-and-usage-limits.md — NoteLib Feature Context
+# subscriptions-and-usage-limits.md - NoteLib Feature Context
 
 ## Goal
 
-Support freemium usage control and future premium plan behavior.
+Support freemium usage control and recurring Premium subscriptions with webhook-driven lifecycle sync.
 
-## Current plan direction
-
-### Demo
-- separate from authenticated subscriptions
-- should not hit the real LLM pipeline
-- no saving
-- public route `/demo`
-- prebuilt Study Pack with no new LLM call and no real session persistence
+## Plan behavior
 
 ### Free
 - 5 Study Packs per month
-- access to My Library
-- includes Study Pack generation, summaries, key concepts, Quick Review, retry, Today’s Focus, and AI Study Coach
+- My Library and Public Library access
+- Quick Review
 
 ### Premium
-- up to 100 Study Packs per month
-- access to My Library
-- includes everything in Free
-- Premium-only features:
-  - Weak Concept Detection
-  - Adaptive Quiz Generation
+- 100 Study Packs per month
+- Challenge Quiz (50/month)
+- Adaptive Practice (50/month)
+- Weak Concept Detection
 
-## Subscription design
+## Billing architecture
 
-Use a dedicated `subscriptions` table rather than storing only a plan enum on the user.
+- Controller/service layer is provider-agnostic (`BillingService` interface).
+- Active runtime provider is `PAYMONGO`.
+- Premium recurring plans:
+  - `MONTHLY` (configured by `PAYMONGO_MONTHLY_PLAN_ID`)
+  - `YEARLY` (configured by `PAYMONGO_YEARLY_PLAN_ID`)
 
-Reason:
-- plan history
-- better analytics
-- clearer billing evolution
+## Webhook lifecycle events
 
-## Anonymous guardrails
+Backend handles:
 
-For unauthenticated real generation:
-- rate limit by cookie/session and/or IP
-- enforce input limits
-- optional cooldown
+- `subscription.activated`
+- `subscription.invoice.paid`
+- `subscription.invoice.payment_failed`
+- `subscription.past_due`
+- `subscription.unpaid`
+- `subscription.updated`
 
-## Future extensions
-- billing provider integration
-- renewal handling
-- cancellation handling
-- usage events
-- richer plan enforcement
+Webhook processing maps to:
 
+- `SubscriptionService` for activate/downgrade transitions
+- `PaymentTransactionService` for payment attempt recording
+
+## Idempotency and safety
+
+- Duplicate webhook delivery is expected.
+- Use provider reference IDs to avoid duplicate transaction inserts.
+- Keep webhook processing fast and deterministic.
+- Webhook registration is managed outside application runtime.

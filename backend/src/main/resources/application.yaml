@@ -81,7 +81,7 @@ studysnap:
     premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
     premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:50}
   billing:
-    provider: ${BILLING_PROVIDER:STRIPE}
+    provider: ${BILLING_PROVIDER:PAYMONGO}
     stripe:
       api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com/v1}
       secret-key: ${STRIPE_SECRET_KEY:}
@@ -89,6 +89,14 @@ studysnap:
       premium-price-id: ${STRIPE_PREMIUM_PRICE_ID:}
       checkout-success-url: ${STRIPE_CHECKOUT_SUCCESS_URL:http://localhost:3000/settings?checkout=success}
       checkout-cancel-url: ${STRIPE_CHECKOUT_CANCEL_URL:http://localhost:3000/settings?checkout=cancel}
+    paymongo:
+      api-base-url: ${PAYMONGO_API_BASE_URL:https://api.paymongo.com/v1}
+      secret-key: ${PAYMONGO_SECRET_KEY:}
+      webhook-secret: ${PAYMONGO_WEBHOOK_SECRET:}
+      monthly-plan-id: ${PAYMONGO_MONTHLY_PLAN_ID:}
+      yearly-plan-id: ${PAYMONGO_YEARLY_PLAN_ID:}
+      checkout-success-url: ${PAYMONGO_CHECKOUT_SUCCESS_URL:http://localhost:3000/settings?checkout=success}
+      checkout-cancel-url: ${PAYMONGO_CHECKOUT_CANCEL_URL:http://localhost:3000/settings?checkout=cancel}
   email:
     resend-api-key: ${RESEND_API_KEY:}
     resend-api-base-url: ${RESEND_API_BASE_URL:https://api.resend.com}

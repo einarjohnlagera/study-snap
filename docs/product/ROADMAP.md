@@ -34,6 +34,8 @@ Scope priorities:
 - Premium Adaptive Practice (targeted generation from weak concepts)
 - session resilience for Challenge/Adaptive (resume in-progress sessions)
 - Plan & Billing usage visibility with separate buckets (Study Packs, Challenge Quiz, Adaptive Practice)
+- PayMongo recurring subscription checkout (monthly/yearly) from Settings
+- webhook-driven subscription lifecycle sync (activation, renewal, failed/unpaid/cancel handling)
 - real email verification + generation gating for unverified users
 - OCR upload gating for unverified users on Create/Edit Note
 - My Library continuity (browse, filter, sort, revisit)

@@ -225,12 +225,21 @@ Primary routes:
 Settings route section: `Plan & Billing`
 
 - show plan (`FREE` or `PREMIUM`)
+- support Premium billing cycle selection:
+  - `MONTHLY`
+  - `YEARLY`
 - show usage buckets separately:
   - Study Packs (monthly quota)
   - Challenge Quiz (50/month)
   - Adaptive Practice (50/month)
-- Stripe Checkout for upgrade
-- Stripe webhook sync keeps plan state aligned
+- PayMongo recurring subscription checkout for upgrade
+- Billing webhook sync keeps plan state aligned (webhook-driven source of truth)
+  - `subscription.activated`
+  - `subscription.invoice.paid`
+  - `subscription.invoice.payment_failed`
+  - `subscription.past_due`
+  - `subscription.unpaid`
+  - `subscription.updated`
 - Premium-gated upgrade prompts should link to `/settings#plan-billing`
 
 Plan limits:

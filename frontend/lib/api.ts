@@ -87,6 +87,7 @@ export type TodayFocusResponse = {
 
 export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";
 export type PlanType = "FREE" | "PREMIUM";
+export type BillingCycle = "MONTHLY" | "YEARLY";
 export type UserRole = "USER" | "ADMIN";
 export type EngagementMode = "FOCUSED" | "CONSISTENCY" | "STREAK";
 
@@ -1231,12 +1232,15 @@ export async function getMasterySnapshot(): Promise<MasterySnapshotResponse> {
   return parseApiResponse<MasterySnapshotResponse>(response, "Could not load mastery snapshot.");
 }
 
-export async function createPremiumCheckoutSession(): Promise<BillingCheckoutSessionResponse> {
+export async function createPremiumCheckoutSession(
+  billingCycle: BillingCycle = "MONTHLY",
+): Promise<BillingCheckoutSessionResponse> {
   const response = await fetchWithAuth(
     "/billing/checkout-session",
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ billingCycle }),
     },
     true,
   );

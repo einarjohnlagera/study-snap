@@ -6,6 +6,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.BillingProvider;
+import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
@@ -67,7 +68,7 @@ public class StripeBillingService implements BillingService {
     }
 
     @Override
-    public BillingCheckoutSessionResponse createPremiumCheckoutSession(UUID userId) {
+    public BillingCheckoutSessionResponse createPremiumCheckoutSession(UUID userId, BillingCycle billingCycle) {
         ensureCheckoutConfigured();
 
         UserEntity user = userRepository.findById(userId)
