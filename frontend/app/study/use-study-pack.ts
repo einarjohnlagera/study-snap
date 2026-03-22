@@ -207,15 +207,6 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       showToast("Email verification is required before generating Study Packs.");
       return null;
     }
-    if (!authUser.profileType) {
-      setErrorMessage("Complete onboarding to start generating your Study Pack.");
-      if (imageFile) {
-        setOcrFlowState("failure");
-        setOcrStatusMessage("Complete onboarding before running OCR from image notes.");
-      }
-      return null;
-    }
-
     setLoading(true);
     setErrorMessage(null);
     setStudyPackResult(null);
@@ -294,11 +285,6 @@ export function useStudyPack(demoMode: boolean, initialNotesText = ""): UseStudy
       showToast("Email verification is required before generating Study Packs.");
       return null;
     }
-    if (!authUser.profileType) {
-      setErrorMessage("Complete onboarding to start generating your Study Pack.");
-      return null;
-    }
-
     setLoading(true);
     setErrorMessage(null);
     setStudyPackResult(null);

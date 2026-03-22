@@ -24,10 +24,6 @@ export default function OnboardingPage() {
     const authUser = getAuthUser();
     if (!authUser) {
       redirectToLoginWithCurrentDestination(router);
-      return;
-    }
-    if (authUser.profileType) {
-      router.replace("/dashboard");
     }
   }, [router]);
 
