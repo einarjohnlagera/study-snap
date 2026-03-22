@@ -171,14 +171,14 @@ export default function SettingsPage() {
     }
   };
 
+  const isPremiumPlan = profile?.planType === "PREMIUM";
   const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
-  const studyPacksLimit = usageSummary?.studyPacksLimit ?? 0;
+  const studyPacksLimit = usageSummary?.studyPacksLimit ?? (isPremiumPlan ? 100 : 5);
   const challengeQuizUsed = usageSummary?.challengeQuizUsed ?? 0;
   const challengeQuizLimit = usageSummary?.challengeQuizLimit ?? 50;
   const adaptivePracticeUsed = usageSummary?.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.adaptivePracticeLimit ?? 50;
   const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
-  const isPremiumPlan = profile?.planType === "PREMIUM";
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -224,40 +224,62 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
                 <UsageMetric label="Study Packs" used={studyPacksUsed} limit={studyPacksLimit} />
-                <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
-                <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
+                {isPremiumPlan ? (
+                  <>
+                    <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
+                    <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
+                  </>
+                ) : null}
                 {hasReachedMonthlyLimit ? (
                   <p className="text-sm text-foreground/80">You have reached your monthly Study Pack limit.</p>
                 ) : null}
-                {!isPremiumPlan ? (
-                  <p className="text-xs text-foreground/65">
-                    Challenge Quiz and Adaptive Practice are Premium features with separate monthly limits.
-                  </p>
-                ) : null}
               </div>
-            </div>
-
-            <div className="space-y-3 rounded-md border border-border bg-background p-4">
-              <p className="text-sm font-semibold">Premium</p>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                <li>100 Study Packs per month</li>
-                <li>Challenge Quiz (50/month)</li>
-                <li>Adaptive Practice (50/month)</li>
-                <li>Weak Concept Detection</li>
-              </ul>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleUpgradeClick()}
-                  disabled={isPremiumPlan || startingCheckout}
-                >
-                  {isPremiumPlan ? "Premium Active" : startingCheckout ? "Redirecting..." : "Upgrade to Premium"}
-                </Button>
-                {planMessage ? (
-                  <p className="text-xs text-foreground/60">{planMessage}</p>
-                ) : null}
-              </div>
+              {isPremiumPlan ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Features</p>
+                  <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
+                    <li>Weak Concept Detection</li>
+                    <li>Higher limits</li>
+                    <li>Premium features enabled</li>
+                  </ul>
+                </div>
+              ) : (
+                <div className="space-y-4 rounded-md border border-border bg-background p-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free Features</p>
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
+                      <li>Save unlimited notes</li>
+                      <li>Quick Review</li>
+                      <li>Public Library access</li>
+                    </ul>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium Features</p>
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
+                      <li>Challenge Quiz</li>
+                      <li>Adaptive Practice</li>
+                      <li>Weak Concept Detection</li>
+                      <li>Higher Study Pack limits</li>
+                    </ul>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Button
+                      type="button"
+                      className="w-full sm:w-auto"
+                      onClick={() => void handleUpgradeClick()}
+                      disabled={startingCheckout}
+                    >
+                      {startingCheckout ? "Redirecting..." : "Upgrade to Premium"}
+                    </Button>
+                    {planMessage ? (
+                      <p className="text-xs text-foreground/60">{planMessage}</p>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+              {isPremiumPlan && planMessage ? (
+                <p className="text-xs text-foreground/60">{planMessage}</p>
+              ) : null}
             </div>
           </Card>
 
