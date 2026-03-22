@@ -19,6 +19,7 @@ import {
   getNote,
   isEmailNotVerifiedError,
   updateNoteVisibility,
+  updateNote,
   getQuickReviewPerformanceSummary,
   startQuickReviewSession,
   type ChallengeQuizPerformanceSummaryResponse,
@@ -48,6 +49,11 @@ function truncateShareUrl(url: string, maxLength = 58) {
   return `${url.slice(0, maxLength - 3)}...`;
 }
 
+function normalizeMetadataInput(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 type PrivateNoteDetailPageClientProps = {
   routeId: string;
 };
@@ -75,6 +81,18 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const [toast, setToast] = useState<string | null>(null);
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
+  const [savingMetadata, setSavingMetadata] = useState(false);
+  const [metadataTagDraft, setMetadataTagDraft] = useState("");
+  const [metadataDraft, setMetadataDraft] = useState<{
+    title: string;
+    subject: string;
+    tags: string[];
+  }>({
+    title: "",
+    subject: "",
+    tags: [],
+  });
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
 
@@ -194,6 +212,17 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname);
   }, [pathname, router, searchParams]);
 
+  useEffect(() => {
+    if (!note || isInlineMetadataEditMode) {
+      return;
+    }
+    setMetadataDraft({
+      title: note.title ?? "",
+      subject: note.subject ?? "",
+      tags: [...(note.tags ?? [])],
+    });
+  }, [isInlineMetadataEditMode, note]);
+
   const isDraft = note?.studyPackStatus !== "STUDY_PACK_READY";
   const title = note?.title?.trim() || "Untitled note";
   const subject = note?.subject?.trim() || "No subject";
@@ -296,7 +325,76 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     if (!note) {
       return;
     }
+    if (!isDraft) {
+      setMetadataDraft({
+        title: note.title ?? "",
+        subject: note.subject ?? "",
+        tags: [...(note.tags ?? [])],
+      });
+      setMetadataTagDraft("");
+      setIsInlineMetadataEditMode(true);
+      return;
+    }
     router.push(`/notes/${note.id}/edit`);
+  };
+
+  const handleCancelMetadataEdit = () => {
+    if (!note || savingMetadata) {
+      return;
+    }
+    setMetadataDraft({
+      title: note.title ?? "",
+      subject: note.subject ?? "",
+      tags: [...(note.tags ?? [])],
+    });
+    setMetadataTagDraft("");
+    setIsInlineMetadataEditMode(false);
+  };
+
+  const handleAddMetadataTag = () => {
+    const candidate = metadataTagDraft.trim();
+    if (candidate.length === 0) {
+      return;
+    }
+    const duplicate = metadataDraft.tags.some((tag) => tag.toLowerCase() === candidate.toLowerCase());
+    if (duplicate) {
+      setMetadataTagDraft("");
+      return;
+    }
+    setMetadataDraft((previous) => ({
+      ...previous,
+      tags: [...previous.tags, candidate],
+    }));
+    setMetadataTagDraft("");
+  };
+
+  const handleSaveMetadata = async () => {
+    if (!note || savingMetadata) {
+      return;
+    }
+    setSavingMetadata(true);
+    try {
+      const updated = await updateNote(note.id, {
+        title: normalizeMetadataInput(metadataDraft.title),
+        subject: normalizeMetadataInput(metadataDraft.subject),
+        tags: metadataDraft.tags,
+        content: note.content,
+      });
+      setNote(updated);
+      setMetadataDraft({
+        title: updated.title ?? "",
+        subject: updated.subject ?? "",
+        tags: [...(updated.tags ?? [])],
+      });
+      setMetadataTagDraft("");
+      setIsInlineMetadataEditMode(false);
+      setToast("Note details updated");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update note details.";
+      setError(message);
+    } finally {
+      setSavingMetadata(false);
+    }
   };
 
   const handleStartQuickReview = async () => {
@@ -401,7 +499,23 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
           <Card className="space-y-4 p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-3">
-                <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
+                {isInlineMetadataEditMode ? (
+                  <div className="space-y-2">
+                    <label htmlFor="note-title-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      Title
+                    </label>
+                    <input
+                      id="note-title-inline"
+                      type="text"
+                      value={metadataDraft.title}
+                      onChange={(event) => setMetadataDraft((previous) => ({ ...previous, title: event.target.value }))}
+                      className="h-10 w-full rounded-lg border border-border bg-background px-3 text-base text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600 sm:text-lg"
+                      placeholder="Untitled note"
+                    />
+                  </div>
+                ) : (
+                  <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
+                )}
                 {hasCopyAttribution ? (
                   <p className="text-xs text-foreground/70">
                     Source: Public Library - {copiedSourceTitle}
@@ -458,30 +572,111 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={handleEdit}>
-                  Edit
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleting}
-                >
-                  Delete
-                </Button>
+                {isInlineMetadataEditMode ? (
+                  <>
+                    <Button type="button" variant="outline" size="sm" onClick={handleCancelMetadataEdit} disabled={savingMetadata}>
+                      Cancel
+                    </Button>
+                    <Button type="button" size="sm" onClick={() => void handleSaveMetadata()} disabled={savingMetadata}>
+                      {savingMetadata ? "Saving..." : "Save"}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="outline" size="sm" onClick={handleEdit}>
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      disabled={deleting}
+                    >
+                      Delete
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
-            <p className="text-sm text-foreground/75">{subject}</p>
-            <div className="flex flex-wrap gap-2">
-              {tags.length > 0 ? tags.map((tag, index) => (
-                <span key={`${tag}-${index}`} className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75">{tag}</span>
-              )) : (
-                <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">No tags</span>
-              )}
-            </div>
-            {isDraft ? (
+            {isInlineMetadataEditMode ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="note-subject-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                    Subject
+                  </label>
+                  <input
+                    id="note-subject-inline"
+                    type="text"
+                    value={metadataDraft.subject}
+                    onChange={(event) => setMetadataDraft((previous) => ({ ...previous, subject: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                    placeholder="No subject"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Tags</p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="note-tags-inline"
+                      type="text"
+                      value={metadataTagDraft}
+                      onChange={(event) => setMetadataTagDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handleAddMetadataTag();
+                        }
+                      }}
+                      className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                      placeholder="Add a tag"
+                    />
+                    <Button type="button" variant="outline" onClick={handleAddMetadataTag}>
+                      Add tag
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {metadataDraft.tags.length > 0 ? metadataDraft.tags.map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75">
+                        {tag}
+                        <button
+                          type="button"
+                          className="text-foreground/60 hover:text-foreground"
+                          aria-label={`Remove ${tag}`}
+                          onClick={() => {
+                            setMetadataDraft((previous) => ({
+                              ...previous,
+                              tags: previous.tags.filter((value) => value !== tag),
+                            }));
+                          }}
+                        >
+                          x
+                        </button>
+                      </span>
+                    )) : (
+                      <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">No tags</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-foreground/75">{subject}</p>
+                <div className="flex flex-wrap gap-2">
+                  {tags.length > 0 ? tags.map((tag, index) => (
+                    <span key={`${tag}-${index}`} className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75">{tag}</span>
+                  )) : (
+                    <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">No tags</span>
+                  )}
+                </div>
+              </>
+            )}
+            {isInlineMetadataEditMode ? (
+              <p className="text-xs text-foreground/70">
+                Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.
+              </p>
+            ) : isDraft ? (
               <p className="text-xs text-foreground/70">
                 Generating locks this note to preserve its Study Pack. Need changes later? Use Make a Copy.
               </p>
