@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
-import { getNote } from "@/lib/api";
+import { getNote, updateNote } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -36,6 +36,7 @@ jest.mock("@/lib/api", () => ({
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: () => false,
+  updateNote: jest.fn(),
   updateNoteVisibility: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
   startQuickReviewSession: jest.fn(),
@@ -72,6 +73,7 @@ describe("PrivateNoteDetailPageClient", () => {
     replaceMock.mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (updateNote as jest.Mock).mockReset();
   });
 
   it("routes Edit to note editor for draft note", async () => {
@@ -99,5 +101,29 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(generateButton).toBeDisabled();
     expect(visibilityButton).toBeDisabled();
+  });
+
+  it("for generated notes, Edit enables inline metadata editing instead of routing", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(pushMock).not.toHaveBeenCalledWith("/notes/note-1/edit");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.",
+      ),
+    ).toBeInTheDocument();
   });
 });
