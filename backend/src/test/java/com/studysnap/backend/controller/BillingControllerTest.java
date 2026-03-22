@@ -5,8 +5,8 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.BillingService;
 import com.studysnap.backend.service.BillingUsageService;
-import com.studysnap.backend.service.StripeBillingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 class BillingControllerTest {
 
     @Mock
-    private StripeBillingService stripeBillingService;
+    private BillingService billingService;
     @Mock
     private BillingUsageService billingUsageService;
     @Mock
@@ -38,7 +38,7 @@ class BillingControllerTest {
 
     @BeforeEach
     void setUp() {
-        billingController = new BillingController(stripeBillingService, billingUsageService, authService);
+        billingController = new BillingController(billingService, billingUsageService, authService);
     }
 
     @Test
@@ -46,12 +46,12 @@ class BillingControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         BillingCheckoutSessionResponse expected = new BillingCheckoutSessionResponse("https://checkout.example");
-        when(stripeBillingService.createPremiumCheckoutSession(userId)).thenReturn(expected);
+        when(billingService.createPremiumCheckoutSession(userId)).thenReturn(expected);
 
         BillingCheckoutSessionResponse response = billingController.createCheckoutSession(user);
 
         verify(authService).requireEmailVerified(userId);
-        verify(stripeBillingService).createPremiumCheckoutSession(userId);
+        verify(billingService).createPremiumCheckoutSession(userId);
         assertThat(response).isEqualTo(expected);
     }
 
@@ -69,6 +69,6 @@ class BillingControllerTest {
         assertThatThrownBy(() -> billingController.createCheckoutSession(user))
                 .isSameAs(verificationError);
 
-        verify(stripeBillingService, never()).createPremiumCheckoutSession(any(UUID.class));
+        verify(billingService, never()).createPremiumCheckoutSession(any(UUID.class));
     }
 }

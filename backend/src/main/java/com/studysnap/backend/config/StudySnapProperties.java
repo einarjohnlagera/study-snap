@@ -1,5 +1,6 @@
 package com.studysnap.backend.config;
 
+import com.studysnap.backend.entity.BillingProvider;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -88,6 +89,7 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class Billing {
+        private BillingProvider provider = BillingProvider.STRIPE;
         private final Stripe stripe = new Stripe();
     }
 

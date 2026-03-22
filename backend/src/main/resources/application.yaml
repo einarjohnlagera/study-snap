@@ -81,6 +81,7 @@ studysnap:
     premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
     premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:50}
   billing:
+    provider: ${BILLING_PROVIDER:STRIPE}
     stripe:
       api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com/v1}
       secret-key: ${STRIPE_SECRET_KEY:}
