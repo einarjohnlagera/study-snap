@@ -43,7 +43,7 @@ import java.util.UUID;
 @Service
 @Transactional
 @RequiredArgsConstructor
-public class StripeBillingService {
+public class StripeBillingService implements BillingService {
     private static final int WEBHOOK_SIGNATURE_TOLERANCE_SECONDS = 300;
     private static final String EVENT_CHECKOUT_SESSION_COMPLETED = "checkout.session.completed";
     private static final String EVENT_INVOICE_PAID = "invoice.paid";
@@ -66,6 +66,7 @@ public class StripeBillingService {
     ) {
     }
 
+    @Override
     public BillingCheckoutSessionResponse createPremiumCheckoutSession(UUID userId) {
         ensureCheckoutConfigured();
 
@@ -107,6 +108,7 @@ public class StripeBillingService {
         return new BillingCheckoutSessionResponse(checkoutUrl);
     }
 
+    @Override
     public SimpleMessageResponse handleWebhook(String payload, String stripeSignatureHeader) {
         ensureWebhookConfigured();
         verifyWebhookSignature(payload, stripeSignatureHeader);
@@ -152,6 +154,11 @@ public class StripeBillingService {
         }
 
         return new SimpleMessageResponse("Received.");
+    }
+
+    @Override
+    public BillingProvider getProvider() {
+        return STRIPE_PROVIDER;
     }
 
     private Optional<UUID> resolveTargetUserId(JsonNode eventObject) {

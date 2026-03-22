@@ -5,8 +5,8 @@ import com.studysnap.backend.dto.BillingUsageSummaryResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
+import com.studysnap.backend.service.BillingService;
 import com.studysnap.backend.service.BillingUsageService;
-import com.studysnap.backend.service.StripeBillingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,20 +21,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/billing")
 @RequiredArgsConstructor
 public class BillingController {
-    private final StripeBillingService stripeBillingService;
+    private final BillingService billingService;
     private final BillingUsageService billingUsageService;
     private final AuthService authService;
 
-    @PostMapping("/checkout-session")
+    @PostMapping({"/checkout-session", "/checkout/premium"})
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BillingCheckoutSessionResponse createCheckoutSession(
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         authService.requireEmailVerified(user.userId());
-        return stripeBillingService.createPremiumCheckoutSession(user.userId());
+        return billingService.createPremiumCheckoutSession(user.userId());
     }
 
-    @GetMapping("/usage-summary")
+    @GetMapping({"/usage-summary", "/usage"})
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BillingUsageSummaryResponse getUsageSummary(
             @AuthenticationPrincipal AuthenticatedUser user
@@ -43,10 +43,14 @@ public class BillingController {
     }
 
     @PostMapping("/webhook")
-    public SimpleMessageResponse handleStripeWebhook(
+    public SimpleMessageResponse handleBillingWebhook(
             @RequestBody String payload,
-            @RequestHeader("Stripe-Signature") String stripeSignature
+            @RequestHeader(value = "X-Billing-Signature", required = false) String billingSignature,
+            @RequestHeader(value = "Stripe-Signature", required = false) String stripeSignature
     ) {
-        return stripeBillingService.handleWebhook(payload, stripeSignature);
+        String signature = billingSignature == null || billingSignature.isBlank()
+                ? stripeSignature
+                : billingSignature;
+        return billingService.handleWebhook(payload, signature);
     }
 }
