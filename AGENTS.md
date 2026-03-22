@@ -96,6 +96,59 @@ Required behavior:
 - OCR upload does not auto-save and does not auto-generate.
 - Uploaded images are not stored permanently.
 
+
+
+## User Access Model
+
+NoteLib uses a hybrid verification model.
+
+Unverified users CAN:
+- Create notes
+- Edit draft notes
+- Copy notes
+- Browse Public Library
+
+Unverified users CANNOT:
+- Generate Study Pack
+- Use OCR
+- Take Challenge Quiz
+- Use Adaptive Practice
+- Make notes public
+- Purchase Premium
+- Use any LLM-powered feature
+
+Verified users:
+- Have full access based on plan (Free or Premium)
+
+This gating must be enforced both in frontend and backend.
+
+## User State Routing
+
+User states:
+
+1. ANONYMOUS
+2. UNVERIFIED
+3. VERIFIED_NO_ONBOARDING
+4. ACTIVE
+
+Routing rules:
+
+ANONYMOUS:
+- Landing
+- Public Library
+
+UNVERIFIED:
+- App shell
+- Show verification banner
+- Allow note creation and copying only
+
+VERIFIED_NO_ONBOARDING:
+- Force onboarding
+- Hide main navigation
+
+ACTIVE:
+- Full app
+
 ## MVP Scope (Do Not Expand Without Request)
 
 In scope:

@@ -16,12 +16,9 @@ import {
 
 type Mode = "login" | "signup";
 
-function nextRouteForAuth(profileType: "STUDENT" | "PARENT" | "PROFESSIONAL" | null, emailVerifiedAt: string | null) {
+function nextRouteForAuth(emailVerifiedAt: string | null) {
   if (!emailVerifiedAt) {
     return "/verify-email";
-  }
-  if (!profileType) {
-    return "/onboarding";
   }
   return "/dashboard";
 }
@@ -76,8 +73,8 @@ export default function AuthPage() {
       return;
     }
 
-    const defaultRoute = nextRouteForAuth(authUser.profileType, authUser.emailVerifiedAt);
-    const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && authUser.profileType && redirectTarget);
+    const defaultRoute = nextRouteForAuth(authUser.emailVerifiedAt);
+    const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
     router.replace(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
   }, [redirectTarget, router]);
 
@@ -107,8 +104,8 @@ export default function AuthPage() {
             })
           : await login({ email, password, keepSignedIn });
       setAuthUser(authUser);
-      const defaultRoute = nextRouteForAuth(authUser.profileType, authUser.emailVerifiedAt);
-      const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && authUser.profileType && redirectTarget);
+      const defaultRoute = nextRouteForAuth(authUser.emailVerifiedAt);
+      const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
       router.push(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
       router.refresh();
     } catch (err) {

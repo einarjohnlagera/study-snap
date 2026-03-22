@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   getMe,
   getMasterySnapshot,
@@ -12,6 +15,7 @@ import {
   type NoteListItemResponse,
   type TodayFocusResponse,
 } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { DashboardHero } from "./dashboard-hero";
 import { DashboardStats } from "./dashboard-stats";
@@ -32,6 +36,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
+  const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -102,6 +107,27 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [loading]);
 
+  useEffect(() => {
+    const authUser = getAuthUser();
+    if (!authUser?.emailVerifiedAt) {
+      setShowWelcomeMessage(false);
+      return;
+    }
+
+    const welcomeStorageKey = `notelib-dashboard-welcome-shown-${authUser.id}`;
+    const alreadyShown = window.localStorage.getItem(welcomeStorageKey) === "1";
+    setShowWelcomeMessage(!alreadyShown);
+  }, []);
+
+  const dismissWelcomeMessage = useCallback(() => {
+    const authUser = getAuthUser();
+    if (authUser) {
+      const welcomeStorageKey = `notelib-dashboard-welcome-shown-${authUser.id}`;
+      window.localStorage.setItem(welcomeStorageKey, "1");
+    }
+    setShowWelcomeMessage(false);
+  }, []);
+
   const recentNotes = useMemo(
     () => [...items]
       .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
@@ -131,6 +157,28 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
+          {showWelcomeMessage ? (
+            <Card className="space-y-3 p-4 sm:p-6">
+              <p className="text-sm text-foreground/80">
+                Welcome to NoteLib! Start by creating a note, then generate your first Study Pack.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Link href="/notes/new" className="w-full sm:w-auto">
+                  <Button type="button" className="w-full sm:w-auto">
+                    Create Note
+                  </Button>
+                </Link>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={dismissWelcomeMessage}
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </Card>
+          ) : null}
           {todayFocus ? <TodayFocusCard focus={todayFocus} /> : null}
           {items.length === 0 ? (
             <DashboardEmpty />

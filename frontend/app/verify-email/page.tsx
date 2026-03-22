@@ -44,7 +44,7 @@ function VerifyEmailPageContent() {
 
     if (!token) {
       if (existingAuthUser?.emailVerifiedAt) {
-        router.replace(existingAuthUser.profileType ? "/dashboard" : "/onboarding");
+        router.replace("/dashboard");
       }
       return;
     }

@@ -77,10 +77,6 @@ export default function SettingsPage() {
       redirectToLoginWithCurrentDestination(router);
       return;
     }
-    if (!authUser.profileType) {
-      router.replace("/onboarding");
-      return;
-    }
 
     setLoading(true);
     setError(null);

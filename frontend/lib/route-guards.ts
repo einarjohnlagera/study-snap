@@ -24,10 +24,6 @@ export function requireVerifiedOnboardedUser(
     router.replace("/verify-email");
     return false;
   }
-  if (!authUser.profileType) {
-    router.replace("/onboarding");
-    return false;
-  }
   return true;
 }
 
@@ -37,10 +33,6 @@ export function requireAuthenticatedOnboardedUser(
   const authUser = getAuthUser();
   if (!authUser) {
     redirectToLoginWithCurrentDestination(router);
-    return false;
-  }
-  if (!authUser.profileType) {
-    router.replace("/onboarding");
     return false;
   }
   return true;
