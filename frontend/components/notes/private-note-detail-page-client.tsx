@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
@@ -620,30 +621,22 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       ) : null}
 
       {showDeleteConfirm ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4">
-          <Card className="w-full max-w-md space-y-4 p-5">
-            <div className="space-y-2">
-              <h2 className="text-lg font-semibold">Delete this note?</h2>
-              <p className="text-sm text-foreground/75">
-                This will permanently delete this note and its generated Study Pack data.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
-                onClick={() => void handleDeleteNote()}
-                disabled={deleting}
-              >
-                {deleting ? "Deleting..." : "Delete note"}
-              </Button>
-            </div>
-          </Card>
-        </div>
+        <DeleteConfirmationModal
+          isOpen={showDeleteConfirm}
+          title="Delete this note?"
+          message="This will permanently delete this note and all generated Study Pack content. This action cannot be undone."
+          confirmText={deleting ? "Deleting..." : "Delete note"}
+          onCancel={() => {
+            if (!deleting) {
+              setShowDeleteConfirm(false);
+            }
+          }}
+          onConfirm={() => {
+            if (!deleting) {
+              void handleDeleteNote();
+            }
+          }}
+        />
       ) : null}
     </main>
   );
