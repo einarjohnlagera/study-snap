@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -111,6 +111,7 @@ function LibraryLoading() {
 
 export default function LibraryPage() {
   const router = useRouter();
+  const initialLoadStartedRef = useRef(false);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
@@ -174,6 +175,10 @@ export default function LibraryPage() {
   }, [hydrateLastReviewed, router]);
 
   useEffect(() => {
+    if (initialLoadStartedRef.current) {
+      return;
+    }
+    initialLoadStartedRef.current = true;
     void loadLibrary();
   }, [loadLibrary]);
 
@@ -680,22 +685,6 @@ export default function LibraryPage() {
                       )}
                     </div>
 
-                    {item.studyPackId ? (
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="w-full sm:w-auto"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            router.push(`/notes/${item.id}/quick-review`);
-                          }}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          Quick Review
-                        </Button>
-                      </div>
-                    ) : null}
                   </Card>
                 );
               })}

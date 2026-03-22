@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AppModal } from "@/components/ui/app-modal";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
@@ -28,7 +29,7 @@ type ChallengeSessionStatePayload = {
   timerStartedAtEpochSeconds?: number;
 };
 
-const LEAVE_WARNING_MESSAGE = "Leave Challenge Quiz?\nYour progress is saved, but the timer will continue.";
+const LEAVE_WARNING_MESSAGE = "Leave Challenge Quiz? Your progress is saved, but the timer will continue.";
 
 function formatTimer(seconds: number): string {
   const safeSeconds = Math.max(0, seconds);
@@ -110,6 +111,7 @@ export default function ChallengeQuizPage() {
     selectedChoices: {},
   });
   const leaveGuardInsertedRef = useRef(false);
+  const showLeaveDialogRef = useRef(false);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
@@ -339,6 +341,10 @@ export default function ChallengeQuizPage() {
   }, [challengeSession, deadlineEpochSeconds, handleSubmit, phase, submitting]);
 
   useEffect(() => {
+    showLeaveDialogRef.current = showLeaveDialog;
+  }, [showLeaveDialog]);
+
+  useEffect(() => {
     if (phase !== "running") {
       leaveGuardInsertedRef.current = false;
       return;
@@ -357,13 +363,13 @@ export default function ChallengeQuizPage() {
     };
 
     const handlePopState = () => {
-      const shouldLeave = window.confirm(LEAVE_WARNING_MESSAGE);
-      if (!shouldLeave) {
+      persistLatestProgress(true);
+      if (showLeaveDialogRef.current) {
         window.history.pushState(null, "", window.location.href);
         return;
       }
-      leaveGuardInsertedRef.current = false;
-      persistLatestProgress(true);
+      window.history.pushState(null, "", window.location.href);
+      setShowLeaveDialog(true);
     };
 
     const handleVisibilityChange = () => {
@@ -461,21 +467,6 @@ export default function ChallengeQuizPage() {
           </Link>
         )}
       </div>
-
-      {showLeaveDialog ? (
-        <Card className="space-y-3 p-4 sm:p-6">
-          <p className="text-sm font-semibold text-foreground">Leave Challenge Quiz?</p>
-          <p className="text-sm text-foreground/75">Your progress is saved, but the timer will continue.</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="w-full sm:w-auto" onClick={() => setShowLeaveDialog(false)}>
-              Stay
-            </Button>
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleLeaveQuiz}>
-              Leave Quiz
-            </Button>
-          </div>
-        </Card>
-      ) : null}
 
       {loading ? (
         <ChallengeQuizLoading />
@@ -734,6 +725,23 @@ export default function ChallengeQuizPage() {
           ) : null}
         </Card>
       ) : null}
+
+      <AppModal
+        isOpen={showLeaveDialog}
+        title="Leave Challenge Quiz?"
+        description="Your progress is saved, but the timer will continue."
+        onClose={() => setShowLeaveDialog(false)}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setShowLeaveDialog(false)}>
+              Stay
+            </Button>
+            <Button type="button" onClick={handleLeaveQuiz}>
+              Leave Quiz
+            </Button>
+          </div>
+        )}
+      />
     </main>
   );
 }
