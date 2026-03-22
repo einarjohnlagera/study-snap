@@ -10,6 +10,12 @@ Support public discovery and safe reuse of learning content while keeping the no
 - Public Note Detail route: `/public/notes/{id}`
 - Token share route (existing): `/p/{token}`
 
+Private note share UX:
+
+- If a note is `PRIVATE`, clicking `Share` shows a confirmation modal.
+- Confirm action: `Make Public & Share`
+- On success, show a share-link modal with copy action.
+
 ## Public Note Rules
 
 - public list includes only notes where `visibility=PUBLIC`

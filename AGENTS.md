@@ -72,6 +72,22 @@ Keep app shell grouping:
   - Profile
   - Settings
 
+## UI Interaction Guardrails
+
+- Keep note cards consistent across Dashboard, My Library, and Public Library:
+  - entire card click opens note detail
+  - tertiary actions live in card menu (My Library) rather than primary card buttons
+- Use one shared modal component for confirmations/dialogs (`AppModal`), including delete/share/visibility/leave-flow prompts.
+- Do not use browser-native `window.confirm` or `alert` for product dialogs.
+- Note Detail edit rules:
+  - `DRAFT`: Edit routes to full editor (content + OCR)
+  - `STUDY_PACK_READY`: Edit stays on Note Detail and allows only title/subject/tags
+  - While inline metadata edit is active, hide/disable share/visibility/learning actions.
+- Share flow for private notes:
+  - click Share -> show private-note modal
+  - confirm -> make note public
+  - then open share-link modal with copy action
+
 ## Verification and Access Gating
 
 - Users can sign up/log in before email verification.
@@ -128,8 +144,7 @@ User states:
 
 1. ANONYMOUS
 2. UNVERIFIED
-3. VERIFIED_NO_ONBOARDING
-4. ACTIVE
+3. VERIFIED
 
 Routing rules:
 
@@ -142,12 +157,10 @@ UNVERIFIED:
 - Show verification banner
 - Allow note creation and copying only
 
-VERIFIED_NO_ONBOARDING:
-- Force onboarding
-- Hide main navigation
-
-ACTIVE:
-- Full app
+VERIFIED:
+- App shell
+- Dashboard as primary landing
+- Full app access based on plan
 
 ## MVP Scope (Do Not Expand Without Request)
 

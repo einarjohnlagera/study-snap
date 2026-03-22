@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
-import { listNotes } from "@/lib/api";
+import { deleteNote, listNotes } from "@/lib/api";
 
 const pushMock = jest.fn();
 
@@ -38,6 +38,8 @@ describe("My Library page", () => {
         updatedAt: "2026-03-21T10:00:00Z",
       },
     ]);
+    (deleteNote as jest.Mock).mockReset();
+    (deleteNote as jest.Mock).mockResolvedValue(undefined);
   });
 
   it("opens note detail when a card is clicked", async () => {
@@ -51,6 +53,21 @@ describe("My Library page", () => {
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-42?from=library");
+    });
+  });
+
+  it("uses the shared delete modal from card actions", async () => {
+    render(<LibraryPage />);
+
+    const menuButton = await screen.findByRole("button", { name: "Open note actions" });
+    fireEvent.click(menuButton);
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(screen.getByText("Delete this note?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
+
+    await waitFor(() => {
+      expect(deleteNote).toHaveBeenCalledWith("note-42");
     });
   });
 });

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
-import { getNote, updateNote } from "@/lib/api";
+import { getNote, updateNote, updateNoteVisibility } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -74,6 +74,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
+    (updateNoteVisibility as jest.Mock).mockReset();
   });
 
   it("routes Edit to note editor for draft note", async () => {
@@ -125,5 +126,25 @@ describe("PrivateNoteDetailPageClient", () => {
         "Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.",
       ),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
+  });
+
+  it("shows private-share modal and then opens share-link modal after making note public", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT", visibility: "PRIVATE" });
+    (updateNoteVisibility as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT", visibility: "PUBLIC" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+
+    expect(screen.getByText("This note is private")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Make Public & Share" }));
+
+    expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC");
+    expect(await screen.findByText("Share this note")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy Link" })).toBeInTheDocument();
   });
 });
