@@ -15,6 +15,7 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +44,7 @@ import java.util.function.Supplier;
 
 @Service
 @Transactional
+@Slf4j
 @RequiredArgsConstructor
 public class PayMongoBillingService implements BillingService {
     private static final BillingProvider PAYMONGO_PROVIDER = BillingProvider.PAYMONGO;
@@ -119,15 +121,33 @@ public class PayMongoBillingService implements BillingService {
         JsonNode event = parseJson(payload);
         String eventType = resolveEventType(event);
         if (!isSupportedEvent(eventType)) {
+            log.info("billing.paymongo.webhook ignored unsupported eventType={}", eventType);
             return new SimpleMessageResponse("Ignored.");
         }
 
         JsonNode eventResource = resolveEventResource(event);
         String providerReferenceId = resolveProviderReferenceId(event, payload, eventType, eventResource);
+        String providerSubscriptionId = resolveProviderSubscriptionId(eventResource);
+        String providerCustomerId = resolveProviderCustomerId(eventResource);
         UUID targetUserId = resolveTargetUserId(eventResource).orElse(null);
         if (targetUserId == null) {
+            log.warn(
+                    "billing.paymongo.webhook ignored unresolved user eventType={} providerReferenceId={} providerSubscriptionId={} providerCustomerId={}",
+                    eventType,
+                    providerReferenceId,
+                    providerSubscriptionId,
+                    providerCustomerId
+            );
             return new SimpleMessageResponse("Ignored.");
         }
+        log.info(
+                "billing.paymongo.webhook received eventType={} providerReferenceId={} userId={} providerSubscriptionId={} providerCustomerId={}",
+                eventType,
+                providerReferenceId,
+                targetUserId,
+                providerSubscriptionId,
+                providerCustomerId
+        );
 
         Optional<PaymentTransactionEntity> pendingTransaction = Optional.empty();
         if (shouldTrackTransaction(eventType)) {
@@ -142,6 +162,7 @@ public class PayMongoBillingService implements BillingService {
                     providerReferenceId
             );
             if (pendingTransaction.isEmpty()) {
+                log.info("billing.paymongo.webhook duplicate ignored providerReferenceId={} eventType={}", providerReferenceId, eventType);
                 return new SimpleMessageResponse("Received.");
             }
         }
@@ -180,6 +201,13 @@ public class PayMongoBillingService implements BillingService {
         OffsetDateTime periodEnd = resolvePeriodEnd(eventResource);
 
         if (EVENT_SUBSCRIPTION_ACTIVATED.equals(eventType) || EVENT_SUBSCRIPTION_INVOICE_PAID.equals(eventType)) {
+            log.info(
+                    "billing.paymongo.subscription activating userId={} eventType={} providerSubscriptionId={} periodEnd={}",
+                    userId,
+                    eventType,
+                    providerSubscriptionId,
+                    periodEnd
+            );
             subscriptionService.activatePremiumSubscription(
                     userId,
                     BillingType.SUBSCRIPTION,
@@ -195,6 +223,13 @@ public class PayMongoBillingService implements BillingService {
                 || EVENT_SUBSCRIPTION_PAST_DUE.equals(eventType)
                 || EVENT_SUBSCRIPTION_UNPAID.equals(eventType)) {
             if (periodEnd != null && OffsetDateTime.now().isBefore(periodEnd)) {
+                log.info(
+                        "billing.paymongo.subscription keep-active-during-grace userId={} eventType={} providerSubscriptionId={} periodEnd={}",
+                        userId,
+                        eventType,
+                        providerSubscriptionId,
+                        periodEnd
+                );
                 subscriptionService.activatePremiumSubscription(
                         userId,
                         BillingType.SUBSCRIPTION,
@@ -205,6 +240,12 @@ public class PayMongoBillingService implements BillingService {
                 );
                 return;
             }
+            log.info(
+                    "billing.paymongo.subscription downgrading userId={} eventType={} providerSubscriptionId={}",
+                    userId,
+                    eventType,
+                    providerSubscriptionId
+            );
             subscriptionService.downgradeToFree(userId);
             return;
         }
@@ -214,6 +255,13 @@ public class PayMongoBillingService implements BillingService {
             boolean cancelAtPeriodEnd = booleanValue(eventResource.path("attributes"), "cancel_at_period_end");
             if (isCanceledStatus(status)) {
                 if (periodEnd != null && OffsetDateTime.now().isBefore(periodEnd)) {
+                    log.info(
+                            "billing.paymongo.subscription canceled-at-period-end userId={} status={} providerSubscriptionId={} periodEnd={}",
+                            userId,
+                            status,
+                            providerSubscriptionId,
+                            periodEnd
+                    );
                     subscriptionService.activatePremiumSubscription(
                             userId,
                             BillingType.SUBSCRIPTION,
@@ -224,11 +272,25 @@ public class PayMongoBillingService implements BillingService {
                     );
                     return;
                 }
+                log.info(
+                        "billing.paymongo.subscription canceled-downgrade userId={} status={} providerSubscriptionId={}",
+                        userId,
+                        status,
+                        providerSubscriptionId
+                );
                 subscriptionService.downgradeToFree(userId);
                 return;
             }
 
             if (isActiveStatus(status)) {
+                log.info(
+                        "billing.paymongo.subscription updated-active userId={} status={} providerSubscriptionId={} periodEnd={} cancelAtPeriodEnd={}",
+                        userId,
+                        status,
+                        providerSubscriptionId,
+                        periodEnd,
+                        cancelAtPeriodEnd
+                );
                 subscriptionService.activatePremiumSubscription(
                         userId,
                         BillingType.SUBSCRIPTION,
@@ -241,6 +303,13 @@ public class PayMongoBillingService implements BillingService {
             }
 
             if (periodEnd != null && OffsetDateTime.now().isBefore(periodEnd)) {
+                log.info(
+                        "billing.paymongo.subscription updated-grace userId={} status={} providerSubscriptionId={} periodEnd={}",
+                        userId,
+                        status,
+                        providerSubscriptionId,
+                        periodEnd
+                );
                 subscriptionService.activatePremiumSubscription(
                         userId,
                         BillingType.SUBSCRIPTION,
@@ -251,6 +320,12 @@ public class PayMongoBillingService implements BillingService {
                 );
                 return;
             }
+            log.info(
+                    "billing.paymongo.subscription updated-downgrade userId={} status={} providerSubscriptionId={}",
+                    userId,
+                    status,
+                    providerSubscriptionId
+            );
             subscriptionService.downgradeToFree(userId);
         }
     }

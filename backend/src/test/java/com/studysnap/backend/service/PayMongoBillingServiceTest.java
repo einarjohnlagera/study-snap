@@ -266,6 +266,69 @@ class PayMongoBillingServiceTest {
     }
 
     @Test
+    void handleWebhook_paymentFailedWithinGracePeriod_keepsPremiumAndMarksFailed() {
+        UUID userId = UUID.randomUUID();
+        UUID transactionId = UUID.randomUUID();
+        PaymentTransactionEntity transaction = new PaymentTransactionEntity();
+        transaction.setId(transactionId);
+        when(paymentTransactionService.createPending(
+                eq(userId),
+                eq(BillingProvider.PAYMONGO),
+                eq(BillingType.SUBSCRIPTION),
+                eq(PlanType.PREMIUM),
+                any(),
+                any(),
+                eq("evt_failed_1")
+        )).thenReturn(Optional.of(transaction));
+
+        PayMongoBillingService service = new PayMongoBillingService(
+                properties,
+                subscriptionService,
+                paymentTransactionService,
+                userRepository,
+                objectMapper
+        );
+        long futurePeriodEnd = OffsetDateTime.now().plusDays(7).toEpochSecond();
+        String payload = """
+                {
+                  "data": {
+                    "id": "evt_failed_1",
+                    "attributes": {
+                      "type": "subscription.invoice.payment_failed",
+                      "data": {
+                        "id": "inv_failed",
+                        "type": "invoice",
+                        "attributes": {
+                          "subscription_id": "sub_failed",
+                          "customer_id": "cus_failed",
+                          "amount_due": 499,
+                          "currency": "USD",
+                          "current_period_end": %s,
+                          "metadata": {
+                            "user_id": "%s"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """.formatted(futurePeriodEnd, userId);
+
+        service.handleWebhook(payload, null);
+
+        verify(subscriptionService).activatePremiumSubscription(
+                eq(userId),
+                eq(BillingType.SUBSCRIPTION),
+                eq(BillingProvider.PAYMONGO),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class),
+                eq(new SubscriptionService.ProviderMetadata("cus_failed", "sub_failed"))
+        );
+        verify(paymentTransactionService).markFailed(transactionId);
+        verify(subscriptionService, never()).downgradeToFree(any());
+    }
+
+    @Test
     void handleWebhook_updatedCancelled_downgradesWithoutTransactionInsert() {
         UUID userId = UUID.randomUUID();
         PayMongoBillingService service = new PayMongoBillingService(
