@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
 import { PageHeader } from "@/components/page-header";
 import {
   copyNote,
@@ -124,6 +125,7 @@ export default function LibraryPage() {
   const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null);
   const [copyingNoteId, setCopyingNoteId] = useState<string | null>(null);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [pendingDeleteNoteId, setPendingDeleteNoteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
@@ -280,22 +282,25 @@ export default function LibraryPage() {
     }
   }, [copyingNoteId, deletingNoteId, router]);
 
-  const handleDelete = useCallback(async (noteId: string) => {
+  const handleRequestDelete = useCallback((noteId: string) => {
     if (copyingNoteId || deletingNoteId) {
       return;
     }
-    const confirmed = window.confirm("Delete this note? This will remove its generated Study Pack data too.");
-    if (!confirmed) {
+    setCardMenuOpenId(null);
+    setPendingDeleteNoteId(noteId);
+  }, [copyingNoteId, deletingNoteId]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (copyingNoteId || deletingNoteId || !pendingDeleteNoteId) {
       return;
     }
-    setDeletingNoteId(noteId);
-    setCardMenuOpenId(null);
+    setDeletingNoteId(pendingDeleteNoteId);
     try {
-      await deleteNote(noteId);
-      setItems((previous) => previous.filter((item) => item.id !== noteId));
+      await deleteNote(pendingDeleteNoteId);
+      setItems((previous) => previous.filter((item) => item.id !== pendingDeleteNoteId));
       setReviewSummaryByNoteId((previous) => {
         const next = { ...previous };
-        delete next[noteId];
+        delete next[pendingDeleteNoteId];
         return next;
       });
       setToast("Note deleted.");
@@ -304,8 +309,9 @@ export default function LibraryPage() {
       setError(message);
     } finally {
       setDeletingNoteId(null);
+      setPendingDeleteNoteId(null);
     }
-  }, [copyingNoteId, deletingNoteId]);
+  }, [copyingNoteId, deletingNoteId, pendingDeleteNoteId]);
 
   const sortedFilteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -631,7 +637,7 @@ export default function LibraryPage() {
                               className="w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                void handleDelete(item.id);
+                                handleRequestDelete(item.id);
                               }}
                               disabled={deletingNoteId === item.id}
                             >
@@ -715,6 +721,22 @@ export default function LibraryPage() {
           {toast}
         </div>
       ) : null}
+      <DeleteConfirmationModal
+        isOpen={Boolean(pendingDeleteNoteId)}
+        title="Delete this note?"
+        message="This will permanently delete this note and all generated Study Pack content. This action cannot be undone."
+        confirmText={deletingNoteId ? "Deleting..." : "Delete note"}
+        onCancel={() => {
+          if (!deletingNoteId) {
+            setPendingDeleteNoteId(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!deletingNoteId) {
+            void handleConfirmDelete();
+          }
+        }}
+      />
     </main>
   );
 }
