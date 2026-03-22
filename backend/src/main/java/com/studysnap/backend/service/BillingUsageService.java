@@ -26,30 +26,30 @@ public class BillingUsageService {
     private final ActivityEventRepository activityEventRepository;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
+    private final BillingUsagePeriodService billingUsagePeriodService;
 
     public BillingUsageSummaryResponse getMonthlyUsageSummary(UUID userId) {
         PlanType planType = subscriptionService.resolvePlan(userId);
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
-        OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, now);
 
         int studyPacksUsedFromStudyPacks = (int) studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
-                monthStart,
-                nextMonthStart
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd()
         );
         int challengeQuizUsedFromSessions = (int) quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 QuickReviewSessionMode.CHALLENGE,
-                monthStart,
-                nextMonthStart
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd()
         );
         int adaptivePracticeUsedFromEvents = (int) activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 ActivityType.STARTED_ADAPTIVE_PRACTICE,
-                monthStart,
-                nextMonthStart
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd()
         );
         UserUsageService.MonthlyUsage monthlyUsage = userUsageService.getMonthlyUsage(userId, now);
         int studyPacksUsed = Math.max(studyPacksUsedFromStudyPacks, monthlyUsage.studyPackGenerations());

@@ -68,6 +68,7 @@ public class StudyPackService {
     private final ActivityTrackingService activityTrackingService;
     private final SubscriptionService subscriptionService;
     private final UserUsageService userUsageService;
+    private final BillingUsagePeriodService billingUsagePeriodService;
     private final OcrRateLimitService ocrRateLimitService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
@@ -684,13 +685,12 @@ public class StudyPackService {
         PlanType planType = subscriptionService.resolvePlan(ownerUserId);
 
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
-        OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(ownerUserId, now);
 
         long usedFromStudyPacks = studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 ownerUserId,
-                monthStart,
-                nextMonthStart
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd()
         );
         long usedFromUsage = userUsageService.getMonthlyUsage(ownerUserId, now).studyPackGenerations();
         long usedThisMonth = Math.max(usedFromStudyPacks, usedFromUsage);
@@ -715,9 +715,9 @@ public class StudyPackService {
 
     private String resolveQuotaReachedMessage(PlanType planType, int limit) {
         if (planType == PlanType.PREMIUM) {
-            return "You have reached your monthly Study Pack limit (" + limit + "). Please try again next month.";
+            return "You have reached your Study Pack limit for the current billing period (" + limit + ").";
         }
-        return "You have reached your monthly Free plan limit (" + limit + " Study Packs). Upgrade to Premium for more monthly Study Packs.";
+        return "You have reached your Free plan limit for the current billing period (" + limit + " Study Packs). Upgrade to Premium for higher limits.";
     }
 
     private void markNoteGenerated(UUID noteId, NoteEntity cachedNote) {

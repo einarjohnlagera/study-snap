@@ -95,6 +95,8 @@ studysnap:
       webhook-secret: ${PAYMONGO_WEBHOOK_SECRET:}
       monthly-plan-id: ${PAYMONGO_MONTHLY_PLAN_ID:}
       yearly-plan-id: ${PAYMONGO_YEARLY_PLAN_ID:}
+      monthly-amount: ${PAYMONGO_MONTHLY_AMOUNT:4.99}
+      yearly-amount: ${PAYMONGO_YEARLY_AMOUNT:39.99}
       checkout-success-url: ${PAYMONGO_CHECKOUT_SUCCESS_URL:http://localhost:3000/settings?checkout=success}
       checkout-cancel-url: ${PAYMONGO_CHECKOUT_CANCEL_URL:http://localhost:3000/settings?checkout=cancel}
   email:

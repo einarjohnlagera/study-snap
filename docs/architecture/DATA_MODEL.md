@@ -193,6 +193,15 @@ Possible schemas:
 - `usage_daily` (counter style)
 - `usage_events` (analytics-ready event style)
 
+Current implementation notes:
+
+- `user_usage` is period-based:
+  - includes `period_start` and `period_end`
+  - counters are incremented against the resolved active billing window
+- `webhook_events` stores provider webhook idempotency state:
+  - `provider`, `event_id`, `event_type`, `status`, timestamps
+  - unique `(provider, event_id)` prevents duplicate processing
+
 ## Refresh Tokens
 
 Purpose:

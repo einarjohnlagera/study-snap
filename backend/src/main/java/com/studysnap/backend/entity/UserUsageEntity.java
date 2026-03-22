@@ -29,6 +29,12 @@ public class UserUsageEntity {
     @Column(nullable = false)
     private Integer year;
 
+    @Column(name = "period_start", nullable = false)
+    private OffsetDateTime periodStart;
+
+    @Column(name = "period_end", nullable = false)
+    private OffsetDateTime periodEnd;
+
     @Column(name = "study_pack_generations", nullable = false)
     private Integer studyPackGenerations;
 

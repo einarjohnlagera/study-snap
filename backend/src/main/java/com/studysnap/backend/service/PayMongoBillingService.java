@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.WebhookEventEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ public class PayMongoBillingService implements BillingService {
     private final StudySnapProperties properties;
     private final SubscriptionService subscriptionService;
     private final PaymentTransactionService paymentTransactionService;
+    private final WebhookEventService webhookEventService;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -127,10 +129,21 @@ public class PayMongoBillingService implements BillingService {
 
         JsonNode eventResource = resolveEventResource(event);
         String providerReferenceId = resolveProviderReferenceId(event, payload, eventType, eventResource);
+        Optional<WebhookEventEntity> reservedWebhookEvent = webhookEventService.reserveEvent(
+                PAYMONGO_PROVIDER,
+                providerReferenceId,
+                eventType
+        );
+        if (reservedWebhookEvent.isEmpty()) {
+            log.info("billing.paymongo.webhook duplicate eventId={} eventType={}", providerReferenceId, eventType);
+            return new SimpleMessageResponse("Received.");
+        }
+
         String providerSubscriptionId = resolveProviderSubscriptionId(eventResource);
         String providerCustomerId = resolveProviderCustomerId(eventResource);
         UUID targetUserId = resolveTargetUserId(eventResource).orElse(null);
         if (targetUserId == null) {
+            webhookEventService.markProcessed(reservedWebhookEvent.get().getId());
             log.warn(
                     "billing.paymongo.webhook ignored unresolved user eventType={} providerReferenceId={} providerSubscriptionId={} providerCustomerId={}",
                     eventType,
@@ -162,6 +175,7 @@ public class PayMongoBillingService implements BillingService {
                     providerReferenceId
             );
             if (pendingTransaction.isEmpty()) {
+                webhookEventService.markProcessed(reservedWebhookEvent.get().getId());
                 log.info("billing.paymongo.webhook duplicate ignored providerReferenceId={} eventType={}", providerReferenceId, eventType);
                 return new SimpleMessageResponse("Received.");
             }
@@ -176,8 +190,10 @@ public class PayMongoBillingService implements BillingService {
                     paymentTransactionService.markSuccess(transaction.getId());
                 }
             });
+            webhookEventService.markProcessed(reservedWebhookEvent.get().getId());
         } catch (RuntimeException ex) {
             pendingTransaction.ifPresent(transaction -> paymentTransactionService.markFailed(transaction.getId()));
+            webhookEventService.markFailed(reservedWebhookEvent.get().getId());
             throw ex;
         }
 

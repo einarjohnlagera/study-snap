@@ -182,6 +182,28 @@ public class SubscriptionService {
         return subscriptionRepository.save(target);
     }
 
+    public void expireSubscriptionAndDowngradeToFree(UUID subscriptionId) {
+        SubscriptionEntity subscription = subscriptionRepository.findById(subscriptionId).orElse(null);
+        if (subscription == null) {
+            return;
+        }
+
+        if (subscription.getPlanType() != PlanType.PREMIUM || subscription.getStatus() != SubscriptionStatus.ACTIVE) {
+            return;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        if (subscription.getEndAt() == null || !subscription.getEndAt().isBefore(now)) {
+            return;
+        }
+
+        subscription.setStatus(SubscriptionStatus.EXPIRED);
+        subscription.setUpdatedAt(now);
+        subscriptionRepository.save(subscription);
+
+        createDefaultFreeSubscription(subscription.getUser());
+    }
+
     @Transactional(readOnly = true)
     public Optional<UUID> findUserIdByProviderCustomerId(BillingProvider provider, String providerCustomerIdRaw) {
         return findUserIdByProviderReference(

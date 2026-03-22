@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.WebhookEventEntity;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,8 @@ class PayMongoBillingServiceTest {
     private SubscriptionService subscriptionService;
     @Mock
     private PaymentTransactionService paymentTransactionService;
+    @Mock
+    private WebhookEventService webhookEventService;
     @Mock
     private UserRepository userRepository;
 
@@ -75,6 +78,7 @@ class PayMongoBillingServiceTest {
                 properties,
                 subscriptionService,
                 paymentTransactionService,
+                webhookEventService,
                 userRepository,
                 objectMapper
         ));
@@ -118,9 +122,14 @@ class PayMongoBillingServiceTest {
                 properties,
                 subscriptionService,
                 paymentTransactionService,
+                webhookEventService,
                 userRepository,
                 objectMapper
         );
+        WebhookEventEntity webhookEvent = new WebhookEventEntity();
+        webhookEvent.setId(UUID.randomUUID());
+        when(webhookEventService.reserveEvent(eq(BillingProvider.PAYMONGO), eq("evt_activated_1"), eq("subscription.activated")))
+                .thenReturn(Optional.of(webhookEvent));
         String payload = """
                 {
                   "data": {
@@ -178,9 +187,14 @@ class PayMongoBillingServiceTest {
                 properties,
                 subscriptionService,
                 paymentTransactionService,
+                webhookEventService,
                 userRepository,
                 objectMapper
         );
+        WebhookEventEntity webhookEvent = new WebhookEventEntity();
+        webhookEvent.setId(UUID.randomUUID());
+        when(webhookEventService.reserveEvent(eq(BillingProvider.PAYMONGO), eq("evt_paid_1"), eq("subscription.invoice.paid")))
+                .thenReturn(Optional.of(webhookEvent));
         String payload = """
                 {
                   "data": {
@@ -214,6 +228,51 @@ class PayMongoBillingServiceTest {
     }
 
     @Test
+    void handleWebhook_duplicateByWebhookEventStore_doesNotReprocess() {
+        UUID userId = UUID.randomUUID();
+        when(webhookEventService.reserveEvent(eq(BillingProvider.PAYMONGO), eq("evt_paid_2"), eq("subscription.invoice.paid")))
+                .thenReturn(Optional.empty());
+
+        PayMongoBillingService service = new PayMongoBillingService(
+                properties,
+                subscriptionService,
+                paymentTransactionService,
+                webhookEventService,
+                userRepository,
+                objectMapper
+        );
+        String payload = """
+                {
+                  "data": {
+                    "id": "evt_paid_2",
+                    "attributes": {
+                      "type": "subscription.invoice.paid",
+                      "data": {
+                        "id": "inv_999",
+                        "type": "invoice",
+                        "attributes": {
+                          "subscription_id": "sub_999",
+                          "customer_id": "cus_999",
+                          "amount_paid": 499,
+                          "currency": "USD",
+                          "metadata": {
+                            "user_id": "%s"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """.formatted(userId);
+
+        SimpleMessageResponse response = service.handleWebhook(payload, null);
+
+        assertThat(response.message()).isEqualTo("Received.");
+        verify(paymentTransactionService, never()).createPending(any(), any(), any(), any(), any(), any(), any());
+        verify(subscriptionService, never()).activatePremiumSubscription(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void handleWebhook_unpaidWithoutGracePeriod_downgradesAndMarksFailed() {
         UUID userId = UUID.randomUUID();
         UUID transactionId = UUID.randomUUID();
@@ -233,9 +292,14 @@ class PayMongoBillingServiceTest {
                 properties,
                 subscriptionService,
                 paymentTransactionService,
+                webhookEventService,
                 userRepository,
                 objectMapper
         );
+        WebhookEventEntity webhookEvent = new WebhookEventEntity();
+        webhookEvent.setId(UUID.randomUUID());
+        when(webhookEventService.reserveEvent(eq(BillingProvider.PAYMONGO), eq("evt_unpaid_1"), eq("subscription.unpaid")))
+                .thenReturn(Optional.of(webhookEvent));
         String payload = """
                 {
                   "data": {
@@ -285,9 +349,14 @@ class PayMongoBillingServiceTest {
                 properties,
                 subscriptionService,
                 paymentTransactionService,
+                webhookEventService,
                 userRepository,
                 objectMapper
         );
+        WebhookEventEntity webhookEvent = new WebhookEventEntity();
+        webhookEvent.setId(UUID.randomUUID());
+        when(webhookEventService.reserveEvent(eq(BillingProvider.PAYMONGO), eq("evt_failed_1"), eq("subscription.invoice.payment_failed")))
+                .thenReturn(Optional.of(webhookEvent));
         long futurePeriodEnd = OffsetDateTime.now().plusDays(7).toEpochSecond();
         String payload = """
                 {
@@ -335,9 +404,14 @@ class PayMongoBillingServiceTest {
                 properties,
                 subscriptionService,
                 paymentTransactionService,
+                webhookEventService,
                 userRepository,
                 objectMapper
         );
+        WebhookEventEntity webhookEvent = new WebhookEventEntity();
+        webhookEvent.setId(UUID.randomUUID());
+        when(webhookEventService.reserveEvent(eq(BillingProvider.PAYMONGO), eq("evt_updated_1"), eq("subscription.updated")))
+                .thenReturn(Optional.of(webhookEvent));
         String payload = """
                 {
                   "data": {

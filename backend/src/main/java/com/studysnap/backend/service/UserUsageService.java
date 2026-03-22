@@ -13,17 +13,33 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserUsageService {
     private final UserUsageRepository userUsageRepository;
+    private final BillingUsagePeriodService billingUsagePeriodService;
 
     @Transactional(readOnly = true)
     public MonthlyUsage getMonthlyUsage(UUID userId, OffsetDateTime referenceTime) {
-        MonthKey monthKey = MonthKey.from(referenceTime);
-        return userUsageRepository.findByUserIdAndYearAndMonth(userId, monthKey.year(), monthKey.month())
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, referenceTime);
+        return userUsageRepository.findByUserIdAndPeriodStart(userId, usagePeriod.periodStart())
                 .map(usage -> new MonthlyUsage(
                         usage.getStudyPackGenerations(),
                         usage.getChallengeQuizGenerations(),
                         usage.getAdaptiveQuizGenerations()
                 ))
                 .orElse(MonthlyUsage.zero());
+    }
+
+    public void ensureUsagePeriod(UUID userId, OffsetDateTime referenceTime) {
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, referenceTime);
+        userUsageRepository.incrementUsage(
+                userId,
+                usagePeriod.year(),
+                usagePeriod.month(),
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd(),
+                0,
+                0,
+                0,
+                OffsetDateTime.now(ZoneOffset.UTC)
+        );
     }
 
     public void incrementStudyPackGeneration(UUID userId, OffsetDateTime occurredAt) {
@@ -45,11 +61,13 @@ public class UserUsageService {
             int challengeDelta,
             int adaptiveDelta
     ) {
-        MonthKey monthKey = MonthKey.from(occurredAt);
+        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, occurredAt);
         userUsageRepository.incrementUsage(
                 userId,
-                monthKey.year(),
-                monthKey.month(),
+                usagePeriod.year(),
+                usagePeriod.month(),
+                usagePeriod.periodStart(),
+                usagePeriod.periodEnd(),
                 studyPackDelta,
                 challengeDelta,
                 adaptiveDelta,
@@ -64,13 +82,6 @@ public class UserUsageService {
     ) {
         public static MonthlyUsage zero() {
             return new MonthlyUsage(0, 0, 0);
-        }
-    }
-
-    private record MonthKey(int year, int month) {
-        private static MonthKey from(OffsetDateTime referenceTime) {
-            OffsetDateTime utcTime = referenceTime == null ? OffsetDateTime.now(ZoneOffset.UTC) : referenceTime.withOffsetSameInstant(ZoneOffset.UTC);
-            return new MonthKey(utcTime.getYear(), utcTime.getMonthValue());
         }
     }
 }

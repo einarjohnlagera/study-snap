@@ -5,6 +5,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.math.BigDecimal;
+
 @ConfigurationProperties(prefix = "studysnap")
 @Getter
 public class StudySnapProperties {
@@ -113,6 +115,8 @@ public class StudySnapProperties {
         private String webhookSecret = "";
         private String monthlyPlanId = "";
         private String yearlyPlanId = "";
+        private BigDecimal monthlyAmount = new BigDecimal("4.99");
+        private BigDecimal yearlyAmount = new BigDecimal("39.99");
         private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
         private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
     }
