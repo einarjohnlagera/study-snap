@@ -69,6 +69,7 @@ export default function SettingsPage() {
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [selectedBillingCycle, setSelectedBillingCycle] = useState<BillingCycle>("MONTHLY");
   const [planMessage, setPlanMessage] = useState<string | null>(null);
+  const [checkoutReturnState, setCheckoutReturnState] = useState<"none" | "success" | "processing" | "cancel" | "failed">("none");
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [savingEngagementMode, setSavingEngagementMode] = useState(false);
   const [engagementModeMessage, setEngagementModeMessage] = useState<string | null>(null);
@@ -109,19 +110,64 @@ export default function SettingsPage() {
     const params = new URLSearchParams(window.location.search);
     const checkoutStatus = params.get("checkout");
     if (checkoutStatus === "success") {
+      setCheckoutReturnState("success");
       setPlanMessage("Payment submitted. Premium will be activated once PayMongo confirms your subscription.");
       return;
     }
     if (checkoutStatus === "processing") {
+      setCheckoutReturnState("processing");
       setPlanMessage("Subscription is processing. We will refresh your plan once payment is confirmed.");
       return;
     }
     if (checkoutStatus === "cancel") {
+      setCheckoutReturnState("cancel");
       setPlanMessage("Checkout canceled. Your plan remains unchanged.");
       return;
     }
+    if (checkoutStatus === "failed") {
+      setCheckoutReturnState("failed");
+      setPlanMessage("Payment was not completed. Your plan remains unchanged.");
+      return;
+    }
+    setCheckoutReturnState("none");
     setPlanMessage(null);
   }, []);
+
+  useEffect(() => {
+    if ((checkoutReturnState !== "success" && checkoutReturnState !== "processing") || profile?.planType === "PREMIUM") {
+      return;
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 8;
+
+    const pollProfileUntilPremium = async () => {
+      while (!cancelled && attempts < maxAttempts) {
+        attempts += 1;
+        try {
+          const [me, usage] = await Promise.all([getMe(), getBillingUsageSummary()]);
+          if (cancelled) {
+            return;
+          }
+          setProfile(me);
+          setUsageSummary(usage);
+          if (me.planType === "PREMIUM") {
+            setPlanMessage("Premium is now active.");
+            return;
+          }
+        } catch {
+          // Keep existing UI state and continue polling.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+    };
+
+    void pollProfileUntilPremium();
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutReturnState, profile?.planType]);
 
   const isEmailVerified = Boolean(profile?.emailVerifiedAt);
 
