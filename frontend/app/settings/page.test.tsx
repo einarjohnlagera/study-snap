@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import SettingsPage from "./page";
 import {
   cancelPremiumSubscription,
+  getBillingPricing,
   getBillingHistory,
   getBillingUsageSummary,
   getMe,
@@ -27,6 +28,7 @@ jest.mock("@/lib/route-guards", () => ({
 jest.mock("@/lib/api", () => ({
   cancelPremiumSubscription: jest.fn(),
   createPremiumCheckoutSession: jest.fn(),
+  getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
   getBillingUsageSummary: jest.fn(),
   getMe: jest.fn(),
@@ -69,6 +71,7 @@ describe("Settings page cancellation flow", () => {
     (getMe as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockReset();
     (getBillingHistory as jest.Mock).mockReset();
+    (getBillingPricing as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
 
     (getMe as jest.Mock).mockResolvedValue(premiumProfile);
@@ -84,6 +87,15 @@ describe("Settings page cancellation flow", () => {
       currentPeriodEnd: "2026-04-01T00:00:00Z",
     });
     (getBillingHistory as jest.Mock).mockResolvedValue([]);
+    (getBillingPricing as jest.Mock).mockResolvedValue({
+      region: "PH",
+      currency: "PHP",
+      monthlyPrice: 249,
+      yearlyPrice: 1999,
+      introMonthlyPrice: 199,
+      hasIntroPromo: true,
+      introEligible: true,
+    });
   });
 
   it("opens the cancellation confirmation modal from Settings", async () => {

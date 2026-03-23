@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
 import {
+  getBillingPricing,
   getBillingUsageSummary,
   getChallengeQuizPerformanceSummary,
   getNote,
@@ -39,6 +40,7 @@ jest.mock("@/lib/api", () => ({
   copyNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
+  getBillingPricing: jest.fn(),
   getBillingUsageSummary: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
   getMyStudyPack: jest.fn(),
@@ -81,6 +83,7 @@ describe("PrivateNoteDetailPageClient", () => {
     replaceMock.mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (getBillingPricing as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
@@ -108,6 +111,15 @@ describe("PrivateNoteDetailPageClient", () => {
       lastCompletedAt: "2026-03-21T10:30:00Z",
       latestPerformanceLevel: "Good",
       latestWeakConcepts: ["Cells"],
+    });
+    (getBillingPricing as jest.Mock).mockResolvedValue({
+      region: "PH",
+      currency: "PHP",
+      monthlyPrice: 249,
+      yearlyPrice: 1999,
+      introMonthlyPrice: 199,
+      hasIntroPromo: true,
+      introEligible: true,
     });
   });
 
@@ -198,6 +210,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz (Premium)" }));
 
     expect(await screen.findByText("Unlock Exam Mode")).toBeInTheDocument();
+    expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalledWith("/settings#plan-billing");
 
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));

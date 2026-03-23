@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import {
   cancelPremiumSubscription,
   createPremiumCheckoutSession,
+  getBillingPricing,
   getBillingHistory,
   getBillingUsageSummary,
   getMe,
@@ -17,6 +18,7 @@ import {
   updateEngagementMode,
   type BillingCycle,
   type BillingHistoryItemResponse,
+  type BillingPricingResponse,
   type BillingUsageSummaryResponse,
   type CancelPremiumSubscriptionRequest,
   type EngagementMode,
@@ -24,6 +26,7 @@ import {
   type SubscriptionCancellationReason,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
   PLAN_BILLING_SECTION_ID,
@@ -85,6 +88,7 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [usageSummary, setUsageSummary] = useState<BillingUsageSummaryResponse | null>(null);
   const [billingHistory, setBillingHistory] = useState<BillingHistoryItemResponse[]>([]);
+  const [billingPricing, setBillingPricing] = useState<BillingPricingResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [selectedBillingCycle, setSelectedBillingCycle] = useState<BillingCycle>("MONTHLY");
@@ -109,14 +113,16 @@ export default function SettingsPage() {
     setError(null);
     setEngagementModeMessage(null);
     try {
-      const [me, usage, history] = await Promise.all([
+      const [me, usage, history, pricing] = await Promise.all([
         getMe(),
         getBillingUsageSummary(),
         getBillingHistory(),
+        getBillingPricing().catch(() => null),
       ]);
       setProfile(me);
       setUsageSummary(usage);
       setBillingHistory(history);
+      setBillingPricing(pricing);
       setSelectedEngagementMode(me.engagementMode);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
@@ -124,6 +130,7 @@ export default function SettingsPage() {
       setProfile(null);
       setUsageSummary(null);
       setBillingHistory([]);
+      setBillingPricing(null);
     } finally {
       setLoading(false);
     }
@@ -302,8 +309,8 @@ export default function SettingsPage() {
   const adaptivePracticeUsed = usageSummary?.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.adaptivePracticeLimit ?? 50;
   const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
-  const monthlyPriceLabel = "USD 4.99 / month";
-  const yearlyPriceLabel = "USD 39.99 / year";
+  const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
+  const yearlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
 
   const formatBillingDate = (rawDate: string | null) => {
     if (!rawDate) {
@@ -400,6 +407,11 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing Cycle</p>
+                    {billingPricing ? (
+                      <p className="text-xs text-foreground/60">
+                        Regional pricing: {billingPricing.region} · {billingPricing.currency}
+                      </p>
+                    ) : null}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <button
                         type="button"

@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.WebhookEventEntity;
 import com.studysnap.backend.repository.UserRepository;
@@ -44,6 +45,8 @@ class PayMongoBillingServiceTest {
     @Mock
     private WebhookEventService webhookEventService;
     @Mock
+    private PricingService pricingService;
+    @Mock
     private UserRepository userRepository;
 
     private ObjectMapper objectMapper;
@@ -55,8 +58,6 @@ class PayMongoBillingServiceTest {
         properties = new StudySnapProperties();
         properties.getBilling().setProvider(BillingProvider.PAYMONGO);
         properties.getBilling().getPaymongo().setSecretKey("sk_test_123");
-        properties.getBilling().getPaymongo().setMonthlyPlanId("plan_monthly");
-        properties.getBilling().getPaymongo().setYearlyPlanId("plan_yearly");
         properties.getBilling().getPaymongo().setCheckoutSuccessUrl("https://app.notelib.test/settings?checkout=success");
         properties.getBilling().getPaymongo().setCheckoutCancelUrl("https://app.notelib.test/settings?checkout=cancel");
     }
@@ -74,12 +75,24 @@ class PayMongoBillingServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(subscriptionService.ensureProviderCustomerId(eq(user), eq(BillingProvider.PAYMONGO), any()))
                 .thenReturn("cus_existing");
+        when(pricingService.resolveCheckoutSelection(userId, BillingCycle.YEARLY, "SAVE10", "PH"))
+                .thenReturn(new PricingService.CheckoutSelection(
+                        "PH",
+                        "PH",
+                        "PHP",
+                        BillingCycle.YEARLY,
+                        "plan_ph_yearly",
+                        UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        "SAVE10",
+                        new java.math.BigDecimal("1799.00")
+                ));
 
         PayMongoBillingService service = spy(new PayMongoBillingService(
                 properties,
                 subscriptionService,
                 paymentTransactionService,
                 webhookEventService,
+                pricingService,
                 userRepository,
                 objectMapper
         ));
@@ -95,12 +108,19 @@ class PayMongoBillingServiceTest {
                 """);
         doReturn(subscriptionResponse).when(service).payMongoPostJson(eq("/subscriptions"), any(JsonNode.class));
 
-        BillingCheckoutSessionResponse response = service.createPremiumCheckoutSession(userId, BillingCycle.YEARLY);
+        BillingCheckoutSessionResponse response = service.createPremiumCheckoutSession(
+                userId,
+                BillingCycle.YEARLY,
+                "SAVE10",
+                "PH"
+        );
 
         assertThat(response.checkoutUrl()).isEqualTo("https://checkout.paymongo.test/sub_123");
         ArgumentCaptor<JsonNode> payloadCaptor = ArgumentCaptor.forClass(JsonNode.class);
         verify(service).payMongoPostJson(eq("/subscriptions"), payloadCaptor.capture());
-        assertThat(payloadCaptor.getValue().at("/data/attributes/plan").asText()).isEqualTo("plan_yearly");
+        assertThat(payloadCaptor.getValue().at("/data/attributes/plan").asText()).isEqualTo("plan_ph_yearly");
+        assertThat(payloadCaptor.getValue().at("/data/attributes/metadata/pricing_region").asText()).isEqualTo("PH");
+        assertThat(payloadCaptor.getValue().at("/data/attributes/metadata/voucher_code").asText()).isEqualTo("SAVE10");
     }
 
     @Test
@@ -109,6 +129,8 @@ class PayMongoBillingServiceTest {
         UUID transactionId = UUID.randomUUID();
         PaymentTransactionEntity transaction = new PaymentTransactionEntity();
         transaction.setId(transactionId);
+        SubscriptionEntity activatedSubscription = new SubscriptionEntity();
+        activatedSubscription.setId(UUID.randomUUID());
         when(paymentTransactionService.createPending(
                 eq(userId),
                 eq(BillingProvider.PAYMONGO),
@@ -124,6 +146,7 @@ class PayMongoBillingServiceTest {
                 subscriptionService,
                 paymentTransactionService,
                 webhookEventService,
+                pricingService,
                 userRepository,
                 objectMapper
         );
@@ -156,6 +179,16 @@ class PayMongoBillingServiceTest {
                 }
                 """.formatted(userId);
 
+        when(subscriptionService.activatePremiumSubscription(
+                eq(userId),
+                eq(BillingType.SUBSCRIPTION),
+                eq(BillingProvider.PAYMONGO),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class),
+                eq(false),
+                eq(new SubscriptionService.ProviderMetadata("cus_abc", "sub_abc"))
+        )).thenReturn(activatedSubscription);
+
         SimpleMessageResponse response = service.handleWebhook(payload, null);
 
         assertThat(response.message()).isEqualTo("Received.");
@@ -170,6 +203,7 @@ class PayMongoBillingServiceTest {
         );
         verify(paymentTransactionService).markSuccess(transactionId);
         verify(paymentTransactionService, never()).markFailed(transactionId);
+        verify(pricingService).recordVoucherRedemption(null, userId, activatedSubscription, transaction);
     }
 
     @Test
@@ -190,6 +224,7 @@ class PayMongoBillingServiceTest {
                 subscriptionService,
                 paymentTransactionService,
                 webhookEventService,
+                pricingService,
                 userRepository,
                 objectMapper
         );
@@ -240,6 +275,7 @@ class PayMongoBillingServiceTest {
                 subscriptionService,
                 paymentTransactionService,
                 webhookEventService,
+                pricingService,
                 userRepository,
                 objectMapper
         );
@@ -295,6 +331,7 @@ class PayMongoBillingServiceTest {
                 subscriptionService,
                 paymentTransactionService,
                 webhookEventService,
+                pricingService,
                 userRepository,
                 objectMapper
         );
@@ -337,6 +374,8 @@ class PayMongoBillingServiceTest {
         UUID transactionId = UUID.randomUUID();
         PaymentTransactionEntity transaction = new PaymentTransactionEntity();
         transaction.setId(transactionId);
+        SubscriptionEntity gracePeriodSubscription = new SubscriptionEntity();
+        gracePeriodSubscription.setId(UUID.randomUUID());
         when(paymentTransactionService.createPending(
                 eq(userId),
                 eq(BillingProvider.PAYMONGO),
@@ -352,6 +391,7 @@ class PayMongoBillingServiceTest {
                 subscriptionService,
                 paymentTransactionService,
                 webhookEventService,
+                pricingService,
                 userRepository,
                 objectMapper
         );
@@ -385,6 +425,16 @@ class PayMongoBillingServiceTest {
                 }
                 """.formatted(futurePeriodEnd, userId);
 
+        when(subscriptionService.activatePremiumSubscription(
+                eq(userId),
+                eq(BillingType.SUBSCRIPTION),
+                eq(BillingProvider.PAYMONGO),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class),
+                eq(false),
+                eq(new SubscriptionService.ProviderMetadata("cus_failed", "sub_failed"))
+        )).thenReturn(gracePeriodSubscription);
+
         service.handleWebhook(payload, null);
 
         verify(subscriptionService).activatePremiumSubscription(
@@ -398,6 +448,7 @@ class PayMongoBillingServiceTest {
         );
         verify(paymentTransactionService).markFailed(transactionId);
         verify(subscriptionService, never()).downgradeToFree(any());
+        verify(pricingService).recordVoucherRedemption(null, userId, gracePeriodSubscription, transaction);
     }
 
     @Test
@@ -408,6 +459,7 @@ class PayMongoBillingServiceTest {
                 subscriptionService,
                 paymentTransactionService,
                 webhookEventService,
+                pricingService,
                 userRepository,
                 objectMapper
         );

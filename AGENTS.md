@@ -48,6 +48,13 @@ Core loop:
 - `Upgrade to Premium` may navigate to `Settings` billing only after explicit user confirmation in that modal.
 - At `80%` of the Free Study Pack limit, show a non-blocking upgrade banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 
+### Pricing Rule
+
+- Backend owns subscription pricing, region detection, voucher eligibility, and PayMongo plan selection.
+- Frontend must use the billing pricing API for pricing display in Settings, pricing surfaces, and upgrade prompts.
+- Do not hardcode Premium prices in frontend code.
+- Intro pricing and first-time promos must be implemented through the voucher/promotion system, not as a boolean on `User`.
+
 ### Library Rule
 
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
@@ -236,9 +243,11 @@ Rules:
 ## Billing Provider (Current)
 
 - Active billing provider is `PAYMONGO` (provider-agnostic billing interface remains in place).
-- Premium recurring plans:
-  - `MONTHLY` (configured externally with `PAYMONGO_MONTHLY_PLAN_ID`)
-  - `YEARLY` (configured externally with `PAYMONGO_YEARLY_PLAN_ID`)
+- Premium recurring plans are selected by backend from region pricing config, not from frontend assumptions.
+- Regional pricing is resolved from `CF-IPCountry` and mapped into pricing regions.
+- Region pricing config contains localized currency/amounts plus standard and optional intro PayMongo plan IDs.
+- Voucher/promotion rules decide whether checkout should use an intro plan ID or a standard plan ID.
+- Intro/first-time subscriber discounts must flow through voucher eligibility and voucher redemption records.
 - Webhook lifecycle is the source of truth for subscription state:
   - `subscription.activated`
   - `subscription.invoice.paid`

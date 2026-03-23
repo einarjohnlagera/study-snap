@@ -9,6 +9,7 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
+import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 
@@ -327,41 +328,7 @@ export default function Home() {
 
       <FeatureHighlightsSection />
       <ProductPreviewSection />
-
-      <section className="space-y-4">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Pricing
-          </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Start free. Upgrade when you need more.</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h3 className="text-xl font-semibold">Free</h3>
-            <ul className="space-y-1 text-sm text-foreground/80">
-              <li>5 Study Packs/month</li>
-              <li>AI summaries</li>
-              <li>Key concepts</li>
-              <li>Quick Review</li>
-              <li>Retry incorrect answers</li>
-              <li>My Library</li>
-              <li>Today&apos;s Focus</li>
-              <li>AI Study Coach</li>
-            </ul>
-          </Card>
-          <Card className="space-y-3 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
-            <h3 className="text-xl font-semibold">Premium</h3>
-            <p className="text-sm text-foreground/75">Everything in Free plus:</p>
-            <ul className="space-y-1 text-sm text-foreground/80">
-              <li>100 Study Packs/month</li>
-              <li>Challenge Quiz (50/month)</li>
-              <li>Adaptive Practice (50/month)</li>
-              <li>Weak concept insights</li>
-              <li>Advanced review tools</li>
-            </ul>
-          </Card>
-        </div>
-      </section>
+      <PricingPlansSection />
 
       <section className="rounded-2xl border border-border bg-gray-50 p-6 text-center shadow-sm dark:bg-gray-950/40 sm:p-10">
         <div className="mx-auto max-w-2xl space-y-4">

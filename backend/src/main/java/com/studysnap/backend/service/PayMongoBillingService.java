@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.WebhookEventEntity;
 import com.studysnap.backend.exception.AppException;
@@ -61,6 +62,7 @@ public class PayMongoBillingService implements BillingService {
     private final SubscriptionService subscriptionService;
     private final PaymentTransactionService paymentTransactionService;
     private final WebhookEventService webhookEventService;
+    private final PricingService pricingService;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newHttpClient();
@@ -73,7 +75,12 @@ public class PayMongoBillingService implements BillingService {
     }
 
     @Override
-    public BillingCheckoutSessionResponse createPremiumCheckoutSession(UUID userId, BillingCycle billingCycle) {
+    public BillingCheckoutSessionResponse createPremiumCheckoutSession(
+            UUID userId,
+            BillingCycle billingCycle,
+            String voucherCode,
+            String cfIpCountry
+    ) {
         ensureCheckoutConfigured();
 
         UserEntity user = userRepository.findById(userId)
@@ -91,18 +98,37 @@ public class PayMongoBillingService implements BillingService {
                 PAYMONGO_PROVIDER,
                 () -> createPayMongoCustomer(user)
         );
-        String planId = resolvePlanId(billingCycle);
+        PricingService.CheckoutSelection checkoutSelection = pricingService.resolveCheckoutSelection(
+                userId,
+                billingCycle,
+                voucherCode,
+                cfIpCountry
+        );
 
         ObjectNode root = objectMapper.createObjectNode();
         ObjectNode data = root.putObject("data");
         ObjectNode attributes = data.putObject("attributes");
         attributes.put("customer", customerId);
-        attributes.put("plan", planId);
+        attributes.put("plan", checkoutSelection.planId());
         attributes.put("return_url", properties.getBilling().getPaymongo().getCheckoutSuccessUrl());
         attributes.put("cancel_url", properties.getBilling().getPaymongo().getCheckoutCancelUrl());
         ObjectNode metadata = attributes.putObject("metadata");
         metadata.put("user_id", user.getId().toString());
-        metadata.put("billing_cycle", normalizeCycle(billingCycle).name());
+        metadata.put("billing_cycle", checkoutSelection.billingCycle().name());
+        metadata.put("pricing_region", checkoutSelection.region());
+        metadata.put("pricing_currency", checkoutSelection.currency());
+        if (checkoutSelection.countryCode() != null) {
+            metadata.put("country_code", checkoutSelection.countryCode());
+        }
+        if (checkoutSelection.voucherId() != null) {
+            metadata.put("voucher_id", checkoutSelection.voucherId().toString());
+        }
+        if (checkoutSelection.voucherCode() != null) {
+            metadata.put("voucher_code", checkoutSelection.voucherCode());
+        }
+        if (checkoutSelection.effectivePrice() != null) {
+            metadata.put("effective_price", checkoutSelection.effectivePrice().toPlainString());
+        }
 
         JsonNode response = payMongoPostJson("/subscriptions", root);
         JsonNode subscriptionObject = response.path("data");
@@ -192,7 +218,7 @@ public class PayMongoBillingService implements BillingService {
         }
 
         try {
-            applyPayMongoEvent(eventType, eventResource, targetUserId);
+            SubscriptionEntity activatedSubscription = applyPayMongoEvent(eventType, eventResource, targetUserId);
             pendingTransaction.ifPresent(transaction -> {
                 if (isFailureEvent(eventType)) {
                     paymentTransactionService.markFailed(transaction.getId());
@@ -200,6 +226,14 @@ public class PayMongoBillingService implements BillingService {
                     paymentTransactionService.markSuccess(transaction.getId());
                 }
             });
+            if (activatedSubscription != null) {
+                pricingService.recordVoucherRedemption(
+                        resolveVoucherId(eventResource),
+                        targetUserId,
+                        activatedSubscription,
+                        pendingTransaction.orElse(null)
+                );
+            }
             webhookEventService.markProcessed(reservedWebhookEvent.get().getId());
         } catch (RuntimeException ex) {
             pendingTransaction.ifPresent(transaction -> paymentTransactionService.markFailed(transaction.getId()));
@@ -215,7 +249,7 @@ public class PayMongoBillingService implements BillingService {
         return PAYMONGO_PROVIDER;
     }
 
-    private void applyPayMongoEvent(String eventType, JsonNode eventResource, UUID userId) {
+    private SubscriptionEntity applyPayMongoEvent(String eventType, JsonNode eventResource, UUID userId) {
         String providerCustomerId = resolveProviderCustomerId(eventResource);
         String providerSubscriptionId = resolveProviderSubscriptionId(eventResource);
         SubscriptionService.ProviderMetadata providerMetadata = new SubscriptionService.ProviderMetadata(
@@ -234,7 +268,7 @@ public class PayMongoBillingService implements BillingService {
                     providerSubscriptionId,
                     periodEnd
             );
-            subscriptionService.activatePremiumSubscription(
+            return subscriptionService.activatePremiumSubscription(
                     userId,
                     BillingType.SUBSCRIPTION,
                     PAYMONGO_PROVIDER,
@@ -243,7 +277,7 @@ public class PayMongoBillingService implements BillingService {
                     false,
                     providerMetadata
             );
-            return;
+            
         }
 
         if (EVENT_SUBSCRIPTION_INVOICE_PAYMENT_FAILED.equals(eventType)
@@ -257,7 +291,7 @@ public class PayMongoBillingService implements BillingService {
                         providerSubscriptionId,
                         periodEnd
                 );
-                subscriptionService.activatePremiumSubscription(
+                return subscriptionService.activatePremiumSubscription(
                         userId,
                         BillingType.SUBSCRIPTION,
                         PAYMONGO_PROVIDER,
@@ -266,7 +300,7 @@ public class PayMongoBillingService implements BillingService {
                         false,
                         providerMetadata
                 );
-                return;
+                
             }
             log.info(
                     "billing.paymongo.subscription downgrading userId={} eventType={} providerSubscriptionId={}",
@@ -275,7 +309,7 @@ public class PayMongoBillingService implements BillingService {
                     providerSubscriptionId
             );
             subscriptionService.downgradeToFree(userId);
-            return;
+            return null;
         }
 
         if (EVENT_SUBSCRIPTION_UPDATED.equals(eventType)) {
@@ -290,7 +324,7 @@ public class PayMongoBillingService implements BillingService {
                             providerSubscriptionId,
                             periodEnd
                     );
-                    subscriptionService.activatePremiumSubscription(
+                    return subscriptionService.activatePremiumSubscription(
                             userId,
                             BillingType.SUBSCRIPTION,
                             PAYMONGO_PROVIDER,
@@ -299,7 +333,7 @@ public class PayMongoBillingService implements BillingService {
                             true,
                             providerMetadata
                     );
-                    return;
+                    
                 }
                 log.info(
                         "billing.paymongo.subscription canceled-downgrade userId={} status={} providerSubscriptionId={}",
@@ -308,7 +342,7 @@ public class PayMongoBillingService implements BillingService {
                         providerSubscriptionId
                 );
                 subscriptionService.downgradeToFree(userId);
-                return;
+                return null;
             }
 
             if (isActiveStatus(status)) {
@@ -320,7 +354,7 @@ public class PayMongoBillingService implements BillingService {
                         periodEnd,
                         cancelAtPeriodEnd
                 );
-                subscriptionService.activatePremiumSubscription(
+                return subscriptionService.activatePremiumSubscription(
                         userId,
                         BillingType.SUBSCRIPTION,
                         PAYMONGO_PROVIDER,
@@ -329,7 +363,7 @@ public class PayMongoBillingService implements BillingService {
                         cancelAtPeriodEnd,
                         providerMetadata
                 );
-                return;
+                
             }
 
             if (periodEnd != null && OffsetDateTime.now().isBefore(periodEnd)) {
@@ -340,7 +374,7 @@ public class PayMongoBillingService implements BillingService {
                         providerSubscriptionId,
                         periodEnd
                 );
-                subscriptionService.activatePremiumSubscription(
+                return subscriptionService.activatePremiumSubscription(
                         userId,
                         BillingType.SUBSCRIPTION,
                         PAYMONGO_PROVIDER,
@@ -349,7 +383,7 @@ public class PayMongoBillingService implements BillingService {
                         cancelAtPeriodEnd,
                         providerMetadata
                 );
-                return;
+                
             }
             log.info(
                     "billing.paymongo.subscription updated-downgrade userId={} status={} providerSubscriptionId={}",
@@ -358,7 +392,9 @@ public class PayMongoBillingService implements BillingService {
                     providerSubscriptionId
             );
             subscriptionService.downgradeToFree(userId);
+            return null;
         }
+        return null;
     }
 
     private Optional<UUID> resolveTargetUserId(JsonNode eventResource) {
@@ -431,30 +467,6 @@ public class PayMongoBillingService implements BillingService {
                 toMajorAmount(amountMinor),
                 textValue(attributes, "currency")
         );
-    }
-
-    private String resolvePlanId(BillingCycle billingCycle) {
-        BillingCycle normalizedCycle = normalizeCycle(billingCycle);
-        if (normalizedCycle == BillingCycle.YEARLY) {
-            String yearlyPlanId = normalizeText(properties.getBilling().getPaymongo().getYearlyPlanId());
-            if (yearlyPlanId == null) {
-                throw new AppException(
-                        "PAYMONGO_PLAN_NOT_CONFIGURED",
-                        "Premium yearly plan is not configured yet.",
-                        HttpStatus.SERVICE_UNAVAILABLE
-                );
-            }
-            return yearlyPlanId;
-        }
-        String monthlyPlanId = normalizeText(properties.getBilling().getPaymongo().getMonthlyPlanId());
-        if (monthlyPlanId == null) {
-            throw new AppException(
-                    "PAYMONGO_PLAN_NOT_CONFIGURED",
-                    "Premium monthly plan is not configured yet.",
-                    HttpStatus.SERVICE_UNAVAILABLE
-            );
-        }
-        return monthlyPlanId;
     }
 
     private BillingCycle normalizeCycle(BillingCycle billingCycle) {
@@ -853,11 +865,17 @@ public class PayMongoBillingService implements BillingService {
         return Boolean.parseBoolean(valueNode.asText().trim());
     }
 
+    private UUID resolveVoucherId(JsonNode eventResource) {
+        JsonNode metadata = eventResource.path("attributes").path("metadata");
+        if (metadata.isMissingNode() || metadata.isNull()) {
+            return null;
+        }
+        return parseUuid(textValue(metadata, "voucher_id"));
+    }
+
     private void ensureCheckoutConfigured() {
         StudySnapProperties.Paymongo paymongo = properties.getBilling().getPaymongo();
-        if (normalizeText(paymongo.getSecretKey()) == null
-                || normalizeText(paymongo.getMonthlyPlanId()) == null
-                || normalizeText(paymongo.getYearlyPlanId()) == null) {
+        if (normalizeText(paymongo.getSecretKey()) == null) {
             throw new AppException(
                     "PAYMONGO_NOT_CONFIGURED",
                     "Premium checkout is not configured yet.",
