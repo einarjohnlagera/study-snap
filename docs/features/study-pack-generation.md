@@ -105,6 +105,13 @@ Errors should remain supportive and actionable.
 - Free: 5 questions
 - Premium: 10–20 questions
 
+## Free plan usage UX
+
+- Free users keep the existing `5` Study Pack/month product rule.
+- When a Free user reaches `80%` usage, show a non-blocking upgrade warning banner on generation-related surfaces.
+- When a Free user tries to generate after reaching the monthly limit, show the shared paywall modal instead of redirecting immediately to billing.
+- Limit messaging should make it clear that Premium increases Study Pack capacity and unlocks Challenge Quiz + Adaptive Practice.
+
 ## Validation and retry
 
 Backend should:

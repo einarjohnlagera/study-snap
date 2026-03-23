@@ -10,6 +10,7 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - 5 Study Packs per month
 - My Library and Public Library access
 - Quick Review
+- Soft paywall messaging for Premium-only quiz modes and Study Pack limit blocks
 
 ### Premium
 - 100 Study Packs per month
@@ -27,6 +28,25 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Optional cancellation feedback can be stored:
   - `cancellationReason`
   - `cancellationFeedback`
+
+## Soft paywall UX
+
+- Free users should not be redirected immediately to `Settings` when they click Premium-only quiz actions.
+- Clicking `Challenge Quiz` or `Adaptive Practice` as a Free user should open a reusable `AppModal`-based paywall first.
+- Premium feature modal copy:
+  - title: `Unlock Exam Mode`
+  - body explains Challenge Quiz + Adaptive Practice value and Premium limits
+  - actions: `OK` and `Upgrade to Premium`
+- If a Free user reaches the monthly Study Pack generation limit, show a limit-reached paywall modal first.
+- Limit modal copy:
+  - title: `You've reached your monthly limit`
+  - body explains Free includes `5` Study Pack generations/month and Premium unlocks more usage plus Premium quiz modes
+  - actions: `OK` and `Upgrade to Premium`
+- Only the explicit `Upgrade to Premium` action should navigate to `Settings` billing.
+- At `80%` of the Free Study Pack limit, show a non-blocking warning banner on:
+  - Dashboard
+  - Note Detail
+  - Study Pack generation/editor surfaces
 
 ## Billing architecture
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
+import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -129,6 +130,7 @@ export default function ChallengeQuizPage() {
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -497,11 +499,9 @@ export default function ChallengeQuizPage() {
           <h1 className="text-xl font-semibold sm:text-2xl">Premium feature</h1>
           <p className="text-sm text-foreground/75">This feature is available in the Premium plan.</p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
-              <Button type="button" className="w-full sm:w-auto">
-                Upgrade to Premium
-              </Button>
-            </Link>
+            <Button type="button" className="w-full sm:w-auto" onClick={() => setShowPremiumPaywall(true)}>
+              See Premium options
+            </Button>
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
                 Back to Note
@@ -741,6 +741,16 @@ export default function ChallengeQuizPage() {
             </Button>
           </div>
         )}
+      />
+
+      <PaywallModal
+        isOpen={showPremiumPaywall}
+        variant="premium-feature"
+        onClose={() => setShowPremiumPaywall(false)}
+        onUpgrade={() => {
+          setShowPremiumPaywall(false);
+          router.push(PLAN_BILLING_PATH);
+        }}
       />
     </main>
   );

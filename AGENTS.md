@@ -42,6 +42,12 @@ Core loop:
 - Downgrade to Free happens through subscription lifecycle logic at period end.
 - Canceling Premium must not remove notes or generated Study Packs from the user library.
 
+### Premium Upgrade Prompt Rule
+
+- Free users should see a soft paywall modal before being sent to billing for Premium-only quiz features or Study Pack limit blocks.
+- `Upgrade to Premium` may navigate to `Settings` billing only after explicit user confirmation in that modal.
+- At `80%` of the Free Study Pack limit, show a non-blocking upgrade banner on Dashboard, Note Detail, and Study Pack generation surfaces.
+
 ### Library Rule
 
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).

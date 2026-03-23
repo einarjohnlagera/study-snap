@@ -2,6 +2,7 @@ import type { PlanType } from "./api";
 
 export const PLAN_BILLING_SECTION_ID = "plan-billing";
 export const PLAN_BILLING_PATH = `/settings#${PLAN_BILLING_SECTION_ID}` as const;
+const NEAR_LIMIT_THRESHOLD = 0.8;
 
 const MONTHLY_STUDY_PACK_LIMITS: Record<PlanType, number> = {
   FREE: 5,
@@ -41,4 +42,32 @@ export function getUsageProgressPercent(used: number, limit: number): number {
   }
   const ratio = (used / limit) * 100;
   return Math.max(0, Math.min(100, Math.round(ratio)));
+}
+
+export function hasReachedUsageLimit(used: number, limit: number): boolean {
+  return limit > 0 && used >= limit;
+}
+
+export function isNearUsageLimit(used: number, limit: number): boolean {
+  if (limit <= 0 || hasReachedUsageLimit(used, limit)) {
+    return false;
+  }
+  return used / limit >= NEAR_LIMIT_THRESHOLD;
+}
+
+export function shouldShowNearStudyPackLimitBanner(
+  planType: PlanType,
+  used: number,
+  limit: number,
+): boolean {
+  return planType === "FREE" && isNearUsageLimit(used, limit);
+}
+
+export function isStudyPackLimitReachedMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    (normalized.includes("free plan limit") && normalized.includes("study pack"))
+    || (normalized.includes("study pack limit") && normalized.includes("upgrade to premium"))
+    || normalized.includes("study pack generations per month")
+  );
 }

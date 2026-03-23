@@ -134,6 +134,8 @@ Plan gating:
 - Weak Concept Detection is Premium-only
 - Adaptive Practice is Premium-only
 - Challenge Quiz is Premium-only
+- when a Free user clicks Premium follow-up CTAs from Quick Review results, show the shared paywall modal before any billing redirect
+- the paywall modal should only route to billing when the user explicitly presses `Upgrade to Premium`
 
 ---
 

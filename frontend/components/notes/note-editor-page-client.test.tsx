@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
-import { getNote } from "@/lib/api";
+import { getBillingUsageSummary, getNote } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -25,6 +25,7 @@ jest.mock("@/lib/api", () => ({
   createNote: jest.fn(),
   createStudyPackFromImage: jest.fn(),
   createStudyPackFromNote: jest.fn(),
+  getBillingUsageSummary: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: () => false,
   isNeedsTextConfirmationResponse: () => false,
@@ -59,8 +60,18 @@ const baseNote = {
 describe("NoteEditorPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    (getBillingUsageSummary as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
+      planType: "FREE",
+      studyPacksUsed: 2,
+      studyPacksLimit: 5,
+      challengeQuizUsed: 0,
+      challengeQuizLimit: 0,
+      adaptivePracticeUsed: 0,
+      adaptivePracticeLimit: 0,
+    });
   });
 
   it("keeps draft note title/subject/tags/content editable", async () => {
@@ -121,5 +132,30 @@ describe("NoteEditorPageClient", () => {
     expect(generateButton).toBeDisabled();
     expect(uploadInput).not.toBeNull();
     expect(uploadInput).toBeDisabled();
+  });
+
+  it("shows a limit-reached paywall modal for free users at their monthly Study Pack cap", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
+      planType: "FREE",
+      studyPacksUsed: 5,
+      studyPacksLimit: 5,
+      challengeQuizUsed: 0,
+      challengeQuizLimit: 0,
+      adaptivePracticeUsed: 0,
+      adaptivePracticeLimit: 0,
+    });
+
+    render(<NoteEditorPageClient />);
+
+    const contentInput = await screen.findByLabelText("Content");
+    fireEvent.change(contentInput, { target: { value: "Some note content" } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate Study Pack/i }));
+
+    expect(await screen.findByText("You've reached your monthly limit")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
 });
