@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -30,6 +31,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -52,6 +54,7 @@ public class QuickReviewAdaptivePracticeService {
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
     private final AuthService authService;
+    private final AnalyticsService analyticsService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         authService.requireEmailVerified(userId);
@@ -186,6 +189,10 @@ public class QuickReviewAdaptivePracticeService {
         userUsageService.incrementAdaptiveQuizGeneration(userId, savedSession.getCreatedAt());
 
         activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
+        analyticsService.trackEvent(userId, AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED, studyPackId, Map.of(
+                "sessionId", savedSession.getId().toString(),
+                "weakConceptCount", weakConcepts.size()
+        ));
 
         return new QuickReviewAdaptiveQuizResponse(
                 savedSession.getId().toString(),

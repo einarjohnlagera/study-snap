@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { login, signup } from "@/lib/api";
+import { login, signup, trackAnalyticsEvent } from "@/lib/api";
 import {
   getAuthUser,
   LOGIN_REASON_QUERY_KEY,
@@ -46,6 +46,7 @@ export default function AuthPage() {
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasTrackedSignupStartRef = useRef(false);
   const [redirectTarget, setRedirectTarget] = useState<string | null>(() => {
     if (typeof window === "undefined") {
       return null;
@@ -77,6 +78,19 @@ export default function AuthPage() {
     const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
     router.replace(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
   }, [redirectTarget, router]);
+
+  useEffect(() => {
+    if (mode !== "signup" || hasTrackedSignupStartRef.current) {
+      return;
+    }
+    hasTrackedSignupStartRef.current = true;
+    void trackAnalyticsEvent({
+      eventType: "SIGNUP_STARTED",
+      metadata: {
+        source: "auth_page",
+      },
+    });
+  }, [mode]);
 
   const canSubmit = useMemo(() => {
     if (mode === "signup") {

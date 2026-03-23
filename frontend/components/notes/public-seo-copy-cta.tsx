@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
-import { copyNote } from "@/lib/api";
+import { copyNote, trackAnalyticsEvent } from "@/lib/api";
 
 type PublicSeoCopyCtaProps = {
   noteId: string;
@@ -52,6 +52,13 @@ export function PublicSeoCopyCta({ noteId }: PublicSeoCopyCtaProps) {
     if (copying) {
       return;
     }
+    void trackAnalyticsEvent({
+      eventType: "PUBLIC_NOTE_COPY_CLICKED",
+      entityId: noteId,
+      metadata: {
+        path: pathname,
+      },
+    });
     if (!getAuthUser()) {
       router.push(buildLoginPath({ redirectTo: `${pathname}?copy=1` }));
       return;

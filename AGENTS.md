@@ -63,6 +63,14 @@ Core loop:
 - Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.
 - Landing page metadata should position NoteLib as a note-to-study-pack product, not a generic AI assistant.
 
+### Analytics Rule
+
+- Track product, growth, and upgrade events through the shared analytics event model.
+- Analytics must be non-blocking and must never break the primary user action if persistence fails.
+- Backend services should record server-truth events for note, Study Pack, review, auth, public-copy, and subscription flows.
+- Frontend/browser-only funnel events may post through `/api/analytics/events`.
+- Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
+
 ### Pricing Rule
 
 - Backend owns subscription pricing, region detection, voucher eligibility, and PayMongo plan selection.

@@ -25,6 +25,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   copyNote: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 describe("PublicSeoCopyCta", () => {

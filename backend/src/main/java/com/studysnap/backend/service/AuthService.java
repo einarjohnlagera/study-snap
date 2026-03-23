@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.RefreshTokenEntity;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -40,6 +42,7 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final SecurityProperties securityProperties;
     private final EmailVerificationService emailVerificationService;
+    private final AnalyticsService analyticsService;
 
     public AuthResponse signup(SignupRequest request, String ipAddress, String userAgent) {
         String email = normalizeEmail(request.email());
@@ -71,6 +74,9 @@ public class AuthService {
         UserEntity saved = userRepository.save(user);
         subscriptionService.createDefaultFreeSubscription(saved);
         emailVerificationService.sendVerificationEmail(saved, false);
+        analyticsService.trackEvent(saved.getId(), AnalyticsEventType.SIGNUP, saved.getId(), Map.of("method", "email_password"));
+        analyticsService.trackEvent(saved.getId(), AnalyticsEventType.SIGNUP_COMPLETED, saved.getId(), Map.of("method", "email_password"));
+        analyticsService.trackEvent(saved.getId(), AnalyticsEventType.EMAIL_VERIFICATION_SENT, saved.getId(), Map.of("source", "signup"));
         return buildAuthResponse(saved, PlanType.FREE, false, null, ipAddress, userAgent);
     }
 
@@ -99,6 +105,9 @@ public class AuthService {
         boolean keepSignedIn = Boolean.TRUE.equals(request.keepSignedIn());
 
         PlanType planType = subscriptionService.resolvePlan(user.getId());
+        analyticsService.trackEvent(user.getId(), AnalyticsEventType.LOGIN, user.getId(), Map.of(
+                "keepSignedIn", keepSignedIn
+        ));
         return buildAuthResponse(user, planType, keepSignedIn, null, ipAddress, userAgent);
     }
 
@@ -152,11 +161,15 @@ public class AuthService {
             return new SimpleMessageResponse("Your email is already verified.");
         }
         emailVerificationService.sendVerificationEmail(user, true);
+        analyticsService.trackEvent(user.getId(), AnalyticsEventType.EMAIL_VERIFICATION_SENT, user.getId(), Map.of("source", "manual_request"));
         return new SimpleMessageResponse("Verification email sent. Please check your inbox.");
     }
 
     public SimpleMessageResponse verifyEmailToken(String token) {
         EmailVerificationService.EmailVerificationResult result = emailVerificationService.verifyToken(token);
+        if (!result.alreadyVerified()) {
+            analyticsService.trackEvent(result.userId(), AnalyticsEventType.EMAIL_VERIFIED, result.userId(), Map.of());
+        }
         return new SimpleMessageResponse(result.message());
     }
 

@@ -59,6 +59,8 @@ class QuickReviewAdaptivePracticeServiceTest {
     private BillingUsagePeriodService billingUsagePeriodService;
     @Mock
     private AuthService authService;
+    @Mock
+    private AnalyticsService analyticsService;
 
     private QuickReviewAdaptivePracticeService adaptivePracticeService;
 
@@ -74,7 +76,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 new StudySnapProperties(),
                 userUsageService,
                 billingUsagePeriodService,
-                authService
+                authService,
+                analyticsService
         );
     }
 
@@ -102,6 +105,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         verify(featureGateService).checkFeatureAccess(userId, com.studysnap.backend.entity.Feature.ADAPTIVE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt());
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
         assertThat(response.quiz()).hasSize(1);
     }
@@ -174,6 +178,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.sessionId()).isEqualTo(resumedSessionId.toString());
         assertThat(response.quiz()).hasSize(1);
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID noteId, UUID ownerUserId) {

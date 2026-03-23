@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -51,6 +52,8 @@ class ChallengeQuizServiceTest {
     private BillingUsagePeriodService billingUsagePeriodService;
     @Mock
     private AuthService authService;
+    @Mock
+    private AnalyticsService analyticsService;
 
     private ChallengeQuizService challengeQuizService;
 
@@ -64,7 +67,8 @@ class ChallengeQuizServiceTest {
                 new StudySnapProperties(),
                 userUsageService,
                 billingUsagePeriodService,
-                authService
+                authService,
+                analyticsService
         );
     }
 
@@ -153,5 +157,71 @@ class ChallengeQuizServiceTest {
                 new QuizItem("Practice?", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         ));
         return studyPack;
+    }
+
+    @Test
+    void startSession_tracksAnalyticsWhenCreatingNewChallengeQuiz() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity previousQuickReview = new QuickReviewSessionEntity();
+        previousQuickReview.setScorePercentage(BigDecimal.valueOf(40));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.CHALLENGE,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any()
+        )).thenReturn(List.of(previousQuickReview));
+        when(llmStudyPackService.generateChallengeQuiz(
+                eq("Pack title"),
+                eq("Summary"),
+                eq(List.of("Concept")),
+                eq(List.of("Practice?")),
+                eq(10),
+                eq("easy-medium")
+        )).thenReturn(List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q3", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q4", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q5", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q6", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q7", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q8", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q9", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q10", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        ));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId);
+
+        assertThat(response.sessionId()).isNotNull();
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
     }
 }

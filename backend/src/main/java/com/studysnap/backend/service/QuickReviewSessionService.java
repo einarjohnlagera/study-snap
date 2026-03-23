@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
@@ -40,6 +41,7 @@ public class QuickReviewSessionService {
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final StudyPackRepository studyPackRepository;
     private final ActivityTrackingService activityTrackingService;
+    private final AnalyticsService analyticsService;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
 
@@ -84,6 +86,9 @@ public class QuickReviewSessionService {
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
 
         activityTrackingService.recordActivity(userId, ActivityType.STARTED_QUICK_REVIEW, studyPackId);
+        analyticsService.trackEvent(userId, AnalyticsEventType.QUICK_REVIEW_STARTED, studyPackId, Map.of(
+                "sessionId", saved.getId().toString()
+        ));
 
         return toStartResponse(saved);
     }

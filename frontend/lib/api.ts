@@ -115,6 +115,50 @@ export type BillingPricingResponse = {
   introEligible: boolean;
 };
 
+export type AnalyticsEventType =
+  | "NOTE_CREATED"
+  | "STUDY_PACK_GENERATED"
+  | "QUICK_REVIEW_STARTED"
+  | "CHALLENGE_QUIZ_STARTED"
+  | "ADAPTIVE_PRACTICE_STARTED"
+  | "PAYWALL_VIEWED"
+  | "UPGRADE_CLICKED"
+  | "SUBSCRIPTION_STARTED"
+  | "PUBLIC_NOTE_VIEWED"
+  | "PUBLIC_NOTE_COPIED"
+  | "PUBLIC_NOTE_COPY_CLICKED"
+  | "LOGIN"
+  | "SIGNUP"
+  | "LANDING_PAGE_VIEWED"
+  | "LANDING_CTA_CLICKED"
+  | "DEMO_OPENED"
+  | "SIGNUP_STARTED"
+  | "SIGNUP_COMPLETED"
+  | "EMAIL_VERIFICATION_SENT"
+  | "EMAIL_VERIFIED";
+
+export type AnalyticsEventRequest = {
+  eventType: AnalyticsEventType;
+  entityId?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+export type AdminAnalyticsSummaryResponse = {
+  landingPageViews: number;
+  landingCtaClicks: number;
+  publicNoteViews: number;
+  publicNoteCopyClicks: number;
+  signupsStarted: number;
+  signupsCompleted: number;
+  emailVerificationsCompleted: number;
+  totalUsers: number;
+  totalNotes: number;
+  totalStudyPacksGenerated: number;
+  totalChallengeQuizzes: number;
+  totalAdaptiveQuizzes: number;
+  totalUpgrades: number;
+};
+
 export type SignupRequest = {
   email: string;
   password: string;
@@ -690,6 +734,23 @@ export async function verifyEmailToken(token: string): Promise<SimpleMessageResp
     method: "GET",
   });
   return parseApiResponse<SimpleMessageResponse>(response, "Could not verify email. Please try again.");
+}
+
+export async function trackAnalyticsEvent(request: AnalyticsEventRequest): Promise<void> {
+  try {
+    await fetch(buildUrl("/analytics/events"), {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({
+        eventType: request.eventType,
+        entityId: request.entityId ?? null,
+        metadata: request.metadata ?? {},
+      }),
+      keepalive: true,
+    });
+  } catch {
+    // Analytics must never interrupt the main product flow.
+  }
 }
 
 export async function confirmEmailVerification(token: string): Promise<SimpleMessageResponse> {

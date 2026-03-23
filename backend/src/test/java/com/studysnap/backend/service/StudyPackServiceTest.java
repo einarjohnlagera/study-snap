@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -54,6 +55,8 @@ class StudyPackServiceTest {
     @Mock
     private ActivityTrackingService activityTrackingService;
     @Mock
+    private AnalyticsService analyticsService;
+    @Mock
     private SubscriptionService subscriptionService;
     @Mock
     private UserUsageService userUsageService;
@@ -74,6 +77,7 @@ class StudyPackServiceTest {
                 llmStudyPackService,
                 new StudySnapProperties(),
                 activityTrackingService,
+                analyticsService,
                 subscriptionService,
                 userUsageService,
                 billingUsagePeriodService,
@@ -145,6 +149,7 @@ class StudyPackServiceTest {
         assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
 
         verify(userUsageService).incrementStudyPackGeneration(eq(userId), any(OffsetDateTime.class));
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), eq(savedStudyPack.getId()), any());
         assertThat(response.noteId()).isEqualTo(noteId.toString());
         assertThat(response.summary()).isEqualTo("Generated summary");
         assertThat(response.keyConcepts()).containsExactly("Cell membrane", "Mitochondria");
@@ -169,6 +174,7 @@ class StudyPackServiceTest {
 
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }
 
     private NoteEntity buildDraftNote(UUID noteId, UUID ownerUserId, String content) {
