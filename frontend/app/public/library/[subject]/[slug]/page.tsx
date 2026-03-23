@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
@@ -173,9 +173,7 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
       </article>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <Link href="/library/public" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          Back to Public Library
-        </Link>
+        <PublicLibraryBackLink className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
         <p className="text-xs text-foreground/55">
           Public pages are read-only. Make a copy to keep studying in your own library.
         </p>
