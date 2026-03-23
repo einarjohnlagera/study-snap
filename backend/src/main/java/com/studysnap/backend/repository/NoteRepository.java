@@ -16,6 +16,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);
     List<NoteEntity> findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility visibility, String subject);
     List<NoteEntity> findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility visibility);
+    long countByVisibility(NoteVisibility visibility);
 
     @Query("""
             select n

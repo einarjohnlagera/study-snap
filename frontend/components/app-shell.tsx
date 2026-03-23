@@ -21,6 +21,7 @@ type ShellUser = {
   firstName: string | null;
   email: string | null;
   emailVerifiedAt: string | null;
+  role: "USER" | "ADMIN" | null;
 };
 
 function shouldUseAuthenticatedShell(hasAuthUser: boolean): boolean {
@@ -73,6 +74,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/pricing")) {
     return "Pricing";
   }
+  if (pathname.startsWith("/admin")) {
+    return "Admin";
+  }
   if (pathname.startsWith("/verify-email")) {
     return "Verify Email";
   }
@@ -106,9 +110,11 @@ const SECONDARY_NAV: NavLinkItem[] = [
 
 function NavLinks({
   pathname,
+  secondaryNav,
   onNavigate,
 }: {
   pathname: string;
+  secondaryNav: NavLinkItem[];
   onNavigate?: () => void;
 }) {
   const renderLink = (item: NavLinkItem) => {
@@ -139,7 +145,7 @@ function NavLinks({
       </div>
       <div className="space-y-1.5">
         <p className="px-3 text-xs font-semibold uppercase tracking-wide text-foreground/50">Account</p>
-        {SECONDARY_NAV.map(renderLink)}
+        {secondaryNav.map(renderLink)}
       </div>
     </>
   );
@@ -157,6 +163,7 @@ export function AppShell({ children }: AppShellProps) {
     firstName: null,
     email: null,
     emailVerifiedAt: null,
+    role: null,
   });
   const [resendingVerification, setResendingVerification] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -173,6 +180,7 @@ export function AppShell({ children }: AppShellProps) {
           firstName: null,
           email: null,
           emailVerifiedAt: null,
+          role: null,
         });
         return;
       }
@@ -181,6 +189,7 @@ export function AppShell({ children }: AppShellProps) {
         firstName: previous.firstName,
         email: authUser.email ?? previous.email,
         emailVerifiedAt: authUser.emailVerifiedAt,
+        role: authUser.role,
       }));
     };
 
@@ -214,6 +223,7 @@ export function AppShell({ children }: AppShellProps) {
       firstName: null,
       email: authUser?.email ?? null,
       emailVerifiedAt: authUser?.emailVerifiedAt ?? null,
+      role: authUser?.role ?? null,
     });
   }, [shouldUseShell, pathname]);
 
@@ -232,6 +242,7 @@ export function AppShell({ children }: AppShellProps) {
           firstName: me.firstName?.trim() || null,
           email: me.email,
           emailVerifiedAt: me.emailVerifiedAt,
+          role: me.role,
         });
       })
       .catch(() => {
@@ -241,6 +252,12 @@ export function AppShell({ children }: AppShellProps) {
       mounted = false;
     };
   }, [shouldUseShell, pathname]);
+
+  const secondaryNav = useMemo(() => {
+    return user.role === "ADMIN"
+      ? [...SECONDARY_NAV, { href: "/admin", label: "Admin" }]
+      : SECONDARY_NAV;
+  }, [user.role]);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -339,7 +356,7 @@ export function AppShell({ children }: AppShellProps) {
           <span className="text-sm font-semibold">NoteLib</span>
         </div>
         <nav className="flex-1 space-y-6 p-4">
-          <NavLinks pathname={pathname || ""} />
+          <NavLinks pathname={pathname || ""} secondaryNav={secondaryNav} />
         </nav>
       </aside>
 
@@ -448,7 +465,7 @@ export function AppShell({ children }: AppShellProps) {
               </button>
             </div>
             <nav className="flex-1 space-y-6 p-4">
-              <NavLinks pathname={pathname || ""} onNavigate={() => setDrawerOpen(false)} />
+              <NavLinks pathname={pathname || ""} secondaryNav={secondaryNav} onNavigate={() => setDrawerOpen(false)} />
             </nav>
             <div className="border-t border-border p-4">
               <Button

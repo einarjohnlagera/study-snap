@@ -71,6 +71,14 @@ Core loop:
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
 - Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
 
+### Admin Dashboard Rule
+
+- Admin Dashboard is internal and read-only in v1.
+- Access must be restricted to `ADMIN` users.
+- Reuse existing analytics, billing, subscription, payment, and library data before adding new reporting storage.
+- Prefer summary cards and simple tables over filters, charts, or exports unless explicitly requested.
+- Admin v1 should cover overview, billing, engagement, public-content growth, recent upgrades, and recent failed payments.
+
 ### Pricing Rule
 
 - Backend owns subscription pricing, region detection, voucher eligibility, and PayMongo plan selection.
@@ -119,6 +127,7 @@ Keep app shell grouping:
 - Account:
   - Profile
   - Settings
+  - Admin (admins only)
 
 ## UI Interaction Guardrails
 

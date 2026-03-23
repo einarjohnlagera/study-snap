@@ -159,6 +159,80 @@ export type AdminAnalyticsSummaryResponse = {
   totalUpgrades: number;
 };
 
+export type AdminDashboardSummaryResponse = {
+  overview: {
+    totalUsers: number;
+    verifiedUsers: number;
+    premiumUsers: number;
+    totalNotes: number;
+    totalStudyPacksGenerated: number;
+    totalPublicNotes: number;
+    totalPublicNoteViews: number;
+    totalPublicNoteCopies: number;
+    totalUpgrades: number;
+  };
+  billing: {
+    activePremiumSubscriptions: number;
+    monthlySubscriptions: number;
+    yearlySubscriptions: number;
+    cancelAtPeriodEndSubscriptions: number;
+    failedPayments: number;
+    estimatedMrr: number;
+    estimatedArr: number;
+  };
+  engagement: {
+    studyPacksGeneratedThisWeek: number;
+    quickReviewsStarted: number;
+    challengeQuizzesStarted: number;
+    adaptivePracticeStarted: number;
+    paywallViews: number;
+    upgradeClicks: number;
+    signups: number;
+    verifiedAccounts: number;
+  };
+};
+
+export type AdminPublicNoteMetricItemResponse = {
+  noteId: string;
+  title: string | null;
+  subject: string | null;
+  totalCount: number;
+};
+
+export type AdminSubjectMetricItemResponse = {
+  subject: string | null;
+  studyPackCount: number;
+};
+
+export type AdminRecentUpgradeItemResponse = {
+  subscriptionId: string;
+  userEmail: string;
+  billingCycle: "MONTHLY" | "YEARLY";
+  provider: "NONE" | "STRIPE" | "PAYMONGO";
+  cancelAtPeriodEnd: boolean;
+  startedAt: string;
+};
+
+export type AdminRecentFailedPaymentItemResponse = {
+  transactionId: string;
+  userEmail: string;
+  amount: number;
+  currency: string;
+  provider: "NONE" | "STRIPE" | "PAYMONGO";
+  createdAt: string;
+};
+
+export type AdminDashboardTopContentResponse = {
+  mostViewedPublicNotes: AdminPublicNoteMetricItemResponse[];
+  mostCopiedPublicNotes: AdminPublicNoteMetricItemResponse[];
+  topSubjectsByStudyPackGeneration: AdminSubjectMetricItemResponse[];
+};
+
+export type AdminDashboardRecentEventsResponse = {
+  recentPremiumUpgrades: AdminRecentUpgradeItemResponse[];
+  recentFailedPayments: AdminRecentFailedPaymentItemResponse[];
+};
+
 export type SignupRequest = {
   email: string;
   password: string;
@@ -699,6 +773,42 @@ export async function getMe(): Promise<MeResponse> {
     true,
   );
   return parseApiResponse<MeResponse>(response, "Could not load profile. Please try again.");
+}
+
+export async function getAdminDashboardSummary(): Promise<AdminDashboardSummaryResponse> {
+  const response = await fetchWithAuth(
+    "/admin/dashboard/summary",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminDashboardSummaryResponse>(response, "Could not load admin summary.");
+}
+
+export async function getAdminDashboardTopContent(): Promise<AdminDashboardTopContentResponse> {
+  const response = await fetchWithAuth(
+    "/admin/dashboard/top-content",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminDashboardTopContentResponse>(response, "Could not load admin content metrics.");
+}
+
+export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRecentEventsResponse> {
+  const response = await fetchWithAuth(
+    "/admin/dashboard/recent-events",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
 }
 
 export async function completeOnboardingProfileType(
