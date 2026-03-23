@@ -37,3 +37,18 @@ export function requireAuthenticatedOnboardedUser(
   }
   return true;
 }
+
+export function requireAdminUser(
+  router: RouterLike,
+): boolean {
+  const authUser = getAuthUser();
+  if (!authUser) {
+    redirectToLoginWithCurrentDestination(router);
+    return false;
+  }
+  if (authUser.role !== "ADMIN") {
+    router.replace("/dashboard");
+    return false;
+  }
+  return true;
+}

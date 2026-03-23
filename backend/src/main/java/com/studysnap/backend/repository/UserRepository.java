@@ -11,6 +11,7 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     boolean existsByEmailIgnoreCase(String email);
     Optional<UserEntity> findByEmailIgnoreCase(String email);
+    long countByEmailVerifiedAtIsNotNull();
 
     @Query("select u.id from UserEntity u")
     List<UUID> findAllUserIds();
