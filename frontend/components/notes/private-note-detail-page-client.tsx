@@ -3,13 +3,21 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { NearLimitBanner } from "@/components/billing/near-limit-banner";
+import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser } from "@/lib/auth";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
+import {
+  PLAN_BILLING_PATH,
+  hasReachedUsageLimit,
+  isStudyPackLimitReachedMessage,
+  shouldShowNearStudyPackLimitBanner,
+} from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   copyNote,
@@ -92,6 +100,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
+  const [activePaywallModal, setActivePaywallModal] = useState<"premium-feature" | "study-pack-limit" | null>(null);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -110,6 +119,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     subject: "",
     tags: [],
   });
+  const { usageSummary } = useBillingUsageSummary();
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
 
@@ -251,6 +261,13 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
   const hasCopyAttribution = Boolean(note?.copiedFromUserId && note?.copiedFromNoteId);
   const copiedSourceTitle = note?.copiedFromTitle?.trim() || "Untitled note";
+  const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
+  const studyPacksLimit = usageSummary?.studyPacksLimit ?? 0;
+  const hasReachedStudyPackLimit = usageSummary?.planType === "FREE"
+    && hasReachedUsageLimit(studyPacksUsed, studyPacksLimit);
+  const shouldShowNearLimitBanner = usageSummary
+    ? shouldShowNearStudyPackLimitBanner(usageSummary.planType, studyPacksUsed, studyPacksLimit)
+    : false;
 
   const performVisibilityUpdate = useCallback(async (
     nextVisibility: NoteVisibility,
@@ -294,6 +311,10 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       setToast("Email verification is required before generating Study Packs.");
       return;
     }
+    if (hasReachedStudyPackLimit) {
+      setActivePaywallModal("study-pack-limit");
+      return;
+    }
 
     setGenerating(true);
     try {
@@ -307,7 +328,11 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
         setToast("Email verification is required before generating Study Packs.");
       } else {
         const message = err instanceof Error ? err.message : "Could not generate Study Pack.";
-        setError(message);
+        if (isStudyPackLimitReachedMessage(message)) {
+          setActivePaywallModal("study-pack-limit");
+        } else {
+          setError(message);
+        }
       }
     } finally {
       setGenerating(false);
@@ -448,7 +473,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     if (!isPremiumPlan) {
-      router.push(PLAN_BILLING_PATH);
+      setActivePaywallModal("premium-feature");
       return;
     }
     router.push(`/notes/${note.id}/challenge-quiz`);
@@ -463,7 +488,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     if (!isPremiumPlan) {
-      router.push(PLAN_BILLING_PATH);
+      setActivePaywallModal("premium-feature");
       return;
     }
     router.push(`/notes/${note.id}/adaptive-practice`);
@@ -555,6 +580,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
         </Card>
       ) : note ? (
         <div className="space-y-6">
+          {shouldShowNearLimitBanner ? <NearLimitBanner /> : null}
           <Card className="space-y-4 p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-3">
@@ -959,6 +985,16 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
           if (!deleting) {
             void handleDeleteNote();
           }
+        }}
+      />
+
+      <PaywallModal
+        isOpen={activePaywallModal !== null}
+        variant={activePaywallModal ?? "premium-feature"}
+        onClose={() => setActivePaywallModal(null)}
+        onUpgrade={() => {
+          setActivePaywallModal(null);
+          router.push(PLAN_BILLING_PATH);
         }}
       />
     </main>

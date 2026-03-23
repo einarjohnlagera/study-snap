@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Trophy } from "lucide-react";
+import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -156,6 +157,7 @@ export default function QuickReviewPage() {
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -730,11 +732,14 @@ export default function QuickReviewPage() {
                 <p className="text-sm text-foreground/85">
                   Adaptive Practice and Challenge Quiz are available on Premium.
                 </p>
-                <Link href={PLAN_BILLING_PATH} className="inline-flex">
-                  <Button type="button" variant="outline" size="sm">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPremiumPaywall(true)}
+                >
                     Upgrade to Premium
-                  </Button>
-                </Link>
+                </Button>
               </div>
             ) : null}
             {displayedRetryCount > 0 ? <p>Retry attempts: {displayedRetryCount}</p> : null}
@@ -785,11 +790,14 @@ export default function QuickReviewPage() {
                   </Button>
                 </Link>
               ) : (
-                <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
-                  <Button type="button" variant="outline" className="w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setShowPremiumPaywall(true)}
+                >
                     Unlock Practice Weak Concepts
-                  </Button>
-                </Link>
+                </Button>
               )
             ) : null}
             {showChallengeGuidedCta ? (
@@ -800,11 +808,14 @@ export default function QuickReviewPage() {
                   </Button>
                 </Link>
               ) : (
-                <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
-                  <Button type="button" variant="outline" className="w-full sm:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setShowPremiumPaywall(true)}
+                >
                     Unlock Challenge Quiz
-                  </Button>
-                </Link>
+                </Button>
               )
             ) : null}
             {!isPerfectScore ? (
@@ -886,6 +897,16 @@ export default function QuickReviewPage() {
           </Card>
         </div>
       ) : null}
+
+      <PaywallModal
+        isOpen={showPremiumPaywall}
+        variant="premium-feature"
+        onClose={() => setShowPremiumPaywall(false)}
+        onUpgrade={() => {
+          setShowPremiumPaywall(false);
+          router.push(PLAN_BILLING_PATH);
+        }}
+      />
     </main>
   );
 }

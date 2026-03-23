@@ -1,6 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
-import { getNote, updateNote, updateNoteVisibility } from "@/lib/api";
+import {
+  getBillingUsageSummary,
+  getChallengeQuizPerformanceSummary,
+  getNote,
+  getQuickReviewPerformanceSummary,
+  updateNote,
+  updateNoteVisibility,
+} from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -32,6 +39,7 @@ jest.mock("@/lib/api", () => ({
   copyNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
+  getBillingUsageSummary: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
@@ -73,8 +81,34 @@ describe("PrivateNoteDetailPageClient", () => {
     replaceMock.mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (getBillingUsageSummary as jest.Mock).mockReset();
+    (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
+    (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
+    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
+      planType: "FREE",
+      studyPacksUsed: 2,
+      studyPacksLimit: 5,
+      challengeQuizUsed: 0,
+      challengeQuizLimit: 0,
+      adaptivePracticeUsed: 0,
+      adaptivePracticeLimit: 0,
+    });
+    (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue({
+      attempts: 1,
+      bestScorePercentage: 80,
+      lastScorePercentage: 80,
+      lastReviewedAt: "2026-03-21T10:30:00Z",
+    });
+    (getChallengeQuizPerformanceSummary as jest.Mock).mockResolvedValue({
+      attempts: 1,
+      bestScorePercentage: 75,
+      lastScorePercentage: 75,
+      lastCompletedAt: "2026-03-21T10:30:00Z",
+      latestPerformanceLevel: "Good",
+      latestWeakConcepts: ["Cells"],
+    });
   });
 
   it("routes Edit to note editor for draft note", async () => {
@@ -146,5 +180,77 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC");
     expect(await screen.findByText("Share this note")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy Link" })).toBeInTheDocument();
+  });
+
+  it("shows a paywall modal when a free user clicks Challenge Quiz and redirects only after upgrade confirmation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz (Premium)" }));
+
+    expect(await screen.findByText("Unlock Exam Mode")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalledWith("/settings#plan-billing");
+
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+  });
+
+  it("shows a paywall modal when a free user clicks Adaptive Practice", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice (Premium)" }));
+
+    expect(await screen.findByText("Unlock Exam Mode")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Challenge Quiz and Adaptive Practice are Premium features designed to help you focus on weak topics/i),
+    ).toBeInTheDocument();
+  });
+
+  it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
+      planType: "PREMIUM",
+      studyPacksUsed: 12,
+      studyPacksLimit: 100,
+      challengeQuizUsed: 1,
+      challengeQuizLimit: 50,
+      adaptivePracticeUsed: 1,
+      adaptivePracticeLimit: 50,
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
+    expect(screen.queryByText("Unlock Exam Mode")).not.toBeInTheDocument();
   });
 });

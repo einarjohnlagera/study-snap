@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { NearLimitBanner } from "@/components/billing/near-limit-banner";
+import { PaywallModal } from "@/components/billing/paywall-modal";
 import {
   confirmStudyPackText,
   createNote,
@@ -15,6 +17,13 @@ import {
   updateNote,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
+import {
+  PLAN_BILLING_PATH,
+  hasReachedUsageLimit,
+  isStudyPackLimitReachedMessage,
+  shouldShowNearStudyPackLimitBanner,
+} from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Card } from "@/components/ui/card";
@@ -116,6 +125,8 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const [ocrConfirmedText, setOcrConfirmedText] = useState("");
   const [isConfirmingOcrText, setIsConfirmingOcrText] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
+  const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
+  const { usageSummary } = useBillingUsageSummary();
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -202,6 +213,13 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
 
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
   const contentLocked = isDetailPage && studyPackStatus === "STUDY_PACK_READY";
+  const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
+  const studyPacksLimit = usageSummary?.studyPacksLimit ?? 0;
+  const hasReachedStudyPackLimit = usageSummary?.planType === "FREE"
+    && hasReachedUsageLimit(studyPacksUsed, studyPacksLimit);
+  const shouldShowNearLimitBanner = usageSummary
+    ? shouldShowNearStudyPackLimitBanner(usageSummary.planType, studyPacksUsed, studyPacksLimit)
+    : false;
 
   const buildRequest = useCallback(() => ({
     title: normalizeOptional(draft.title),
@@ -266,6 +284,10 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       showToast("Email verification is required before generating Study Packs.", "info");
       return;
     }
+    if (hasReachedStudyPackLimit) {
+      setShowLimitReachedModal(true);
+      return;
+    }
 
     setIsGenerating(true);
     try {
@@ -302,12 +324,25 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         showToast("Email verification is required before generating Study Packs.", "info");
       } else {
         const message = error instanceof Error ? error.message : "Could not generate Study Pack.";
-        showToast(message, "error");
+        if (isStudyPackLimitReachedMessage(message)) {
+          setShowLimitReachedModal(true);
+        } else {
+          showToast(message, "error");
+        }
       }
     } finally {
       setIsGenerating(false);
     }
-  }, [contentEmpty, finalizeGenerationRedirect, isEmailVerified, isGenerating, isSaving, showToast, upsertNote]);
+  }, [
+    contentEmpty,
+    finalizeGenerationRedirect,
+    hasReachedStudyPackLimit,
+    isEmailVerified,
+    isGenerating,
+    isSaving,
+    showToast,
+    upsertNote,
+  ]);
 
   const applySuggestions = useCallback(async () => {
     if (!pendingSuggestion || applyingSuggestion) {
@@ -538,6 +573,12 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
 
   return (
     <>
+      {shouldShowNearLimitBanner ? (
+        <div className="mx-auto w-full max-w-4xl px-4 pt-6 sm:px-6 sm:pt-8">
+          <NearLimitBanner />
+        </div>
+      ) : null}
+
       <NoteEditorForm
         pageTitle={pageTitle}
         note={draft}
@@ -591,6 +632,16 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
           void applySuggestions();
         }}
         onKeepMine={keepMineAndContinue}
+      />
+
+      <PaywallModal
+        isOpen={showLimitReachedModal}
+        variant="study-pack-limit"
+        onClose={() => setShowLimitReachedModal(false)}
+        onUpgrade={() => {
+          setShowLimitReachedModal(false);
+          router.push(PLAN_BILLING_PATH);
+        }}
       />
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}

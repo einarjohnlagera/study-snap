@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
+import { shouldShowNearStudyPackLimitBanner } from "@/lib/plans";
 import {
   getMe,
   getMasterySnapshot,
@@ -37,6 +40,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
+  const { usageSummary } = useBillingUsageSummary();
 
   const loadDashboard = useCallback(async () => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -138,6 +142,13 @@ export default function DashboardPage() {
     () => items.reduce((sum, item) => sum + (item.quizCount ?? 0), 0),
     [items],
   );
+  const shouldShowNearLimitBanner = usageSummary
+    ? shouldShowNearStudyPackLimitBanner(
+      usageSummary.planType,
+      usageSummary.studyPacksUsed,
+      usageSummary.studyPacksLimit,
+    )
+    : false;
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -157,6 +168,7 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
+          {shouldShowNearLimitBanner ? <NearLimitBanner /> : null}
           {showWelcomeMessage ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">
