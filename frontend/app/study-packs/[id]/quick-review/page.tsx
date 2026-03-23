@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Trophy } from "lucide-react";
-import { PaywallModal } from "@/components/billing/paywall-modal";
+import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -157,7 +157,7 @@ export default function QuickReviewPage() {
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
+  const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -736,7 +736,7 @@ export default function QuickReviewPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowPremiumPaywall(true)}
+                  onClick={() => setActivePaywallModal(showAdaptiveGuidedCta ? "adaptive-practice" : "challenge-quiz")}
                 >
                     Upgrade to Premium
                 </Button>
@@ -794,7 +794,7 @@ export default function QuickReviewPage() {
                   type="button"
                   variant="outline"
                   className="w-full sm:w-auto"
-                  onClick={() => setShowPremiumPaywall(true)}
+                  onClick={() => setActivePaywallModal("adaptive-practice")}
                 >
                     Unlock Practice Weak Concepts
                 </Button>
@@ -812,7 +812,7 @@ export default function QuickReviewPage() {
                   type="button"
                   variant="outline"
                   className="w-full sm:w-auto"
-                  onClick={() => setShowPremiumPaywall(true)}
+                  onClick={() => setActivePaywallModal("challenge-quiz")}
                 >
                     Unlock Challenge Quiz
                 </Button>
@@ -899,11 +899,11 @@ export default function QuickReviewPage() {
       ) : null}
 
       <PaywallModal
-        isOpen={showPremiumPaywall}
-        variant="premium-feature"
-        onClose={() => setShowPremiumPaywall(false)}
+        isOpen={activePaywallModal !== null}
+        variant={activePaywallModal ?? "challenge-quiz"}
+        onClose={() => setActivePaywallModal(null)}
         onUpgrade={() => {
-          setShowPremiumPaywall(false);
+          setActivePaywallModal(null);
           router.push(PLAN_BILLING_PATH);
         }}
       />

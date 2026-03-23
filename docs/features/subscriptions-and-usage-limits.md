@@ -32,11 +32,16 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 ## Soft paywall UX
 
 - Free users should not be redirected immediately to `Settings` when they click Premium-only quiz actions.
-- Clicking `Challenge Quiz` or `Adaptive Practice` as a Free user should open a reusable `AppModal`-based paywall first.
-- Premium feature modal copy:
+- Clicking `Challenge Quiz` as a Free user should open a reusable `AppModal`-based paywall first.
+- Challenge Quiz modal copy:
   - title: `Unlock Exam Mode`
-  - body explains Challenge Quiz + Adaptive Practice value and Premium limits
-  - actions: `OK` and `Upgrade to Premium`
+  - body: `Challenge Quiz simulates a real exam and helps you test your knowledge without seeing answers immediately. Perfect for exam preparation.`
+  - actions: `Maybe Later` and `Upgrade to Premium`
+- Clicking `Adaptive Practice` as a Free user should open a reusable paywall first.
+- Adaptive Practice modal copy:
+  - title: `Focus on Your Weak Topics`
+  - body: `Adaptive Practice creates quizzes based on the topics you got wrong so you can improve faster and focus on weak areas.`
+  - actions: `Maybe Later` and `Upgrade to Premium`
 - If a Free user reaches the monthly Study Pack generation limit, show a limit-reached paywall modal first.
 - Limit modal copy:
   - title: `You've reached your monthly limit`
@@ -47,6 +52,19 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - Dashboard
   - Note Detail
   - Study Pack generation/editor surfaces
+
+## Pricing page and upgrade positioning
+
+- NoteLib pricing copy should position Premium as an exam preparation and mastery plan, not only as an AI upgrade.
+- Pricing page hero copy:
+  - title: `Study smarter. Pass exams faster.`
+  - subtitle: `Turn your notes into summaries, quizzes, and reviewers in seconds.`
+  - actions: `Start Free` and `Upgrade to Premium`
+- Pricing page must display localized pricing from `GET /api/billing/pricing`.
+- Pricing page should compare Free vs Premium clearly for student workflows:
+  - Free: Create Notes, Save Notes, `5` Study Packs/month, Quick Review, Public Library Access
+  - Premium: Everything in Free, `100` Study Packs/month, Challenge Quiz, Adaptive Practice, Priority AI generation
+- Dashboard should show a Free-only upgrade card with Premium exam-prep messaging and a redirect to `Settings` billing.
 
 ## Billing architecture
 

@@ -745,7 +745,7 @@ export default function ChallengeQuizPage() {
 
       <PaywallModal
         isOpen={showPremiumPaywall}
-        variant="premium-feature"
+        variant="challenge-quiz"
         onClose={() => setShowPremiumPaywall(false)}
         onUpgrade={() => {
           setShowPremiumPaywall(false);

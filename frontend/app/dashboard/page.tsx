@@ -28,6 +28,7 @@ import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
 import { TodayFocusCard } from "./today-focus-card";
 import { MasterySnapshotCard } from "./mastery-snapshot-card";
+import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -149,6 +150,7 @@ export default function DashboardPage() {
       usageSummary.studyPacksLimit,
     )
     : false;
+  const shouldShowFreeUpgradeCard = usageSummary?.planType === "FREE";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -169,6 +171,7 @@ export default function DashboardPage() {
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
           {shouldShowNearLimitBanner ? <NearLimitBanner /> : null}
+          {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}
           {showWelcomeMessage ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">

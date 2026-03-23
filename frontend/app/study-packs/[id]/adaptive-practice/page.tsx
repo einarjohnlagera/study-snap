@@ -398,7 +398,7 @@ export default function AdaptivePracticePage() {
 
       <PaywallModal
         isOpen={showPremiumPaywall}
-        variant="premium-feature"
+        variant="adaptive-practice"
         onClose={() => setShowPremiumPaywall(false)}
         onUpgrade={() => {
           setShowPremiumPaywall(false);

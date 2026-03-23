@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
-import { PaywallModal } from "@/components/billing/paywall-modal";
+import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -100,7 +100,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
-  const [activePaywallModal, setActivePaywallModal] = useState<"premium-feature" | "study-pack-limit" | null>(null);
+  const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -473,7 +473,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     if (!isPremiumPlan) {
-      setActivePaywallModal("premium-feature");
+      setActivePaywallModal("challenge-quiz");
       return;
     }
     router.push(`/notes/${note.id}/challenge-quiz`);
@@ -488,7 +488,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     if (!isPremiumPlan) {
-      setActivePaywallModal("premium-feature");
+      setActivePaywallModal("adaptive-practice");
       return;
     }
     router.push(`/notes/${note.id}/adaptive-practice`);
@@ -990,7 +990,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
 
       <PaywallModal
         isOpen={activePaywallModal !== null}
-        variant={activePaywallModal ?? "premium-feature"}
+        variant={activePaywallModal ?? "challenge-quiz"}
         onClose={() => setActivePaywallModal(null)}
         onUpgrade={() => {
           setActivePaywallModal(null);

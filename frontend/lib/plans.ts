@@ -2,6 +2,7 @@ import type { PlanType } from "./api";
 
 export const PLAN_BILLING_SECTION_ID = "plan-billing";
 export const PLAN_BILLING_PATH = `/settings#${PLAN_BILLING_SECTION_ID}` as const;
+export const PRICING_PAGE_PATH = "/pricing" as const;
 const NEAR_LIMIT_THRESHOLD = 0.8;
 
 const MONTHLY_STUDY_PACK_LIMITS: Record<PlanType, number> = {

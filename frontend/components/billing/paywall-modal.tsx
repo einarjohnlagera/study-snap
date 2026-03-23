@@ -5,7 +5,10 @@ import { AppModal } from "@/components/ui/app-modal";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
 import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 
-export type PaywallModalVariant = "premium-feature" | "study-pack-limit";
+export type PaywallModalVariant =
+  | "challenge-quiz"
+  | "adaptive-practice"
+  | "study-pack-limit";
 
 type PaywallModalProps = {
   isOpen: boolean;
@@ -16,9 +19,9 @@ type PaywallModalProps = {
 
 const PREMIUM_FEATURE_BENEFITS = [
   "100 Study Packs per month",
-  "Challenge Quiz (exam-style)",
-  "Adaptive Practice (focus on weak concepts)",
-  "Higher monthly limits",
+  "Challenge Quiz (Exam Mode)",
+  "Adaptive Practice (focus on weak topics)",
+  "Priority AI generation",
 ];
 
 function getModalCopy(variant: PaywallModalVariant) {
@@ -27,13 +30,24 @@ function getModalCopy(variant: PaywallModalVariant) {
       title: "You've reached your monthly limit",
       intro:
         "Free plan includes 5 Study Pack generations per month. Upgrade to Premium to continue generating Study Packs and unlock Challenge Quiz and Adaptive Practice.",
+      dismissLabel: "OK",
+    };
+  }
+
+  if (variant === "adaptive-practice") {
+    return {
+      title: "Focus on Your Weak Topics",
+      intro:
+        "Adaptive Practice creates quizzes based on the topics you got wrong so you can improve faster and focus on weak areas.",
+      dismissLabel: "Maybe Later",
     };
   }
 
   return {
     title: "Unlock Exam Mode",
     intro:
-      "Challenge Quiz and Adaptive Practice are Premium features designed to help you focus on weak topics and prepare for exams faster.",
+      "Challenge Quiz simulates a real exam and helps you test your knowledge without seeing answers immediately. Perfect for exam preparation.",
+    dismissLabel: "Maybe Later",
   };
 }
 
@@ -57,7 +71,7 @@ export function PaywallModal({
       actions={(
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={onClose}>
-            OK
+            {copy.dismissLabel}
           </Button>
           <Button type="button" onClick={onUpgrade}>
             Upgrade to Premium

@@ -67,6 +67,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/settings")) {
     return "Settings";
   }
+  if (pathname.startsWith("/pricing")) {
+    return "Pricing";
+  }
   if (pathname.startsWith("/verify-email")) {
     return "Verify Email";
   }
