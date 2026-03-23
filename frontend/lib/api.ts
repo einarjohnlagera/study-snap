@@ -90,6 +90,20 @@ export type PlanType = "FREE" | "PREMIUM";
 export type BillingCycle = "MONTHLY" | "YEARLY";
 export type UserRole = "USER" | "ADMIN";
 export type EngagementMode = "FOCUSED" | "CONSISTENCY" | "STREAK";
+export type SubscriptionCancellationReason =
+  | "TOO_EXPENSIVE"
+  | "NOT_USING_ENOUGH"
+  | "MISSING_FEATURES"
+  | "TECHNICAL_ISSUES"
+  | "FOUND_ANOTHER_TOOL"
+  | "JUST_TRYING_IT_OUT"
+  | "OTHER";
+
+export type SubscriptionPlanStatusResponse = {
+  cancelAtPeriodEnd: boolean;
+  premiumEndsAt: string | null;
+  cancelledAt: string | null;
+};
 
 export type SignupRequest = {
   email: string;
@@ -131,10 +145,16 @@ export type MeResponse = {
   role: UserRole;
   status: "ACTIVE" | "SUSPENDED";
   planType: PlanType;
+  subscription: SubscriptionPlanStatusResponse;
 };
 
 export type UpdateEngagementModeRequest = {
   engagementMode: EngagementMode;
+};
+
+export type CancelPremiumSubscriptionRequest = {
+  reason?: SubscriptionCancellationReason | null;
+  feedback?: string | null;
 };
 
 export type StudyEngagementResponse = {
@@ -1257,6 +1277,24 @@ export async function createPremiumCheckoutSession(
   return parseApiResponse<BillingCheckoutSessionResponse>(
     response,
     "Could not start Premium checkout. Please try again.",
+  );
+}
+
+export async function cancelPremiumSubscription(
+  request: CancelPremiumSubscriptionRequest = {},
+): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/billing/subscription/cancel",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<MeResponse>(
+    response,
+    "Could not schedule Premium cancellation. Please try again.",
   );
 }
 

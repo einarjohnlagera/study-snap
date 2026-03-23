@@ -20,6 +20,7 @@ public record MeResponse(
         OffsetDateTime emailVerifiedAt,
         UserRole role,
         UserStatus status,
-        PlanType planType
+        PlanType planType,
+        SubscriptionPlanStatusResponse subscription
 ) {
 }

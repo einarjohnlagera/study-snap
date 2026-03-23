@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionCancellationReason;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserEntity;
@@ -68,5 +69,88 @@ class SubscriptionServiceTest {
         assertThat(freeSaved.getPlanType()).isEqualTo(PlanType.FREE);
         assertThat(freeSaved.getBillingType()).isEqualTo(BillingType.NONE);
         assertThat(freeSaved.getProvider()).isEqualTo(BillingProvider.NONE);
+    }
+
+    @Test
+    void scheduleCancellationAtPeriodEnd_persistsReasonAndFeedback() {
+        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository);
+        UUID userId = UUID.randomUUID();
+
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+
+        SubscriptionEntity activePremium = new SubscriptionEntity();
+        activePremium.setId(UUID.randomUUID());
+        activePremium.setUser(user);
+        activePremium.setPlanType(PlanType.PREMIUM);
+        activePremium.setStatus(SubscriptionStatus.ACTIVE);
+        activePremium.setBillingType(BillingType.SUBSCRIPTION);
+        activePremium.setProvider(BillingProvider.PAYMONGO);
+        activePremium.setStartAt(OffsetDateTime.now().minusDays(10));
+        activePremium.setEndAt(OffsetDateTime.now().plusDays(20));
+        activePremium.setCreatedAt(OffsetDateTime.now().minusDays(10));
+        activePremium.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionRepository.findFirstByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(Optional.of(activePremium));
+        when(subscriptionRepository.save(any(SubscriptionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        SubscriptionEntity saved = service.scheduleCancellationAtPeriodEnd(
+                userId,
+                SubscriptionCancellationReason.MISSING_FEATURES,
+                "Need better export options."
+        );
+
+        assertThat(saved.isCancelAtPeriodEnd()).isTrue();
+        assertThat(saved.getCancelledAt()).isNotNull();
+        assertThat(saved.getCancellationReason()).isEqualTo(SubscriptionCancellationReason.MISSING_FEATURES);
+        assertThat(saved.getCancellationFeedback()).isEqualTo("Need better export options.");
+        verify(subscriptionRepository).save(activePremium);
+    }
+
+    @Test
+    void activatePremiumSubscription_clearsScheduledCancellationWhenRenewed() {
+        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository);
+        UUID userId = UUID.randomUUID();
+
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+
+        SubscriptionEntity activePremium = new SubscriptionEntity();
+        activePremium.setId(UUID.randomUUID());
+        activePremium.setUser(user);
+        activePremium.setPlanType(PlanType.PREMIUM);
+        activePremium.setStatus(SubscriptionStatus.ACTIVE);
+        activePremium.setBillingType(BillingType.SUBSCRIPTION);
+        activePremium.setProvider(BillingProvider.PAYMONGO);
+        activePremium.setStartAt(OffsetDateTime.now().minusDays(5));
+        activePremium.setEndAt(OffsetDateTime.now().plusDays(10));
+        activePremium.setCancelAtPeriodEnd(true);
+        activePremium.setCancelledAt(OffsetDateTime.now().minusDays(1));
+        activePremium.setCancellationReason(SubscriptionCancellationReason.TOO_EXPENSIVE);
+        activePremium.setCancellationFeedback("Too much.");
+        activePremium.setCreatedAt(OffsetDateTime.now().minusDays(5));
+        activePremium.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionRepository.findFirstByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(Optional.of(activePremium));
+        when(subscriptionRepository.save(any(SubscriptionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        SubscriptionEntity saved = service.activatePremiumSubscription(
+                userId,
+                BillingType.SUBSCRIPTION,
+                BillingProvider.PAYMONGO,
+                OffsetDateTime.now(),
+                OffsetDateTime.now().plusDays(30),
+                false,
+                new SubscriptionService.ProviderMetadata("cus_123", "sub_123")
+        );
+
+        assertThat(saved.isCancelAtPeriodEnd()).isFalse();
+        assertThat(saved.getCancelledAt()).isNull();
+        assertThat(saved.getCancellationReason()).isNull();
+        assertThat(saved.getCancellationFeedback()).isNull();
     }
 }

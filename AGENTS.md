@@ -34,6 +34,14 @@ Core loop:
 - Copy does not include: generated `summary`, `key concepts`, `quiz`, session history, or performance history.
 - Copy result is a new `DRAFT` note.
 
+### Premium Cancellation Rule
+
+- Premium cancellation must be confirmed in Settings before submission.
+- Cancellation is scheduled at the end of the current billing period, not immediate.
+- Premium access remains active until that period ends.
+- Downgrade to Free happens through subscription lifecycle logic at period end.
+- Canceling Premium must not remove notes or generated Study Packs from the user library.
+
 ### Library Rule
 
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).

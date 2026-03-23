@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
 import {
+  cancelPremiumSubscription,
   createPremiumCheckoutSession,
   getBillingHistory,
   getBillingUsageSummary,
@@ -16,8 +18,10 @@ import {
   type BillingCycle,
   type BillingHistoryItemResponse,
   type BillingUsageSummaryResponse,
+  type CancelPremiumSubscriptionRequest,
   type EngagementMode,
   type MeResponse,
+  type SubscriptionCancellationReason,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
@@ -61,6 +65,19 @@ function UsageMetric({
   );
 }
 
+const CANCELLATION_REASONS: Array<{
+  value: SubscriptionCancellationReason;
+  label: string;
+}> = [
+  { value: "TOO_EXPENSIVE", label: "Too expensive" },
+  { value: "NOT_USING_ENOUGH", label: "Not using it enough" },
+  { value: "MISSING_FEATURES", label: "Missing features I need" },
+  { value: "TECHNICAL_ISSUES", label: "Technical issues" },
+  { value: "FOUND_ANOTHER_TOOL", label: "Found another tool" },
+  { value: "JUST_TRYING_IT_OUT", label: "Just trying it out" },
+  { value: "OTHER", label: "Other" },
+];
+
 export default function SettingsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -76,6 +93,10 @@ export default function SettingsPage() {
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [savingEngagementMode, setSavingEngagementMode] = useState(false);
   const [engagementModeMessage, setEngagementModeMessage] = useState<string | null>(null);
+  const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
+  const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
+  const [cancellationFeedback, setCancellationFeedback] = useState("");
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -225,7 +246,55 @@ export default function SettingsPage() {
     }
   };
 
+  const handleOpenCancellationModal = () => {
+    setSelectedCancellationReason(null);
+    setCancellationFeedback("");
+    setIsCancellationModalOpen(true);
+  };
+
+  const handleCloseCancellationModal = () => {
+    if (cancellingSubscription) {
+      return;
+    }
+    setIsCancellationModalOpen(false);
+  };
+
+  const handleConfirmCancellation = async () => {
+    setCancellingSubscription(true);
+    setPlanMessage(null);
+    try {
+      const request: CancelPremiumSubscriptionRequest = {
+        reason: selectedCancellationReason,
+        feedback: cancellationFeedback.trim() || null,
+      };
+      const updatedProfile = await cancelPremiumSubscription(request);
+      setProfile((currentProfile) => {
+        const baseProfile = updatedProfile ?? currentProfile;
+        if (!baseProfile) {
+          return currentProfile;
+        }
+        return {
+          ...baseProfile,
+          subscription: {
+            ...baseProfile.subscription,
+            cancelAtPeriodEnd: true,
+            premiumEndsAt: baseProfile.subscription.premiumEndsAt ?? currentProfile?.subscription.premiumEndsAt ?? null,
+            cancelledAt: baseProfile.subscription.cancelledAt ?? currentProfile?.subscription.cancelledAt ?? new Date().toISOString(),
+          },
+        };
+      });
+      setPlanMessage("Cancellation scheduled. Premium remains active until the end of your current billing period.");
+      setIsCancellationModalOpen(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not schedule Premium cancellation.";
+      setPlanMessage(message);
+    } finally {
+      setCancellingSubscription(false);
+    }
+  };
+
   const isPremiumPlan = profile?.planType === "PREMIUM";
+  const isCancellationScheduled = Boolean(profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt);
   const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
   const studyPacksLimit = usageSummary?.studyPacksLimit ?? (isPremiumPlan ? 100 : 5);
   const challengeQuizUsed = usageSummary?.challengeQuizUsed ?? 0;
@@ -236,7 +305,10 @@ export default function SettingsPage() {
   const monthlyPriceLabel = "USD 4.99 / month";
   const yearlyPriceLabel = "USD 39.99 / year";
 
-  const formatBillingDate = (rawDate: string) => {
+  const formatBillingDate = (rawDate: string | null) => {
+    if (!rawDate) {
+      return "the end of your current billing period";
+    }
     const value = new Date(rawDate);
     if (Number.isNaN(value.getTime())) {
       return rawDate;
@@ -372,6 +444,37 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
+              {isPremiumPlan && isCancellationScheduled ? (
+                <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
+                  <p className="text-sm font-semibold text-foreground">
+                    Premium ends on {formatBillingDate(profile.subscription.premiumEndsAt)}
+                  </p>
+                  <p className="text-sm text-foreground/80">Your subscription will not renew.</p>
+                  <p className="text-xs text-foreground/70">
+                    Your notes and Study Packs will remain in your library.
+                  </p>
+                </div>
+              ) : null}
+              {isPremiumPlan && !isCancellationScheduled ? (
+                <div className="rounded-md border border-border bg-background p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Cancel Subscription</p>
+                      <p className="text-xs text-foreground/70">
+                        Premium stays active until the end of your current billing period.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      onClick={handleOpenCancellationModal}
+                    >
+                      Cancel Subscription
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {isPremiumPlan && planMessage ? (
                 <p className="text-xs text-foreground/60">{planMessage}</p>
               ) : null}
@@ -489,6 +592,68 @@ export default function SettingsPage() {
           </Card>
         </div>
       ) : null}
+      <AppModal
+        isOpen={isCancellationModalOpen}
+        title="Cancel Premium?"
+        description="Your Premium access will remain active until the end of your current billing period. After that, your account will return to the Free plan. Your notes and Study Packs will remain in your library."
+        onClose={handleCloseCancellationModal}
+        panelClassName="max-w-[560px]"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={handleCloseCancellationModal}
+              disabled={cancellingSubscription}
+            >
+              Keep Premium
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => void handleConfirmCancellation()}
+              disabled={cancellingSubscription}
+            >
+              {cancellingSubscription ? "Confirming..." : "Confirm Cancellation"}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-foreground">Why are you cancelling? (Optional)</legend>
+            <div className="space-y-2">
+              {CANCELLATION_REASONS.map((reason) => (
+                <label
+                  key={reason.value}
+                  className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                >
+                  <input
+                    type="radio"
+                    name="cancellationReason"
+                    value={reason.value}
+                    checked={selectedCancellationReason === reason.value}
+                    onChange={() => setSelectedCancellationReason(reason.value)}
+                  />
+                  <span>{reason.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-foreground">Anything we can improve?</span>
+            <textarea
+              value={cancellationFeedback}
+              onChange={(event) => setCancellationFeedback(event.target.value)}
+              rows={4}
+              maxLength={1000}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              placeholder="Optional feedback"
+            />
+          </label>
+        </div>
+      </AppModal>
     </main>
   );
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
+import com.studysnap.backend.dto.CancelPremiumSubscriptionRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.BillingProvider;
@@ -115,6 +116,15 @@ public class PayMongoBillingService implements BillingService {
         }
 
         return new BillingCheckoutSessionResponse(checkoutUrl);
+    }
+
+    @Override
+    public void cancelPremiumSubscription(UUID userId, CancelPremiumSubscriptionRequest request) {
+        subscriptionService.scheduleCancellationAtPeriodEnd(
+                userId,
+                request == null ? null : request.reason(),
+                request == null ? null : request.feedback()
+        );
     }
 
     @Override
@@ -230,6 +240,7 @@ public class PayMongoBillingService implements BillingService {
                     PAYMONGO_PROVIDER,
                     periodStart == null ? OffsetDateTime.now() : periodStart,
                     periodEnd,
+                    false,
                     providerMetadata
             );
             return;
@@ -252,6 +263,7 @@ public class PayMongoBillingService implements BillingService {
                         PAYMONGO_PROVIDER,
                         periodStart == null ? OffsetDateTime.now() : periodStart,
                         periodEnd,
+                        false,
                         providerMetadata
                 );
                 return;
@@ -284,6 +296,7 @@ public class PayMongoBillingService implements BillingService {
                             PAYMONGO_PROVIDER,
                             periodStart == null ? OffsetDateTime.now() : periodStart,
                             periodEnd,
+                            true,
                             providerMetadata
                     );
                     return;
@@ -312,7 +325,8 @@ public class PayMongoBillingService implements BillingService {
                         BillingType.SUBSCRIPTION,
                         PAYMONGO_PROVIDER,
                         periodStart == null ? OffsetDateTime.now() : periodStart,
-                        cancelAtPeriodEnd ? periodEnd : null,
+                        periodEnd,
+                        cancelAtPeriodEnd,
                         providerMetadata
                 );
                 return;
@@ -332,6 +346,7 @@ public class PayMongoBillingService implements BillingService {
                         PAYMONGO_PROVIDER,
                         periodStart == null ? OffsetDateTime.now() : periodStart,
                         periodEnd,
+                        cancelAtPeriodEnd,
                         providerMetadata
                 );
                 return;

@@ -4,6 +4,8 @@ import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.dto.BillingHistoryItemResponse;
 import com.studysnap.backend.dto.BillingUsageSummaryResponse;
+import com.studysnap.backend.dto.CancelPremiumSubscriptionRequest;
+import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -11,6 +13,7 @@ import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingHistoryService;
 import com.studysnap.backend.service.BillingService;
 import com.studysnap.backend.service.BillingUsageService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -59,6 +62,19 @@ public class BillingController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return billingHistoryService.getHistory(user.userId());
+    }
+
+    @PostMapping("/subscription/cancel")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public MeResponse cancelPremiumSubscription(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody(required = false) CancelPremiumSubscriptionRequest request
+    ) {
+        CancelPremiumSubscriptionRequest payload = request == null
+                ? new CancelPremiumSubscriptionRequest(null, null)
+                : request;
+        billingService.cancelPremiumSubscription(user.userId(), payload);
+        return authService.getMe(user.userId());
     }
 
     @PostMapping("/webhook")
