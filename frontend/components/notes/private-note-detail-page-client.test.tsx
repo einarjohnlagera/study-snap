@@ -210,6 +210,9 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz (Premium)" }));
 
     expect(await screen.findByText("Unlock Exam Mode")).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Challenge Quiz simulates a real exam and helps you test your knowledge without seeing answers immediately/i),
+    ).toBeInTheDocument();
     expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalledWith("/settings#plan-billing");
 
@@ -233,9 +236,9 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice (Premium)" }));
 
-    expect(await screen.findByText("Unlock Exam Mode")).toBeInTheDocument();
+    expect(await screen.findByText("Focus on Your Weak Topics")).toBeInTheDocument();
     expect(
-      screen.getByText(/Challenge Quiz and Adaptive Practice are Premium features designed to help you focus on weak topics/i),
+      screen.getByText(/Adaptive Practice creates quizzes based on the topics you got wrong so you can improve faster/i),
     ).toBeInTheDocument();
   });
 

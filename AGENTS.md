@@ -47,6 +47,13 @@ Core loop:
 - Free users should see a soft paywall modal before being sent to billing for Premium-only quiz features or Study Pack limit blocks.
 - `Upgrade to Premium` may navigate to `Settings` billing only after explicit user confirmation in that modal.
 - At `80%` of the Free Study Pack limit, show a non-blocking upgrade banner on Dashboard, Note Detail, and Study Pack generation surfaces.
+- Upgrade messaging should position Premium as an exam-preparation and mastery tool for students.
+- Keep modal copy specific to the user action:
+  - `Challenge Quiz` -> exam simulation messaging
+  - `Adaptive Practice` -> weak-topic improvement messaging
+  - Study Pack limit -> quota + Premium unlock messaging
+- Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, and the `100` Study Pack Premium limit.
+- Pricing page should clearly compare Free vs Premium with localized backend pricing and student-oriented value messaging.
 
 ### Pricing Rule
 
