@@ -61,9 +61,20 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
     expect(screen.getByText("Subject: Science")).toBeInTheDocument();
     expect(screen.getByText("By studybuddy")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
     expect(screen.getByText("Cell structure summary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Key Concepts" })).toBeInTheDocument();
     expect(screen.getByText("Cell membrane")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Practice Questions Preview" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Make a copy to try the interactive quiz, see answers, and track your score."),
+    ).toBeInTheDocument();
     expect(screen.getByText(/What controls the cell\?/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What you can do with this note in NoteLib" })).toBeInTheDocument();
+    expect(screen.getByText("Take Quick Review quiz")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Preview only\. The full quiz experience, answer reveal, and score tracking are available/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Make a Copy and Generate Your Own Quiz/i })).toBeInTheDocument();
   });
 
