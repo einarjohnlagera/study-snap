@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
@@ -89,7 +89,6 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               )}
             </div>
             <p className="text-sm text-foreground/80">By {note.authorDisplayName}</p>
-            <PublicSeoCopyCta noteId={note.id} />
           </div>
         </header>
 
@@ -123,11 +122,29 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
           </Card>
         </section>
 
+        <section aria-labelledby="public-note-whats-inside">
+          <Card className="space-y-3 border-blue-500/20 bg-blue-500/5 p-4 sm:p-6">
+            <h2 id="public-note-whats-inside" className="text-xl font-semibold">
+              What you can do with this note in NoteLib
+            </h2>
+            <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
+              <li>Review summary</li>
+              <li>Study key concepts</li>
+              <li>Take Quick Review quiz</li>
+              <li>Try Challenge Quiz (Exam Mode)</li>
+              <li>Practice weak topics with Adaptive Practice</li>
+            </ul>
+          </Card>
+        </section>
+
         <section aria-labelledby="public-note-quiz">
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 id="public-note-quiz" className="text-xl font-semibold">
-              Quiz Preview
+              Practice Questions Preview
             </h2>
+            <p className="text-sm text-foreground/70">
+              Make a copy to try the interactive quiz, see answers, and track your score.
+            </p>
             {hasGeneratedStudyPack && quizPreview.length > 0 ? (
               <ol className="space-y-4">
                 {quizPreview.map((item, index) => (
@@ -146,14 +163,17 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
             ) : (
               <p className="text-sm text-foreground/75">No quiz preview available yet.</p>
             )}
+            <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-3 text-sm text-foreground/70">
+              Preview only. The full quiz experience, answer reveal, and score tracking are available after you make a
+              copy to your library.
+            </div>
+            <PublicSeoCopyCta noteId={note.id} />
           </Card>
         </section>
       </article>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <Link href="/library/public" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          Back to Public Library
-        </Link>
+        <PublicLibraryBackLink className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
         <p className="text-xs text-foreground/55">
           Public pages are read-only. Make a copy to keep studying in your own library.
         </p>

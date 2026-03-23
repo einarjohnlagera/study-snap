@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
@@ -106,7 +107,7 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <Link href="/library/public" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">Back to Public Library</Link>
+      <PublicLibraryBackLink className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
 
       {loading ? (
         <Card className="p-6">Loading public note...</Card>

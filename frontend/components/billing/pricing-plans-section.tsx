@@ -13,16 +13,18 @@ type PricingPlansSectionProps = {
   showHeading?: boolean;
 };
 
+type ComparisonValue = "check" | string | null;
+
 const COMPARISON_ROWS = [
   {
     label: "Create Notes",
-    free: "Included",
-    premium: "Included",
+    free: "check",
+    premium: "check",
   },
   {
     label: "Save Notes",
-    free: "Included",
-    premium: "Included",
+    free: "check",
+    premium: "check",
   },
   {
     label: "Study Packs per month",
@@ -31,44 +33,54 @@ const COMPARISON_ROWS = [
   },
   {
     label: "Quick Review",
-    free: "Included",
-    premium: "Included",
+    free: "check",
+    premium: "check",
   },
   {
     label: "Public Library Access",
-    free: "Included",
-    premium: "Included",
+    free: "check",
+    premium: "check",
   },
   {
     label: "Challenge Quiz (Exam Mode)",
     free: null,
-    premium: "Included",
+    premium: "check",
   },
   {
-    label: "Adaptive Practice (Focus on weak topics)",
+    label: "Adaptive Practice",
     free: null,
-    premium: "Included",
+    premium: "check",
   },
   {
     label: "Priority AI generation",
     free: null,
-    premium: "Included",
+    premium: "check",
   },
 ];
 
-function ComparisonCell({ value }: { value: string | null }) {
+function ComparisonCell({ value, emphasize = false }: { value: ComparisonValue; emphasize?: boolean }) {
+  const baseClassName = emphasize
+    ? "text-foreground"
+    : "text-foreground/85";
+
   if (value === null) {
     return (
-      <span className="inline-flex items-center gap-2 text-foreground/55">
-        <Minus className="h-4 w-4" />
-        Not included
+      <span className={`inline-flex min-h-6 min-w-6 items-center justify-center ${baseClassName}`} aria-label="Not included">
+        <Minus className="h-4 w-4 text-foreground/55" aria-hidden="true" />
+      </span>
+    );
+  }
+
+  if (value === "check") {
+    return (
+      <span className={`inline-flex min-h-6 min-w-6 items-center justify-center ${baseClassName}`} aria-label="Included">
+        <Check className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-2 text-foreground/85">
-      <Check className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+    <span className={`inline-flex min-h-6 items-center justify-center font-medium tabular-nums ${baseClassName}`}>
       {value}
     </span>
   );
@@ -167,23 +179,25 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[40rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-left">
                 <th className="px-4 py-3 font-semibold sm:px-6">Feature</th>
-                <th className="px-4 py-3 font-semibold sm:px-6">Free</th>
-                <th className="px-4 py-3 font-semibold sm:px-6">Premium</th>
+                <th className="px-4 py-3 text-center font-semibold sm:px-6">Free</th>
+                <th className="bg-blue-500/8 px-4 py-3 text-center font-semibold text-foreground sm:px-6 dark:bg-blue-500/12">
+                  Premium
+                </th>
               </tr>
             </thead>
             <tbody>
               {COMPARISON_ROWS.map((row) => (
                 <tr key={row.label} className="border-b border-border last:border-b-0">
                   <td className="px-4 py-3 font-medium sm:px-6">{row.label}</td>
-                  <td className="px-4 py-3 sm:px-6">
+                  <td className="px-4 py-3 text-center align-middle sm:px-6">
                     <ComparisonCell value={row.free} />
                   </td>
-                  <td className="px-4 py-3 sm:px-6">
-                    <ComparisonCell value={row.premium} />
+                  <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12">
+                    <ComparisonCell value={row.premium} emphasize />
                   </td>
                 </tr>
               ))}

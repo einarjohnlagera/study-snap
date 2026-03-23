@@ -23,8 +23,11 @@ describe("PricingPage", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
     expect(screen.getByText("₱1,999/year (Save ₱989)")).toBeInTheDocument();
+    expect(screen.queryByText("Included")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not included")).not.toBeInTheDocument();
     expect(screen.getAllByText("Challenge Quiz (Exam Mode)")).not.toHaveLength(0);
-    expect(screen.getAllByText("Adaptive Practice (Focus on weak topics)")).not.toHaveLength(0);
+    expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
+    expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
   });
 
   it("links hero and plan CTAs to signup and billing", async () => {
