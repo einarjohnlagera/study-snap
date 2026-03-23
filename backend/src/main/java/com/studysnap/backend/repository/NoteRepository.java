@@ -14,6 +14,8 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);
+    List<NoteEntity> findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility visibility, String subject);
+    List<NoteEntity> findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility visibility);
 
     @Query("""
             select n

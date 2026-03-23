@@ -269,4 +269,12 @@ public class NoteController {
     ) {
         return noteService.getPublicById(id);
     }
+
+    @GetMapping("/public/seo/{subject}/{slug}")
+    public PublicNoteDetailResponse getPublicBySeoPath(
+            @PathVariable String subject,
+            @PathVariable String slug
+    ) {
+        return noteService.getPublicBySeoPath(subject, slug);
+    }
 }

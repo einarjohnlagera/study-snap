@@ -8,9 +8,11 @@ import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -32,9 +34,13 @@ public class NoteService {
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
     private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
     private static final String STUDY_PACK_STATUS_READY = "STUDY_PACK_READY";
+    private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
+    private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
+    private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
 
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
+    private final UserRepository userRepository;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         NoteEntity entity = new NoteEntity();
@@ -226,6 +232,27 @@ public class NoteService {
         return mapToPublicDetail(entity, linkedStudyPack);
     }
 
+    @Transactional(readOnly = true)
+    public PublicNoteDetailResponse getPublicBySeoPath(String subjectSlug, String titleSlug) {
+        String normalizedSubjectSlug = normalizeSlug(subjectSlug);
+        String normalizedTitleSlug = normalizeSlug(titleSlug);
+        List<NoteEntity> candidates = DEFAULT_PUBLIC_SUBJECT_SLUG.equals(normalizedSubjectSlug)
+                ? noteRepository.findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
+                : noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(
+                        NoteVisibility.PUBLIC,
+                        unslugify(normalizedSubjectSlug)
+                );
+
+        NoteEntity matched = candidates.stream()
+                .filter(note -> slugify(note.getSubject(), DEFAULT_PUBLIC_SUBJECT_SLUG).equals(normalizedSubjectSlug))
+                .filter(note -> slugify(note.getTitle(), DEFAULT_PUBLIC_TITLE_SLUG).equals(normalizedTitleSlug))
+                .findFirst()
+                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+
+        StudyPackEntity linkedStudyPack = findLinkedStudyPack(matched.getId());
+        return mapToPublicDetail(matched, linkedStudyPack);
+    }
+
     private List<NoteListItemResponse> toListItems(List<NoteEntity> notes) {
         if (notes.isEmpty()) {
             return List.of();
@@ -334,6 +361,9 @@ public class NoteService {
     }
 
     private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack) {
+        String authorDisplayName = userRepository.findById(note.getOwnerUserId())
+                .map(this::resolvePublicAuthorName)
+                .orElse(DEFAULT_AUTHOR_NAME);
         return new PublicNoteDetailResponse(
                 note.getId().toString(),
                 note.getTitle(),
@@ -344,8 +374,21 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
+                authorDisplayName,
                 note.getUpdatedAt()
         );
+    }
+
+    private String resolvePublicAuthorName(UserEntity user) {
+        String displayName = normalizeOptionalText(user.getDisplayName());
+        if (displayName != null) {
+            return displayName;
+        }
+        String firstName = normalizeOptionalText(user.getFirstName());
+        if (firstName != null) {
+            return firstName;
+        }
+        return DEFAULT_AUTHOR_NAME;
     }
 
     private String resolveStudyPackStatus(NoteEntity note, StudyPackEntity studyPack) {
@@ -376,6 +419,24 @@ public class NoteService {
 
     private NoteVisibility resolveVisibility(NoteEntity note) {
         return note.getVisibility() == null ? NoteVisibility.PRIVATE : note.getVisibility();
+    }
+
+    private static String slugify(String value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String normalized = value.trim().toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        return normalized.isBlank() ? fallback : normalized;
+    }
+
+    private String normalizeSlug(String slug) {
+        return slug == null ? "" : slug.trim().toLowerCase();
+    }
+
+    private String unslugify(String slug) {
+        return slug.replace('-', ' ').trim();
     }
 
     private NoteStatus resolveStatus(NoteEntity note) {

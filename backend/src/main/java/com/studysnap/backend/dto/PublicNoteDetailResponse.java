@@ -13,6 +13,7 @@ public record PublicNoteDetailResponse(
         String summary,
         List<String> keyConcepts,
         List<QuizItem> quiz,
+        String authorDisplayName,
         OffsetDateTime updatedAt
 ) {
 }

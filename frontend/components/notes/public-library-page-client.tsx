@@ -10,6 +10,7 @@ import {
   listPublicNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
+import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 
@@ -330,11 +331,11 @@ export function PublicLibraryPageClient() {
                     key={item.id}
                     role="link"
                     tabIndex={0}
-                    onClick={() => router.push(`/public/notes/${item.id}`)}
+                    onClick={() => router.push(buildPublicLibraryNotePath({ subject: item.subject, title: item.title }))}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        router.push(`/public/notes/${item.id}`);
+                        router.push(buildPublicLibraryNotePath({ subject: item.subject, title: item.title }));
                       }
                     }}
                     className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"

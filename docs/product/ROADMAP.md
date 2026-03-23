@@ -29,7 +29,7 @@ Scope priorities:
   - `/library` (My Library)
   - `/library/public` (Public Library)
   - `/notes/{id}` (Note Detail)
-  - `/public/notes/{id}` (Public Note Detail)
+  - `/public/library/{subject}/{slug}` (Public Note Detail, SEO)
 - Premium Challenge Quiz (timed mode generated from Study Pack summary + key concepts)
 - Premium Adaptive Practice (targeted generation from weak concepts)
 - session resilience for Challenge/Adaptive (resume in-progress sessions)

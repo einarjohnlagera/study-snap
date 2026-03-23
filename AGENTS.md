@@ -67,6 +67,10 @@ Core loop:
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Library should exclude the current user's own notes.
+- Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
+- Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.
+- Private notes must never be exposed through the public SEO route.
+- Copying a public note must preserve attribution via `copiedFromNoteId` and `copiedFromUserId`.
 
 ### Note Ownership Rule
 

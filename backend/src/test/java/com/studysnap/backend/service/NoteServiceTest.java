@@ -6,9 +6,11 @@ import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,12 +38,14 @@ class NoteServiceTest {
     private NoteRepository noteRepository;
     @Mock
     private StudyPackRepository studyPackRepository;
+    @Mock
+    private UserRepository userRepository;
 
     private NoteService noteService;
 
     @BeforeEach
     void setUp() {
-        noteService = new NoteService(noteRepository, studyPackRepository);
+        noteService = new NoteService(noteRepository, studyPackRepository, userRepository);
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -172,6 +176,47 @@ class NoteServiceTest {
 
         verify(studyPackRepository).delete(studyPack);
         verify(noteRepository).delete(note);
+    }
+
+    @Test
+    void getPublicBySeoPath_returnsPublicNoteWithAuthorAttribution() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity publicNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        publicNote.setTitle("World War 1 Causes");
+        publicNote.setSubject("History");
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(UUID.randomUUID());
+        studyPack.setNoteId(noteId);
+        studyPack.setSummary("Summary");
+        studyPack.setKeyConcepts(List.of("Alliance systems"));
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        owner.setDisplayName("historyhero");
+        owner.setFirstName("History");
+
+        when(noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, "history"))
+                .thenReturn(List.of(publicNote));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(studyPack));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        var response = noteService.getPublicBySeoPath("history", "world-war-1-causes");
+
+        assertThat(response.id()).isEqualTo(noteId.toString());
+        assertThat(response.authorDisplayName()).isEqualTo("historyhero");
+        assertThat(response.summary()).isEqualTo("Summary");
+        assertThat(response.keyConcepts()).containsExactly("Alliance systems");
+    }
+
+    @Test
+    void getPublicBySeoPath_rejectsMissingOrPrivateMatch() {
+        when(noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, "science"))
+                .thenReturn(List.of());
+
+        assertThatThrownBy(() -> noteService.getPublicBySeoPath("science", "cell-structure"))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("NOTE_NOT_FOUND");
     }
 
     private NoteEntity buildNote(

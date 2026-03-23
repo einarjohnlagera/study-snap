@@ -52,7 +52,7 @@ Primary routes:
 - `/library`
 - `/library/public`
 - `/notes/{id}` (Note Detail)
-- `/public/notes/{id}` (Public Note Detail, read-only)
+- `/public/library/{subject}/{slug}` (Public Note Detail, read-only)
 
 ## Verification and OCR
 

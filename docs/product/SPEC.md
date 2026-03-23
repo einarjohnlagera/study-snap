@@ -177,7 +177,7 @@ Primary routes:
 - `/library` (My Library)
 - `/library/public` (Public Library)
 - `/notes/{id}` (Note Detail)
-- `/public/notes/{id}` (Public Note Detail, read-only)
+- `/public/library/{subject}/{slug}` (Public Note Detail, read-only, SEO)
 
 ### Quick Review
 
