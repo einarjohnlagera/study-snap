@@ -1,0 +1,5 @@
+ALTER TABLE subscriptions
+    ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS cancellation_reason VARCHAR(64),
+    ADD COLUMN IF NOT EXISTS cancellation_feedback VARCHAR(1000);

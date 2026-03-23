@@ -17,6 +17,17 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Adaptive Practice (50/month)
 - Weak Concept Detection
 
+## Premium cancellation
+
+- Canceling Premium is a confirm-first flow in `Settings`.
+- Cancellation is scheduled for the end of the current billing period, not immediate.
+- Premium features remain active until the stored billing-period end date.
+- After the period ends, subscription lifecycle logic downgrades the account to Free.
+- Canceling Premium does not remove notes or generated Study Packs from the user library.
+- Optional cancellation feedback can be stored:
+  - `cancellationReason`
+  - `cancellationFeedback`
+
 ## Billing architecture
 
 - Controller/service layer is provider-agnostic (`BillingService` interface).
@@ -54,6 +65,7 @@ Webhook processing maps to:
 - `SubscriptionExpiryJob` (daily):
   - finds active Premium subscriptions past `endAt`
   - marks them expired and downgrades users to Free
+  - scheduled cancellations use the existing billing-period end date for downgrade timing
 - `BillingUsageResetJob` (daily):
   - ensures each user has a usage row for the current billing period
   - free users follow calendar month windows

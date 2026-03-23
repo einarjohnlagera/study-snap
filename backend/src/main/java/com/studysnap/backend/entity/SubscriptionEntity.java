@@ -43,6 +43,19 @@ public class SubscriptionEntity {
     @Column(name = "end_at")
     private OffsetDateTime endAt;
 
+    @Column(name = "cancel_at_period_end", nullable = false)
+    private boolean cancelAtPeriodEnd;
+
+    @Column(name = "cancelled_at")
+    private OffsetDateTime cancelledAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancellation_reason", length = 64)
+    private SubscriptionCancellationReason cancellationReason;
+
+    @Column(name = "cancellation_feedback", length = 1000)
+    private String cancellationFeedback;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "billing_type", nullable = false, length = 32)
     private BillingType billingType;

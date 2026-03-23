@@ -26,6 +26,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
@@ -164,6 +165,7 @@ class PayMongoBillingServiceTest {
                 eq(BillingProvider.PAYMONGO),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class),
+                eq(false),
                 eq(new SubscriptionService.ProviderMetadata("cus_abc", "sub_abc"))
         );
         verify(paymentTransactionService).markSuccess(transactionId);
@@ -222,7 +224,7 @@ class PayMongoBillingServiceTest {
         SimpleMessageResponse response = service.handleWebhook(payload, null);
 
         assertThat(response.message()).isEqualTo("Received.");
-        verify(subscriptionService, never()).activatePremiumSubscription(any(), any(), any(), any(), any(), any());
+        verify(subscriptionService, never()).activatePremiumSubscription(any(), any(), any(), any(), any(), anyBoolean(), any());
         verify(paymentTransactionService, never()).markSuccess(any());
         verify(paymentTransactionService, never()).markFailed(any());
     }
@@ -269,7 +271,7 @@ class PayMongoBillingServiceTest {
 
         assertThat(response.message()).isEqualTo("Received.");
         verify(paymentTransactionService, never()).createPending(any(), any(), any(), any(), any(), any(), any());
-        verify(subscriptionService, never()).activatePremiumSubscription(any(), any(), any(), any(), any(), any());
+        verify(subscriptionService, never()).activatePremiumSubscription(any(), any(), any(), any(), any(), anyBoolean(), any());
     }
 
     @Test
@@ -391,6 +393,7 @@ class PayMongoBillingServiceTest {
                 eq(BillingProvider.PAYMONGO),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class),
+                eq(false),
                 eq(new SubscriptionService.ProviderMetadata("cus_failed", "sub_failed"))
         );
         verify(paymentTransactionService).markFailed(transactionId);

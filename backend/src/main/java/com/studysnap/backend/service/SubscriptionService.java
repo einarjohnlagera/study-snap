@@ -1,8 +1,10 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionCancellationReason;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserEntity;
@@ -33,6 +35,17 @@ public class SubscriptionService {
     ) {
     }
 
+    public record PlanSnapshot(
+            PlanType planType,
+            boolean cancelAtPeriodEnd,
+            OffsetDateTime premiumEndsAt,
+            OffsetDateTime cancelledAt
+    ) {
+        public SubscriptionPlanStatusResponse toResponse() {
+            return new SubscriptionPlanStatusResponse(cancelAtPeriodEnd, premiumEndsAt, cancelledAt);
+        }
+    }
+
     public SubscriptionEntity createDefaultFreeSubscription(UserEntity user) {
         OffsetDateTime now = OffsetDateTime.now();
         SubscriptionEntity subscription = new SubscriptionEntity();
@@ -46,6 +59,11 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public PlanType resolvePlan(UUID userId) {
+        return getPlanSnapshot(userId).planType();
+    }
+
+    @Transactional(readOnly = true)
+    public PlanSnapshot getPlanSnapshot(UUID userId) {
         OffsetDateTime now = OffsetDateTime.now();
         return subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
                         userId,
@@ -54,8 +72,13 @@ public class SubscriptionService {
                 ).stream()
                 .filter(subscription -> hasActivePremiumAccess(subscription, now))
                 .findFirst()
-                .map(e -> PlanType.PREMIUM)
-                .orElse(PlanType.FREE);
+                .map(subscription -> new PlanSnapshot(
+                        PlanType.PREMIUM,
+                        subscription.isCancelAtPeriodEnd(),
+                        subscription.getEndAt(),
+                        subscription.getCancelledAt()
+                ))
+                .orElseGet(() -> new PlanSnapshot(PlanType.FREE, false, null, null));
     }
 
     public String ensureProviderCustomerId(
@@ -93,6 +116,7 @@ public class SubscriptionService {
             BillingProvider provider,
             OffsetDateTime startAt,
             OffsetDateTime endAt,
+            boolean cancelAtPeriodEnd,
             ProviderMetadata providerMetadata
     ) {
         if (billingType == null || billingType == BillingType.NONE) {
@@ -143,6 +167,12 @@ public class SubscriptionService {
         }
         target.setStartAt(effectiveStartAt);
         target.setEndAt(endAt);
+        target.setCancelAtPeriodEnd(cancelAtPeriodEnd);
+        if (!cancelAtPeriodEnd) {
+            clearCancellationDetails(target);
+        } else if (target.getCancelledAt() == null) {
+            target.setCancelledAt(now);
+        }
         target.setUpdatedAt(now);
         return subscriptionRepository.save(target);
     }
@@ -168,8 +198,44 @@ public class SubscriptionService {
                 provider,
                 now,
                 now.plusDays(durationDays),
+                true,
                 providerMetadata
         );
+    }
+
+    public SubscriptionEntity scheduleCancellationAtPeriodEnd(
+            UUID userId,
+            SubscriptionCancellationReason reason,
+            String feedback
+    ) {
+        UserEntity user = requireUser(userId);
+        SubscriptionEntity target = ensureLatestSubscription(user);
+        OffsetDateTime now = OffsetDateTime.now();
+
+        if (target.getPlanType() != PlanType.PREMIUM
+                || target.getStatus() != SubscriptionStatus.ACTIVE
+                || !hasActivePremiumAccess(target, now)) {
+            throw new AppException(
+                    "PREMIUM_SUBSCRIPTION_NOT_ACTIVE",
+                    "There is no active Premium subscription to cancel.",
+                    HttpStatus.CONFLICT
+            );
+        }
+
+        if (target.getEndAt() == null) {
+            throw new AppException(
+                    "SUBSCRIPTION_PERIOD_END_UNAVAILABLE",
+                    "Could not determine the current billing period end.",
+                    HttpStatus.CONFLICT
+            );
+        }
+
+        target.setCancelAtPeriodEnd(true);
+        target.setCancelledAt(now);
+        target.setCancellationReason(reason);
+        target.setCancellationFeedback(normalizeFeedback(feedback));
+        target.setUpdatedAt(now);
+        return subscriptionRepository.save(target);
     }
 
     public SubscriptionEntity downgradeToFree(UUID userId) {
@@ -288,5 +354,21 @@ public class SubscriptionService {
         target.setProviderSubscriptionId(null);
         target.setStartAt(now);
         target.setEndAt(null);
+        clearCancellationDetails(target);
+    }
+
+    private void clearCancellationDetails(SubscriptionEntity target) {
+        target.setCancelAtPeriodEnd(false);
+        target.setCancelledAt(null);
+        target.setCancellationReason(null);
+        target.setCancellationFeedback(null);
+    }
+
+    private String normalizeFeedback(String feedback) {
+        if (feedback == null) {
+            return null;
+        }
+        String normalized = feedback.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }

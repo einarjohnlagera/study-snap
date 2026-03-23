@@ -171,6 +171,7 @@ public class AuthService {
     }
 
     private MeResponse toMeResponse(UserEntity user) {
+        SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(user.getId());
         return new MeResponse(
                 user.getId().toString(),
                 user.getEmail(),
@@ -183,7 +184,8 @@ public class AuthService {
                 user.getEmailVerifiedAt(),
                 user.getRole(),
                 user.getStatus(),
-                subscriptionService.resolvePlan(user.getId())
+                planSnapshot.planType(),
+                planSnapshot.toResponse()
         );
     }
 
