@@ -42,6 +42,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh", "/auth/verify-email").permitAll()
                         .requestMatchers("/billing/webhook").permitAll()
+                        .requestMatchers("/billing/pricing").permitAll()
                         .requestMatchers("/notes/public/**").permitAll()
                         .requestMatchers("/share/**").permitAll()
                         .requestMatchers("/p/**").permitAll()

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
-import { getBillingUsageSummary, getNote } from "@/lib/api";
+import { getBillingPricing, getBillingUsageSummary, getNote } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -25,6 +25,7 @@ jest.mock("@/lib/api", () => ({
   createNote: jest.fn(),
   createStudyPackFromImage: jest.fn(),
   createStudyPackFromNote: jest.fn(),
+  getBillingPricing: jest.fn(),
   getBillingUsageSummary: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: () => false,
@@ -60,6 +61,7 @@ const baseNote = {
 describe("NoteEditorPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    (getBillingPricing as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
@@ -71,6 +73,15 @@ describe("NoteEditorPageClient", () => {
       challengeQuizLimit: 0,
       adaptivePracticeUsed: 0,
       adaptivePracticeLimit: 0,
+    });
+    (getBillingPricing as jest.Mock).mockResolvedValue({
+      region: "PH",
+      currency: "PHP",
+      monthlyPrice: 249,
+      yearlyPrice: 1999,
+      introMonthlyPrice: 199,
+      hasIntroPromo: true,
+      introEligible: true,
     });
   });
 
@@ -153,6 +164,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: /Generate Study Pack/i }));
 
     expect(await screen.findByText("You've reached your monthly limit")).toBeInTheDocument();
+    expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
 

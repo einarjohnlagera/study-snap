@@ -82,6 +82,79 @@ studysnap:
     premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:50}
   billing:
     provider: ${BILLING_PROVIDER:PAYMONGO}
+    pricing-regions:
+      US:
+        currency: USD
+        monthly-price: ${PRICING_US_MONTHLY_PRICE:4.99}
+        yearly-price: ${PRICING_US_YEARLY_PRICE:39.99}
+        paymongo-monthly-plan-id: ${PAYMONGO_US_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_US_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_US_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_US_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_US_ACTIVE:true}
+      PH:
+        currency: PHP
+        monthly-price: ${PRICING_PH_MONTHLY_PRICE:249}
+        yearly-price: ${PRICING_PH_YEARLY_PRICE:1999}
+        paymongo-monthly-plan-id: ${PAYMONGO_PH_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_PH_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_PH_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_PH_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_PH_ACTIVE:true}
+      GB:
+        currency: GBP
+        monthly-price: ${PRICING_GB_MONTHLY_PRICE:4.49}
+        yearly-price: ${PRICING_GB_YEARLY_PRICE:35.99}
+        paymongo-monthly-plan-id: ${PAYMONGO_GB_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_GB_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_GB_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_GB_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_GB_ACTIVE:true}
+      EU:
+        currency: EUR
+        monthly-price: ${PRICING_EU_MONTHLY_PRICE:4.99}
+        yearly-price: ${PRICING_EU_YEARLY_PRICE:39.99}
+        paymongo-monthly-plan-id: ${PAYMONGO_EU_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_EU_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_EU_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_EU_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_EU_ACTIVE:true}
+      AU:
+        currency: AUD
+        monthly-price: ${PRICING_AU_MONTHLY_PRICE:7.49}
+        yearly-price: ${PRICING_AU_YEARLY_PRICE:59.99}
+        paymongo-monthly-plan-id: ${PAYMONGO_AU_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_AU_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_AU_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_AU_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_AU_ACTIVE:true}
+      CA:
+        currency: CAD
+        monthly-price: ${PRICING_CA_MONTHLY_PRICE:6.49}
+        yearly-price: ${PRICING_CA_YEARLY_PRICE:51.99}
+        paymongo-monthly-plan-id: ${PAYMONGO_CA_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_CA_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_CA_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_CA_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_CA_ACTIVE:true}
+      SG:
+        currency: SGD
+        monthly-price: ${PRICING_SG_MONTHLY_PRICE:6.49}
+        yearly-price: ${PRICING_SG_YEARLY_PRICE:51.99}
+        paymongo-monthly-plan-id: ${PAYMONGO_SG_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_SG_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_SG_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_SG_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_SG_ACTIVE:true}
+      IN:
+        currency: INR
+        monthly-price: ${PRICING_IN_MONTHLY_PRICE:399}
+        yearly-price: ${PRICING_IN_YEARLY_PRICE:3199}
+        paymongo-monthly-plan-id: ${PAYMONGO_IN_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
+        paymongo-yearly-plan-id: ${PAYMONGO_IN_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
+        paymongo-intro-monthly-plan-id: ${PAYMONGO_IN_INTRO_MONTHLY_PLAN_ID:}
+        paymongo-intro-yearly-plan-id: ${PAYMONGO_IN_INTRO_YEARLY_PLAN_ID:}
+        active: ${PRICING_IN_ACTIVE:true}
     stripe:
       api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com/v1}
       secret-key: ${STRIPE_SECRET_KEY:}
@@ -117,4 +190,3 @@ studysnap:
       max-failed-attempts: ${AUTH_MAX_FAILED_ATTEMPTS:5}
       lock-minutes: ${AUTH_LOCK_MINUTES:15}
       auth-rate-limit-per-minute: ${AUTH_RATE_LIMIT_PER_MINUTE:20}
-

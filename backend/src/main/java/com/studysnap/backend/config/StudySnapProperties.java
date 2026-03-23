@@ -6,6 +6,8 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @ConfigurationProperties(prefix = "studysnap")
 @Getter
@@ -94,6 +96,7 @@ public class StudySnapProperties {
         private BillingProvider provider = BillingProvider.PAYMONGO;
         private final Stripe stripe = new Stripe();
         private final Paymongo paymongo = new Paymongo();
+        private Map<String, RegionPricing> pricingRegions = new LinkedHashMap<>();
     }
 
     @Getter
@@ -119,6 +122,19 @@ public class StudySnapProperties {
         private BigDecimal yearlyAmount = new BigDecimal("39.99");
         private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
         private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
+    }
+
+    @Getter
+    @Setter
+    public static class RegionPricing {
+        private String currency = "USD";
+        private BigDecimal monthlyPrice = new BigDecimal("4.99");
+        private BigDecimal yearlyPrice = new BigDecimal("39.99");
+        private String paymongoMonthlyPlanId = "";
+        private String paymongoYearlyPlanId = "";
+        private String paymongoIntroMonthlyPlanId = "";
+        private String paymongoIntroYearlyPlanId = "";
+        private boolean active = true;
     }
 
     @Getter

@@ -9,7 +9,12 @@ import com.studysnap.backend.entity.BillingCycle;
 import java.util.UUID;
 
 public interface BillingService {
-    BillingCheckoutSessionResponse createPremiumCheckoutSession(UUID userId, BillingCycle billingCycle);
+    BillingCheckoutSessionResponse createPremiumCheckoutSession(
+            UUID userId,
+            BillingCycle billingCycle,
+            String voucherCode,
+            String cfIpCountry
+    );
 
     void cancelPremiumSubscription(UUID userId, CancelPremiumSubscriptionRequest request);
 

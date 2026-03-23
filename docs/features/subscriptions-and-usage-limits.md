@@ -52,9 +52,77 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 
 - Controller/service layer is provider-agnostic (`BillingService` interface).
 - Active runtime provider is `PAYMONGO`.
-- Premium recurring plans:
-  - `MONTHLY` (configured by `PAYMONGO_MONTHLY_PLAN_ID`)
-  - `YEARLY` (configured by `PAYMONGO_YEARLY_PLAN_ID`)
+- Backend is the single source of truth for Premium pricing, region resolution, voucher eligibility, and PayMongo plan selection.
+- Frontend pricing surfaces must read pricing from `GET /api/billing/pricing` and must not hardcode subscription amounts.
+
+## Regional pricing
+
+- Region detection uses the `CF-IPCountry` request header.
+- `PricingRegionResolver` maps country codes into pricing regions:
+  - `PH -> PH`
+  - `US -> US`
+  - `GB -> GB`
+  - EU member countries -> `EU`
+  - `AU -> AU`
+  - `CA -> CA`
+  - `SG -> SG`
+  - `IN -> IN`
+  - fallback -> `US`
+- Backend pricing config is stored per region and includes:
+  - `currency`
+  - `monthlyPrice`
+  - `yearlyPrice`
+  - `paymongoMonthlyPlanId`
+  - `paymongoYearlyPlanId`
+  - `paymongoIntroMonthlyPlanId` (optional)
+  - `paymongoIntroYearlyPlanId` (optional)
+  - `isActive`
+
+## Voucher and promotion rules
+
+- Intro pricing is implemented as voucher logic, not a boolean on `User`.
+- Voucher records support:
+  - `discountType`
+  - `discountValue`
+  - `currency`
+  - `billingCycleScope`
+  - `planScope`
+  - `regionScope`
+  - `newSubscribersOnly`
+  - `requiresCode`
+  - redemption limits and validity windows
+- Voucher eligibility checks:
+  - voucher is active
+  - current time is within `validFrom` and `validUntil`
+  - redemption limit is not exhausted
+  - region, billing cycle, plan, and currency match
+  - if `newSubscribersOnly=true`, the user has no prior Premium subscription and has not redeemed that voucher before
+- Automatic intro promos use `requiresCode=false`.
+- Future promo codes use the same voucher system with `requiresCode=true`.
+
+## Pricing API
+
+- `GET /api/billing/pricing` returns the effective display pricing for the request region.
+- Response contract:
+  - `region`
+  - `currency`
+  - `monthlyPrice`
+  - `yearlyPrice`
+  - `introMonthlyPrice`
+  - `hasIntroPromo`
+  - `introEligible`
+- Pricing page, upgrade modal, and Settings billing UI must all use this API response.
+
+## PayMongo plan selection
+
+- Checkout plan selection is backend-driven.
+- When creating a subscription, backend chooses the PayMongo plan ID using:
+  - resolved pricing region
+  - selected billing cycle
+  - eligible automatic or code-based voucher
+- If an eligible voucher is applied and the region config has a matching intro plan ID, backend uses that intro PayMongo plan ID.
+- Otherwise backend uses the standard monthly or yearly PayMongo plan ID for the region.
+- Successful subscription activation records a voucher redemption tied to the user, subscription, and payment transaction.
 
 ## Webhook lifecycle events
 

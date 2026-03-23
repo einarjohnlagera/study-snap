@@ -15,6 +15,8 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
     Optional<SubscriptionEntity> findFirstByUser_IdAndStatusOrderByCreatedAtDesc(UUID userId, SubscriptionStatus status);
     Optional<SubscriptionEntity> findFirstByUser_IdOrderByCreatedAtDesc(UUID userId);
 
+    boolean existsByUser_IdAndPlanType(UUID userId, PlanType planType);
+
     Optional<SubscriptionEntity> findFirstByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
             UUID userId,
             PlanType planType,

@@ -105,6 +105,16 @@ export type SubscriptionPlanStatusResponse = {
   cancelledAt: string | null;
 };
 
+export type BillingPricingResponse = {
+  region: string;
+  currency: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  introMonthlyPrice: number | null;
+  hasIntroPromo: boolean;
+  introEligible: boolean;
+};
+
 export type SignupRequest = {
   email: string;
   password: string;
@@ -1264,19 +1274,41 @@ export async function getMasterySnapshot(): Promise<MasterySnapshotResponse> {
 
 export async function createPremiumCheckoutSession(
   billingCycle: BillingCycle = "MONTHLY",
+  voucherCode?: string | null,
 ): Promise<BillingCheckoutSessionResponse> {
   const response = await fetchWithAuth(
     "/billing/checkout-session",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ billingCycle }),
+      body: JSON.stringify({ billingCycle, voucherCode: voucherCode ?? null }),
     },
     true,
   );
   return parseApiResponse<BillingCheckoutSessionResponse>(
     response,
     "Could not start Premium checkout. Please try again.",
+  );
+}
+
+export async function getBillingPricing(): Promise<BillingPricingResponse> {
+  const accessToken = getAccessToken();
+  const response = accessToken
+    ? await fetchWithAuth(
+        "/billing/pricing",
+        {
+          method: "GET",
+          headers: buildAuthHeaders(),
+        },
+        true,
+      )
+    : await fetch(buildUrl("/billing/pricing"), {
+        method: "GET",
+      });
+
+  return parseApiResponse<BillingPricingResponse>(
+    response,
+    "Could not load Premium pricing.",
   );
 }
 

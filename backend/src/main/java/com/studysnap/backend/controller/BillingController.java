@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.dto.BillingHistoryItemResponse;
+import com.studysnap.backend.dto.BillingPricingResponse;
 import com.studysnap.backend.dto.BillingUsageSummaryResponse;
 import com.studysnap.backend.dto.CancelPremiumSubscriptionRequest;
 import com.studysnap.backend.dto.MeResponse;
@@ -11,6 +12,7 @@ import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingHistoryService;
+import com.studysnap.backend.service.PricingService;
 import com.studysnap.backend.service.BillingService;
 import com.studysnap.backend.service.BillingUsageService;
 import jakarta.validation.Valid;
@@ -33,19 +35,30 @@ public class BillingController {
     private final BillingService billingService;
     private final BillingUsageService billingUsageService;
     private final BillingHistoryService billingHistoryService;
+    private final PricingService pricingService;
     private final AuthService authService;
 
     @PostMapping({"/checkout-session", "/checkout/premium"})
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BillingCheckoutSessionResponse createCheckoutSession(
             @AuthenticationPrincipal AuthenticatedUser user,
-            @RequestBody(required = false) BillingCheckoutSessionRequest request
+            @RequestBody(required = false) BillingCheckoutSessionRequest request,
+            @RequestHeader(value = "CF-IPCountry", required = false) String cfIpCountry
     ) {
         authService.requireEmailVerified(user.userId());
         BillingCycle billingCycle = request == null || request.billingCycle() == null
                 ? BillingCycle.MONTHLY
                 : request.billingCycle();
-        return billingService.createPremiumCheckoutSession(user.userId(), billingCycle);
+        String voucherCode = request == null ? null : request.voucherCode();
+        return billingService.createPremiumCheckoutSession(user.userId(), billingCycle, voucherCode, cfIpCountry);
+    }
+
+    @GetMapping("/pricing")
+    public BillingPricingResponse getPricing(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestHeader(value = "CF-IPCountry", required = false) String cfIpCountry
+    ) {
+        return pricingService.getPricing(user == null ? null : user.userId(), cfIpCountry);
     }
 
     @GetMapping({"/usage-summary", "/usage"})

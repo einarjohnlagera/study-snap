@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
+import { useBillingPricing } from "@/hooks/use-billing-pricing";
+import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 
 export type PaywallModalVariant = "premium-feature" | "study-pack-limit";
 
@@ -42,6 +44,9 @@ export function PaywallModal({
   onUpgrade,
 }: PaywallModalProps) {
   const copy = getModalCopy(variant);
+  const { billingPricing } = useBillingPricing(isOpen);
+  const monthlyLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
+  const yearlyLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
 
   return (
     <AppModal
@@ -72,6 +77,15 @@ export function PaywallModal({
             ))}
           </ul>
         </div>
+        {billingPricing ? (
+          <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm text-foreground/85">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+              Pricing in your region
+            </p>
+            <p className="mt-2 font-medium text-foreground">{monthlyLabel}</p>
+            <p className="text-xs text-foreground/70">{yearlyLabel}</p>
+          </div>
+        ) : null}
       </div>
     </AppModal>
   );

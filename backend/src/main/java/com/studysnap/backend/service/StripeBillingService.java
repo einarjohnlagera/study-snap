@@ -69,7 +69,12 @@ public class StripeBillingService implements BillingService {
     }
 
     @Override
-    public BillingCheckoutSessionResponse createPremiumCheckoutSession(UUID userId, BillingCycle billingCycle) {
+    public BillingCheckoutSessionResponse createPremiumCheckoutSession(
+            UUID userId,
+            BillingCycle billingCycle,
+            String voucherCode,
+            String cfIpCountry
+    ) {
         ensureCheckoutConfigured();
 
         UserEntity user = userRepository.findById(userId)
