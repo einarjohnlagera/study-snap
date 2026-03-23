@@ -1,93 +1,181 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import {
-  ArrowDown,
   ArrowRight,
   Brain,
+  CheckCircle2,
+  FileText,
   ListChecks,
   ScanText,
   Sparkles,
-  TrendingUp,
+  Target,
+  Zap,
 } from "lucide-react";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 
-const coreOutputs = [
+export const metadata: Metadata = {
+  title: "NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes",
+  description: "Turn your notes into summaries, key concepts, and quizzes. Study smarter with NoteLib.",
+};
+
+const howItWorksSteps = [
   {
-    title: "Summary",
-    description: "Understand the topic quickly with a clear summary of your notes.",
+    step: "Step 1",
+    title: "Upload or Paste Notes",
+    description: "Take a photo or paste your notes.",
+    icon: ScanText,
+  },
+  {
+    step: "Step 2",
+    title: "Generate Study Pack",
+    description: "Get summary, key concepts, and quiz instantly.",
     icon: Sparkles,
   },
   {
+    step: "Step 3",
+    title: "Review and Practice",
+    description: "Use Quick Review, Challenge Quiz, and Adaptive Practice.",
+    icon: Target,
+  },
+];
+
+const featureCards = [
+  {
+    title: "Summaries",
+    description: "Understand lessons faster",
+    icon: FileText,
+  },
+  {
     title: "Key Concepts",
-    description: "See the most important ideas and terms in a simple, scannable list.",
+    description: "Focus on important topics",
     icon: Brain,
   },
   {
     title: "Quick Review",
-    description: "Practice active recall with quiz questions, feedback, and retry support.",
-    icon: ListChecks,
-  },
-];
-
-const featureHighlights = [
-  {
-    title: "AI Summary",
-    description: "NoteLib condenses your notes into a clear summary so you can grasp the key points faster.",
-    icon: Sparkles,
-  },
-  {
-    title: "Key Concepts",
-    description: "Important concepts are extracted and organized so you can review them quickly.",
-    icon: Brain,
-  },
-  {
-    title: "Quick Review Quiz",
-    description: "Automatically generated quiz questions help reinforce what you’ve learned.",
+    description: "Fast reviewer before quiz",
     icon: ListChecks,
   },
   {
-    title: "Adaptive Learning",
-    description: "Challenge Quiz and Adaptive Practice help you train weak areas with focused exam-style review.",
-    icon: TrendingUp,
+    title: "Challenge Quiz",
+    description: "Exam-style quiz",
+    icon: CheckCircle2,
+  },
+  {
+    title: "Adaptive Practice",
+    description: "Focus on weak topics",
+    icon: Zap,
   },
 ];
 
-const faqItems = [
-  {
-    question: "What is NoteLib?",
-    answer: "NoteLib turns your notes into a structured study pack with summaries, key concepts, and quizzes.",
-  },
-  {
-    question: "What type of notes can I upload?",
-    answer: "You can paste text notes or upload images of handwritten notes, lecture slides, or textbook pages.",
-  },
-  {
-    question: "Is NoteLib free?",
-    answer: "NoteLib offers a free plan with limited study packs per month, and a premium plan with additional features.",
-  },
-  {
-    question: "Do I need an account to try it?",
-    answer: "No. You can try the demo mode without creating an account.",
-  },
-];
-
-function FeatureHighlightsSection() {
+function HeroSection() {
   return (
-    <section className="space-y-4">
+    <section className="relative overflow-hidden rounded-[2rem] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.16),_transparent_28%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.9))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.18),_transparent_28%),linear-gradient(135deg,_rgba(2,6,23,0.96),_rgba(15,23,42,0.94))] sm:p-8 lg:p-10">
+      <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <div className="space-y-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+            <Sparkles className="h-4 w-4" />
+            AI study packs for students
+          </div>
+          <div className="space-y-3">
+            <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              Turn your notes into summaries, quizzes, and reviewers in seconds.
+            </h1>
+            <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+              Study smarter with AI-powered summaries, key concepts, and practice quizzes.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+              Get Started Free
+            </Link>
+            <Link
+              href="/demo"
+              className={buttonVariants({ variant: "outline", className: "w-full border-blue-500/30 bg-background/80 sm:w-auto" })}
+            >
+              Try Demo
+            </Link>
+          </div>
+          <div className="grid gap-3 text-sm text-foreground/75 sm:grid-cols-3">
+            <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
+              <p className="font-semibold text-foreground">Paste notes or upload photos</p>
+            </div>
+            <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
+              <p className="font-semibold text-foreground">Generate a Study Pack instantly</p>
+            </div>
+            <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
+              <p className="font-semibold text-foreground">Review before quizzes and exams</p>
+            </div>
+          </div>
+        </div>
+
+        <Card className="overflow-hidden border-blue-500/20 bg-background/85 p-0 shadow-lg backdrop-blur">
+          <div className="border-b border-border bg-muted/40 px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              From class notes to exam prep
+            </p>
+            <p className="mt-1 text-sm text-foreground/75">
+              NoteLib turns one note into a review workflow you can actually use.
+            </p>
+          </div>
+          <div className="grid gap-3 p-5">
+            <div className="rounded-2xl border border-border bg-muted/20 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Raw Notes</p>
+              <div className="mt-2 space-y-2 text-sm text-foreground/80">
+                <p>Cell structure includes the nucleus, membrane, mitochondria, and ribosomes.</p>
+                <p>Each part has a specific role in keeping the cell alive and functioning.</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                Generate Study Pack
+                <ArrowRight className="h-3.5 w-3.5" />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Summary</p>
+                <p className="mt-2 text-sm text-foreground/80">Review the lesson quickly before class or exams.</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Key Concepts</p>
+                <p className="mt-2 text-sm text-foreground/80">Spot the terms and ideas most likely to matter.</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Quiz Practice</p>
+                <p className="mt-2 text-sm text-foreground/80">Use Quick Review, Challenge Quiz, and Adaptive Practice.</p>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function HowItWorksSection() {
+  return (
+    <section className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Feature Highlights
+          How It Works
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Everything you need to study faster</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">From messy notes to a study routine in three steps</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        {featureHighlights.map((feature) => (
-          <Card key={feature.title} className="space-y-3 p-4 sm:p-6">
-            <feature.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            <CardTitle>{feature.title}</CardTitle>
-            <CardDescription className="text-sm">{feature.description}</CardDescription>
+      <div className="grid gap-4 md:grid-cols-3">
+        {howItWorksSteps.map((item) => (
+          <Card key={item.title} className="space-y-4 p-5 sm:p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                {item.step}
+              </span>
+              <item.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="space-y-2">
+              <CardTitle>{item.title}</CardTitle>
+              <CardDescription className="text-sm">{item.description}</CardDescription>
+            </div>
           </Card>
         ))}
       </div>
@@ -95,262 +183,80 @@ function FeatureHighlightsSection() {
   );
 }
 
-function ProductPreviewSection() {
+function FeaturesSection() {
   return (
-    <section className="space-y-4">
+    <section className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Product Preview
+          Features
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">See NoteLib in action</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for review weeks, quizzes, and exam prep</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="space-y-3 p-4 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">AI Summary</p>
-          <p className="text-sm leading-relaxed text-foreground/85">
-            Plants convert light energy into chemical energy to produce glucose.
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {featureCards.map((feature) => (
+          <Card key={feature.title} className="space-y-4 p-5">
+            <feature.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className="space-y-2">
+              <CardTitle className="text-lg">{feature.title}</CardTitle>
+              <CardDescription className="text-sm">{feature.description}</CardDescription>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DemoSection() {
+  return (
+    <section className="rounded-[2rem] border border-amber-500/20 bg-[linear-gradient(135deg,_rgba(254,243,199,0.55),_rgba(255,255,255,0.92))] p-6 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(120,53,15,0.32),_rgba(15,23,42,0.92))] sm:p-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+            Demo
           </p>
-        </Card>
-        <Card className="space-y-3 p-4 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Key Concepts</p>
-          <ul className="space-y-1 text-sm text-foreground/85">
-            <li>• Chlorophyll</li>
-            <li>• Calvin cycle</li>
-            <li>• Light-dependent reactions</li>
-          </ul>
-        </Card>
-        <Card className="space-y-3 p-4 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Quick Review</p>
-          <div className="space-y-2 text-sm text-foreground/85">
-            <p className="font-medium text-foreground">Question:</p>
-            <p>What is the main role of chlorophyll?</p>
-            <p className="font-medium text-foreground">Options:</p>
-            <ul className="space-y-1">
-              <li>A) absorb sunlight</li>
-              <li>B) store water</li>
-              <li>C) produce oxygen</li>
-            </ul>
-          </div>
-        </Card>
-      </div>
-      <div>
-        <Link href="/demo" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          Try the demo to experience the full workflow.
+          <h2 className="text-2xl font-semibold sm:text-3xl">Try a demo Study Pack now — no signup required.</h2>
+          <p className="max-w-2xl text-sm text-foreground/75 sm:text-base">
+            Explore the NoteLib workflow before creating an account. Open the demo, review the generated outputs, and see how fast note review can feel.
+          </p>
+        </div>
+        <Link href="/demo" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+          Try Demo
         </Link>
       </div>
     </section>
   );
 }
 
-function FaqSection() {
+function BottomCtaSection() {
   return (
-    <section className="space-y-4">
-      <div className="space-y-2">
-        <h2 className="text-2xl font-semibold sm:text-3xl">Frequently Asked Questions</h2>
-      </div>
-      <div className="space-y-3">
-        {faqItems.map((item) => (
-          <Card key={item.question} className="p-0">
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4 text-left text-sm font-medium sm:p-5 sm:text-base [&::-webkit-details-marker]:hidden">
-                <span>{item.question}</span>
-                <span className="text-xs text-foreground/55" aria-hidden>
-                  +
-                </span>
-              </summary>
-              <p className="border-t border-border px-4 py-3 text-sm leading-relaxed text-foreground/75 sm:px-5">
-                {item.answer}
-              </p>
-            </details>
-          </Card>
-        ))}
+    <section className="rounded-[2rem] border border-blue-500/20 bg-[linear-gradient(135deg,_rgba(219,234,254,0.75),_rgba(255,255,255,0.96))] p-6 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(30,64,175,0.26),_rgba(15,23,42,0.94))] sm:p-8">
+      <div className="space-y-4 text-center">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Start Today
+          </p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Start studying smarter today.</h2>
+        </div>
+        <div className="flex justify-center">
+          <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+            Create Free Account
+          </Link>
+        </div>
       </div>
     </section>
-  );
-}
-
-function HeroTransformationPreview() {
-  return (
-    <div className="rounded-xl border border-border/80 bg-background/80 p-3 shadow-sm backdrop-blur sm:p-4">
-      <div className="space-y-3 sm:grid sm:grid-cols-[1fr_auto_1fr] sm:items-stretch sm:gap-3 sm:space-y-0">
-        <Card className="space-y-3 p-3 sm:p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/60">Raw Notes</p>
-          <div className="space-y-2 text-xs leading-relaxed text-foreground/80">
-            <p>Photosynthesis is how plants make food using sunlight.</p>
-            <p>Chlorophyll absorbs light energy in the leaves.</p>
-            <p>Water + carbon dioxide help produce glucose.</p>
-            <p>Oxygen is released. Key stages: light-dependent reactions and Calvin cycle.</p>
-          </div>
-        </Card>
-
-        <div className="flex items-center justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-medium text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 sm:flex-col sm:rounded-xl sm:px-2.5 sm:py-2">
-            <span>AI transforms</span>
-            <ArrowRight className="hidden h-3.5 w-3.5 sm:block" />
-            <ArrowDown className="h-3.5 w-3.5 sm:hidden" />
-          </div>
-        </div>
-
-        <Card className="space-y-3 p-3 sm:p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/60">Study Pack</p>
-          <div className="space-y-2 text-xs text-foreground/85">
-            <p className="font-semibold text-foreground">Photosynthesis</p>
-            <div>
-              <p className="font-medium text-foreground/80">Summary</p>
-              <p>Plants convert light energy into chemical energy to produce glucose.</p>
-            </div>
-            <div>
-              <p className="font-medium text-foreground/80">Key Concepts</p>
-              <ul className="list-disc pl-4">
-                <li>Chlorophyll</li>
-                <li>Calvin cycle</li>
-                <li>Light-dependent reactions</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium text-foreground/80">Quiz Preview</p>
-              <p>What is the main role of chlorophyll?</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-    </div>
   );
 }
 
 export default function Home() {
   return (
     <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
-      <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-blue-50 to-white p-6 shadow-sm dark:from-blue-950/30 dark:to-gray-950 sm:p-10">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <div className="space-y-5">
-            <Image
-              src="/notelib-logo-full-light.svg"
-              alt="NoteLib"
-              width={176}
-              height={36}
-              priority
-              className="dark:hidden"
-            />
-            <Image
-              src="/notelib-logo-full-dark.svg"
-              alt="NoteLib"
-              width={176}
-              height={36}
-              priority
-              className="hidden dark:block"
-            />
-            <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1 text-xs text-foreground/80 sm:text-sm">
-              <ScanText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              AI study assistant for notes, review, and practice
-            </div>
-            <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl md:text-5xl">
-              Turn your notes into study packs in seconds
-            </h1>
-            <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Upload or paste your notes and NoteLib turns them into summaries, key concepts, and quiz
-              questions so you can review faster.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/demo" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-                Try Demo
-              </Link>
-              <Link
-                href="/auth"
-                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-              >
-                Start Free
-              </Link>
-            </div>
-            <p className="text-sm text-foreground/75">
-              Perfect for lecture notes, textbook pages, and study reviewers.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/80">
-                AI summary
-              </span>
-              <span className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/80">
-                Key concepts
-              </span>
-              <span className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/80">
-                Quick Review quiz
-              </span>
-            </div>
-          </div>
-          <HeroTransformationPreview />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Study Pack Preview
-          </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Each Study Pack includes three essentials</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {coreOutputs.map((item) => (
-            <Card key={item.title} className="space-y-3 p-4 sm:p-6">
-              <item.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              <CardTitle>{item.title}</CardTitle>
-              <CardDescription className="text-sm">{item.description}</CardDescription>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            How It Works
-          </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">From notes to better review in 3 steps</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card className="space-y-2 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Step 1</p>
-            <h3 className="text-lg font-semibold">Upload notes</h3>
-            <p className="text-sm text-foreground/75">Paste notes or upload an image. OCR extracts the text for you.</p>
-          </Card>
-          <Card className="space-y-2 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Step 2</p>
-            <h3 className="text-lg font-semibold">Generate Study Pack</h3>
-            <p className="text-sm text-foreground/75">Get a summary, key concepts, and quiz questions in one place.</p>
-          </Card>
-          <Card className="space-y-2 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Step 3</p>
-            <h3 className="text-lg font-semibold">Review smarter</h3>
-            <p className="text-sm text-foreground/75">Use Quick Review, spot weak areas, and practice what needs more work.</p>
-          </Card>
-        </div>
-      </section>
-
-      <FeatureHighlightsSection />
-      <ProductPreviewSection />
+      <HeroSection />
+      <HowItWorksSection />
+      <FeaturesSection />
       <PricingPlansSection />
-
-      <section className="rounded-2xl border border-border bg-gray-50 p-6 text-center shadow-sm dark:bg-gray-950/40 sm:p-10">
-        <div className="mx-auto max-w-2xl space-y-4">
-          <h2 className="text-2xl font-semibold sm:text-3xl">Ready to study with more clarity and consistency?</h2>
-          <p className="text-sm text-foreground/75 sm:text-base">
-            Create your account and turn your next set of notes into a reusable Study Pack for active review.
-          </p>
-          <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-              Create Free Account
-            </Link>
-            <Link
-              href="/demo"
-              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-            >
-              Explore Demo
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <FaqSection />
+      <DemoSection />
+      <BottomCtaSection />
     </main>
   );
 }

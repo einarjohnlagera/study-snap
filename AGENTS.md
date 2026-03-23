@@ -55,6 +55,14 @@ Core loop:
 - Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, and the `100` Study Pack Premium limit.
 - Pricing page should clearly compare Free vs Premium with localized backend pricing and student-oriented value messaging.
 
+### Marketing Landing Page Rule
+
+- The landing page must explain NoteLib in student terms: notes -> summaries -> quizzes -> review.
+- Keep the home page focused on hero, how-it-works, features, Free vs Premium pricing, demo access, and signup CTA.
+- Demo access must be available without signup.
+- Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.
+- Landing page metadata should position NoteLib as a note-to-study-pack product, not a generic AI assistant.
+
 ### Pricing Rule
 
 - Backend owns subscription pricing, region detection, voucher eligibility, and PayMongo plan selection.
