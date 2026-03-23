@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { getSampleNotePreset } from "@/lib/sample-notes";
-import { createNote } from "@/lib/api";
+import { createNote, trackAnalyticsEvent } from "@/lib/api";
 import { ConfirmTextCard } from "./confirm-text-card";
 import { StudyPackResults } from "./study-pack-results";
 import { StudyInputCard } from "./study-input-card";
@@ -24,6 +24,7 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   const isSampleNote = Boolean(samplePreset);
   const [redirecting, setRedirecting] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
+  const hasTrackedDemoRef = useRef(false);
 
   const {
     notesText,
@@ -50,6 +51,19 @@ export default function StudyPageClient({ forcedDemoMode = false }: StudyPageCli
   } = useStudyPack(demoMode, samplePreset?.content ?? "");
 
   const canSaveNote = notesText.trim().length > 0;
+
+  useEffect(() => {
+    if (!demoMode || hasTrackedDemoRef.current) {
+      return;
+    }
+    hasTrackedDemoRef.current = true;
+    void trackAnalyticsEvent({
+      eventType: "DEMO_OPENED",
+      metadata: {
+        sample: samplePreset?.key ?? null,
+      },
+    });
+  }, [demoMode, samplePreset?.key]);
 
   const handleSaveNote = async () => {
     if (demoMode || redirecting || savingNote || !canSaveNote) {

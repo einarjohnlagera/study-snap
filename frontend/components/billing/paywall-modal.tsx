@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
+import { trackAnalyticsEvent } from "@/lib/api";
 import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 
 export type PaywallModalVariant =
@@ -57,10 +60,42 @@ export function PaywallModal({
   onClose,
   onUpgrade,
 }: PaywallModalProps) {
+  const pathname = usePathname();
+  const hasTrackedOpenRef = useRef(false);
   const copy = getModalCopy(variant);
   const { billingPricing } = useBillingPricing(isOpen);
   const monthlyLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
   const yearlyLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
+
+  useEffect(() => {
+    if (!isOpen) {
+      hasTrackedOpenRef.current = false;
+      return;
+    }
+    if (hasTrackedOpenRef.current) {
+      return;
+    }
+    hasTrackedOpenRef.current = true;
+    void trackAnalyticsEvent({
+      eventType: "PAYWALL_VIEWED",
+      metadata: {
+        variant,
+        path: pathname,
+      },
+    });
+  }, [isOpen, pathname, variant]);
+
+  const handleUpgrade = () => {
+    void trackAnalyticsEvent({
+      eventType: "UPGRADE_CLICKED",
+      metadata: {
+        source: "paywall_modal",
+        variant,
+        path: pathname,
+      },
+    });
+    onUpgrade();
+  };
 
   return (
     <AppModal
@@ -73,7 +108,7 @@ export function PaywallModal({
           <Button type="button" variant="outline" onClick={onClose}>
             {copy.dismissLabel}
           </Button>
-          <Button type="button" onClick={onUpgrade}>
+          <Button type="button" onClick={handleUpgrade}>
             Upgrade to Premium
           </Button>
         </div>

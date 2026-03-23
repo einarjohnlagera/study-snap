@@ -11,6 +11,11 @@ jest.mock("@/lib/api", () => ({
     hasIntroPromo: true,
     introEligible: true,
   }),
+  trackAnalyticsEvent: jest.fn(),
+}));
+
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/notes/note-1",
 }));
 
 describe("PaywallModal", () => {

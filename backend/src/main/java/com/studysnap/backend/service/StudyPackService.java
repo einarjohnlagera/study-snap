@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.StudyPackListPageResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
 import com.studysnap.backend.dto.StudyPackListItemResponse;
 import com.studysnap.backend.dto.StudyPackResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.InputType;
 import com.studysnap.backend.entity.ModelTier;
@@ -66,6 +67,7 @@ public class StudyPackService {
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
     private final ActivityTrackingService activityTrackingService;
+    private final AnalyticsService analyticsService;
     private final SubscriptionService subscriptionService;
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
@@ -96,6 +98,11 @@ public class StudyPackService {
         if (requestedSourceNote != null) {
             markNoteGenerated(sourceNote.getId(), sourceNote);
         }
+        analyticsService.trackEvent(ownerUserId, AnalyticsEventType.STUDY_PACK_GENERATED, saved.getId(), buildGenerationMetadata(
+                sourceNote.getId(),
+                InputType.TEXT,
+                requestedSourceNote != null
+        ));
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=text latencyMs={}", requestId, latency);
@@ -145,6 +152,11 @@ public class StudyPackService {
                 generatedNote.getId()
         );
         markNoteGenerated(generatedNote.getId(), generatedNote);
+        analyticsService.trackEvent(ownerUserId, AnalyticsEventType.STUDY_PACK_GENERATED, saved.getId(), buildGenerationMetadata(
+                generatedNote.getId(),
+                InputType.IMAGE,
+                false
+        ));
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=create_studyPack inputType=image latencyMs={}", requestId, latency);
@@ -191,6 +203,11 @@ public class StudyPackService {
         );
         markNoteGenerated(generatedNote.getId(), generatedNote);
         studyPackDraftRepository.delete(draft);
+        analyticsService.trackEvent(ownerUserId, AnalyticsEventType.STUDY_PACK_GENERATED, saved.getId(), buildGenerationMetadata(
+                generatedNote.getId(),
+                InputType.IMAGE,
+                false
+        ));
         long latency = System.currentTimeMillis() - startedAt;
 
         log.info("requestId={} action=confirm_text latencyMs={}", requestId, latency);
@@ -758,6 +775,18 @@ public class StudyPackService {
         });
     }
 
+    private LinkedHashMap<String, Object> buildGenerationMetadata(UUID noteId, InputType inputType, boolean generatedFromExistingNote) {
+        LinkedHashMap<String, Object> metadata = new LinkedHashMap<>();
+        if (noteId != null) {
+            metadata.put("noteId", noteId.toString());
+        }
+        if (inputType != null) {
+            metadata.put("inputType", inputType.name());
+        }
+        metadata.put("generatedFromExistingNote", generatedFromExistingNote);
+        return metadata;
+    }
+
     private void assertNoteEditable(UUID noteId, UUID ownerUserId) {
         if (noteId == null) {
             return;
@@ -773,4 +802,3 @@ public class StudyPackService {
         }
     }
 }
-

@@ -5,6 +5,7 @@ import { Check, Crown, Minus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
+import { trackAnalyticsEvent } from "@/lib/api";
 import { formatBillingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
 
@@ -141,7 +142,18 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice (Focus on weak topics)</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI generation</li>
           </ul>
-          <Link href={PLAN_BILLING_PATH} className={buttonVariants({ className: "w-full sm:w-auto" })}>
+          <Link
+            href={PLAN_BILLING_PATH}
+            className={buttonVariants({ className: "w-full sm:w-auto" })}
+            onClick={() => {
+              void trackAnalyticsEvent({
+                eventType: "UPGRADE_CLICKED",
+                metadata: {
+                  source: "pricing_plans_section",
+                },
+              });
+            }}
+          >
             Upgrade to Premium
           </Link>
         </Card>

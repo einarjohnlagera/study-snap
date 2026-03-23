@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
@@ -26,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -40,12 +42,14 @@ class NoteServiceTest {
     private StudyPackRepository studyPackRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private AnalyticsService analyticsService;
 
     private NoteService noteService;
 
     @BeforeEach
     void setUp() {
-        noteService = new NoteService(noteRepository, studyPackRepository, userRepository);
+        noteService = new NoteService(noteRepository, studyPackRepository, userRepository, analyticsService);
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -69,6 +73,7 @@ class NoteServiceTest {
         assertThat(created.studyPackStatus()).isEqualTo("DRAFT");
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
+        verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
     }
 
     @Test
@@ -156,6 +161,7 @@ class NoteServiceTest {
         assertThat(copied.copiedFromTitle()).isEqualTo("Public source");
         assertThat(copied.copiedFromPublic()).isTrue();
         assertThat(copied.copiedAt()).isNotNull();
+        verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.PUBLIC_NOTE_COPIED), eq(sourceNoteId), any());
     }
 
     @Test
@@ -200,7 +206,7 @@ class NoteServiceTest {
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(studyPack));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
-        var response = noteService.getPublicBySeoPath("history", "world-war-1-causes");
+        var response = noteService.getPublicBySeoPath("history", "world-war-1-causes", null);
 
         assertThat(response.id()).isEqualTo(noteId.toString());
         assertThat(response.authorDisplayName()).isEqualTo("historyhero");
@@ -213,7 +219,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, "science"))
                 .thenReturn(List.of());
 
-        assertThatThrownBy(() -> noteService.getPublicBySeoPath("science", "cell-structure"))
+        assertThatThrownBy(() -> noteService.getPublicBySeoPath("science", "cell-structure", null))
                 .isInstanceOf(AppException.class)
                 .extracting(error -> ((AppException) error).getCode())
                 .isEqualTo("NOTE_NOT_FOUND");

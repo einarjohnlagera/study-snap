@@ -154,11 +154,11 @@ class NoteControllerTest {
                 "noteguru",
                 OffsetDateTime.now()
         );
-        when(noteService.getPublicBySeoPath("science", "cell-structure")).thenReturn(expected);
+        when(noteService.getPublicBySeoPath("science", "cell-structure", null)).thenReturn(expected);
 
-        PublicNoteDetailResponse response = noteController.getPublicBySeoPath("science", "cell-structure");
+        PublicNoteDetailResponse response = noteController.getPublicBySeoPath("science", "cell-structure", null);
 
         assertThat(response).isEqualTo(expected);
-        verify(noteService).getPublicBySeoPath("science", "cell-structure");
+        verify(noteService).getPublicBySeoPath("science", "cell-structure", null);
     }
 }

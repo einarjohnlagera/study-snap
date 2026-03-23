@@ -265,16 +265,18 @@ public class NoteController {
 
     @GetMapping("/public/{id}")
     public PublicNoteDetailResponse getPublicById(
-            @PathVariable String id
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return noteService.getPublicById(id);
+        return noteService.getPublicById(id, user == null ? null : user.userId());
     }
 
     @GetMapping("/public/seo/{subject}/{slug}")
     public PublicNoteDetailResponse getPublicBySeoPath(
             @PathVariable String subject,
-            @PathVariable String slug
+            @PathVariable String slug,
+            @AuthenticationPrincipal AuthenticatedUser user
     ) {
-        return noteService.getPublicBySeoPath(subject, slug);
+        return noteService.getPublicBySeoPath(subject, slug, user == null ? null : user.userId());
     }
 }

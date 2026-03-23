@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionCancellationReason;
 import com.studysnap.backend.entity.SubscriptionEntity;
@@ -21,6 +22,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,10 +35,12 @@ class SubscriptionServiceTest {
     private SubscriptionRepository subscriptionRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock
+    private AnalyticsService analyticsService;
 
     @Test
     void expireSubscriptionAndDowngradeToFree_marksExpiredAndCreatesFreeSubscription() {
-        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository);
+        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository, analyticsService);
         UUID subscriptionId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
 
@@ -73,7 +78,7 @@ class SubscriptionServiceTest {
 
     @Test
     void scheduleCancellationAtPeriodEnd_persistsReasonAndFeedback() {
-        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository);
+        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository, analyticsService);
         UUID userId = UUID.randomUUID();
 
         UserEntity user = new UserEntity();
@@ -111,7 +116,7 @@ class SubscriptionServiceTest {
 
     @Test
     void activatePremiumSubscription_clearsScheduledCancellationWhenRenewed() {
-        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository);
+        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository, analyticsService);
         UUID userId = UUID.randomUUID();
 
         UserEntity user = new UserEntity();
@@ -152,5 +157,6 @@ class SubscriptionServiceTest {
         assertThat(saved.getCancelledAt()).isNull();
         assertThat(saved.getCancellationReason()).isNull();
         assertThat(saved.getCancellationFeedback()).isNull();
+        verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.SUBSCRIPTION_STARTED), any(), any());
     }
 }

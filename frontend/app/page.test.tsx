@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
 import Home, { metadata } from "./page";
 
@@ -7,6 +8,18 @@ jest.mock("@/components/billing/pricing-plans-section", () => ({
       <h2>Move from note-taking to exam prep</h2>
       <p>Pricing section placeholder</p>
     </section>
+  ),
+}));
+
+jest.mock("@/components/analytics/page-view-tracker", () => ({
+  AnalyticsPageViewTracker: () => null,
+}));
+
+jest.mock("@/components/analytics/tracked-link", () => ({
+  TrackedLink: ({ href, className, children }: { href: string; className?: string; children: ReactNode }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
   ),
 }));
 

@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PlanType;
@@ -28,6 +29,7 @@ import java.util.function.Supplier;
 public class SubscriptionService {
     private final SubscriptionRepository subscriptionRepository;
     private final UserRepository userRepository;
+    private final AnalyticsService analyticsService;
 
     public record ProviderMetadata(
             String providerCustomerId,
@@ -147,6 +149,7 @@ public class SubscriptionService {
 
         UserEntity user = requireUser(userId);
         SubscriptionEntity target = ensureLatestSubscription(user);
+        boolean wasActivePremium = hasActivePremiumAccess(target, now);
 
         String normalizedProviderCustomerId = providerMetadata == null
                 ? null
@@ -174,7 +177,15 @@ public class SubscriptionService {
             target.setCancelledAt(now);
         }
         target.setUpdatedAt(now);
-        return subscriptionRepository.save(target);
+        SubscriptionEntity saved = subscriptionRepository.save(target);
+        if (!wasActivePremium) {
+            analyticsService.trackEvent(userId, AnalyticsEventType.SUBSCRIPTION_STARTED, saved.getId(), buildSubscriptionMetadata(
+                    billingType,
+                    provider,
+                    cancelAtPeriodEnd
+            ));
+        }
+        return saved;
     }
 
     public SubscriptionEntity activatePrepaidSubscription(
@@ -316,6 +327,22 @@ public class SubscriptionService {
         }
         String normalized = raw.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private java.util.Map<String, Object> buildSubscriptionMetadata(
+            BillingType billingType,
+            BillingProvider provider,
+            boolean cancelAtPeriodEnd
+    ) {
+        java.util.LinkedHashMap<String, Object> metadata = new java.util.LinkedHashMap<>();
+        if (billingType != null) {
+            metadata.put("billingType", billingType.name());
+        }
+        if (provider != null) {
+            metadata.put("provider", provider.name());
+        }
+        metadata.put("cancelAtPeriodEnd", cancelAtPeriodEnd);
+        return metadata;
     }
 
     private void requireBillableProvider(BillingProvider provider, String message) {

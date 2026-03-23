@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -41,6 +42,7 @@ public class NoteService {
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final UserRepository userRepository;
+    private final AnalyticsService analyticsService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         NoteEntity entity = new NoteEntity();
@@ -61,6 +63,10 @@ public class NoteService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setUpdatedAt(OffsetDateTime.now());
         NoteEntity saved = noteRepository.save(entity);
+        analyticsService.trackEvent(ownerUserId, AnalyticsEventType.NOTE_CREATED, saved.getId(), buildMetadata(
+                "subject", saved.getSubject(),
+                "visibility", resolveVisibility(saved).name()
+        ));
         return mapToResponse(saved, null);
     }
 
@@ -167,6 +173,12 @@ public class NoteService {
         copy.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(copy);
+        if (!isOwner) {
+            analyticsService.trackEvent(ownerUserId, AnalyticsEventType.PUBLIC_NOTE_COPIED, source.getId(), buildMetadata(
+                    "copiedNoteId", saved.getId().toString(),
+                    "sourceOwnerUserId", source.getOwnerUserId() == null ? null : source.getOwnerUserId().toString()
+            ));
+        }
         return mapToResponse(saved, null);
     }
 
@@ -219,7 +231,7 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public PublicNoteDetailResponse getPublicById(String id) {
+    public PublicNoteDetailResponse getPublicById(String id, UUID viewerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(
                 id,
                 "NOTE_NOT_FOUND",
@@ -229,11 +241,15 @@ public class NoteService {
         NoteEntity entity = noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(entity.getId());
+        analyticsService.trackEvent(viewerUserId, AnalyticsEventType.PUBLIC_NOTE_VIEWED, entity.getId(), buildMetadata(
+                "pathType", "id",
+                "subject", entity.getSubject()
+        ));
         return mapToPublicDetail(entity, linkedStudyPack);
     }
 
     @Transactional(readOnly = true)
-    public PublicNoteDetailResponse getPublicBySeoPath(String subjectSlug, String titleSlug) {
+    public PublicNoteDetailResponse getPublicBySeoPath(String subjectSlug, String titleSlug, UUID viewerUserId) {
         String normalizedSubjectSlug = normalizeSlug(subjectSlug);
         String normalizedTitleSlug = normalizeSlug(titleSlug);
         List<NoteEntity> candidates = DEFAULT_PUBLIC_SUBJECT_SLUG.equals(normalizedSubjectSlug)
@@ -250,6 +266,11 @@ public class NoteService {
                 .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
 
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(matched.getId());
+        LinkedHashMap<String, Object> analyticsMetadata = new LinkedHashMap<>();
+        analyticsMetadata.put("pathType", "seo");
+        analyticsMetadata.put("subjectSlug", normalizedSubjectSlug);
+        analyticsMetadata.put("titleSlug", normalizedTitleSlug);
+        analyticsService.trackEvent(viewerUserId, AnalyticsEventType.PUBLIC_NOTE_VIEWED, matched.getId(), analyticsMetadata);
         return mapToPublicDetail(matched, linkedStudyPack);
     }
 
@@ -437,6 +458,19 @@ public class NoteService {
 
     private String unslugify(String slug) {
         return slug.replace('-', ' ').trim();
+    }
+
+    private Map<String, Object> buildMetadata(String key1, Object value1, String key2, Object value2) {
+        LinkedHashMap<String, Object> metadata = new LinkedHashMap<>();
+        putMetadataValue(metadata, key1, value1);
+        putMetadataValue(metadata, key2, value2);
+        return metadata;
+    }
+
+    private void putMetadataValue(Map<String, Object> metadata, String key, Object value) {
+        if (key != null && value != null) {
+            metadata.put(key, value);
+        }
     }
 
     private NoteStatus resolveStatus(NoteEntity note) {

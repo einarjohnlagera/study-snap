@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -62,6 +63,7 @@ public class ChallengeQuizService {
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
     private final AuthService authService;
+    private final AnalyticsService analyticsService;
 
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId) {
         authService.requireEmailVerified(userId);
@@ -140,6 +142,10 @@ public class ChallengeQuizService {
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
         userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
+        analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, studyPackId, Map.of(
+                "sessionId", saved.getId().toString(),
+                "questionCount", challengeQuiz.size()
+        ));
         return toStartResponse(saved, studyPack, usedThisMonth + 1);
     }
 

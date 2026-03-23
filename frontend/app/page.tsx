@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
   ArrowRight,
   Brain,
@@ -11,6 +10,8 @@ import {
   Target,
   Zap,
 } from "lucide-react";
+import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
+import { TrackedLink } from "@/components/analytics/tracked-link";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -87,15 +88,22 @@ function HeroSection() {
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+            <TrackedLink
+              href="/auth"
+              className={buttonVariants({ className: "w-full sm:w-auto" })}
+              eventType="LANDING_CTA_CLICKED"
+              eventMetadata={{ placement: "hero_primary", destination: "/auth" }}
+            >
               Get Started Free
-            </Link>
-            <Link
+            </TrackedLink>
+            <TrackedLink
               href="/demo"
               className={buttonVariants({ variant: "outline", className: "w-full border-blue-500/30 bg-background/80 sm:w-auto" })}
+              eventType="LANDING_CTA_CLICKED"
+              eventMetadata={{ placement: "hero_demo", destination: "/demo" }}
             >
               Try Demo
-            </Link>
+            </TrackedLink>
           </div>
           <div className="grid gap-3 text-sm text-foreground/75 sm:grid-cols-3">
             <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
@@ -220,9 +228,14 @@ function DemoSection() {
             Explore the NoteLib workflow before creating an account. Open the demo, review the generated outputs, and see how fast note review can feel.
           </p>
         </div>
-        <Link href="/demo" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+        <TrackedLink
+          href="/demo"
+          className={buttonVariants({ className: "w-full sm:w-auto" })}
+          eventType="LANDING_CTA_CLICKED"
+          eventMetadata={{ placement: "demo_section", destination: "/demo" }}
+        >
           Try Demo
-        </Link>
+        </TrackedLink>
       </div>
     </section>
   );
@@ -239,9 +252,14 @@ function BottomCtaSection() {
           <h2 className="text-2xl font-semibold sm:text-3xl">Start studying smarter today.</h2>
         </div>
         <div className="flex justify-center">
-          <Link href="/auth" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+          <TrackedLink
+            href="/auth"
+            className={buttonVariants({ className: "w-full sm:w-auto" })}
+            eventType="LANDING_CTA_CLICKED"
+            eventMetadata={{ placement: "bottom_cta", destination: "/auth" }}
+          >
             Create Free Account
-          </Link>
+          </TrackedLink>
         </div>
       </div>
     </section>
@@ -251,6 +269,7 @@ function BottomCtaSection() {
 export default function Home() {
   return (
     <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
+      <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
       <HowItWorksSection />
       <FeaturesSection />

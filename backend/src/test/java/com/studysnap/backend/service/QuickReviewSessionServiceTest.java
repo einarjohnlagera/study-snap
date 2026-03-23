@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewConfidenceLevel;
@@ -34,6 +35,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -51,6 +53,8 @@ class QuickReviewSessionServiceTest {
     @Mock
     private ActivityTrackingService activityTrackingService;
     @Mock
+    private AnalyticsService analyticsService;
+    @Mock
     private SubscriptionService subscriptionService;
 
     private QuickReviewSessionService quickReviewSessionService;
@@ -62,6 +66,7 @@ class QuickReviewSessionServiceTest {
                 quickReviewSessionRepository,
                 studyPackRepository,
                 activityTrackingService,
+                analyticsService,
                 subscriptionService,
                 featureGateService
         );
@@ -138,6 +143,30 @@ class QuickReviewSessionServiceTest {
         assertThat(response.scorePercentage()).isEqualByComparingTo("60.00");
         assertThat(response.retryCount()).isEqualTo(1);
         assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
+    }
+
+    @Test
+    void startSession_tracksAnalyticsWhenCreatingNewQuickReviewSession() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(studyPackId);
+        studyPack.setNoteId(noteId);
+        studyPack.setOwnerUserId(userId);
+        studyPack.setQuiz(List.of());
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.QUICK_REVIEW,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.empty());
+
+        QuickReviewSessionStartResponse response = quickReviewSessionService.startSession(studyPackId.toString(), userId);
+
+        assertThat(response.sessionId()).isNotNull();
+        verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.QUICK_REVIEW_STARTED), eq(studyPackId), any());
     }
 
     @Test
