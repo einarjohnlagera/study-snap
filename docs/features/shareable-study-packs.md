@@ -7,7 +7,8 @@ Support public discovery and safe reuse of learning content while keeping the no
 ## Public Surfaces
 
 - Public Library route: `/library/public`
-- Public Note Detail route: `/public/notes/{id}`
+- Public Note Detail route: `/public/library/{subject}/{slug}`
+- Legacy public note route: `/public/notes/{id}` -> redirects to canonical SEO route
 - Token share route (existing): `/p/{token}`
 
 Private note share UX:
@@ -21,8 +22,10 @@ Private note share UX:
 - public list includes only notes where `visibility=PUBLIC`
 - owner notes are excluded from Public Library listing
 - public detail is read-only
-- public detail shows: title, subject, tags, summary, key concepts, practice quiz
+- public detail is accessible without login and should remain indexable
+- public detail shows: title, subject, tags, summary, key concepts, practice quiz, author attribution
 - public detail hides: challenge/adaptive/performance/edit controls
+- private notes must never resolve on the public SEO route
 
 ## Copy Flow
 
@@ -36,6 +39,7 @@ Copy behavior:
 - do not copy generated outputs or performance/session history
 - result is a new Draft note in current user ownership
 - copy must not trigger new LLM generation
+- preserve public-source attribution with `copiedFromNoteId` and `copiedFromUserId`
 
 ## Security and Privacy
 

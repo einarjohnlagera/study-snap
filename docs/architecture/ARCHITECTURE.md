@@ -37,7 +37,7 @@ Routes:
 - `/library` My Library (owned notes)
 - `/library/public` Public Library (public notes from other users)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
-- `/public/notes/{id}` public read-only note detail
+- `/public/library/{subject}/{slug}` public read-only note detail
 - `/settings` plan/billing and account controls
 - `/profile` account profile
 - `/p/{token}` public shared Study Pack

@@ -18,6 +18,7 @@ import {
   isStudyPackLimitReachedMessage,
   shouldShowNearStudyPackLimitBanner,
 } from "@/lib/plans";
+import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   copyNote,
@@ -58,11 +59,12 @@ function truncateShareUrl(url: string, maxLength = 58) {
   return `${url.slice(0, maxLength - 3)}...`;
 }
 
-function buildShareUrl(noteId: string) {
+function buildShareUrl(subject: string | null, title: string | null) {
+  const path = buildPublicLibraryNotePath({ subject, title });
   if (typeof window === "undefined") {
-    return `/public/notes/${noteId}`;
+    return path;
   }
-  return new URL(`/public/notes/${noteId}`, window.location.origin).toString();
+  return new URL(path, window.location.origin).toString();
 }
 
 function normalizeMetadataInput(value: string): string | null {
@@ -504,7 +506,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
         setShowSharePrivateConfirm(true);
         return;
       }
-      setShareModalUrl(buildShareUrl(note.id));
+      setShareModalUrl(buildShareUrl(note.subject, note.title));
       setShowShareLinkModal(true);
       setShareModalCopied(false);
     } catch (err) {
@@ -526,7 +528,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
         return;
       }
       setShowSharePrivateConfirm(false);
-      setShareModalUrl(buildShareUrl(updated.id));
+      setShareModalUrl(buildShareUrl(updated.subject, updated.title));
       setShowShareLinkModal(true);
       setShareModalCopied(false);
     } finally {

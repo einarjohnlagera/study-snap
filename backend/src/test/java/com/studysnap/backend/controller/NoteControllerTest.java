@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
@@ -136,5 +137,28 @@ class NoteControllerTest {
 
         verify(authService, never()).requireEmailVerified(userId);
         verify(noteService).updateVisibility("note-1", "PRIVATE", userId);
+    }
+
+    @Test
+    void getPublicBySeoPath_delegatesToService() {
+        PublicNoteDetailResponse expected = new PublicNoteDetailResponse(
+                UUID.randomUUID().toString(),
+                "Cell Structure",
+                "Science",
+                List.of("cells"),
+                "preview",
+                "STUDY_PACK_READY",
+                "Summary",
+                List.of("Nucleus"),
+                List.of(),
+                "noteguru",
+                OffsetDateTime.now()
+        );
+        when(noteService.getPublicBySeoPath("science", "cell-structure")).thenReturn(expected);
+
+        PublicNoteDetailResponse response = noteController.getPublicBySeoPath("science", "cell-structure");
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteService).getPublicBySeoPath("science", "cell-structure");
     }
 }

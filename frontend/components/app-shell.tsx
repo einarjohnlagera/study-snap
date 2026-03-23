@@ -37,6 +37,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/library/public")) {
     return "Public Library";
   }
+  if (pathname.startsWith("/public/library/")) {
+    return "Public Library";
+  }
   if (pathname.startsWith("/library")) {
     return "My Library";
   }

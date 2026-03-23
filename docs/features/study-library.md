@@ -54,6 +54,14 @@ Capabilities:
 - open Public Note Detail (read-only)
 - `Copy to My Library`
 
+SEO public detail route:
+
+- canonical path: `/public/library/{subject}/{slug}`
+- accessible without login
+- indexable for search engines only when the note is `PUBLIC`
+- uses semantic content sections for title, summary, key concepts, and quiz preview
+- older ID-based public note links may redirect to the canonical SEO route
+
 ## Copy Rules
 
 Both flows use the same copy rules:
@@ -81,6 +89,7 @@ Result:
 
 - new Draft note owned by the current user
 - redirect to unified Note Detail page
+- if copied from a public note, preserve attribution via `copiedFromNoteId` and `copiedFromUserId`
 
 ## Dashboard Guardrails
 

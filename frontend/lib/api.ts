@@ -462,6 +462,7 @@ export type PublicNoteDetailResponse = {
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];
+  authorDisplayName: string;
   updatedAt: string;
 };
 
@@ -1411,6 +1412,17 @@ export async function listPublicNotes(): Promise<NoteListItemResponse[]> {
 
 export async function getPublicNote(noteId: string): Promise<PublicNoteDetailResponse> {
   const response = await fetch(buildUrl(`/notes/public/${noteId}`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicNoteDetailResponse>(response, "Could not load this public note.");
+}
+
+export async function getPublicNoteBySeoPath(
+  subject: string,
+  slug: string,
+): Promise<PublicNoteDetailResponse> {
+  const response = await fetch(buildUrl(`/notes/public/seo/${subject}/${slug}`), {
     method: "GET",
     headers: buildAuthHeaders(),
   });
