@@ -7,12 +7,13 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 public record BillingHistoryItemResponse(
+        java.util.UUID id,
         OffsetDateTime date,
         String description,
         BigDecimal amount,
         String currency,
         PaymentTransactionStatus status,
         BillingProvider provider,
-        String referenceId
+        String providerReferenceId
 ) {
 }

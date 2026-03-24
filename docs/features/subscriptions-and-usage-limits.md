@@ -29,6 +29,25 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `cancellationReason`
   - `cancellationFeedback`
 
+## Billing history in Settings
+
+- `Settings -> Plan & Billing` should show a subscription summary card above payment history.
+- The summary card should display:
+  - `currentPlan`
+  - `subscriptionStatus`
+  - `billingType`
+  - renewal date when Premium is active
+  - end date and non-renewal messaging when `cancelAtPeriodEnd=true`
+- Payment history is sourced from `payment_transactions` and sorted newest first.
+- Transaction descriptions should stay user-friendly:
+  - `Premium Monthly`
+  - `Premium Yearly`
+  - `Subscription Renewal`
+  - `Failed payment`
+- Empty state copy:
+  - title: `No billing history yet`
+  - body: `Your payment history will appear here once you subscribe to Premium.`
+
 ## Soft paywall UX
 
 - Free users should not be redirected immediately to `Settings` when they click Premium-only quiz actions.
@@ -130,6 +149,28 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `hasIntroPromo`
   - `introEligible`
 - Pricing page, upgrade modal, and Settings billing UI must all use this API response.
+
+## Billing history API
+
+- `GET /api/billing/history` returns subscription summary data plus payment history.
+- Response contract:
+  - `currentPlan`
+  - `subscriptionStatus`
+  - `billingType`
+  - `currentPeriodStart`
+  - `currentPeriodEnd`
+  - `cancelAtPeriodEnd`
+  - `cancellationEffectiveAt`
+  - `transactions[]`
+- Each transaction item includes:
+  - `id`
+  - `date`
+  - `description`
+  - `amount`
+  - `currency`
+  - `status`
+  - `provider`
+  - `providerReferenceId`
 
 ## PayMongo plan selection
 

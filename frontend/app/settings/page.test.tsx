@@ -86,7 +86,16 @@ describe("Settings page cancellation flow", () => {
       currentPeriodStart: "2026-03-01T00:00:00Z",
       currentPeriodEnd: "2026-04-01T00:00:00Z",
     });
-    (getBillingHistory as jest.Mock).mockResolvedValue([]);
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "PREMIUM",
+      subscriptionStatus: "ACTIVE",
+      billingType: "MONTHLY",
+      currentPeriodStart: "2026-03-01T00:00:00Z",
+      currentPeriodEnd: "2026-04-01T00:00:00Z",
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
       currency: "PHP",
@@ -113,6 +122,16 @@ describe("Settings page cancellation flow", () => {
 
   it("submits the optional cancellation reason and updates the scheduled-cancellation state", async () => {
     (cancelPremiumSubscription as jest.Mock).mockResolvedValue(scheduledCancellationProfile);
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "PREMIUM",
+      subscriptionStatus: "ACTIVE",
+      billingType: "MONTHLY",
+      currentPeriodStart: "2026-03-01T00:00:00Z",
+      currentPeriodEnd: "2026-04-20T00:00:00Z",
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
 
     render(<SettingsPage />);
 
@@ -130,9 +149,87 @@ describe("Settings page cancellation flow", () => {
       });
     });
 
-    expect(await screen.findByText(/Premium ends on/i)).toBeInTheDocument();
-    expect(screen.getByText("Your subscription will not renew.")).toBeInTheDocument();
+    expect(await screen.findByText(/Your Premium plan will end on .* and will not renew\./i)).toBeInTheDocument();
     expect(screen.getByText("Your notes and Study Packs will remain in your library.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel Subscription" })).not.toBeInTheDocument();
+  });
+
+  it("renders the billing history empty state", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...premiumProfile,
+      planType: "FREE",
+      subscription: {
+        cancelAtPeriodEnd: false,
+        premiumEndsAt: null,
+        cancelledAt: null,
+      },
+    });
+    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
+      planType: "FREE",
+      studyPacksUsed: 1,
+      studyPacksLimit: 5,
+      challengeQuizUsed: 0,
+      challengeQuizLimit: 0,
+      adaptivePracticeUsed: 0,
+      adaptivePracticeLimit: 0,
+      currentPeriodStart: "2026-03-01T00:00:00Z",
+      currentPeriodEnd: "2026-04-01T00:00:00Z",
+    });
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "FREE",
+      subscriptionStatus: null,
+      billingType: null,
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [],
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("No billing history yet")).toBeInTheDocument();
+    expect(screen.getAllByText("Your payment history will appear here once you subscribe to Premium.")).toHaveLength(2);
+  });
+
+  it("renders billing transactions from newest to oldest", async () => {
+    (getBillingHistory as jest.Mock).mockResolvedValue({
+      currentPlan: "PREMIUM",
+      subscriptionStatus: "ACTIVE",
+      billingType: "MONTHLY",
+      currentPeriodStart: "2026-03-01T00:00:00Z",
+      currentPeriodEnd: "2026-04-01T00:00:00Z",
+      cancelAtPeriodEnd: false,
+      cancellationEffectiveAt: null,
+      transactions: [
+        {
+          id: "txn-new",
+          date: "2026-03-22T00:00:00Z",
+          description: "Failed payment",
+          amount: 249,
+          currency: "PHP",
+          status: "FAILED",
+          provider: "PAYMONGO",
+          providerReferenceId: "evt_new",
+        },
+        {
+          id: "txn-old",
+          date: "2026-03-01T00:00:00Z",
+          description: "Premium Monthly",
+          amount: 249,
+          currency: "PHP",
+          status: "SUCCESS",
+          provider: "PAYMONGO",
+          providerReferenceId: "evt_old",
+        },
+      ],
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByRole("heading", { name: "Payment History" })).toBeInTheDocument();
+    const descriptions = screen.getAllByText(/Failed payment|Premium Monthly/);
+    expect(descriptions[0]).toHaveTextContent("Failed payment");
+    expect(descriptions[1]).toHaveTextContent("Premium Monthly");
   });
 });

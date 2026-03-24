@@ -2,7 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
-import com.studysnap.backend.dto.BillingHistoryItemResponse;
+import com.studysnap.backend.dto.BillingHistoryResponse;
 import com.studysnap.backend.dto.BillingPricingResponse;
 import com.studysnap.backend.dto.BillingUsageSummaryResponse;
 import com.studysnap.backend.dto.CancelPremiumSubscriptionRequest;
@@ -25,8 +25,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/billing")
@@ -71,7 +69,7 @@ public class BillingController {
 
     @GetMapping("/history")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
-    public List<BillingHistoryItemResponse> getHistory(
+    public BillingHistoryResponse getHistory(
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return billingHistoryService.getHistory(user.userId());
