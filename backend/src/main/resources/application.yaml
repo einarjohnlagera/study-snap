@@ -16,8 +16,8 @@ spring:
     baseline-on-migrate: true
   servlet:
     multipart:
-      max-file-size: ${MAX_IMAGE_SIZE:5MB}
-      max-request-size: ${MAX_IMAGE_SIZE:5MB}
+      max-file-size: ${MAX_IMPORT_FILE_SIZE:10MB}
+      max-request-size: ${MAX_IMPORT_FILE_SIZE:10MB}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -80,6 +80,19 @@ studysnap:
     premium-monthly-study-pack-limit: ${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}
     premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
     premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:50}
+  limits:
+    free-ocr-per-billing-period: ${OCR_FREE_BILLING_PERIOD_LIMIT:20}
+    premium-ocr-per-billing-period: ${OCR_PREMIUM_BILLING_PERIOD_LIMIT:200}
+    file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10MB}
+    txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1MB}
+    pdf-upload-max-size: ${PDF_IMPORT_MAX_SIZE:10MB}
+    docx-upload-max-size: ${DOCX_IMPORT_MAX_SIZE:10MB}
+    pdf-max-pages: ${PDF_IMPORT_MAX_PAGES:30}
+    extracted-text-max-length: ${EXTRACTED_TEXT_MAX_LENGTH:200000}
+    free-ai-rate-limit-per-minute: ${AI_FREE_RATE_LIMIT_PER_MINUTE:5}
+    premium-ai-rate-limit-per-minute: ${AI_PREMIUM_RATE_LIMIT_PER_MINUTE:20}
+    free-ocr-rate-limit-per-minute: ${OCR_FREE_RATE_LIMIT_PER_MINUTE:6}
+    premium-ocr-rate-limit-per-minute: ${OCR_PREMIUM_RATE_LIMIT_PER_MINUTE:20}
   billing:
     provider: ${BILLING_PROVIDER:PAYMONGO}
     pricing-regions:

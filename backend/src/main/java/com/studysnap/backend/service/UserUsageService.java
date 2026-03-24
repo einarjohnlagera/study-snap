@@ -22,7 +22,8 @@ public class UserUsageService {
                 .map(usage -> new MonthlyUsage(
                         usage.getStudyPackGenerations(),
                         usage.getChallengeQuizGenerations(),
-                        usage.getAdaptiveQuizGenerations()
+                        usage.getAdaptiveQuizGenerations(),
+                        usage.getOcrExtractions()
                 ))
                 .orElse(MonthlyUsage.zero());
     }
@@ -35,6 +36,7 @@ public class UserUsageService {
                 usagePeriod.month(),
                 usagePeriod.periodStart(),
                 usagePeriod.periodEnd(),
+                0,
                 0,
                 0,
                 0,
@@ -54,12 +56,27 @@ public class UserUsageService {
         increment(userId, occurredAt, 0, 0, 1);
     }
 
+    public void incrementOcrExtraction(UUID userId, OffsetDateTime occurredAt) {
+        increment(userId, occurredAt, 0, 0, 0, 1);
+    }
+
     private void increment(
             UUID userId,
             OffsetDateTime occurredAt,
             int studyPackDelta,
             int challengeDelta,
             int adaptiveDelta
+    ) {
+        increment(userId, occurredAt, studyPackDelta, challengeDelta, adaptiveDelta, 0);
+    }
+
+    private void increment(
+            UUID userId,
+            OffsetDateTime occurredAt,
+            int studyPackDelta,
+            int challengeDelta,
+            int adaptiveDelta,
+            int ocrDelta
     ) {
         BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, occurredAt);
         userUsageRepository.incrementUsage(
@@ -71,6 +88,7 @@ public class UserUsageService {
                 studyPackDelta,
                 challengeDelta,
                 adaptiveDelta,
+                ocrDelta,
                 OffsetDateTime.now(ZoneOffset.UTC)
         );
     }
@@ -78,10 +96,11 @@ public class UserUsageService {
     public record MonthlyUsage(
             int studyPackGenerations,
             int challengeQuizGenerations,
-            int adaptiveQuizGenerations
+            int adaptiveQuizGenerations,
+            int ocrExtractions
     ) {
         public static MonthlyUsage zero() {
-            return new MonthlyUsage(0, 0, 0);
+            return new MonthlyUsage(0, 0, 0, 0);
         }
     }
 }

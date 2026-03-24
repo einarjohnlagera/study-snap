@@ -46,6 +46,23 @@ If OCR confidence is low:
 - max image size
 - supported formats (`jpg`, `png`, `webp` where supported)
 - reject images without readable text
+- enforce backend OCR usage limits per billing period by plan
+- enforce backend OCR rate limits with `429 Too Many Requests`
+- use the friendly OCR quota message:
+  - `You have reached your OCR limit for now. Please try again later or upgrade to Premium.`
+- use the friendly rate-limit message:
+  - `Too many requests. Please wait a moment and try again.`
+
+## Import limits
+
+Unified note import must keep backend-configured limits for:
+- total upload size
+- text/PDF/DOCX file size
+- maximum PDF pages
+- maximum extracted text length
+
+When extracted text exceeds the configured maximum, return:
+- `This file is too large to process. Please upload a smaller file.`
 
 ## OCR text normalization
 

@@ -111,6 +111,10 @@ Validation/error handling in the OCR path:
 - image too large (max `5 MB` in current UX guidance)
 - no readable text detected
 - generic OCR/extraction failures
+- OCR billing-period quota reached:
+  - `You have reached your OCR limit for now. Please try again later or upgrade to Premium.`
+- OCR or AI request rate limit reached:
+  - `Too many requests. Please wait a moment and try again.`
 
 Errors should remain supportive and actionable.
 
@@ -151,6 +155,13 @@ PDF import rule:
 - if OCR fallback also cannot read the PDF, show:
   - `This PDF appears to be scanned or image-based. Please upload images for OCR instead.`
 - scanned-PDF OCR fallback follows the same verification/OCR gating rules as image OCR
+
+Import protection rules:
+- allowed import types remain `png`, `jpg`, `jpeg`, `webp`, `txt`, `pdf`, `docx`
+- file-size limits are backend-configured and enforced before extraction
+- extracted text length is backend-configured and must fail with:
+  - `This file is too large to process. Please upload a smaller file.`
+- Study Pack generation, Challenge Quiz generation, Adaptive Practice generation, and OCR import are all protected by per-minute rate limiting on the backend
 
 Authoritative input rule:
 - if the user edits extracted OCR text, generation must use the edited text (not the original raw OCR output)

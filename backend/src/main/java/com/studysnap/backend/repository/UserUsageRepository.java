@@ -32,6 +32,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 study_pack_generations,
                 challenge_quiz_generations,
                 adaptive_quiz_generations,
+                ocr_extractions,
                 created_at
             )
             VALUES (
@@ -44,6 +45,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 :studyPackDelta,
                 :challengeDelta,
                 :adaptiveDelta,
+                :ocrDelta,
                 :createdAt
             )
             ON CONFLICT (user_id, period_start)
@@ -51,7 +53,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 period_end = EXCLUDED.period_end,
                 study_pack_generations = user_usage.study_pack_generations + EXCLUDED.study_pack_generations,
                 challenge_quiz_generations = user_usage.challenge_quiz_generations + EXCLUDED.challenge_quiz_generations,
-                adaptive_quiz_generations = user_usage.adaptive_quiz_generations + EXCLUDED.adaptive_quiz_generations
+                adaptive_quiz_generations = user_usage.adaptive_quiz_generations + EXCLUDED.adaptive_quiz_generations,
+                ocr_extractions = user_usage.ocr_extractions + EXCLUDED.ocr_extractions
             """, nativeQuery = true)
     int incrementUsage(
             @Param("userId") UUID userId,
@@ -62,6 +65,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
             @Param("studyPackDelta") Integer studyPackDelta,
             @Param("challengeDelta") Integer challengeDelta,
             @Param("adaptiveDelta") Integer adaptiveDelta,
+            @Param("ocrDelta") Integer ocrDelta,
             @Param("createdAt") OffsetDateTime createdAt
     );
 }

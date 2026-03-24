@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -16,6 +17,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -55,6 +57,7 @@ public class QuickReviewAdaptivePracticeService {
     private final BillingUsagePeriodService billingUsagePeriodService;
     private final AuthService authService;
     private final AnalyticsService analyticsService;
+    private final AiRateLimitService aiRateLimitService;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         authService.requireEmailVerified(userId);
@@ -119,6 +122,7 @@ public class QuickReviewAdaptivePracticeService {
         }
 
         assertAdaptivePracticeQuotaAvailable(userId);
+        aiRateLimitService.assertAllowed(userId, PlanType.PREMIUM, "adaptive-practice");
         int questionCount = resolveAdaptiveQuestionCount(weakConcepts.size());
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         List<QuizItem> generatedQuiz = llmStudyPackService.generateAdaptivePracticeQuiz(

@@ -181,6 +181,11 @@ Required behavior:
 - OCR upload does not auto-save and does not auto-generate.
 - Uploaded images are not stored permanently.
 - Note import/extraction is backend-owned; frontend should not be the source of truth for OCR/PDF/DOCX parsing.
+- OCR usage must be protected by backend-configured billing-period limits plus per-minute rate limiting.
+- If OCR quota is exhausted, return:
+  - `You have reached your OCR limit for now. Please try again later or upgrade to Premium.`
+- If OCR request rate limit is exceeded, return:
+  - `Too many requests. Please wait a moment and try again.`
 
 ## File Import Flow (Create/Edit Note)
 
@@ -196,6 +201,9 @@ Required behavior:
 - Text-based PDFs are supported in this flow.
 - If a PDF has no embedded text, use OCR fallback before treating it as unreadable.
 - If a PDF has no extractable text, show a friendly scanned-PDF message and direct users to image OCR instead.
+- File imports must enforce backend-configured size/type/text-length limits before content reaches Note `content`.
+- If extracted import text exceeds the configured maximum, return:
+  - `This file is too large to process. Please upload a smaller file.`
 
 
 
@@ -303,6 +311,8 @@ Rules:
 - Premium Challenge Quiz: 50/month
 - Premium Adaptive Practice: 50/month
 - Challenge/Adaptive quotas are separate from Study Pack generation quota.
+- OCR usage has its own backend-configured billing-period quota by plan.
+- Expensive OCR and AI generation endpoints must also enforce backend request-rate limits and return `429` with a friendly retry message.
 
 ## Billing Provider (Current)
 

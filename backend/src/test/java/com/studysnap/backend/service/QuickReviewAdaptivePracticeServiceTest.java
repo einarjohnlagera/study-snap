@@ -14,6 +14,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +62,8 @@ class QuickReviewAdaptivePracticeServiceTest {
     private AuthService authService;
     @Mock
     private AnalyticsService analyticsService;
+    @Mock
+    private AiRateLimitService aiRateLimitService;
 
     private QuickReviewAdaptivePracticeService adaptivePracticeService;
 
@@ -77,7 +80,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 userUsageService,
                 billingUsagePeriodService,
                 authService,
-                analyticsService
+                analyticsService,
+                aiRateLimitService
         );
     }
 
@@ -105,6 +109,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         verify(featureGateService).checkFeatureAccess(userId, com.studysnap.backend.entity.Feature.ADAPTIVE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt());
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
         assertThat(response.quiz()).hasSize(1);
@@ -177,6 +182,7 @@ class QuickReviewAdaptivePracticeServiceTest {
 
         assertThat(response.sessionId()).isEqualTo(resumedSessionId.toString());
         assertThat(response.quiz()).hasSize(1);
+        verify(aiRateLimitService).assertAllowed(userId, PlanType.PREMIUM, "adaptive-practice");
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }

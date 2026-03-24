@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +55,8 @@ class ChallengeQuizServiceTest {
     private AuthService authService;
     @Mock
     private AnalyticsService analyticsService;
+    @Mock
+    private AiRateLimitService aiRateLimitService;
 
     private ChallengeQuizService challengeQuizService;
 
@@ -68,7 +71,8 @@ class ChallengeQuizServiceTest {
                 userUsageService,
                 billingUsagePeriodService,
                 authService,
-                analyticsService
+                analyticsService,
+                aiRateLimitService
         );
     }
 
@@ -140,6 +144,7 @@ class ChallengeQuizServiceTest {
         verify(featureGateService).checkFeatureAccess(userId, com.studysnap.backend.entity.Feature.CHALLENGE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any());
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
         assertThat(response.quiz()).hasSize(1);
@@ -222,6 +227,7 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId);
 
         assertThat(response.sessionId()).isNotNull();
+        verify(aiRateLimitService).assertAllowed(userId, PlanType.PREMIUM, "challenge-quiz");
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
     }
 }

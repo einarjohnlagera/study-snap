@@ -44,6 +44,9 @@ public class UserUsageEntity {
     @Column(name = "adaptive_quiz_generations", nullable = false)
     private Integer adaptiveQuizGenerations;
 
+    @Column(name = "ocr_extractions", nullable = false)
+    private Integer ocrExtractions;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 }
