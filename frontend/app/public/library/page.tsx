@@ -8,6 +8,6 @@ export const metadata: Metadata = buildPageMetadata({
   path: "/public/library",
 });
 
-export default function PublicLibraryPage() {
+export default function PublicLibrarySeoIndexPage() {
   return <PublicLibraryPageClient />;
 }

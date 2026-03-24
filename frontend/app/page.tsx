@@ -15,11 +15,13 @@ import { TrackedLink } from "@/components/analytics/tracked-link";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { buildPageMetadata } from "@/lib/site-metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes",
-  description: "Turn your notes into summaries, key concepts, and quizzes. Study smarter with NoteLib.",
-};
+  description: "Turn your notes into summaries, key concepts, and practice questions so you can study smarter.",
+  path: "/",
+});
 
 const howItWorksSteps = [
   {

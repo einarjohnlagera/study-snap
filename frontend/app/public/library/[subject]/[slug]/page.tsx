@@ -5,6 +5,7 @@ import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
+import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 
 type PublicLibrarySeoPageProps = {
   params: Promise<{
@@ -13,12 +14,12 @@ type PublicLibrarySeoPageProps = {
   }>;
 };
 
-function getAppBaseUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-}
+function buildDescription(title: string, summary?: string | null) {
+  if (summary && summary.trim()) {
+    return truncateDescription(summary, 160);
+  }
 
-function buildDescription(title: string) {
-  return `Study ${title} with summary, key concepts, and quiz reviewer. Free study pack from NoteLib.`;
+  return `Study ${title} with summaries, key concepts, and practice questions on NoteLib.`;
 }
 
 export async function generateMetadata({ params }: PublicLibrarySeoPageProps): Promise<Metadata> {
@@ -32,16 +33,20 @@ export async function generateMetadata({ params }: PublicLibrarySeoPageProps): P
   }
 
   const title = note.title?.trim() || "Untitled note";
-  const description = buildDescription(title);
-  const url = `${getAppBaseUrl()}${buildPublicLibraryNotePathFromDetail(note)}`;
+  const description = buildDescription(title, note.summary);
+  const path = buildPublicLibraryNotePathFromDetail(note);
+  const url = absoluteUrl(path);
+  const metadata = buildPageMetadata({
+    title: `${title} | NoteLib`,
+    description,
+    path,
+    type: "article",
+  });
 
   return {
-    title: `${title} Summary and Reviewer | NoteLib`,
-    description,
+    ...metadata,
     openGraph: {
-      title: `${title} Summary and Reviewer | NoteLib`,
-      description,
-      type: "article",
+      ...metadata.openGraph,
       url,
     },
   };

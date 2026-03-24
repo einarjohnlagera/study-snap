@@ -85,15 +85,41 @@ describe("PublicLibrarySeoPage", () => {
       params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
     });
 
-    expect(metadata.title).toBe("Cell Structure Summary and Reviewer | NoteLib");
-    expect(metadata.description).toBe(
-      "Study Cell Structure with summary, key concepts, and quiz reviewer. Free study pack from NoteLib.",
-    );
-    expect(metadata.openGraph).toMatchObject({
-      title: "Cell Structure Summary and Reviewer | NoteLib",
-      type: "article",
-      url: "http://localhost:3000/public/library/science/cell-structure",
+    expect(metadata.title).toBe("Cell Structure | NoteLib");
+    expect(metadata.description).toBe("Cell structure summary");
+    expect(metadata.alternates).toEqual({
+      canonical: "https://www.notelib.app/public/library/science/cell-structure",
     });
+    expect(metadata.openGraph).toMatchObject({
+      title: "Cell Structure | NoteLib",
+      type: "article",
+      url: "https://www.notelib.app/public/library/science/cell-structure",
+      siteName: "NoteLib",
+      images: expect.arrayContaining([
+        expect.objectContaining({ url: "https://www.notelib.app/og-image.png" }),
+      ]),
+    });
+    expect(metadata.twitter).toMatchObject({
+      card: "summary_large_image",
+      title: "Cell Structure | NoteLib",
+      description: "Cell structure summary",
+      images: ["https://www.notelib.app/og-image.png"],
+    });
+  });
+
+  it("falls back to generated description when the note summary is missing", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      summary: "",
+    });
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+    });
+
+    expect(metadata.description).toBe(
+      "Study Cell Structure with summaries, key concepts, and practice questions on NoteLib.",
+    );
   });
 
   it("does not render private or missing notes publicly", async () => {

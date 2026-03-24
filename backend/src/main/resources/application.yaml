@@ -83,10 +83,10 @@ studysnap:
   limits:
     free-ocr-per-billing-period: ${OCR_FREE_BILLING_PERIOD_LIMIT:20}
     premium-ocr-per-billing-period: ${OCR_PREMIUM_BILLING_PERIOD_LIMIT:200}
-    file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10MB}
-    txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1MB}
-    pdf-upload-max-size: ${PDF_IMPORT_MAX_SIZE:10MB}
-    docx-upload-max-size: ${DOCX_IMPORT_MAX_SIZE:10MB}
+    file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
+    txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}
+    pdf-upload-max-size: ${PDF_IMPORT_MAX_SIZE:10}
+    docx-upload-max-size: ${DOCX_IMPORT_MAX_SIZE:10}
     pdf-max-pages: ${PDF_IMPORT_MAX_PAGES:30}
     extracted-text-max-length: ${EXTRACTED_TEXT_MAX_LENGTH:200000}
     free-ai-rate-limit-per-minute: ${AI_FREE_RATE_LIMIT_PER_MINUTE:5}
