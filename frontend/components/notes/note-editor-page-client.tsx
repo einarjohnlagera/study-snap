@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import {
-  confirmStudyPackText,
   createNote,
   createStudyPackFromImage,
   createStudyPackFromNote,
@@ -121,9 +120,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const [ocrImageInputKey, setOcrImageInputKey] = useState(0);
   const [ocrFlowState, setOcrFlowState] = useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
   const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
-  const [ocrDraftId, setOcrDraftId] = useState<string | null>(null);
-  const [ocrConfirmedText, setOcrConfirmedText] = useState("");
-  const [isConfirmingOcrText, setIsConfirmingOcrText] = useState(false);
+  const [ocrReviewMessage, setOcrReviewMessage] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
@@ -392,8 +389,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       setOcrImageFile(null);
       setOcrFlowState("idle");
       setOcrStatusMessage(null);
-      setOcrDraftId(null);
-      setOcrConfirmedText("");
+      setOcrReviewMessage(null);
       return;
     }
 
@@ -429,8 +425,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     }
 
     setOcrImageFile(file);
-    setOcrDraftId(null);
-    setOcrConfirmedText("");
+    setOcrReviewMessage(null);
     setOcrFlowState("uploading");
     setOcrStatusMessage("Uploading image...");
 
@@ -444,10 +439,20 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       window.clearTimeout(extractingTimer);
 
       if (isNeedsTextConfirmationResponse(response)) {
-        setOcrDraftId(response.id);
-        setOcrConfirmedText(response.extractedText);
+        const didAppend = appendExtractedTextToContent(response.extractedText);
+        if (!didAppend) {
+          setOcrFlowState("failure");
+          setOcrStatusMessage("No readable text was extracted from this image.");
+          showToast("No readable text was detected. Retake the photo and try again.", "info");
+          return;
+        }
+
         setOcrFlowState("success");
-        setOcrStatusMessage("Text extracted. Review and confirm before adding it to Content.");
+        setOcrStatusMessage("Text extracted and added to Content.");
+        setOcrReviewMessage(
+          "OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack.",
+        );
+        showToast("OCR text added to Content. Review it before continuing.", "info");
         return;
       }
 
@@ -462,6 +467,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
 
       setOcrFlowState("success");
       setOcrStatusMessage("Text extracted and added to Content.");
+      setOcrReviewMessage(null);
       showToast("OCR text added to Content.", "success");
     } catch (error) {
       window.clearTimeout(extractingTimer);
@@ -477,68 +483,10 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       const message = toFriendlyOcrErrorMessage(rawMessage);
       setOcrFlowState("failure");
       setOcrStatusMessage(message);
+      setOcrReviewMessage(null);
       showToast(message, "error");
     }
   }, [appendExtractedTextToContent, contentLocked, showToast]);
-
-  const handleConfirmOcrText = useCallback(async () => {
-    if (contentLocked) {
-      setOcrFlowState("failure");
-      setOcrStatusMessage("Note content is locked after generating a Study Pack. Make a copy to change the note itself.");
-      showToast("Note content is locked after generating a Study Pack. Make a copy to change the note itself.", "info");
-      return;
-    }
-
-    if (!ocrDraftId || isConfirmingOcrText || ocrConfirmedText.trim().length === 0) {
-      return;
-    }
-
-    const authUser = getAuthUser();
-    if (!authUser?.emailVerifiedAt) {
-      const message = "Verify your email before using OCR upload.";
-      setOcrFlowState("failure");
-      setOcrStatusMessage(message);
-      showToast(message, "info");
-      return;
-    }
-
-    setIsConfirmingOcrText(true);
-    setOcrFlowState("extracting");
-    setOcrStatusMessage("Confirming OCR text...");
-
-    try {
-      const response = await confirmStudyPackText(ocrDraftId, ocrConfirmedText);
-      const extractedText = resolveExtractedText(response, ocrConfirmedText);
-      const didAppend = appendExtractedTextToContent(extractedText);
-      if (!didAppend) {
-        setOcrFlowState("failure");
-        setOcrStatusMessage("No readable text was extracted from this image.");
-        showToast("No readable text was detected. Try editing and confirming again.", "info");
-        return;
-      }
-
-      setOcrDraftId(null);
-      setOcrConfirmedText("");
-      setOcrFlowState("success");
-      setOcrStatusMessage("Confirmed text added to Content.");
-      showToast("OCR text added to Content.", "success");
-    } catch (error) {
-      if (isEmailNotVerifiedError(error)) {
-        const message = "Verify your email before using OCR upload.";
-        setOcrFlowState("failure");
-        setOcrStatusMessage(message);
-        showToast(message, "info");
-        return;
-      }
-      const rawMessage = error instanceof Error ? error.message : "Could not confirm OCR text.";
-      const message = toFriendlyOcrErrorMessage(rawMessage);
-      setOcrFlowState("failure");
-      setOcrStatusMessage(message);
-      showToast(message, "error");
-    } finally {
-      setIsConfirmingOcrText(false);
-    }
-  }, [appendExtractedTextToContent, contentLocked, isConfirmingOcrText, ocrConfirmedText, ocrDraftId, showToast]);
 
   const pageTitle = isDetailPage ? "Note" : "New Note";
   const studyPackMessage = isDetailPage
@@ -606,15 +554,9 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         ocrImageInputKey={ocrImageInputKey}
         ocrFlowState={ocrFlowState}
         ocrStatusMessage={ocrStatusMessage}
-        ocrConfirmedText={ocrConfirmedText}
-        ocrNeedsConfirmation={Boolean(ocrDraftId)}
-        isConfirmingOcrText={isConfirmingOcrText}
+        ocrReviewMessage={ocrReviewMessage}
         onOcrImageFileChange={(file) => {
           void handleOcrImageFileChange(file);
-        }}
-        onOcrConfirmedTextChange={setOcrConfirmedText}
-        onConfirmOcrText={() => {
-          void handleConfirmOcrText();
         }}
         disableContentEditing={contentLocked}
         contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."

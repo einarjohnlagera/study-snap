@@ -31,12 +31,8 @@ type NoteEditorFormProps = {
   ocrImageInputKey: number;
   ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
   ocrStatusMessage: string | null;
-  ocrConfirmedText: string;
-  ocrNeedsConfirmation: boolean;
-  isConfirmingOcrText: boolean;
+  ocrReviewMessage?: string | null;
   onOcrImageFileChange: (file: File | null) => void;
-  onOcrConfirmedTextChange: (value: string) => void;
-  onConfirmOcrText: () => void;
   disableContentEditing?: boolean;
   contentLockHint?: string | null;
   disableGenerateAction?: boolean;
@@ -67,12 +63,8 @@ export function NoteEditorForm({
   ocrImageInputKey,
   ocrFlowState,
   ocrStatusMessage,
-  ocrConfirmedText,
-  ocrNeedsConfirmation,
-  isConfirmingOcrText,
+  ocrReviewMessage,
   onOcrImageFileChange,
-  onOcrConfirmedTextChange,
-  onConfirmOcrText,
   disableContentEditing = false,
   contentLockHint = null,
   disableGenerateAction = false,
@@ -277,9 +269,19 @@ export function NoteEditorForm({
               {contentLockHint ?? "Note content is locked after generating a Study Pack. Make a copy to change the note itself."}
             </p>
           ) : (
-            <p className="text-xs text-foreground/60">
-              Keep this note focused on one topic for better Study Pack quality.
-            </p>
+            <>
+              {ocrReviewMessage ? (
+                <div className="rounded-md border border-amber-500/40 bg-amber-50/70 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4" aria-hidden="true" />
+                    <p>{ocrReviewMessage}</p>
+                  </div>
+                </div>
+              ) : null}
+              <p className="text-xs text-foreground/60">
+                Keep this note focused on one topic for better Study Pack quality.
+              </p>
+            </>
           )}
         </section>
 
@@ -319,37 +321,6 @@ export function NoteEditorForm({
                   aria-hidden="true"
                 />
                 <p>{ocrStatusMessage}</p>
-              </div>
-            </div>
-          ) : null}
-          {ocrNeedsConfirmation ? (
-            <div className="space-y-2 rounded-md border border-border bg-background p-3">
-              <label htmlFor="ocr-confirmed-text" className="text-sm font-medium text-foreground">
-                Review Extracted Text
-              </label>
-              <textarea
-                id="ocr-confirmed-text"
-                value={ocrConfirmedText}
-                onChange={(event) => onOcrConfirmedTextChange(event.target.value)}
-                placeholder="Review and edit extracted OCR text..."
-                className="min-h-36 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
-              />
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={onConfirmOcrText}
-                  disabled={disableContentEditing || disableOcrUpload || isConfirmingOcrText || ocrConfirmedText.trim().length === 0}
-                >
-                  {isConfirmingOcrText ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Applying OCR Text...
-                    </>
-                  ) : (
-                    "Use OCR Text"
-                  )}
-                </Button>
               </div>
             </div>
           ) : null}
