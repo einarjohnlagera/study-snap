@@ -62,6 +62,17 @@ SEO public detail route:
 - uses semantic content sections for title, summary, key concepts, and quiz preview
 - older ID-based public note links may redirect to the canonical SEO route
 
+SEO indexing rules:
+
+- canonical public library index path: `/public/library`
+- `robots.txt` should allow public crawling while disallowing authenticated app routes such as `/dashboard`, `/library`, `/notes`, `/settings`, `/admin`, and `/api`
+- `sitemap.xml` should include:
+  - `/`
+  - `/pricing`
+  - `/public/library`
+  - all canonical public note detail routes under `/public/library/{subject}/{slug}`
+- authenticated/private routes must not appear in the sitemap
+
 ## Copy Rules
 
 Both flows use the same copy rules:
