@@ -41,6 +41,7 @@ function formatMemberSince(value: string | null): string {
 
 const PROFILE_TYPE_OPTIONS: Array<{ value: ProfileType; label: string }> = [
   { value: "STUDENT", label: "Student" },
+  { value: "TEACHER", label: "Teacher" },
   { value: "PARENT", label: "Parent" },
   { value: "PROFESSIONAL", label: "Professional" },
 ];

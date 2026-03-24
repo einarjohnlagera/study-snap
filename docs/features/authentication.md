@@ -46,6 +46,15 @@ Frontend OCR gate message:
 
 - `Verify your email before using OCR upload.`
 
+## Onboarding Rule
+
+After email verification:
+
+- verified users who have not completed onboarding should be routed to `/onboarding` before protected app areas
+- onboarding should happen once only
+- onboarding collects `profileType` and `learningStyle` (`engagementMode`)
+- after completion, users should land on `Dashboard`
+
 ## Navigation Expectations (Authenticated Shell)
 
 - Main: Dashboard, My Library, Public Library

@@ -94,7 +94,7 @@ export type TodayFocusResponse = {
   actionLabel: string;
 };
 
-export type ProfileType = "STUDENT" | "PARENT" | "PROFESSIONAL";
+export type ProfileType = "STUDENT" | "TEACHER" | "PARENT" | "PROFESSIONAL";
 export type PlanType = "FREE" | "PREMIUM";
 export type BillingCycle = "MONTHLY" | "YEARLY";
 export type UserRole = "USER" | "ADMIN";
@@ -261,6 +261,7 @@ export type AuthResponse = {
   displayName: string;
   profileType: ProfileType | null;
   emailVerifiedAt: string | null;
+  onboardingCompletedAt: string | null;
   role: UserRole;
   planType: PlanType;
   token: string;
@@ -279,6 +280,7 @@ export type MeResponse = {
   profileType: ProfileType | null;
   engagementMode: EngagementMode;
   emailVerifiedAt: string | null;
+  onboardingCompletedAt: string | null;
   role: UserRole;
   status: "ACTIVE" | "SUSPENDED";
   planType: PlanType;
@@ -309,6 +311,11 @@ export type MasterySnapshotResponse = {
 
 export type OnboardingProfileTypeRequest = {
   profileType: ProfileType;
+};
+
+export type CompleteOnboardingRequest = {
+  profileType: ProfileType;
+  engagementMode: EngagementMode;
 };
 
 export type SimpleMessageResponse = {
@@ -682,6 +689,7 @@ function toAuthUser(payload: AuthResponse): AuthUser {
     displayName: payload.displayName,
     profileType: payload.profileType,
     emailVerifiedAt: payload.emailVerifiedAt,
+    onboardingCompletedAt: payload.onboardingCompletedAt,
     role: payload.role,
     planType: payload.planType,
     accessToken: payload.token,
@@ -837,6 +845,21 @@ export async function completeOnboardingProfileType(
 ): Promise<MeResponse> {
   const response = await fetchWithAuth(
     "/auth/onboarding/profile-type",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+}
+
+export async function completeOnboarding(
+  request: CompleteOnboardingRequest,
+): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/auth/onboarding",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),

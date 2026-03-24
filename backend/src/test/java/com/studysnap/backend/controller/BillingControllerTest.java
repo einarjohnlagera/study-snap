@@ -191,6 +191,7 @@ class BillingControllerTest {
                 ProfileType.STUDENT,
                 EngagementMode.FOCUSED,
                 OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
                 UserRole.USER,
                 UserStatus.ACTIVE,
                 PlanType.PREMIUM,

@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AuthResponse;
+import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
@@ -67,6 +68,7 @@ public class AuthService {
         user.setCurrentStreak(0);
         user.setLongestStreak(0);
         user.setLastStudyDate(null);
+        user.setOnboardingCompletedAt(null);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
         user.setLastPasswordChangeAt(now);
@@ -145,12 +147,35 @@ public class AuthService {
         return toMeResponse(user);
     }
 
-    public MeResponse completeOnboarding(UUID userId, OnboardingProfileTypeRequest request) {
+    public MeResponse updateProfileType(UUID userId, OnboardingProfileTypeRequest request) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
 
         user.setProfileType(request.profileType());
         user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
+    public MeResponse completeOnboarding(UUID userId, CompleteOnboardingRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        if (user.getEmailVerifiedAt() == null) {
+            throw new AppException(
+                    "EMAIL_VERIFICATION_REQUIRED",
+                    "Verify your email before continuing setup.",
+                    null,
+                    "RESEND_VERIFICATION",
+                    HttpStatus.FORBIDDEN
+            );
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        user.setProfileType(request.profileType());
+        user.setEngagementMode(request.engagementMode());
+        if (user.getOnboardingCompletedAt() == null) {
+            user.setOnboardingCompletedAt(now);
+        }
+        user.setUpdatedAt(now);
         return toMeResponse(user);
     }
 
@@ -195,6 +220,7 @@ public class AuthService {
                 user.getProfileType(),
                 user.getEngagementMode(),
                 user.getEmailVerifiedAt(),
+                user.getOnboardingCompletedAt(),
                 user.getRole(),
                 user.getStatus(),
                 planSnapshot.planType(),
@@ -240,6 +266,7 @@ public class AuthService {
                 user.getDisplayName(),
                 user.getProfileType(),
                 user.getEmailVerifiedAt(),
+                user.getOnboardingCompletedAt(),
                 user.getRole(),
                 planType,
                 accessToken,

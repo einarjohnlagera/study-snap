@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AuthResponse;
+import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
@@ -66,6 +67,15 @@ public class AuthController {
     public MeResponse completeOnboarding(
             @AuthenticationPrincipal AuthenticatedUser user,
             @Valid @RequestBody OnboardingProfileTypeRequest request
+    ) {
+        return authService.updateProfileType(user.userId(), request);
+    }
+
+    @PostMapping("/onboarding")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse completeOnboardingSetup(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody CompleteOnboardingRequest request
     ) {
         return authService.completeOnboarding(user.userId(), request);
     }

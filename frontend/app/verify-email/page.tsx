@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { ApiRequestError, getMe, requestEmailVerification, verifyEmailToken } from "@/lib/api";
-import { buildLoginPath, getAuthUser, setAuthUser, type AuthUser } from "@/lib/auth";
+import { buildLoginPath, getAuthUser, resolveAuthenticatedHome, setAuthUser, type AuthUser } from "@/lib/auth";
 import { ToastMessage } from "@/components/ui/toast-message";
 
 function VerifyEmailPageContent() {
@@ -44,7 +44,7 @@ function VerifyEmailPageContent() {
 
     if (!token) {
       if (existingAuthUser?.emailVerifiedAt) {
-        router.replace("/dashboard");
+        router.replace(resolveAuthenticatedHome(existingAuthUser));
       }
       return;
     }
@@ -74,6 +74,7 @@ function VerifyEmailPageContent() {
             displayName: me.displayName,
             profileType: me.profileType,
             emailVerifiedAt: me.emailVerifiedAt,
+            onboardingCompletedAt: me.onboardingCompletedAt,
           };
           setAuthUser(nextAuthUser);
           setAuthUserState(nextAuthUser);
@@ -134,7 +135,7 @@ function VerifyEmailPageContent() {
     if (!authUser) {
       return "/login";
     }
-    return "/dashboard";
+    return resolveAuthenticatedHome(authUser);
   }, [authUser]);
 
   const loginToVerifyHref = useMemo(

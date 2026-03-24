@@ -4,8 +4,9 @@ export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
-  profileType: "STUDENT" | "PARENT" | "PROFESSIONAL" | null;
+  profileType: "STUDENT" | "TEACHER" | "PARENT" | "PROFESSIONAL" | null;
   emailVerifiedAt: string | null;
+  onboardingCompletedAt?: string | null;
   role: "USER" | "ADMIN";
   planType: "FREE" | "PREMIUM";
   accessToken: string;
@@ -97,6 +98,33 @@ export function getCurrentUserId(): string | null {
 
 export function isEmailVerified(): boolean {
   return Boolean(getAuthUser()?.emailVerifiedAt);
+}
+
+export function hasCompletedOnboarding(authUser: AuthUser | null): boolean {
+  if (!authUser?.emailVerifiedAt) {
+    return false;
+  }
+  return Boolean(authUser.onboardingCompletedAt);
+}
+
+export function needsOnboarding(authUser: AuthUser | null): boolean {
+  if (!authUser?.emailVerifiedAt) {
+    return false;
+  }
+  if (typeof authUser.onboardingCompletedAt === "undefined") {
+    return false;
+  }
+  return authUser.onboardingCompletedAt === null;
+}
+
+export function resolveAuthenticatedHome(authUser: AuthUser | null): string {
+  if (!authUser?.emailVerifiedAt) {
+    return "/verify-email";
+  }
+  if (needsOnboarding(authUser)) {
+    return "/onboarding";
+  }
+  return "/dashboard";
 }
 
 export function getAccessToken(): string | null {

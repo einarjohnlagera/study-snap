@@ -1,10 +1,14 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AuthResponse;
+import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
+import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.JwtService;
@@ -23,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -60,9 +65,9 @@ class AuthServiceTest {
                 emailVerificationService,
                 analyticsService
         );
-        when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
-        when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));
-        when(refreshTokenService.issue(any(UserEntity.class), any(Boolean.class), any(), any(), any()))
+        lenient().when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
+        lenient().when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));
+        lenient().when(refreshTokenService.issue(any(UserEntity.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", OffsetDateTime.now().plusDays(7)));
     }
 
@@ -79,6 +84,7 @@ class AuthServiceTest {
         );
 
         assertThat(response.email()).isEqualTo("[email protected]");
+        assertThat(response.onboardingCompletedAt()).isNull();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -113,5 +119,40 @@ class AuthServiceTest {
         verify(analyticsService).trackEvent(userId, AnalyticsEventType.LOGIN, userId, java.util.Map.of(
                 "keepSignedIn", true
         ));
+    }
+
+    @Test
+    void completeOnboarding_savesProfileTypeLearningStyleAndCompletionTimestamp() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("[email protected]");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+
+        MeResponse response = authService.completeOnboarding(
+                userId,
+                new CompleteOnboardingRequest(ProfileType.TEACHER, EngagementMode.STREAK)
+        );
+
+        assertThat(response.profileType()).isEqualTo(ProfileType.TEACHER);
+        assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
+        assertThat(response.onboardingCompletedAt()).isNotNull();
+        assertThat(user.getOnboardingCompletedAt()).isNotNull();
     }
 }

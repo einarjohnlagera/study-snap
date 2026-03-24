@@ -64,6 +64,17 @@ Core loop:
 - Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.
 - Landing page metadata should position NoteLib as a note-to-study-pack product, not a generic AI assistant.
 
+### Onboarding Rule
+
+- Onboarding is active again for all verified users, not only Premium users.
+- Onboarding should happen once after email verification / first verified entry into the app.
+- Onboarding must stay short and collect only:
+  - `Profile Type`
+  - `Learning Style` (`engagementMode`)
+- Profile Type can be edited later in `Profile`.
+- Learning Style can be edited later in `Settings > Preferences`.
+- Public pages and anonymous flows must not be blocked by onboarding.
+
 ### Analytics Rule
 
 - Track product, growth, and upgrade events through the shared analytics event model.

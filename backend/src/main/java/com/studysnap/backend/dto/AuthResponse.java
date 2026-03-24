@@ -12,6 +12,7 @@ public record AuthResponse(
         String displayName,
         ProfileType profileType,
         OffsetDateTime emailVerifiedAt,
+        OffsetDateTime onboardingCompletedAt,
         UserRole role,
         PlanType planType,
         String token,
