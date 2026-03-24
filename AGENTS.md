@@ -174,7 +174,9 @@ Required behavior:
 - User uploads note image.
 - OCR extracts text.
 - Extracted text is inserted/merged into Note `content`.
-- User can review and edit OCR text before save/generate.
+- User reviews and edits OCR text directly in the main `Content` field before save/generate.
+- Do not add a second OCR-only review textarea in Create/Edit Note.
+- If OCR confidence is low, show an inline warning near `Content` instead of a separate confirmation editor.
 - OCR upload does not auto-save and does not auto-generate.
 - Uploaded images are not stored permanently.
 

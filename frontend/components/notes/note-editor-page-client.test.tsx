@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
-import { getBillingPricing, getBillingUsageSummary, getNote } from "@/lib/api";
+import { createStudyPackFromImage, getBillingPricing, getBillingUsageSummary, getNote, isNeedsTextConfirmationResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -10,6 +10,7 @@ jest.mock("next/navigation", () => ({
     push: pushMock,
     refresh: jest.fn(),
   }),
+  usePathname: () => "/notes/new",
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -29,7 +30,8 @@ jest.mock("@/lib/api", () => ({
   getBillingUsageSummary: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: () => false,
-  isNeedsTextConfirmationResponse: () => false,
+  isNeedsTextConfirmationResponse: jest.fn(() => false),
+  trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
 }));
 
@@ -61,10 +63,12 @@ const baseNote = {
 describe("NoteEditorPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    (createStudyPackFromImage as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (isNeedsTextConfirmationResponse as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
       studyPacksUsed: 2,
@@ -83,6 +87,7 @@ describe("NoteEditorPageClient", () => {
       hasIntroPromo: true,
       introEligible: true,
     });
+    (isNeedsTextConfirmationResponse as jest.Mock).mockReturnValue(false);
   });
 
   it("keeps draft note title/subject/tags/content editable", async () => {
@@ -169,5 +174,73 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
 
     expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+  });
+
+  it("inserts OCR text directly into Content and shows an inline warning for low-confidence OCR", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (isNeedsTextConfirmationResponse as jest.Mock).mockReturnValue(true);
+    (createStudyPackFromImage as jest.Mock).mockResolvedValue({
+      status: "needs_text_confirmation",
+      id: "draft-1",
+      extractedText: "Low confidence OCR text",
+      meta: {
+        ocrConfidence: 0.42,
+        latencyMs: 1200,
+      },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const uploadInput = document.getElementById("note-ocr-image") as HTMLInputElement | null;
+    expect(uploadInput).not.toBeNull();
+
+    const image = new File(["fake"], "note.png", { type: "image/png" });
+    fireEvent.change(uploadInput as HTMLInputElement, { target: { files: [image] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Low confidence OCR text");
+    });
+
+    expect(
+      screen.getByText("OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Review Extracted Text")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use OCR Text" })).not.toBeInTheDocument();
+  });
+
+  it("inserts extracted OCR text into Content for standard OCR responses", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (createStudyPackFromImage as jest.Mock).mockResolvedValue({
+      id: "study-pack-1",
+      noteId: null,
+      inputType: "image",
+      extractedText: "High confidence OCR text",
+      sourceText: null,
+      title: "Generated",
+      summary: "Summary",
+      subject: null,
+      keyConcepts: [],
+      tags: [],
+      quiz: [],
+      createdAt: "2026-03-21T10:00:00Z",
+      meta: {
+        ocrConfidence: 0.98,
+        latencyMs: 800,
+      },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const uploadInput = document.getElementById("note-ocr-image") as HTMLInputElement | null;
+    const image = new File(["fake"], "note.png", { type: "image/png" });
+    fireEvent.change(uploadInput as HTMLInputElement, { target: { files: [image] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("High confidence OCR text");
+    });
+
+    expect(screen.queryByText("Review Extracted Text")).not.toBeInTheDocument();
   });
 });

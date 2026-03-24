@@ -34,9 +34,11 @@ Processing idea:
 
 If OCR confidence is low:
 - return `status: needs_text_confirmation`
-- provide editable extracted text
-- allow the user to confirm or correct it
-- resubmit corrected text for Study Pack generation
+- note editor should still insert the extracted text directly into the main Note `content` field
+- show an inline warning near `Content`:
+  - `OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack.`
+- do not show a second OCR-specific review textarea in Create/Edit Note
+- note editor OCR review must happen in the main `Content` field only
 
 ## Image guardrails
 
