@@ -1,0 +1,2 @@
+ALTER TABLE user_usage
+    ADD COLUMN IF NOT EXISTS ocr_extractions INTEGER NOT NULL DEFAULT 0;

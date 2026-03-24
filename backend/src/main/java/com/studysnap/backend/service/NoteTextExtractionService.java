@@ -24,6 +24,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -36,17 +38,13 @@ public class NoteTextExtractionService {
     private static final String DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private static final String PDF_MIME = "application/pdf";
     private static final String TEXT_MIME = "text/plain";
-    private static final long MAX_TXT_BYTES = (long) 1024 * 1024;
-    private static final long MAX_DOCX_BYTES = 10L * 1024 * 1024;
-    private static final long MAX_PDF_BYTES = 10L * 1024 * 1024;
-    private static final int MAX_PDF_PAGES = 30;
-    private static final int MAX_EXTRACTED_CHARACTERS = 200_000;
-
+    private static final String IMPORTED_TEXT_TOO_LARGE_MESSAGE = "This file is too large to process. Please upload a smaller file.";
     private final AuthService authService;
     private final OcrService ocrService;
     private final OcrRateLimitService ocrRateLimitService;
     private final SubscriptionService subscriptionService;
     private final StudySnapProperties properties;
+    private final OcrUsageProtectionService ocrUsageProtectionService;
 
     public ExtractedNoteTextResponse extractText(MultipartFile file, UUID ownerUserId) {
         ImportedFileType type = resolveImportedFileType(file);
@@ -62,8 +60,10 @@ public class NoteTextExtractionService {
         authService.requireEmailVerified(ownerUserId);
         PlanType planType = subscriptionService.resolvePlan(ownerUserId);
         validateImage(file, planType);
+        ocrUsageProtectionService.assertQuotaAvailable(ownerUserId, planType);
         ocrRateLimitService.assertAllowed(ownerUserId, planType);
 
+        ocrUsageProtectionService.recordUsage(ownerUserId, OffsetDateTime.now(ZoneOffset.UTC));
         OcrResult result = ocrService.extractText(file);
         String extractedText = normalizeText(result.extractedText());
         if (extractedText.isBlank()) {
@@ -86,16 +86,17 @@ public class NoteTextExtractionService {
 
     private ExtractedNoteTextResponse extractFromTxt(MultipartFile file) {
         assertFilePresent(file, "Please upload a TXT file to continue.");
-        assertFileSize(file, MAX_TXT_BYTES, "This file is too large. Upload a TXT file under 1 MB.");
+        assertFileSize(file, resolveFileSizeLimit(ImportedFileType.TXT), "This file is too large. Upload a smaller TXT file.");
         try {
             String extractedText = normalizeText(new String(file.getBytes(), StandardCharsets.UTF_8));
             if (extractedText.isBlank()) {
                 throw new AppException(
                         "EMPTY_IMPORTED_TEXT",
-                        "This file is empty or has no readable text.",
-                        HttpStatus.BAD_REQUEST
+                    "This file is empty or has no readable text.",
+                    HttpStatus.BAD_REQUEST
                 );
             }
+            assertExtractedTextLength(extractedText, IMPORTED_TEXT_TOO_LARGE_MESSAGE);
             return new ExtractedNoteTextResponse(
                     "txt",
                     extractedText,
@@ -108,12 +109,12 @@ public class NoteTextExtractionService {
 
     private ExtractedNoteTextResponse extractFromPdf(MultipartFile file, UUID ownerUserId) {
         assertFilePresent(file, "Please upload a PDF file to continue.");
-        assertFileSize(file, MAX_PDF_BYTES, "This file is too large. Upload a PDF file under 10 MB.");
+        assertFileSize(file, resolveFileSizeLimit(ImportedFileType.PDF), "This file is too large. Upload a smaller PDF file.");
         try (PDDocument document = PDDocument.load(file.getBytes())) {
-            if (document.getNumberOfPages() > MAX_PDF_PAGES) {
+            if (document.getNumberOfPages() > Math.max(1, properties.getLimits().getPdfMaxPages())) {
                 throw new AppException(
-                        "PDF_TOO_LONG",
-                        "This PDF is too long to import at once. Try a PDF with 30 pages or fewer.",
+                    "PDF_TOO_LONG",
+                    "This PDF is too long to import at once. Try a PDF with 30 pages or fewer.",
                         HttpStatus.BAD_REQUEST
                 );
             }
@@ -123,7 +124,7 @@ public class NoteTextExtractionService {
             if (extractedText.isBlank()) {
                 return extractFromPdfViaOcr(document, file, ownerUserId);
             }
-            assertExtractedTextLength(extractedText, "This PDF contains too much text to import at once. Try a shorter PDF.");
+            assertExtractedTextLength(extractedText, IMPORTED_TEXT_TOO_LARGE_MESSAGE);
 
             return new ExtractedNoteTextResponse(
                     "pdf",
@@ -138,7 +139,9 @@ public class NoteTextExtractionService {
     private ExtractedNoteTextResponse extractFromPdfViaOcr(PDDocument document, MultipartFile file, UUID ownerUserId) {
         authService.requireEmailVerified(ownerUserId);
         PlanType planType = subscriptionService.resolvePlan(ownerUserId);
+        ocrUsageProtectionService.assertQuotaAvailable(ownerUserId, planType);
         ocrRateLimitService.assertAllowed(ownerUserId, planType);
+        ocrUsageProtectionService.recordUsage(ownerUserId, OffsetDateTime.now(ZoneOffset.UTC));
 
         PDFRenderer renderer = new PDFRenderer(document);
         StringBuilder combinedText = new StringBuilder();
@@ -176,7 +179,7 @@ public class NoteTextExtractionService {
                     HttpStatus.BAD_REQUEST
             );
         }
-        assertExtractedTextLength(extractedText, "This PDF contains too much text to import at once. Try a shorter PDF.");
+        assertExtractedTextLength(extractedText, IMPORTED_TEXT_TOO_LARGE_MESSAGE);
 
         double averageConfidence = ocrPageCount > 0 ? confidenceTotal / ocrPageCount : 0.0;
         return new ExtractedNoteTextResponse(
@@ -191,7 +194,7 @@ public class NoteTextExtractionService {
 
     private ExtractedNoteTextResponse extractFromDocx(MultipartFile file) {
         assertFilePresent(file, "Please upload a DOCX file to continue.");
-        assertFileSize(file, MAX_DOCX_BYTES, "This file is too large. Upload a DOCX file under 10 MB.");
+        assertFileSize(file, resolveFileSizeLimit(ImportedFileType.DOCX), "This file is too large. Upload a smaller DOCX file.");
         try (
                 ByteArrayInputStream inputStream = new ByteArrayInputStream(file.getBytes());
                 XWPFDocument document = new XWPFDocument(inputStream)
@@ -210,7 +213,7 @@ public class NoteTextExtractionService {
                         HttpStatus.BAD_REQUEST
                 );
             }
-            assertExtractedTextLength(extractedText, "This document is too large to import at once. Try a shorter DOCX file.");
+            assertExtractedTextLength(extractedText, IMPORTED_TEXT_TOO_LARGE_MESSAGE);
 
             return new ExtractedNoteTextResponse(
                     "docx",
@@ -262,9 +265,12 @@ public class NoteTextExtractionService {
 
         long maxImageBytes = Math.max(
                 1,
-                planType == PlanType.PREMIUM
-                        ? properties.getOcr().getPremiumMaxImageBytes()
-                        : properties.getOcr().getFreeMaxImageBytes()
+                Math.min(
+                        properties.getLimits().getFileUploadMaxSize(),
+                        planType == PlanType.PREMIUM
+                                ? properties.getOcr().getPremiumMaxImageBytes()
+                                : properties.getOcr().getFreeMaxImageBytes()
+                )
         );
         if (image.getSize() > maxImageBytes) {
             long maxSizeMb = Math.max(1, maxImageBytes / (1024 * 1024));
@@ -289,9 +295,20 @@ public class NoteTextExtractionService {
     }
 
     private void assertExtractedTextLength(String extractedText, String message) {
-        if (extractedText.length() > MAX_EXTRACTED_CHARACTERS) {
+        if (extractedText.length() > Math.max(1, properties.getLimits().getExtractedTextMaxLength())) {
             throw new AppException("IMPORTED_TEXT_TOO_LARGE", message, HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private long resolveFileSizeLimit(ImportedFileType type) {
+        long globalLimit = Math.max(1L, properties.getLimits().getFileUploadMaxSize());
+        long specificLimit = switch (type) {
+            case TXT -> properties.getLimits().getTxtUploadMaxSize();
+            case PDF -> properties.getLimits().getPdfUploadMaxSize();
+            case DOCX -> properties.getLimits().getDocxUploadMaxSize();
+            case IMAGE -> globalLimit;
+        };
+        return Math.max(1L, Math.min(globalLimit, specificLimit));
     }
 
     private String normalizeText(String value) {

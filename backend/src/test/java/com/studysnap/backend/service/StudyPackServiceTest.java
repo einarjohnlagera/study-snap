@@ -15,6 +15,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +65,10 @@ class StudyPackServiceTest {
     private BillingUsagePeriodService billingUsagePeriodService;
     @Mock
     private OcrRateLimitService ocrRateLimitService;
+    @Mock
+    private OcrUsageProtectionService ocrUsageProtectionService;
+    @Mock
+    private AiRateLimitService aiRateLimitService;
 
     private StudyPackService studyPackService;
 
@@ -81,7 +86,9 @@ class StudyPackServiceTest {
                 subscriptionService,
                 userUsageService,
                 billingUsagePeriodService,
-                ocrRateLimitService
+                ocrRateLimitService,
+                ocrUsageProtectionService,
+                aiRateLimitService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -175,6 +182,47 @@ class StudyPackServiceTest {
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
+    }
+
+    @Test
+    void createFromText_rejectsWhenAiRateLimitIsExceeded() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        org.mockito.Mockito.doThrow(new AppException(
+                "TOO_MANY_REQUESTS",
+                "Too many requests. Please wait a moment and try again.",
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS
+        )).when(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "study-pack");
+
+        assertThatThrownBy(() -> studyPackService.createFromText(
+                new CreateStudyPackRequest(null, noteId.toString()),
+                userId
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("TOO_MANY_REQUESTS");
+
+        verify(llmStudyPackService, never()).generateStudyPack(any());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
     private NoteEntity buildDraftNote(UUID noteId, UUID ownerUserId, String content) {

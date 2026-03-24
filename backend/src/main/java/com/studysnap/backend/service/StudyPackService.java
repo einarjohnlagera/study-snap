@@ -23,6 +23,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
@@ -72,6 +73,8 @@ public class StudyPackService {
     private final UserUsageService userUsageService;
     private final BillingUsagePeriodService billingUsagePeriodService;
     private final OcrRateLimitService ocrRateLimitService;
+    private final OcrUsageProtectionService ocrUsageProtectionService;
+    private final AiRateLimitService aiRateLimitService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -81,6 +84,7 @@ public class StudyPackService {
                 ? normalizeAndValidateText(request.notesText())
                 : normalizeAndValidateText(requestedSourceNote.getContent());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
+        aiRateLimitService.assertAllowed(ownerUserId, planType, "study-pack");
 
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
         NoteEntity sourceNote = requestedSourceNote == null
@@ -113,10 +117,11 @@ public class StudyPackService {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
-        assertMonthlyOcrUploadQuotaAvailable(ownerUserId, planType);
+        ocrUsageProtectionService.assertQuotaAvailable(ownerUserId, planType);
         ocrRateLimitService.assertAllowed(ownerUserId, planType);
         validateImage(image, planType);
 
+        ocrUsageProtectionService.recordUsage(ownerUserId, OffsetDateTime.now(ZoneOffset.UTC));
         OcrResult ocrResult = ocrService.extractText(image);
         String extractedText = mergeSubject(ocrResult.extractedText(), subject);
 
@@ -140,6 +145,7 @@ public class StudyPackService {
         }
 
         String normalizedText = normalizeAndValidateText(extractedText);
+        aiRateLimitService.assertAllowed(ownerUserId, planType, "study-pack");
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
         NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated);
         StudyPackEntity saved = saveStudyPack(
@@ -190,6 +196,7 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(request.notesText());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
+        aiRateLimitService.assertAllowed(ownerUserId, planType, "study-pack");
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
         NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated);
         StudyPackEntity saved = saveStudyPack(
@@ -390,44 +397,6 @@ public class StudyPackService {
                     HttpStatus.BAD_REQUEST
             );
         }
-    }
-
-    private void assertMonthlyOcrUploadQuotaAvailable(UUID ownerUserId, PlanType planType) {
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        OffsetDateTime monthStart = now.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
-        OffsetDateTime nextMonthStart = monthStart.plusMonths(1);
-
-        long usedFromImageStudyPacks = studyPackRepository
-                .countByOwnerUserIdAndInputTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                        ownerUserId,
-                        InputType.IMAGE,
-                        monthStart,
-                        nextMonthStart
-                );
-        long usedFromPendingDrafts = studyPackDraftRepository
-                .countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                        ownerUserId,
-                        monthStart,
-                        nextMonthStart
-                );
-        long usedThisMonth = usedFromImageStudyPacks + usedFromPendingDrafts;
-        int monthlyLimit = resolveMonthlyOcrUploadLimit(planType);
-        if (usedThisMonth < monthlyLimit) {
-            return;
-        }
-
-        throw new AppException(
-                "MONTHLY_OCR_UPLOAD_LIMIT_REACHED",
-                "You've reached your monthly OCR upload limit.",
-                HttpStatus.FORBIDDEN
-        );
-    }
-
-    private int resolveMonthlyOcrUploadLimit(PlanType planType) {
-        int configuredLimit = planType == PlanType.PREMIUM
-                ? properties.getOcr().getPremiumMonthlyUploadLimit()
-                : properties.getOcr().getFreeMonthlyUploadLimit();
-        return Math.max(1, configuredLimit);
     }
 
     private long resolveMaxImageBytes(PlanType planType) {

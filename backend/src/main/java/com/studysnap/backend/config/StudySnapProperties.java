@@ -17,6 +17,7 @@ public class StudySnapProperties {
     private final Llm llm = new Llm();
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
+    private final Limits limits = new Limits();
     private final Billing billing = new Billing();
     private final Email email = new Email();
 
@@ -88,6 +89,23 @@ public class StudySnapProperties {
         private int premiumMonthlyStudyPackLimit = 100;
         private int premiumMonthlyChallengeQuizLimit = 50;
         private int premiumMonthlyAdaptivePracticeLimit = 50;
+    }
+
+    @Getter
+    @Setter
+    public static class Limits {
+        private int freeOcrPerBillingPeriod = 20;
+        private int premiumOcrPerBillingPeriod = 200;
+        private long fileUploadMaxSize = 10_000_000;
+        private long txtUploadMaxSize = 1_000_000;
+        private long pdfUploadMaxSize = 10_000_000;
+        private long docxUploadMaxSize = 10_000_000;
+        private int pdfMaxPages = 30;
+        private int extractedTextMaxLength = 200_000;
+        private int freeAiRateLimitPerMinute = 5;
+        private int premiumAiRateLimitPerMinute = 20;
+        private int freeOcrRateLimitPerMinute = 6;
+        private int premiumOcrRateLimitPerMinute = 20;
     }
 
     @Getter

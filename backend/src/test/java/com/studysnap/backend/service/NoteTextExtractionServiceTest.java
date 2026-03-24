@@ -22,10 +22,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +46,8 @@ class NoteTextExtractionServiceTest {
 
     @Mock
     private SubscriptionService subscriptionService;
+    @Mock
+    private OcrUsageProtectionService ocrUsageProtectionService;
 
     private NoteTextExtractionService noteTextExtractionService;
     private UUID userId;
@@ -54,13 +59,20 @@ class NoteTextExtractionServiceTest {
         properties.getOcr().setFreeMaxImageBytes(5_000_000);
         properties.getOcr().setPremiumMaxImageBytes(10_000_000);
         properties.getOcr().setMaxPagesPerUpload(1);
+        properties.getLimits().setTxtUploadMaxSize(1_000_000);
+        properties.getLimits().setPdfUploadMaxSize(10_000_000);
+        properties.getLimits().setDocxUploadMaxSize(10_000_000);
+        properties.getLimits().setFileUploadMaxSize(10_000_000);
+        properties.getLimits().setPdfMaxPages(30);
+        properties.getLimits().setExtractedTextMaxLength(200_000);
 
         noteTextExtractionService = new NoteTextExtractionService(
                 authService,
                 ocrService,
                 ocrRateLimitService,
                 subscriptionService,
-                properties
+                properties,
+                ocrUsageProtectionService
         );
         userId = UUID.randomUUID();
     }
@@ -153,11 +165,13 @@ class NoteTextExtractionServiceTest {
 
             assertEquals("pdf", response.inputType());
             assertEquals("Scanned PDF OCR text", response.extractedText());
-            assertEquals(0.88, response.meta().ocrConfidence());
-            assertFalse(response.meta().lowConfidence());
-            verify(authService).requireEmailVerified(userId);
-            verify(ocrRateLimitService).assertAllowed(userId, PlanType.FREE);
-        }
+        assertEquals(0.88, response.meta().ocrConfidence());
+        assertFalse(response.meta().lowConfidence());
+        verify(authService).requireEmailVerified(userId);
+        verify(ocrUsageProtectionService).assertQuotaAvailable(userId, PlanType.FREE);
+        verify(ocrUsageProtectionService).recordUsage(eq(userId), org.mockito.ArgumentMatchers.any());
+        verify(ocrRateLimitService).assertAllowed(userId, PlanType.FREE);
+    }
     }
 
     @Test
@@ -178,6 +192,8 @@ class NoteTextExtractionServiceTest {
         assertTrue(response.meta().lowConfidence());
         assertEquals(0.41, response.meta().ocrConfidence());
         verify(authService).requireEmailVerified(userId);
+        verify(ocrUsageProtectionService).assertQuotaAvailable(userId, PlanType.FREE);
+        verify(ocrUsageProtectionService).recordUsage(eq(userId), org.mockito.ArgumentMatchers.any());
         verify(ocrRateLimitService).assertAllowed(userId, PlanType.FREE);
     }
 
@@ -201,7 +217,99 @@ class NoteTextExtractionServiceTest {
 
             assertEquals("PDF_NO_TEXT", error.getCode());
             assertEquals("This PDF appears to be scanned or image-based. Please upload images for OCR instead.", error.getMessage());
+            verify(ocrUsageProtectionService).recordUsage(eq(userId), org.mockito.ArgumentMatchers.any());
         }
+    }
+
+    @Test
+    void rejectsPdfImportWhenFileExceedsConfiguredLimit() {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getOcr().setConfidenceThreshold(0.8);
+        properties.getOcr().setFreeMaxImageBytes(5_000_000);
+        properties.getOcr().setPremiumMaxImageBytes(10_000_000);
+        properties.getOcr().setMaxPagesPerUpload(1);
+        properties.getLimits().setFileUploadMaxSize(10_000_000);
+        properties.getLimits().setPdfUploadMaxSize(128);
+        properties.getLimits().setDocxUploadMaxSize(10_000_000);
+        properties.getLimits().setTxtUploadMaxSize(1_000_000);
+        properties.getLimits().setPdfMaxPages(30);
+        properties.getLimits().setExtractedTextMaxLength(200_000);
+        noteTextExtractionService = new NoteTextExtractionService(
+                authService,
+                ocrService,
+                ocrRateLimitService,
+                subscriptionService,
+                properties,
+                ocrUsageProtectionService
+        );
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "notes.pdf",
+                "application/pdf",
+                new byte[256]
+        );
+
+        AppException error = assertThrows(AppException.class, () -> noteTextExtractionService.extractText(file, userId));
+
+        assertEquals("IMPORT_FILE_TOO_LARGE", error.getCode());
+        assertEquals("This file is too large. Upload a smaller PDF file.", error.getMessage());
+    }
+
+    @Test
+    void rejectsTxtImportWhenExtractedContentExceedsConfiguredLength() {
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getOcr().setConfidenceThreshold(0.8);
+        properties.getOcr().setFreeMaxImageBytes(5_000_000);
+        properties.getOcr().setPremiumMaxImageBytes(10_000_000);
+        properties.getOcr().setMaxPagesPerUpload(1);
+        properties.getLimits().setFileUploadMaxSize(10_000_000);
+        properties.getLimits().setTxtUploadMaxSize(10_000_000);
+        properties.getLimits().setPdfUploadMaxSize(10_000_000);
+        properties.getLimits().setDocxUploadMaxSize(10_000_000);
+        properties.getLimits().setPdfMaxPages(30);
+        properties.getLimits().setExtractedTextMaxLength(10);
+        noteTextExtractionService = new NoteTextExtractionService(
+                authService,
+                ocrService,
+                ocrRateLimitService,
+                subscriptionService,
+                properties,
+                ocrUsageProtectionService
+        );
+
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "notes.txt",
+                "text/plain",
+                "01234567890".getBytes(StandardCharsets.UTF_8)
+        );
+
+        AppException error = assertThrows(AppException.class, () -> noteTextExtractionService.extractText(file, userId));
+
+        assertEquals("IMPORTED_TEXT_TOO_LARGE", error.getCode());
+        assertEquals("This file is too large to process. Please upload a smaller file.", error.getMessage());
+    }
+
+    @Test
+    void rejectsImageImportsWhenOcrQuotaIsExceeded() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "note.png",
+                "image/png",
+                "fake-image".getBytes()
+        );
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        doThrow(new AppException(
+                "OCR_LIMIT_REACHED",
+                "You have reached your OCR limit for now. Please try again later or upgrade to Premium.",
+                org.springframework.http.HttpStatus.FORBIDDEN
+        )).when(ocrUsageProtectionService).assertQuotaAvailable(userId, PlanType.FREE);
+
+        AppException error = assertThrows(AppException.class, () -> noteTextExtractionService.extractText(file, userId));
+
+        assertEquals("OCR_LIMIT_REACHED", error.getCode());
+        verify(ocrRateLimitService, never()).assertAllowed(userId, PlanType.FREE);
     }
 
     @Test

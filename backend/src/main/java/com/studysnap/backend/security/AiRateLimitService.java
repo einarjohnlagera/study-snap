@@ -13,18 +13,18 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-public class OcrRateLimitService {
+public class AiRateLimitService {
     private static final Duration WINDOW = Duration.ofMinutes(1);
 
     private final StudySnapProperties properties;
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
 
-    public OcrRateLimitService(StudySnapProperties properties) {
+    public AiRateLimitService(StudySnapProperties properties) {
         this.properties = properties;
     }
 
-    public void assertAllowed(UUID userId, PlanType planType) {
-        String bucketKey = userId + ":" + planType.name();
+    public void assertAllowed(UUID userId, PlanType planType, String operation) {
+        String bucketKey = operation + ":" + userId + ":" + planType.name();
         Bucket bucket = buckets.computeIfAbsent(bucketKey, ignored -> new Bucket(OffsetDateTime.now(), 0));
         int rateLimit = resolveRateLimitPerMinute(planType);
         synchronized (bucket) {
@@ -35,7 +35,7 @@ public class OcrRateLimitService {
             }
             if (bucket.count >= rateLimit) {
                 throw new AppException(
-                        "OCR_RATE_LIMIT_EXCEEDED",
+                        "TOO_MANY_REQUESTS",
                         "Too many requests. Please wait a moment and try again.",
                         HttpStatus.TOO_MANY_REQUESTS
                 );
@@ -46,8 +46,8 @@ public class OcrRateLimitService {
 
     private int resolveRateLimitPerMinute(PlanType planType) {
         int configured = planType == PlanType.PREMIUM
-                ? properties.getLimits().getPremiumOcrRateLimitPerMinute()
-                : properties.getLimits().getFreeOcrRateLimitPerMinute();
+                ? properties.getLimits().getPremiumAiRateLimitPerMinute()
+                : properties.getLimits().getFreeAiRateLimitPerMinute();
         return Math.max(1, configured);
     }
 
