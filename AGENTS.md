@@ -41,6 +41,7 @@ Core loop:
 - Premium access remains active until that period ends.
 - Downgrade to Free happens through subscription lifecycle logic at period end.
 - Canceling Premium must not remove notes or generated Study Packs from the user library.
+- Settings billing should show scheduled end-of-period cancellation clearly in the subscription summary and must not imply immediate loss of access.
 
 ### Premium Upgrade Prompt Rule
 
@@ -85,6 +86,14 @@ Core loop:
 - Frontend must use the billing pricing API for pricing display in Settings, pricing surfaces, and upgrade prompts.
 - Do not hardcode Premium prices in frontend code.
 - Intro pricing and first-time promos must be implemented through the voucher/promotion system, not as a boolean on `User`.
+
+### Billing History Rule
+
+- `Settings -> Plan & Billing` should include a read-only billing history section below the current plan and usage card.
+- The billing summary card should show current plan, subscription status, billing cycle, and renewal or end date.
+- If `cancelAtPeriodEnd=true`, show that Premium will end on the stored date and will not renew.
+- Payment history must come from `PaymentTransactionEntity` data via `GET /api/billing/history`.
+- Billing history rows should stay user-friendly and must not expose raw webhook event names.
 
 ### Library Rule
 

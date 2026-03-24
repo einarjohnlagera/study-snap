@@ -508,13 +508,25 @@ export type BillingUsageSummaryResponse = {
 };
 
 export type BillingHistoryItemResponse = {
+  id: string;
   date: string;
   description: string;
   amount: number;
   currency: string;
-  status: "PENDING" | "SUCCESS" | "FAILED";
+  status: "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
   provider: "NONE" | "STRIPE" | "PAYMONGO";
-  referenceId: string;
+  providerReferenceId: string;
+};
+
+export type BillingHistoryResponse = {
+  currentPlan: PlanType;
+  subscriptionStatus: "ACTIVE" | "CANCELED" | "EXPIRED" | null;
+  billingType: BillingCycle | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  cancellationEffectiveAt: string | null;
+  transactions: BillingHistoryItemResponse[];
 };
 
 export type UpdateStudyPackMetadataRequest = {
@@ -1517,7 +1529,7 @@ export async function getBillingUsageSummary(): Promise<BillingUsageSummaryRespo
   );
 }
 
-export async function getBillingHistory(): Promise<BillingHistoryItemResponse[]> {
+export async function getBillingHistory(): Promise<BillingHistoryResponse> {
   const response = await fetchWithAuth(
     "/billing/history",
     {
@@ -1526,7 +1538,7 @@ export async function getBillingHistory(): Promise<BillingHistoryItemResponse[]>
     },
     true,
   );
-  return parseApiResponse<BillingHistoryItemResponse[]>(
+  return parseApiResponse<BillingHistoryResponse>(
     response,
     "Could not load billing history.",
   );

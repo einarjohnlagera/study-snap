@@ -17,6 +17,7 @@ import {
   logout,
   updateEngagementMode,
   type BillingCycle,
+  type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
   type BillingUsageSummaryResponse,
@@ -87,7 +88,7 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [usageSummary, setUsageSummary] = useState<BillingUsageSummaryResponse | null>(null);
-  const [billingHistory, setBillingHistory] = useState<BillingHistoryItemResponse[]>([]);
+  const [billingHistory, setBillingHistory] = useState<BillingHistoryResponse | null>(null);
   const [billingPricing, setBillingPricing] = useState<BillingPricingResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [startingCheckout, setStartingCheckout] = useState(false);
@@ -129,7 +130,7 @@ export default function SettingsPage() {
       setError(message);
       setProfile(null);
       setUsageSummary(null);
-      setBillingHistory([]);
+      setBillingHistory(null);
       setBillingPricing(null);
     } finally {
       setLoading(false);
@@ -290,6 +291,18 @@ export default function SettingsPage() {
           },
         };
       });
+      setBillingHistory((currentHistory) => {
+        if (!currentHistory) {
+          return currentHistory;
+        }
+        return {
+          ...currentHistory,
+          cancelAtPeriodEnd: true,
+          cancellationEffectiveAt:
+            updatedProfile?.subscription.premiumEndsAt ?? currentHistory.cancellationEffectiveAt ?? currentHistory.currentPeriodEnd,
+          currentPeriodEnd: updatedProfile?.subscription.premiumEndsAt ?? currentHistory.currentPeriodEnd,
+        };
+      });
       setPlanMessage("Cancellation scheduled. Premium remains active until the end of your current billing period.");
       setIsCancellationModalOpen(false);
     } catch (err) {
@@ -301,7 +314,9 @@ export default function SettingsPage() {
   };
 
   const isPremiumPlan = profile?.planType === "PREMIUM";
-  const isCancellationScheduled = Boolean(profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt);
+  const isCancellationScheduled = Boolean(
+    billingHistory?.cancelAtPeriodEnd ?? (profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt),
+  );
   const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
   const studyPacksLimit = usageSummary?.studyPacksLimit ?? (isPremiumPlan ? 100 : 5);
   const challengeQuizUsed = usageSummary?.challengeQuizUsed ?? 0;
@@ -311,6 +326,7 @@ export default function SettingsPage() {
   const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
   const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
   const yearlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
+  const billingTransactions = billingHistory?.transactions ?? [];
 
   const formatBillingDate = (rawDate: string | null) => {
     if (!rawDate) {
@@ -322,6 +338,75 @@ export default function SettingsPage() {
     }
     return value.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   };
+
+  const formatBillingAmount = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `${Number(amount).toFixed(2)} ${currency}`;
+    }
+  };
+
+  const getTransactionStatusLabel = (status: BillingHistoryItemResponse["status"]) => {
+    switch (status) {
+      case "SUCCESS":
+        return "Paid";
+      case "FAILED":
+        return "Failed";
+      case "REFUNDED":
+        return "Refunded";
+      default:
+        return "Pending";
+    }
+  };
+
+  const getTransactionStatusClasses = (status: BillingHistoryItemResponse["status"]) => {
+    switch (status) {
+      case "SUCCESS":
+        return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+      case "FAILED":
+        return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
+      case "REFUNDED":
+        return "border-border bg-muted text-foreground/75";
+      default:
+        return "border-border bg-background text-foreground/75";
+    }
+  };
+
+  const subscriptionSummaryPlan = billingHistory?.currentPlan ?? profile?.planType ?? "FREE";
+  const subscriptionSummaryStatus = (() => {
+    if (subscriptionSummaryPlan !== "PREMIUM") {
+      return "Free plan";
+    }
+    if (billingHistory?.cancelAtPeriodEnd) {
+      return "Cancels at period end";
+    }
+    if (billingHistory?.subscriptionStatus === "ACTIVE") {
+      return "Active";
+    }
+    if (billingHistory?.subscriptionStatus === "EXPIRED") {
+      return "Expired";
+    }
+    if (billingHistory?.subscriptionStatus === "CANCELED") {
+      return "Canceled";
+    }
+    return "Premium";
+  })();
+  const subscriptionSummaryDate = billingHistory?.cancelAtPeriodEnd
+    ? billingHistory.cancellationEffectiveAt ?? billingHistory.currentPeriodEnd
+    : billingHistory?.currentPeriodEnd;
+  const subscriptionSummaryDateLabel =
+    subscriptionSummaryPlan === "PREMIUM" ? (billingHistory?.cancelAtPeriodEnd ? "Ends on" : "Renews on") : "Status";
+  const subscriptionBillingCycleLabel = billingHistory?.billingType
+    ? billingHistory.billingType === "YEARLY"
+      ? "Yearly"
+      : "Monthly"
+    : "—";
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -456,17 +541,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
-              {isPremiumPlan && isCancellationScheduled ? (
-                <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
-                  <p className="text-sm font-semibold text-foreground">
-                    Premium ends on {formatBillingDate(profile.subscription.premiumEndsAt)}
-                  </p>
-                  <p className="text-sm text-foreground/80">Your subscription will not renew.</p>
-                  <p className="text-xs text-foreground/70">
-                    Your notes and Study Packs will remain in your library.
-                  </p>
-                </div>
-              ) : null}
               {isPremiumPlan && !isCancellationScheduled ? (
                 <div className="rounded-md border border-border bg-background p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -492,33 +566,132 @@ export default function SettingsPage() {
               ) : null}
             </div>
 
-            <div className="space-y-2 rounded-md border border-border bg-background p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing History</p>
-              {billingHistory.length === 0 ? (
-                <p className="text-sm text-foreground/70">No billing transactions yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {billingHistory.slice(0, 10).map((item) => (
-                    <div key={item.referenceId} className="rounded-md border border-border p-3 text-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-medium">{item.description}</p>
-                        <p className="text-foreground/70">
-                          {Number(item.amount).toFixed(2)} {item.currency}
-                        </p>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-foreground/60">
-                        <span>{formatBillingDate(item.date)}</span>
-                        <span>•</span>
-                        <span>{item.status}</span>
-                        <span>•</span>
-                        <span>{item.provider}</span>
-                        <span>•</span>
-                        <span className="font-mono">{item.referenceId}</span>
-                      </div>
-                    </div>
-                  ))}
+            <div className="space-y-4 rounded-md border border-border bg-background p-4">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing History</p>
+                <h3 className="text-base font-semibold text-foreground">Subscription Summary</h3>
+              </div>
+
+              <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current plan</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {subscriptionSummaryPlan === "PREMIUM" ? "Premium" : "Free"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Status</p>
+                    <p className="text-sm font-medium text-foreground">{subscriptionSummaryStatus}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      {subscriptionSummaryDateLabel}
+                    </p>
+                    <p className="text-sm font-medium text-foreground">
+                      {subscriptionSummaryPlan === "PREMIUM"
+                        ? formatBillingDate(subscriptionSummaryDate ?? null)
+                        : "No active subscription"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing cycle</p>
+                    <p className="text-sm font-medium text-foreground">{subscriptionBillingCycleLabel}</p>
+                  </div>
                 </div>
-              )}
+
+                {billingHistory?.cancelAtPeriodEnd ? (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
+                    <p className="text-sm font-medium text-foreground">
+                      Your Premium plan will end on {formatBillingDate(subscriptionSummaryDate ?? null)} and will not renew.
+                    </p>
+                    <p className="mt-1 text-xs text-foreground/70">
+                      Your notes and Study Packs will remain in your library.
+                    </p>
+                  </div>
+                ) : subscriptionSummaryPlan === "PREMIUM" ? (
+                  <p className="text-sm text-foreground/75">
+                    Your Premium plan renews on {formatBillingDate(subscriptionSummaryDate ?? null)}.
+                  </p>
+                ) : (
+                  <p className="text-sm text-foreground/75">
+                    Your payment history will appear here once you subscribe to Premium.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-base font-semibold text-foreground">Payment History</h3>
+                {billingTransactions.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-border p-4 text-sm">
+                    <p className="font-medium text-foreground">No billing history yet</p>
+                    <p className="mt-1 text-foreground/70">
+                      Your payment history will appear here once you subscribe to Premium.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="hidden overflow-x-auto rounded-md border border-border md:block">
+                      <table className="min-w-full divide-y divide-border text-sm">
+                        <thead className="bg-muted/50">
+                          <tr className="text-left text-xs uppercase tracking-wide text-foreground/60">
+                            <th className="px-4 py-3 font-semibold">Date</th>
+                            <th className="px-4 py-3 font-semibold">Description</th>
+                            <th className="px-4 py-3 font-semibold">Amount</th>
+                            <th className="px-4 py-3 font-semibold">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-background">
+                          {billingTransactions.map((item) => (
+                            <tr key={item.id}>
+                              <td className="px-4 py-3 text-foreground/75">{formatBillingDate(item.date)}</td>
+                              <td className="px-4 py-3">
+                                <p className="font-medium text-foreground">{item.description}</p>
+                                <p className="mt-1 text-xs text-foreground/60">
+                                  {item.provider} • <span className="font-mono">{item.providerReferenceId}</span>
+                                </p>
+                              </td>
+                              <td className="px-4 py-3 text-foreground/75">
+                                {formatBillingAmount(item.amount, item.currency)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getTransactionStatusClasses(item.status)}`}
+                                >
+                                  {getTransactionStatusLabel(item.status)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="space-y-3 md:hidden">
+                      {billingTransactions.map((item) => (
+                        <div key={item.id} className="rounded-md border border-border p-4 text-sm">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <p className="font-medium text-foreground">{item.description}</p>
+                              <p className="text-xs text-foreground/60">{formatBillingDate(item.date)}</p>
+                            </div>
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${getTransactionStatusClasses(item.status)}`}
+                            >
+                              {getTransactionStatusLabel(item.status)}
+                            </span>
+                          </div>
+                          <div className="mt-3 space-y-1 text-xs text-foreground/70">
+                            <p>{formatBillingAmount(item.amount, item.currency)}</p>
+                            <p>{item.provider}</p>
+                            <p className="font-mono">{item.providerReferenceId}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </Card>
 
