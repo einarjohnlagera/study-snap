@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -133,6 +134,33 @@ class NoteTextExtractionServiceTest {
     }
 
     @Test
+    void fallsBackToOcrForScannedPdfWithoutEmbeddedText() throws IOException {
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            document.addPage(new PDPage());
+            document.save(outputStream);
+
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "scan.pdf",
+                    "application/pdf",
+                    outputStream.toByteArray()
+            );
+            when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+            when(ocrService.extractText(org.mockito.ArgumentMatchers.any(MultipartFile.class)))
+                    .thenReturn(new OcrResult("Scanned PDF OCR text", 0.88));
+
+            ExtractedNoteTextResponse response = noteTextExtractionService.extractText(file, userId);
+
+            assertEquals("pdf", response.inputType());
+            assertEquals("Scanned PDF OCR text", response.extractedText());
+            assertEquals(0.88, response.meta().ocrConfidence());
+            assertFalse(response.meta().lowConfidence());
+            verify(authService).requireEmailVerified(userId);
+            verify(ocrRateLimitService).assertAllowed(userId, PlanType.FREE);
+        }
+    }
+
+    @Test
     void returnsLowConfidenceMetadataForImageOcr() {
         MockMultipartFile file = new MockMultipartFile(
                 "file",
@@ -154,7 +182,7 @@ class NoteTextExtractionServiceTest {
     }
 
     @Test
-    void rejectsScannedPdfWithoutExtractableText() throws IOException {
+    void rejectsScannedPdfWithoutExtractableTextWhenOcrFallbackAlsoFindsNothing() throws IOException {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             document.addPage(new PDPage());
             document.save(outputStream);
@@ -165,6 +193,9 @@ class NoteTextExtractionServiceTest {
                     "application/pdf",
                     outputStream.toByteArray()
             );
+            when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+            when(ocrService.extractText(org.mockito.ArgumentMatchers.any(MultipartFile.class)))
+                    .thenReturn(new OcrResult("", 0.32));
 
             AppException error = assertThrows(AppException.class, () -> noteTextExtractionService.extractText(file, userId));
 

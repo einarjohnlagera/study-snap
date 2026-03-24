@@ -194,6 +194,7 @@ Required behavior:
 - Users review and edit imported text directly in the main `Content` field.
 - File import does not auto-save and does not auto-generate.
 - Text-based PDFs are supported in this flow.
+- If a PDF has no embedded text, use OCR fallback before treating it as unreadable.
 - If a PDF has no extractable text, show a friendly scanned-PDF message and direct users to image OCR instead.
 
 

@@ -7,6 +7,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.OcrResult;
 import lombok.RequiredArgsConstructor;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -16,8 +17,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
@@ -48,7 +53,7 @@ public class NoteTextExtractionService {
         return switch (type) {
             case IMAGE -> extractFromImage(file, ownerUserId);
             case TXT -> extractFromTxt(file);
-            case PDF -> extractFromPdf(file);
+            case PDF -> extractFromPdf(file, ownerUserId);
             case DOCX -> extractFromDocx(file);
         };
     }
@@ -101,7 +106,7 @@ public class NoteTextExtractionService {
         }
     }
 
-    private ExtractedNoteTextResponse extractFromPdf(MultipartFile file) {
+    private ExtractedNoteTextResponse extractFromPdf(MultipartFile file, UUID ownerUserId) {
         assertFilePresent(file, "Please upload a PDF file to continue.");
         assertFileSize(file, MAX_PDF_BYTES, "This file is too large. Upload a PDF file under 10 MB.");
         try (PDDocument document = PDDocument.load(file.getBytes())) {
@@ -116,11 +121,7 @@ public class NoteTextExtractionService {
             PDFTextStripper stripper = new PDFTextStripper();
             String extractedText = normalizeText(stripper.getText(document));
             if (extractedText.isBlank()) {
-                throw new AppException(
-                        "PDF_NO_TEXT",
-                        "This PDF appears to be scanned or image-based. Please upload images for OCR instead.",
-                        HttpStatus.BAD_REQUEST
-                );
+                return extractFromPdfViaOcr(document, file, ownerUserId);
             }
             assertExtractedTextLength(extractedText, "This PDF contains too much text to import at once. Try a shorter PDF.");
 
@@ -132,6 +133,60 @@ public class NoteTextExtractionService {
         } catch (IOException exception) {
             throw new AppException("NOTE_IMPORT_FAILED", "Could not read this PDF file.", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private ExtractedNoteTextResponse extractFromPdfViaOcr(PDDocument document, MultipartFile file, UUID ownerUserId) {
+        authService.requireEmailVerified(ownerUserId);
+        PlanType planType = subscriptionService.resolvePlan(ownerUserId);
+        ocrRateLimitService.assertAllowed(ownerUserId, planType);
+
+        PDFRenderer renderer = new PDFRenderer(document);
+        StringBuilder combinedText = new StringBuilder();
+        double confidenceTotal = 0.0;
+        int ocrPageCount = 0;
+
+        for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex += 1) {
+            try {
+                OcrResult pageResult = ocrService.extractText(renderPdfPageAsImage(renderer, file, pageIndex));
+                String pageText = normalizeText(pageResult.extractedText());
+                if (pageText.isBlank()) {
+                    continue;
+                }
+                if (!combinedText.isEmpty()) {
+                    combinedText.append("\n\n");
+                }
+                combinedText.append(pageText);
+                confidenceTotal += pageResult.confidence();
+                ocrPageCount += 1;
+            } catch (AppException exception) {
+                if (isRecoverablePdfOcrFailure(exception)) {
+                    continue;
+                }
+                throw exception;
+            } catch (IOException exception) {
+                throw new AppException("NOTE_IMPORT_FAILED", "Could not read this PDF file.", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        String extractedText = normalizeText(combinedText.toString());
+        if (extractedText.isBlank()) {
+            throw new AppException(
+                    "PDF_NO_TEXT",
+                    "This PDF appears to be scanned or image-based. Please upload images for OCR instead.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        assertExtractedTextLength(extractedText, "This PDF contains too much text to import at once. Try a shorter PDF.");
+
+        double averageConfidence = ocrPageCount > 0 ? confidenceTotal / ocrPageCount : 0.0;
+        return new ExtractedNoteTextResponse(
+                "pdf",
+                extractedText,
+                new ExtractedNoteTextResponse.ExtractionMeta(
+                        averageConfidence,
+                        averageConfidence < properties.getOcr().getConfidenceThreshold()
+                )
+        );
     }
 
     private ExtractedNoteTextResponse extractFromDocx(MultipartFile file) {
@@ -247,6 +302,83 @@ public class NoteTextExtractionService {
                 .replaceAll("[ \\t]+\\n", "\n")
                 .replaceAll("\\n{3,}", "\n\n")
                 .trim();
+    }
+
+    private MultipartFile renderPdfPageAsImage(PDFRenderer renderer, MultipartFile sourceFile, int pageIndex) throws IOException {
+        BufferedImage renderedPage = renderer.renderImageWithDPI(pageIndex, 150);
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            if (!ImageIO.write(renderedPage, "jpg", outputStream)) {
+                throw new AppException("NOTE_IMPORT_FAILED", "Could not read this PDF file.", HttpStatus.BAD_REQUEST);
+            }
+            String originalName = sourceFile.getOriginalFilename() == null ? "document" : sourceFile.getOriginalFilename();
+            return new GeneratedMultipartFile(
+                    "file",
+                    originalName + "-page-" + (pageIndex + 1) + ".jpg",
+                    "image/jpeg",
+                    outputStream.toByteArray()
+            );
+        }
+    }
+
+    private boolean isRecoverablePdfOcrFailure(AppException exception) {
+        return "OCR_NO_TEXT".equals(exception.getCode())
+                || "IMAGE_TEXT_NOT_DETECTED".equals(exception.getCode())
+                || "IMAGE_TEXT_INSUFFICIENT".equals(exception.getCode())
+                || "IMAGE_TEXT_UNREADABLE".equals(exception.getCode());
+    }
+
+    private static final class GeneratedMultipartFile implements MultipartFile {
+        private final String name;
+        private final String originalFilename;
+        private final String contentType;
+        private final byte[] bytes;
+
+        private GeneratedMultipartFile(String name, String originalFilename, String contentType, byte[] bytes) {
+            this.name = name;
+            this.originalFilename = originalFilename;
+            this.contentType = contentType;
+            this.bytes = bytes;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getOriginalFilename() {
+            return originalFilename;
+        }
+
+        @Override
+        public String getContentType() {
+            return contentType;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return bytes.length == 0;
+        }
+
+        @Override
+        public long getSize() {
+            return bytes.length;
+        }
+
+        @Override
+        public byte[] getBytes() {
+            return bytes.clone();
+        }
+
+        @Override
+        public InputStream getInputStream() {
+            return new ByteArrayInputStream(bytes);
+        }
+
+        @Override
+        public void transferTo(java.io.File dest) throws IllegalStateException {
+            throw new UnsupportedOperationException("Not supported for generated multipart content.");
+        }
     }
 
     private enum ImportedFileType {

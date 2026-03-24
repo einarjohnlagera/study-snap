@@ -13,6 +13,7 @@ Current product placement:
 - OCR must not auto-save and must not auto-generate.
 - Unverified users are blocked from OCR upload.
 - OCR in the note editor uses the shared note import pipeline, not direct Study Pack generation.
+- If a PDF has no embedded text, the import flow may fall back to OCR on rendered PDF pages.
 
 ## OCR provider direction
 
@@ -28,6 +29,7 @@ Create/Edit Note should use a backend extraction endpoint that:
 5. returns extracted text for insertion into Note `content`
 
 The note editor must not generate a Study Pack during import.
+If a PDF has no embedded text, the extraction pipeline should try OCR fallback before declaring the PDF unreadable.
 
 ## Low-confidence fallback
 

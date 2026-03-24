@@ -147,8 +147,10 @@ When OCR or file import returns extracted text:
 
 PDF import rule:
 - support text-based PDFs only
-- if no text is extractable, show:
+- if no embedded text is extractable, try OCR fallback for scanned/image-based PDFs
+- if OCR fallback also cannot read the PDF, show:
   - `This PDF appears to be scanned or image-based. Please upload images for OCR instead.`
+- scanned-PDF OCR fallback follows the same verification/OCR gating rules as image OCR
 
 Authoritative input rule:
 - if the user edits extracted OCR text, generation must use the edited text (not the original raw OCR output)
