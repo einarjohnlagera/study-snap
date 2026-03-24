@@ -55,7 +55,22 @@ describe("LandingPage", () => {
   it("exports landing page SEO metadata", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes",
-      description: "Turn your notes into summaries, key concepts, and quizzes. Study smarter with NoteLib.",
+      description: "Turn your notes into summaries, key concepts, and practice questions so you can study smarter.",
+      alternates: {
+        canonical: "https://www.notelib.app/",
+      },
+      openGraph: expect.objectContaining({
+        type: "website",
+        url: "https://www.notelib.app/",
+        siteName: "NoteLib",
+        images: expect.arrayContaining([
+          expect.objectContaining({ url: "https://www.notelib.app/og-image.png" }),
+        ]),
+      }),
+      twitter: expect.objectContaining({
+        card: "summary_large_image",
+        images: ["https://www.notelib.app/og-image.png"],
+      }),
     });
   });
 });

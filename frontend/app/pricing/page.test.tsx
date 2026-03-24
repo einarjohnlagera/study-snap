@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import PricingPage from "./page";
+import PricingPage, { metadata } from "./page";
 
 jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn().mockResolvedValue({
@@ -38,5 +38,27 @@ describe("PricingPage", () => {
       "href",
       "/settings#plan-billing",
     );
+  });
+
+  it("exports pricing metadata with canonical and social preview fields", () => {
+    expect(metadata).toMatchObject({
+      title: "NoteLib Pricing – Upgrade to Premium Study Tools",
+      description: "Unlock Challenge Quiz, Adaptive Practice, and higher monthly limits with NoteLib Premium.",
+      alternates: {
+        canonical: "https://www.notelib.app/pricing",
+      },
+      openGraph: expect.objectContaining({
+        type: "website",
+        url: "https://www.notelib.app/pricing",
+        siteName: "NoteLib",
+        images: expect.arrayContaining([
+          expect.objectContaining({ url: "https://www.notelib.app/og-image.png" }),
+        ]),
+      }),
+      twitter: expect.objectContaining({
+        card: "summary_large_image",
+        images: ["https://www.notelib.app/og-image.png"],
+      }),
+    });
   });
 });

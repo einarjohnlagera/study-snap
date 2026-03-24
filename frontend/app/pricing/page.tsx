@@ -1,9 +1,17 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
+import { buildPageMetadata } from "@/lib/site-metadata";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "NoteLib Pricing – Upgrade to Premium Study Tools",
+  description: "Unlock Challenge Quiz, Adaptive Practice, and higher monthly limits with NoteLib Premium.",
+  path: "/pricing",
+});
 
 export default function PricingPage() {
   return (
