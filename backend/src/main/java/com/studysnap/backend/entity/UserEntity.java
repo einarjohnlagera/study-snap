@@ -85,6 +85,9 @@ public class UserEntity {
     @Column(name = "email_verified_at")
     private OffsetDateTime emailVerifiedAt;
 
+    @Column(name = "onboarding_completed_at")
+    private OffsetDateTime onboardingCompletedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

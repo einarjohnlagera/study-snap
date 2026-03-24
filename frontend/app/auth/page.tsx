@@ -11,17 +11,11 @@ import {
   LOGIN_REASON_QUERY_KEY,
   LOGIN_REASON_SESSION_EXPIRED,
   LOGIN_REDIRECT_QUERY_KEY,
+  resolveAuthenticatedHome,
   setAuthUser,
 } from "@/lib/auth";
 
 type Mode = "login" | "signup";
-
-function nextRouteForAuth(emailVerifiedAt: string | null) {
-  if (!emailVerifiedAt) {
-    return "/verify-email";
-  }
-  return "/dashboard";
-}
 
 function resolveSafeRedirectTarget(redirectParam: string | null): string | null {
   if (!redirectParam) {
@@ -74,8 +68,8 @@ export default function AuthPage() {
       return;
     }
 
-    const defaultRoute = nextRouteForAuth(authUser.emailVerifiedAt);
     const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
+    const defaultRoute = resolveAuthenticatedHome(authUser);
     router.replace(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
   }, [redirectTarget, router]);
 
@@ -118,7 +112,7 @@ export default function AuthPage() {
             })
           : await login({ email, password, keepSignedIn });
       setAuthUser(authUser);
-      const defaultRoute = nextRouteForAuth(authUser.emailVerifiedAt);
+      const defaultRoute = resolveAuthenticatedHome(authUser);
       const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
       router.push(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
       router.refresh();

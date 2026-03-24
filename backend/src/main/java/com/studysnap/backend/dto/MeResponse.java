@@ -18,6 +18,7 @@ public record MeResponse(
         ProfileType profileType,
         EngagementMode engagementMode,
         OffsetDateTime emailVerifiedAt,
+        OffsetDateTime onboardingCompletedAt,
         UserRole role,
         UserStatus status,
         PlanType planType,

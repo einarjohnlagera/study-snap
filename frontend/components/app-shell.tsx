@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiRequestError, getMe, logout, requestEmailVerification } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, needsOnboarding, setAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { ToastMessage } from "@/components/ui/toast-message";
@@ -21,11 +21,25 @@ type ShellUser = {
   firstName: string | null;
   email: string | null;
   emailVerifiedAt: string | null;
+  onboardingCompletedAt: string | null;
   role: "USER" | "ADMIN" | null;
 };
 
 function shouldUseAuthenticatedShell(hasAuthUser: boolean): boolean {
   return hasAuthUser;
+}
+
+function isProtectedAppRoute(pathname: string): boolean {
+  return (
+    pathname.startsWith("/dashboard")
+    || pathname.startsWith("/library")
+    || pathname.startsWith("/notes")
+    || pathname.startsWith("/profile")
+    || pathname.startsWith("/settings")
+    || pathname.startsWith("/study")
+    || pathname.startsWith("/study-packs")
+    || pathname.startsWith("/admin")
+  );
 }
 
 function getPageTitle(pathname: string): string {
@@ -70,6 +84,9 @@ function getPageTitle(pathname: string): string {
   }
   if (pathname.startsWith("/settings")) {
     return "Settings";
+  }
+  if (pathname.startsWith("/onboarding")) {
+    return "Onboarding";
   }
   if (pathname.startsWith("/pricing")) {
     return "Pricing";
@@ -163,6 +180,7 @@ export function AppShell({ children }: AppShellProps) {
     firstName: null,
     email: null,
     emailVerifiedAt: null,
+    onboardingCompletedAt: null,
     role: null,
   });
   const [resendingVerification, setResendingVerification] = useState(false);
@@ -180,6 +198,7 @@ export function AppShell({ children }: AppShellProps) {
           firstName: null,
           email: null,
           emailVerifiedAt: null,
+          onboardingCompletedAt: null,
           role: null,
         });
         return;
@@ -189,6 +208,7 @@ export function AppShell({ children }: AppShellProps) {
         firstName: previous.firstName,
         email: authUser.email ?? previous.email,
         emailVerifiedAt: authUser.emailVerifiedAt,
+        onboardingCompletedAt: authUser.onboardingCompletedAt ?? previous.onboardingCompletedAt,
         role: authUser.role,
       }));
     };
@@ -214,6 +234,20 @@ export function AppShell({ children }: AppShellProps) {
   }, [hasAuthUser, pathname, router]);
 
   useEffect(() => {
+    const authUser = getAuthUser();
+    if (!authUser) {
+      return;
+    }
+    if (needsOnboarding(authUser) && isProtectedAppRoute(pathname) && pathname !== "/onboarding") {
+      router.replace("/onboarding");
+      return;
+    }
+    if (authUser.onboardingCompletedAt && pathname === "/onboarding") {
+      router.replace("/dashboard");
+    }
+  }, [pathname, router]);
+
+  useEffect(() => {
     if (!shouldUseShell) {
       return;
     }
@@ -223,6 +257,7 @@ export function AppShell({ children }: AppShellProps) {
       firstName: null,
       email: authUser?.email ?? null,
       emailVerifiedAt: authUser?.emailVerifiedAt ?? null,
+      onboardingCompletedAt: authUser?.onboardingCompletedAt ?? null,
       role: authUser?.role ?? null,
     });
   }, [shouldUseShell, pathname]);
@@ -242,8 +277,19 @@ export function AppShell({ children }: AppShellProps) {
           firstName: me.firstName?.trim() || null,
           email: me.email,
           emailVerifiedAt: me.emailVerifiedAt,
+          onboardingCompletedAt: me.onboardingCompletedAt,
           role: me.role,
         });
+        const authUser = getAuthUser();
+        if (authUser) {
+          setAuthUser({
+            ...authUser,
+            displayName: me.displayName?.trim() || authUser.displayName,
+            profileType: me.profileType,
+            emailVerifiedAt: me.emailVerifiedAt,
+            onboardingCompletedAt: me.onboardingCompletedAt,
+          });
+        }
       })
       .catch(() => {
         // Keep local auth fallback data if profile fetch fails.

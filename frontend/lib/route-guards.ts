@@ -1,4 +1,4 @@
-import { buildLoginPath, getAuthUser, getCurrentPathWithQuery } from "./auth";
+import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, needsOnboarding } from "./auth";
 
 type RouterLike = {
   replace: (href: string) => void;
@@ -24,6 +24,10 @@ export function requireVerifiedOnboardedUser(
     router.replace("/verify-email");
     return false;
   }
+  if (needsOnboarding(authUser)) {
+    router.replace("/onboarding");
+    return false;
+  }
   return true;
 }
 
@@ -33,6 +37,10 @@ export function requireAuthenticatedOnboardedUser(
   const authUser = getAuthUser();
   if (!authUser) {
     redirectToLoginWithCurrentDestination(router);
+    return false;
+  }
+  if (needsOnboarding(authUser)) {
+    router.replace("/onboarding");
     return false;
   }
   return true;
