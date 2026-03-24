@@ -168,6 +168,7 @@ Keep app shell grouping:
 ## OCR Flow (Create/Edit Note)
 
 OCR is optional and attached to Note authoring (`New Note` / edit note).
+Create/Edit Note uses one unified import pipeline for images and supported files.
 
 Required behavior:
 
@@ -179,6 +180,7 @@ Required behavior:
 - If OCR confidence is low, show an inline warning near `Content` instead of a separate confirmation editor.
 - OCR upload does not auto-save and does not auto-generate.
 - Uploaded images are not stored permanently.
+- Note import/extraction is backend-owned; frontend should not be the source of truth for OCR/PDF/DOCX parsing.
 
 ## File Import Flow (Create/Edit Note)
 
@@ -187,6 +189,7 @@ File import is part of Note authoring and must populate the main `Content` field
 Required behavior:
 
 - Support `.txt`, `.pdf`, and `.docx` import in Create/Edit Note.
+- Use the same unified upload entry point as image OCR.
 - Imported text is inserted/merged into Note `content`.
 - Users review and edit imported text directly in the main `Content` field.
 - File import does not auto-save and does not auto-generate.

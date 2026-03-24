@@ -24,8 +24,8 @@ export const metadata: Metadata = {
 const howItWorksSteps = [
   {
     step: "Step 1",
-    title: "Upload or Paste Notes",
-    description: "Take a photo or paste your notes.",
+    title: "Create or Import Notes",
+    description: "Type, paste, or import your notes from an image or file.",
     icon: ScanText,
   },
   {
@@ -107,10 +107,10 @@ function HeroSection() {
           </div>
           <div className="grid gap-3 text-sm text-foreground/75 sm:grid-cols-3">
             <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
-              <p className="font-semibold text-foreground">Paste notes or upload photos</p>
+              <p className="font-semibold text-foreground">Create or import notes</p>
             </div>
             <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
-              <p className="font-semibold text-foreground">Generate a Study Pack instantly</p>
+              <p className="font-semibold text-foreground">Generate a Study Pack when you&apos;re ready</p>
             </div>
             <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
               <p className="font-semibold text-foreground">Review before quizzes and exams</p>

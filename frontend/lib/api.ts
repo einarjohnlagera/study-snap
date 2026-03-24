@@ -34,6 +34,15 @@ export type StudyPackResponse = {
   };
 };
 
+export type NoteTextExtractionResponse = {
+  inputType: "image" | "txt" | "pdf" | "docx";
+  extractedText: string;
+  meta: {
+    ocrConfidence: number | null;
+    lowConfidence: boolean;
+  };
+};
+
 export type StudyPackListItemResponse = {
   id: string;
   title: string;
@@ -956,6 +965,25 @@ export async function createStudyPackFromImage(imageFile: File): Promise<StudyPa
   return parseApiResponse<StudyPackApiResponse>(
     response,
     "We could not generate your study pack right now. Please try again.",
+  );
+}
+
+export async function extractNoteTextFromFile(file: File): Promise<NoteTextExtractionResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetchWithAuth(
+    "/notes/extract-text",
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+      body: formData,
+    },
+    true,
+  );
+  return parseApiResponse<NoteTextExtractionResponse>(
+    response,
+    "We could not import text from this file right now. Please try again.",
   );
 }
 

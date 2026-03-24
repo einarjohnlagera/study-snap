@@ -29,7 +29,7 @@ Required copy:
 
 Use a three-step explanation:
 
-1. `Upload or Paste Notes`
+1. `Create or Import Notes`
 2. `Generate Study Pack`
 3. `Review and Practice`
 

@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.CreateStudyPackRequest;
+import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
@@ -12,6 +13,7 @@ import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.NoteService;
+import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
@@ -22,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -43,6 +46,8 @@ class NoteControllerTest {
     @Mock
     private NoteService noteService;
     @Mock
+    private NoteTextExtractionService noteTextExtractionService;
+    @Mock
     private StudyPackService studyPackService;
     @Mock
     private QuickReviewSessionService quickReviewSessionService;
@@ -60,6 +65,7 @@ class NoteControllerTest {
         noteController = new NoteController(
                 authService,
                 noteService,
+                noteTextExtractionService,
                 studyPackService,
                 quickReviewSessionService,
                 quickReviewStudyTipService,
@@ -94,6 +100,24 @@ class NoteControllerTest {
         verify(authService).requireEmailVerified(userId);
         verify(studyPackService).createFromText(new CreateStudyPackRequest(null, "note-1"), userId);
         assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void extractText_delegatesToExtractionService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        MockMultipartFile file = new MockMultipartFile("file", "notes.txt", "text/plain", "Hello".getBytes());
+        ExtractedNoteTextResponse expected = new ExtractedNoteTextResponse(
+                "txt",
+                "Hello",
+                new ExtractedNoteTextResponse.ExtractionMeta(null, false)
+        );
+        when(noteTextExtractionService.extractText(file, userId)).thenReturn(expected);
+
+        ExtractedNoteTextResponse response = noteController.extractText(file, user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteTextExtractionService).extractText(file, userId);
     }
 
     @Test

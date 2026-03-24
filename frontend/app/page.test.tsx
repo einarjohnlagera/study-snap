@@ -36,7 +36,7 @@ describe("LandingPage", () => {
     expect(screen.getByRole("link", { name: "Get Started Free" })).toHaveAttribute("href", "/auth");
     expect(screen.getAllByRole("link", { name: "Try Demo" })[0]).toHaveAttribute("href", "/demo");
 
-    expect(screen.getByText("Upload or Paste Notes")).toBeInTheDocument();
+    expect(screen.getByText("Create or Import Notes")).toBeInTheDocument();
     expect(screen.getAllByText("Generate Study Pack")).not.toHaveLength(0);
     expect(screen.getByText("Review and Practice")).toBeInTheDocument();
 

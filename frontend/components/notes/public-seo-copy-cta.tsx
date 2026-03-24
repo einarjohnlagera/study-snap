@@ -78,7 +78,7 @@ export function PublicSeoCopyCta({ noteId }: PublicSeoCopyCtaProps) {
   return (
     <div className="space-y-2">
       <Button type="button" className="w-full sm:w-auto" onClick={() => void handleCopy()} disabled={copying}>
-        {copying ? "Preparing your copy..." : "Make a Copy and Generate Your Own Quiz"}
+        {copying ? "Preparing your copy..." : "Make a Copy and Generate Your Own Study Pack"}
       </Button>
       {copyError ? <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p> : null}
     </div>

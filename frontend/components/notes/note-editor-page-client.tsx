@@ -6,13 +6,11 @@ import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import {
   createNote,
-  createStudyPackFromImage,
   createStudyPackFromNote,
+  extractNoteTextFromFile,
   getNote,
   isEmailNotVerifiedError,
-  isNeedsTextConfirmationResponse,
   type NoteResponse,
-  type StudyPackResponse,
   updateNote,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -29,7 +27,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteEditorForm, type NoteEditorDraft } from "@/components/notes/note-editor-form";
-import { importNoteFile } from "@/lib/note-import";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
@@ -42,42 +39,9 @@ type PendingSuggestion = {
   tags: string[];
 };
 
-const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-
 function normalizeOptional(value: string): string | null {
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
-}
-
-function toFriendlyOcrErrorMessage(message: string): string {
-  const normalized = message.toLowerCase();
-  if (
-    normalized.includes("unsupported")
-    || normalized.includes("file type")
-    || normalized.includes("content type")
-    || normalized.includes("format")
-  ) {
-    return "Unsupported image type. Upload a PNG, JPEG, or WEBP image.";
-  }
-  if (normalized.includes("too large") || normalized.includes("max") || normalized.includes("size")) {
-    return "Image is too large. Try an image smaller than 5 MB.";
-  }
-  if (
-    normalized.includes("no readable text")
-    || normalized.includes("no text")
-    || normalized.includes("text detected")
-    || normalized.includes("text not detected")
-  ) {
-    return "No readable text was detected. Retake the photo with better lighting and focus, then try again.";
-  }
-  return "We could not extract text from this image right now. Try another image or paste notes manually.";
-}
-
-function resolveExtractedText(response: StudyPackResponse, confirmedTextFallback?: string): string {
-  const candidate = [response.extractedText, response.sourceText, confirmedTextFallback]
-    .find((value) => typeof value === "string" && value.trim().length > 0);
-  return candidate?.trim() ?? "";
 }
 
 function toDraft(note: NoteResponse): NoteEditorDraft {
@@ -117,15 +81,11 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
-  const [ocrImageFile, setOcrImageFile] = useState<File | null>(null);
-  const [ocrImageInputKey, setOcrImageInputKey] = useState(0);
-  const [ocrFlowState, setOcrFlowState] = useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
-  const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
-  const [ocrReviewMessage, setOcrReviewMessage] = useState<string | null>(null);
-  const [importedFile, setImportedFile] = useState<File | null>(null);
-  const [importedFileInputKey, setImportedFileInputKey] = useState(0);
-  const [importFlowState, setImportFlowState] = useState<"idle" | "importing" | "success" | "failure">("idle");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importFileInputKey, setImportFileInputKey] = useState(0);
+  const [importFlowState, setImportFlowState] = useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
+  const [importReviewMessage, setImportReviewMessage] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
@@ -176,10 +136,14 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
   const contentLocked = isDetailPage && studyPackStatus === "STUDY_PACK_READY";
 
-  const handleImportedFileChange = useCallback(async (file: File | null) => {
+  const handleImportFileChange = useCallback(async (file: File | null) => {
+    const resetImportInput = () => {
+      setImportFileInputKey((previous) => previous + 1);
+    };
+
     if (contentLocked) {
-      setImportedFile(null);
-      setImportedFileInputKey((previous) => previous + 1);
+      setImportFile(null);
+      resetImportInput();
       setImportFlowState("failure");
       setImportStatusMessage("Note content is locked after generating a Study Pack. Make a copy to change the note itself.");
       showToast("Note content is locked after generating a Study Pack. Make a copy to change the note itself.", "info");
@@ -187,33 +151,65 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     }
 
     if (!file) {
-      setImportedFile(null);
+      setImportFile(null);
       setImportFlowState("idle");
       setImportStatusMessage(null);
+      setImportReviewMessage(null);
       return;
     }
 
-    setImportedFile(file);
-    setImportFlowState("importing");
-    setImportStatusMessage("Importing file...");
+    setImportFile(file);
+    setImportReviewMessage(null);
+    setImportFlowState("uploading");
+    setImportStatusMessage("Uploading file...");
+
+    const extractingTimer = window.setTimeout(() => {
+      setImportFlowState("extracting");
+      setImportStatusMessage("Extracting text into your notes...");
+    }, 350);
 
     try {
-      const imported = await importNoteFile(file);
-      const didAppend = appendExtractedTextToContent(imported.text);
+      const extracted = await extractNoteTextFromFile(file);
+      window.clearTimeout(extractingTimer);
+
+      const didAppend = appendExtractedTextToContent(extracted.extractedText);
       if (!didAppend) {
         setImportFlowState("failure");
         setImportStatusMessage("This file is empty or has no readable text.");
+        resetImportInput();
         showToast("This file is empty or has no readable text.", "info");
         return;
       }
 
       setImportFlowState("success");
       setImportStatusMessage("File content added to Content.");
-      showToast(`${imported.kind.toUpperCase()} content added to Content.`, "success");
+      if (extracted.meta.lowConfidence) {
+        resetImportInput();
+        setImportReviewMessage(
+          "OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack.",
+        );
+        showToast("Extracted text added to Content. Review it before continuing.", "info");
+        return;
+      }
+
+      resetImportInput();
+      showToast("Extracted text added to Content.", "success");
     } catch (error) {
+      window.clearTimeout(extractingTimer);
       const message = error instanceof Error ? error.message : "Could not import this file.";
+      if (isEmailNotVerifiedError(error)) {
+        const verificationMessage = "Verify your email before using OCR upload.";
+        setImportFlowState("failure");
+        setImportStatusMessage(verificationMessage);
+        setImportReviewMessage(null);
+        resetImportInput();
+        showToast(verificationMessage, "info");
+        return;
+      }
       setImportFlowState("failure");
       setImportStatusMessage(message);
+      setImportReviewMessage(null);
+      resetImportInput();
       showToast(message, "error");
     }
   }, [appendExtractedTextToContent, contentLocked, showToast]);
@@ -422,119 +418,6 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     finalizeGenerationRedirect(noteIdToOpen);
   }, [finalizeGenerationRedirect, pendingSuggestion]);
 
-  const handleOcrImageFileChange = useCallback(async (file: File | null) => {
-    if (contentLocked) {
-      setOcrImageFile(null);
-      setOcrImageInputKey((previous) => previous + 1);
-      setOcrFlowState("failure");
-      setOcrStatusMessage("Note content is locked after generating a Study Pack. Make a copy to change the note itself.");
-      showToast("Note content is locked after generating a Study Pack. Make a copy to change the note itself.", "info");
-      return;
-    }
-
-    if (!file) {
-      setOcrImageFile(null);
-      setOcrFlowState("idle");
-      setOcrStatusMessage(null);
-      setOcrReviewMessage(null);
-      return;
-    }
-
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      const message = "Unsupported image type. Upload a PNG, JPEG, or WEBP image.";
-      setOcrImageFile(null);
-      setOcrImageInputKey((previous) => previous + 1);
-      setOcrFlowState("failure");
-      setOcrStatusMessage(message);
-      showToast(message, "error");
-      return;
-    }
-
-    if (file.size > MAX_IMAGE_BYTES) {
-      const message = "Image is too large. Try an image smaller than 5 MB.";
-      setOcrImageFile(null);
-      setOcrImageInputKey((previous) => previous + 1);
-      setOcrFlowState("failure");
-      setOcrStatusMessage(message);
-      showToast(message, "error");
-      return;
-    }
-
-    const authUser = getAuthUser();
-    if (!authUser?.emailVerifiedAt) {
-      const message = "Verify your email before using OCR upload.";
-      setOcrImageFile(null);
-      setOcrImageInputKey((previous) => previous + 1);
-      setOcrFlowState("failure");
-      setOcrStatusMessage(message);
-      showToast(message, "info");
-      return;
-    }
-
-    setOcrImageFile(file);
-    setOcrReviewMessage(null);
-    setOcrFlowState("uploading");
-    setOcrStatusMessage("Uploading image...");
-
-    const extractingTimer = window.setTimeout(() => {
-      setOcrFlowState("extracting");
-      setOcrStatusMessage("Extracting text from image...");
-    }, 500);
-
-    try {
-      const response = await createStudyPackFromImage(file);
-      window.clearTimeout(extractingTimer);
-
-      if (isNeedsTextConfirmationResponse(response)) {
-        const didAppend = appendExtractedTextToContent(response.extractedText);
-        if (!didAppend) {
-          setOcrFlowState("failure");
-          setOcrStatusMessage("No readable text was extracted from this image.");
-          showToast("No readable text was detected. Retake the photo and try again.", "info");
-          return;
-        }
-
-        setOcrFlowState("success");
-        setOcrStatusMessage("Text extracted and added to Content.");
-        setOcrReviewMessage(
-          "OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack.",
-        );
-        showToast("OCR text added to Content. Review it before continuing.", "info");
-        return;
-      }
-
-      const extractedText = resolveExtractedText(response);
-      const didAppend = appendExtractedTextToContent(extractedText);
-      if (!didAppend) {
-        setOcrFlowState("failure");
-        setOcrStatusMessage("No readable text was extracted from this image.");
-        showToast("No readable text was detected. Retake the photo and try again.", "info");
-        return;
-      }
-
-      setOcrFlowState("success");
-      setOcrStatusMessage("Text extracted and added to Content.");
-      setOcrReviewMessage(null);
-      showToast("OCR text added to Content.", "success");
-    } catch (error) {
-      window.clearTimeout(extractingTimer);
-      if (isEmailNotVerifiedError(error)) {
-        const message = "Verify your email before using OCR upload.";
-        setOcrFlowState("failure");
-        setOcrStatusMessage(message);
-        showToast(message, "info");
-        return;
-      }
-
-      const rawMessage = error instanceof Error ? error.message : "OCR request failed.";
-      const message = toFriendlyOcrErrorMessage(rawMessage);
-      setOcrFlowState("failure");
-      setOcrStatusMessage(message);
-      setOcrReviewMessage(null);
-      showToast(message, "error");
-    }
-  }, [appendExtractedTextToContent, contentLocked, showToast]);
-
   const pageTitle = isDetailPage ? "Note" : "New Note";
   const studyPackMessage = isDetailPage
     ? "Generate a Study Pack from this note when you are ready."
@@ -594,28 +477,20 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         isSaving={isSaving}
         isGenerating={isGenerating}
         saveStateLabel={saveStateLabel}
-        helperText="Save your note for later, or generate a Study Pack instantly using 1 credit."
+        helperText="Create or import your notes first, then generate a Study Pack when you are ready."
         showTagsSection={isDetailPage}
         studyPackMessage={studyPackMessage}
-        ocrImageFile={ocrImageFile}
-        ocrImageInputKey={ocrImageInputKey}
-        ocrFlowState={ocrFlowState}
-        ocrStatusMessage={ocrStatusMessage}
-        ocrReviewMessage={ocrReviewMessage}
-        importedFile={importedFile}
-        importedFileInputKey={importedFileInputKey}
+        importFile={importFile}
+        importFileInputKey={importFileInputKey}
         importFlowState={importFlowState}
         importStatusMessage={importStatusMessage}
-        onOcrImageFileChange={(file) => {
-          void handleOcrImageFileChange(file);
-        }}
-        onImportedFileChange={(file) => {
-          void handleImportedFileChange(file);
+        importReviewMessage={importReviewMessage}
+        onImportFileChange={(file) => {
+          void handleImportFileChange(file);
         }}
         disableContentEditing={contentLocked}
         contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."
         disableGenerateAction={!isEmailVerified}
-        disableOcrUpload={!isEmailVerified}
       />
 
       <AiSuggestionModal

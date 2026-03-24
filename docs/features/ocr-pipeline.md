@@ -4,7 +4,7 @@ This file consolidates the OCR-related context from the legacy docs.
 
 ## Goal
 
-Support image-based note uploads and convert them into Study Packs.
+Support image-based note uploads as part of Note authoring and extract text into notes before Study Pack generation.
 
 Current product placement:
 
@@ -12,29 +12,28 @@ Current product placement:
 - OCR fills Note content for user review/edit before save/generate.
 - OCR must not auto-save and must not auto-generate.
 - Unverified users are blocked from OCR upload.
+- OCR in the note editor uses the shared note import pipeline, not direct Study Pack generation.
 
 ## OCR provider direction
 
 NoteLib uses Google Cloud Vision OCR for image-based notes.
 
-## Hybrid OCR strategy
+## Extraction flow
 
-Use a hybrid OCR approach to reduce cost and avoid unnecessary OCR calls.
+Create/Edit Note should use a backend extraction endpoint that:
+1. accepts the uploaded file
+2. detects whether it is an image or supported document
+3. runs OCR for images only
+4. normalizes extracted text
+5. returns extracted text for insertion into Note `content`
 
-Processing idea:
-1. image upload
-2. image validation
-3. quick text detection
-4. if text is detected, run full OCR extraction
-5. extract text
-6. normalize OCR text
-7. send normalized text to the LLM
+The note editor must not generate a Study Pack during import.
 
 ## Low-confidence fallback
 
 If OCR confidence is low:
-- return `status: needs_text_confirmation`
-- note editor should still insert the extracted text directly into the main Note `content` field
+- return OCR confidence metadata with the extracted text
+- note editor should insert the extracted text directly into the main Note `content` field
 - show an inline warning near `Content`:
   - `OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack.`
 - do not show a second OCR-specific review textarea in Create/Edit Note
@@ -68,6 +67,5 @@ Normalization should include:
 
 ## Deferred ideas
 
-- OCR drafts expiry cleanup
 - smarter cleanup heuristics
 - subject-aware OCR cleanup

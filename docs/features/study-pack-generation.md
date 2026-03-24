@@ -73,17 +73,19 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 Create/Edit Note supports multiple content input paths before save or generation:
 
 - pasted text in the main `Content` field
-- image upload with OCR
+- image upload with OCR text extraction
 - `.txt` file import
 - `.pdf` file import for text-based PDFs
 - `.docx` file import
 
 All imported content should populate the main note `content` field for manual review/edit.
 Imports must not auto-save and must not auto-generate.
+Create/Edit Note should use one unified upload entry point for images and supported files.
+Backend extraction is the source of truth for OCR and document text extraction.
 
 ## OCR input flow (image notes)
 
-Study Pack generation supports an OCR-assisted flow when users upload image notes from Create/Edit Note.
+Create/Edit Note supports an OCR-assisted import flow when users upload image notes.
 
 Authoring behavior:
 - OCR upload is optional and secondary to the main note form

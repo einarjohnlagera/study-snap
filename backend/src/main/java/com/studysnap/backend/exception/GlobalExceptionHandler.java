@@ -6,16 +6,26 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.util.unit.DataSize;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 	private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+	private final DataSize maxUploadSize;
+
+	public GlobalExceptionHandler(
+			@Value("${spring.servlet.multipart.max-file-size:10MB}") DataSize maxUploadSize
+	) {
+		this.maxUploadSize = maxUploadSize;
+	}
 
 	@ExceptionHandler(AppException.class)
 	public ResponseEntity<ApiErrorResponse> handleAppException(AppException ex, HttpServletRequest request) {
@@ -62,6 +72,20 @@ public class GlobalExceptionHandler {
 		);
 	}
 
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	public ResponseEntity<ApiErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex, HttpServletRequest request) {
+		String requestId = getRequestId(request);
+		log.warn("max_upload_size_exception requestId={} message={}", requestId, ex.getMessage());
+		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+				new ApiErrorResponse(requestId, new ApiErrorResponse.ApiError(
+						"IMPORT_FILE_TOO_LARGE",
+						"This file is too large. Upload a file under " + formatDataSize(maxUploadSize) + ".",
+						null,
+						null
+				))
+		);
+	}
+
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiErrorResponse> handleUnhandled(Exception ex, HttpServletRequest request) {
 		String requestId = getRequestId(request);
@@ -89,5 +113,14 @@ public class GlobalExceptionHandler {
 			return null;
 		}
 		return ex.getDetails();
+	}
+
+	private String formatDataSize(DataSize dataSize) {
+		long megabytes = dataSize.toMegabytes();
+		if (megabytes > 0) {
+			return megabytes + " MB";
+		}
+		long kilobytes = Math.max(1, dataSize.toKilobytes());
+		return kilobytes + " KB";
 	}
 }
