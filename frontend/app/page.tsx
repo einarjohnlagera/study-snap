@@ -13,13 +13,18 @@ import {
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
+import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { buildPageMetadata } from "@/lib/site-metadata";
+import { buildWebsiteStructuredData } from "@/lib/structured-data";
+
+const landingPageDescription =
+  "Turn your notes into summaries, key concepts, and practice questions so you can study smarter.";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes",
-  description: "Turn your notes into summaries, key concepts, and practice questions so you can study smarter.",
+  description: landingPageDescription,
   path: "/",
 });
 
@@ -271,6 +276,10 @@ function BottomCtaSection() {
 export default function Home() {
   return (
     <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
+      <StructuredDataScript
+        id="landing-page-structured-data"
+        data={buildWebsiteStructuredData(landingPageDescription)}
+      />
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
       <HowItWorksSection />

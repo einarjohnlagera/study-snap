@@ -25,7 +25,7 @@ jest.mock("@/components/analytics/tracked-link", () => ({
 
 describe("LandingPage", () => {
   it("renders the core marketing sections and CTAs", () => {
-    render(<Home />);
+    const { container } = render(<Home />);
 
     expect(screen.getByRole("heading", {
       name: "Turn your notes into summaries, quizzes, and reviewers in seconds.",
@@ -50,6 +50,11 @@ describe("LandingPage", () => {
     expect(screen.getByText("Try a demo Study Pack now — no signup required.")).toBeInTheDocument();
     expect(screen.getByText("Start studying smarter today.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create Free Account" })).toHaveAttribute("href", "/auth");
+
+    const structuredData = container.querySelector("#landing-page-structured-data");
+    expect(structuredData).not.toBeNull();
+    expect(structuredData?.textContent).toContain('"@type":"WebSite"');
+    expect(structuredData?.textContent).toContain('"name":"NoteLib"');
   });
 
   it("exports landing page SEO metadata", () => {

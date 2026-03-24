@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
+import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
+import { buildArticleStructuredData } from "@/lib/structured-data";
 
 type PublicLibrarySeoPageProps = {
   params: Promise<{
@@ -63,9 +65,23 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
   const subjectLabel = note.subject?.trim() || "General";
   const hasGeneratedStudyPack = note.studyPackStatus === "STUDY_PACK_READY";
   const quizPreview = note.quiz.slice(0, 3);
+  const description = buildDescription(title, note.summary);
+  const canonicalUrl = absoluteUrl(buildPublicLibraryNotePathFromDetail(note));
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
+      <StructuredDataScript
+        id="public-note-structured-data"
+        data={buildArticleStructuredData({
+          title,
+          description,
+          canonicalUrl,
+          authorName: note.authorDisplayName,
+          updatedAt: note.updatedAt,
+          tags: note.tags,
+          subject: note.subject,
+        })}
+      />
       <article className="space-y-6">
         <header className="rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-amber-500/10 p-6 shadow-sm sm:p-8">
           <div className="space-y-4">

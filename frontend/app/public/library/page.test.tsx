@@ -7,9 +7,13 @@ jest.mock("@/components/notes/public-library-page-client", () => ({
 
 describe("PublicLibrarySeoIndexPage", () => {
   it("renders the public library page client", () => {
-    render(<PublicLibrarySeoIndexPage />);
+    const { container } = render(<PublicLibrarySeoIndexPage />);
 
     expect(screen.getByText("Public Library Client")).toBeInTheDocument();
+    const structuredData = container.querySelector("#public-library-structured-data");
+    expect(structuredData).not.toBeNull();
+    expect(structuredData?.textContent).toContain('"@type":"CollectionPage"');
+    expect(structuredData?.textContent).toContain('"name":"NoteLib Public Library"');
   });
 
   it("exports public library metadata with canonical and social preview fields", () => {

@@ -103,6 +103,9 @@ Core loop:
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.
+- Public landing page should emit JSON-LD `WebSite` schema.
+- Public Library index should emit JSON-LD `CollectionPage` schema.
+- Public SEO note pages should emit JSON-LD `Article` schema using real note data only.
 - `robots.txt` must allow public crawling and disallow authenticated/private app areas such as `/dashboard`, `/library`, `/notes`, `/settings`, `/admin`, and `/api`.
 - `sitemap.xml` must include only public SEO-safe routes: `/`, `/pricing`, `/public/library`, and canonical public note URLs.
 - Private notes must never be exposed through the public SEO route.

@@ -50,7 +50,7 @@ describe("PublicLibrarySeoPage", () => {
   it("renders public note content without requiring auth", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
 
-    render(
+    const { container } = render(
       await PublicLibrarySeoPage({
         params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
       }),
@@ -76,6 +76,13 @@ describe("PublicLibrarySeoPage", () => {
       screen.getByText(/Preview only\. The full quiz experience, answer reveal, and score tracking are available/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Make a Copy and Generate Your Own Study Pack/i })).toBeInTheDocument();
+
+    const structuredData = container.querySelector("#public-note-structured-data");
+    expect(structuredData).not.toBeNull();
+    expect(structuredData?.textContent).toContain('"@type":"Article"');
+    expect(structuredData?.textContent).toContain('"headline":"Cell Structure"');
+    expect(structuredData?.textContent).toContain('"articleSection":"Science"');
+    expect(structuredData?.textContent).toContain('"keywords":"biology, cells"');
   });
 
   it("returns SEO metadata for a public note", async () => {

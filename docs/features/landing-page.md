@@ -63,7 +63,14 @@ Required feature cards:
 Landing page metadata should use:
 
 - title: `NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes`
-- description: `Turn your notes into summaries, key concepts, and quizzes. Study smarter with NoteLib.`
+- description: `Turn your notes into summaries, key concepts, and practice questions so you can study smarter.`
+
+Landing page structured data should use JSON-LD WebSite schema:
+
+- `@type: WebSite`
+- `name: NoteLib`
+- `url: https://www.notelib.app`
+- the same page description as the landing metadata
 
 ## UX Notes
 
