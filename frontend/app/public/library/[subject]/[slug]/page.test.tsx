@@ -16,7 +16,7 @@ jest.mock("@/lib/server-public-notes", () => ({
 
 jest.mock("@/components/notes/public-seo-copy-cta", () => ({
   PublicSeoCopyCta: ({ noteId }: { noteId: string }) => (
-    <button type="button">Make a Copy and Generate Your Own Quiz ({noteId})</button>
+    <button type="button">Make a Copy and Generate Your Own Study Pack ({noteId})</button>
   ),
 }));
 
@@ -75,7 +75,7 @@ describe("PublicLibrarySeoPage", () => {
     expect(
       screen.getByText(/Preview only\. The full quiz experience, answer reveal, and score tracking are available/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Make a Copy and Generate Your Own Quiz/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Make a Copy and Generate Your Own Study Pack/i })).toBeInTheDocument();
   });
 
   it("returns SEO metadata for a public note", async () => {

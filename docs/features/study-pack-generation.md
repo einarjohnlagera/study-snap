@@ -68,9 +68,24 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 - concept should be concise and reusable (1 to 4 words)
 - concept should represent the key idea tested by the question
 
+## Note import flow
+
+Create/Edit Note supports multiple content input paths before save or generation:
+
+- pasted text in the main `Content` field
+- image upload with OCR text extraction
+- `.txt` file import
+- `.pdf` file import for text-based PDFs
+- `.docx` file import
+
+All imported content should populate the main note `content` field for manual review/edit.
+Imports must not auto-save and must not auto-generate.
+Create/Edit Note should use one unified upload entry point for images and supported files.
+Backend extraction is the source of truth for OCR and document text extraction.
+
 ## OCR input flow (image notes)
 
-Study Pack generation supports an OCR-assisted flow when users upload image notes from Create/Edit Note.
+Create/Edit Note supports an OCR-assisted import flow when users upload image notes.
 
 Authoring behavior:
 - OCR upload is optional and secondary to the main note form
@@ -82,7 +97,7 @@ Frontend OCR UX goals:
 - clear upload guidance before OCR starts
 - visible image selection confirmation (including preview)
 - explicit OCR processing states
-- clean extracted-text review before final generation
+- extracted text goes directly into the main `Content` field for final review
 
 Processing states shown in the UI:
 - `idle`: no active OCR operation
@@ -123,12 +138,19 @@ If validation fails:
 - run one repair pass
 - if it still fails, return a friendly error
 
-## Extracted text review/edit step
+## Imported text review/edit step
 
-When OCR returns extracted text for confirmation:
-- the extracted text is shown in an editable review area
-- users can correct OCR mistakes before continuing
-- edited text is treated as the final source of truth for Study Pack generation
+When OCR or file import returns extracted text:
+- the text is inserted into the main `Content` field
+- users review and edit there before save/generate
+- the edited `Content` value is treated as the final source of truth for Study Pack generation
+
+PDF import rule:
+- support text-based PDFs only
+- if no embedded text is extractable, try OCR fallback for scanned/image-based PDFs
+- if OCR fallback also cannot read the PDF, show:
+  - `This PDF appears to be scanned or image-based. Please upload images for OCR instead.`
+- scanned-PDF OCR fallback follows the same verification/OCR gating rules as image OCR
 
 Authoritative input rule:
 - if the user edits extracted OCR text, generation must use the edited text (not the original raw OCR output)

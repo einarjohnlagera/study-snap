@@ -46,7 +46,7 @@ describe("PublicSeoCopyCta", () => {
 
     render(<PublicSeoCopyCta noteId="note-1" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Make a Copy and Generate Your Own Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make a Copy and Generate Your Own Study Pack" }));
 
     expect(pushMock).toHaveBeenCalledWith(
       "/login?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1",
@@ -60,7 +60,7 @@ describe("PublicSeoCopyCta", () => {
 
     render(<PublicSeoCopyCta noteId="note-1" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Make a Copy and Generate Your Own Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Make a Copy and Generate Your Own Study Pack" }));
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-1");

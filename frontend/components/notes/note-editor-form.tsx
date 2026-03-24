@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, CheckCircle2, FileImage, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -27,16 +27,15 @@ type NoteEditorFormProps = {
   helperText: string;
   showTagsSection: boolean;
   studyPackMessage?: string | null;
-  ocrImageFile: File | null;
-  ocrImageInputKey: number;
-  ocrFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
-  ocrStatusMessage: string | null;
-  ocrReviewMessage?: string | null;
-  onOcrImageFileChange: (file: File | null) => void;
+  importFile: File | null;
+  importFileInputKey: number;
+  importFlowState: "idle" | "uploading" | "extracting" | "success" | "failure";
+  importStatusMessage: string | null;
+  importReviewMessage?: string | null;
+  onImportFileChange: (file: File | null) => void;
   disableContentEditing?: boolean;
   contentLockHint?: string | null;
   disableGenerateAction?: boolean;
-  disableOcrUpload?: boolean;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -59,30 +58,29 @@ export function NoteEditorForm({
   helperText,
   showTagsSection,
   studyPackMessage,
-  ocrImageFile,
-  ocrImageInputKey,
-  ocrFlowState,
-  ocrStatusMessage,
-  ocrReviewMessage,
-  onOcrImageFileChange,
+  importFile,
+  importFileInputKey,
+  importFlowState,
+  importStatusMessage,
+  importReviewMessage,
+  onImportFileChange,
   disableContentEditing = false,
   contentLockHint = null,
   disableGenerateAction = false,
-  disableOcrUpload = false,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const contentEmpty = note.content.trim().length === 0;
   const actionsDisabled = contentEmpty || isSaving || isGenerating;
-  const ocrInFlight = ocrFlowState === "uploading" || ocrFlowState === "extracting";
-  const OcrStatusIcon = ocrFlowState === "failure"
+  const importInFlight = importFlowState === "uploading" || importFlowState === "extracting";
+  const ImportStatusIcon = importFlowState === "failure"
     ? AlertCircle
-    : ocrFlowState === "success"
+    : importFlowState === "success"
       ? CheckCircle2
       : Loader2;
-  const ocrStatusTone = ocrFlowState === "failure"
+  const importStatusTone = importFlowState === "failure"
     ? "border-red-500/40 bg-red-50/70 text-red-800 dark:bg-red-950/30 dark:text-red-200"
-    : ocrFlowState === "success"
+    : importFlowState === "success"
       ? "border-emerald-500/40 bg-emerald-50/70 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200"
       : "border-blue-500/40 bg-blue-50/70 text-blue-800 dark:bg-blue-950/30 dark:text-blue-200";
 
@@ -270,11 +268,11 @@ export function NoteEditorForm({
             </p>
           ) : (
             <>
-              {ocrReviewMessage ? (
+              {importReviewMessage ? (
                 <div className="rounded-md border border-amber-500/40 bg-amber-50/70 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
                   <div className="flex items-start gap-2">
                     <AlertCircle className="mt-0.5 h-4 w-4" aria-hidden="true" />
-                    <p>{ocrReviewMessage}</p>
+                    <p>{importReviewMessage}</p>
                   </div>
                 </div>
               ) : null}
@@ -285,47 +283,50 @@ export function NoteEditorForm({
           )}
         </section>
 
-        <section className="space-y-3 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4">
+        <section className="space-y-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4">
           <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">Upload Note Photo (optional OCR)</p>
+            <p className="text-sm font-medium text-foreground">Import Notes</p>
             <p className="text-xs text-foreground/65">
-              Upload a clear note image to extract text into Content. You can edit it before saving or generating.
+              Upload an image or file to extract text into your notes, then review and edit it in Content.
             </p>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
-            <UploadCloud className="h-4 w-4 text-foreground/60" />
-            <FileImage className="h-4 w-4 text-foreground/60" />
-            <input
-              key={ocrImageInputKey}
-              id="note-ocr-image"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              disabled={disableContentEditing || disableOcrUpload}
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                onOcrImageFileChange(file);
-              }}
-              className="w-full cursor-pointer text-sm text-foreground/75 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
-            />
+          <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Upload image or file</p>
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
+              <UploadCloud className="h-4 w-4 text-foreground/60" />
+              <FileText className="h-4 w-4 text-foreground/60" />
+              <input
+                key={importFileInputKey}
+                id="note-import-file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,.txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                disabled={disableContentEditing}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  onImportFileChange(file);
+                }}
+                className="w-full cursor-pointer text-sm text-foreground/75 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-blue-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-blue-700"
+              />
+            </div>
           </div>
-          {ocrImageFile ? (
+          {importFile ? (
             <p className="text-xs text-foreground/65">
-              Selected: {ocrImageFile.name} ({(ocrImageFile.size / (1024 * 1024)).toFixed(2)} MB)
+              Selected file: {importFile.name} ({(importFile.size / (1024 * 1024)).toFixed(2)} MB)
             </p>
           ) : null}
-          {ocrStatusMessage ? (
-            <div className={`rounded-md border px-3 py-2 text-sm ${ocrStatusTone}`}>
+          {importStatusMessage ? (
+            <div className={`rounded-md border px-3 py-2 text-sm ${importStatusTone}`}>
               <div className="flex items-start gap-2">
-                <OcrStatusIcon
-                  className={`mt-0.5 h-4 w-4 ${ocrInFlight ? "animate-spin" : ""}`}
+                <ImportStatusIcon
+                  className={`mt-0.5 h-4 w-4 ${importInFlight ? "animate-spin" : ""}`}
                   aria-hidden="true"
                 />
-                <p>{ocrStatusMessage}</p>
+                <p>{importStatusMessage}</p>
               </div>
             </div>
           ) : null}
           <p className="text-xs text-foreground/60">
-            Supported formats: PNG, JPEG, WEBP. Max file size: 5 MB.
+            Supported formats: PNG, JPG, JPEG, WEBP, TXT, PDF, DOCX.
           </p>
         </section>
       </Card>

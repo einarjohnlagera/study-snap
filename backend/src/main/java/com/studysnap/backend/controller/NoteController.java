@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
@@ -20,12 +21,14 @@ import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.NoteService;
+import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewSessionService;
 import com.studysnap.backend.service.QuickReviewStudyTipService;
 import com.studysnap.backend.service.StudyPackService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -37,6 +40,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +53,7 @@ public class NoteController {
 
     private final AuthService authService;
     private final NoteService noteService;
+    private final NoteTextExtractionService noteTextExtractionService;
     private final StudyPackService studyPackService;
     private final QuickReviewSessionService quickReviewSessionService;
     private final QuickReviewStudyTipService quickReviewStudyTipService;
@@ -62,6 +68,16 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteService.create(request, userId);
+    }
+
+    @PostMapping(value = "/extract-text", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ExtractedNoteTextResponse extractText(
+            @RequestPart("file") MultipartFile file,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return noteTextExtractionService.extractText(file, userId);
     }
 
     @PutMapping("/{id}")

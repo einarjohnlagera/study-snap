@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
-import { createStudyPackFromImage, getBillingPricing, getBillingUsageSummary, getNote, isNeedsTextConfirmationResponse } from "@/lib/api";
+import { createStudyPackFromNote, extractNoteTextFromFile, getBillingPricing, getBillingUsageSummary, getNote } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -22,15 +22,13 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
-  confirmStudyPackText: jest.fn(),
   createNote: jest.fn(),
-  createStudyPackFromImage: jest.fn(),
   createStudyPackFromNote: jest.fn(),
+  extractNoteTextFromFile: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingUsageSummary: jest.fn(),
   getNote: jest.fn(),
-  isEmailNotVerifiedError: () => false,
-  isNeedsTextConfirmationResponse: jest.fn(() => false),
+  isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
 }));
@@ -63,12 +61,12 @@ const baseNote = {
 describe("NoteEditorPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
-    (createStudyPackFromImage as jest.Mock).mockReset();
+    (createStudyPackFromNote as jest.Mock).mockReset();
+    (extractNoteTextFromFile as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
-    (isNeedsTextConfirmationResponse as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
       studyPacksUsed: 2,
@@ -87,7 +85,6 @@ describe("NoteEditorPageClient", () => {
       hasIntroPromo: true,
       introEligible: true,
     });
-    (isNeedsTextConfirmationResponse as jest.Mock).mockReturnValue(false);
   });
 
   it("keeps draft note title/subject/tags/content editable", async () => {
@@ -134,7 +131,7 @@ describe("NoteEditorPageClient", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables OCR upload and Generate action when user is unverified", async () => {
+  it("keeps import available for unverified users while Generate stays disabled", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: null });
 
     render(<NoteEditorPageClient />);
@@ -143,11 +140,11 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
 
     const generateButton = screen.getByRole("button", { name: /Generate Study Pack/i });
-    const uploadInput = document.getElementById("note-ocr-image") as HTMLInputElement | null;
+    const uploadInput = document.getElementById("note-import-file") as HTMLInputElement | null;
 
     expect(generateButton).toBeDisabled();
     expect(uploadInput).not.toBeNull();
-    expect(uploadInput).toBeDisabled();
+    expect(uploadInput).not.toBeDisabled();
   });
 
   it("shows a limit-reached paywall modal for free users at their monthly Study Pack cap", async () => {
@@ -176,25 +173,21 @@ describe("NoteEditorPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
 
-  it("inserts OCR text directly into Content and shows an inline warning for low-confidence OCR", async () => {
+  it("imports image OCR text into Content without generating a Study Pack and shows an inline warning for low confidence", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
-    (isNeedsTextConfirmationResponse as jest.Mock).mockReturnValue(true);
-    (createStudyPackFromImage as jest.Mock).mockResolvedValue({
-      status: "needs_text_confirmation",
-      id: "draft-1",
+    (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
+      inputType: "image",
       extractedText: "Low confidence OCR text",
       meta: {
         ocrConfidence: 0.42,
-        latencyMs: 1200,
+        lowConfidence: true,
       },
     });
 
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
-    const uploadInput = document.getElementById("note-ocr-image") as HTMLInputElement | null;
-    expect(uploadInput).not.toBeNull();
-
+    const uploadInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const image = new File(["fake"], "note.png", { type: "image/png" });
     fireEvent.change(uploadInput as HTMLInputElement, { target: { files: [image] } });
 
@@ -205,35 +198,24 @@ describe("NoteEditorPageClient", () => {
     expect(
       screen.getByText("OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack."),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Review Extracted Text")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Use OCR Text" })).not.toBeInTheDocument();
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
 
-  it("inserts extracted OCR text into Content for standard OCR responses", async () => {
+  it("imports image OCR text into Content for standard OCR responses", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
-    (createStudyPackFromImage as jest.Mock).mockResolvedValue({
-      id: "study-pack-1",
-      noteId: null,
+    (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
       inputType: "image",
       extractedText: "High confidence OCR text",
-      sourceText: null,
-      title: "Generated",
-      summary: "Summary",
-      subject: null,
-      keyConcepts: [],
-      tags: [],
-      quiz: [],
-      createdAt: "2026-03-21T10:00:00Z",
       meta: {
         ocrConfidence: 0.98,
-        latencyMs: 800,
+        lowConfidence: false,
       },
     });
 
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
-    const uploadInput = document.getElementById("note-ocr-image") as HTMLInputElement | null;
+    const uploadInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const image = new File(["fake"], "note.png", { type: "image/png" });
     fireEvent.change(uploadInput as HTMLInputElement, { target: { files: [image] } });
 
@@ -241,6 +223,147 @@ describe("NoteEditorPageClient", () => {
       expect(screen.getByLabelText("Content")).toHaveValue("High confidence OCR text");
     });
 
-    expect(screen.queryByText("Review Extracted Text")).not.toBeInTheDocument();
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
+  });
+
+  it("imports TXT file content into the Content field", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
+      inputType: "txt",
+      extractedText: "Imported TXT notes",
+      meta: { ocrConfidence: null, lowConfidence: false },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["text"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported TXT notes");
+    });
+  });
+
+  it("imports DOCX file content into the Content field", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
+      inputType: "docx",
+      extractedText: "Imported DOCX notes",
+      meta: { ocrConfidence: null, lowConfidence: false },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["docx"], "notes.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported DOCX notes");
+    });
+  });
+
+  it("imports text-based PDF content into the Content field", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
+      inputType: "pdf",
+      extractedText: "Imported PDF notes",
+      meta: { ocrConfidence: null, lowConfidence: false },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["pdf"], "notes.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported PDF notes");
+    });
+  });
+
+  it("shows an unsupported file type validation message", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockRejectedValue(
+      new Error("Unsupported file type. Upload PNG, JPG, JPEG, WEBP, TXT, PDF, or DOCX."),
+    );
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["bad"], "notes.csv", { type: "text/csv" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(
+      await screen.findAllByText("Unsupported file type. Upload PNG, JPG, JPEG, WEBP, TXT, PDF, or DOCX."),
+    ).not.toHaveLength(0);
+  });
+
+  it("shows a scanned PDF error when text cannot be extracted", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockRejectedValue(
+      new Error("This PDF appears to be scanned or image-based. Please upload images for OCR instead."),
+    );
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["pdf"], "scan.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(
+      await screen.findAllByText("This PDF appears to be scanned or image-based. Please upload images for OCR instead."),
+    ).not.toHaveLength(0);
+  });
+
+  it("allows retrying the same file after an import error", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock)
+      .mockRejectedValueOnce(new Error("Could not import this file."))
+      .mockResolvedValueOnce({
+        inputType: "txt",
+        extractedText: "Recovered content",
+        meta: { ocrConfidence: null, lowConfidence: false },
+      });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const firstInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["text"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(firstInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(await screen.findAllByText("Could not import this file.")).not.toHaveLength(0);
+    expect(extractNoteTextFromFile).toHaveBeenCalledTimes(1);
+
+    const secondInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    fireEvent.change(secondInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Recovered content");
+    });
+    expect(extractNoteTextFromFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a verification message when an unverified user uploads an image", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: null });
+    (extractNoteTextFromFile as jest.Mock).mockRejectedValue(new Error("EMAIL_VERIFICATION_REQUIRED"));
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["img"], "note.png", { type: "image/png" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(await screen.findAllByText("Verify your email before using OCR upload.")).not.toHaveLength(0);
   });
 });
