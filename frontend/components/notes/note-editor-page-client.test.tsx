@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
 import { createStudyPackFromImage, getBillingPricing, getBillingUsageSummary, getNote, isNeedsTextConfirmationResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { importNoteFile } from "@/lib/note-import";
 
 const pushMock = jest.fn();
 
@@ -19,6 +20,10 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
+}));
+
+jest.mock("@/lib/note-import", () => ({
+  importNoteFile: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -69,6 +74,7 @@ describe("NoteEditorPageClient", () => {
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (isNeedsTextConfirmationResponse as jest.Mock).mockReset();
+    (importNoteFile as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
       studyPacksUsed: 2,
@@ -242,5 +248,98 @@ describe("NoteEditorPageClient", () => {
     });
 
     expect(screen.queryByText("Review Extracted Text")).not.toBeInTheDocument();
+  });
+
+  it("imports TXT file content into the Content field", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (importNoteFile as jest.Mock).mockResolvedValue({
+      kind: "txt",
+      text: "Imported TXT notes",
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["text"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported TXT notes");
+    });
+  });
+
+  it("imports DOCX file content into the Content field", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (importNoteFile as jest.Mock).mockResolvedValue({
+      kind: "docx",
+      text: "Imported DOCX notes",
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["docx"], "notes.docx", {
+      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported DOCX notes");
+    });
+  });
+
+  it("imports text-based PDF content into the Content field", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (importNoteFile as jest.Mock).mockResolvedValue({
+      kind: "pdf",
+      text: "Imported PDF notes",
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["pdf"], "notes.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported PDF notes");
+    });
+  });
+
+  it("shows an unsupported file type validation message", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (importNoteFile as jest.Mock).mockRejectedValue(new Error("Unsupported file type. Upload a TXT, PDF, or DOCX file."));
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["bad"], "notes.csv", { type: "text/csv" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(
+      await screen.findAllByText("Unsupported file type. Upload a TXT, PDF, or DOCX file."),
+    ).not.toHaveLength(0);
+  });
+
+  it("shows a scanned PDF error when text cannot be extracted", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (importNoteFile as jest.Mock).mockRejectedValue(
+      new Error("This PDF appears to be scanned or image-based. Please upload images for OCR instead."),
+    );
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["pdf"], "scan.pdf", { type: "application/pdf" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(
+      await screen.findAllByText("This PDF appears to be scanned or image-based. Please upload images for OCR instead."),
+    ).not.toHaveLength(0);
   });
 });

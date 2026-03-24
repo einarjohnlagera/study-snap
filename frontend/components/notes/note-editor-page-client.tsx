@@ -29,6 +29,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteEditorForm, type NoteEditorDraft } from "@/components/notes/note-editor-form";
+import { importNoteFile } from "@/lib/note-import";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
@@ -121,6 +122,10 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
   const [ocrFlowState, setOcrFlowState] = useState<"idle" | "uploading" | "extracting" | "success" | "failure">("idle");
   const [ocrStatusMessage, setOcrStatusMessage] = useState<string | null>(null);
   const [ocrReviewMessage, setOcrReviewMessage] = useState<string | null>(null);
+  const [importedFile, setImportedFile] = useState<File | null>(null);
+  const [importedFileInputKey, setImportedFileInputKey] = useState(0);
+  const [importFlowState, setImportFlowState] = useState<"idle" | "importing" | "success" | "failure">("idle");
+  const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
@@ -168,6 +173,51 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     return true;
   }, []);
 
+  const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
+  const contentLocked = isDetailPage && studyPackStatus === "STUDY_PACK_READY";
+
+  const handleImportedFileChange = useCallback(async (file: File | null) => {
+    if (contentLocked) {
+      setImportedFile(null);
+      setImportedFileInputKey((previous) => previous + 1);
+      setImportFlowState("failure");
+      setImportStatusMessage("Note content is locked after generating a Study Pack. Make a copy to change the note itself.");
+      showToast("Note content is locked after generating a Study Pack. Make a copy to change the note itself.", "info");
+      return;
+    }
+
+    if (!file) {
+      setImportedFile(null);
+      setImportFlowState("idle");
+      setImportStatusMessage(null);
+      return;
+    }
+
+    setImportedFile(file);
+    setImportFlowState("importing");
+    setImportStatusMessage("Importing file...");
+
+    try {
+      const imported = await importNoteFile(file);
+      const didAppend = appendExtractedTextToContent(imported.text);
+      if (!didAppend) {
+        setImportFlowState("failure");
+        setImportStatusMessage("This file is empty or has no readable text.");
+        showToast("This file is empty or has no readable text.", "info");
+        return;
+      }
+
+      setImportFlowState("success");
+      setImportStatusMessage("File content added to Content.");
+      showToast(`${imported.kind.toUpperCase()} content added to Content.`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not import this file.";
+      setImportFlowState("failure");
+      setImportStatusMessage(message);
+      showToast(message, "error");
+    }
+  }, [appendExtractedTextToContent, contentLocked, showToast]);
+
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
       return;
@@ -207,9 +257,6 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       active = false;
     };
   }, [noteId, router]);
-
-  const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
-  const contentLocked = isDetailPage && studyPackStatus === "STUDY_PACK_READY";
   const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
   const studyPacksLimit = usageSummary?.studyPacksLimit ?? 0;
   const hasReachedStudyPackLimit = usageSummary?.planType === "FREE"
@@ -555,8 +602,15 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         ocrFlowState={ocrFlowState}
         ocrStatusMessage={ocrStatusMessage}
         ocrReviewMessage={ocrReviewMessage}
+        importedFile={importedFile}
+        importedFileInputKey={importedFileInputKey}
+        importFlowState={importFlowState}
+        importStatusMessage={importStatusMessage}
         onOcrImageFileChange={(file) => {
           void handleOcrImageFileChange(file);
+        }}
+        onImportedFileChange={(file) => {
+          void handleImportedFileChange(file);
         }}
         disableContentEditing={contentLocked}
         contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."

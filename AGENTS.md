@@ -180,6 +180,19 @@ Required behavior:
 - OCR upload does not auto-save and does not auto-generate.
 - Uploaded images are not stored permanently.
 
+## File Import Flow (Create/Edit Note)
+
+File import is part of Note authoring and must populate the main `Content` field before any save or generation action.
+
+Required behavior:
+
+- Support `.txt`, `.pdf`, and `.docx` import in Create/Edit Note.
+- Imported text is inserted/merged into Note `content`.
+- Users review and edit imported text directly in the main `Content` field.
+- File import does not auto-save and does not auto-generate.
+- Text-based PDFs are supported in this flow.
+- If a PDF has no extractable text, show a friendly scanned-PDF message and direct users to image OCR instead.
+
 
 
 ## User Access Model
