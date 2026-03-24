@@ -100,8 +100,11 @@ Core loop:
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Library should exclude the current user's own notes.
+- Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.
+- `robots.txt` must allow public crawling and disallow authenticated/private app areas such as `/dashboard`, `/library`, `/notes`, `/settings`, `/admin`, and `/api`.
+- `sitemap.xml` must include only public SEO-safe routes: `/`, `/pricing`, `/public/library`, and canonical public note URLs.
 - Private notes must never be exposed through the public SEO route.
 - Copying a public note must preserve attribution via `copiedFromNoteId` and `copiedFromUserId`.
 

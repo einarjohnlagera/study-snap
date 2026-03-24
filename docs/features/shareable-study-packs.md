@@ -6,7 +6,8 @@ Support public discovery and safe reuse of learning content while keeping the no
 
 ## Public Surfaces
 
-- Public Library route: `/library/public`
+- Public Library app route: `/library/public`
+- Public Library canonical SEO route: `/public/library`
 - Public Note Detail route: `/public/library/{subject}/{slug}`
 - Legacy public note route: `/public/notes/{id}` -> redirects to canonical SEO route
 - Token share route (existing): `/p/{token}`
@@ -26,6 +27,7 @@ Private note share UX:
 - public detail shows: title, subject, tags, summary, key concepts, practice quiz, author attribution
 - public detail hides: challenge/adaptive/performance/edit controls
 - private notes must never resolve on the public SEO route
+- `sitemap.xml` must include only canonical public library routes, not authenticated library routes
 
 ## Copy Flow
 
