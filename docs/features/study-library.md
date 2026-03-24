@@ -73,6 +73,13 @@ SEO indexing rules:
   - all canonical public note detail routes under `/public/library/{subject}/{slug}`
 - authenticated/private routes must not appear in the sitemap
 
+Structured data rules:
+
+- `/public/library` should emit JSON-LD `CollectionPage` schema
+- `/public/library/{subject}/{slug}` should emit JSON-LD `Article` schema
+- use real note title, summary/fallback description, author display name, tags, subject, and `updatedAt` where available
+- structured data must align with the page metadata and canonical URL
+
 ## Copy Rules
 
 Both flows use the same copy rules:
