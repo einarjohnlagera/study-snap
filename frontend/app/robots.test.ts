@@ -5,11 +5,11 @@ describe("robots metadata route", () => {
     expect(robots()).toEqual({
       rules: {
         userAgent: "*",
-        allow: "/",
+        allow: ["/", "/public/", "/public/library/"],
         disallow: [
-          "/api",
           "/admin",
           "/auth",
+          "/api",
           "/dashboard",
           "/library",
           "/login",
@@ -17,6 +17,7 @@ describe("robots metadata route", () => {
           "/onboarding",
           "/profile",
           "/settings",
+          "/signup",
           "/study",
           "/study-packs",
           "/verify-email",

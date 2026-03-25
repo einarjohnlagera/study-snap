@@ -11,6 +11,11 @@ Provide public legal pages required for launch readiness, payment integration, a
 
 These routes must remain publicly accessible without login.
 
+## SEO Indexing
+
+- `/privacy` and `/terms` should appear in the public XML sitemap.
+- Legal pages are crawlable public routes and should not be gated behind auth, onboarding, or app-shell access rules.
+
 ## Privacy Policy
 
 The Privacy Policy page should cover:

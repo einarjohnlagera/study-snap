@@ -21,11 +21,15 @@ export function getPublicTitleSlug(title: string | null | undefined) {
   return slugify(title, DEFAULT_PUBLIC_TITLE_SLUG);
 }
 
+export function buildPublicLibrarySubjectPath(subject: string | null | undefined) {
+  return `/public/library/${getPublicSubjectSlug(subject)}`;
+}
+
 export function buildPublicLibraryNotePath(input: {
   subject: string | null | undefined;
   title: string | null | undefined;
 }) {
-  return `/public/library/${getPublicSubjectSlug(input.subject)}/${getPublicTitleSlug(input.title)}`;
+  return `${buildPublicLibrarySubjectPath(input.subject)}/${getPublicTitleSlug(input.title)}`;
 }
 
 export function buildPublicLibraryNotePathFromDetail(note: PublicNoteDetailResponse) {

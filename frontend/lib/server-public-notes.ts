@@ -1,4 +1,5 @@
 import type { NoteListItemResponse, PublicNoteDetailResponse } from "@/lib/api";
+import { getPublicSubjectSlug } from "@/lib/public-note-path";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
@@ -43,4 +44,44 @@ export async function getServerPublicNoteBySeoPath(subject: string, slug: string
 
 export async function getServerPublicNotes() {
   return fetchPublicNotes("/notes/public");
+}
+
+export type PublicSubjectEntry = {
+  slug: string;
+  label: string;
+  lastModified: string | null;
+};
+
+export function getPublicSubjectEntries(notes: NoteListItemResponse[]): PublicSubjectEntry[] {
+  const subjects = new Map<string, PublicSubjectEntry>();
+
+  notes.forEach((note) => {
+    const label = note.subject?.trim() || "General";
+    const slug = getPublicSubjectSlug(label);
+    const existing = subjects.get(slug);
+
+    if (!existing) {
+      subjects.set(slug, {
+        slug,
+        label,
+        lastModified: note.updatedAt ?? null,
+      });
+      return;
+    }
+
+    if (note.updatedAt && (!existing.lastModified || note.updatedAt > existing.lastModified)) {
+      existing.lastModified = note.updatedAt;
+    }
+  });
+
+  return Array.from(subjects.values()).sort((left, right) => left.label.localeCompare(right.label));
+}
+
+export async function getServerPublicSubjects() {
+  return getPublicSubjectEntries(await getServerPublicNotes());
+}
+
+export async function getServerPublicNotesBySubjectSlug(subjectSlug: string) {
+  const notes = await getServerPublicNotes();
+  return notes.filter((note) => getPublicSubjectSlug(note.subject) === subjectSlug);
 }

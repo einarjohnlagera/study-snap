@@ -65,11 +65,14 @@ SEO public detail route:
 SEO indexing rules:
 
 - canonical public library index path: `/public/library`
+- canonical public subject index paths: `/public/library/{subject}`
 - `robots.txt` should allow public crawling while disallowing authenticated app routes such as `/dashboard`, `/library`, `/notes`, `/settings`, `/admin`, and `/api`
 - `sitemap.xml` should include:
   - `/`
-  - `/pricing`
+  - `/privacy`
+  - `/terms`
   - `/public/library`
+  - all canonical public subject routes under `/public/library/{subject}`
   - all canonical public note detail routes under `/public/library/{subject}/{slug}`
 - authenticated/private routes must not appear in the sitemap
 
