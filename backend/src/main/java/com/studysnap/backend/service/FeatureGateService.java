@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
@@ -13,6 +14,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FeatureGateService {
     private final SubscriptionService subscriptionService;
+    private final StudySnapProperties properties;
 
     public void checkFeatureAccess(UUID userId, Feature feature) {
         PlanType planType = subscriptionService.resolvePlan(userId);
@@ -41,6 +43,10 @@ public class FeatureGateService {
         if (planType == null || feature == null) {
             return false;
         }
-        return planType == feature.getRequiredPlan();
+        return switch (feature) {
+            case ADAPTIVE_QUIZ -> properties.getPricing().isAdaptivePracticeAvailable(planType);
+            case DIFFICULTY_SELECTION -> properties.getPricing().isDifficultySelectionAvailable(planType);
+            case WEAK_CONCEPT_DETECTION -> true;
+        };
     }
 }

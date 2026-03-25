@@ -51,6 +51,7 @@ public class QuickReviewAdaptivePracticeService {
     private final ActivityEventRepository activityEventRepository;
     private final LlmStudyPackService llmStudyPackService;
     private final ActivityTrackingService activityTrackingService;
+    private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
@@ -69,7 +70,8 @@ public class QuickReviewAdaptivePracticeService {
         );
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
-        featureGateService.checkFeatureAccess(userId, Feature.ADAPTIVE_QUIZ);
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
@@ -121,8 +123,8 @@ public class QuickReviewAdaptivePracticeService {
             );
         }
 
-        assertAdaptivePracticeQuotaAvailable(userId);
-        aiRateLimitService.assertAllowed(userId, PlanType.PREMIUM, "adaptive-practice");
+        assertAdaptivePracticeQuotaAvailable(userId, planType);
+        aiRateLimitService.assertAllowed(userId, planType, "adaptive-practice");
         int questionCount = resolveAdaptiveQuestionCount(weakConcepts.size());
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         List<QuizItem> generatedQuiz = llmStudyPackService.generateAdaptivePracticeQuiz(
@@ -300,10 +302,17 @@ public class QuickReviewAdaptivePracticeService {
                 .toList();
     }
 
-    private void assertAdaptivePracticeQuotaAvailable(UUID userId) {
+    private void assertAdaptivePracticeQuotaAvailable(UUID userId, PlanType planType) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, now);
-        int monthlyLimit = properties.getPricing().getPremiumMonthlyAdaptivePracticeLimit();
+        int monthlyLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
+        if (monthlyLimit <= 0) {
+            throw new AppException(
+                    "PREMIUM_FEATURE_REQUIRED",
+                    "Adaptive Practice is a Premium feature. Upgrade to Premium to continue.",
+                    HttpStatus.FORBIDDEN
+            );
+        }
 
         long usedFromActivityEvents = activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,

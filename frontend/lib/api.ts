@@ -443,6 +443,10 @@ export type AdaptivePracticeCompleteRequest = {
   durationSeconds?: number;
 };
 
+export type ChallengeQuizStartRequest = {
+  difficulty?: "easy" | "medium" | "hard";
+};
+
 export type ChallengeQuizStartResponse = {
   sessionId: string | null;
   studyPackId: string;
@@ -451,6 +455,8 @@ export type ChallengeQuizStartResponse = {
   timeLimitSeconds: number;
   usedThisMonth: number;
   monthlyLimit: number;
+  difficultySelectionAvailable: boolean;
+  selectedDifficulty: "easy" | "medium" | "hard";
   quiz: QuizItem[];
   currentQuestionIndex: number;
   sessionState: Record<string, unknown> | null;
@@ -543,6 +549,8 @@ export type BillingUsageSummaryResponse = {
   challengeQuizLimit: number;
   adaptivePracticeUsed: number;
   adaptivePracticeLimit: number;
+  adaptivePracticeAvailable: boolean;
+  difficultySelectionAvailable: boolean;
 };
 
 export type BillingHistoryItemResponse = {
@@ -602,6 +610,7 @@ export type NoteResponse = {
   quickReviewAvailable: boolean;
   challengeQuizAvailable: boolean;
   adaptivePracticeAvailable: boolean;
+  difficultySelectionAvailable: boolean;
 };
 
 export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
@@ -1426,12 +1435,14 @@ export async function completeAdaptivePracticeSession(
 
 export async function startChallengeQuizSession(
   noteId: string,
+  request: ChallengeQuizStartRequest = {},
 ): Promise<ChallengeQuizStartResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/challenge-quiz/start`,
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
     },
     true,
   );

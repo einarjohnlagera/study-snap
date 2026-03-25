@@ -64,6 +64,7 @@ const baseNote = {
   quickReviewAvailable: false,
   challengeQuizAvailable: false,
   adaptivePracticeAvailable: false,
+  difficultySelectionAvailable: false,
 };
 
 describe("NoteEditorPageClient", () => {
@@ -79,11 +80,13 @@ describe("NoteEditorPageClient", () => {
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
       studyPacksUsed: 2,
-      studyPacksLimit: 5,
+      studyPacksLimit: 10,
       challengeQuizUsed: 0,
-      challengeQuizLimit: 0,
+      challengeQuizLimit: 5,
       adaptivePracticeUsed: 0,
       adaptivePracticeLimit: 0,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: false,
     });
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
@@ -126,6 +129,7 @@ describe("NoteEditorPageClient", () => {
       keyConcepts: ["Concept"],
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
+      difficultySelectionAvailable: false,
     });
 
     render(<NoteEditorPageClient noteId="note-generated" />);
@@ -160,15 +164,17 @@ describe("NoteEditorPageClient", () => {
   });
 
   it("shows a limit-reached paywall modal for free users at their monthly Study Pack cap", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
-      studyPacksUsed: 5,
-      studyPacksLimit: 5,
+      studyPacksUsed: 10,
+      studyPacksLimit: 10,
       challengeQuizUsed: 0,
-      challengeQuizLimit: 0,
+      challengeQuizLimit: 5,
       adaptivePracticeUsed: 0,
       adaptivePracticeLimit: 0,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: false,
     });
 
     render(<NoteEditorPageClient />);

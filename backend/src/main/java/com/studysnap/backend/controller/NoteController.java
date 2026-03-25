@@ -13,6 +13,7 @@ import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
+import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
@@ -194,12 +195,13 @@ public class NoteController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public ChallengeQuizStartResponse startChallengeQuiz(
             @PathVariable String id,
+            @RequestBody(required = false) ChallengeQuizStartRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
-        return challengeQuizService.startSession(studyPackId, userId);
+        return challengeQuizService.startSession(studyPackId, userId, request);
     }
 
     @GetMapping("/{id}/challenge-quiz/in-progress")

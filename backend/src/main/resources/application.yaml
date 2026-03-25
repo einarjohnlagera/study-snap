@@ -76,10 +76,13 @@ studysnap:
       min-incorrect-count: ${QUICK_REVIEW_STUDY_TIP_MIN_INCORRECT_COUNT:1}
       max-questions: ${QUICK_REVIEW_STUDY_TIP_MAX_QUESTIONS:3}
   pricing:
-    free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:5}
+    free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:10}
     premium-monthly-study-pack-limit: ${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}
+    free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:5}
     premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
-    premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:50}
+    premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}
+    adaptive-practice-premium-only: ${ADAPTIVE_PRACTICE_PREMIUM_ONLY:true}
+    difficulty-selection-premium-only: ${DIFFICULTY_SELECTION_PREMIUM_ONLY:true}
   limits:
     free-ocr-per-billing-period: ${OCR_FREE_BILLING_PERIOD_LIMIT:20}
     premium-ocr-per-billing-period: ${OCR_PREMIUM_BILLING_PERIOD_LIMIT:200}

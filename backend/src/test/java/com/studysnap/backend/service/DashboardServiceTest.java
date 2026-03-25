@@ -6,6 +6,7 @@ import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
@@ -62,7 +63,7 @@ class DashboardServiceTest {
 
     @BeforeEach
     void setUp() {
-        FeatureGateService featureGateService = new FeatureGateService(subscriptionService);
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, new StudySnapProperties());
         dashboardService = new DashboardService(
                 userRepository,
                 studyPackRepository,
@@ -589,7 +590,7 @@ class DashboardServiceTest {
     }
 
     @Test
-    void getTodayFocus_skipsWeakConceptPracticeForFreePlan() {
+    void getTodayFocus_surfacesWeakConceptPracticeForFreePlan() {
         UUID userId = UUID.randomUUID();
         UUID reviewedPackId = UUID.randomUUID();
         StudyPackEntity reviewedPack = buildStudyPack(userId, reviewedPackId, "Reviewed Pack");
@@ -610,17 +611,11 @@ class DashboardServiceTest {
                 eq(userId),
                 any(Pageable.class)
         )).thenReturn(List.of(reviewedSession), List.of(reviewedSession));
-        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
-                eq(userId),
-                eq(ActivityType.OPENED_STUDY_PACK),
-                any(Pageable.class)
-        )).thenReturn(List.of());
-        when(studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.empty());
         when(studyPackRepository.findByIdAndOwnerUserId(reviewedPackId, userId)).thenReturn(Optional.of(reviewedPack));
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
 
-        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
         assertThat(response.studyPackId()).isEqualTo(reviewedPackId.toString());
     }
 

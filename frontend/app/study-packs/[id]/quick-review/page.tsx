@@ -301,15 +301,12 @@ export default function QuickReviewPage() {
     return Array.from(new Set(concepts));
   }, [quiz, selectedChoices]);
   const displayedWeakConcepts = useMemo(() => {
-    if (!isPremiumPlan) {
-      return [];
-    }
     const persistedWeakConcepts = persistedResult?.weakConcepts?.filter((concept) => concept.trim().length > 0) ?? [];
     if (persistedWeakConcepts.length > 0) {
       return persistedWeakConcepts;
     }
     return weakConcepts;
-  }, [isPremiumPlan, persistedResult?.weakConcepts, weakConcepts]);
+  }, [persistedResult?.weakConcepts, weakConcepts]);
   const confidenceOptions = useMemo<Array<{ label: string; value: QuickReviewConfidenceLevel }>>(
     () => [
       { label: "Very confident", value: "HIGH" },
@@ -436,11 +433,9 @@ export default function QuickReviewPage() {
         totalQuestions,
         retryCount: effectiveRetryCount,
         durationSeconds,
-        sessionMetadata: isPremiumPlan
-          ? {
-              weakConcepts,
-            }
-          : undefined,
+        sessionMetadata: {
+          weakConcepts,
+        },
       });
       setPersistedResult(result);
     } catch {
@@ -449,7 +444,7 @@ export default function QuickReviewPage() {
       setCompletionTracked(true);
       setCompletingSession(false);
     }
-  }, [completingSession, completionTracked, currentSessionId, isPremiumPlan, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
+  }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
 
   useEffect(() => {
     if (!isComplete || !note) {
@@ -726,16 +721,16 @@ export default function QuickReviewPage() {
                 </ul>
               </div>
             ) : null}
-            {!isPerfectScore && incorrectCount > 0 && !isPremiumPlan ? (
+            {!isPerfectScore && incorrectCount > 0 && !note?.adaptivePracticeAvailable ? (
               <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
                 <p className="text-sm text-foreground/85">
-                  Adaptive Practice and Challenge Quiz are available on Premium.
+                  Adaptive Practice is available on Premium. Challenge Quiz stays available up to your monthly limit.
                 </p>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setActivePaywallModal(showAdaptiveGuidedCta ? "adaptive-practice" : "challenge-quiz")}
+                  onClick={() => setActivePaywallModal("adaptive-practice")}
                 >
                     Upgrade to Premium
                 </Button>
@@ -782,7 +777,7 @@ export default function QuickReviewPage() {
               </Button>
             </Link>
             {showAdaptiveGuidedCta ? (
-              isPremiumPlan ? (
+              note?.adaptivePracticeAvailable ? (
                 <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
                   <Button type="button" variant="outline" className="w-full sm:w-auto">
                     Practice Weak Concepts
@@ -800,22 +795,11 @@ export default function QuickReviewPage() {
               )
             ) : null}
             {showChallengeGuidedCta ? (
-              isPremiumPlan ? (
-                <Link href={`/notes/${note.id}/challenge-quiz`} className="w-full sm:w-auto">
-                  <Button type="button" variant="outline" className="w-full sm:w-auto">
-                    Start Challenge Quiz
-                  </Button>
-                </Link>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => setActivePaywallModal("challenge-quiz")}
-                >
-                    Unlock Challenge Quiz
+              <Link href={`/notes/${note.id}/challenge-quiz`} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  Start Challenge Quiz
                 </Button>
-              )
+              </Link>
             ) : null}
             {!isPerfectScore ? (
               <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>

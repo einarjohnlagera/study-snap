@@ -160,7 +160,7 @@ public class QuickReviewSessionController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
-        return challengeQuizService.startSession(studyPackId, userId);
+        return challengeQuizService.startSession(studyPackId, userId, null);
     }
 
     @PostMapping("/challenge/{sessionId}/complete")

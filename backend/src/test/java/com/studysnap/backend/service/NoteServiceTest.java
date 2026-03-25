@@ -6,8 +6,10 @@ import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -43,14 +45,28 @@ class NoteServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private SubscriptionService subscriptionService;
+    @Mock
+    private FeatureGateService featureGateService;
+    @Mock
     private AnalyticsService analyticsService;
 
     private NoteService noteService;
 
     @BeforeEach
     void setUp() {
-        noteService = new NoteService(noteRepository, studyPackRepository, userRepository, analyticsService);
+        noteService = new NoteService(
+                noteRepository,
+                studyPackRepository,
+                userRepository,
+                subscriptionService,
+                featureGateService,
+                analyticsService
+        );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
+        lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.ADAPTIVE_QUIZ))).thenReturn(false);
+        lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.DIFFICULTY_SELECTION))).thenReturn(false);
     }
 
     @Test

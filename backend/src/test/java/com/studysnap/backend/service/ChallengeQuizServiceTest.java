@@ -46,6 +46,8 @@ class ChallengeQuizServiceTest {
     @Mock
     private LlmStudyPackService llmStudyPackService;
     @Mock
+    private SubscriptionService subscriptionService;
+    @Mock
     private FeatureGateService featureGateService;
     @Mock
     private UserUsageService userUsageService;
@@ -66,6 +68,7 @@ class ChallengeQuizServiceTest {
                 studyPackRepository,
                 quickReviewSessionRepository,
                 llmStudyPackService,
+                subscriptionService,
                 featureGateService,
                 new StudySnapProperties(),
                 userUsageService,
@@ -137,11 +140,11 @@ class ChallengeQuizServiceTest {
                         3
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
 
-        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId);
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
         verify(authService).requireEmailVerified(userId);
-        verify(featureGateService).checkFeatureAccess(userId, com.studysnap.backend.entity.Feature.CHALLENGE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
@@ -196,6 +199,7 @@ class ChallengeQuizServiceTest {
                         3
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                 eq(userId),
                 eq(studyPackId),
@@ -208,7 +212,7 @@ class ChallengeQuizServiceTest {
                 eq(List.of("Concept")),
                 eq(List.of("Practice?")),
                 eq(10),
-                eq("easy-medium")
+                eq("easy")
         )).thenReturn(List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
@@ -224,10 +228,10 @@ class ChallengeQuizServiceTest {
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId);
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
         assertThat(response.sessionId()).isNotNull();
-        verify(aiRateLimitService).assertAllowed(userId, PlanType.PREMIUM, "challenge-quiz");
+        verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
     }
 }

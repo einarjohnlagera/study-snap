@@ -365,11 +365,15 @@ Rules:
 
 ## Cost and Quotas
 
-- Free: 5 Study Packs/month
+- Free: 10 Study Packs/month
+- Free Challenge Quiz: 5/month
 - Premium: 100 Study Packs/month
 - Premium Challenge Quiz: 50/month
-- Premium Adaptive Practice: 50/month
-- Challenge/Adaptive quotas are separate from Study Pack generation quota.
+- Premium Adaptive Practice: 30/month
+- Adaptive Practice is Premium-only and still quota-limited.
+- Difficulty Selection is Premium-only and feature-gated.
+- Weak concepts remain visible to Free users.
+- Study Pack, Challenge Quiz, and Adaptive Practice quotas are separate from each other.
 - OCR usage has its own backend-configured billing-period quota by plan.
 - Expensive OCR and AI generation endpoints must also enforce backend request-rate limits and return `429` with a friendly retry message.
 

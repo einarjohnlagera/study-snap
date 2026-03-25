@@ -694,9 +694,7 @@ public class StudyPackService {
     }
 
     private int resolveMonthlyStudyPackLimit(PlanType planType) {
-        return planType == PlanType.PREMIUM
-                ? properties.getPricing().getPremiumMonthlyStudyPackLimit()
-                : properties.getPricing().getFreeMonthlyStudyPackLimit();
+        return properties.getPricing().resolveMonthlyStudyPackLimit(planType);
     }
 
     private String resolveQuotaReachedMessage(PlanType planType, int limit) {
