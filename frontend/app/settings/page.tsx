@@ -11,7 +11,7 @@ import {
   cancelPremiumSubscription,
   getBillingPricing,
   getBillingHistory,
-  getBillingUsageSummary,
+  getMyPlan,
   getMe,
   logout,
   updateEngagementMode,
@@ -20,9 +20,9 @@ import {
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
-  type BillingUsageSummaryResponse,
   type CancelPremiumSubscriptionRequest,
   type EngagementMode,
+  type MePlanResponse,
   type MeResponse,
   type SubscriptionCancellationReason,
 } from "@/lib/api";
@@ -87,7 +87,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
-  const [usageSummary, setUsageSummary] = useState<BillingUsageSummaryResponse | null>(null);
+  const [usageSummary, setUsageSummary] = useState<MePlanResponse | null>(null);
   const [billingHistory, setBillingHistory] = useState<BillingHistoryResponse | null>(null);
   const [billingPricing, setBillingPricing] = useState<BillingPricingResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -119,7 +119,7 @@ export default function SettingsPage() {
     try {
       const [me, usage, history, pricing] = await Promise.all([
         getMe(),
-        getBillingUsageSummary(),
+        getMyPlan(),
         getBillingHistory(),
         getBillingPricing().catch(() => null),
       ]);
@@ -254,14 +254,16 @@ export default function SettingsPage() {
   const isCancellationScheduled = Boolean(
     billingHistory?.cancelAtPeriodEnd ?? (profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt),
   );
-  const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
-  const studyPacksLimit = usageSummary?.studyPacksLimit ?? (isPremiumPlan ? 100 : 10);
-  const challengeQuizUsed = usageSummary?.challengeQuizUsed ?? 0;
-  const challengeQuizLimit = usageSummary?.challengeQuizLimit ?? (isPremiumPlan ? 50 : 5);
-  const adaptivePracticeUsed = usageSummary?.adaptivePracticeUsed ?? 0;
-  const adaptivePracticeLimit = usageSummary?.adaptivePracticeLimit ?? (isPremiumPlan ? 30 : 0);
-  const adaptivePracticeAvailable = usageSummary?.adaptivePracticeAvailable ?? isPremiumPlan;
-  const difficultySelectionAvailable = usageSummary?.difficultySelectionAvailable ?? isPremiumPlan;
+  const studyPacksUsed = usageSummary?.usage.studyPacksUsed ?? 0;
+  const studyPacksLimit = usageSummary?.limits.studyPacksPerMonth ?? 0;
+  const challengeQuizUsed = usageSummary?.usage.challengeQuizzesUsed ?? 0;
+  const challengeQuizLimit = usageSummary?.limits.challengeQuizzesPerMonth ?? 0;
+  const adaptivePracticeUsed = usageSummary?.usage.adaptivePracticeUsed ?? 0;
+  const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
+  const ocrUsed = usageSummary?.usage.ocrUsed ?? 0;
+  const ocrLimit = usageSummary?.limits.ocrPerMonth ?? 0;
+  const adaptivePracticeAvailable = usageSummary?.features.adaptivePracticeAvailable ?? false;
+  const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
   const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
   const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
   const yearlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
@@ -505,11 +507,8 @@ export default function SettingsPage() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
                 <UsageMetric label="Study Packs" used={studyPacksUsed} limit={studyPacksLimit} />
                 <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
-                {adaptivePracticeAvailable ? (
-                  <>
-                    <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
-                  </>
-                ) : null}
+                <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
+                <UsageMetric label="OCR" used={ocrUsed} limit={ocrLimit} />
                 {hasReachedMonthlyLimit ? (
                   <p className="text-sm text-foreground/80">You have reached your monthly Study Pack limit.</p>
                 ) : null}
@@ -532,19 +531,20 @@ export default function SettingsPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free Features</p>
                     <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
                       <li>Save unlimited notes</li>
-                      <li>10 Study Packs per month</li>
+                      <li>{studyPacksLimit} Study Packs per month</li>
                       <li>Quick Review</li>
-                      <li>5 Challenge Quizzes per month</li>
+                      <li>{challengeQuizLimit} Challenge Quizzes per month</li>
                       <li>Weak concepts visible</li>
+                      <li>File uploads available</li>
+                      <li>{ocrLimit} OCR uses per month</li>
                       <li>Public Library access</li>
                     </ul>
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium Features</p>
                     <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                      <li>100 Study Packs per month</li>
-                      <li>50 Challenge Quizzes per month</li>
-                      <li>30 Adaptive Practice sessions per month</li>
+                      <li>Higher monthly limits</li>
+                      <li>Adaptive Practice</li>
                       <li>Difficulty selection</li>
                       <li>Priority AI</li>
                     </ul>

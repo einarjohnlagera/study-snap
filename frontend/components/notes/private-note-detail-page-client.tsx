@@ -60,10 +60,10 @@ function truncateShareUrl(url: string, maxLength = 58) {
 
 function buildShareUrl(subject: string | null, title: string | null) {
   const path = buildPublicLibraryNotePath({ subject, title });
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return path;
   }
-  return new URL(path, window.location.origin).toString();
+  return new URL(path, globalThis.location.origin).toString();
 }
 
 function normalizeMetadataInput(value: string): string | null {
@@ -182,9 +182,9 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
     };
     syncAuthState();
-    window.addEventListener("studysnap-auth-change", syncAuthState);
+    globalThis.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncAuthState);
+      globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
     };
   }, []);
 
@@ -192,16 +192,16 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     if (!toast) {
       return;
     }
-    const timeout = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(timeout);
+    const timeout = globalThis.setTimeout(() => setToast(null), 2600);
+    return () => globalThis.clearTimeout(timeout);
   }, [toast]);
 
   useEffect(() => {
     if (!shareModalCopied) {
       return;
     }
-    const timeout = window.setTimeout(() => setShareModalCopied(false), 2000);
-    return () => window.clearTimeout(timeout);
+    const timeout = globalThis.setTimeout(() => setShareModalCopied(false), 2000);
+    return () => globalThis.clearTimeout(timeout);
   }, [shareModalCopied]);
 
   useEffect(() => {
@@ -214,8 +214,8 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
         setVisibilityMenuOpen(false);
       }
     };
-    window.addEventListener("mousedown", handleOutsideClick);
-    return () => window.removeEventListener("mousedown", handleOutsideClick);
+    globalThis.addEventListener("mousedown", handleOutsideClick);
+    return () => globalThis.removeEventListener("mousedown", handleOutsideClick);
   }, [visibilityMenuOpen]);
 
   useEffect(() => {
@@ -262,12 +262,12 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
   const hasCopyAttribution = Boolean(note?.copiedFromUserId && note?.copiedFromNoteId);
   const copiedSourceTitle = note?.copiedFromTitle?.trim() || "Untitled note";
-  const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
-  const studyPacksLimit = usageSummary?.studyPacksLimit ?? 0;
-  const hasReachedStudyPackLimit = usageSummary?.planType === "FREE"
+  const studyPacksUsed = usageSummary?.usage.studyPacksUsed ?? 0;
+  const studyPacksLimit = usageSummary?.limits.studyPacksPerMonth ?? 0;
+  const hasReachedStudyPackLimit = usageSummary?.plan === "FREE"
     && hasReachedUsageLimit(studyPacksUsed, studyPacksLimit);
   const shouldShowNearLimitBanner = usageSummary
-    ? shouldShowNearStudyPackLimitBanner(usageSummary.planType, studyPacksUsed, studyPacksLimit)
+    ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksUsed, studyPacksLimit)
     : false;
 
   const performVisibilityUpdate = useCallback(async (

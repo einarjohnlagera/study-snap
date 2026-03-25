@@ -1,5 +1,7 @@
 "use client";
 
+import type { MePlanResponse } from "./me-plan";
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -13,6 +15,7 @@ export type AuthUser = {
   refreshToken: string;
   accessTokenExpiresAt: string;
   refreshTokenExpiresAt: string;
+  planSummary?: MePlanResponse | null;
 };
 
 const AUTH_USER_KEY = "study_snap_auth_user";
@@ -23,10 +26,10 @@ export const LOGIN_REASON_SESSION_EXPIRED = "session_expired";
 let hasTriggeredSessionExpiryRedirect = false;
 
 function emitAuthChangeEvent(): void {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return;
   }
-  window.dispatchEvent(new Event("studysnap-auth-change"));
+  globalThis.dispatchEvent(new Event("studysnap-auth-change"));
 }
 
 function getSafeRedirectPath(path: string | null | undefined): string | null {
@@ -40,10 +43,10 @@ function getSafeRedirectPath(path: string | null | undefined): string | null {
 }
 
 export function getCurrentPathWithQuery(): string {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return "/dashboard";
   }
-  return `${window.location.pathname}${window.location.search}`;
+  return `${globalThis.location.pathname}${globalThis.location.search}`;
 }
 
 export function buildLoginPath(options?: {
@@ -62,10 +65,10 @@ export function buildLoginPath(options?: {
 }
 
 export function getAuthUser(): AuthUser | null {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return null;
   }
-  const raw = window.localStorage.getItem(AUTH_USER_KEY);
+  const raw = globalThis.localStorage.getItem(AUTH_USER_KEY);
   if (!raw) {
     return null;
   }
@@ -77,41 +80,29 @@ export function getAuthUser(): AuthUser | null {
 }
 
 export function setAuthUser(user: AuthUser): void {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return;
   }
-  window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  globalThis.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   emitAuthChangeEvent();
 }
 
 export function clearAuthUser(): void {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return;
   }
-  window.localStorage.removeItem(AUTH_USER_KEY);
+  globalThis.localStorage.removeItem(AUTH_USER_KEY);
   emitAuthChangeEvent();
 }
 
 export function getCurrentUserId(): string | null {
   return getAuthUser()?.id ?? null;
 }
-
-export function isEmailVerified(): boolean {
-  return Boolean(getAuthUser()?.emailVerifiedAt);
-}
-
-export function hasCompletedOnboarding(authUser: AuthUser | null): boolean {
-  if (!authUser?.emailVerifiedAt) {
-    return false;
-  }
-  return Boolean(authUser.onboardingCompletedAt);
-}
-
 export function needsOnboarding(authUser: AuthUser | null): boolean {
   if (!authUser?.emailVerifiedAt) {
     return false;
   }
-  if (typeof authUser.onboardingCompletedAt === "undefined") {
+  if (authUser.onboardingCompletedAt === undefined) {
     return false;
   }
   return authUser.onboardingCompletedAt === null;
@@ -134,18 +125,8 @@ export function getAccessToken(): string | null {
 export function getRefreshToken(): string | null {
   return getAuthUser()?.refreshToken ?? null;
 }
-
-export function isAccessTokenExpired(bufferSeconds = 30): boolean {
-  const authUser = getAuthUser();
-  if (!authUser) {
-    return true;
-  }
-  const expiresAt = new Date(authUser.accessTokenExpiresAt).getTime();
-  return Date.now() + bufferSeconds * 1000 >= expiresAt;
-}
-
 export function handleUnauthorizedSession(): void {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return;
   }
   if (hasTriggeredSessionExpiryRedirect) {
@@ -155,7 +136,7 @@ export function handleUnauthorizedSession(): void {
   hasTriggeredSessionExpiryRedirect = true;
   const redirectTo = getCurrentPathWithQuery();
   clearAuthUser();
-  window.location.replace(
+  globalThis.location.replace(
     buildLoginPath({
       redirectTo,
       sessionExpired: true,

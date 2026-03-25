@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
 import {
   getBillingPricing,
-  getBillingUsageSummary,
+  getMyPlan,
   getChallengeQuizPerformanceSummary,
   getNote,
   getQuickReviewPerformanceSummary,
@@ -35,6 +35,7 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
+  setAuthUser: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -42,7 +43,7 @@ jest.mock("@/lib/api", () => ({
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
   getBillingPricing: jest.fn(),
-  getBillingUsageSummary: jest.fn(),
+  getMyPlan: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
@@ -88,22 +89,38 @@ describe("PrivateNoteDetailPageClient", () => {
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
-    (getBillingUsageSummary as jest.Mock).mockReset();
+    (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
-    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
-      planType: "FREE",
-      studyPacksUsed: 2,
-      studyPacksLimit: 10,
-      challengeQuizUsed: 0,
-      challengeQuizLimit: 5,
-      adaptivePracticeUsed: 0,
-      adaptivePracticeLimit: 0,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: false,
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 8,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
     });
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue({
       attempts: 1,
@@ -243,16 +260,32 @@ describe("PrivateNoteDetailPageClient", () => {
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
-    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
-      planType: "PREMIUM",
-      studyPacksUsed: 12,
-      studyPacksLimit: 100,
-      challengeQuizUsed: 1,
-      challengeQuizLimit: 50,
-      adaptivePracticeUsed: 1,
-      adaptivePracticeLimit: 30,
-      adaptivePracticeAvailable: true,
-      difficultySelectionAvailable: true,
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "PREMIUM",
+      limits: {
+        studyPacksPerMonth: 100,
+        challengeQuizzesPerMonth: 50,
+        adaptivePracticePerMonth: 30,
+        ocrPerMonth: 100,
+      },
+      usage: {
+        studyPacksUsed: 12,
+        challengeQuizzesUsed: 1,
+        adaptivePracticeUsed: 1,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 88,
+        challengeQuizzesRemaining: 49,
+        adaptivePracticeRemaining: 29,
+        ocrRemaining: 100,
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        difficultySelectionAvailable: true,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
     });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,

@@ -120,7 +120,7 @@ export default function DashboardPage() {
     }
 
     const welcomeStorageKey = `notelib-dashboard-welcome-shown-${authUser.id}`;
-    const alreadyShown = window.localStorage.getItem(welcomeStorageKey) === "1";
+    const alreadyShown = globalThis.localStorage.getItem(welcomeStorageKey) === "1";
     setShowWelcomeMessage(!alreadyShown);
   }, []);
 
@@ -128,7 +128,7 @@ export default function DashboardPage() {
     const authUser = getAuthUser();
     if (authUser) {
       const welcomeStorageKey = `notelib-dashboard-welcome-shown-${authUser.id}`;
-      window.localStorage.setItem(welcomeStorageKey, "1");
+      globalThis.localStorage.setItem(welcomeStorageKey, "1");
     }
     setShowWelcomeMessage(false);
   }, []);
@@ -145,12 +145,12 @@ export default function DashboardPage() {
   );
   const shouldShowNearLimitBanner = usageSummary
     ? shouldShowNearStudyPackLimitBanner(
-      usageSummary.planType,
-      usageSummary.studyPacksUsed,
-      usageSummary.studyPacksLimit,
+      usageSummary.plan,
+      usageSummary.usage.studyPacksUsed,
+      usageSummary.limits.studyPacksPerMonth,
     )
     : false;
-  const shouldShowFreeUpgradeCard = usageSummary?.planType === "FREE";
+  const shouldShowFreeUpgradeCard = usageSummary?.plan === "FREE";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">

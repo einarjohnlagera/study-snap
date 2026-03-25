@@ -230,8 +230,9 @@ Settings route section: `Plan & Billing`
   - `YEARLY`
 - show usage buckets separately:
   - Study Packs (monthly quota)
-  - Challenge Quiz (50/month)
-  - Adaptive Practice (50/month)
+  - Challenge Quiz (plan-based monthly quota)
+  - Adaptive Practice (Premium-only, plan-based monthly quota)
+  - OCR (plan-based monthly quota)
 - PayMongo recurring subscription checkout for upgrade
 - Billing webhook sync keeps plan state aligned (webhook-driven source of truth)
   - `subscription.activated`
@@ -244,8 +245,8 @@ Settings route section: `Plan & Billing`
 
 Plan limits:
 
-- Free: 5 Study Packs/month, includes summaries/key concepts/Quick Review/retry/Library/Today's Focus/AI Study Coach
-- Premium: 100 Study Packs/month + Challenge Quiz + Adaptive Practice + weak concept insights
+- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, OCR quota, file uploads, weak concept visibility
+- Premium: 100 Study Packs/month, 50 Challenge Quizzes/month, 30 Adaptive Practice sessions/month, higher OCR quota, difficulty selection, priority AI
 
 ---
 

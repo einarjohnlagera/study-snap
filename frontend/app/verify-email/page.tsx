@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { ApiRequestError, getMe, requestEmailVerification, verifyEmailToken } from "@/lib/api";
+import { ApiRequestError, getMe, getMyPlan, requestEmailVerification, verifyEmailToken } from "@/lib/api";
 import { buildLoginPath, getAuthUser, resolveAuthenticatedHome, setAuthUser, type AuthUser } from "@/lib/auth";
 import { ToastMessage } from "@/components/ui/toast-message";
 
@@ -30,11 +30,11 @@ function VerifyEmailPageContent() {
     if (!toastMessage) {
       return;
     }
-    const timeout = window.setTimeout(() => {
+    const timeout = globalThis.setTimeout(() => {
       setToastMessage(null);
     }, 3200);
     return () => {
-      window.clearTimeout(timeout);
+      globalThis.clearTimeout(timeout);
     };
   }, [toastMessage]);
 
@@ -68,13 +68,17 @@ function VerifyEmailPageContent() {
         }
 
         try {
-          const me = await getMe();
+          const [me, planSummary] = await Promise.all([
+            getMe(),
+            getMyPlan().catch(() => null),
+          ]);
           const nextAuthUser: AuthUser = {
             ...activeAuthUser,
             displayName: me.displayName,
             profileType: me.profileType,
             emailVerifiedAt: me.emailVerifiedAt,
             onboardingCompletedAt: me.onboardingCompletedAt,
+            planSummary,
           };
           setAuthUser(nextAuthUser);
           setAuthUserState(nextAuthUser);

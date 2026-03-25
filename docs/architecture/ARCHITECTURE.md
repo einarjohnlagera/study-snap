@@ -152,6 +152,14 @@ Versioning model:
   - `POST /api/billing/checkout/premium`
   - `POST /api/billing/webhook`
   - `GET /api/billing/usage`
+- `MeController` exposes the authenticated plan summary endpoint:
+  - `GET /api/me/plan`
+- `GET /api/me/plan` is the single frontend-facing source of truth for:
+  - plan type
+  - monthly limits for Study Packs, Challenge Quiz, Adaptive Practice, and OCR
+  - current monthly usage counters
+  - remaining usage counters
+  - Premium feature flags such as Adaptive Practice and Difficulty Selection
 - `BillingService` is the provider abstraction used by the controller.
 - Active provider is resolved by configuration (`studysnap.billing.provider`).
 - Current active provider: `PAYMONGO`.

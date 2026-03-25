@@ -4,7 +4,7 @@ import {
   cancelPremiumSubscription,
   getBillingPricing,
   getBillingHistory,
-  getBillingUsageSummary,
+  getMyPlan,
   getMe,
   joinPremiumWaitlist,
   updateEngagementMode,
@@ -33,7 +33,7 @@ jest.mock("@/lib/api", () => ({
   cancelPremiumSubscription: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
-  getBillingUsageSummary: jest.fn(),
+  getMyPlan: jest.fn(),
   getMe: jest.fn(),
   joinPremiumWaitlist: jest.fn(),
   logout: jest.fn(),
@@ -76,7 +76,7 @@ const scheduledCancellationProfile = {
 describe("Settings page cancellation flow", () => {
   beforeEach(() => {
     (getMe as jest.Mock).mockReset();
-    (getBillingUsageSummary as jest.Mock).mockReset();
+    (getMyPlan as jest.Mock).mockReset();
     (getBillingHistory as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
@@ -85,18 +85,32 @@ describe("Settings page cancellation flow", () => {
     (updateStudyReminders as jest.Mock).mockReset();
 
     (getMe as jest.Mock).mockResolvedValue(premiumProfile);
-    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
-      planType: "PREMIUM",
-      studyPacksUsed: 2,
-      studyPacksLimit: 100,
-      challengeQuizUsed: 1,
-      challengeQuizLimit: 50,
-      adaptivePracticeUsed: 0,
-      adaptivePracticeLimit: 30,
-      adaptivePracticeAvailable: true,
-      difficultySelectionAvailable: true,
-      currentPeriodStart: "2026-03-01T00:00:00Z",
-      currentPeriodEnd: "2026-04-01T00:00:00Z",
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "PREMIUM",
+      limits: {
+        studyPacksPerMonth: 100,
+        challengeQuizzesPerMonth: 50,
+        adaptivePracticePerMonth: 30,
+        ocrPerMonth: 100,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 1,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 4,
+      },
+      remaining: {
+        studyPacksRemaining: 98,
+        challengeQuizzesRemaining: 49,
+        adaptivePracticeRemaining: 30,
+        ocrRemaining: 96,
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        difficultySelectionAvailable: true,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
     });
     (getBillingHistory as jest.Mock).mockResolvedValue({
       currentPlan: "PREMIUM",
@@ -204,18 +218,32 @@ describe("Settings page cancellation flow", () => {
         cancelledAt: null,
       },
     });
-    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
-      planType: "FREE",
-      studyPacksUsed: 1,
-      studyPacksLimit: 10,
-      challengeQuizUsed: 0,
-      challengeQuizLimit: 5,
-      adaptivePracticeUsed: 0,
-      adaptivePracticeLimit: 0,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: false,
-      currentPeriodStart: "2026-03-01T00:00:00Z",
-      currentPeriodEnd: "2026-04-01T00:00:00Z",
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 1,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 1,
+      },
+      remaining: {
+        studyPacksRemaining: 9,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 19,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
     });
     (getBillingHistory as jest.Mock).mockResolvedValue({
       currentPlan: "FREE",

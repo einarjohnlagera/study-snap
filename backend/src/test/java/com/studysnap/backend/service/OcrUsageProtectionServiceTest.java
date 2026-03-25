@@ -41,8 +41,8 @@ class OcrUsageProtectionServiceTest {
     @BeforeEach
     void setUp() {
         StudySnapProperties properties = new StudySnapProperties();
-        properties.getLimits().setFreeOcrPerBillingPeriod(2);
-        properties.getLimits().setPremiumOcrPerBillingPeriod(5);
+        properties.getPricing().setFreeMonthlyOcrLimit(2);
+        properties.getPricing().setPremiumMonthlyOcrLimit(5);
         service = new OcrUsageProtectionService(
                 properties,
                 userUsageService,

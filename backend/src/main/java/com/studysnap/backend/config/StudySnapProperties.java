@@ -92,6 +92,8 @@ public class StudySnapProperties {
         private int freeMonthlyChallengeQuizLimit = 5;
         private int premiumMonthlyChallengeQuizLimit = 50;
         private int premiumMonthlyAdaptivePracticeLimit = 30;
+        private int freeMonthlyOcrLimit = 20;
+        private int premiumMonthlyOcrLimit = 100;
         private boolean adaptivePracticePremiumOnly = true;
         private boolean difficultySelectionPremiumOnly = true;
 
@@ -114,6 +116,12 @@ public class StudySnapProperties {
             return premiumMonthlyAdaptivePracticeLimit;
         }
 
+        public int resolveMonthlyOcrLimit(PlanType planType) {
+            return planType == PlanType.PREMIUM
+                    ? premiumMonthlyOcrLimit
+                    : freeMonthlyOcrLimit;
+        }
+
         public boolean isAdaptivePracticeAvailable(PlanType planType) {
             return !adaptivePracticePremiumOnly || planType == PlanType.PREMIUM;
         }
@@ -128,8 +136,6 @@ public class StudySnapProperties {
     public static class Limits {
         private static final long BYTES_PER_MEGABYTE = 1024L * 1024L;
 
-        private int freeOcrPerBillingPeriod = 20;
-        private int premiumOcrPerBillingPeriod = 200;
         private long fileUploadMaxSize = 10;
         private long txtUploadMaxSize = 1;
         private long pdfUploadMaxSize = 10;

@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { ApiRequestError, getMe, logout, requestEmailVerification } from "@/lib/api";
+import { ApiRequestError, getMe, getMyPlan, logout, requestEmailVerification } from "@/lib/api";
 import { getAuthUser, needsOnboarding, setAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
@@ -130,11 +130,11 @@ function NavLinks({
   pathname,
   secondaryNav,
   onNavigate,
-}: {
+}: Readonly<{
   pathname: string;
   secondaryNav: NavLinkItem[];
   onNavigate?: () => void;
-}) {
+}>) {
   const renderLink = (item: NavLinkItem) => {
     const active = item.href === "/library"
       ? pathname === item.href
@@ -169,7 +169,7 @@ function NavLinks({
   );
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children }: Readonly<AppShellProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -215,11 +215,11 @@ export function AppShell({ children }: AppShellProps) {
     };
 
     syncAuthState();
-    window.addEventListener("studysnap-auth-change", syncAuthState);
-    window.addEventListener("storage", syncAuthState);
+    globalThis.addEventListener("studysnap-auth-change", syncAuthState);
+    globalThis.addEventListener("storage", syncAuthState);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncAuthState);
-      window.removeEventListener("storage", syncAuthState);
+      globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
+      globalThis.removeEventListener("storage", syncAuthState);
     };
   }, []);
 
@@ -268,8 +268,11 @@ export function AppShell({ children }: AppShellProps) {
       return;
     }
     let mounted = true;
-    void getMe()
-      .then((me) => {
+    void Promise.all([
+      getMe(),
+      getMyPlan().catch(() => null),
+    ])
+      .then(([me, planSummary]) => {
         if (!mounted) {
           return;
         }
@@ -289,6 +292,7 @@ export function AppShell({ children }: AppShellProps) {
             profileType: me.profileType,
             emailVerifiedAt: me.emailVerifiedAt,
             onboardingCompletedAt: me.onboardingCompletedAt,
+            planSummary,
           });
         }
       })
@@ -315,11 +319,11 @@ export function AppShell({ children }: AppShellProps) {
     if (!toastMessage) {
       return;
     }
-    const timeout = window.setTimeout(() => {
+    const timeout = globalThis.setTimeout(() => {
       setToastMessage(null);
     }, 3200);
     return () => {
-      window.clearTimeout(timeout);
+      globalThis.clearTimeout(timeout);
     };
   }, [toastMessage]);
 
@@ -335,9 +339,9 @@ export function AppShell({ children }: AppShellProps) {
         setAvatarMenuOpen(false);
       }
     };
-    window.addEventListener("mousedown", handleOutsideClick);
+    globalThis.addEventListener("mousedown", handleOutsideClick);
     return () => {
-      window.removeEventListener("mousedown", handleOutsideClick);
+      globalThis.removeEventListener("mousedown", handleOutsideClick);
     };
   }, [avatarMenuOpen]);
 
