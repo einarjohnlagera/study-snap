@@ -33,6 +33,24 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
+function truncateCell(value: string, maxLength = 80): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function formatFeedbackStatus(value: "NEW" | "REVIEWED" | "CLOSED"): string {
+  switch (value) {
+    case "REVIEWED":
+      return "Reviewed";
+    case "CLOSED":
+      return "Closed";
+    default:
+      return "New";
+  }
+}
+
 type MetricCardProps = {
   label: string;
   value: string;
@@ -287,6 +305,21 @@ export default function AdminPage() {
                 `${item.currency} ${formatAmount(item.amount)}`,
                 item.provider,
                 formatDate(item.createdAt),
+              ])}
+            />
+          </section>
+
+          <section>
+            <SimpleTable
+              title="Recent Feedback"
+              columns={["Date", "User", "Message", "Page URL", "Status"]}
+              emptyMessage="No feedback submitted yet."
+              rows={recentEvents.recentFeedback.map((item) => [
+                formatDate(item.createdAt),
+                item.userEmail,
+                truncateCell(item.message, 96),
+                item.pageUrl ? truncateCell(item.pageUrl, 60) : "Not provided",
+                formatFeedbackStatus(item.status),
               ])}
             />
           </section>

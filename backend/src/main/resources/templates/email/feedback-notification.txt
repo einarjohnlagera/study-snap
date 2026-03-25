@@ -1,0 +1,8 @@
+New feedback was submitted in NoteLib.
+
+User: {{userEmail}}
+Page: {{pageUrl}}
+Date: {{submittedAt}}
+
+Message:
+{{message}}

@@ -9,6 +9,8 @@ import com.studysnap.backend.entity.AnalyticsEventEntity;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
+import com.studysnap.backend.entity.FeedbackEntity;
+import com.studysnap.backend.entity.FeedbackStatus;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
@@ -16,6 +18,7 @@ import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.FeedbackRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
 import com.studysnap.backend.repository.PremiumWaitlistRepository;
@@ -56,6 +59,8 @@ class AdminDashboardServiceTest {
     private PaymentTransactionRepository paymentTransactionRepository;
     @Mock
     private PremiumWaitlistRepository premiumWaitlistRepository;
+    @Mock
+    private FeedbackRepository feedbackRepository;
 
     private AdminDashboardService adminDashboardService;
 
@@ -68,7 +73,8 @@ class AdminDashboardServiceTest {
                 studyPackRepository,
                 subscriptionRepository,
                 paymentTransactionRepository,
-                premiumWaitlistRepository
+                premiumWaitlistRepository,
+                feedbackRepository
         );
     }
 
@@ -180,12 +186,22 @@ class AdminDashboardServiceTest {
                 PaymentTransactionStatus.FAILED
         );
         failedPayment.setCreatedAt(OffsetDateTime.parse("2026-03-21T00:00:00Z"));
+        FeedbackEntity feedback = new FeedbackEntity();
+        feedback.setId(UUID.randomUUID());
+        feedback.setUserId(user.getId());
+        feedback.setEmail("[email protected]");
+        feedback.setMessage("Please make the upgrade flow clearer.");
+        feedback.setPageUrl("https://www.notelib.app/settings");
+        feedback.setStatus(FeedbackStatus.NEW);
+        feedback.setCreatedAt(OffsetDateTime.parse("2026-03-22T00:00:00Z"));
 
         when(analyticsEventRepository.findByEventTypeOrderByCreatedAtDesc(eq(AnalyticsEventType.SUBSCRIPTION_STARTED), any(Pageable.class)))
                 .thenReturn(List.of(event));
         when(subscriptionRepository.findAllById(any())).thenReturn(List.of(subscription));
         when(paymentTransactionRepository.findByStatusOrderByCreatedAtDesc(eq(PaymentTransactionStatus.FAILED), any(Pageable.class)))
                 .thenReturn(List.of(failedPayment));
+        when(feedbackRepository.findAllByOrderByCreatedAtDesc(any(Pageable.class)))
+                .thenReturn(List.of(feedback));
 
         AdminDashboardRecentEventsResponse response = adminDashboardService.getRecentEvents();
 
@@ -193,6 +209,8 @@ class AdminDashboardServiceTest {
         assertThat(response.recentPremiumUpgrades().getFirst().userEmail()).isEqualTo("[email protected]");
         assertThat(response.recentFailedPayments()).hasSize(1);
         assertThat(response.recentFailedPayments().getFirst().currency()).isEqualTo("PHP");
+        assertThat(response.recentFeedback()).hasSize(1);
+        assertThat(response.recentFeedback().getFirst().message()).isEqualTo("Please make the upgrade flow clearer.");
     }
 
     private UserEntity buildUser(String email) {

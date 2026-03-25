@@ -232,6 +232,15 @@ export type AdminRecentFailedPaymentItemResponse = {
   createdAt: string;
 };
 
+export type AdminRecentFeedbackItemResponse = {
+  feedbackId: string;
+  userEmail: string;
+  message: string;
+  pageUrl: string | null;
+  status: "NEW" | "REVIEWED" | "CLOSED";
+  createdAt: string;
+};
+
 export type AdminDashboardTopContentResponse = {
   mostViewedPublicNotes: AdminPublicNoteMetricItemResponse[];
   mostCopiedPublicNotes: AdminPublicNoteMetricItemResponse[];
@@ -241,6 +250,11 @@ export type AdminDashboardTopContentResponse = {
 export type AdminDashboardRecentEventsResponse = {
   recentPremiumUpgrades: AdminRecentUpgradeItemResponse[];
   recentFailedPayments: AdminRecentFailedPaymentItemResponse[];
+  recentFeedback: AdminRecentFeedbackItemResponse[];
+};
+
+export type SubmitFeedbackRequest = {
+  message: string;
 };
 
 export type SignupRequest = {
@@ -846,6 +860,27 @@ export async function getAdminDashboardRecentEvents(): Promise<AdminDashboardRec
     true,
   );
   return parseApiResponse<AdminDashboardRecentEventsResponse>(response, "Could not load recent admin events.");
+}
+
+export async function submitFeedback(
+  request: SubmitFeedbackRequest,
+  pageUrl: string | null,
+): Promise<SimpleMessageResponse> {
+  const headers = new Headers(buildAuthHeaders("application/json"));
+  if (pageUrl && pageUrl.trim().length > 0) {
+    headers.set("X-Page-Url", pageUrl);
+  }
+
+  const response = await fetchWithAuth(
+    "/feedback",
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not send feedback. Please try again.");
 }
 
 export async function completeOnboardingProfileType(

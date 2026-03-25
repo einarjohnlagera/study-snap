@@ -123,7 +123,14 @@ Core loop:
 - Access must be restricted to `ADMIN` users.
 - Reuse existing analytics, billing, subscription, payment, and library data before adding new reporting storage.
 - Prefer summary cards and simple tables over filters, charts, or exports unless explicitly requested.
-- Admin v1 should cover overview, billing, engagement, public-content growth, recent upgrades, and recent failed payments.
+- Admin v1 should cover overview, billing, engagement, public-content growth, recent upgrades, recent failed payments, and recent feedback.
+
+### Feedback Rule
+
+- Authenticated app users should be able to submit in-app feedback during soft launch.
+- Feedback should capture `message`, authenticated `userId`, `email`, and the current page URL.
+- Feedback submission must persist to the `feedback` table and may send a best-effort support notification email.
+- Admin Dashboard should expose recent feedback in a read-only table.
 
 ### Pricing Rule
 

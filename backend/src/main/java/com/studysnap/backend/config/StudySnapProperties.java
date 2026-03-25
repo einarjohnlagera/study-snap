@@ -162,6 +162,7 @@ public class StudySnapProperties {
         private String resendApiKey = "";
         private String resendApiBaseUrl = "https://api.resend.com";
         private String from = "";
+        private String support = "support@mail.notelib.app";
         private String appBaseUrl = "http://localhost:3000";
         private int verificationTokenHours = 24;
         private int resendCooldownSeconds = 60;

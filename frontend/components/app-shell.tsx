@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ApiRequestError, getMe, logout, requestEmailVerification } from "@/lib/api";
 import { getAuthUser, needsOnboarding, setAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { Button } from "@/components/ui/button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
@@ -529,6 +530,7 @@ export function AppShell({ children }: AppShellProps) {
       ) : null}
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
+      <SendFeedbackWidget />
     </div>
   );
 }
