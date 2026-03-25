@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
+import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
@@ -61,6 +62,8 @@ public class AuthService {
         user.setCountryCode(null);
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
+        user.setInactivityRemindersEnabled(false);
+        user.setWeakConceptRemindersEnabled(false);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
         user.setTokenVersion(0);
@@ -208,6 +211,17 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    public MeResponse updateStudyReminders(UUID userId, UpdateStudyRemindersRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+
+        user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
+        user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
+        user.setUpdatedAt(OffsetDateTime.now());
+
+        return toMeResponse(user);
+    }
+
     private MeResponse toMeResponse(UserEntity user) {
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(user.getId());
         return new MeResponse(
@@ -219,6 +233,8 @@ public class AuthService {
                 user.getCountryCode(),
                 user.getProfileType(),
                 user.getEngagementMode(),
+                Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
+                Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
                 user.getRole(),

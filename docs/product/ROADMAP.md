@@ -65,6 +65,30 @@ Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 
 Roadmap decisions should reinforce this loop rather than one-time output generation.
 
+## Phase: Retention System (Future)
+
+- Study Reminder Emails
+  - Inactivity reminder
+  - Weak concept reminder
+  - Study pack not generated reminder
+  - Come back reminder
+  - Renewal reminder
+  - Payment failed reminder
+  - Win-back email after cancellation
+
+- Learning Style affects reminder frequency
+  - Focused → minimal reminders
+  - Consistency → moderate reminders
+  - Streak → frequent reminders + streak tracking
+
+- Streak System
+  - Consecutive study days
+  - Longest streak
+  - Dashboard streak UI
+
+- Reminder Scheduler (daily job)
+- Email templates via Resend
+
 ## Legacy planning context
 
 Older phase-by-phase roadmap details are preserved in `/legacy/ROADMAP.md`.

@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
+import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
 import com.studysnap.backend.service.AuthService;
@@ -29,26 +30,29 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private static final String USER_AGENT = "User-Agent";
+
     private final AuthService authService;
     private final AuthRateLimitService authRateLimitService;
 
     @PostMapping("/signup")
     public AuthResponse signup(@Valid @RequestBody SignupRequest request, HttpServletRequest servletRequest) {
         authRateLimitService.assertAllowed("signup", resolveClientIp(servletRequest));
-        return authService.signup(request, resolveClientIp(servletRequest), servletRequest.getHeader("User-Agent"));
+        return authService.signup(request, resolveClientIp(servletRequest), servletRequest.getHeader(USER_AGENT));
     }
 
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest servletRequest) {
         String clientIp = resolveClientIp(servletRequest);
         authRateLimitService.assertAllowed("login", clientIp + ":" + (request.email() == null ? "" : request.email().trim().toLowerCase()));
-        return authService.login(request, clientIp, servletRequest.getHeader("User-Agent"));
+        return authService.login(request, clientIp, servletRequest.getHeader(USER_AGENT));
     }
 
     @PostMapping("/refresh")
     public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest request, HttpServletRequest servletRequest) {
         authRateLimitService.assertAllowed("refresh", resolveClientIp(servletRequest));
-        return authService.refresh(request, resolveClientIp(servletRequest), servletRequest.getHeader("User-Agent"));
+        return authService.refresh(request, resolveClientIp(servletRequest), servletRequest.getHeader(USER_AGENT));
     }
 
     @PostMapping("/logout")
@@ -104,6 +108,15 @@ public class AuthController {
             @Valid @RequestBody UpdateEngagementModeRequest request
     ) {
         return authService.updateEngagementMode(user.userId(), request);
+    }
+
+    @PostMapping("/preferences/study-reminders")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateStudyReminders(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody UpdateStudyRemindersRequest request
+    ) {
+        return authService.updateStudyReminders(user.userId(), request);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

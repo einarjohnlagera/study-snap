@@ -16,6 +16,7 @@ import {
   isEmailNotVerifiedError,
   logout,
   updateEngagementMode,
+  updateStudyReminders,
   type BillingCycle,
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
@@ -98,6 +99,10 @@ export default function SettingsPage() {
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [savingEngagementMode, setSavingEngagementMode] = useState(false);
   const [engagementModeMessage, setEngagementModeMessage] = useState<string | null>(null);
+  const [inactivityRemindersEnabled, setInactivityRemindersEnabled] = useState(false);
+  const [weakConceptRemindersEnabled, setWeakConceptRemindersEnabled] = useState(false);
+  const [savingStudyReminders, setSavingStudyReminders] = useState(false);
+  const [studyRemindersMessage, setStudyRemindersMessage] = useState<string | null>(null);
   const [isCancellationModalOpen, setIsCancellationModalOpen] = useState(false);
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
@@ -113,6 +118,7 @@ export default function SettingsPage() {
     setLoading(true);
     setError(null);
     setEngagementModeMessage(null);
+    setStudyRemindersMessage(null);
     try {
       const [me, usage, history, pricing] = await Promise.all([
         getMe(),
@@ -125,6 +131,8 @@ export default function SettingsPage() {
       setBillingHistory(history);
       setBillingPricing(pricing);
       setSelectedEngagementMode(me.engagementMode);
+      setInactivityRemindersEnabled(me.inactivityRemindersEnabled);
+      setWeakConceptRemindersEnabled(me.weakConceptRemindersEnabled);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load settings.";
       setError(message);
@@ -245,12 +253,35 @@ export default function SettingsPage() {
       const updated = await updateEngagementMode({ engagementMode: selectedEngagementMode });
       setProfile(updated);
       setSelectedEngagementMode(updated.engagementMode);
+      setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
+      setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
       setEngagementModeMessage("Learning style updated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update learning style.";
       setEngagementModeMessage(message);
     } finally {
       setSavingEngagementMode(false);
+    }
+  };
+
+  const handleSaveStudyReminders = async () => {
+    setSavingStudyReminders(true);
+    setStudyRemindersMessage(null);
+    try {
+      const updated = await updateStudyReminders({
+        inactivityRemindersEnabled,
+        weakConceptRemindersEnabled,
+      });
+      setProfile(updated);
+      setSelectedEngagementMode(updated.engagementMode);
+      setInactivityRemindersEnabled(updated.inactivityRemindersEnabled);
+      setWeakConceptRemindersEnabled(updated.weakConceptRemindersEnabled);
+      setStudyRemindersMessage("Study reminders updated.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update study reminders.";
+      setStudyRemindersMessage(message);
+    } finally {
+      setSavingStudyReminders(false);
     }
   };
 
@@ -429,14 +460,127 @@ export default function SettingsPage() {
           />
 
           <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Account</h2>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void handleSignOut()} disabled={signingOut}>
-                {signingOut ? "Signing out..." : "Sign Out"}
-              </Button>
-              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
-                Delete Account (Coming Soon)
-              </Button>
+            <h2 className="text-lg font-semibold sm:text-xl">Preferences</h2>
+            <p className="text-sm text-foreground/70">
+              Keep NoteLib aligned with the way you study. Learning Style guides future reminder cadence, and you can
+              turn reminder types on or off anytime.
+            </p>
+            <div className="space-y-3 rounded-md border border-border bg-background p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Learning Style</p>
+                <p className="text-xs text-foreground/60">
+                  Choose how much study encouragement you want from NoteLib.
+                </p>
+              </div>
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3">
+                  <input
+                    type="radio"
+                    name="engagementMode"
+                    value="FOCUSED"
+                    checked={selectedEngagementMode === "FOCUSED"}
+                    onChange={() => setSelectedEngagementMode("FOCUSED")}
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium">Focused</span>
+                    <span className="block text-xs text-foreground/60">
+                      Use NoteLib when you need it. No streaks or pressure.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3">
+                  <input
+                    type="radio"
+                    name="engagementMode"
+                    value="CONSISTENCY"
+                    checked={selectedEngagementMode === "CONSISTENCY"}
+                    onChange={() => setSelectedEngagementMode("CONSISTENCY")}
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium">Consistency</span>
+                    <span className="block text-xs text-foreground/60">
+                      Light encouragement to study regularly.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3">
+                  <input
+                    type="radio"
+                    name="engagementMode"
+                    value="STREAK"
+                    checked={selectedEngagementMode === "STREAK"}
+                    onChange={() => setSelectedEngagementMode("STREAK")}
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium">Streak</span>
+                    <span className="block text-xs text-foreground/60">
+                      Track consecutive study days.
+                    </span>
+                  </span>
+                </label>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => void handleSaveEngagementMode()}
+                  disabled={savingEngagementMode}
+                >
+                  {savingEngagementMode ? "Saving..." : "Save Learning Style"}
+                </Button>
+                {engagementModeMessage ? (
+                  <p className="text-xs text-foreground/60">{engagementModeMessage}</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="space-y-4 rounded-md border border-border bg-background p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Study Reminders</p>
+                <p className="text-xs text-foreground/60">
+                  Control the types of reminders you want. Future reminder timing will follow your Learning Style.
+                </p>
+              </div>
+              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Inactivity reminders</span>
+                  <span className="block text-xs text-foreground/60">
+                    Get reminded to come back when you have not studied for a while.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={inactivityRemindersEnabled}
+                  onChange={(event) => setInactivityRemindersEnabled(event.target.checked)}
+                  disabled={savingStudyReminders}
+                />
+              </label>
+              <label className="flex items-start justify-between gap-4 rounded-md border border-border p-3">
+                <span className="space-y-1">
+                  <span className="block text-sm font-medium">Weak concept reminders</span>
+                  <span className="block text-xs text-foreground/60">
+                    Get reminded to review topics you struggled with.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={weakConceptRemindersEnabled}
+                  onChange={(event) => setWeakConceptRemindersEnabled(event.target.checked)}
+                  disabled={savingStudyReminders}
+                />
+              </label>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => void handleSaveStudyReminders()}
+                  disabled={savingStudyReminders}
+                >
+                  {savingStudyReminders ? "Saving..." : "Save Study Reminders"}
+                </Button>
+                {studyRemindersMessage ? (
+                  <p className="text-xs text-foreground/60">{studyRemindersMessage}</p>
+                ) : null}
+              </div>
             </div>
           </Card>
 
@@ -696,83 +840,14 @@ export default function SettingsPage() {
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Preferences</h2>
-            <div className="space-y-3 rounded-md border border-border bg-background p-4">
-              <p className="text-sm font-medium">Learning Style</p>
-              <div className="space-y-3">
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3">
-                  <input
-                    type="radio"
-                    name="engagementMode"
-                    value="FOCUSED"
-                    checked={selectedEngagementMode === "FOCUSED"}
-                    onChange={() => setSelectedEngagementMode("FOCUSED")}
-                  />
-                  <span className="space-y-1">
-                    <span className="block text-sm font-medium">Focused</span>
-                    <span className="block text-xs text-foreground/60">
-                      Use NoteLib when you need it. No streaks or pressure.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3">
-                  <input
-                    type="radio"
-                    name="engagementMode"
-                    value="CONSISTENCY"
-                    checked={selectedEngagementMode === "CONSISTENCY"}
-                    onChange={() => setSelectedEngagementMode("CONSISTENCY")}
-                  />
-                  <span className="space-y-1">
-                    <span className="block text-sm font-medium">Consistency</span>
-                    <span className="block text-xs text-foreground/60">
-                      Light encouragement to study regularly.
-                    </span>
-                  </span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3">
-                  <input
-                    type="radio"
-                    name="engagementMode"
-                    value="STREAK"
-                    checked={selectedEngagementMode === "STREAK"}
-                    onChange={() => setSelectedEngagementMode("STREAK")}
-                  />
-                  <span className="space-y-1">
-                    <span className="block text-sm font-medium">Streak</span>
-                    <span className="block text-xs text-foreground/60">
-                      Track consecutive study days.
-                    </span>
-                  </span>
-                </label>
-              </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleSaveEngagementMode()}
-                  disabled={savingEngagementMode}
-                >
-                  {savingEngagementMode ? "Saving..." : "Save Learning Style"}
-                </Button>
-                {engagementModeMessage ? (
-                  <p className="text-xs text-foreground/60">{engagementModeMessage}</p>
-                ) : null}
-              </div>
-            </div>
-            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-background p-3">
-              <div>
-                <p className="text-sm font-medium">Study reminders</p>
-                <p className="text-xs text-foreground/60">Coming soon</p>
-              </div>
-              <input type="checkbox" disabled />
-            </div>
-            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-background p-3">
-              <div>
-                <p className="text-sm font-medium">Theme</p>
-                <p className="text-xs text-foreground/60">Coming soon</p>
-              </div>
-              <input type="checkbox" disabled />
+            <h2 className="text-lg font-semibold sm:text-xl">Account</h2>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void handleSignOut()} disabled={signingOut}>
+                {signingOut ? "Signing out..." : "Sign Out"}
+              </Button>
+              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
+                Delete Account (Coming Soon)
+              </Button>
             </div>
           </Card>
         </div>
