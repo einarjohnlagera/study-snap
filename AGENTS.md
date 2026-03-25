@@ -109,6 +109,7 @@ Core loop:
 
 - Retention emails are scheduled backend jobs, not request-time actions.
 - V1 email types are:
+  - `WELCOME`
   - `INACTIVITY`
   - `WEAK_CONCEPT`
   - `UNFINISHED_NOTE`
@@ -116,6 +117,12 @@ Core loop:
 - `INACTIVITY` and `UNFINISHED_NOTE` should honor `inactivityRemindersEnabled`.
 - `WEAK_CONCEPT` should honor `weakConceptRemindersEnabled`.
 - Reminder cadence may later vary by `Learning Style`, but V1 stores the inputs and uses fixed thresholds.
+
+### Verification Email Rule
+
+- After a user successfully verifies their email, send a one-time welcome email.
+- The welcome email should link to `Dashboard` and explain the first-study-pack flow.
+- Welcome emails must only send once per user and should be guarded through `email_log`.
 
 ### Admin Dashboard Rule
 

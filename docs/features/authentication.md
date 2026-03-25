@@ -22,6 +22,17 @@ Required endpoints:
 - `POST /api/auth/resend-verification`
 - `GET /api/auth/verify-email?token=...`
 
+## Verification Emails
+
+- Signup should send the verification email through the shared Resend-backed `EmailService`.
+- Successful email verification should send a one-time welcome email.
+- The welcome email should:
+  - confirm the user is now in NoteLib
+  - explain the first-study-pack flow
+  - link to `Dashboard`
+  - mention Free plan access plus Premium coming-soon positioning
+- Welcome emails should be logged through `email_log` and must only send once per user.
+
 ## Session Behavior (Frontend)
 
 - All protected API calls go through `frontend/lib/api.ts`.
