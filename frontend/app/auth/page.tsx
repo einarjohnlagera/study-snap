@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { login, signup, trackAnalyticsEvent } from "@/lib/api";
@@ -243,6 +244,7 @@ export default function AuthPage() {
           </Button>
         </form>
       </Card>
+      <PublicFooter className="mt-6" />
     </div>
   );
 }

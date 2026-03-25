@@ -50,6 +50,9 @@ describe("LandingPage", () => {
     expect(screen.getByText("Try a demo Study Pack now — no signup required.")).toBeInTheDocument();
     expect(screen.getByText("Start studying smarter today.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create Free Account" })).toHaveAttribute("href", "/auth");
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
+    expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "mailto:support@mail.notelib.app");
 
     const structuredData = container.querySelector("#landing-page-structured-data");
     expect(structuredData).not.toBeNull();

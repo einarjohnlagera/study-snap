@@ -13,6 +13,7 @@ import {
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
+import { PublicFooter } from "@/components/public/public-footer";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -287,6 +288,7 @@ export default function Home() {
       <PricingPlansSection />
       <DemoSection />
       <BottomCtaSection />
+      <PublicFooter />
     </main>
   );
 }

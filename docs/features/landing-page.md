@@ -77,3 +77,7 @@ Landing page structured data should use JSON-LD WebSite schema:
 - Keep the page mobile-friendly.
 - Keep CTA paths explicit: signup/auth and demo.
 - Landing page should remain readable in both light and dark mode.
+- Landing page should include footer links for:
+  - `Privacy Policy`
+  - `Terms of Service`
+  - `Contact`
