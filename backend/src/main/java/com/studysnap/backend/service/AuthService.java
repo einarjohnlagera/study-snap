@@ -19,6 +19,9 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.InvalidCredentialsException;
+import com.studysnap.backend.exception.InvalidRefreshTokenException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
@@ -119,9 +122,9 @@ public class AuthService {
     public AuthResponse refresh(RefreshTokenRequest request, String ipAddress, String userAgent) {
         RefreshTokenEntity existing = refreshTokenService.requireValid(request.refreshToken());
         UserEntity user = userRepository.findById(existing.getUserId())
-                .orElseThrow(() -> new AppException("INVALID_REFRESH_TOKEN", "Invalid refresh token.", HttpStatus.UNAUTHORIZED));
+                .orElseThrow(InvalidRefreshTokenException::new);
         if (user.getStatus() != UserStatus.ACTIVE) {
-            throw new AppException("INVALID_REFRESH_TOKEN", "Invalid refresh token.", HttpStatus.UNAUTHORIZED);
+            throw new InvalidRefreshTokenException();
         }
 
         refreshTokenService.revoke(request.refreshToken());
@@ -144,15 +147,11 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public MeResponse getMe(UUID userId) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
-
-        return toMeResponse(user);
+        return toMeResponse(findUserOrThrow(userId));
     }
 
     public MeResponse updateProfileType(UUID userId, OnboardingProfileTypeRequest request) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        UserEntity user = findUserOrThrow(userId);
 
         user.setProfileType(request.profileType());
         user.setUpdatedAt(OffsetDateTime.now());
@@ -160,8 +159,7 @@ public class AuthService {
     }
 
     public MeResponse completeOnboarding(UUID userId, CompleteOnboardingRequest request) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        UserEntity user = findUserOrThrow(userId);
         if (user.getEmailVerifiedAt() == null) {
             throw new AppException(
                     "EMAIL_VERIFICATION_REQUIRED",
@@ -183,8 +181,7 @@ public class AuthService {
     }
 
     public SimpleMessageResponse requestEmailVerification(UUID userId) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        UserEntity user = findUserOrThrow(userId);
         if (user.getEmailVerifiedAt() != null) {
             return new SimpleMessageResponse("Your email is already verified.");
         }
@@ -202,8 +199,7 @@ public class AuthService {
     }
 
     public MeResponse updateEngagementMode(UUID userId, UpdateEngagementModeRequest request) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        UserEntity user = findUserOrThrow(userId);
 
         user.setEngagementMode(request.engagementMode());
         user.setUpdatedAt(OffsetDateTime.now());
@@ -212,8 +208,7 @@ public class AuthService {
     }
 
     public MeResponse updateStudyReminders(UUID userId, UpdateStudyRemindersRequest request) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        UserEntity user = findUserOrThrow(userId);
 
         user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
         user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
@@ -246,8 +241,7 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public void requireEmailVerified(UUID userId) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+        UserEntity user = findUserOrThrow(userId);
         if (user.getEmailVerifiedAt() == null) {
             throw new AppException(
                     "EMAIL_NOT_VERIFIED",
@@ -308,7 +302,12 @@ public class AuthService {
     }
 
     private AppException invalidCredentials() {
-        return new AppException("INVALID_CREDENTIALS", "Invalid email or password.", HttpStatus.UNAUTHORIZED);
+        return new InvalidCredentialsException();
+    }
+
+    private UserEntity findUserOrThrow(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
     }
 
     private String normalizeEmail(String email) {

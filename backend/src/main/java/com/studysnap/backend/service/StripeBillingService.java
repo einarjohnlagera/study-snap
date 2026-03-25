@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -78,7 +79,7 @@ public class StripeBillingService implements BillingService {
         ensureCheckoutConfigured();
 
         UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(UserNotFoundException::new);
         if (subscriptionService.resolvePlan(userId) == PlanType.PREMIUM) {
             throw new AppException(
                     "PLAN_ALREADY_PREMIUM",

@@ -13,6 +13,7 @@ import com.studysnap.backend.entity.VoucherDiscountType;
 import com.studysnap.backend.entity.VoucherPlanScope;
 import com.studysnap.backend.entity.VoucherRedemptionEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.DiscountVoucherRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -73,7 +74,7 @@ public class PricingService {
             String cfIpCountry
     ) {
         UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(UserNotFoundException::new);
         ResolvedPricingContext context = resolvePricingContext(user, cfIpCountry);
         BillingCycle normalizedCycle = billingCycle == null ? BillingCycle.MONTHLY : billingCycle;
         AppliedVoucher appliedVoucher = findBestEligibleVoucher(
@@ -126,7 +127,7 @@ public class PricingService {
         DiscountVoucherEntity voucher = discountVoucherRepository.findById(voucherId)
                 .orElseThrow(() -> new AppException("VOUCHER_NOT_FOUND", "Voucher not found.", HttpStatus.NOT_FOUND));
         UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(UserNotFoundException::new);
 
         VoucherRedemptionEntity redemption = new VoucherRedemptionEntity();
         redemption.setId(UUID.randomUUID());
