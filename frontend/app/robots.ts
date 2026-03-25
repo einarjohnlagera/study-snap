@@ -5,11 +5,11 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
-      allow: "/",
+      allow: ["/", "/public/", "/public/library/"],
       disallow: [
-        "/api",
         "/admin",
         "/auth",
+        "/api",
         "/dashboard",
         "/library",
         "/login",
@@ -17,6 +17,7 @@ export default function robots(): MetadataRoute.Robots {
         "/onboarding",
         "/profile",
         "/settings",
+        "/signup",
         "/study",
         "/study-packs",
         "/verify-email",
