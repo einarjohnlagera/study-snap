@@ -94,6 +94,18 @@ Core loop:
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
 - Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
 
+### Retention Email Rule
+
+- Retention emails are scheduled backend jobs, not request-time actions.
+- V1 email types are:
+  - `INACTIVITY`
+  - `WEAK_CONCEPT`
+  - `UNFINISHED_NOTE`
+- Retention emails must log sends in `email_log` and respect same-type cooldowns before sending again.
+- `INACTIVITY` and `UNFINISHED_NOTE` should honor `inactivityRemindersEnabled`.
+- `WEAK_CONCEPT` should honor `weakConceptRemindersEnabled`.
+- Reminder cadence may later vary by `Learning Style`, but V1 stores the inputs and uses fixed thresholds.
+
 ### Admin Dashboard Rule
 
 - Admin Dashboard is internal and read-only in v1.

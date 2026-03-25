@@ -192,6 +192,14 @@ studysnap:
     app-base-url: ${APP_BASE_URL:http://localhost:3000}
     verification-token-hours: ${EMAIL_VERIFICATION_TOKEN_HOURS:24}
     resend-cooldown-seconds: ${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:60}
+  retention:
+    daily-cron: ${RETENTION_DAILY_CRON:0 45 2 * * *}
+    inactivity-days: ${RETENTION_INACTIVITY_DAYS:7}
+    inactivity-cooldown-days: ${RETENTION_INACTIVITY_COOLDOWN_DAYS:7}
+    weak-concept-cooldown-days: ${RETENTION_WEAK_CONCEPT_COOLDOWN_DAYS:5}
+    unfinished-note-days: ${RETENTION_UNFINISHED_NOTE_DAYS:2}
+    unfinished-note-cooldown-days: ${RETENTION_UNFINISHED_NOTE_COOLDOWN_DAYS:3}
+    weak-concept-threshold-percent: ${RETENTION_WEAK_CONCEPT_THRESHOLD_PERCENT:60}
   security:
     jwt:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}

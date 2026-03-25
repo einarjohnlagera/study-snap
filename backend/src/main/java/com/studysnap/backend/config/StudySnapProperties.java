@@ -20,6 +20,7 @@ public class StudySnapProperties {
     private final Limits limits = new Limits();
     private final Billing billing = new Billing();
     private final Email email = new Email();
+    private final Retention retention = new Retention();
 
     @Setter
     private String appName = "NoteLib";
@@ -164,5 +165,17 @@ public class StudySnapProperties {
         private String appBaseUrl = "http://localhost:3000";
         private int verificationTokenHours = 24;
         private int resendCooldownSeconds = 60;
+    }
+
+    @Getter
+    @Setter
+    public static class Retention {
+        private String dailyCron = "0 45 2 * * *";
+        private int inactivityDays = 7;
+        private int inactivityCooldownDays = 7;
+        private int weakConceptCooldownDays = 5;
+        private int unfinishedNoteDays = 2;
+        private int unfinishedNoteCooldownDays = 3;
+        private int weakConceptThresholdPercent = 60;
     }
 }
