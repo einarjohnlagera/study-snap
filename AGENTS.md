@@ -61,6 +61,19 @@ Core loop:
 - Demo access must be available without signup.
 - Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.
 - Landing page metadata should position NoteLib as a note-to-study-pack product, not a generic AI assistant.
+- Public marketing/auth surfaces should expose footer links to:
+  - `Privacy Policy`
+  - `Terms of Service`
+  - `Contact`
+
+### Legal Pages Rule
+
+- `Privacy Policy` and `Terms of Service` must remain public and accessible without login.
+- Public routes are:
+  - `/privacy`
+  - `/terms`
+- Legal copy should stay simple, readable, and professional rather than highly styled.
+- Contact email for launch/legal pages is `support@mail.notelib.app`.
 
 ### Onboarding Rule
 
