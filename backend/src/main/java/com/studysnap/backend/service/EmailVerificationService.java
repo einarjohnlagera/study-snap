@@ -2,9 +2,12 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.EmailVerificationTokenEntity;
+import com.studysnap.backend.entity.EmailLogEntity;
+import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.EmailVerificationTokenRepository;
+import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -34,6 +37,7 @@ public class EmailVerificationService {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
+    private final EmailLogRepository emailLogRepository;
     private final StudySnapProperties properties;
 
     public void sendVerificationEmail(UserEntity user, boolean enforceCooldown) {
@@ -102,6 +106,7 @@ public class EmailVerificationService {
         user.setUpdatedAt(now);
         markTokenAsUsed(token, now);
         markOtherActiveTokensAsUsed(user.getId(), token.getId(), now);
+        sendWelcomeEmail(user);
 
         return new EmailVerificationResult(
                 user.getId(),
@@ -154,6 +159,38 @@ public class EmailVerificationService {
         return baseUrl + "/verify-email?token=" + URLEncoder.encode(rawToken, StandardCharsets.UTF_8);
     }
 
+    public void sendWelcomeEmail(UserEntity user) {
+        if (user == null || user.getId() == null || user.getEmailVerifiedAt() == null) {
+            return;
+        }
+        if (emailLogRepository.findTopByUserIdAndEmailTypeOrderBySentAtDesc(user.getId(), RetentionEmailType.WELCOME).isPresent()) {
+            return;
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        EmailTemplateService.RenderedEmailTemplate renderedTemplate = emailTemplateService.render(
+                "welcome-email",
+                Map.of(
+                        "name", resolveFirstName(user),
+                        "dashboard_url", resolveAppBaseUrl() + "/dashboard"
+                )
+        );
+
+        emailService.sendEmail(new EmailMessage(
+                user.getEmail(),
+                renderedTemplate.subject(),
+                renderedTemplate.htmlBody(),
+                renderedTemplate.textBody()
+        ));
+
+        EmailLogEntity logEntity = new EmailLogEntity();
+        logEntity.setId(UUID.randomUUID());
+        logEntity.setUserId(user.getId());
+        logEntity.setEmailType(RetentionEmailType.WELCOME);
+        logEntity.setSentAt(now);
+        emailLogRepository.save(logEntity);
+    }
+
     private String resolveAppBaseUrl() {
         String configured = properties.getEmail().getAppBaseUrl();
         if (configured == null || configured.isBlank()) {
@@ -188,6 +225,13 @@ public class EmailVerificationService {
             return "NoteLib";
         }
         return appName.trim();
+    }
+
+    private String resolveFirstName(UserEntity user) {
+        if (user.getFirstName() == null || user.getFirstName().isBlank()) {
+            return "there";
+        }
+        return user.getFirstName().trim();
     }
 
     private String generateRawToken() {

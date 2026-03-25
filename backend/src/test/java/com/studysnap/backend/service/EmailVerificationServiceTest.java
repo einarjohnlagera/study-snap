@@ -2,9 +2,12 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.EmailVerificationTokenEntity;
+import com.studysnap.backend.entity.EmailLogEntity;
+import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.EmailVerificationTokenRepository;
+import com.studysnap.backend.repository.EmailLogRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.testutil.builders.UserEntityBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +45,8 @@ class EmailVerificationServiceTest {
     private EmailService emailService;
     @Mock
     private EmailTemplateService emailTemplateService;
+    @Mock
+    private EmailLogRepository emailLogRepository;
 
     private EmailVerificationService service;
 
@@ -51,7 +56,7 @@ class EmailVerificationServiceTest {
         properties.getEmail().setAppBaseUrl("https://app.notelib.test");
         properties.getEmail().setVerificationTokenHours(24);
         properties.getEmail().setResendCooldownSeconds(60);
-        service = new EmailVerificationService(tokenRepository, userRepository, emailService, emailTemplateService, properties);
+        service = new EmailVerificationService(tokenRepository, userRepository, emailService, emailTemplateService, emailLogRepository, properties);
     }
 
     @Test
@@ -130,6 +135,13 @@ class EmailVerificationServiceTest {
         when(tokenRepository.findByTokenHash(hash(rawToken))).thenReturn(Optional.of(token));
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         when(tokenRepository.findByUserIdAndUsedAtIsNull(user.getId())).thenReturn(List.of(token));
+        when(emailLogRepository.findTopByUserIdAndEmailTypeOrderBySentAtDesc(user.getId(), RetentionEmailType.WELCOME))
+                .thenReturn(Optional.empty());
+        when(emailTemplateService.render(any(), any())).thenReturn(new EmailTemplateService.RenderedEmailTemplate(
+                "Welcome to NoteLib — Start your first Study Pack",
+                "<p>Welcome</p>",
+                "Welcome"
+        ));
 
         EmailVerificationService.EmailVerificationResult result = service.verifyToken(rawToken);
 
@@ -137,6 +149,50 @@ class EmailVerificationServiceTest {
         assertThat(result.alreadyVerified()).isFalse();
         assertThat(user.getEmailVerifiedAt()).isNotNull();
         assertThat(token.getUsedAt()).isNotNull();
+        verify(emailService).sendEmail(any(EmailMessage.class));
+        verify(emailLogRepository).save(any(EmailLogEntity.class));
+    }
+
+    @Test
+    void sendWelcomeEmail_doesNotSendTwice() {
+        UserEntity user = UserEntityBuilder.aUser().build();
+        user.setEmailVerifiedAt(OffsetDateTime.now());
+        EmailLogEntity existing = new EmailLogEntity();
+        existing.setId(UUID.randomUUID());
+        existing.setUserId(user.getId());
+        existing.setEmailType(RetentionEmailType.WELCOME);
+        existing.setSentAt(OffsetDateTime.now().minusDays(1));
+
+        when(emailLogRepository.findTopByUserIdAndEmailTypeOrderBySentAtDesc(user.getId(), RetentionEmailType.WELCOME))
+                .thenReturn(Optional.of(existing));
+
+        service.sendWelcomeEmail(user);
+
+        verify(emailTemplateService, never()).render(any(), any());
+        verify(emailService, never()).sendEmail(any());
+        verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
+    }
+
+    @Test
+    void sendWelcomeEmail_includesDashboardLink() {
+        UserEntity user = UserEntityBuilder.aUser().build();
+        user.setFirstName("Note");
+        user.setEmailVerifiedAt(OffsetDateTime.now());
+
+        when(emailLogRepository.findTopByUserIdAndEmailTypeOrderBySentAtDesc(user.getId(), RetentionEmailType.WELCOME))
+                .thenReturn(Optional.empty());
+        when(emailTemplateService.render(any(), any())).thenReturn(new EmailTemplateService.RenderedEmailTemplate(
+                "Welcome to NoteLib — Start your first Study Pack",
+                "<p>Welcome</p>",
+                "Welcome"
+        ));
+
+        service.sendWelcomeEmail(user);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailTemplateService).render(any(), paramsCaptor.capture());
+        assertThat(paramsCaptor.getValue().get("dashboard_url")).isEqualTo("https://app.notelib.test/dashboard");
     }
 
     private String hash(String rawValue) {
