@@ -16,6 +16,7 @@ const routerMock = {
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  usePathname: () => "/dashboard",
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -29,9 +30,11 @@ jest.mock("@/lib/auth", () => ({
 jest.mock("@/lib/api", () => ({
   getMasterySnapshot: jest.fn(),
   getMe: jest.fn(),
+  joinPremiumWaitlist: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
   getTodayFocus: jest.fn(),
   listNotes: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 jest.mock("@/hooks/use-billing-usage-summary", () => ({
@@ -72,10 +75,7 @@ describe("DashboardPage upgrade messaging", () => {
     expect(
       screen.getByText(/unlock Challenge Quiz and Adaptive Practice and generate up to 100 Study Packs per month/i),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Upgrade to Premium/i })).toHaveAttribute(
-      "href",
-      "/settings#plan-billing",
-    );
+    expect(screen.getByRole("button", { name: /Upgrade to Premium/i })).toBeInTheDocument();
   });
 
   it("does not show the Free plan upgrade card for premium users", async () => {

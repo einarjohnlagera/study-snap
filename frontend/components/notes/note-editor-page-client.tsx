@@ -16,7 +16,6 @@ import {
 import { getAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
-  PLAN_BILLING_PATH,
   hasReachedUsageLimit,
   isStudyPackLimitReachedMessage,
   shouldShowNearStudyPackLimitBanner,
@@ -509,10 +508,6 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
         isOpen={showLimitReachedModal}
         variant="study-pack-limit"
         onClose={() => setShowLimitReachedModal(false)}
-        onUpgrade={() => {
-          setShowLimitReachedModal(false);
-          router.push(PLAN_BILLING_PATH);
-        }}
       />
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
@@ -35,11 +35,12 @@ export default function PricingPage() {
                   Start Free
                 </Button>
               </Link>
-              <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
-                <Button type="button" variant="outline" className="w-full sm:w-auto">
-                  Upgrade to Premium
-                </Button>
-              </Link>
+              <PremiumWaitlistButton
+                label="Upgrade to Premium"
+                source="pricing_hero"
+                variant="outline"
+                className="w-full sm:w-auto"
+              />
             </div>
           </div>
           <Card className="space-y-3 border-blue-500/20 bg-background/90 p-5 backdrop-blur sm:p-6">

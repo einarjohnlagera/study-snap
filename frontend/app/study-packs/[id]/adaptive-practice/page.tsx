@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeAdaptivePracticeSession,
@@ -400,10 +399,6 @@ export default function AdaptivePracticePage() {
         isOpen={showPremiumPaywall}
         variant="adaptive-practice"
         onClose={() => setShowPremiumPaywall(false)}
-        onUpgrade={() => {
-          setShowPremiumPaywall(false);
-          router.push(PLAN_BILLING_PATH);
-        }}
       />
     </main>
   );

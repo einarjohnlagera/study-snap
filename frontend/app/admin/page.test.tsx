@@ -52,6 +52,7 @@ describe("AdminPage", () => {
         totalUsers: 120,
         verifiedUsers: 90,
         premiumUsers: 18,
+        premiumWaitlistCount: 41,
         totalNotes: 420,
         totalStudyPacksGenerated: 275,
         totalPublicNotes: 44,
@@ -117,6 +118,7 @@ describe("AdminPage", () => {
 
     expect(await screen.findByText("Admin Dashboard")).toBeInTheDocument();
     expect(await screen.findByText("Cell Structure")).toBeInTheDocument();
+    expect(screen.getByText("Premium Waitlist")).toBeInTheDocument();
     expect(screen.getByText("Total Users")).toBeInTheDocument();
     expect(screen.getAllByText("120")).toHaveLength(2);
     expect(screen.getByText("Most Viewed Public Notes")).toBeInTheDocument();

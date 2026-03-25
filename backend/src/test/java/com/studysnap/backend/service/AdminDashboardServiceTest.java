@@ -18,6 +18,7 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
+import com.studysnap.backend.repository.PremiumWaitlistRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -53,6 +54,8 @@ class AdminDashboardServiceTest {
     private SubscriptionRepository subscriptionRepository;
     @Mock
     private PaymentTransactionRepository paymentTransactionRepository;
+    @Mock
+    private PremiumWaitlistRepository premiumWaitlistRepository;
 
     private AdminDashboardService adminDashboardService;
 
@@ -64,7 +67,8 @@ class AdminDashboardServiceTest {
                 noteRepository,
                 studyPackRepository,
                 subscriptionRepository,
-                paymentTransactionRepository
+                paymentTransactionRepository,
+                premiumWaitlistRepository
         );
     }
 
@@ -94,6 +98,7 @@ class AdminDashboardServiceTest {
                 ));
         when(userRepository.count()).thenReturn(120L);
         when(userRepository.countByEmailVerifiedAtIsNotNull()).thenReturn(90L);
+        when(premiumWaitlistRepository.count()).thenReturn(41L);
         when(noteRepository.count()).thenReturn(420L);
         when(noteRepository.countByVisibility(any())).thenReturn(44L);
         when(studyPackRepository.count()).thenReturn(275L);
@@ -117,6 +122,7 @@ class AdminDashboardServiceTest {
 
         assertThat(response.overview().totalUsers()).isEqualTo(120);
         assertThat(response.overview().premiumUsers()).isEqualTo(2);
+        assertThat(response.overview().premiumWaitlistCount()).isEqualTo(41);
         assertThat(response.billing().monthlySubscriptions()).isEqualTo(1);
         assertThat(response.billing().yearlySubscriptions()).isEqualTo(1);
         assertThat(response.billing().cancelAtPeriodEndSubscriptions()).isEqualTo(1);

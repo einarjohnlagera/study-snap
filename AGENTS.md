@@ -45,14 +45,12 @@ Core loop:
 
 ### Premium Upgrade Prompt Rule
 
-- Free users should see a soft paywall modal before being sent to billing for Premium-only quiz features or Study Pack limit blocks.
-- `Upgrade to Premium` may navigate to `Settings` billing only after explicit user confirmation in that modal.
+- Free users should see a soft paywall modal before any Premium-only quiz feature or Study Pack limit block attempts a paid conversion flow.
+- During the current pre-launch phase, `Upgrade to Premium` should open a `Premium is coming soon` modal and offer `Join Waitlist`, not payment.
+- Waitlist joins should call `POST /api/premium/waitlist` and remain idempotent per authenticated user.
 - At `80%` of the Free Study Pack limit, show a non-blocking upgrade banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 - Upgrade messaging should position Premium as an exam-preparation and mastery tool for students.
-- Keep modal copy specific to the user action:
-  - `Challenge Quiz` -> exam simulation messaging
-  - `Adaptive Practice` -> weak-topic improvement messaging
-  - Study Pack limit -> quota + Premium unlock messaging
+- Pre-launch modal copy should make it clear that payments are still being enabled and that users can join the waitlist for launch access.
 - Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, and the `100` Study Pack Premium limit.
 - Pricing page should clearly compare Free vs Premium with localized backend pricing and student-oriented value messaging.
 
@@ -120,6 +118,7 @@ Core loop:
 - Frontend must use the billing pricing API for pricing display in Settings, pricing surfaces, and upgrade prompts.
 - Do not hardcode Premium prices in frontend code.
 - Intro pricing and first-time promos must be implemented through the voucher/promotion system, not as a boolean on `User`.
+- While Premium checkout is pre-launch, pricing surfaces should still show backend pricing but route upgrade intent into the Premium waitlist modal instead of payment.
 
 ### Billing History Rule
 
@@ -362,6 +361,10 @@ Rules:
 - Region pricing config contains localized currency/amounts plus standard and optional intro PayMongo plan IDs.
 - Voucher/promotion rules decide whether checkout should use an intro plan ID or a standard plan ID.
 - Intro/first-time subscriber discounts must flow through voucher eligibility and voucher redemption records.
+- Premium launch is currently gated by the waitlist flow:
+  - upgrade CTAs join `premium_waitlist`
+  - admin dashboard tracks waitlist count
+  - checkout plumbing remains provider-ready but is not the active user-facing path
 - Webhook lifecycle is the source of truth for subscription state:
   - `subscription.activated`
   - `subscription.invoice.paid`

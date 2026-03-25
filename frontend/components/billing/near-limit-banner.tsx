@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
+import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 
 type NearLimitBannerProps = {
   className?: string;
@@ -19,11 +17,13 @@ export function NearLimitBanner({ className }: NearLimitBannerProps) {
           You&apos;re almost at your monthly limit. Upgrade to Premium to continue generating Study Packs and unlock
           Challenge Quiz and Adaptive Practice.
         </p>
-        <Link href={PLAN_BILLING_PATH} className="w-full shrink-0 sm:w-auto">
-          <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto">
-            Upgrade to Premium
-          </Button>
-        </Link>
+        <PremiumWaitlistButton
+          label="Upgrade to Premium"
+          source="near_limit_banner"
+          variant="outline"
+          size="sm"
+          className="w-full sm:w-auto"
+        />
       </div>
     </div>
   );

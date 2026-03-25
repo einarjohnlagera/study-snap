@@ -6,6 +6,7 @@ import {
   getBillingHistory,
   getBillingUsageSummary,
   getMe,
+  joinPremiumWaitlist,
   updateEngagementMode,
   updateStudyReminders,
 } from "@/lib/api";
@@ -17,6 +18,7 @@ const routerMock = {
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  usePathname: () => "/settings",
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -29,13 +31,13 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/api", () => ({
   cancelPremiumSubscription: jest.fn(),
-  createPremiumCheckoutSession: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
   getBillingUsageSummary: jest.fn(),
   getMe: jest.fn(),
-  isEmailNotVerifiedError: jest.fn(() => false),
+  joinPremiumWaitlist: jest.fn(),
   logout: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
   updateEngagementMode: jest.fn(),
   updateStudyReminders: jest.fn(),
 }));
@@ -78,6 +80,7 @@ describe("Settings page cancellation flow", () => {
     (getBillingHistory as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
+    (joinPremiumWaitlist as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
     (updateStudyReminders as jest.Mock).mockReset();
 
@@ -112,6 +115,34 @@ describe("Settings page cancellation flow", () => {
       hasIntroPromo: true,
       introEligible: true,
     });
+    (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
+      message: "You're on the list! We'll notify you when Premium launches.",
+    });
+  });
+
+  it("opens the Premium coming soon modal and joins the waitlist from Settings", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...premiumProfile,
+      planType: "FREE",
+      subscription: {
+        cancelAtPeriodEnd: false,
+        premiumEndsAt: null,
+        cancelledAt: null,
+      },
+    });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
+
+    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
+
+    await waitFor(() => {
+      expect(joinPremiumWaitlist).toHaveBeenCalled();
+    });
+    expect(await screen.findByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
   });
 
   it("opens the cancellation confirmation modal from Settings", async () => {

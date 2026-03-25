@@ -1,5 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PricingPage, { metadata } from "./page";
+
+jest.mock("next/navigation", () => ({
+  usePathname: () => "/pricing",
+}));
 
 jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn().mockResolvedValue({
@@ -11,6 +15,10 @@ jest.mock("@/lib/api", () => ({
     hasIntroPromo: true,
     introEligible: true,
   }),
+  joinPremiumWaitlist: jest.fn().mockResolvedValue({
+    message: "You're on the list! We'll notify you when Premium launches.",
+  }),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 describe("PricingPage", () => {
@@ -30,14 +38,18 @@ describe("PricingPage", () => {
     expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
   });
 
-  it("links hero and plan CTAs to signup and billing", async () => {
+  it("links signup CTA and opens the premium waitlist flow", async () => {
     render(<PricingPage />);
 
     expect((await screen.findAllByRole("link", { name: "Start Free" }))[0]).toHaveAttribute("href", "/auth");
-    expect((await screen.findAllByRole("link", { name: "Upgrade to Premium" }))[0]).toHaveAttribute(
-      "href",
-      "/settings#plan-billing",
-    );
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Upgrade to Premium" }))[0]);
+
+    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
+    await waitFor(() => {
+      expect(screen.getByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
+    });
   });
 
   it("exports pricing metadata with canonical and social preview fields", () => {

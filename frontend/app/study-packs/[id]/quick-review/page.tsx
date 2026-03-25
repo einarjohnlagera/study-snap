@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeQuickReviewSession,
@@ -902,10 +901,6 @@ export default function QuickReviewPage() {
         isOpen={activePaywallModal !== null}
         variant={activePaywallModal ?? "challenge-quiz"}
         onClose={() => setActivePaywallModal(null)}
-        onUpgrade={() => {
-          setActivePaywallModal(null);
-          router.push(PLAN_BILLING_PATH);
-        }}
       />
     </main>
   );

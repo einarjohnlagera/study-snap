@@ -9,7 +9,6 @@ import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeChallengeQuizSession,
@@ -747,10 +746,6 @@ export default function ChallengeQuizPage() {
         isOpen={showPremiumPaywall}
         variant="challenge-quiz"
         onClose={() => setShowPremiumPaywall(false)}
-        onUpgrade={() => {
-          setShowPremiumPaywall(false);
-          router.push(PLAN_BILLING_PATH);
-        }}
       />
     </main>
   );

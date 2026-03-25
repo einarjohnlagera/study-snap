@@ -13,7 +13,6 @@ import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
-  PLAN_BILLING_PATH,
   hasReachedUsageLimit,
   isStudyPackLimitReachedMessage,
   shouldShowNearStudyPackLimitBanner,
@@ -994,10 +993,6 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
         isOpen={activePaywallModal !== null}
         variant={activePaywallModal ?? "challenge-quiz"}
         onClose={() => setActivePaywallModal(null)}
-        onUpgrade={() => {
-          setActivePaywallModal(null);
-          router.push(PLAN_BILLING_PATH);
-        }}
       />
     </main>
   );

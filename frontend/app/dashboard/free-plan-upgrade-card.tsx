@@ -1,8 +1,6 @@
-import Link from "next/link";
-import { ArrowRight, Crown } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Crown } from "lucide-react";
+import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 import { Card } from "@/components/ui/card";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
 
 export function FreePlanUpgradeCard() {
   return (
@@ -20,12 +18,13 @@ export function FreePlanUpgradeCard() {
             Upgrade to Premium to unlock Challenge Quiz and Adaptive Practice and generate up to 100 Study Packs per month.
           </p>
         </div>
-        <Link href={PLAN_BILLING_PATH} className="w-full sm:w-auto">
-          <Button type="button" className="w-full sm:w-auto">
-            Upgrade to Premium
-            <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
+        <div className="w-full sm:w-auto">
+          <PremiumWaitlistButton
+            label="Upgrade to Premium"
+            source="dashboard_free_plan_card"
+            className="w-full sm:w-auto"
+          />
+        </div>
       </div>
     </Card>
   );

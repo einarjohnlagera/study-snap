@@ -11,6 +11,7 @@ public record AdminDashboardSummaryResponse(
             long totalUsers,
             long verifiedUsers,
             long premiumUsers,
+            long premiumWaitlistCount,
             long totalNotes,
             long totalStudyPacksGenerated,
             long totalPublicNotes,
