@@ -266,7 +266,7 @@ public class NoteTextExtractionService {
         long maxImageBytes = Math.max(
                 1,
                 Math.min(
-                        properties.getLimits().getFileUploadMaxSize(),
+                        properties.getLimits().getFileUploadMaxSizeBytes(),
                         planType == PlanType.PREMIUM
                                 ? properties.getOcr().getPremiumMaxImageBytes()
                                 : properties.getOcr().getFreeMaxImageBytes()
@@ -301,11 +301,11 @@ public class NoteTextExtractionService {
     }
 
     private long resolveFileSizeLimit(ImportedFileType type) {
-        long globalLimit = Math.max(1L, properties.getLimits().getFileUploadMaxSize());
+        long globalLimit = Math.max(1L, properties.getLimits().getFileUploadMaxSizeBytes());
         long specificLimit = switch (type) {
-            case TXT -> properties.getLimits().getTxtUploadMaxSize();
-            case PDF -> properties.getLimits().getPdfUploadMaxSize();
-            case DOCX -> properties.getLimits().getDocxUploadMaxSize();
+            case TXT -> properties.getLimits().getTxtUploadMaxSizeBytes();
+            case PDF -> properties.getLimits().getPdfUploadMaxSizeBytes();
+            case DOCX -> properties.getLimits().getDocxUploadMaxSizeBytes();
             case IMAGE -> globalLimit;
         };
         return Math.max(1L, Math.min(globalLimit, specificLimit));
@@ -344,19 +344,8 @@ public class NoteTextExtractionService {
                 || "IMAGE_TEXT_UNREADABLE".equals(exception.getCode());
     }
 
-    private static final class GeneratedMultipartFile implements MultipartFile {
-        private final String name;
-        private final String originalFilename;
-        private final String contentType;
-        private final byte[] bytes;
-
-        private GeneratedMultipartFile(String name, String originalFilename, String contentType, byte[] bytes) {
-            this.name = name;
-            this.originalFilename = originalFilename;
-            this.contentType = contentType;
-            this.bytes = bytes;
-        }
-
+    private record GeneratedMultipartFile(String name, String originalFilename, String contentType, byte[] bytes)
+            implements MultipartFile {
         @Override
         public String getName() {
             return name;

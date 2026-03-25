@@ -95,18 +95,40 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class Limits {
+        private static final long BYTES_PER_MEGABYTE = 1024L * 1024L;
+
         private int freeOcrPerBillingPeriod = 20;
         private int premiumOcrPerBillingPeriod = 200;
-        private long fileUploadMaxSize = 10_000_000;
-        private long txtUploadMaxSize = 1_000_000;
-        private long pdfUploadMaxSize = 10_000_000;
-        private long docxUploadMaxSize = 10_000_000;
+        private long fileUploadMaxSize = 10;
+        private long txtUploadMaxSize = 1;
+        private long pdfUploadMaxSize = 10;
+        private long docxUploadMaxSize = 10;
         private int pdfMaxPages = 30;
         private int extractedTextMaxLength = 200_000;
         private int freeAiRateLimitPerMinute = 5;
         private int premiumAiRateLimitPerMinute = 20;
         private int freeOcrRateLimitPerMinute = 6;
         private int premiumOcrRateLimitPerMinute = 20;
+
+        public long getFileUploadMaxSizeBytes() {
+            return toBytes(fileUploadMaxSize);
+        }
+
+        public long getTxtUploadMaxSizeBytes() {
+            return toBytes(txtUploadMaxSize);
+        }
+
+        public long getPdfUploadMaxSizeBytes() {
+            return toBytes(pdfUploadMaxSize);
+        }
+
+        public long getDocxUploadMaxSizeBytes() {
+            return toBytes(docxUploadMaxSize);
+        }
+
+        private long toBytes(long megabytes) {
+            return Math.max(1L, megabytes) * BYTES_PER_MEGABYTE;
+        }
     }
 
     @Getter

@@ -59,10 +59,10 @@ class NoteTextExtractionServiceTest {
         properties.getOcr().setFreeMaxImageBytes(5_000_000);
         properties.getOcr().setPremiumMaxImageBytes(10_000_000);
         properties.getOcr().setMaxPagesPerUpload(1);
-        properties.getLimits().setTxtUploadMaxSize(1_000_000);
-        properties.getLimits().setPdfUploadMaxSize(10_000_000);
-        properties.getLimits().setDocxUploadMaxSize(10_000_000);
-        properties.getLimits().setFileUploadMaxSize(10_000_000);
+        properties.getLimits().setTxtUploadMaxSize(1);
+        properties.getLimits().setPdfUploadMaxSize(10);
+        properties.getLimits().setDocxUploadMaxSize(10);
+        properties.getLimits().setFileUploadMaxSize(10);
         properties.getLimits().setPdfMaxPages(30);
         properties.getLimits().setExtractedTextMaxLength(200_000);
 
@@ -228,10 +228,10 @@ class NoteTextExtractionServiceTest {
         properties.getOcr().setFreeMaxImageBytes(5_000_000);
         properties.getOcr().setPremiumMaxImageBytes(10_000_000);
         properties.getOcr().setMaxPagesPerUpload(1);
-        properties.getLimits().setFileUploadMaxSize(10_000_000);
-        properties.getLimits().setPdfUploadMaxSize(128);
-        properties.getLimits().setDocxUploadMaxSize(10_000_000);
-        properties.getLimits().setTxtUploadMaxSize(1_000_000);
+        properties.getLimits().setFileUploadMaxSize(10);
+        properties.getLimits().setPdfUploadMaxSize(1);
+        properties.getLimits().setDocxUploadMaxSize(10);
+        properties.getLimits().setTxtUploadMaxSize(1);
         properties.getLimits().setPdfMaxPages(30);
         properties.getLimits().setExtractedTextMaxLength(200_000);
         noteTextExtractionService = new NoteTextExtractionService(
@@ -247,7 +247,7 @@ class NoteTextExtractionServiceTest {
                 "file",
                 "notes.pdf",
                 "application/pdf",
-                new byte[256]
+                new byte[2 * 1024 * 1024]
         );
 
         AppException error = assertThrows(AppException.class, () -> noteTextExtractionService.extractText(file, userId));
@@ -263,10 +263,10 @@ class NoteTextExtractionServiceTest {
         properties.getOcr().setFreeMaxImageBytes(5_000_000);
         properties.getOcr().setPremiumMaxImageBytes(10_000_000);
         properties.getOcr().setMaxPagesPerUpload(1);
-        properties.getLimits().setFileUploadMaxSize(10_000_000);
-        properties.getLimits().setTxtUploadMaxSize(10_000_000);
-        properties.getLimits().setPdfUploadMaxSize(10_000_000);
-        properties.getLimits().setDocxUploadMaxSize(10_000_000);
+        properties.getLimits().setFileUploadMaxSize(10);
+        properties.getLimits().setTxtUploadMaxSize(10);
+        properties.getLimits().setPdfUploadMaxSize(10);
+        properties.getLimits().setDocxUploadMaxSize(10);
         properties.getLimits().setPdfMaxPages(30);
         properties.getLimits().setExtractedTextMaxLength(10);
         noteTextExtractionService = new NoteTextExtractionService(
