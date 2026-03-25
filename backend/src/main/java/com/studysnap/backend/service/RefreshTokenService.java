@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.entity.RefreshTokenEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.repository.RefreshTokenRepository;
 import com.studysnap.backend.security.SecurityProperties;
 import org.springframework.http.HttpStatus;
@@ -54,9 +55,9 @@ public class RefreshTokenService {
 
     public RefreshTokenEntity requireValid(String rawToken) {
         RefreshTokenEntity entity = refreshTokenRepository.findByTokenHash(hash(rawToken))
-                .orElseThrow(() -> new AppException("INVALID_REFRESH_TOKEN", "Invalid refresh token.", HttpStatus.UNAUTHORIZED));
+                .orElseThrow(InvalidRefreshTokenException::new);
         if (entity.getRevokedAt() != null) {
-            throw new AppException("INVALID_REFRESH_TOKEN", "Invalid refresh token.", HttpStatus.UNAUTHORIZED);
+            throw new InvalidRefreshTokenException();
         }
         if (entity.getExpiresAt().isBefore(OffsetDateTime.now())) {
             throw new AppException("REFRESH_TOKEN_EXPIRED", "Refresh token expired. Please log in again.", HttpStatus.UNAUTHORIZED);

@@ -16,6 +16,7 @@ import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.WebhookEventEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,7 +85,7 @@ public class PayMongoBillingService implements BillingService {
         ensureCheckoutConfigured();
 
         UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(UserNotFoundException::new);
         if (subscriptionService.resolvePlan(userId) == PlanType.PREMIUM) {
             throw new AppException(
                     "PLAN_ALREADY_PREMIUM",

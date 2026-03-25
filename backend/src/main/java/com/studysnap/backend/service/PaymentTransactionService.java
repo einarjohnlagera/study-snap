@@ -6,12 +6,11 @@ import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +41,7 @@ public class PaymentTransactionService {
             String providerReferenceId
     ) {
         UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("USER_NOT_FOUND", "User not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(UserNotFoundException::new);
 
         PaymentTransactionEntity transaction = new PaymentTransactionEntity();
         transaction.setId(UUID.randomUUID());

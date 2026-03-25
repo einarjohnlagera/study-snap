@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -314,11 +315,7 @@ public class SubscriptionService {
 
     private UserEntity requireUser(UUID userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new AppException(
-                        "USER_NOT_FOUND",
-                        "User not found.",
-                        HttpStatus.NOT_FOUND
-                ));
+                .orElseThrow(UserNotFoundException::new);
     }
 
     private String normalizeReference(String raw) {

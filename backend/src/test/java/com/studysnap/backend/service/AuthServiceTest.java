@@ -11,6 +11,9 @@ import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.InvalidCredentialsException;
+import com.studysnap.backend.exception.InvalidRefreshTokenException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
@@ -26,6 +29,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -123,6 +127,43 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_throwsInvalidCredentialsException_whenUserDoesNotExist() {
+        when(userRepository.findByEmailIgnoreCase("[email protected]")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.login(
+                new LoginRequest("[email protected]", "password123", false),
+                "127.0.0.1",
+                "JUnit"
+        )).isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid email or password.");
+    }
+
+    @Test
+    void getMe_throwsUserNotFoundException_whenUserDoesNotExist() {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.getMe(userId))
+                .isInstanceOf(UserNotFoundException.class)
+                .hasMessage("User not found.");
+    }
+
+    @Test
+    void refresh_throwsInvalidRefreshTokenException_whenRefreshTokenUserDoesNotExist() {
+        UUID userId = UUID.randomUUID();
+        when(refreshTokenService.requireValid("refresh-token"))
+                .thenReturn(new RefreshTokenEntityBuilder().withUserId(userId).build());
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.refresh(
+                new com.studysnap.backend.dto.RefreshTokenRequest("refresh-token"),
+                "127.0.0.1",
+                "JUnit"
+        )).isInstanceOf(InvalidRefreshTokenException.class)
+                .hasMessage("Invalid refresh token.");
+    }
+
+    @Test
     void completeOnboarding_savesProfileTypeLearningStyleAndCompletionTimestamp() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
@@ -191,5 +232,20 @@ class AuthServiceTest {
         assertThat(response.weakConceptRemindersEnabled()).isTrue();
         assertThat(user.getInactivityRemindersEnabled()).isTrue();
         assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
+    }
+
+    private static final class RefreshTokenEntityBuilder {
+        private UUID userId;
+
+        private RefreshTokenEntityBuilder withUserId(UUID value) {
+            this.userId = value;
+            return this;
+        }
+
+        private com.studysnap.backend.entity.RefreshTokenEntity build() {
+            com.studysnap.backend.entity.RefreshTokenEntity entity = new com.studysnap.backend.entity.RefreshTokenEntity();
+            entity.setUserId(userId);
+            return entity;
+        }
     }
 }
