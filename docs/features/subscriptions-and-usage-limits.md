@@ -8,6 +8,8 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 
 ### Free
 - 10 Study Packs per month
+- OCR (20/month by default, backend-configurable)
+- File uploads available
 - My Library and Public Library access
 - Quick Review
 - Challenge Quiz (5/month)
@@ -20,6 +22,7 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - 100 Study Packs per month
 - Challenge Quiz (50/month)
 - Adaptive Practice (30/month)
+- OCR (100/month by default, backend-configurable)
 - Difficulty selection
 - Priority AI
 - Weak Concept Detection
@@ -188,16 +191,28 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `provider`
   - `providerReferenceId`
 
-## Plan and usage summary API
+## Centralized plan API
 
-- `GET /api/billing/usage-summary` should expose the centralized plan model to the frontend.
+- `GET /api/me/plan` is the frontend source of truth for plan limits, usage, remaining counts, and feature flags.
 - Response contract includes:
-  - `studyPacksLimit`
-  - `challengeQuizLimit`
-  - `adaptivePracticeLimit`
-  - `adaptivePracticeAvailable`
-  - `difficultySelectionAvailable`
-- Frontend gating should rely on these backend flags and limits rather than hardcoded Premium assumptions.
+  - `plan`
+  - `limits.studyPacksPerMonth`
+  - `limits.challengeQuizzesPerMonth`
+  - `limits.adaptivePracticePerMonth`
+  - `limits.ocrPerMonth`
+  - `usage.studyPacksUsed`
+  - `usage.challengeQuizzesUsed`
+  - `usage.adaptivePracticeUsed`
+  - `usage.ocrUsed`
+  - `remaining.studyPacksRemaining`
+  - `remaining.challengeQuizzesRemaining`
+  - `remaining.adaptivePracticeRemaining`
+  - `remaining.ocrRemaining`
+  - `features.adaptivePracticeAvailable`
+  - `features.difficultySelectionAvailable`
+  - `features.fileUploadAvailable`
+  - `features.ocrAvailable`
+- Frontend gating and usage UI should rely on this API instead of hardcoded limits or Premium flags.
 
 ## PayMongo plan selection
 

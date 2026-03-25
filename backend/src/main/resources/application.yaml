@@ -81,11 +81,11 @@ studysnap:
     free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:5}
     premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
     premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}
+    free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
+    premium-monthly-ocr-limit: ${PREMIUM_MONTHLY_OCR_LIMIT:100}
     adaptive-practice-premium-only: ${ADAPTIVE_PRACTICE_PREMIUM_ONLY:true}
     difficulty-selection-premium-only: ${DIFFICULTY_SELECTION_PREMIUM_ONLY:true}
   limits:
-    free-ocr-per-billing-period: ${OCR_FREE_BILLING_PERIOD_LIMIT:20}
-    premium-ocr-per-billing-period: ${OCR_PREMIUM_BILLING_PERIOD_LIMIT:200}
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
     txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}
     pdf-upload-max-size: ${PDF_IMPORT_MAX_SIZE:10}

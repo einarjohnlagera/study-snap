@@ -60,7 +60,7 @@ function hasExistingMetadata(note: NoteResponse): boolean {
   );
 }
 
-export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
+export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientProps>) {
   const router = useRouter();
   const isDetailPage = Boolean(noteId);
   const [studyPackStatus, setStudyPackStatus] = useState<NoteResponse["studyPackStatus"] | null>(null);
@@ -93,9 +93,9 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     const syncAuthState = () => {
       setIsEmailVerified(Boolean(getAuthUser()?.emailVerifiedAt));
     };
-    window.addEventListener("studysnap-auth-change", syncAuthState);
+    globalThis.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncAuthState);
+      globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
     };
   }, []);
 
@@ -103,10 +103,10 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     if (!toastMessage) {
       return;
     }
-    const timeout = window.setTimeout(() => {
+    const timeout = globalThis.setTimeout(() => {
       setToastMessage(null);
     }, 3200);
-    return () => window.clearTimeout(timeout);
+    return () => globalThis.clearTimeout(timeout);
   }, [toastMessage]);
 
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
@@ -162,14 +162,14 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
     setImportFlowState("uploading");
     setImportStatusMessage("Uploading file...");
 
-    const extractingTimer = window.setTimeout(() => {
+    const extractingTimer = globalThis.setTimeout(() => {
       setImportFlowState("extracting");
       setImportStatusMessage("Extracting text into your notes...");
     }, 350);
 
     try {
       const extracted = await extractNoteTextFromFile(file);
-      window.clearTimeout(extractingTimer);
+      globalThis.clearTimeout(extractingTimer);
 
       const didAppend = appendExtractedTextToContent(extracted.extractedText);
       if (!didAppend) {
@@ -194,7 +194,7 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       resetImportInput();
       showToast("Extracted text added to Content.", "success");
     } catch (error) {
-      window.clearTimeout(extractingTimer);
+      globalThis.clearTimeout(extractingTimer);
       const message = error instanceof Error ? error.message : "Could not import this file.";
       if (isEmailNotVerifiedError(error)) {
         const verificationMessage = "Verify your email before using OCR upload.";
@@ -252,12 +252,12 @@ export function NoteEditorPageClient({ noteId }: NoteEditorPageClientProps) {
       active = false;
     };
   }, [noteId, router]);
-  const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
-  const studyPacksLimit = usageSummary?.studyPacksLimit ?? 0;
-  const hasReachedStudyPackLimit = usageSummary?.planType === "FREE"
+  const studyPacksUsed = usageSummary?.usage.studyPacksUsed ?? 0;
+  const studyPacksLimit = usageSummary?.limits.studyPacksPerMonth ?? 0;
+  const hasReachedStudyPackLimit = usageSummary?.plan === "FREE"
     && hasReachedUsageLimit(studyPacksUsed, studyPacksLimit);
   const shouldShowNearLimitBanner = usageSummary
-    ? shouldShowNearStudyPackLimitBanner(usageSummary.planType, studyPacksUsed, studyPacksLimit)
+    ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksUsed, studyPacksLimit)
     : false;
 
   const buildRequest = useCallback(() => ({

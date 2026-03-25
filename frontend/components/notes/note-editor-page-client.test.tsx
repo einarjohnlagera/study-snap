@@ -4,7 +4,7 @@ import {
   createStudyPackFromNote,
   extractNoteTextFromFile,
   getBillingPricing,
-  getBillingUsageSummary,
+  getMyPlan,
   getNote,
   joinPremiumWaitlist,
 } from "@/lib/api";
@@ -26,6 +26,7 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
+  setAuthUser: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -33,7 +34,7 @@ jest.mock("@/lib/api", () => ({
   createStudyPackFromNote: jest.fn(),
   extractNoteTextFromFile: jest.fn(),
   getBillingPricing: jest.fn(),
-  getBillingUsageSummary: jest.fn(),
+  getMyPlan: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   joinPremiumWaitlist: jest.fn(),
@@ -73,20 +74,36 @@ describe("NoteEditorPageClient", () => {
     (createStudyPackFromNote as jest.Mock).mockReset();
     (extractNoteTextFromFile as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
-    (getBillingUsageSummary as jest.Mock).mockReset();
+    (getMyPlan as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
-    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
-      planType: "FREE",
-      studyPacksUsed: 2,
-      studyPacksLimit: 10,
-      challengeQuizUsed: 0,
-      challengeQuizLimit: 5,
-      adaptivePracticeUsed: 0,
-      adaptivePracticeLimit: 0,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: false,
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 8,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
     });
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
@@ -165,16 +182,32 @@ describe("NoteEditorPageClient", () => {
 
   it("shows a limit-reached paywall modal for free users at their monthly Study Pack cap", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
-    (getBillingUsageSummary as jest.Mock).mockResolvedValue({
-      planType: "FREE",
-      studyPacksUsed: 10,
-      studyPacksLimit: 10,
-      challengeQuizUsed: 0,
-      challengeQuizLimit: 5,
-      adaptivePracticeUsed: 0,
-      adaptivePracticeLimit: 0,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: false,
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 10,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 0,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
     });
 
     render(<NoteEditorPageClient />);

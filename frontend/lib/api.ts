@@ -6,6 +6,9 @@ import {
   setAuthUser,
   type AuthUser,
 } from "./auth";
+import type { MePlanResponse } from "./me-plan";
+
+export type { MePlanResponse } from "./me-plan";
 
 export type QuizItem = {
   question: string;
@@ -1659,6 +1662,21 @@ export async function getBillingUsageSummary(): Promise<BillingUsageSummaryRespo
   return parseApiResponse<BillingUsageSummaryResponse>(
     response,
     "Could not load billing usage.",
+  );
+}
+
+export async function getMyPlan(): Promise<MePlanResponse> {
+  const response = await fetchWithAuth(
+    "/me/plan",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<MePlanResponse>(
+    response,
+    "Could not load plan details.",
   );
 }
 

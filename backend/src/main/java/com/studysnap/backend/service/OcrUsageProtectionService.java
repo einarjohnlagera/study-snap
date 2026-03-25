@@ -64,9 +64,7 @@ public class OcrUsageProtectionService {
     }
 
     private int resolveLimit(PlanType planType) {
-        int configured = planType == PlanType.PREMIUM
-                ? properties.getLimits().getPremiumOcrPerBillingPeriod()
-                : properties.getLimits().getFreeOcrPerBillingPeriod();
+        int configured = properties.getPricing().resolveMonthlyOcrLimit(planType);
         return Math.max(1, configured);
     }
 }

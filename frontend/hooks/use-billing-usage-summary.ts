@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getBillingUsageSummary, type BillingUsageSummaryResponse } from "@/lib/api";
+import { getMyPlan, type MePlanResponse } from "@/lib/api";
+import { getAuthUser, setAuthUser } from "@/lib/auth";
 
 export function useBillingUsageSummary(enabled = true) {
-  const [usageSummary, setUsageSummary] = useState<BillingUsageSummaryResponse | null>(null);
+  const [usageSummary, setUsageSummary] = useState<MePlanResponse | null>(() => getAuthUser()?.planSummary ?? null);
   const [usageLoaded, setUsageLoaded] = useState(false);
 
   const loadUsageSummary = useCallback(async () => {
@@ -15,8 +16,15 @@ export function useBillingUsageSummary(enabled = true) {
     }
 
     try {
-      const nextUsageSummary = await getBillingUsageSummary();
+      const nextUsageSummary = await getMyPlan();
       setUsageSummary(nextUsageSummary);
+      const authUser = getAuthUser();
+      if (authUser) {
+        setAuthUser({
+          ...authUser,
+          planSummary: nextUsageSummary,
+        });
+      }
       return nextUsageSummary;
     } catch {
       return null;

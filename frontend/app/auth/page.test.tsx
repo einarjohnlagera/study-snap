@@ -26,6 +26,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  getMyPlan: jest.fn(),
   login: jest.fn(),
   signup: jest.fn(),
   trackAnalyticsEvent: jest.fn(),

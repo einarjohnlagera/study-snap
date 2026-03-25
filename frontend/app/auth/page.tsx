@@ -6,7 +6,7 @@ import Image from "next/image";
 import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { login, signup, trackAnalyticsEvent } from "@/lib/api";
+import { getMyPlan, login, signup, trackAnalyticsEvent } from "@/lib/api";
 import {
   getAuthUser,
   LOGIN_REASON_QUERY_KEY,
@@ -43,22 +43,22 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const hasTrackedSignupStartRef = useRef(false);
   const [redirectTarget, setRedirectTarget] = useState<string | null>(() => {
-    if (typeof window === "undefined") {
+    if (globalThis.window === undefined) {
       return null;
     }
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     return resolveSafeRedirectTarget(params.get(LOGIN_REDIRECT_QUERY_KEY));
   });
   const [showSessionExpiredMessage, setShowSessionExpiredMessage] = useState(() => {
-    if (typeof window === "undefined") {
+    if (globalThis.window === undefined) {
       return false;
     }
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     return params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED;
   });
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     setRedirectTarget(resolveSafeRedirectTarget(params.get(LOGIN_REDIRECT_QUERY_KEY)));
     setShowSessionExpiredMessage(params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED);
   }, []);
@@ -113,7 +113,12 @@ export default function AuthPage() {
             })
           : await login({ email, password, keepSignedIn });
       setAuthUser(authUser);
-      const defaultRoute = resolveAuthenticatedHome(authUser);
+      const nextAuthUser = {
+        ...authUser,
+        planSummary: await getMyPlan().catch(() => null),
+      };
+      setAuthUser(nextAuthUser);
+      const defaultRoute = resolveAuthenticatedHome(nextAuthUser);
       const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
       router.push(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
       router.refresh();

@@ -63,9 +63,9 @@ describe("DashboardPage upgrade messaging", () => {
   it("shows the Free plan upgrade card for free users", async () => {
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
-        planType: "FREE",
-        studyPacksUsed: 2,
-        studyPacksLimit: 10,
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10 },
+        usage: { studyPacksUsed: 2 },
       },
     });
 
@@ -73,7 +73,7 @@ describe("DashboardPage upgrade messaging", () => {
 
     expect(await screen.findByText("You are using the Free Plan.")).toBeInTheDocument();
     expect(
-      screen.getByText(/unlock Challenge Quiz and Adaptive Practice and generate up to 100 Study Packs per month/i),
+      screen.getByText(/unlock Adaptive Practice, choose quiz difficulty, and access higher monthly limits/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Upgrade to Premium/i })).toBeInTheDocument();
   });
@@ -81,9 +81,9 @@ describe("DashboardPage upgrade messaging", () => {
   it("does not show the Free plan upgrade card for premium users", async () => {
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
-        planType: "PREMIUM",
-        studyPacksUsed: 12,
-        studyPacksLimit: 100,
+        plan: "PREMIUM",
+        limits: { studyPacksPerMonth: 100 },
+        usage: { studyPacksUsed: 12 },
       },
     });
 
