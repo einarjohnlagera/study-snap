@@ -1,0 +1,9 @@
+Hi {{name}},
+
+You have not been back to NoteLib in a little while.
+
+Pick up where you left off and continue studying here:
+{{dashboardUrl}}
+
+See you soon,
+NoteLib

@@ -1,0 +1,10 @@
+Hi {{name}},
+
+Your recent Challenge Quiz showed that these topics need more review:
+{{weakConcepts}}
+
+Open Adaptive Practice for {{noteTitle}} here:
+{{adaptivePracticeUrl}}
+
+Keep going,
+NoteLib
