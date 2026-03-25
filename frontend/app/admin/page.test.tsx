@@ -112,6 +112,16 @@ describe("AdminPage", () => {
           createdAt: "2026-03-21T00:00:00Z",
         },
       ],
+      recentFeedback: [
+        {
+          feedbackId: "feedback-1",
+          userEmail: "[email protected]",
+          message: "The note editor feels confusing on mobile.",
+          pageUrl: "https://www.notelib.app/notes/new",
+          status: "NEW",
+          createdAt: "2026-03-22T00:00:00Z",
+        },
+      ],
     });
 
     render(<AdminPage />);
@@ -123,6 +133,8 @@ describe("AdminPage", () => {
     expect(screen.getAllByText("120")).toHaveLength(2);
     expect(screen.getByText("Most Viewed Public Notes")).toBeInTheDocument();
     expect(screen.getByText("Recent Failed Payments")).toBeInTheDocument();
+    expect(screen.getByText("Recent Feedback")).toBeInTheDocument();
+    expect(screen.getByText("The note editor feels confusing on mobile.")).toBeInTheDocument();
     expect(screen.getByText("PHP 249.00")).toBeInTheDocument();
   });
 

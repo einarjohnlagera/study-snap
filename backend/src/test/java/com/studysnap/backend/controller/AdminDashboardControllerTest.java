@@ -62,7 +62,7 @@ class AdminDashboardControllerTest {
     @Test
     void getRecentEvents_returnsRecentEventsPayload() {
         AdminDashboardController controller = new AdminDashboardController(adminDashboardService);
-        AdminDashboardRecentEventsResponse expected = new AdminDashboardRecentEventsResponse(List.of(), List.of());
+        AdminDashboardRecentEventsResponse expected = new AdminDashboardRecentEventsResponse(List.of(), List.of(), List.of());
         when(adminDashboardService.getRecentEvents()).thenReturn(expected);
 
         AdminDashboardRecentEventsResponse response = controller.getRecentEvents();

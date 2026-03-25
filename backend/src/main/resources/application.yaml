@@ -189,6 +189,7 @@ studysnap:
     resend-api-key: ${RESEND_API_KEY:}
     resend-api-base-url: ${RESEND_API_BASE_URL:https://api.resend.com}
     from: ${EMAIL_FROM:}
+    support: ${EMAIL_SUPPORT:support@mail.notelib.app}
     app-base-url: ${APP_BASE_URL:http://localhost:3000}
     verification-token-hours: ${EMAIL_VERIFICATION_TOKEN_HOURS:24}
     resend-cooldown-seconds: ${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:60}

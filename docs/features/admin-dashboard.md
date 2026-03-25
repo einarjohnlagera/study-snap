@@ -71,6 +71,7 @@ Admin v1 tables should include:
 - top subjects by Study Pack generation
 - recent premium upgrades
 - recent failed payments
+- recent feedback
 
 ## Data Sources
 
@@ -80,6 +81,7 @@ Reuse existing data sources where possible:
 - `premium_waitlist` for pre-launch Premium interest
 - `subscriptions` for active Premium state and cancel-at-period-end status
 - `payment_transactions` for failed payments and recurring-revenue estimates
+- `feedback` for recent user feedback during soft launch
 - `notes` and `study_packs` for library and generation counts
 
 ## Notes

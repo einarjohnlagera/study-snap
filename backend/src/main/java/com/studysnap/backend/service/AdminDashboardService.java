@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AdminDashboardRecentEventsResponse;
 import com.studysnap.backend.dto.AdminDashboardSummaryResponse;
 import com.studysnap.backend.dto.AdminDashboardTopContentResponse;
+import com.studysnap.backend.dto.AdminRecentFeedbackItemResponse;
 import com.studysnap.backend.dto.AdminRecentFailedPaymentItemResponse;
 import com.studysnap.backend.dto.AdminRecentUpgradeItemResponse;
 import com.studysnap.backend.dto.AdminSubjectMetricItemResponse;
@@ -15,6 +16,7 @@ import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
+import com.studysnap.backend.repository.FeedbackRepository;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
@@ -54,6 +56,7 @@ public class AdminDashboardService {
     private final SubscriptionRepository subscriptionRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final PremiumWaitlistRepository premiumWaitlistRepository;
+    private final FeedbackRepository feedbackRepository;
 
     public AdminDashboardSummaryResponse getSummary() {
         OffsetDateTime now = OffsetDateTime.now();
@@ -176,7 +179,20 @@ public class AdminDashboardService {
                 ))
                 .toList();
 
-        return new AdminDashboardRecentEventsResponse(recentPremiumUpgrades, recentFailedPayments);
+        List<AdminRecentFeedbackItemResponse> recentFeedback = feedbackRepository
+                .findAllByOrderByCreatedAtDesc(PageRequest.of(0, RECENT_EVENT_LIMIT))
+                .stream()
+                .map(feedback -> new AdminRecentFeedbackItemResponse(
+                        feedback.getId(),
+                        feedback.getEmail(),
+                        feedback.getMessage(),
+                        feedback.getPageUrl(),
+                        feedback.getStatus(),
+                        feedback.getCreatedAt()
+                ))
+                .toList();
+
+        return new AdminDashboardRecentEventsResponse(recentPremiumUpgrades, recentFailedPayments, recentFeedback);
     }
 
     private List<AdminSubjectMetricItemResponse> normalizeTopSubjects(List<AdminSubjectMetricItemResponse> rawSubjects) {
