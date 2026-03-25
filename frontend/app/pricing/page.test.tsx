@@ -33,15 +33,23 @@ describe("PricingPage", () => {
     expect(screen.getByText("₱1,999/year (Save ₱989)")).toBeInTheDocument();
     expect(screen.queryByText("Included")).not.toBeInTheDocument();
     expect(screen.queryByText("Not included")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Challenge Quiz (Exam Mode)")).not.toHaveLength(0);
-    expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
+    expect(screen.getByText("Start studying for free.")).toBeInTheDocument();
+    expect(screen.getByText("Unlock adaptive practice and advanced quizzes.")).toBeInTheDocument();
+    expect(screen.getByText("10 AI Study Packs / month")).toBeInTheDocument();
+    expect(screen.getByText("5 Challenge Quizzes / month")).toBeInTheDocument();
+    expect(screen.getAllByText("Weak Concepts Insights")).not.toHaveLength(0);
+    expect(screen.getAllByText("File Uploads (PDF, DOCX, TXT)")).not.toHaveLength(0);
+    expect(screen.getByText("Image to Text (OCR) - Limited")).toBeInTheDocument();
+    expect(screen.getByText("Higher OCR Limits")).toBeInTheDocument();
+    expect(screen.getAllByText("Choose Quiz Difficulty")).not.toHaveLength(0);
+    expect(screen.getByText("More practice. Better results.")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
   });
 
   it("links signup CTA and opens the premium waitlist flow", async () => {
     render(<PricingPage />);
 
-    expect((await screen.findAllByRole("link", { name: "Start Free" }))[0]).toHaveAttribute("href", "/auth");
+    expect((await screen.findAllByRole("link", { name: "Start for Free" }))[0]).toHaveAttribute("href", "/auth");
 
     fireEvent.click((await screen.findAllByRole("button", { name: "Upgrade to Premium" }))[0]);
 

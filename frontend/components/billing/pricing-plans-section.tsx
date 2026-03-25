@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
 import { formatBillingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
+import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 
 type PricingPlansSectionProps = {
   showHeading?: boolean;
@@ -16,24 +17,34 @@ type ComparisonValue = "check" | string | null;
 
 const COMPARISON_ROWS = [
   {
-    label: "Create Notes",
+    label: "Unlimited Notes",
     free: "check",
     premium: "check",
   },
   {
-    label: "Save Notes",
+    label: "AI Study Packs / month",
+    free: String(pricingConfig.free.studyPacksPerMonth),
+    premium: String(pricingConfig.premium.studyPacksPerMonth),
+  },
+  {
+    label: "Challenge Quizzes / month",
+    free: String(pricingConfig.free.challengeQuizzesPerMonth),
+    premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
+  },
+  {
+    label: "Weak Concepts Insights",
     free: "check",
     premium: "check",
   },
   {
-    label: "Study Packs per month",
-    free: "10",
-    premium: "100",
-  },
-  {
-    label: "Quick Review",
+    label: "File Uploads (PDF, DOCX, TXT)",
     free: "check",
     premium: "check",
+  },
+  {
+    label: "Image to Text (OCR) / month",
+    free: String(pricingConfig.free.ocrPerMonth),
+    premium: String(pricingConfig.premium.ocrPerMonth),
   },
   {
     label: "Public Library Access",
@@ -41,27 +52,17 @@ const COMPARISON_ROWS = [
     premium: "check",
   },
   {
-    label: "Challenge Quiz (Exam Mode)",
-    free: "5",
-    premium: "check",
-  },
-  {
-    label: "Weak Concepts",
-    free: "check",
-    premium: "check",
-  },
-  {
-    label: "Adaptive Practice",
+    label: "Adaptive Practice / month",
     free: null,
-    premium: "30",
+    premium: String(pricingConfig.premium.adaptivePracticePerMonth),
   },
   {
-    label: "Difficulty Selection",
+    label: "Choose Quiz Difficulty",
     free: null,
     premium: "check",
   },
   {
-    label: "Priority AI generation",
+    label: "Priority AI Processing",
     free: null,
     premium: "check",
   },
@@ -97,8 +98,14 @@ function ComparisonCell({ value, emphasize = false }: { value: ComparisonValue; 
 
 export function PricingPlansSection({ showHeading = true }: PricingPlansSectionProps) {
   const { billingPricing } = useBillingPricing(true);
-  const monthlyLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
-  const yearlyLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
+  const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
+  const fallbackPrice = pricingConfig.price[displayRegion];
+  const monthlyLabel = billingPricing
+    ? getBillingCyclePriceLabel(billingPricing, "MONTHLY")
+    : `${formatBillingAmount(fallbackPrice.monthly, fallbackPrice.currency)}/month`;
+  const yearlyLabel = billingPricing
+    ? getBillingCyclePriceLabel(billingPricing, "YEARLY")
+    : `${formatBillingAmount(fallbackPrice.yearly, fallbackPrice.currency)}/year`;
 
   return (
     <section className="space-y-4">
@@ -117,21 +124,21 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
         <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-            <CardTitle>Build your study routine</CardTitle>
-            <CardDescription>Create notes, generate a few Study Packs, and review with Quick Review.</CardDescription>
+            <CardTitle>Start studying for free.</CardTitle>
+            <CardDescription>Free gives you enough room to build notes, generate reviewers, and spot weak areas before exams.</CardDescription>
           </div>
           <p className="text-3xl font-semibold">Free</p>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Create Notes</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Save Notes</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />10 Study Packs per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Quick Review</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />5 Challenge Quizzes per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak concepts visible</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Unlimited Notes</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} AI Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Insights</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />File Uploads (PDF, DOCX, TXT)</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Image to Text (OCR) - Limited</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Public Library Access</li>
           </ul>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-            Start Free
+            Start for Free
           </Link>
         </Card>
 
@@ -141,9 +148,9 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
               <Crown className="h-3.5 w-3.5" />
               Premium
             </div>
-            <CardTitle>Train for exams with purpose</CardTitle>
+            <CardTitle>Unlock adaptive practice and advanced quizzes.</CardTitle>
             <CardDescription>
-              Premium is built for exam preparation, weak-topic practice, and heavier study pack generation during crunch time.
+              Premium is for serious review weeks when you want more practice, stronger quiz control, and higher limits.
             </CardDescription>
           </div>
           <div className="space-y-1">
@@ -160,17 +167,21 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Everything in Free</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />100 Study Packs per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />50 Challenge Quizzes per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />30 Adaptive Practice sessions per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty Selection</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI generation</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.studyPacksPerMonth} AI Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.adaptivePracticePerMonth} Adaptive Practice / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Choose Quiz Difficulty</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI Processing</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher OCR Limits</li>
           </ul>
-          <PremiumWaitlistButton
-            label="Upgrade to Premium"
-            source="pricing_plans_section"
-            className="w-full sm:w-auto"
-          />
+          <div className="space-y-2">
+            <PremiumWaitlistButton
+              label="Upgrade to Premium"
+              source="pricing_plans_section"
+              className="w-full sm:w-auto"
+            />
+            <p className="text-sm text-foreground/65">More practice. Better results.</p>
+          </div>
         </Card>
       </div>
 
@@ -178,11 +189,11 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
         <div className="border-b border-border px-4 py-4 sm:px-6">
           <h3 className="text-lg font-semibold sm:text-xl">Plan comparison</h3>
           <p className="mt-1 text-sm text-foreground/70">
-            Premium is positioned as the exam preparation plan, not just a bigger AI quota.
+            Free stays useful. Premium adds deeper practice and higher limits when your review gets serious.
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-[40rem] text-sm">
+          <table className="min-w-[36rem] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-left">
                 <th className="px-4 py-3 font-semibold sm:px-6">Feature</th>
