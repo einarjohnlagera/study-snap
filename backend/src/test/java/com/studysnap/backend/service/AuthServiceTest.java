@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
@@ -154,5 +155,41 @@ class AuthServiceTest {
         assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
         assertThat(response.onboardingCompletedAt()).isNotNull();
         assertThat(user.getOnboardingCompletedAt()).isNotNull();
+    }
+
+    @Test
+    void updateStudyReminders_persistsReminderPreferences() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("[email protected]");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEngagementMode(EngagementMode.CONSISTENCY);
+        user.setInactivityRemindersEnabled(false);
+        user.setWeakConceptRemindersEnabled(false);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+
+        MeResponse response = authService.updateStudyReminders(
+                userId,
+                new UpdateStudyRemindersRequest(true, true)
+        );
+
+        assertThat(response.inactivityRemindersEnabled()).isTrue();
+        assertThat(response.weakConceptRemindersEnabled()).isTrue();
+        assertThat(user.getInactivityRemindersEnabled()).isTrue();
+        assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
     }
 }

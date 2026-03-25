@@ -75,6 +75,17 @@ Core loop:
 - Learning Style can be edited later in `Settings > Preferences`.
 - Public pages and anonymous flows must not be blocked by onboarding.
 
+### Preferences Rule
+
+- `Settings` should show `Preferences` before `Plan & Billing` and `Account`.
+- `Preferences` currently includes `Learning Style` plus `Study Reminders`.
+- `Learning Style` is stored as `engagementMode`.
+- Reminder toggles are:
+  - `inactivityRemindersEnabled`
+  - `weakConceptRemindersEnabled`
+- Preference values must persist in backend and be returned by `GET /auth/me`.
+- Future reminder cadence should be guided by `Learning Style`, but scheduling logic is a separate task.
+
 ### Analytics Rule
 
 - Track product, growth, and upgrade events through the shared analytics event model.

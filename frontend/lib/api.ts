@@ -279,6 +279,8 @@ export type MeResponse = {
   countryCode: string | null;
   profileType: ProfileType | null;
   engagementMode: EngagementMode;
+  inactivityRemindersEnabled: boolean;
+  weakConceptRemindersEnabled: boolean;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
   role: UserRole;
@@ -289,6 +291,11 @@ export type MeResponse = {
 
 export type UpdateEngagementModeRequest = {
   engagementMode: EngagementMode;
+};
+
+export type UpdateStudyRemindersRequest = {
+  inactivityRemindersEnabled: boolean;
+  weakConceptRemindersEnabled: boolean;
 };
 
 export type CancelPremiumSubscriptionRequest = {
@@ -934,6 +941,19 @@ export async function updateEngagementMode(request: UpdateEngagementModeRequest)
     true,
   );
   return parseApiResponse<MeResponse>(response, "Could not update engagement mode. Please try again.");
+}
+
+export async function updateStudyReminders(request: UpdateStudyRemindersRequest): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/auth/preferences/study-reminders",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<MeResponse>(response, "Could not update study reminders. Please try again.");
 }
 
 export async function createStudyPackFromText(notesText: string): Promise<StudyPackResponse> {

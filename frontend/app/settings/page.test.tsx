@@ -6,6 +6,8 @@ import {
   getBillingHistory,
   getBillingUsageSummary,
   getMe,
+  updateEngagementMode,
+  updateStudyReminders,
 } from "@/lib/api";
 
 const routerMock = {
@@ -35,6 +37,7 @@ jest.mock("@/lib/api", () => ({
   isEmailNotVerifiedError: jest.fn(() => false),
   logout: jest.fn(),
   updateEngagementMode: jest.fn(),
+  updateStudyReminders: jest.fn(),
 }));
 
 const premiumProfile = {
@@ -46,6 +49,8 @@ const premiumProfile = {
   countryCode: null,
   profileType: "STUDENT",
   engagementMode: "FOCUSED",
+  inactivityRemindersEnabled: false,
+  weakConceptRemindersEnabled: false,
   emailVerifiedAt: "2026-03-20T00:00:00Z",
   role: "USER",
   status: "ACTIVE",
@@ -73,6 +78,8 @@ describe("Settings page cancellation flow", () => {
     (getBillingHistory as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
+    (updateEngagementMode as jest.Mock).mockReset();
+    (updateStudyReminders as jest.Mock).mockReset();
 
     (getMe as jest.Mock).mockResolvedValue(premiumProfile);
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
@@ -231,5 +238,57 @@ describe("Settings page cancellation flow", () => {
     const descriptions = screen.getAllByText(/Failed payment|Premium Monthly/);
     expect(descriptions[0]).toHaveTextContent("Failed payment");
     expect(descriptions[1]).toHaveTextContent("Premium Monthly");
+  });
+
+  it("renders Preferences before Plan & Billing and Account", async () => {
+    render(<SettingsPage />);
+
+    const preferencesHeading = await screen.findByRole("heading", { name: "Preferences" });
+    const billingHeading = screen.getByRole("heading", { name: "Plan & Billing" });
+    const accountHeading = screen.getByRole("heading", { name: "Account" });
+
+    expect(preferencesHeading.compareDocumentPosition(billingHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(billingHeading.compareDocumentPosition(accountHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("persists learning style changes", async () => {
+    (updateEngagementMode as jest.Mock).mockResolvedValue({
+      ...premiumProfile,
+      engagementMode: "STREAK",
+      inactivityRemindersEnabled: false,
+      weakConceptRemindersEnabled: false,
+    });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByDisplayValue("STREAK"));
+    fireEvent.click(screen.getByRole("button", { name: "Save Learning Style" }));
+
+    await waitFor(() => {
+      expect(updateEngagementMode).toHaveBeenCalledWith({ engagementMode: "STREAK" });
+    });
+    expect(await screen.findByText("Learning style updated.")).toBeInTheDocument();
+  });
+
+  it("persists study reminder toggles", async () => {
+    (updateStudyReminders as jest.Mock).mockResolvedValue({
+      ...premiumProfile,
+      inactivityRemindersEnabled: true,
+      weakConceptRemindersEnabled: true,
+    });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Inactivity reminders/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Weak concept reminders/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Study Reminders" }));
+
+    await waitFor(() => {
+      expect(updateStudyReminders).toHaveBeenCalledWith({
+        inactivityRemindersEnabled: true,
+        weakConceptRemindersEnabled: true,
+      });
+    });
+    expect(await screen.findByText("Study reminders updated.")).toBeInTheDocument();
   });
 });

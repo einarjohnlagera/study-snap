@@ -17,6 +17,8 @@ public record MeResponse(
         String countryCode,
         ProfileType profileType,
         EngagementMode engagementMode,
+        boolean inactivityRemindersEnabled,
+        boolean weakConceptRemindersEnabled,
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,
         UserRole role,

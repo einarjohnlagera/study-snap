@@ -50,6 +50,12 @@ public class UserEntity {
     @Column(name = "engagement_mode", nullable = false, length = 32)
     private EngagementMode engagementMode;
 
+    @Column(name = "inactivity_reminders_enabled", nullable = false)
+    private Boolean inactivityRemindersEnabled;
+
+    @Column(name = "weak_concept_reminders_enabled", nullable = false)
+    private Boolean weakConceptRemindersEnabled;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private UserStatus status;
