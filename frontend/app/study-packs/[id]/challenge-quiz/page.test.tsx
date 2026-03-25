@@ -72,6 +72,7 @@ describe("ChallengeQuizPage", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -81,6 +82,8 @@ describe("ChallengeQuizPage", () => {
       timeLimitSeconds: 600,
       usedThisMonth: 0,
       monthlyLimit: 50,
+      difficultySelectionAvailable: true,
+      selectedDifficulty: "medium",
       quiz: [
         {
           question: "What powers the cell?",

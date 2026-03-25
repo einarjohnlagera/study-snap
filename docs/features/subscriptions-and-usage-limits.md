@@ -7,15 +7,21 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 ## Plan behavior
 
 ### Free
-- 5 Study Packs per month
+- 10 Study Packs per month
 - My Library and Public Library access
 - Quick Review
-- Soft paywall messaging for Premium-only quiz modes and Study Pack limit blocks
+- Challenge Quiz (5/month)
+- Weak concepts remain visible after quiz/review completion
+- Adaptive Practice is Premium-only
+- Difficulty selection is Premium-only
+- Soft paywall messaging for Premium-only features and Study Pack limit blocks
 
 ### Premium
 - 100 Study Packs per month
 - Challenge Quiz (50/month)
-- Adaptive Practice (50/month)
+- Adaptive Practice (30/month)
+- Difficulty selection
+- Priority AI
 - Weak Concept Detection
 
 ## Premium cancellation
@@ -79,8 +85,8 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Pricing page must display localized pricing from `GET /api/billing/pricing`.
 - Until payments are enabled, pricing CTAs should open the Premium waitlist modal rather than redirect directly into checkout.
 - Pricing page should compare Free vs Premium clearly for student workflows:
-  - Free: Create Notes, Save Notes, `5` Study Packs/month, Quick Review, Public Library Access
-  - Premium: Everything in Free, `100` Study Packs/month, Challenge Quiz, Adaptive Practice, Priority AI generation
+  - Free: Create Notes, Save Notes, `10` Study Packs/month, Quick Review, `5` Challenge Quizzes/month, Weak concepts, Public Library Access
+  - Premium: Everything in Free, `100` Study Packs/month, `50` Challenge Quizzes/month, `30` Adaptive Practice sessions/month, Difficulty selection, Priority AI generation
 - Dashboard should show a Free-only upgrade card with Premium exam-prep messaging and the same waitlist modal entry point.
 
 ## Billing architecture
@@ -181,6 +187,17 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `status`
   - `provider`
   - `providerReferenceId`
+
+## Plan and usage summary API
+
+- `GET /api/billing/usage-summary` should expose the centralized plan model to the frontend.
+- Response contract includes:
+  - `studyPacksLimit`
+  - `challengeQuizLimit`
+  - `adaptivePracticeLimit`
+  - `adaptivePracticeAvailable`
+  - `difficultySelectionAvailable`
+- Frontend gating should rely on these backend flags and limits rather than hardcoded Premium assumptions.
 
 ## PayMongo plan selection
 

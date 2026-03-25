@@ -1,6 +1,7 @@
 package com.studysnap.backend.config;
 
 import com.studysnap.backend.entity.BillingProvider;
+import com.studysnap.backend.entity.PlanType;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -86,10 +87,40 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class Pricing {
-        private int freeMonthlyStudyPackLimit = 5;
+        private int freeMonthlyStudyPackLimit = 10;
         private int premiumMonthlyStudyPackLimit = 100;
+        private int freeMonthlyChallengeQuizLimit = 5;
         private int premiumMonthlyChallengeQuizLimit = 50;
-        private int premiumMonthlyAdaptivePracticeLimit = 50;
+        private int premiumMonthlyAdaptivePracticeLimit = 30;
+        private boolean adaptivePracticePremiumOnly = true;
+        private boolean difficultySelectionPremiumOnly = true;
+
+        public int resolveMonthlyStudyPackLimit(PlanType planType) {
+            return planType == PlanType.PREMIUM
+                    ? premiumMonthlyStudyPackLimit
+                    : freeMonthlyStudyPackLimit;
+        }
+
+        public int resolveMonthlyChallengeQuizLimit(PlanType planType) {
+            return planType == PlanType.PREMIUM
+                    ? premiumMonthlyChallengeQuizLimit
+                    : freeMonthlyChallengeQuizLimit;
+        }
+
+        public int resolveMonthlyAdaptivePracticeLimit(PlanType planType) {
+            if (planType != PlanType.PREMIUM && adaptivePracticePremiumOnly) {
+                return 0;
+            }
+            return premiumMonthlyAdaptivePracticeLimit;
+        }
+
+        public boolean isAdaptivePracticeAvailable(PlanType planType) {
+            return !adaptivePracticePremiumOnly || planType == PlanType.PREMIUM;
+        }
+
+        public boolean isDifficultySelectionAvailable(PlanType planType) {
+            return !difficultySelectionPremiumOnly || planType == PlanType.PREMIUM;
+        }
     }
 
     @Getter

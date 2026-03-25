@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
@@ -61,7 +62,7 @@ class QuickReviewSessionServiceTest {
 
     @BeforeEach
     void setUp() {
-        FeatureGateService featureGateService = new FeatureGateService(subscriptionService);
+        FeatureGateService featureGateService = new FeatureGateService(subscriptionService, new StudySnapProperties());
         quickReviewSessionService = new QuickReviewSessionService(
                 quickReviewSessionRepository,
                 studyPackRepository,
@@ -279,7 +280,7 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
-    void completeSession_hidesWeakConceptsForFreePlan() {
+    void completeSession_keepsWeakConceptsVisibleForFreePlan() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -297,8 +298,8 @@ class QuickReviewSessionServiceTest {
 
         QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
 
-        assertThat(response.weakConcepts()).isEmpty();
-        assertThat(session.getSessionMetadata()).isNull();
+        assertThat(response.weakConcepts()).containsExactly("Light Reactions", "Calvin Cycle");
+        assertThat(session.getSessionMetadata()).isNotNull();
     }
 
     @Test

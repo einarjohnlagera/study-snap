@@ -56,18 +56,16 @@ public class BillingUsageService {
         int challengeQuizUsed = Math.max(challengeQuizUsedFromSessions, monthlyUsage.challengeQuizGenerations());
         int adaptivePracticeUsed = Math.max(adaptivePracticeUsedFromEvents, monthlyUsage.adaptiveQuizGenerations());
 
-        int studyPacksLimit = planType == PlanType.PREMIUM
-                ? properties.getPricing().getPremiumMonthlyStudyPackLimit()
-                : properties.getPricing().getFreeMonthlyStudyPackLimit();
-
         return new BillingUsageSummaryResponse(
                 planType,
                 studyPacksUsed,
-                studyPacksLimit,
+                properties.getPricing().resolveMonthlyStudyPackLimit(planType),
                 challengeQuizUsed,
-                properties.getPricing().getPremiumMonthlyChallengeQuizLimit(),
+                properties.getPricing().resolveMonthlyChallengeQuizLimit(planType),
                 adaptivePracticeUsed,
-                properties.getPricing().getPremiumMonthlyAdaptivePracticeLimit()
+                properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType),
+                properties.getPricing().isAdaptivePracticeAvailable(planType),
+                properties.getPricing().isDifficultySelectionAvailable(planType)
         );
     }
 }

@@ -65,7 +65,7 @@ describe("DashboardPage upgrade messaging", () => {
       usageSummary: {
         planType: "FREE",
         studyPacksUsed: 2,
-        studyPacksLimit: 5,
+        studyPacksLimit: 10,
       },
     });
 

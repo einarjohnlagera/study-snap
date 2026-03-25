@@ -5,9 +5,11 @@ import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
@@ -42,6 +44,8 @@ public class NoteService {
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final UserRepository userRepository;
+    private final SubscriptionService subscriptionService;
+    private final FeatureGateService featureGateService;
     private final AnalyticsService analyticsService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
@@ -340,6 +344,7 @@ public class NoteService {
                 : studyPack.getQuiz();
         int quizCount = quiz.size();
         boolean hasGeneratedQuiz = !quiz.isEmpty();
+        PlanType planType = subscriptionService.resolvePlan(entity.getOwnerUserId());
         return new NoteResponse(
                 entity.getId().toString(),
                 entity.getTitle(),
@@ -362,7 +367,8 @@ public class NoteService {
                 quizCount,
                 hasGeneratedQuiz,
                 hasGeneratedQuiz,
-                hasGeneratedQuiz
+                hasGeneratedQuiz && featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ),
+                hasGeneratedQuiz && featureGateService.hasFeatureAccess(planType, Feature.DIFFICULTY_SELECTION)
         );
     }
 

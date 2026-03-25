@@ -86,13 +86,6 @@ export default function AdaptivePracticePage() {
       requestInFlightRef.current = false;
       return;
     }
-    if (authUser?.planType !== "PREMIUM") {
-      setAdaptiveQuiz(null);
-      setPremiumLocked(true);
-      setLoading(false);
-      requestInFlightRef.current = false;
-      return;
-    }
 
     try {
       const detail = await getNote(noteId);
@@ -103,6 +96,11 @@ export default function AdaptivePracticePage() {
         return;
       }
       setNote(detail);
+      if (!detail.adaptivePracticeAvailable) {
+        setAdaptiveQuiz(null);
+        setPremiumLocked(true);
+        return;
+      }
       const response = await generateAdaptiveQuickReviewQuiz(detail.id);
       setAdaptiveQuiz(response);
       setCurrentIndex(0);

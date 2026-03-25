@@ -9,6 +9,8 @@ public record BillingUsageSummaryResponse(
         int challengeQuizUsed,
         int challengeQuizLimit,
         int adaptivePracticeUsed,
-        int adaptivePracticeLimit
+        int adaptivePracticeLimit,
+        boolean adaptivePracticeAvailable,
+        boolean difficultySelectionAvailable
 ) {
 }

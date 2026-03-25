@@ -92,7 +92,9 @@ describe("Settings page cancellation flow", () => {
       challengeQuizUsed: 1,
       challengeQuizLimit: 50,
       adaptivePracticeUsed: 0,
-      adaptivePracticeLimit: 50,
+      adaptivePracticeLimit: 30,
+      adaptivePracticeAvailable: true,
+      difficultySelectionAvailable: true,
       currentPeriodStart: "2026-03-01T00:00:00Z",
       currentPeriodEnd: "2026-04-01T00:00:00Z",
     });
@@ -205,11 +207,13 @@ describe("Settings page cancellation flow", () => {
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
       studyPacksUsed: 1,
-      studyPacksLimit: 5,
+      studyPacksLimit: 10,
       challengeQuizUsed: 0,
-      challengeQuizLimit: 0,
+      challengeQuizLimit: 5,
       adaptivePracticeUsed: 0,
       adaptivePracticeLimit: 0,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: false,
       currentPeriodStart: "2026-03-01T00:00:00Z",
       currentPeriodEnd: "2026-04-01T00:00:00Z",
     });

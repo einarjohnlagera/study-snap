@@ -25,6 +25,7 @@ public record NoteResponse(
         Integer quizCount,
         boolean quickReviewAvailable,
         boolean challengeQuizAvailable,
-        boolean adaptivePracticeAvailable
+        boolean adaptivePracticeAvailable,
+        boolean difficultySelectionAvailable
 ) {
 }

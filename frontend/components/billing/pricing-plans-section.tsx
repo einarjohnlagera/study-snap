@@ -27,7 +27,7 @@ const COMPARISON_ROWS = [
   },
   {
     label: "Study Packs per month",
-    free: "5",
+    free: "10",
     premium: "100",
   },
   {
@@ -42,11 +42,21 @@ const COMPARISON_ROWS = [
   },
   {
     label: "Challenge Quiz (Exam Mode)",
-    free: null,
+    free: "5",
+    premium: "check",
+  },
+  {
+    label: "Weak Concepts",
+    free: "check",
     premium: "check",
   },
   {
     label: "Adaptive Practice",
+    free: null,
+    premium: "30",
+  },
+  {
+    label: "Difficulty Selection",
     free: null,
     premium: "check",
   },
@@ -114,8 +124,10 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Create Notes</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Save Notes</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />5 Study Packs per month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />10 Study Packs per month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Quick Review</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />5 Challenge Quizzes per month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak concepts visible</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Public Library Access</li>
           </ul>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
@@ -149,8 +161,9 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Everything in Free</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />100 Study Packs per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Challenge Quiz (Exam Mode)</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice (Focus on weak topics)</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />50 Challenge Quizzes per month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />30 Adaptive Practice sessions per month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty Selection</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI generation</li>
           </ul>
           <PremiumWaitlistButton

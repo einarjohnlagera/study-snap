@@ -11,6 +11,7 @@ import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
+  type ChallengeQuizStartRequest,
   completeChallengeQuizSession,
   getInProgressChallengeQuizSession,
   getMyStudyPack,
@@ -23,11 +24,12 @@ import {
   type ChallengeQuizStartResponse,
 } from "@/lib/api";
 
-type ChallengePhase = "prestart" | "running" | "complete" | "premium-locked" | "limit-reached";
+type ChallengePhase = "prestart" | "running" | "complete" | "limit-reached";
 type ChallengeSessionStatePayload = {
   selectedChoices?: Record<string, string>;
   timerStartedAtEpochSeconds?: number;
 };
+type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
 
 const LEAVE_WARNING_MESSAGE = "Leave Challenge Quiz? Your progress is saved, but the timer will continue.";
 
@@ -130,6 +132,7 @@ export default function ChallengeQuizPage() {
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -228,16 +231,13 @@ export default function ChallengeQuizPage() {
         setPhase("prestart");
         return;
       }
-      const planType = authUser?.planType ?? "FREE";
-      if (planType !== "PREMIUM") {
-        setPhase("premium-locked");
-        return;
-      }
 
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
       if (inProgress.sessionId) {
+        setSelectedDifficulty(inProgress.selectedDifficulty);
         applyStartedSession(inProgress, true);
       } else {
+        setSelectedDifficulty(inProgress.selectedDifficulty);
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
@@ -246,7 +246,7 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setPhase("prestart");
+        setPhase(inProgress.usedThisMonth >= inProgress.monthlyLimit ? "limit-reached" : "prestart");
       }
     } catch (err) {
       if (pathname.startsWith("/study-packs/")) {
@@ -406,10 +406,14 @@ export default function ChallengeQuizPage() {
     setStarting(true);
     setError(null);
     try {
-      const started = await startChallengeQuizSession(note.id);
+      const request: ChallengeQuizStartRequest = note.difficultySelectionAvailable
+        ? { difficulty: selectedDifficulty }
+        : {};
+      const started = await startChallengeQuizSession(note.id, request);
       if (!started.sessionId) {
         throw new Error("Could not start Challenge Quiz.");
       }
+      setSelectedDifficulty(started.selectedDifficulty);
       applyStartedSession(started, true);
     } catch (err) {
       const message = isEmailNotVerifiedError(err)
@@ -420,13 +424,11 @@ export default function ChallengeQuizPage() {
       setError(message);
       if (message.toLowerCase().includes("monthly challenge quiz limit")) {
         setPhase("limit-reached");
-      } else if (message.toLowerCase().includes("premium")) {
-        setPhase("premium-locked");
       }
     } finally {
       setStarting(false);
     }
-  }, [applyStartedSession, note, starting]);
+  }, [applyStartedSession, isEmailVerified, note, selectedDifficulty, starting]);
 
   const handleRetry = () => {
     setChallengeSession(null);
@@ -490,24 +492,6 @@ export default function ChallengeQuizPage() {
             </Link>
           </div>
         </Card>
-      ) : phase === "premium-locked" ? (
-        <Card className="space-y-4 p-4 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Challenge Quiz
-          </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">Premium feature</h1>
-          <p className="text-sm text-foreground/75">This feature is available in the Premium plan.</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="w-full sm:w-auto" onClick={() => setShowPremiumPaywall(true)}>
-              See Premium options
-            </Button>
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Note
-              </Button>
-            </Link>
-          </div>
-        </Card>
       ) : phase === "limit-reached" ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
@@ -530,6 +514,43 @@ export default function ChallengeQuizPage() {
           <p className="text-sm text-foreground/80">
             We tailored this quiz based on your recent performance.
           </p>
+          <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">Difficulty</p>
+              {note?.difficultySelectionAvailable ? (
+                <p>Choose the level you want before you start.</p>
+              ) : (
+                <p>Difficulty selection is available on Premium. Free users get a recommended level automatically.</p>
+              )}
+            </div>
+            {note?.difficultySelectionAvailable ? (
+              <div className="grid gap-2 sm:grid-cols-3">
+                {(["easy", "medium", "hard"] as const).map((difficulty) => (
+                  <button
+                    key={difficulty}
+                    type="button"
+                    className={`rounded-md border px-3 py-2 text-left capitalize transition ${
+                      selectedDifficulty === difficulty
+                        ? "border-blue-500 bg-blue-500/10 text-foreground"
+                        : "border-border bg-background"
+                    }`}
+                    onClick={() => setSelectedDifficulty(difficulty)}
+                  >
+                    {difficulty}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm capitalize">
+                  Recommended difficulty: {selectedDifficulty}
+                </p>
+                <Button type="button" variant="outline" onClick={() => setShowPremiumPaywall(true)}>
+                  Choose Difficulty (Premium)
+                </Button>
+              </div>
+            )}
+          </div>
           <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
             <p>Rules:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">

@@ -4,6 +4,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -53,6 +54,8 @@ class QuickReviewAdaptivePracticeServiceTest {
     @Mock
     private ActivityTrackingService activityTrackingService;
     @Mock
+    private SubscriptionService subscriptionService;
+    @Mock
     private FeatureGateService featureGateService;
     @Mock
     private UserUsageService userUsageService;
@@ -75,6 +78,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 activityEventRepository,
                 llmStudyPackService,
                 activityTrackingService,
+                subscriptionService,
                 featureGateService,
                 new StudySnapProperties(),
                 userUsageService,
@@ -102,11 +106,12 @@ class QuickReviewAdaptivePracticeServiceTest {
                 QuickReviewSessionMode.ADAPTIVE,
                 QuickReviewSessionStatus.IN_PROGRESS
         )).thenReturn(Optional.of(existing));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
 
         QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId);
 
         verify(authService).requireEmailVerified(userId);
-        verify(featureGateService).checkFeatureAccess(userId, com.studysnap.backend.entity.Feature.ADAPTIVE_QUIZ);
+        verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
@@ -161,6 +166,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                         3
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
         when(llmStudyPackService.generateAdaptivePracticeQuiz(
                 any(),
                 any(),
@@ -182,6 +188,7 @@ class QuickReviewAdaptivePracticeServiceTest {
 
         assertThat(response.sessionId()).isEqualTo(resumedSessionId.toString());
         assertThat(response.quiz()).hasSize(1);
+        verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
         verify(aiRateLimitService).assertAllowed(userId, PlanType.PREMIUM, "adaptive-practice");
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());

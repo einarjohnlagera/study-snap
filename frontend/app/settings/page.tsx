@@ -255,11 +255,13 @@ export default function SettingsPage() {
     billingHistory?.cancelAtPeriodEnd ?? (profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt),
   );
   const studyPacksUsed = usageSummary?.studyPacksUsed ?? 0;
-  const studyPacksLimit = usageSummary?.studyPacksLimit ?? (isPremiumPlan ? 100 : 5);
+  const studyPacksLimit = usageSummary?.studyPacksLimit ?? (isPremiumPlan ? 100 : 10);
   const challengeQuizUsed = usageSummary?.challengeQuizUsed ?? 0;
-  const challengeQuizLimit = usageSummary?.challengeQuizLimit ?? 50;
+  const challengeQuizLimit = usageSummary?.challengeQuizLimit ?? (isPremiumPlan ? 50 : 5);
   const adaptivePracticeUsed = usageSummary?.adaptivePracticeUsed ?? 0;
-  const adaptivePracticeLimit = usageSummary?.adaptivePracticeLimit ?? 50;
+  const adaptivePracticeLimit = usageSummary?.adaptivePracticeLimit ?? (isPremiumPlan ? 30 : 0);
+  const adaptivePracticeAvailable = usageSummary?.adaptivePracticeAvailable ?? isPremiumPlan;
+  const difficultySelectionAvailable = usageSummary?.difficultySelectionAvailable ?? isPremiumPlan;
   const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
   const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
   const yearlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
@@ -502,9 +504,9 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
                 <UsageMetric label="Study Packs" used={studyPacksUsed} limit={studyPacksLimit} />
-                {isPremiumPlan ? (
+                <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
+                {adaptivePracticeAvailable ? (
                   <>
-                    <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
                     <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
                   </>
                 ) : null}
@@ -516,9 +518,12 @@ export default function SettingsPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Features</p>
                   <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                    <li>Weak Concept Detection</li>
+                    <li>Weak concepts visible</li>
+                    <li>Adaptive Practice available</li>
+                    <li>{adaptivePracticeLimit} Adaptive Practice sessions per month</li>
+                    <li>{difficultySelectionAvailable ? "Difficulty selection enabled" : "Difficulty selection locked"}</li>
                     <li>Higher limits</li>
-                    <li>Premium features enabled</li>
+                    <li>Priority AI enabled</li>
                   </ul>
                 </div>
               ) : (
@@ -527,17 +532,21 @@ export default function SettingsPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free Features</p>
                     <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
                       <li>Save unlimited notes</li>
+                      <li>10 Study Packs per month</li>
                       <li>Quick Review</li>
+                      <li>5 Challenge Quizzes per month</li>
+                      <li>Weak concepts visible</li>
                       <li>Public Library access</li>
                     </ul>
                   </div>
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium Features</p>
                     <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                      <li>Challenge Quiz</li>
-                      <li>Adaptive Practice</li>
-                      <li>Weak Concept Detection</li>
-                      <li>Higher Study Pack limits</li>
+                      <li>100 Study Packs per month</li>
+                      <li>50 Challenge Quizzes per month</li>
+                      <li>30 Adaptive Practice sessions per month</li>
+                      <li>Difficulty selection</li>
+                      <li>Priority AI</li>
                     </ul>
                   </div>
                   <div className="space-y-2">

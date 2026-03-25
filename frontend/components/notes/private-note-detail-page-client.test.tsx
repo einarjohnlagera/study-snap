@@ -78,6 +78,7 @@ const baseNote = {
   quickReviewAvailable: false,
   challengeQuizAvailable: false,
   adaptivePracticeAvailable: false,
+  difficultySelectionAvailable: false,
 };
 
 describe("PrivateNoteDetailPageClient", () => {
@@ -96,11 +97,13 @@ describe("PrivateNoteDetailPageClient", () => {
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
       studyPacksUsed: 2,
-      studyPacksLimit: 5,
+      studyPacksLimit: 10,
       challengeQuizUsed: 0,
-      challengeQuizLimit: 0,
+      challengeQuizLimit: 5,
       adaptivePracticeUsed: 0,
       adaptivePracticeLimit: 0,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: false,
     });
     (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue({
       attempts: 1,
@@ -201,7 +204,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Copy Link" })).toBeInTheDocument();
   });
 
-  it("shows a paywall modal when a free user clicks Challenge Quiz and redirects only after upgrade confirmation", async () => {
+  it("lets free users start Challenge Quiz without showing the premium modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -209,19 +212,15 @@ describe("PrivateNoteDetailPageClient", () => {
       studyPackId: "sp-1",
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
-      adaptivePracticeAvailable: true,
+      adaptivePracticeAvailable: false,
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz (Premium)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
-    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
-    expect(pushMock).not.toHaveBeenCalledWith("/settings#plan-billing");
-
-    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
-
-    expect(await screen.findByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
+    expect(screen.queryByText("Premium is coming soon")).not.toBeInTheDocument();
   });
 
   it("shows a paywall modal when a free user clicks Adaptive Practice", async () => {
@@ -232,12 +231,12 @@ describe("PrivateNoteDetailPageClient", () => {
       studyPackId: "sp-1",
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
-      adaptivePracticeAvailable: true,
+      adaptivePracticeAvailable: false,
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice (Premium)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
     expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
   });
@@ -251,7 +250,9 @@ describe("PrivateNoteDetailPageClient", () => {
       challengeQuizUsed: 1,
       challengeQuizLimit: 50,
       adaptivePracticeUsed: 1,
-      adaptivePracticeLimit: 50,
+      adaptivePracticeLimit: 30,
+      adaptivePracticeAvailable: true,
+      difficultySelectionAvailable: true,
     });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -260,6 +261,7 @@ describe("PrivateNoteDetailPageClient", () => {
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
       adaptivePracticeAvailable: true,
+      difficultySelectionAvailable: true,
     });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);

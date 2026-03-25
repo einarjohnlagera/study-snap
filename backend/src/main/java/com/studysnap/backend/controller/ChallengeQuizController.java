@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
+import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.ChallengeQuizService;
@@ -34,10 +35,11 @@ public class ChallengeQuizController {
     @Deprecated
     public ChallengeQuizStartResponse startChallengeQuiz(
             @PathVariable String studyPackId,
+            @RequestBody(required = false) ChallengeQuizStartRequest request,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
-        return challengeQuizService.startSession(studyPackId, userId);
+        return challengeQuizService.startSession(studyPackId, userId, request);
     }
 
     @GetMapping("/study-packs/{studyPackId}/in-progress")

@@ -7,10 +7,10 @@ import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
 import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
+import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.AnalyticsEventType;
-import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -56,10 +56,12 @@ public class ChallengeQuizService {
     private static final int MID_SCORE_QUESTION_COUNT = 12;
     private static final int HIGH_SCORE_QUESTION_COUNT = 15;
     private static final int DEFAULT_TIME_LIMIT_SECONDS = 600;
+    private static final String DEFAULT_SELECTED_DIFFICULTY = "medium";
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final LlmStudyPackService llmStudyPackService;
+    private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
     private final UserUsageService userUsageService;
@@ -68,7 +70,7 @@ public class ChallengeQuizService {
     private final AnalyticsService analyticsService;
     private final AiRateLimitService aiRateLimitService;
 
-    public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId) {
+    public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
         authService.requireEmailVerified(userId);
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
                 studyPackIdRaw,
@@ -78,7 +80,8 @@ public class ChallengeQuizService {
         );
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
-        featureGateService.checkFeatureAccess(userId, Feature.CHALLENGE_QUIZ);
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        String selectedDifficulty = resolveSelectedDifficulty(planType, request);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
@@ -92,16 +95,16 @@ public class ChallengeQuizService {
             List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(existing.getSessionState());
             if (!existingQuiz.isEmpty()) {
                 int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
-                return toStartResponse(existing, studyPack, usedThisMonth);
+                return toStartResponse(existing, studyPack, usedThisMonth, planType);
             }
             existing.setStatus(QuickReviewSessionStatus.COMPLETED);
             existing.setCompletedAt(OffsetDateTime.now());
             quickReviewSessionRepository.save(existing);
         }
 
-        int usedThisMonth = assertChallengeQuizQuotaAvailable(userId);
-        aiRateLimitService.assertAllowed(userId, PlanType.PREMIUM, "challenge-quiz");
-        ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId);
+        int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
+        aiRateLimitService.assertAllowed(userId, planType, "challenge-quiz");
+        ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty);
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         List<QuizItem> generatedQuiz = llmStudyPackService.generateChallengeQuiz(
                 studyPack.getTitle(),
@@ -148,9 +151,10 @@ public class ChallengeQuizService {
         userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
         analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, studyPackId, Map.of(
                 "sessionId", saved.getId().toString(),
-                "questionCount", challengeQuiz.size()
+                "questionCount", challengeQuiz.size(),
+                "difficulty", profile.difficulty()
         ));
-        return toStartResponse(saved, studyPack, usedThisMonth + 1);
+        return toStartResponse(saved, studyPack, usedThisMonth + 1, planType);
     }
 
     @Transactional(readOnly = true)
@@ -163,6 +167,7 @@ public class ChallengeQuizService {
         );
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+        PlanType planType = subscriptionService.resolvePlan(userId);
 
         int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
         return quickReviewSessionRepository
@@ -172,7 +177,7 @@ public class ChallengeQuizService {
                         QuickReviewSessionMode.CHALLENGE,
                         QuickReviewSessionStatus.IN_PROGRESS
                 )
-                .map(session -> toStartResponse(session, studyPack, usedThisMonth))
+                .map(session -> toStartResponse(session, studyPack, usedThisMonth, planType))
                 .orElse(new ChallengeQuizStartResponse(
                         null,
                         studyPack.getId().toString(),
@@ -180,7 +185,9 @@ public class ChallengeQuizService {
                         0,
                         DEFAULT_TIME_LIMIT_SECONDS,
                         usedThisMonth,
-                        properties.getPricing().getPremiumMonthlyChallengeQuizLimit(),
+                        properties.getPricing().resolveMonthlyChallengeQuizLimit(planType),
+                        properties.getPricing().isDifficultySelectionAvailable(planType),
+                        DEFAULT_SELECTED_DIFFICULTY,
                         List.of(),
                         0,
                         null
@@ -289,7 +296,8 @@ public class ChallengeQuizService {
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(saved.getStudyPackId(), userId)
                 .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
         int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
-        return toStartResponse(saved, studyPack, usedThisMonth);
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        return toStartResponse(saved, studyPack, usedThisMonth, planType);
     }
 
     public ChallengeQuizSessionResponse completeSession(String sessionIdRaw, UUID userId, ChallengeQuizCompleteRequest request) {
@@ -364,9 +372,9 @@ public class ChallengeQuizService {
         );
     }
 
-    private int assertChallengeQuizQuotaAvailable(UUID userId) {
+    private int assertChallengeQuizQuotaAvailable(UUID userId, PlanType planType) {
         long usedThisMonth = countChallengeQuizUsedThisMonth(userId);
-        int monthlyLimit = properties.getPricing().getPremiumMonthlyChallengeQuizLimit();
+        int monthlyLimit = properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
         if (usedThisMonth < monthlyLimit) {
             return (int) usedThisMonth;
         }
@@ -391,7 +399,10 @@ public class ChallengeQuizService {
         return Math.max(usedFromSessions, usedFromUsage);
     }
 
-    private ChallengeGenerationProfile resolveGenerationProfile(UUID userId, UUID studyPackId) {
+    private ChallengeGenerationProfile resolveGenerationProfile(UUID userId, UUID studyPackId, String selectedDifficulty) {
+        if (selectedDifficulty != null) {
+            return new ChallengeGenerationProfile(resolveQuestionCountForDifficulty(selectedDifficulty), selectedDifficulty);
+        }
         QuickReviewSessionEntity latestQuickReview = quickReviewSessionRepository
                 .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
@@ -404,16 +415,24 @@ public class ChallengeQuizService {
                 .orElse(null);
         BigDecimal previousScore = latestQuickReview == null ? null : latestQuickReview.getScorePercentage();
         if (previousScore == null) {
-            return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, "medium");
+            return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, DEFAULT_SELECTED_DIFFICULTY);
         }
 
         if (previousScore.compareTo(BigDecimal.valueOf(50)) < 0) {
-            return new ChallengeGenerationProfile(LOW_SCORE_QUESTION_COUNT, "easy-medium");
+            return new ChallengeGenerationProfile(LOW_SCORE_QUESTION_COUNT, "easy");
         }
         if (previousScore.compareTo(BigDecimal.valueOf(80)) < 0) {
-            return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, "medium");
+            return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, DEFAULT_SELECTED_DIFFICULTY);
         }
-        return new ChallengeGenerationProfile(HIGH_SCORE_QUESTION_COUNT, "medium-hard");
+        return new ChallengeGenerationProfile(HIGH_SCORE_QUESTION_COUNT, "hard");
+    }
+
+    private int resolveQuestionCountForDifficulty(String difficulty) {
+        return switch (difficulty) {
+            case "easy" -> LOW_SCORE_QUESTION_COUNT;
+            case "hard" -> HIGH_SCORE_QUESTION_COUNT;
+            default -> MID_SCORE_QUESTION_COUNT;
+        };
     }
 
     private List<String> extractQuestionTexts(List<QuizItem> quiz) {
@@ -426,7 +445,12 @@ public class ChallengeQuizService {
                 .toList();
     }
 
-    private ChallengeQuizStartResponse toStartResponse(QuickReviewSessionEntity session, StudyPackEntity studyPack, int usedThisMonth) {
+    private ChallengeQuizStartResponse toStartResponse(
+            QuickReviewSessionEntity session,
+            StudyPackEntity studyPack,
+            int usedThisMonth,
+            PlanType planType
+    ) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         if (quiz.isEmpty()) {
             throw new AppException(
@@ -436,7 +460,7 @@ public class ChallengeQuizService {
             );
         }
         int timeLimitSeconds = extractTimeLimitSeconds(session.getSessionState());
-        int limit = properties.getPricing().getPremiumMonthlyChallengeQuizLimit();
+        int limit = properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
         return new ChallengeQuizStartResponse(
                 session.getId().toString(),
                 studyPack.getId().toString(),
@@ -445,10 +469,28 @@ public class ChallengeQuizService {
                 timeLimitSeconds,
                 usedThisMonth,
                 limit,
+                properties.getPricing().isDifficultySelectionAvailable(planType),
+                extractDifficulty(session.getSessionState()),
                 quiz,
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),
                 sanitizeSessionStateForClient(session.getSessionState())
         );
+    }
+
+    private String resolveSelectedDifficulty(PlanType planType, ChallengeQuizStartRequest request) {
+        if (request == null || request.difficulty() == null || request.difficulty().isBlank()) {
+            return null;
+        }
+        featureGateService.checkFeatureAccess(planType, com.studysnap.backend.entity.Feature.DIFFICULTY_SELECTION);
+        String normalized = request.difficulty().trim().toLowerCase();
+        return switch (normalized) {
+            case "easy", "medium", "hard" -> normalized;
+            default -> throw new AppException(
+                    "INVALID_CHALLENGE_QUIZ_DIFFICULTY",
+                    "Difficulty must be easy, medium, or hard.",
+                    HttpStatus.BAD_REQUEST
+            );
+        };
     }
 
     private ChallengeQuizSessionSummaryResponse toSessionSummaryResponse(QuickReviewSessionEntity session) {
@@ -474,6 +516,17 @@ public class ChallengeQuizService {
         state.put(SESSION_STATE_COMPLETED, false);
         state.put("difficulty", difficulty);
         return state;
+    }
+
+    private String extractDifficulty(Map<String, Object> sessionState) {
+        if (sessionState == null) {
+            return DEFAULT_SELECTED_DIFFICULTY;
+        }
+        Object raw = sessionState.get("difficulty");
+        if (raw instanceof String difficulty && !difficulty.isBlank()) {
+            return difficulty;
+        }
+        return DEFAULT_SELECTED_DIFFICULTY;
     }
 
     private int extractTimeLimitSeconds(Map<String, Object> sessionState) {

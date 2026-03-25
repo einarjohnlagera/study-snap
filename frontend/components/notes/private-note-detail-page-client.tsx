@@ -473,8 +473,8 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       setToast("Verify your email to use this feature.");
       return;
     }
-    if (!isPremiumPlan) {
-      setActivePaywallModal("challenge-quiz");
+    if (!note.challengeQuizAvailable) {
+      setToast("Generate a Study Pack with quiz questions before starting Challenge Quiz.");
       return;
     }
     router.push(`/notes/${note.id}/challenge-quiz`);
@@ -488,7 +488,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       setToast("Verify your email to use this feature.");
       return;
     }
-    if (!isPremiumPlan) {
+    if (!note.adaptivePracticeAvailable) {
       setActivePaywallModal("adaptive-practice");
       return;
     }
@@ -791,11 +791,11 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
                         Start Quick Review
                       </Button>
                       <Button type="button" variant="outline" onClick={handleStartChallengeQuiz}>
-                        {isPremiumPlan ? "Challenge Quiz" : "Challenge Quiz (Premium)"}
+                        Challenge Quiz
                       </Button>
                       {hasAdaptiveTargets ? (
                         <Button type="button" variant="outline" onClick={handleStartAdaptivePractice}>
-                          {isPremiumPlan ? "Adaptive Practice" : "Adaptive Practice (Premium)"}
+                          Adaptive Practice
                         </Button>
                       ) : null}
                     </>
