@@ -1,0 +1,8 @@
+Hi {{name}},
+
+Thanks for your interest in NoteLib Premium.
+
+We're currently enabling payments. We'll let you know as soon as Premium becomes available.
+
+You can keep studying anytime from your dashboard:
+{{dashboardUrl}}

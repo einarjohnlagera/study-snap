@@ -35,7 +35,7 @@ class AdminDashboardControllerTest {
     void getSummary_returnsAdminDashboardSummary() {
         AdminDashboardController controller = new AdminDashboardController(adminDashboardService);
         AdminDashboardSummaryResponse expected = new AdminDashboardSummaryResponse(
-                new AdminDashboardSummaryResponse.Overview(120, 90, 18, 420, 275, 44, 830, 67, 18),
+                new AdminDashboardSummaryResponse.Overview(120, 90, 18, 41, 420, 275, 44, 830, 67, 18),
                 new AdminDashboardSummaryResponse.Billing(18, 12, 6, 2, 3, new BigDecimal("199.50"), new BigDecimal("1499.00")),
                 new AdminDashboardSummaryResponse.Engagement(38, 240, 81, 44, 130, 27, 52, 31)
         );

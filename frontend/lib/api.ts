@@ -173,6 +173,7 @@ export type AdminDashboardSummaryResponse = {
     totalUsers: number;
     verifiedUsers: number;
     premiumUsers: number;
+    premiumWaitlistCount: number;
     totalNotes: number;
     totalStudyPacksGenerated: number;
     totalPublicNotes: number;
@@ -1543,6 +1544,21 @@ export async function createPremiumCheckoutSession(
   return parseApiResponse<BillingCheckoutSessionResponse>(
     response,
     "Could not start Premium checkout. Please try again.",
+  );
+}
+
+export async function joinPremiumWaitlist(): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    "/premium/waitlist",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(
+    response,
+    "Could not join the Premium waitlist right now. Please try again.",
   );
 }
 

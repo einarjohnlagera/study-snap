@@ -1,6 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
-import { createStudyPackFromNote, extractNoteTextFromFile, getBillingPricing, getBillingUsageSummary, getNote } from "@/lib/api";
+import {
+  createStudyPackFromNote,
+  extractNoteTextFromFile,
+  getBillingPricing,
+  getBillingUsageSummary,
+  getNote,
+  joinPremiumWaitlist,
+} from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
@@ -29,6 +36,7 @@ jest.mock("@/lib/api", () => ({
   getBillingUsageSummary: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
+  joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
 }));
@@ -66,6 +74,7 @@ describe("NoteEditorPageClient", () => {
     (getBillingPricing as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
+    (joinPremiumWaitlist as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
       planType: "FREE",
@@ -84,6 +93,9 @@ describe("NoteEditorPageClient", () => {
       introMonthlyPrice: 199,
       hasIntroPromo: true,
       introEligible: true,
+    });
+    (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
+      message: "You're on the list! We'll notify you when Premium launches.",
     });
   });
 
@@ -165,12 +177,11 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getByRole("button", { name: /Generate Study Pack/i }));
 
-    expect(await screen.findByText("You've reached your monthly limit")).toBeInTheDocument();
-    expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
+    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+    expect(await screen.findByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
   });
 
   it("imports image OCR text into Content without generating a Study Pack and shows an inline warning for low confidence", async () => {

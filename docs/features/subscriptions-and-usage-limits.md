@@ -50,23 +50,20 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 
 ## Soft paywall UX
 
-- Free users should not be redirected immediately to `Settings` when they click Premium-only quiz actions.
-- Clicking `Challenge Quiz` as a Free user should open a reusable `AppModal`-based paywall first.
-- Challenge Quiz modal copy:
-  - title: `Unlock Exam Mode`
-  - body: `Challenge Quiz simulates a real exam and helps you test your knowledge without seeing answers immediately. Perfect for exam preparation.`
-  - actions: `Maybe Later` and `Upgrade to Premium`
-- Clicking `Adaptive Practice` as a Free user should open a reusable paywall first.
-- Adaptive Practice modal copy:
-  - title: `Focus on Your Weak Topics`
-  - body: `Adaptive Practice creates quizzes based on the topics you got wrong so you can improve faster and focus on weak areas.`
-  - actions: `Maybe Later` and `Upgrade to Premium`
-- If a Free user reaches the monthly Study Pack generation limit, show a limit-reached paywall modal first.
-- Limit modal copy:
-  - title: `You've reached your monthly limit`
-  - body explains Free includes `5` Study Pack generations/month and Premium unlocks more usage plus Premium quiz modes
-  - actions: `OK` and `Upgrade to Premium`
-- Only the explicit `Upgrade to Premium` action should navigate to `Settings` billing.
+- Free users should not be redirected immediately into payment when they click Premium-only quiz actions.
+- During the current pre-launch billing phase, upgrade CTAs open a reusable `Premium is coming soon` modal instead of checkout.
+- The coming-soon modal should list:
+  - `Challenge Quiz`
+  - `Adaptive Practice`
+  - `Weak Concept Training`
+  - `Higher monthly limits`
+- Modal actions are:
+  - `Join Waitlist`
+  - `Maybe Later`
+- Joining the waitlist calls `POST /api/premium/waitlist`.
+- Waitlist joins are idempotent per authenticated user and should return:
+  - `You're on the list! We'll notify you when Premium launches.`
+- Challenge Quiz, Adaptive Practice, Study Pack limit blocks, Settings billing, pricing CTAs, dashboard upgrade cards, and near-limit banners should all route through this pre-launch waitlist flow.
 - At `80%` of the Free Study Pack limit, show a non-blocking warning banner on:
   - Dashboard
   - Note Detail
@@ -80,10 +77,11 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - subtitle: `Turn your notes into summaries, quizzes, and reviewers in seconds.`
   - actions: `Start Free` and `Upgrade to Premium`
 - Pricing page must display localized pricing from `GET /api/billing/pricing`.
+- Until payments are enabled, pricing CTAs should open the Premium waitlist modal rather than redirect directly into checkout.
 - Pricing page should compare Free vs Premium clearly for student workflows:
   - Free: Create Notes, Save Notes, `5` Study Packs/month, Quick Review, Public Library Access
   - Premium: Everything in Free, `100` Study Packs/month, Challenge Quiz, Adaptive Practice, Priority AI generation
-- Dashboard should show a Free-only upgrade card with Premium exam-prep messaging and a redirect to `Settings` billing.
+- Dashboard should show a Free-only upgrade card with Premium exam-prep messaging and the same waitlist modal entry point.
 
 ## Billing architecture
 
@@ -91,6 +89,18 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Active runtime provider is `PAYMONGO`.
 - Backend is the single source of truth for Premium pricing, region resolution, voucher eligibility, and PayMongo plan selection.
 - Frontend pricing surfaces must read pricing from `GET /api/billing/pricing` and must not hardcode subscription amounts.
+- Premium checkout plumbing may remain in place behind the provider abstraction, but the current user-facing conversion flow is waitlist-first until payment launch is enabled.
+
+## Premium waitlist
+
+- Waitlist persistence lives in `premium_waitlist`.
+- Stored fields:
+  - `id`
+  - `user_id`
+  - `email`
+  - `created_at`
+- Only one waitlist row is allowed per user.
+- Admin reporting should surface the waitlist total as a core Premium-interest metric.
 
 ## Regional pricing
 

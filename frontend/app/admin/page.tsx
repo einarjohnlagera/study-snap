@@ -141,6 +141,7 @@ export default function AdminPage() {
       { label: "Total Users", value: formatMetric(summary.overview.totalUsers) },
       { label: "Verified Users", value: formatMetric(summary.overview.verifiedUsers) },
       { label: "Premium Users", value: formatMetric(summary.overview.premiumUsers) },
+      { label: "Premium Waitlist", value: formatMetric(summary.overview.premiumWaitlistCount) },
       { label: "Total Notes", value: formatMetric(summary.overview.totalNotes) },
       { label: "Study Packs", value: formatMetric(summary.overview.totalStudyPacksGenerated) },
       { label: "Public Notes", value: formatMetric(summary.overview.totalPublicNotes) },

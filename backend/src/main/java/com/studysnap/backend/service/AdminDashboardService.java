@@ -18,6 +18,7 @@ import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
+import com.studysnap.backend.repository.PremiumWaitlistRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -52,6 +53,7 @@ public class AdminDashboardService {
     private final StudyPackRepository studyPackRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final PaymentTransactionRepository paymentTransactionRepository;
+    private final PremiumWaitlistRepository premiumWaitlistRepository;
 
     public AdminDashboardSummaryResponse getSummary() {
         OffsetDateTime now = OffsetDateTime.now();
@@ -84,6 +86,7 @@ public class AdminDashboardService {
                         userRepository.count(),
                         userRepository.countByEmailVerifiedAtIsNotNull(),
                         premiumUsers,
+                        premiumWaitlistRepository.count(),
                         noteRepository.count(),
                         studyPackRepository.count(),
                         noteRepository.countByVisibility(NoteVisibility.PUBLIC),

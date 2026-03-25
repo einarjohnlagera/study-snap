@@ -6,6 +6,7 @@ import {
   getChallengeQuizPerformanceSummary,
   getNote,
   getQuickReviewPerformanceSummary,
+  joinPremiumWaitlist,
   updateNote,
   updateNoteVisibility,
 } from "@/lib/api";
@@ -46,6 +47,8 @@ jest.mock("@/lib/api", () => ({
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: () => false,
+  joinPremiumWaitlist: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
   updateNoteVisibility: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
@@ -87,6 +90,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (getBillingUsageSummary as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (joinPremiumWaitlist as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
     (getBillingUsageSummary as jest.Mock).mockResolvedValue({
@@ -120,6 +124,9 @@ describe("PrivateNoteDetailPageClient", () => {
       introMonthlyPrice: 199,
       hasIntroPromo: true,
       introEligible: true,
+    });
+    (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
+      message: "You're on the list! We'll notify you when Premium launches.",
     });
   });
 
@@ -209,16 +216,12 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz (Premium)" }));
 
-    expect(await screen.findByText("Unlock Exam Mode")).toBeInTheDocument();
-    expect(
-      await screen.findByText(/Challenge Quiz simulates a real exam and helps you test your knowledge without seeing answers immediately/i),
-    ).toBeInTheDocument();
-    expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
+    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalledWith("/settings#plan-billing");
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+    expect(await screen.findByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
   });
 
   it("shows a paywall modal when a free user clicks Adaptive Practice", async () => {
@@ -236,10 +239,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice (Premium)" }));
 
-    expect(await screen.findByText("Focus on Your Weak Topics")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Adaptive Practice creates quizzes based on the topics you got wrong so you can improve faster/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
   });
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {

@@ -1,7 +1,6 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 import { Card } from "@/components/ui/card";
-import { PLAN_BILLING_PATH, getUsageProgressPercent } from "@/lib/plans";
+import { getUsageProgressPercent } from "@/lib/plans";
 
 type PlanUsageCardProps = {
   usedThisMonth: number;
@@ -31,14 +30,10 @@ export function PlanUsageCard({ usedThisMonth, monthlyLimit }: PlanUsageCardProp
       {hasReachedLimit ? (
         <div className="space-y-3 rounded-md border border-border bg-background p-3">
           <p className="text-sm text-foreground/85">You have reached your monthly Study Pack limit.</p>
-          <Link href={PLAN_BILLING_PATH} className="inline-flex">
-            <Button type="button" size="sm">Upgrade to Premium</Button>
-          </Link>
+          <PremiumWaitlistButton label="Upgrade to Premium" source="dashboard_plan_usage_limit" size="sm" />
         </div>
       ) : (
-        <Link href={PLAN_BILLING_PATH} className="inline-flex">
-          <Button type="button" variant="outline" size="sm">Upgrade</Button>
-        </Link>
+        <PremiumWaitlistButton label="Upgrade" source="dashboard_plan_usage_card" variant="outline" size="sm" />
       )}
     </Card>
   );
