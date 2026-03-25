@@ -31,7 +31,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 @Service
-@Transactional(readOnly = true)
+@Transactional
 @RequiredArgsConstructor
 public class NoteTextExtractionService {
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of("image/jpeg", "image/png", "image/webp");
