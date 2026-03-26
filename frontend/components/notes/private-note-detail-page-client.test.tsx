@@ -86,6 +86,8 @@ describe("PrivateNoteDetailPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
@@ -237,7 +239,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
-    expect(screen.queryByText("Premium is coming soon")).not.toBeInTheDocument();
+    expect(screen.queryByText("Adaptive Practice is a Premium feature")).not.toBeInTheDocument();
   });
 
   it("shows a paywall modal when a free user clicks Adaptive Practice", async () => {
@@ -255,7 +257,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
-    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
+    expect(await screen.findByText("Adaptive Practice is a Premium feature")).toBeInTheDocument();
   });
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {

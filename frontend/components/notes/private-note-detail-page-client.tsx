@@ -28,6 +28,7 @@ import {
   getNote,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
+  trackAnalyticsEvent,
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
@@ -269,6 +270,18 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const shouldShowNearLimitBanner = usageSummary
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksUsed, studyPacksLimit)
     : false;
+  const openPaywallModal = useCallback((variant: PaywallModalVariant, source: string) => {
+    void trackAnalyticsEvent({
+      eventType: "FEATURE_LOCKED_CLICKED",
+      metadata: {
+        feature: variant === "adaptive-practice" ? "adaptive" : "study_pack_limit",
+        source,
+        path: pathname,
+        noteId: note?.id ?? null,
+      },
+    });
+    setActivePaywallModal(variant);
+  }, [note?.id, pathname]);
 
   const performVisibilityUpdate = useCallback(async (
     nextVisibility: NoteVisibility,
@@ -313,7 +326,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     if (hasReachedStudyPackLimit) {
-      setActivePaywallModal("study-pack-limit");
+      openPaywallModal("study-pack-limit", "private_note_detail_generate");
       return;
     }
 
@@ -330,7 +343,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       } else {
         const message = err instanceof Error ? err.message : "Could not generate Study Pack.";
         if (isStudyPackLimitReachedMessage(message)) {
-          setActivePaywallModal("study-pack-limit");
+          openPaywallModal("study-pack-limit", "private_note_detail_generate_error");
         } else {
           setError(message);
         }
@@ -489,7 +502,7 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       return;
     }
     if (!note.adaptivePracticeAvailable) {
-      setActivePaywallModal("adaptive-practice");
+      openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice");
       return;
     }
     router.push(`/notes/${note.id}/adaptive-practice`);
@@ -991,7 +1004,8 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
 
       <PaywallModal
         isOpen={activePaywallModal !== null}
-        variant={activePaywallModal ?? "challenge-quiz"}
+        variant={activePaywallModal ?? "study-pack-limit"}
+        source="private_note_detail"
         onClose={() => setActivePaywallModal(null)}
       />
     </main>

@@ -17,6 +17,7 @@ import {
   getNote,
   saveQuickReviewConfidence,
   startQuickReviewSession,
+  trackAnalyticsEvent,
   updateQuickReviewSessionProgress,
   type NoteResponse,
   type QuickReviewConfidenceLevel,
@@ -164,6 +165,18 @@ export default function QuickReviewPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+  const openAdaptivePracticePaywall = useCallback((source: string) => {
+    void trackAnalyticsEvent({
+      eventType: "FEATURE_LOCKED_CLICKED",
+      metadata: {
+        feature: "adaptive",
+        source,
+        path: pathname,
+        noteId,
+      },
+    });
+    setActivePaywallModal("adaptive-practice");
+  }, [noteId, pathname]);
 
   const resetQuickReviewState = useCallback((allIndexes: number[]) => {
     setPhase("initial");
@@ -730,7 +743,7 @@ export default function QuickReviewPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setActivePaywallModal("adaptive-practice")}
+                  onClick={() => openAdaptivePracticePaywall("quick_review_results_upgrade")}
                 >
                     Upgrade to Premium
                 </Button>
@@ -788,7 +801,7 @@ export default function QuickReviewPage() {
                   type="button"
                   variant="outline"
                   className="w-full sm:w-auto"
-                  onClick={() => setActivePaywallModal("adaptive-practice")}
+                  onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
                 >
                     Unlock Practice Weak Concepts
                 </Button>
@@ -883,7 +896,8 @@ export default function QuickReviewPage() {
 
       <PaywallModal
         isOpen={activePaywallModal !== null}
-        variant={activePaywallModal ?? "challenge-quiz"}
+        variant={activePaywallModal ?? "adaptive-practice"}
+        source="quick_review_page"
         onClose={() => setActivePaywallModal(null)}
       />
     </main>
