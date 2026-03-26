@@ -7,10 +7,12 @@ import { Trophy } from "lucide-react";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AppModal } from "@/components/ui/app-modal";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
+  completeProductOnboarding,
   completeQuickReviewSession,
   generateQuickReviewStudyTip,
   getMyStudyPack,
@@ -25,6 +27,11 @@ import {
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
 } from "@/lib/api";
+import {
+  clearFirstStudyOnboardingStep,
+  getFirstStudyOnboardingStep,
+  hasPendingFirstStudyOnboarding,
+} from "@/lib/first-study-onboarding";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
 type SessionStatePayload = {
@@ -158,6 +165,7 @@ export default function QuickReviewPage() {
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
+  const [showCompletionGuide, setShowCompletionGuide] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -345,6 +353,20 @@ export default function QuickReviewPage() {
       window.removeEventListener("studysnap-auth-change", syncAuthState);
     };
   }, []);
+
+  useEffect(() => {
+    const authUser = getAuthUser();
+    if (!authUser || !hasPendingFirstStudyOnboarding(authUser)) {
+      setShowCompletionGuide(false);
+      return;
+    }
+    const firstStudyStep = getFirstStudyOnboardingStep(authUser.id);
+    if (firstStudyStep === "study-pack-ready" && isComplete) {
+      setShowCompletionGuide(true);
+      return;
+    }
+    setShowCompletionGuide(false);
+  }, [isComplete]);
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -628,6 +650,31 @@ export default function QuickReviewPage() {
     }
   }, [completingSession, completionTracked, currentSessionId, savingConfidence]);
 
+  const finalizeFirstStudyOnboarding = useCallback(async () => {
+    const authUser = getAuthUser();
+    if (!authUser) {
+      router.push("/dashboard");
+      return;
+    }
+    try {
+      const me = await completeProductOnboarding(false);
+      setAuthUser({
+        ...authUser,
+        displayName: me.displayName,
+        profileType: me.profileType,
+        emailVerifiedAt: me.emailVerifiedAt,
+        onboardingCompletedAt: me.onboardingCompletedAt,
+        productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+      });
+    } catch {
+      // Best-effort completion only.
+    } finally {
+      clearFirstStudyOnboardingStep(authUser.id);
+      setShowCompletionGuide(false);
+      router.push("/dashboard");
+    }
+  }, [router]);
+
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
@@ -899,6 +946,28 @@ export default function QuickReviewPage() {
         variant={activePaywallModal ?? "adaptive-practice"}
         source="quick_review_page"
         onClose={() => setActivePaywallModal(null)}
+      />
+
+      <AppModal
+        isOpen={showCompletionGuide}
+        title="You’re all set!"
+        description="You can now track your progress, see weak concepts, and continue practicing anytime from your dashboard."
+        onClose={() => {
+          void finalizeFirstStudyOnboarding();
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                void finalizeFirstStudyOnboarding();
+              }}
+            >
+              Go to Dashboard
+            </Button>
+          </div>
+        )}
       />
     </main>
   );

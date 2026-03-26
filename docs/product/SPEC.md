@@ -254,6 +254,11 @@ Primary routes:
   - inactive-user reminder after `3` days without meaningful study activity
   - weak-concept reminder after `3` days without follow-up practice on weak Challenge Quiz concepts
   - weekly progress summary every Sunday at `6:00 PM`
+- First-study product onboarding is separate from preferences onboarding and guides new users through:
+  - create note
+  - generate Study Pack
+  - complete Quick Review
+  - return to Dashboard
 
 ### Plan and Billing
 

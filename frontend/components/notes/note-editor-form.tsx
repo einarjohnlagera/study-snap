@@ -36,6 +36,8 @@ type NoteEditorFormProps = {
   disableContentEditing?: boolean;
   contentLockHint?: string | null;
   disableGenerateAction?: boolean;
+  firstStudyHintVisible?: boolean;
+  onDismissFirstStudyHint?: () => void;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -67,6 +69,8 @@ export function NoteEditorForm({
   disableContentEditing = false,
   contentLockHint = null,
   disableGenerateAction = false,
+  firstStudyHintVisible = false,
+  onDismissFirstStudyHint,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -250,6 +254,22 @@ export function NoteEditorForm({
           </div>
         </section>
 
+        {firstStudyHintVisible ? (
+          <div className="rounded-lg border border-blue-500/30 bg-blue-50/80 p-4 text-sm text-blue-950 dark:bg-blue-950/30 dark:text-blue-100">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <p className="font-semibold">Step 1: Add your notes here.</p>
+                <p>You can type, paste, or upload a file or image.</p>
+              </div>
+              {onDismissFirstStudyHint ? (
+                <Button type="button" variant="outline" size="sm" onClick={onDismissFirstStudyHint}>
+                  Skip guide
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <section className="space-y-2">
           <label htmlFor="note-content" className="text-sm font-medium text-foreground">Content</label>
           <textarea
@@ -260,6 +280,8 @@ export function NoteEditorForm({
             readOnly={disableContentEditing}
             className={`min-h-[340px] w-full rounded-lg border border-border bg-background px-4 py-3 text-sm leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600 sm:text-base ${
               disableContentEditing ? "cursor-not-allowed bg-muted/30 text-foreground/80" : ""
+            } ${
+              firstStudyHintVisible ? "border-blue-500 ring-2 ring-blue-500/30" : ""
             }`}
           />
           {disableContentEditing ? (
@@ -283,7 +305,9 @@ export function NoteEditorForm({
           )}
         </section>
 
-        <section className="space-y-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4">
+        <section className={`space-y-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4 ${
+          firstStudyHintVisible ? "border-blue-500/60 ring-2 ring-blue-500/20" : ""
+        }`}>
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">Import Notes</p>
             <p className="text-xs text-foreground/65">

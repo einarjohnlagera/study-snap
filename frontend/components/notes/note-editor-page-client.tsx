@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import {
+  completeProductOnboarding,
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
@@ -15,7 +16,7 @@ import {
   type NoteResponse,
   updateNote,
 } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   hasReachedUsageLimit,
@@ -29,6 +30,13 @@ import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteEditorForm, type NoteEditorDraft } from "@/components/notes/note-editor-form";
+import {
+  clearFirstStudyOnboardingStep,
+  getFirstStudyOnboardingStep,
+  hasPendingFirstStudyOnboarding,
+  setFirstStudyOnboardingStep,
+  type FirstStudyOnboardingStep,
+} from "@/lib/first-study-onboarding";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
@@ -90,6 +98,7 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
   const [importStatusMessage, setImportStatusMessage] = useState<string | null>(null);
   const [importReviewMessage, setImportReviewMessage] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
+  const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
@@ -97,8 +106,15 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
 
   useEffect(() => {
     const syncAuthState = () => {
-      setIsEmailVerified(Boolean(getAuthUser()?.emailVerifiedAt));
+      const authUser = getAuthUser();
+      setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
+      if (authUser && hasPendingFirstStudyOnboarding(authUser)) {
+        setFirstStudyStep(getFirstStudyOnboardingStep(authUser.id));
+        return;
+      }
+      setFirstStudyStep(null);
     };
+    syncAuthState();
     globalThis.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
       globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
@@ -330,6 +346,11 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
       if (!saved) {
         return;
       }
+      const authUser = getAuthUser();
+      if (authUser && firstStudyStep === "create-note") {
+        setFirstStudyOnboardingStep(authUser.id, "saved-note");
+        setFirstStudyStep("saved-note");
+      }
       setSaveStateLabel("Saved");
       if (isDetailPage) {
         router.push(`/notes/${saved.id}?saved=1`);
@@ -343,7 +364,7 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
     } finally {
       setIsSaving(false);
     }
-  }, [contentEmpty, isDetailPage, isGenerating, isSaving, router, showToast, upsertNote]);
+  }, [contentEmpty, firstStudyStep, isDetailPage, isGenerating, isSaving, router, showToast, upsertNote]);
 
   const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
     router.push(`/notes/${noteIdToOpen}?from=notes&created=1`);
@@ -456,6 +477,30 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
   const studyPackMessage = isDetailPage
     ? "Generate a Study Pack from this note when you are ready."
     : "Save your note for later, or generate immediately when the content is ready.";
+  const showFirstStudyHint = !isDetailPage && firstStudyStep === "create-note";
+
+  const dismissFirstStudyHint = useCallback(async () => {
+    const authUser = getAuthUser();
+    if (!authUser) {
+      return;
+    }
+    try {
+      const me = await completeProductOnboarding(true);
+      setAuthUser({
+        ...authUser,
+        displayName: me.displayName,
+        profileType: me.profileType,
+        emailVerifiedAt: me.emailVerifiedAt,
+        onboardingCompletedAt: me.onboardingCompletedAt,
+        productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+      });
+    } catch {
+      // Best-effort onboarding persistence should not block editing.
+    } finally {
+      clearFirstStudyOnboardingStep(authUser.id);
+      setFirstStudyStep(null);
+    }
+  }, []);
 
   if (loadingNote) {
     return (
@@ -525,6 +570,10 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
         disableContentEditing={contentLocked}
         contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."
         disableGenerateAction={!isEmailVerified}
+        firstStudyHintVisible={showFirstStudyHint}
+        onDismissFirstStudyHint={showFirstStudyHint ? () => {
+          void dismissFirstStudyHint();
+        } : undefined}
       />
 
       <AiSuggestionModal

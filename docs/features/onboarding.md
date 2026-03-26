@@ -2,7 +2,12 @@
 
 ## Goal
 
-Collect the minimum study preferences needed to personalize NoteLib for newly verified users without adding heavy setup friction.
+NoteLib uses two short onboarding flows:
+
+- preferences onboarding for newly verified users
+- first-study product onboarding for users who have not created a Study Pack yet
+
+The goal is to personalize the app quickly, then guide brand-new users through their first note-to-review workflow.
 
 ## Activation Rule
 
@@ -55,3 +60,25 @@ On submit:
 - Learning Style can be edited later in `Settings > Preferences`
 
 Onboarding is only the first-time setup surface.
+
+## First-Study Product Onboarding
+
+This separate walkthrough teaches the first core workflow:
+
+`Create Note -> Generate Study Pack -> Quick Review -> Dashboard`
+
+Required behavior:
+
+- show the welcome modal only when `studyPackCount == 0`
+- do not show the walkthrough after `productOnboardingCompletedAt` is set
+- let the user skip the guide at any step
+- persist only the final completion/dismissal flag in backend
+- keep the in-progress UI step lightweight on the frontend
+
+First-study steps:
+
+- welcome modal on `Dashboard`
+- create-note hint on `New Note`
+- generate-study-pack modal on `Note Detail`
+- quick-review modal on `Note Detail`
+- completion modal after first Quick Review

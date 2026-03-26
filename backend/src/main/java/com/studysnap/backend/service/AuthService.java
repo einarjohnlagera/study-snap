@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
+import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
@@ -23,6 +24,7 @@ import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthService {
     private final UserRepository userRepository;
+    private final StudyPackRepository studyPackRepository;
     private final SubscriptionService subscriptionService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -75,6 +78,7 @@ public class AuthService {
         user.setLongestStreak(0);
         user.setLastStudyDate(null);
         user.setOnboardingCompletedAt(null);
+        user.setProductOnboardingCompletedAt(null);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
         user.setLastPasswordChangeAt(now);
@@ -180,6 +184,15 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    public MeResponse completeProductOnboarding(UUID userId, CompleteProductOnboardingRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        if (user.getProductOnboardingCompletedAt() == null) {
+            user.setProductOnboardingCompletedAt(OffsetDateTime.now());
+            user.setUpdatedAt(OffsetDateTime.now());
+        }
+        return toMeResponse(user);
+    }
+
     public SimpleMessageResponse requestEmailVerification(UUID userId) {
         UserEntity user = findUserOrThrow(userId);
         if (user.getEmailVerifiedAt() != null) {
@@ -219,6 +232,7 @@ public class AuthService {
 
     private MeResponse toMeResponse(UserEntity user) {
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(user.getId());
+        long studyPackCount = studyPackRepository.countByOwnerUserId(user.getId());
         return new MeResponse(
                 user.getId().toString(),
                 user.getEmail(),
@@ -232,6 +246,8 @@ public class AuthService {
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
+                user.getProductOnboardingCompletedAt(),
+                studyPackCount,
                 user.getRole(),
                 user.getStatus(),
                 planSnapshot.planType(),
@@ -273,13 +289,14 @@ public class AuthService {
         return new AuthResponse(
                 user.getId().toString(),
                 user.getEmail(),
-                user.getDisplayName(),
-                user.getProfileType(),
-                user.getEmailVerifiedAt(),
-                user.getOnboardingCompletedAt(),
-                user.getRole(),
-                planType,
-                accessToken,
+            user.getDisplayName(),
+            user.getProfileType(),
+            user.getEmailVerifiedAt(),
+            user.getOnboardingCompletedAt(),
+            user.getProductOnboardingCompletedAt(),
+            user.getRole(),
+            planType,
+            accessToken,
                 refreshToken.rawToken(),
                 accessExpiresAt,
                 refreshToken.expiresAt()

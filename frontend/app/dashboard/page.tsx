@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { shouldShowNearStudyPackLimitBanner } from "@/lib/plans";
 import {
+  completeProductOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
   getMe,
@@ -19,7 +20,7 @@ import {
   type DashboardOverviewResponse,
   type NoteListItemResponse,
 } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { ContinueSpotlight } from "./continue-spotlight";
 import { DashboardHero } from "./dashboard-hero";
@@ -32,6 +33,12 @@ import { DashboardLoading } from "./dashboard-loading";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
 import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
+import { AppModal } from "@/components/ui/app-modal";
+import {
+  clearFirstStudyOnboardingStep,
+  isFirstStudyOnboardingEligible,
+  setFirstStudyOnboardingStep,
+} from "@/lib/first-study-onboarding";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -45,6 +52,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
+  const [showFirstStudyWelcomeModal, setShowFirstStudyWelcomeModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
 
   const loadDashboard = useCallback(async () => {
@@ -88,10 +96,12 @@ export default function DashboardPage() {
       ]);
 
       if (meResult.status === "fulfilled") {
-        const preferredName = meResult.value.firstName?.trim()
-          || meResult.value.displayName?.trim()
+        const me = meResult.value;
+        const preferredName = me.firstName?.trim()
+          || me.displayName?.trim()
           || "there";
         setGreetingName(preferredName);
+        setShowFirstStudyWelcomeModal(isFirstStudyOnboardingEligible(me));
       }
       setContinueStudying(continueStudyingResult.status === "fulfilled" ? continueStudyingResult.value : null);
       setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
@@ -137,6 +147,29 @@ export default function DashboardPage() {
     setShowWelcomeMessage(false);
   }, []);
 
+  const handleSkipFirstStudyOnboarding = useCallback(async () => {
+    const authUser = getAuthUser();
+    if (!authUser) {
+      return;
+    }
+    try {
+      const me = await completeProductOnboarding(true);
+      setAuthUser({
+        ...authUser,
+        displayName: me.displayName,
+        profileType: me.profileType,
+        emailVerifiedAt: me.emailVerifiedAt,
+        onboardingCompletedAt: me.onboardingCompletedAt,
+        productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+      });
+    } catch {
+      // Best-effort dismissal only.
+    } finally {
+      clearFirstStudyOnboardingStep(authUser.id);
+      setShowFirstStudyWelcomeModal(false);
+    }
+  }, []);
+
   const recentNotes = useMemo(
     () => [...items]
       .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
@@ -172,7 +205,7 @@ export default function DashboardPage() {
         >
           {shouldShowNearLimitBanner ? <NearLimitBanner /> : null}
           {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}
-          {showWelcomeMessage ? (
+          {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">
                 Welcome to NoteLib! Start by creating a note, then generate your first Study Pack.
@@ -220,6 +253,43 @@ export default function DashboardPage() {
         variant={activePaywallModal ?? "adaptive-practice"}
         onClose={() => setActivePaywallModal(null)}
         source="dashboard_focus_areas"
+      />
+
+      <AppModal
+        isOpen={showFirstStudyWelcomeModal}
+        title="Welcome to NoteLib"
+        description="NoteLib helps you turn notes into summaries, key concepts, and quizzes. Let’s create your first study pack."
+        onClose={() => {
+          void handleSkipFirstStudyOnboarding();
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                void handleSkipFirstStudyOnboarding();
+              }}
+            >
+              Skip for now
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                const authUser = getAuthUser();
+                if (authUser) {
+                  setFirstStudyOnboardingStep(authUser.id, "create-note");
+                }
+                setShowFirstStudyWelcomeModal(false);
+                router.push("/notes/new");
+              }}
+            >
+              Create My First Note
+            </Button>
+          </div>
+        )}
       />
     </div>
   );

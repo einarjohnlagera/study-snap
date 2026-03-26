@@ -194,6 +194,8 @@ class BillingControllerTest {
                 false,
                 OffsetDateTime.parse("2026-03-20T00:00:00Z"),
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                0,
                 UserRole.USER,
                 UserStatus.ACTIVE,
                 PlanType.PREMIUM,

@@ -292,6 +292,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
             profileType: me.profileType,
             emailVerifiedAt: me.emailVerifiedAt,
             onboardingCompletedAt: me.onboardingCompletedAt,
+            productOnboardingCompletedAt: me.productOnboardingCompletedAt,
             planSummary,
           });
         }

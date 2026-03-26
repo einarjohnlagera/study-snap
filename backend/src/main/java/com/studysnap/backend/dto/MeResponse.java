@@ -21,6 +21,8 @@ public record MeResponse(
         boolean weakConceptRemindersEnabled,
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,
+        OffsetDateTime productOnboardingCompletedAt,
+        long studyPackCount,
         UserRole role,
         UserStatus status,
         PlanType planType,

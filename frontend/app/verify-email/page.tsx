@@ -78,6 +78,7 @@ function VerifyEmailPageContent() {
             profileType: me.profileType,
             emailVerifiedAt: me.emailVerifiedAt,
             onboardingCompletedAt: me.onboardingCompletedAt,
+            productOnboardingCompletedAt: me.productOnboardingCompletedAt,
             planSummary,
           };
           setAuthUser(nextAuthUser);
