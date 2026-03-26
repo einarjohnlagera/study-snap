@@ -25,12 +25,11 @@ class MePlanServiceTest {
     @Mock
     private UserUsageService userUsageService;
 
-    private StudySnapProperties properties;
     private MePlanService mePlanService;
 
     @BeforeEach
     void setUp() {
-        properties = new StudySnapProperties();
+        StudySnapProperties properties = new StudySnapProperties();
         properties.getPricing().setFreeMonthlyStudyPackLimit(10);
         properties.getPricing().setPremiumMonthlyStudyPackLimit(100);
         properties.getPricing().setFreeMonthlyChallengeQuizLimit(5);
@@ -48,11 +47,20 @@ class MePlanServiceTest {
         UUID userId = UUID.randomUUID();
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new UserUsageService.MonthlyUsage(3, 2, 0, 5));
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                        3,
+                        2,
+                        0,
+                        5
+                ));
 
         MePlanResponse response = mePlanService.getPlan(userId);
 
         assertThat(response.plan()).isEqualTo(PlanType.FREE);
+        assertThat(response.usageCycle().startsAt()).isEqualTo(OffsetDateTime.parse("2026-03-10T00:00:00Z"));
+        assertThat(response.usageCycle().endsAt()).isEqualTo(OffsetDateTime.parse("2026-04-10T00:00:00Z"));
         assertThat(response.limits().studyPacksPerMonth()).isEqualTo(10);
         assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(5);
         assertThat(response.limits().adaptivePracticePerMonth()).isZero();
@@ -76,11 +84,19 @@ class MePlanServiceTest {
         UUID userId = UUID.randomUUID();
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new UserUsageService.MonthlyUsage(101, 50, 33, 120));
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-20T00:00:00Z"),
+                        101,
+                        50,
+                        33,
+                        120
+                ));
 
         MePlanResponse response = mePlanService.getPlan(userId);
 
         assertThat(response.plan()).isEqualTo(PlanType.PREMIUM);
+        assertThat(response.usageCycle().endsAt()).isEqualTo(OffsetDateTime.parse("2026-04-20T00:00:00Z"));
         assertThat(response.limits().studyPacksPerMonth()).isEqualTo(100);
         assertThat(response.limits().challengeQuizzesPerMonth()).isEqualTo(50);
         assertThat(response.limits().adaptivePracticePerMonth()).isEqualTo(30);

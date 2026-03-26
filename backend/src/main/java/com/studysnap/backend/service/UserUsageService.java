@@ -20,12 +20,14 @@ public class UserUsageService {
         BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, referenceTime);
         return userUsageRepository.findByUserIdAndPeriodStart(userId, usagePeriod.periodStart())
                 .map(usage -> new MonthlyUsage(
+                        usage.getPeriodStart(),
+                        usage.getPeriodEnd(),
                         usage.getStudyPackGenerations(),
                         usage.getChallengeQuizGenerations(),
                         usage.getAdaptiveQuizGenerations(),
                         usage.getOcrExtractions()
                 ))
-                .orElse(MonthlyUsage.zero());
+                .orElse(MonthlyUsage.zero(usagePeriod.periodStart(), usagePeriod.periodEnd()));
     }
 
     public void ensureUsagePeriod(UUID userId, OffsetDateTime referenceTime) {
@@ -94,13 +96,20 @@ public class UserUsageService {
     }
 
     public record MonthlyUsage(
+            OffsetDateTime periodStart,
+            OffsetDateTime periodEnd,
             int studyPackGenerations,
             int challengeQuizGenerations,
             int adaptiveQuizGenerations,
             int ocrExtractions
     ) {
         public static MonthlyUsage zero() {
-            return new MonthlyUsage(0, 0, 0, 0);
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+            return new MonthlyUsage(now, now, 0, 0, 0, 0);
+        }
+
+        public static MonthlyUsage zero(OffsetDateTime periodStart, OffsetDateTime periodEnd) {
+            return new MonthlyUsage(periodStart, periodEnd, 0, 0, 0, 0);
         }
     }
 }

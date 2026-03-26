@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +37,10 @@ class MeControllerTest {
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         MePlanResponse expected = new MePlanResponse(
                 PlanType.FREE,
+                new MePlanResponse.UsageCycle(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z")
+                ),
                 new MePlanResponse.Limits(10, 5, 0, 20),
                 new MePlanResponse.Usage(3, 2, 0, 5),
                 new MePlanResponse.Remaining(7, 3, 0, 15),

@@ -213,6 +213,25 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `features.fileUploadAvailable`
   - `features.ocrAvailable`
 - Frontend gating and usage UI should rely on this API instead of hardcoded limits or Premium flags.
+- `usageCycle.startsAt` and `usageCycle.endsAt` define the current billing-period window used for quota reset messaging.
+
+## Settings usage UI
+
+- `Settings -> Plan & Billing -> Monthly Usage` should render progress bars instead of plain counters.
+- Free users see:
+  - `Study Packs`
+  - `Challenge Quiz`
+- Premium users also see:
+  - `Adaptive Practice`
+- OCR usage remains hidden from the Settings UI even though it is still tracked and enforced in backend.
+- Progress bar colors:
+  - `0-60%`: blue
+  - `60-85%`: orange
+  - `85-100%`: red
+- When a visible limit is reached:
+  - show `You've reached your limit for this cycle.`
+  - show the reset date from `usageCycle.endsAt`
+  - show `Upgrade to Premium` for Free users only
 
 ## Usage reset windows
 

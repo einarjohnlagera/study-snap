@@ -209,6 +209,22 @@ Primary routes:
 - Reuse existing in-progress session to avoid duplicate LLM calls
 - Usage limit: 50/month (separate from Study Pack generation quota)
 
+## Plan Usage Display
+
+- `Settings -> Plan & Billing` shows billing-cycle usage bars instead of raw counters.
+- Free users see:
+  - `Study Packs`
+  - `Challenge Quiz`
+- Premium users also see:
+  - `Adaptive Practice`
+- OCR usage is tracked in backend but hidden from the Settings UI.
+- Usage bars use warning colors:
+  - `0-60%` normal
+  - `60-85%` warning
+  - `85-100%` danger
+- Usage reset dates are based on the billing cycle, not the calendar month.
+- When a Free user hits a visible limit, Settings should show an `Upgrade to Premium` CTA.
+
 ### Authentication Session Handling
 
 - Protected routes require auth

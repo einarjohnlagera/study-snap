@@ -76,7 +76,14 @@ class OcrUsageProtectionServiceTest {
     @Test
     void rejectsWhenTrackedOcrUsageReachesFreeLimit() {
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new UserUsageService.MonthlyUsage(0, 0, 0, 2));
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                        0,
+                        0,
+                        0,
+                        2
+                ));
 
         AppException error = assertThrows(AppException.class, () -> service.assertQuotaAvailable(userId, PlanType.FREE));
 
@@ -87,7 +94,14 @@ class OcrUsageProtectionServiceTest {
     @Test
     void allowsPremiumUsersWithHigherConfiguredQuota() {
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new UserUsageService.MonthlyUsage(0, 0, 0, 3));
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                        0,
+                        0,
+                        0,
+                        3
+                ));
 
         assertDoesNotThrow(() -> service.assertQuotaAvailable(userId, PlanType.PREMIUM));
     }

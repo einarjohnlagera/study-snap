@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import SettingsPage from "./page";
 import {
   cancelPremiumSubscription,
@@ -87,6 +87,10 @@ describe("Settings page cancellation flow", () => {
     (getMe as jest.Mock).mockResolvedValue(premiumProfile);
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "PREMIUM",
+      usageCycle: {
+        startsAt: "2026-03-20T00:00:00Z",
+        endsAt: "2026-04-20T00:00:00Z",
+      },
       limits: {
         studyPacksPerMonth: 100,
         challengeQuizzesPerMonth: 50,
@@ -220,6 +224,10 @@ describe("Settings page cancellation flow", () => {
     });
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
+      usageCycle: {
+        startsAt: "2026-03-20T00:00:00Z",
+        endsAt: "2026-04-20T00:00:00Z",
+      },
       limits: {
         studyPacksPerMonth: 10,
         challengeQuizzesPerMonth: 5,
@@ -319,6 +327,112 @@ describe("Settings page cancellation flow", () => {
 
     expect(await screen.findByText("Monthly Usage")).toBeInTheDocument();
     expect(screen.queryByText(/OCR:/)).not.toBeInTheDocument();
+  });
+
+  it("shows usage reset date and hides adaptive practice usage for free users", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...premiumProfile,
+      planType: "FREE",
+      subscription: {
+        cancelAtPeriodEnd: false,
+        premiumEndsAt: null,
+        cancelledAt: null,
+      },
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      usageCycle: {
+        startsAt: "2026-03-15T00:00:00Z",
+        endsAt: "2026-04-15T00:00:00Z",
+      },
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 3,
+        challengeQuizzesUsed: 1,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 7,
+        challengeQuizzesRemaining: 4,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("Usage resets on: April 15")).toBeInTheDocument();
+    expect(screen.queryByTestId("usage-metric-adaptive-practice")).not.toBeInTheDocument();
+  });
+
+  it("shows adaptive practice usage for premium users", async () => {
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("Usage resets on: April 20")).toBeInTheDocument();
+    expect(screen.getByTestId("usage-metric-adaptive-practice")).toBeInTheDocument();
+    expect(within(screen.getByTestId("usage-metric-adaptive-practice")).getByText("0 / 30")).toBeInTheDocument();
+  });
+
+  it("shows upgrade CTA when a free user reaches a usage limit", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...premiumProfile,
+      planType: "FREE",
+      subscription: {
+        cancelAtPeriodEnd: false,
+        premiumEndsAt: null,
+        cancelledAt: null,
+      },
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      usageCycle: {
+        startsAt: "2026-03-15T00:00:00Z",
+        endsAt: "2026-04-15T00:00:00Z",
+      },
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 10,
+        challengeQuizzesUsed: 1,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 0,
+        challengeQuizzesRemaining: 4,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<SettingsPage />);
+
+    const studyPackMetric = await screen.findByTestId("usage-metric-study-packs");
+    expect(studyPackMetric).toHaveTextContent("April 15");
+    expect(studyPackMetric).toHaveTextContent("Upgrade to Premium");
+    expect(within(studyPackMetric).getByRole("button", { name: "Upgrade to Premium" })).toBeInTheDocument();
   });
 
   it("persists learning style changes", async () => {
