@@ -34,12 +34,16 @@ describe("PricingPage", () => {
     expect(screen.queryByText("Included")).not.toBeInTheDocument();
     expect(screen.queryByText("Not included")).not.toBeInTheDocument();
     expect(screen.getByText("Start studying for free.")).toBeInTheDocument();
-    expect(screen.getByText("Unlock adaptive practice and advanced quizzes.")).toBeInTheDocument();
-    expect(screen.getByText("10 AI Study Packs / month")).toBeInTheDocument();
-    expect(screen.getByText("5 Challenge Quizzes / month")).toBeInTheDocument();
+    expect(screen.getByText("Unlock adaptive practice and deeper quiz training.")).toBeInTheDocument();
+    expect(screen.getByText("Most students upgrade during exam weeks.")).toBeInTheDocument();
+    expect(screen.getByText("10 Study Packs per month")).toBeInTheDocument();
+    expect(screen.getByText("5 Challenge Quizzes per month")).toBeInTheDocument();
     expect(screen.getAllByText("Weak Concepts Insights")).not.toHaveLength(0);
     expect(screen.getAllByText("File Uploads (PDF, DOCX, TXT)")).not.toHaveLength(0);
-    expect(screen.getByText("Image to Text (OCR) - Limited")).toBeInTheDocument();
+    expect(screen.getByText("Limited OCR (Image to Text)")).toBeInTheDocument();
+    expect(screen.getByText("Everything in Free")).toBeInTheDocument();
+    expect(screen.getByText("More Study Packs and Quizzes")).toBeInTheDocument();
+    expect(screen.getByText("Adaptive Practice for weak topics")).toBeInTheDocument();
     expect(screen.getByText("Higher OCR Limits")).toBeInTheDocument();
     expect(screen.getAllByText("Choose Quiz Difficulty")).not.toHaveLength(0);
     expect(screen.getByText("More practice. Better results.")).toBeInTheDocument();
@@ -52,6 +56,9 @@ describe("PricingPage", () => {
     expect(screen.getByText("Premium Features")).toBeInTheDocument();
     expect(screen.getAllByText("Image to Text (OCR)")).not.toHaveLength(0);
     expect(screen.queryByText("Image to Text (OCR) / month")).not.toBeInTheDocument();
+    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("50")).toBeInTheDocument();
+    expect(screen.getByText("30")).toBeInTheDocument();
     expect(screen.getByText("Limited")).toBeInTheDocument();
     expect(screen.getByText("Higher Limits")).toBeInTheDocument();
 
