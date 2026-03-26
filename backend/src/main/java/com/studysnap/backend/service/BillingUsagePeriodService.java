@@ -4,13 +4,16 @@ import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.SubscriptionRepository;
+import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Service
@@ -19,6 +22,7 @@ public class BillingUsagePeriodService {
     private static final long YEARLY_DURATION_THRESHOLD_DAYS = 300;
 
     private final SubscriptionRepository subscriptionRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public UsagePeriod resolveUsagePeriod(UUID userId, OffsetDateTime referenceTime) {
@@ -31,7 +35,7 @@ public class BillingUsagePeriodService {
                 .filter(subscription -> isWithinActiveWindow(subscription, nowUtc))
                 .findFirst()
                 .map(this::toPremiumUsagePeriod)
-                .orElseGet(() -> toFreeUsagePeriod(nowUtc));
+                .orElseGet(() -> toFreeUsagePeriod(userId, nowUtc));
     }
 
     public UsagePeriod toPremiumUsagePeriod(SubscriptionEntity subscription) {
@@ -54,17 +58,43 @@ public class BillingUsagePeriodService {
         );
     }
 
-    public UsagePeriod toFreeUsagePeriod(OffsetDateTime referenceTime) {
+    public UsagePeriod toFreeUsagePeriod(UUID userId, OffsetDateTime referenceTime) {
         OffsetDateTime nowUtc = normalize(referenceTime);
-        OffsetDateTime monthStart = nowUtc.withDayOfMonth(1).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime anchor = userRepository.findCreatedAtById(userId)
+                .map(this::normalize)
+                .orElseThrow(UserNotFoundException::new);
+        OffsetDateTime periodStart = resolveCycleStart(anchor, nowUtc);
+        OffsetDateTime periodEnd = periodStart.plusMonths(1);
         return new UsagePeriod(
                 PlanType.FREE,
                 BillingCycle.MONTHLY,
-                monthStart,
-                monthStart.plusMonths(1),
-                monthStart.getYear(),
-                monthStart.getMonthValue()
+                periodStart,
+                periodEnd,
+                periodStart.getYear(),
+                periodStart.getMonthValue()
         );
+    }
+
+    private OffsetDateTime resolveCycleStart(OffsetDateTime anchor, OffsetDateTime referenceTime) {
+        if (referenceTime.isBefore(anchor)) {
+            return anchor;
+        }
+
+        long monthOffset = ChronoUnit.MONTHS.between(
+                anchor.toLocalDate().withDayOfMonth(1),
+                referenceTime.toLocalDate().withDayOfMonth(1)
+        );
+        OffsetDateTime candidate = anchor.plusMonths(monthOffset);
+
+        while (candidate.isAfter(referenceTime)) {
+            monthOffset -= 1;
+            candidate = anchor.plusMonths(monthOffset);
+        }
+        while (!candidate.plusMonths(1).isAfter(referenceTime)) {
+            monthOffset += 1;
+            candidate = anchor.plusMonths(monthOffset);
+        }
+        return candidate;
     }
 
     private BillingCycle resolveBillingCycle(SubscriptionEntity subscription) {

@@ -314,6 +314,13 @@ describe("Settings page cancellation flow", () => {
     expect(billingHeading.compareDocumentPosition(accountHeading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
+  it("does not show OCR usage in the settings usage section", async () => {
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("Monthly Usage")).toBeInTheDocument();
+    expect(screen.queryByText(/OCR:/)).not.toBeInTheDocument();
+  });
+
   it("persists learning style changes", async () => {
     (updateEngagementMode as jest.Mock).mockResolvedValue({
       ...premiumProfile,

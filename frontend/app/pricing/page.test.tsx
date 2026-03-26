@@ -44,6 +44,12 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("Choose Quiz Difficulty")).not.toHaveLength(0);
     expect(screen.getByText("More practice. Better results.")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
+
+    const pricingText = document.body.textContent ?? "";
+    expect(pricingText.indexOf("Unlimited Notes")).toBeLessThan(pricingText.indexOf("AI Study Packs / month"));
+    expect(pricingText.indexOf("AI Study Packs / month")).toBeLessThan(pricingText.indexOf("File Uploads (PDF, DOCX, TXT)"));
+    expect(pricingText.indexOf("File Uploads (PDF, DOCX, TXT)")).toBeLessThan(pricingText.indexOf("Image to Text (OCR)"));
+    expect(pricingText.indexOf("Image to Text (OCR)")).toBeLessThan(pricingText.indexOf("Challenge Quizzes / month"));
   });
 
   it("links signup CTA and opens the premium waitlist flow", async () => {

@@ -27,24 +27,19 @@ const COMPARISON_ROWS = [
     premium: String(pricingConfig.premium.studyPacksPerMonth),
   },
   {
-    label: "Challenge Quizzes / month",
-    free: String(pricingConfig.free.challengeQuizzesPerMonth),
-    premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
-  },
-  {
-    label: "Weak Concepts Insights",
-    free: "check",
-    premium: "check",
-  },
-  {
     label: "File Uploads (PDF, DOCX, TXT)",
     free: "check",
     premium: "check",
   },
   {
-    label: "Image to Text (OCR) / month",
-    free: String(pricingConfig.free.ocrPerMonth),
-    premium: String(pricingConfig.premium.ocrPerMonth),
+    label: "Image to Text (OCR)",
+    free: "Limited",
+    premium: "Higher Limits",
+  },
+  {
+    label: "Challenge Quizzes / month",
+    free: String(pricingConfig.free.challengeQuizzesPerMonth),
+    premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
   },
   {
     label: "Public Library Access",
@@ -52,7 +47,12 @@ const COMPARISON_ROWS = [
     premium: "check",
   },
   {
-    label: "Adaptive Practice / month",
+    label: "Weak Concepts Insights",
+    free: "check",
+    premium: "check",
+  },
+  {
+    label: "Adaptive Practice",
     free: null,
     premium: String(pricingConfig.premium.adaptivePracticePerMonth),
   },
@@ -131,11 +131,11 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Unlimited Notes</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} AI Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Insights</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />File Uploads (PDF, DOCX, TXT)</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Image to Text (OCR) - Limited</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Public Library Access</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Insights</li>
           </ul>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
             Start for Free
@@ -166,13 +166,13 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
             ) : null}
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Everything in Free</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.studyPacksPerMonth} AI Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Everything in Free</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher OCR Limits</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.adaptivePracticePerMonth} Adaptive Practice / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Choose Quiz Difficulty</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI Processing</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher OCR Limits</li>
           </ul>
           <div className="space-y-2">
             <PremiumWaitlistButton

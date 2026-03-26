@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
+import { PremiumWaitlistModal } from "@/components/billing/premium-waitlist-modal";
 import {
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
   getNote,
   isEmailNotVerifiedError,
+  isOcrLimitReachedError,
   type NoteResponse,
   updateNote,
 } from "@/lib/api";
@@ -24,6 +26,7 @@ import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AppModal } from "@/components/ui/app-modal";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteEditorForm, type NoteEditorDraft } from "@/components/notes/note-editor-form";
 
@@ -87,6 +90,8 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
   const [importReviewMessage, setImportReviewMessage] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
+  const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
+  const [showOcrUpgradeModal, setShowOcrUpgradeModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
 
   useEffect(() => {
@@ -203,6 +208,14 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
         setImportReviewMessage(null);
         resetImportInput();
         showToast(verificationMessage, "info");
+        return;
+      }
+      if (isOcrLimitReachedError(error)) {
+        setImportFlowState("failure");
+        setImportStatusMessage(null);
+        setImportReviewMessage(null);
+        resetImportInput();
+        setShowOcrLimitModal(true);
         return;
       }
       setImportFlowState("failure");
@@ -421,6 +434,7 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
   const studyPackMessage = isDetailPage
     ? "Generate a Study Pack from this note when you are ready."
     : "Save your note for later, or generate immediately when the content is ready.";
+  const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
 
   if (loadingNote) {
     return (
@@ -508,6 +522,46 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
         isOpen={showLimitReachedModal}
         variant="study-pack-limit"
         onClose={() => setShowLimitReachedModal(false)}
+      />
+
+      <AppModal
+        isOpen={showOcrLimitModal}
+        title="OCR limit reached"
+        description={currentPlan === "PREMIUM"
+          ? "You’ve reached your OCR limit for this billing cycle. Your limits will reset on your next billing date."
+          : "You’ve reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade to Premium for higher OCR limits."}
+        onClose={() => setShowOcrLimitModal(false)}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setShowOcrLimitModal(false)}
+            >
+              OK
+            </Button>
+            {currentPlan === "FREE" ? (
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setShowOcrLimitModal(false);
+                  setShowOcrUpgradeModal(true);
+                }}
+              >
+                Upgrade to Premium
+              </Button>
+            ) : null}
+          </div>
+        )}
+      />
+
+      <PremiumWaitlistModal
+        isOpen={showOcrUpgradeModal}
+        onClose={() => setShowOcrUpgradeModal(false)}
+        source="note_editor_ocr_limit"
+        feature="ocr"
       />
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}

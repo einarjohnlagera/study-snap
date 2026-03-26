@@ -232,7 +232,7 @@ Settings route section: `Plan & Billing`
   - Study Packs (monthly quota)
   - Challenge Quiz (plan-based monthly quota)
   - Adaptive Practice (Premium-only, plan-based monthly quota)
-  - OCR (plan-based monthly quota)
+  - OCR (tracked internally, hidden from user-facing usage UI)
 - PayMongo recurring subscription checkout for upgrade
 - Billing webhook sync keeps plan state aligned (webhook-driven source of truth)
   - `subscription.activated`
@@ -247,6 +247,9 @@ Plan limits:
 
 - Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, OCR quota, file uploads, weak concept visibility
 - Premium: 100 Study Packs/month, 50 Challenge Quizzes/month, 30 Adaptive Practice sessions/month, higher OCR quota, difficulty selection, priority AI
+- Usage windows are billing-cycle-based:
+  - Free resets monthly from account creation date
+  - Premium resets from the active subscription billing window
 
 ---
 

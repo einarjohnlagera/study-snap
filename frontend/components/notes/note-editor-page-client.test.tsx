@@ -6,6 +6,7 @@ import {
   getBillingPricing,
   getMyPlan,
   getNote,
+  isOcrLimitReachedError,
   joinPremiumWaitlist,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -37,6 +38,7 @@ jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
+  isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
   joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
@@ -415,5 +417,65 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
 
     expect(await screen.findAllByText("Verify your email before using OCR upload.")).not.toHaveLength(0);
+  });
+
+  it("shows the free OCR limit modal and upgrade path", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockRejectedValue(new Error("OCR_LIMIT_REACHED"));
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["img"], "note.png", { type: "image/png" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
+    expect(screen.getByText(/You’ve reached your image-to-text limit for this month\./i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
+  });
+
+  it("shows the premium OCR limit modal without upgrade CTA", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "PREMIUM",
+      limits: {
+        studyPacksPerMonth: 100,
+        challengeQuizzesPerMonth: 50,
+        adaptivePracticePerMonth: 30,
+        ocrPerMonth: 100,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 100,
+      },
+      remaining: {
+        studyPacksRemaining: 98,
+        challengeQuizzesRemaining: 50,
+        adaptivePracticeRemaining: 30,
+        ocrRemaining: 0,
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        difficultySelectionAvailable: true,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+    (extractNoteTextFromFile as jest.Mock).mockRejectedValue(new Error("OCR_LIMIT_REACHED"));
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["img"], "note.png", { type: "image/png" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
+    expect(screen.getByText(/Your limits will reset on your next billing date\./i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Upgrade to Premium" })).not.toBeInTheDocument();
   });
 });

@@ -386,6 +386,10 @@ Rules:
 - Study Pack, Challenge Quiz, and Adaptive Practice quotas are separate from each other.
 - OCR usage has its own backend-configured monthly quota by plan.
 - Frontend plan limits and feature availability must come from `GET /api/me/plan`, not hardcoded values.
+- Settings usage UI should not show OCR counters; OCR remains backend-tracked and enforced.
+- OCR limit UX in note import should use a modal:
+  - Free: explain OCR is limited and offer `Upgrade to Premium`
+  - Premium: explain reset happens on the next billing date
 - Expensive OCR and AI generation endpoints must also enforce backend request-rate limits and return `429` with a friendly retry message.
 
 ## Billing Provider (Current)

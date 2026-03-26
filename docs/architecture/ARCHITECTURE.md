@@ -160,6 +160,10 @@ Versioning model:
   - current monthly usage counters
   - remaining usage counters
   - Premium feature flags such as Adaptive Practice and Difficulty Selection
+- Usage periods are enforced from `BillingUsagePeriodService`:
+  - Free users anchor monthly cycles to `users.created_at`
+  - Premium users use the active subscription `startAt/endAt` billing window
+  - `user_usage.period_start` and `user_usage.period_end` are the persisted cycle boundaries used for quota checks
 - `BillingService` is the provider abstraction used by the controller.
 - Active provider is resolved by configuration (`studysnap.billing.provider`).
 - Current active provider: `PAYMONGO`.
