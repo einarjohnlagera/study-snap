@@ -20,12 +20,98 @@ Dashboard is guidance-only:
 ## Dashboard Sections (Current)
 
 1. Greeting
-2. New Note
-3. Today's Focus
-4. Recent Notes
-5. Mastery Snapshot
-6. Your Stats
-7. View All in Library (`/library`)
+2. Resume Study
+3. Performance Summary
+4. Focus Areas
+5. This Week
+6. This Month
+7. Recent Notes
+8. View All in Library (`/library`)
+
+## Resume Study
+
+Endpoint:
+
+- `GET /dashboard/continue-studying`
+
+Behavior:
+
+- Reuses the existing continue-studying recommendation logic
+- Keeps resume and retry actions routed through `noteId`
+
+## Dashboard Overview
+
+Endpoint:
+
+- `GET /dashboard/overview`
+
+Response includes:
+
+- `performanceSummary`
+- `focusAreas`
+- `weeklyActivity`
+
+Guardrails:
+
+- Use persisted quiz session and activity-event data only
+- Do not call LLM services
+- Use Challenge Quiz concept breakdown data for strongest/weakest concept and weak-area accuracy
+- Weekly activity should come from activity logs
+
+## Performance Summary
+
+Display:
+
+- average quiz score
+- total quizzes taken
+- study packs created
+- strongest concept
+- weakest concept
+
+Data sources:
+
+- completed Quick Review sessions
+- completed Challenge Quiz sessions
+- persisted concept accuracy from Challenge Quiz session metadata
+- existing Study Pack records for created count
+
+## Focus Areas
+
+Display:
+
+- top 3 weak concepts
+- concept accuracy percentage
+- progress bar
+
+Behavior:
+
+- Premium users get `Practice Weak Concepts`
+- Free users get `Unlock Adaptive Practice` and the shared Premium paywall modal
+
+## This Week
+
+Display:
+
+- study packs created
+- quizzes taken
+- adaptive sessions
+- study days
+
+Data source:
+
+- activity logs only
+
+## This Month
+
+Display:
+
+- Study Packs usage
+- Challenge Quiz usage
+- Adaptive Practice usage for Premium only
+
+Guardrails:
+
+- do not show OCR usage
 
 ## Today's Focus
 

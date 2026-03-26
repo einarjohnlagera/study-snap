@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -35,6 +36,16 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             UUID userId,
             QuickReviewSessionMode sessionMode,
             Pageable pageable
+    );
+
+    List<QuickReviewSessionEntity> findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+            UUID userId,
+            QuickReviewSessionMode sessionMode
+    );
+
+    List<QuickReviewSessionEntity> findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+            UUID userId,
+            Collection<QuickReviewSessionMode> sessionModes
     );
 
     @Deprecated

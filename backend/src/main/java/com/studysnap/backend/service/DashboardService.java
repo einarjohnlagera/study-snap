@@ -3,6 +3,11 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.DashboardConceptInsightResponse;
+import com.studysnap.backend.dto.DashboardFocusAreasResponse;
+import com.studysnap.backend.dto.DashboardOverviewResponse;
+import com.studysnap.backend.dto.DashboardPerformanceSummaryResponse;
+import com.studysnap.backend.dto.DashboardWeeklyActivityResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
@@ -44,7 +49,10 @@ public class DashboardService {
     private static final BigDecimal PERFECT_SCORE = BigDecimal.valueOf(100);
     private static final Set<ActivityType> MEANINGFUL_STUDY_ACTIVITIES = EnumSet.of(
             ActivityType.CREATED_STUDY_PACK,
+            ActivityType.STARTED_QUICK_REVIEW,
+            ActivityType.STARTED_ADAPTIVE_PRACTICE,
             ActivityType.COMPLETED_QUICK_REVIEW,
+            ActivityType.COMPLETED_CHALLENGE_QUIZ,
             ActivityType.COMPLETED_ADAPTIVE_QUIZ
     );
 
@@ -189,6 +197,34 @@ public class DashboardService {
                 averageRecentScore,
                 bestRecentScore,
                 studyPacksReviewed
+        );
+    }
+
+    public DashboardOverviewResponse getOverview(UUID userId) {
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        List<QuickReviewSessionEntity> completedQuizSessions = quickReviewSessionRepository
+                .findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
+                );
+        List<QuickReviewSessionEntity> completedChallengeSessions = quickReviewSessionRepository
+                .findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        QuickReviewSessionMode.CHALLENGE
+                );
+
+        DashboardPerformanceSummaryResponse performanceSummary = buildPerformanceSummary(
+                completedQuizSessions,
+                completedChallengeSessions,
+                studyPackRepository.countByOwnerUserId(userId)
+        );
+        DashboardFocusAreasResponse focusAreas = buildFocusAreas(completedChallengeSessions, planType);
+        DashboardWeeklyActivityResponse weeklyActivity = buildWeeklyActivity(userId);
+
+        return new DashboardOverviewResponse(
+                performanceSummary,
+                focusAreas,
+                weeklyActivity
         );
     }
 
@@ -458,6 +494,113 @@ public class DashboardService {
         return session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage();
     }
 
+    private DashboardPerformanceSummaryResponse buildPerformanceSummary(
+            List<QuickReviewSessionEntity> completedQuizSessions,
+            List<QuickReviewSessionEntity> completedChallengeSessions,
+            long studyPacksCreated
+    ) {
+        BigDecimal averageQuizScore = null;
+        if (!completedQuizSessions.isEmpty()) {
+            BigDecimal totalScore = completedQuizSessions.stream()
+                    .map(this::scorePercentageOrZero)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            averageQuizScore = totalScore
+                    .divide(BigDecimal.valueOf(completedQuizSessions.size()), 2, RoundingMode.HALF_UP);
+        }
+
+        Map<String, ConceptPerformanceAccumulator> conceptPerformance = aggregateConceptPerformance(completedChallengeSessions);
+        DashboardConceptInsightResponse strongestConcept = conceptPerformance.values().stream()
+                .sorted(
+                        Comparator.comparing(ConceptPerformanceAccumulator::accuracyPercentage)
+                                .reversed()
+                                .thenComparing(ConceptPerformanceAccumulator::totalQuestions, Comparator.reverseOrder())
+                                .thenComparing(ConceptPerformanceAccumulator::conceptName)
+                )
+                .map(ConceptPerformanceAccumulator::toInsight)
+                .findFirst()
+                .orElse(null);
+        DashboardConceptInsightResponse weakestConcept = conceptPerformance.values().stream()
+                .sorted(
+                        Comparator.comparing(ConceptPerformanceAccumulator::accuracyPercentage)
+                                .thenComparing(ConceptPerformanceAccumulator::totalQuestions, Comparator.reverseOrder())
+                                .thenComparing(ConceptPerformanceAccumulator::conceptName)
+                )
+                .map(ConceptPerformanceAccumulator::toInsight)
+                .findFirst()
+                .orElse(null);
+
+        return new DashboardPerformanceSummaryResponse(
+                averageQuizScore,
+                completedQuizSessions.size(),
+                studyPacksCreated,
+                strongestConcept,
+                weakestConcept
+        );
+    }
+
+    private DashboardFocusAreasResponse buildFocusAreas(
+            List<QuickReviewSessionEntity> completedChallengeSessions,
+            PlanType planType
+    ) {
+        Map<String, ConceptPerformanceAccumulator> conceptPerformance = aggregateConceptPerformance(completedChallengeSessions);
+        List<ConceptPerformanceAccumulator> weakestConcepts = conceptPerformance.values().stream()
+                .sorted(
+                        Comparator.comparing(ConceptPerformanceAccumulator::accuracyPercentage)
+                                .thenComparing(ConceptPerformanceAccumulator::totalQuestions, Comparator.reverseOrder())
+                                .thenComparing(ConceptPerformanceAccumulator::latestCompletedAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                )
+                .limit(3)
+                .toList();
+
+        String practiceNoteId = weakestConcepts.stream()
+                .map(ConceptPerformanceAccumulator::noteId)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+
+        return new DashboardFocusAreasResponse(
+                weakestConcepts.stream()
+                        .map(ConceptPerformanceAccumulator::toInsight)
+                        .toList(),
+                practiceNoteId,
+                featureGateService.hasFeatureAccess(planType, Feature.ADAPTIVE_QUIZ)
+        );
+    }
+
+    private DashboardWeeklyActivityResponse buildWeeklyActivity(UUID userId) {
+        OffsetDateTime weekStart = LocalDate.now()
+                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                .atStartOfDay(ZoneId.systemDefault())
+                .toOffsetDateTime();
+        OffsetDateTime weekEnd = weekStart.plusDays(7);
+
+        List<UserActivityEventEntity> weeklyEvents = activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                userId,
+                MEANINGFUL_STUDY_ACTIVITIES,
+                weekStart
+        ).stream()
+                .filter(event -> event.getCreatedAt() != null && event.getCreatedAt().isBefore(weekEnd))
+                .toList();
+
+        int studyPacksCreated = countEventsByType(weeklyEvents, ActivityType.CREATED_STUDY_PACK);
+        int quizzesTaken = countEventsByType(weeklyEvents, ActivityType.COMPLETED_QUICK_REVIEW)
+                + countEventsByType(weeklyEvents, ActivityType.COMPLETED_CHALLENGE_QUIZ);
+        int adaptiveSessions = countEventsByType(weeklyEvents, ActivityType.STARTED_ADAPTIVE_PRACTICE);
+        int studyDays = (int) weeklyEvents.stream()
+                .map(UserActivityEventEntity::getCreatedAt)
+                .filter(Objects::nonNull)
+                .map(createdAt -> createdAt.atZoneSameInstant(ZoneId.systemDefault()).toLocalDate())
+                .distinct()
+                .count();
+
+        return new DashboardWeeklyActivityResponse(
+                studyPacksCreated,
+                quizzesTaken,
+                adaptiveSessions,
+                studyDays
+        );
+    }
+
     private Optional<ContinueStudyingResponse> resolveRecentlyOpenedRecommendation(UUID userId) {
         List<UserActivityEventEntity> recentOpened = activityEventRepository
                 .findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
@@ -632,6 +775,81 @@ public class DashboardService {
                 .toList();
     }
 
+    private Map<String, ConceptPerformanceAccumulator> aggregateConceptPerformance(List<QuickReviewSessionEntity> challengeSessions) {
+        Map<String, ConceptPerformanceAccumulator> conceptPerformance = new LinkedHashMap<>();
+        for (QuickReviewSessionEntity session : challengeSessions) {
+            for (ConceptBreakdownEntry entry : extractConceptBreakdown(session)) {
+                conceptPerformance.merge(
+                        entry.conceptName(),
+                        new ConceptPerformanceAccumulator(
+                                entry.conceptName(),
+                                entry.correctAnswers(),
+                                entry.totalQuestions(),
+                                session.getCompletedAt(),
+                                session.getNoteId() == null ? null : session.getNoteId().toString()
+                        ),
+                        ConceptPerformanceAccumulator::merge
+                );
+            }
+        }
+        return conceptPerformance;
+    }
+
+    private List<ConceptBreakdownEntry> extractConceptBreakdown(QuickReviewSessionEntity session) {
+        if (session.getSessionMetadata() == null) {
+            return List.of();
+        }
+        Object conceptBreakdownRaw = session.getSessionMetadata().get("conceptBreakdown");
+        if (!(conceptBreakdownRaw instanceof List<?> conceptBreakdownList)) {
+            return List.of();
+        }
+
+        List<ConceptBreakdownEntry> entries = new ArrayList<>(conceptBreakdownList.size());
+        for (Object entryRaw : conceptBreakdownList) {
+            if (!(entryRaw instanceof Map<?, ?> entry)) {
+                continue;
+            }
+            String conceptName = normalizeConceptName(entry.get("concept"));
+            int correctAnswers = asInt(entry.get("correctAnswers"));
+            int totalQuestions = asInt(entry.get("totalQuestions"));
+            if (conceptName == null || totalQuestions <= 0) {
+                continue;
+            }
+            entries.add(new ConceptBreakdownEntry(conceptName, correctAnswers, totalQuestions));
+        }
+        return entries;
+    }
+
+    private String normalizeConceptName(Object rawValue) {
+        if (!(rawValue instanceof String value)) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private int asInt(Object rawValue) {
+        if (rawValue instanceof Integer value) {
+            return value;
+        }
+        if (rawValue instanceof Long value) {
+            return Math.toIntExact(value);
+        }
+        if (rawValue instanceof Double value) {
+            return (int) Math.round(value);
+        }
+        if (rawValue instanceof BigDecimal value) {
+            return value.intValue();
+        }
+        return 0;
+    }
+
+    private int countEventsByType(List<UserActivityEventEntity> events, ActivityType activityType) {
+        return (int) events.stream()
+                .filter(event -> event.getActivityType() == activityType)
+                .count();
+    }
+
     private int countStudyDaysThisWeek(UUID userId) {
         LocalDate today = LocalDate.now();
         LocalDate weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
@@ -651,5 +869,50 @@ public class DashboardService {
                 .map(createdAt -> createdAt.atZoneSameInstant(ZoneId.systemDefault()).toLocalDate())
                 .distinct()
                 .count();
+    }
+
+    private record ConceptBreakdownEntry(
+            String conceptName,
+            int correctAnswers,
+            int totalQuestions
+    ) {
+    }
+
+    private record ConceptPerformanceAccumulator(
+            String conceptName,
+            int correctAnswers,
+            int totalQuestions,
+            OffsetDateTime latestCompletedAt,
+            String noteId
+    ) {
+        private ConceptPerformanceAccumulator merge(ConceptPerformanceAccumulator other) {
+            OffsetDateTime mergedLatestCompletedAt = latestCompletedAt;
+            String mergedNoteId = noteId;
+            if (other.latestCompletedAt != null
+                    && (mergedLatestCompletedAt == null || other.latestCompletedAt.isAfter(mergedLatestCompletedAt))) {
+                mergedLatestCompletedAt = other.latestCompletedAt;
+                mergedNoteId = other.noteId;
+            }
+            return new ConceptPerformanceAccumulator(
+                    conceptName,
+                    correctAnswers + other.correctAnswers,
+                    totalQuestions + other.totalQuestions,
+                    mergedLatestCompletedAt,
+                    mergedNoteId
+            );
+        }
+
+        private BigDecimal accuracyPercentage() {
+            if (totalQuestions <= 0) {
+                return BigDecimal.ZERO;
+            }
+            return BigDecimal.valueOf(correctAnswers)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
+        }
+
+        private DashboardConceptInsightResponse toInsight() {
+            return new DashboardConceptInsightResponse(conceptName, accuracyPercentage());
+        }
     }
 }

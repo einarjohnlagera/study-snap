@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
@@ -211,6 +212,96 @@ class DashboardServiceTest {
         assertThat(response.averageRecentScore()).isEqualByComparingTo(new BigDecimal("76.67"));
         assertThat(response.bestRecentScore()).isEqualByComparingTo(bigDecimal(100));
         assertThat(response.studyPacksReviewed()).isEqualTo(2);
+    }
+
+    @Test
+    void getOverview_returnsPerformanceFocusAreasAndWeeklyActivity() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        QuickReviewSessionEntity quickReview = buildCompletedSession(userId, UUID.randomUUID(), bigDecimal(75), now.minusDays(3));
+        QuickReviewSessionEntity challengeOne = buildCompletedChallengeSession(
+                userId,
+                UUID.randomUUID(),
+                noteId,
+                bigDecimal(50),
+                now.minusDays(2),
+                List.of(
+                        conceptBreakdownEntry("Algebra", 1, 4),
+                        conceptBreakdownEntry("Geometry", 4, 5)
+                )
+        );
+        QuickReviewSessionEntity challengeTwo = buildCompletedChallengeSession(
+                userId,
+                UUID.randomUUID(),
+                noteId,
+                bigDecimal(80),
+                now.minusDays(1),
+                List.of(
+                        conceptBreakdownEntry("Algebra", 2, 4),
+                        conceptBreakdownEntry("Physics", 4, 4)
+                )
+        );
+
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
+        )).thenReturn(List.of(challengeTwo, challengeOne, quickReview));
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(List.of(challengeTwo, challengeOne));
+        when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(3L);
+        when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(userId),
+                any(),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of(
+                buildActivityEvent(userId, ActivityType.CREATED_STUDY_PACK, now.minusDays(2)),
+                buildActivityEvent(userId, ActivityType.COMPLETED_QUICK_REVIEW, now.minusDays(2).minusHours(2)),
+                buildActivityEvent(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, now.minusDays(1)),
+                buildActivityEvent(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, now.minusDays(1).minusHours(1))
+        ));
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.performanceSummary().averageQuizScore()).isEqualByComparingTo("68.33");
+        assertThat(response.performanceSummary().totalQuizzesTaken()).isEqualTo(3);
+        assertThat(response.performanceSummary().studyPacksCreated()).isEqualTo(3);
+        assertThat(response.performanceSummary().strongestConcept().conceptName()).isEqualTo("Physics");
+        assertThat(response.performanceSummary().weakestConcept().conceptName()).isEqualTo("Algebra");
+        assertThat(response.focusAreas().concepts()).hasSize(3);
+        assertThat(response.focusAreas().concepts().get(0).conceptName()).isEqualTo("Algebra");
+        assertThat(response.focusAreas().practiceNoteId()).isEqualTo(noteId.toString());
+        assertThat(response.focusAreas().adaptivePracticeAvailable()).isTrue();
+        assertThat(response.weeklyActivity().studyPacksCreated()).isEqualTo(1);
+        assertThat(response.weeklyActivity().quizzesTaken()).isEqualTo(2);
+        assertThat(response.weeklyActivity().adaptiveSessions()).isEqualTo(1);
+        assertThat(response.weeklyActivity().studyDays()).isEqualTo(2);
+    }
+
+    @Test
+    void getOverview_marksAdaptivePracticeUnavailableForFreeUsers() {
+        UUID userId = UUID.randomUUID();
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
+        )).thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(List.of());
+        when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(0L);
+        when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(userId),
+                any(),
+                any(OffsetDateTime.class)
+        )).thenReturn(List.of());
+
+        DashboardOverviewResponse response = dashboardService.getOverview(userId);
+
+        assertThat(response.focusAreas().adaptivePracticeAvailable()).isFalse();
     }
 
     @Test
@@ -787,6 +878,28 @@ class DashboardServiceTest {
                 .build();
     }
 
+    private QuickReviewSessionEntity buildCompletedChallengeSession(
+            UUID userId,
+            UUID studyPackId,
+            UUID noteId,
+            BigDecimal scorePercentage,
+            OffsetDateTime completedAt,
+            List<Map<String, Object>> conceptBreakdown
+    ) {
+        QuickReviewSessionEntity session = QuickReviewSessionEntityBuilder.aCompletedSession()
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withScorePercentage(scorePercentage)
+                .withCurrentRound(QuickReviewRound.INITIAL)
+                .withCreatedAt(completedAt.minusMinutes(10))
+                .withCompletedAt(completedAt)
+                .build();
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setSessionMetadata(Map.of("conceptBreakdown", conceptBreakdown));
+        return session;
+    }
+
     private UserActivityEventEntity buildOpenedEvent(UUID userId, UUID studyPackId, OffsetDateTime createdAt) {
         return UserActivityEventEntityBuilder.anActivityEvent()
                 .withUserId(userId)
@@ -807,5 +920,13 @@ class DashboardServiceTest {
 
     private BigDecimal bigDecimal(int value) {
         return BigDecimal.valueOf(value);
+    }
+
+    private Map<String, Object> conceptBreakdownEntry(String concept, int correctAnswers, int totalQuestions) {
+        return Map.of(
+                "concept", concept,
+                "correctAnswers", correctAnswers,
+                "totalQuestions", totalQuestions
+        );
     }
 }

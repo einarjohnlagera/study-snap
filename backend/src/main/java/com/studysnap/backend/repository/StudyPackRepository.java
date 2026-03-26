@@ -33,6 +33,7 @@ public interface StudyPackRepository extends JpaRepository<StudyPackEntity, UUID
     Optional<StudyPackEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     Optional<StudyPackEntity> findByOwnerUserIdAndNoteId(UUID ownerUserId, UUID noteId);
     Optional<StudyPackEntity> findByNoteId(UUID noteId);
+    long countByOwnerUserId(UUID ownerUserId);
 
     List<StudyPackEntity> findByNoteIdIn(Collection<UUID> noteIds);
     @Lock(LockModeType.PESSIMISTIC_WRITE)

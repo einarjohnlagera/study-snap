@@ -151,7 +151,21 @@ Dashboard guidance rules:
 
 - Dashboard is non-destructive and guidance-first.
 - Deletion is not available from Dashboard.
-- Dashboard may show `Mastery Snapshot` based on existing completed Quick Review data.
+- Dashboard should surface:
+  - `Resume Study`
+  - `Performance Summary`
+  - `Focus Areas`
+  - `This Week`
+  - `This Month`
+- Dashboard performance and weak-concept insights must be computed from existing quiz session data only.
+- Dashboard must not use LLM calls for statistics or recommendations.
+- `Focus Areas` should show the top weak concepts and route Premium users to Adaptive Practice through `noteId`.
+- Free users should see the same weak concepts but hit the soft Premium paywall when trying to start Adaptive Practice from Dashboard.
+- Dashboard monthly usage should show:
+  - Study Packs
+  - Challenge Quiz
+  - Adaptive Practice for Premium only
+- OCR usage must stay hidden from the dashboard UI.
 
 ### Shareable Study Packs
 
