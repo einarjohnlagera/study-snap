@@ -214,6 +214,27 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `features.ocrAvailable`
 - Frontend gating and usage UI should rely on this API instead of hardcoded limits or Premium flags.
 
+## Usage reset windows
+
+- Quotas do not reset on calendar month boundaries.
+- Free users reset monthly from the account creation date anchor.
+- Premium users reset from the active subscription billing window.
+- Persisted `user_usage.period_start` and `user_usage.period_end` define the active quota cycle for:
+  - Study Packs
+  - Challenge Quiz
+  - Adaptive Practice
+  - OCR
+
+## OCR display and limit UX
+
+- Landing/pricing surfaces should not show numeric OCR quotas.
+  - Free: `Limited`
+  - Premium: `Higher Limits`
+- Settings should not show OCR usage counters even though OCR usage is tracked internally.
+- When OCR quota is exhausted in note import:
+  - Free users see an `OCR limit reached` modal with an upgrade path
+  - Premium users see an `OCR limit reached` modal that explains reset happens on the next billing date
+
 ## PayMongo plan selection
 
 - Checkout plan selection is backend-driven.

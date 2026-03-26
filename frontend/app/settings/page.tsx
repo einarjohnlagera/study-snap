@@ -260,8 +260,6 @@ export default function SettingsPage() {
   const challengeQuizLimit = usageSummary?.limits.challengeQuizzesPerMonth ?? 0;
   const adaptivePracticeUsed = usageSummary?.usage.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
-  const ocrUsed = usageSummary?.usage.ocrUsed ?? 0;
-  const ocrLimit = usageSummary?.limits.ocrPerMonth ?? 0;
   const adaptivePracticeAvailable = usageSummary?.features.adaptivePracticeAvailable ?? false;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
   const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
@@ -508,7 +506,6 @@ export default function SettingsPage() {
                 <UsageMetric label="Study Packs" used={studyPacksUsed} limit={studyPacksLimit} />
                 <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
                 <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
-                <UsageMetric label="OCR" used={ocrUsed} limit={ocrLimit} />
                 {hasReachedMonthlyLimit ? (
                   <p className="text-sm text-foreground/80">You have reached your monthly Study Pack limit.</p>
                 ) : null}
@@ -536,7 +533,7 @@ export default function SettingsPage() {
                       <li>{challengeQuizLimit} Challenge Quizzes per month</li>
                       <li>Weak concepts visible</li>
                       <li>File uploads available</li>
-                      <li>{ocrLimit} OCR uses per month</li>
+                      <li>Image to Text (OCR) - Limited</li>
                       <li>Public Library access</li>
                     </ul>
                   </div>
@@ -546,6 +543,7 @@ export default function SettingsPage() {
                       <li>Higher monthly limits</li>
                       <li>Adaptive Practice</li>
                       <li>Difficulty selection</li>
+                      <li>Higher OCR limits</li>
                       <li>Priority AI</li>
                     </ul>
                   </div>

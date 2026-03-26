@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Fragment } from "react";
 import { Check, Crown, Minus } from "lucide-react";
 import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -14,61 +15,86 @@ type PricingPlansSectionProps = {
 };
 
 type ComparisonValue = "check" | string | null;
+type ComparisonRow = {
+  label: string;
+  free: ComparisonValue;
+  premium: ComparisonValue;
+};
 
-const COMPARISON_ROWS = [
+type ComparisonSection = {
+  title: string;
+  rows: ComparisonRow[];
+};
+
+const COMPARISON_SECTIONS: ComparisonSection[] = [
   {
-    label: "Unlimited Notes",
-    free: "check",
-    premium: "check",
+    title: "Core Features",
+    rows: [
+      {
+        label: "Unlimited Notes",
+        free: "check",
+        premium: "check",
+      },
+      {
+        label: "File Uploads (PDF, DOCX, TXT)",
+        free: "check",
+        premium: "check",
+      },
+      {
+        label: "Public Library Access",
+        free: "check",
+        premium: "check",
+      },
+      {
+        label: "Weak Concepts Insights",
+        free: "check",
+        premium: "check",
+      },
+    ],
   },
   {
-    label: "AI Study Packs / month",
-    free: String(pricingConfig.free.studyPacksPerMonth),
-    premium: String(pricingConfig.premium.studyPacksPerMonth),
+    title: "Monthly Limits",
+    rows: [
+      {
+        label: "AI Study Packs / month",
+        free: String(pricingConfig.free.studyPacksPerMonth),
+        premium: String(pricingConfig.premium.studyPacksPerMonth),
+      },
+      {
+        label: "Image to Text (OCR)",
+        free: "Limited",
+        premium: "Higher Limits",
+      },
+      {
+        label: "Challenge Quizzes / month",
+        free: String(pricingConfig.free.challengeQuizzesPerMonth),
+        premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
+      },
+    ],
   },
   {
-    label: "Challenge Quizzes / month",
-    free: String(pricingConfig.free.challengeQuizzesPerMonth),
-    premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
-  },
-  {
-    label: "Weak Concepts Insights",
-    free: "check",
-    premium: "check",
-  },
-  {
-    label: "File Uploads (PDF, DOCX, TXT)",
-    free: "check",
-    premium: "check",
-  },
-  {
-    label: "Image to Text (OCR) / month",
-    free: String(pricingConfig.free.ocrPerMonth),
-    premium: String(pricingConfig.premium.ocrPerMonth),
-  },
-  {
-    label: "Public Library Access",
-    free: "check",
-    premium: "check",
-  },
-  {
-    label: "Adaptive Practice / month",
-    free: null,
-    premium: String(pricingConfig.premium.adaptivePracticePerMonth),
-  },
-  {
-    label: "Choose Quiz Difficulty",
-    free: null,
-    premium: "check",
-  },
-  {
-    label: "Priority AI Processing",
-    free: null,
-    premium: "check",
+    title: "Premium Features",
+    rows: [
+      {
+        label: "Adaptive Practice",
+        free: null,
+        premium: String(pricingConfig.premium.adaptivePracticePerMonth),
+      },
+      {
+        label: "Choose Quiz Difficulty",
+        free: null,
+        premium: "check",
+      },
+      {
+        label: "Priority AI Processing",
+        free: null,
+        premium: "check",
+      },
+    ],
   },
 ];
 
-function ComparisonCell({ value, emphasize = false }: { value: ComparisonValue; emphasize?: boolean }) {
+function ComparisonCell({ value, emphasize = false }: Readonly<{ value: ComparisonValue; emphasize?: boolean }>) {
   const baseClassName = emphasize
     ? "text-foreground"
     : "text-foreground/85";
@@ -96,7 +122,7 @@ function ComparisonCell({ value, emphasize = false }: { value: ComparisonValue; 
   );
 }
 
-export function PricingPlansSection({ showHeading = true }: PricingPlansSectionProps) {
+export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlansSectionProps>) {
   const { billingPricing } = useBillingPricing(true);
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
   const fallbackPrice = pricingConfig.price[displayRegion];
@@ -131,11 +157,11 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Unlimited Notes</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} AI Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Insights</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />File Uploads (PDF, DOCX, TXT)</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Image to Text (OCR) - Limited</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Public Library Access</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Insights</li>
           </ul>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
             Start for Free
@@ -166,13 +192,13 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
             ) : null}
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Everything in Free</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.studyPacksPerMonth} AI Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Everything in Free</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher OCR Limits</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.adaptivePracticePerMonth} Adaptive Practice / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Choose Quiz Difficulty</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI Processing</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher OCR Limits</li>
           </ul>
           <div className="space-y-2">
             <PremiumWaitlistButton
@@ -189,7 +215,7 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
         <div className="border-b border-border px-4 py-4 sm:px-6">
           <h3 className="text-lg font-semibold sm:text-xl">Plan comparison</h3>
           <p className="mt-1 text-sm text-foreground/70">
-            Free stays useful. Premium adds deeper practice and higher limits when your review gets serious.
+            Free helps you study consistently. Premium unlocks deeper practice and higher limits when exams get serious.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -204,16 +230,30 @@ export function PricingPlansSection({ showHeading = true }: PricingPlansSectionP
               </tr>
             </thead>
             <tbody>
-              {COMPARISON_ROWS.map((row) => (
-                <tr key={row.label} className="border-b border-border last:border-b-0">
-                  <td className="px-4 py-3 font-medium sm:px-6">{row.label}</td>
-                  <td className="px-4 py-3 text-center align-middle sm:px-6">
-                    <ComparisonCell value={row.free} />
-                  </td>
-                  <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12">
-                    <ComparisonCell value={row.premium} emphasize />
-                  </td>
-                </tr>
+              {COMPARISON_SECTIONS.map((section) => (
+                <Fragment key={section.title}>
+                  <tr className="bg-muted/20">
+                    <td className="px-4 pb-2 pt-5 text-xs font-semibold uppercase tracking-wide text-foreground/55 sm:px-6">
+                      {section.title}
+                    </td>
+                    <td className="px-4 pb-2 pt-5 sm:px-6" />
+                    <td className="bg-blue-500/8 px-4 pb-2 pt-5 sm:px-6 dark:bg-blue-500/12" />
+                  </tr>
+                  {section.rows.map((row, rowIndex) => (
+                    <tr
+                      key={row.label}
+                      className={`border-b border-border ${rowIndex === section.rows.length - 1 ? "last:border-b-0" : ""}`}
+                    >
+                      <td className="px-4 py-3 font-medium sm:px-6">{row.label}</td>
+                      <td className="px-4 py-3 text-center align-middle sm:px-6">
+                        <ComparisonCell value={row.free} />
+                      </td>
+                      <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12">
+                        <ComparisonCell value={row.premium} emphasize />
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
