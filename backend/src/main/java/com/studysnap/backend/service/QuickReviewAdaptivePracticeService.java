@@ -42,9 +42,11 @@ import java.time.ZoneOffset;
 @Transactional
 @RequiredArgsConstructor
 public class QuickReviewAdaptivePracticeService {
+
     private static final int BASE_QUESTION_COUNT = 5;
     private static final int MID_QUESTION_COUNT = 7;
     private static final int HIGH_QUESTION_COUNT = 10;
+    private static final String FOCUS_MESSAGE = "Focusing on concepts you need to improve.";
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -63,34 +65,34 @@ public class QuickReviewAdaptivePracticeService {
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         authService.requireEmailVerified(userId);
         UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                studyPackIdRaw,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
+            studyPackIdRaw,
+            "STUDY_PACK_NOT_FOUND",
+            "Study pack not found.",
+            HttpStatus.NOT_FOUND
         );
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+            .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                        userId,
-                        studyPackId,
-                        QuickReviewSessionMode.ADAPTIVE,
-                        QuickReviewSessionStatus.IN_PROGRESS
-                )
-                .orElse(null);
+            .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                studyPackId,
+                QuickReviewSessionMode.ADAPTIVE,
+                QuickReviewSessionStatus.IN_PROGRESS
+            )
+            .orElse(null);
         if (existing != null) {
             List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(existing.getSessionState());
             if (!existingQuiz.isEmpty()) {
                 return new QuickReviewAdaptiveQuizResponse(
-                        existing.getId().toString(),
-                        studyPack.getId().toString(),
-                        studyPack.getTitle(),
-                        extractWeakConcepts(existing),
-                        existingQuiz,
-                        "Focusing on concepts you need to improve."
+                    existing.getId().toString(),
+                    studyPack.getId().toString(),
+                    studyPack.getTitle(),
+                    extractWeakConcepts(existing),
+                    existingQuiz,
+                    FOCUS_MESSAGE
                 );
             }
             existing.setStatus(QuickReviewSessionStatus.COMPLETED);
@@ -102,24 +104,24 @@ public class QuickReviewAdaptivePracticeService {
 
         if (latestCompletedSession == null) {
             return new QuickReviewAdaptiveQuizResponse(
-                    null,
-                    studyPack.getId().toString(),
-                    studyPack.getTitle(),
-                    List.of(),
-                    List.of(),
-                    "Complete a Quick Review or Challenge Quiz first to unlock adaptive practice."
+                null,
+                studyPack.getId().toString(),
+                studyPack.getTitle(),
+                List.of(),
+                List.of(),
+                "Complete a Quick Review or Challenge Quiz first to unlock adaptive practice."
             );
         }
 
         List<String> weakConcepts = extractWeakConcepts(latestCompletedSession);
         if (weakConcepts.isEmpty()) {
             return new QuickReviewAdaptiveQuizResponse(
-                    null,
-                    studyPack.getId().toString(),
-                    studyPack.getTitle(),
-                    List.of(),
-                    List.of(),
-                    "No weak concepts found from your latest review."
+                null,
+                studyPack.getId().toString(),
+                studyPack.getTitle(),
+                List.of(),
+                List.of(),
+                "No weak concepts found from your latest review."
             );
         }
 
@@ -128,22 +130,22 @@ public class QuickReviewAdaptivePracticeService {
         int questionCount = resolveAdaptiveQuestionCount(weakConcepts.size());
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         List<QuizItem> generatedQuiz = llmStudyPackService.generateAdaptivePracticeQuiz(
-                studyPack.getTitle(),
-                studyPack.getSummary(),
-                studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
-                weakConcepts,
-                disallowedQuestions,
-                questionCount
+            studyPack.getTitle(),
+            studyPack.getSummary(),
+            studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
+            weakConcepts,
+            disallowedQuestions,
+            questionCount
         );
         List<QuizItem> adaptiveQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                generatedQuiz,
-                QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
+            generatedQuiz,
+            QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
         );
         if (adaptiveQuiz.size() != questionCount) {
             throw new AppException(
-                    "ADAPTIVE_QUIZ_GENERATION_FAILED",
-                    "Could not generate enough unique adaptive questions. Please try again.",
-                    HttpStatus.BAD_GATEWAY
+                "ADAPTIVE_QUIZ_GENERATION_FAILED",
+                "Could not generate enough unique adaptive questions. Please try again.",
+                HttpStatus.BAD_GATEWAY
             );
         }
 
@@ -170,23 +172,23 @@ public class QuickReviewAdaptivePracticeService {
             savedSession = quickReviewSessionRepository.save(session);
         } catch (DataIntegrityViolationException integrityViolationException) {
             QuickReviewSessionEntity resumed = quickReviewSessionRepository
-                    .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                            userId,
-                            studyPackId,
-                            QuickReviewSessionMode.ADAPTIVE,
-                            QuickReviewSessionStatus.IN_PROGRESS
-                    )
-                    .orElse(null);
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                    userId,
+                    studyPackId,
+                    QuickReviewSessionMode.ADAPTIVE,
+                    QuickReviewSessionStatus.IN_PROGRESS
+                )
+                .orElse(null);
             if (resumed != null) {
                 List<QuizItem> resumedQuiz = QuizSessionStateUtils.extractQuiz(resumed.getSessionState());
                 if (!resumedQuiz.isEmpty()) {
                     return new QuickReviewAdaptiveQuizResponse(
-                            resumed.getId().toString(),
-                            studyPack.getId().toString(),
-                            studyPack.getTitle(),
-                            extractWeakConcepts(resumed),
-                            resumedQuiz,
-                            "Focusing on concepts you need to improve."
+                        resumed.getId().toString(),
+                        studyPack.getId().toString(),
+                        studyPack.getTitle(),
+                        extractWeakConcepts(resumed),
+                        resumedQuiz,
+                        FOCUS_MESSAGE
                     );
                 }
             }
@@ -196,39 +198,40 @@ public class QuickReviewAdaptivePracticeService {
 
         activityTrackingService.recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
         analyticsService.trackEvent(userId, AnalyticsEventType.ADAPTIVE_PRACTICE_STARTED, studyPackId, Map.of(
-                "sessionId", savedSession.getId().toString(),
-                "weakConceptCount", weakConcepts.size()
+            "sessionId", savedSession.getId().toString(),
+            "weakConceptCount", weakConcepts.size()
         ));
 
         return new QuickReviewAdaptiveQuizResponse(
-                savedSession.getId().toString(),
-                studyPack.getId().toString(),
-                studyPack.getTitle(),
-                weakConcepts,
-                adaptiveQuiz,
-                "Focusing on concepts you need to improve."
+            savedSession.getId().toString(),
+            studyPack.getId().toString(),
+            studyPack.getTitle(),
+            weakConcepts,
+            adaptiveQuiz,
+            FOCUS_MESSAGE
         );
     }
 
     public SimpleMessageResponse completeAdaptiveSession(
-            String sessionIdRaw,
-            UUID userId,
-            Integer correctAnswers,
-            Integer totalQuestions,
-            Integer durationSeconds
+        String sessionIdRaw,
+        UUID userId,
+        Integer correctAnswers,
+        Integer totalQuestions,
+        Integer durationSeconds
     ) {
         UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
-                sessionIdRaw,
-                "SESSION_NOT_FOUND",
-                "Adaptive Practice session not found.",
-                HttpStatus.NOT_FOUND
+            sessionIdRaw,
+            "SESSION_NOT_FOUND",
+            "Adaptive Practice session not found.",
+            HttpStatus.NOT_FOUND
         );
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
-                        sessionId,
-                        userId,
-                        QuickReviewSessionMode.ADAPTIVE
-                )
-                .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Adaptive Practice session not found.", HttpStatus.NOT_FOUND));
+                sessionId,
+                userId,
+                QuickReviewSessionMode.ADAPTIVE
+            )
+            .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Adaptive Practice session not found.",
+                HttpStatus.NOT_FOUND));
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             return new SimpleMessageResponse("Adaptive Practice session already completed.");
@@ -238,15 +241,15 @@ public class QuickReviewAdaptivePracticeService {
         int safeCorrectAnswers = correctAnswers == null ? 0 : Math.max(0, correctAnswers);
         if (safeCorrectAnswers > safeTotalQuestions) {
             throw new AppException(
-                    "INVALID_SESSION_RESULT",
-                    "Correct answers cannot exceed total questions.",
-                    HttpStatus.BAD_REQUEST
+                "INVALID_SESSION_RESULT",
+                "Correct answers cannot exceed total questions.",
+                HttpStatus.BAD_REQUEST
             );
         }
 
         BigDecimal scorePercentage = safeTotalQuestions == 0
-                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-                : BigDecimal.valueOf(safeCorrectAnswers)
+            ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+            : BigDecimal.valueOf(safeCorrectAnswers)
                 .multiply(BigDecimal.valueOf(100))
                 .divide(BigDecimal.valueOf(safeTotalQuestions), 2, RoundingMode.HALF_UP);
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
@@ -297,9 +300,9 @@ public class QuickReviewAdaptivePracticeService {
             return List.of();
         }
         return quiz.stream()
-                .map(QuizItem::question)
-                .filter(question -> question != null && !question.isBlank())
-                .toList();
+            .map(QuizItem::question)
+            .filter(question -> question != null && !question.isBlank())
+            .toList();
     }
 
     private void assertAdaptivePracticeQuotaAvailable(UUID userId, PlanType planType) {
@@ -308,17 +311,17 @@ public class QuickReviewAdaptivePracticeService {
         int monthlyLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
         if (monthlyLimit <= 0) {
             throw new AppException(
-                    "PREMIUM_FEATURE_REQUIRED",
-                    "Adaptive Practice is a Premium feature. Upgrade to Premium to continue.",
-                    HttpStatus.FORBIDDEN
+                "PREMIUM_FEATURE_REQUIRED",
+                "Adaptive Practice is a Premium feature. Upgrade to Premium to continue.",
+                HttpStatus.FORBIDDEN
             );
         }
 
         long usedFromActivityEvents = activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                userId,
-                ActivityType.STARTED_ADAPTIVE_PRACTICE,
-                usagePeriod.periodStart(),
-                usagePeriod.periodEnd()
+            userId,
+            ActivityType.STARTED_ADAPTIVE_PRACTICE,
+            usagePeriod.periodStart(),
+            usagePeriod.periodEnd()
         );
         long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).adaptiveQuizGenerations();
         long usedThisMonth = Math.max(usedFromActivityEvents, usedFromUsage);
@@ -327,22 +330,22 @@ public class QuickReviewAdaptivePracticeService {
         }
 
         throw new AppException(
-                "MONTHLY_ADAPTIVE_PRACTICE_LIMIT_REACHED",
-                "You've reached your monthly Adaptive Practice limit.",
-                HttpStatus.FORBIDDEN
+            "MONTHLY_ADAPTIVE_PRACTICE_LIMIT_REACHED",
+            "You've reached your monthly Adaptive Practice limit.",
+            HttpStatus.FORBIDDEN
         );
     }
 
     private QuickReviewSessionEntity resolveLatestAdaptiveSourceSession(UUID userId, UUID studyPackId) {
         QuickReviewSessionEntity latestQuickReview = fetchLatestCompletedSession(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.QUICK_REVIEW
+            userId,
+            studyPackId,
+            QuickReviewSessionMode.QUICK_REVIEW
         );
         QuickReviewSessionEntity latestChallenge = fetchLatestCompletedSession(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.CHALLENGE
+            userId,
+            studyPackId,
+            QuickReviewSessionMode.CHALLENGE
         );
 
         if (latestQuickReview == null) {
@@ -365,18 +368,18 @@ public class QuickReviewAdaptivePracticeService {
     }
 
     private QuickReviewSessionEntity fetchLatestCompletedSession(
-            UUID userId,
-            UUID studyPackId,
-            QuickReviewSessionMode sessionMode
+        UUID userId,
+        UUID studyPackId,
+        QuickReviewSessionMode sessionMode
     ) {
         return quickReviewSessionRepository
-                .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                        userId,
-                        studyPackId,
-                        sessionMode,
-                        PageRequest.of(0, 1)
-                ).stream()
-                .findFirst()
-                .orElse(null);
+            .findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                userId,
+                studyPackId,
+                sessionMode,
+                PageRequest.of(0, 1)
+            ).stream()
+            .findFirst()
+            .orElse(null);
     }
 }
