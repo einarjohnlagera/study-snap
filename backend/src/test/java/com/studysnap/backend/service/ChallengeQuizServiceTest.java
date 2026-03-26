@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
@@ -13,6 +14,7 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
@@ -31,6 +33,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -212,12 +215,12 @@ class ChallengeQuizServiceTest {
                 any()
         )).thenReturn(List.of(previousQuickReview));
         when(llmStudyPackService.generateChallengeQuiz(
-                eq("Pack title"),
-                eq("Summary"),
-                eq(List.of("Concept")),
-                eq(List.of("Practice?")),
-                eq(10),
-                eq("easy")
+                "Pack title",
+                "Summary",
+                List.of("Concept"),
+                List.of("Practice?"),
+                10,
+                "easy"
         )).thenReturn(List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
@@ -283,5 +286,24 @@ class ChallengeQuizServiceTest {
         );
 
         verify(activityTrackingService).recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, studyPackId);
+    }
+
+    @Test
+    void startSession_throwsTypedExceptionForInvalidDifficulty() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+
+        assertThatThrownBy(() -> challengeQuizService.startSession(
+                studyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest("expert")
+        ))
+                .isInstanceOf(InvalidChallengeQuizDifficultyException.class)
+                .hasMessage("Difficulty must be easy, medium, or hard.");
     }
 }
