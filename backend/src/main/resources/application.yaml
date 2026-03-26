@@ -198,11 +198,14 @@ studysnap:
     resend-cooldown-seconds: ${EMAIL_VERIFICATION_RESEND_COOLDOWN_SECONDS:60}
   retention:
     daily-cron: ${RETENTION_DAILY_CRON:0 45 2 * * *}
-    inactivity-days: ${RETENTION_INACTIVITY_DAYS:7}
-    inactivity-cooldown-days: ${RETENTION_INACTIVITY_COOLDOWN_DAYS:7}
+    weekly-cron: ${RETENTION_WEEKLY_CRON:0 0 18 * * SUN}
+    inactivity-days: ${RETENTION_INACTIVITY_DAYS:3}
+    inactivity-cooldown-days: ${RETENTION_INACTIVITY_COOLDOWN_DAYS:3}
+    weak-concept-inactivity-days: ${RETENTION_WEAK_CONCEPT_INACTIVITY_DAYS:3}
     weak-concept-cooldown-days: ${RETENTION_WEAK_CONCEPT_COOLDOWN_DAYS:5}
     unfinished-note-days: ${RETENTION_UNFINISHED_NOTE_DAYS:2}
     unfinished-note-cooldown-days: ${RETENTION_UNFINISHED_NOTE_COOLDOWN_DAYS:3}
+    weekly-cooldown-days: ${RETENTION_WEEKLY_COOLDOWN_DAYS:7}
     weak-concept-threshold-percent: ${RETENTION_WEAK_CONCEPT_THRESHOLD_PERCENT:60}
   security:
     jwt:

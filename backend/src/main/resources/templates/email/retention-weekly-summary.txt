@@ -1,0 +1,15 @@
+Hi {{name}},
+
+Here’s your study summary this week:
+
+Study Packs Created: {{studyPacksCreated}}
+Quizzes Taken: {{quizzesTaken}}
+Adaptive Sessions: {{adaptiveSessions}}
+Average Quiz Score: {{averageQuizScore}}%
+
+Keep going — you’re making progress.
+
+Continue studying:
+{{dashboardUrl}}
+
+NoteLib

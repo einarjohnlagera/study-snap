@@ -1,9 +1,12 @@
 Hi {{name}},
 
-You have not been back to NoteLib in a little while.
+You started studying on NoteLib but haven’t continued recently.
 
-Pick up where you left off and continue studying here:
-{{dashboardUrl}}
+Consistent review helps with memory retention.
+Try doing a quick review today — it only takes a few minutes.
+
+Continue studying here:
+{{resumeUrl}}
 
 See you soon,
 NoteLib
