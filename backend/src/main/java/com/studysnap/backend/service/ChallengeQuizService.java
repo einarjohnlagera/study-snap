@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -69,6 +70,7 @@ public class ChallengeQuizService {
     private final AuthService authService;
     private final AnalyticsService analyticsService;
     private final AiRateLimitService aiRateLimitService;
+    private final ActivityTrackingService activityTrackingService;
 
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
         authService.requireEmailVerified(userId);
@@ -356,6 +358,7 @@ public class ChallengeQuizService {
         session.setSessionMetadata(buildCompletionSessionMetadata(statistics));
 
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+        activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, saved.getStudyPackId());
         return new ChallengeQuizSessionResponse(
                 saved.getId().toString(),
                 saved.getStudyPackId().toString(),

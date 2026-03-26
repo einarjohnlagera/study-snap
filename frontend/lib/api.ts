@@ -97,6 +97,38 @@ export type TodayFocusResponse = {
   actionLabel: string;
 };
 
+export type DashboardConceptInsightResponse = {
+  conceptName: string;
+  accuracyPercentage: number;
+};
+
+export type DashboardPerformanceSummaryResponse = {
+  averageQuizScore: number | null;
+  totalQuizzesTaken: number;
+  studyPacksCreated: number;
+  strongestConcept: DashboardConceptInsightResponse | null;
+  weakestConcept: DashboardConceptInsightResponse | null;
+};
+
+export type DashboardFocusAreasResponse = {
+  concepts: DashboardConceptInsightResponse[];
+  practiceNoteId: string | null;
+  adaptivePracticeAvailable: boolean;
+};
+
+export type DashboardWeeklyActivityResponse = {
+  studyPacksCreated: number;
+  quizzesTaken: number;
+  adaptiveSessions: number;
+  studyDays: number;
+};
+
+export type DashboardOverviewResponse = {
+  performanceSummary: DashboardPerformanceSummaryResponse;
+  focusAreas: DashboardFocusAreasResponse;
+  weeklyActivity: DashboardWeeklyActivityResponse;
+};
+
 export type ProfileType = "STUDENT" | "TEACHER" | "PARENT" | "PROFESSIONAL";
 export type PlanType = "FREE" | "PREMIUM";
 export type BillingCycle = "MONTHLY" | "YEARLY";
@@ -1553,6 +1585,18 @@ export async function getTodayFocus(): Promise<TodayFocusResponse> {
     true,
   );
   return parseApiResponse<TodayFocusResponse>(response, "Could not load today's focus.");
+}
+
+export async function getDashboardOverview(): Promise<DashboardOverviewResponse> {
+  const response = await fetchWithAuth(
+    "/dashboard/overview",
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<DashboardOverviewResponse>(response, "Could not load dashboard overview.");
 }
 
 export async function getStudyEngagement(): Promise<StudyEngagementResponse> {

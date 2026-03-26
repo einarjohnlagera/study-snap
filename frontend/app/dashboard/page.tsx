@@ -4,30 +4,33 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
+import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { shouldShowNearStudyPackLimitBanner } from "@/lib/plans";
 import {
+  getContinueStudyingRecommendation,
+  getDashboardOverview,
   getMe,
-  getMasterySnapshot,
-  getTodayFocus,
   getQuickReviewPerformanceSummary,
   listNotes,
-  type MasterySnapshotResponse,
+  type ContinueStudyingResponse,
+  type DashboardOverviewResponse,
   type NoteListItemResponse,
-  type TodayFocusResponse,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { ContinueSpotlight } from "./continue-spotlight";
 import { DashboardHero } from "./dashboard-hero";
-import { DashboardStats } from "./dashboard-stats";
+import { DashboardMonthlyUsageCard } from "./dashboard-monthly-usage-card";
+import { DashboardPerformanceSummaryCard } from "./dashboard-performance-summary-card";
+import { DashboardFocusAreasCard } from "./dashboard-focus-areas-card";
+import { DashboardWeeklyActivityCard } from "./dashboard-weekly-activity-card";
 import { StudyPackGrid } from "./study-pack-grid";
 import { DashboardLoading } from "./dashboard-loading";
 import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
-import { TodayFocusCard } from "./today-focus-card";
-import { MasterySnapshotCard } from "./mastery-snapshot-card";
 import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
 
 export default function DashboardPage() {
@@ -35,8 +38,9 @@ export default function DashboardPage() {
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [recentNoteMetaById, setRecentNoteMetaById] = useState<Record<string, { lastReviewedAt: string | null; quizCount: number | null }>>({});
   const [greetingName, setGreetingName] = useState("there");
-  const [todayFocus, setTodayFocus] = useState<TodayFocusResponse | null>(null);
-  const [masterySnapshot, setMasterySnapshot] = useState<MasterySnapshotResponse | null>(null);
+  const [continueStudying, setContinueStudying] = useState<ContinueStudyingResponse | null>(null);
+  const [overview, setOverview] = useState<DashboardOverviewResponse | null>(null);
+  const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
@@ -77,10 +81,10 @@ export default function DashboardPage() {
         setRecentNoteMetaById({});
       }
 
-      const [meResult, todayFocusResult, masterySnapshotResult] = await Promise.allSettled([
+      const [meResult, continueStudyingResult, overviewResult] = await Promise.allSettled([
         getMe(),
-        getTodayFocus(),
-        getMasterySnapshot(),
+        getContinueStudyingRecommendation(),
+        getDashboardOverview(),
       ]);
 
       if (meResult.status === "fulfilled") {
@@ -89,8 +93,8 @@ export default function DashboardPage() {
           || "there";
         setGreetingName(preferredName);
       }
-      setTodayFocus(todayFocusResult.status === "fulfilled" ? todayFocusResult.value : null);
-      setMasterySnapshot(masterySnapshotResult.status === "fulfilled" ? masterySnapshotResult.value : null);
+      setContinueStudying(continueStudyingResult.status === "fulfilled" ? continueStudyingResult.value : null);
+      setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load your notes.";
       setError(message);
@@ -137,10 +141,6 @@ export default function DashboardPage() {
     () => [...items]
       .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
       .slice(0, 4),
-    [items],
-  );
-  const totalQuizQuestions = useMemo(
-    () => items.reduce((sum, item) => sum + (item.quizCount ?? 0), 0),
     [items],
   );
   const shouldShowNearLimitBanner = usageSummary
@@ -194,16 +194,33 @@ export default function DashboardPage() {
               </div>
             </Card>
           ) : null}
-          {todayFocus ? <TodayFocusCard focus={todayFocus} /> : null}
+          {continueStudying?.noteId ? (
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold sm:text-xl">Resume Study</h2>
+              <ContinueSpotlight recommendation={continueStudying} />
+            </section>
+          ) : null}
+          <DashboardPerformanceSummaryCard summary={overview?.performanceSummary ?? null} />
+          <DashboardFocusAreasCard
+            focusAreas={overview?.focusAreas ?? null}
+            onUnlockAdaptivePractice={() => setActivePaywallModal("adaptive-practice")}
+          />
+          <DashboardWeeklyActivityCard activity={overview?.weeklyActivity ?? null} />
+          <DashboardMonthlyUsageCard usageSummary={usageSummary} />
           {items.length === 0 ? (
             <DashboardEmpty />
           ) : (
             <StudyPackGrid notes={recentNotes} totalNotes={items.length} recentNoteMetaById={recentNoteMetaById} />
           )}
-          <MasterySnapshotCard snapshot={masterySnapshot} />
-          <DashboardStats notes={items} totalQuizQuestions={totalQuizQuestions} />
         </div>
       )}
+
+      <PaywallModal
+        isOpen={activePaywallModal !== null}
+        variant={activePaywallModal ?? "adaptive-practice"}
+        onClose={() => setActivePaywallModal(null)}
+        source="dashboard_focus_areas"
+      />
     </div>
   );
 }

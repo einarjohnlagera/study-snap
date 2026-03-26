@@ -425,6 +425,9 @@ Rules:
 
 - Dashboard is guidance-first and non-destructive.
 - Keep delete actions out of Dashboard.
+- Dashboard should show `Resume Study`, `Performance Summary`, `Focus Areas`, `This Week`, and `This Month` before recent-note browsing.
+- Dashboard statistics and weak-concept insights must be computed from stored quiz sessions and activity logs only, never by LLM calls.
+- `Focus Areas` should surface top weak concepts for all users, but Adaptive Practice CTA remains Premium-gated through the shared soft paywall for Free users.
 - Keep destructive actions (delete) in Note Detail/My Library with explicit confirmation.
 
 ## Documentation Source of Truth

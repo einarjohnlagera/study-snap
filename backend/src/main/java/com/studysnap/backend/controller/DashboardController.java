@@ -1,6 +1,7 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
@@ -52,5 +53,13 @@ public class DashboardController {
     ) {
         UUID userId = user.userId();
         return dashboardService.getMasterySnapshot(userId);
+    }
+
+    @GetMapping("/overview")
+    public DashboardOverviewResponse getOverview(
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return dashboardService.getOverview(userId);
     }
 }

@@ -1,8 +1,10 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
@@ -59,6 +61,8 @@ class ChallengeQuizServiceTest {
     private AnalyticsService analyticsService;
     @Mock
     private AiRateLimitService aiRateLimitService;
+    @Mock
+    private ActivityTrackingService activityTrackingService;
 
     private ChallengeQuizService challengeQuizService;
 
@@ -75,7 +79,8 @@ class ChallengeQuizServiceTest {
                 billingUsagePeriodService,
                 authService,
                 analyticsService,
-                aiRateLimitService
+                aiRateLimitService,
+                activityTrackingService
         );
     }
 
@@ -233,5 +238,50 @@ class ChallengeQuizServiceTest {
         assertThat(response.sessionId()).isNotNull();
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
+    }
+
+    @Test
+    void completeSession_recordsChallengeQuizActivity() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(2);
+        session.setCurrentQuestionIndex(1);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                List.of(
+                        new QuizItem("Question 1", List.of("A", "B", "C", "D"), "A", "Concept 1", "Explanation"),
+                        new QuizItem("Question 2", List.of("A", "B", "C", "D"), "B", "Concept 2", "Explanation")
+                ),
+                Map.of(
+                        "selectedChoices", Map.of("0", "A", "1", "C"),
+                        "completed", false
+                )
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(1, 2, 120)
+        );
+
+        verify(activityTrackingService).recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, studyPackId);
     }
 }

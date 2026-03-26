@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ss_user
       POSTGRES_PASSWORD: ss#20260305
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - study_snap_pgdata:/var/lib/postgresql/data
     healthcheck:

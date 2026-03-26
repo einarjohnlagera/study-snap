@@ -29,7 +29,10 @@ public class ActivityTrackingEventListener {
     private static final Logger log = LoggerFactory.getLogger(ActivityTrackingEventListener.class);
     private static final Set<ActivityType> MEANINGFUL_STUDY_ACTIVITIES = EnumSet.of(
             ActivityType.CREATED_STUDY_PACK,
+            ActivityType.STARTED_QUICK_REVIEW,
+            ActivityType.STARTED_ADAPTIVE_PRACTICE,
             ActivityType.COMPLETED_QUICK_REVIEW,
+            ActivityType.COMPLETED_CHALLENGE_QUIZ,
             ActivityType.COMPLETED_ADAPTIVE_QUIZ
     );
 
