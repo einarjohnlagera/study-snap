@@ -2,6 +2,10 @@
 
 export type MePlanResponse = {
   plan: "FREE" | "PREMIUM";
+  usageCycle: {
+    startsAt: string;
+    endsAt: string;
+  };
   limits: {
     studyPacksPerMonth: number;
     challengeQuizzesPerMonth: number;

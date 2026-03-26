@@ -44,27 +44,61 @@ function SettingsLoading() {
   );
 }
 
+function getUsageBarClasses(used: number, limit: number) {
+  const progressPercent = getUsageProgressPercent(used, limit);
+  if (progressPercent >= 85) {
+    return "bg-red-500 dark:bg-red-400";
+  }
+  if (progressPercent >= 60) {
+    return "bg-amber-500 dark:bg-amber-400";
+  }
+  return "bg-blue-600 dark:bg-blue-400";
+}
+
 function UsageMetric({
   label,
   used,
   limit,
+  resetDateLabel,
+  showUpgradeCta,
+  onUpgradeClick,
 }: {
   label: string;
   used: number;
   limit: number;
+  resetDateLabel: string;
+  showUpgradeCta: boolean;
+  onUpgradeClick: () => void;
 }) {
   const progressPercent = getUsageProgressPercent(used, limit);
+  const hasReachedLimit = limit > 0 && used >= limit;
+  const metricTestId = `usage-metric-${label.toLowerCase().replace(/\s+/g, "-")}`;
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-foreground/80">
-        {label}: {used} / {limit}
-      </p>
+    <div data-testid={metricTestId} className="space-y-3 rounded-md border border-border bg-background p-4">
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-sm text-foreground/70">
+          {used} / {limit}
+        </p>
+      </div>
       <div className="h-2 overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-blue-600 transition-all dark:bg-blue-400"
+          className={`h-full rounded-full transition-all ${getUsageBarClasses(used, limit)}`}
           style={{ width: `${progressPercent}%` }}
         />
       </div>
+      {hasReachedLimit ? (
+        <div className="space-y-2">
+          <p className="text-xs text-foreground/70">
+            You&apos;ve reached your limit for this cycle. Limits reset on: {resetDateLabel}
+          </p>
+          {showUpgradeCta ? (
+            <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={onUpgradeClick}>
+              Upgrade to Premium
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -260,9 +294,7 @@ export default function SettingsPage() {
   const challengeQuizLimit = usageSummary?.limits.challengeQuizzesPerMonth ?? 0;
   const adaptivePracticeUsed = usageSummary?.usage.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
-  const adaptivePracticeAvailable = usageSummary?.features.adaptivePracticeAvailable ?? false;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
-  const hasReachedMonthlyLimit = studyPacksUsed >= studyPacksLimit && studyPacksLimit > 0;
   const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
   const yearlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
   const billingTransactions = billingHistory?.transactions ?? [];
@@ -276,6 +308,17 @@ export default function SettingsPage() {
       return rawDate;
     }
     return value.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  };
+
+  const formatUsageResetDate = (rawDate: string | null | undefined) => {
+    if (!rawDate) {
+      return "—";
+    }
+    const value = new Date(rawDate);
+    if (Number.isNaN(value.getTime())) {
+      return rawDate;
+    }
+    return value.toLocaleDateString(undefined, { month: "long", day: "numeric" });
   };
 
   const formatBillingAmount = (amount: number, currency: string) => {
@@ -346,6 +389,7 @@ export default function SettingsPage() {
       ? "Yearly"
       : "Monthly"
     : "—";
+  const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle.endsAt);
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -503,12 +547,35 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
-                <UsageMetric label="Study Packs" used={studyPacksUsed} limit={studyPacksLimit} />
-                <UsageMetric label="Challenge Quiz" used={challengeQuizUsed} limit={challengeQuizLimit} />
-                <UsageMetric label="Adaptive Practice" used={adaptivePracticeUsed} limit={adaptivePracticeLimit} />
-                {hasReachedMonthlyLimit ? (
-                  <p className="text-sm text-foreground/80">You have reached your monthly Study Pack limit.</p>
-                ) : null}
+                <p className="text-xs text-foreground/60">Usage resets on: {usageResetDateLabel}</p>
+                <div className="space-y-3">
+                  <UsageMetric
+                    label="Study Packs"
+                    used={studyPacksUsed}
+                    limit={studyPacksLimit}
+                    resetDateLabel={usageResetDateLabel}
+                    showUpgradeCta={!isPremiumPlan}
+                    onUpgradeClick={() => setIsWaitlistModalOpen(true)}
+                  />
+                  <UsageMetric
+                    label="Challenge Quiz"
+                    used={challengeQuizUsed}
+                    limit={challengeQuizLimit}
+                    resetDateLabel={usageResetDateLabel}
+                    showUpgradeCta={!isPremiumPlan}
+                    onUpgradeClick={() => setIsWaitlistModalOpen(true)}
+                  />
+                  {isPremiumPlan ? (
+                    <UsageMetric
+                      label="Adaptive Practice"
+                      used={adaptivePracticeUsed}
+                      limit={adaptivePracticeLimit}
+                      resetDateLabel={usageResetDateLabel}
+                      showUpgradeCta={false}
+                      onUpgradeClick={() => {}}
+                    />
+                  ) : null}
+                </div>
               </div>
               {isPremiumPlan ? (
                 <div className="space-y-2">

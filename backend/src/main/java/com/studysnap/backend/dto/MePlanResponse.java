@@ -2,13 +2,22 @@ package com.studysnap.backend.dto;
 
 import com.studysnap.backend.entity.PlanType;
 
+import java.time.OffsetDateTime;
+
 public record MePlanResponse(
         PlanType plan,
+        UsageCycle usageCycle,
         Limits limits,
         Usage usage,
         Remaining remaining,
         Features features
 ) {
+    public record UsageCycle(
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt
+    ) {
+    }
+
     public record Limits(
             int studyPacksPerMonth,
             int challengeQuizzesPerMonth,

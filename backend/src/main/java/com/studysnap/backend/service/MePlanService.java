@@ -36,6 +36,10 @@ public class MePlanService {
 
         return new MePlanResponse(
                 planType,
+                new MePlanResponse.UsageCycle(
+                        usage.periodStart(),
+                        usage.periodEnd()
+                ),
                 new MePlanResponse.Limits(
                         studyPackLimit,
                         challengeQuizLimit,
