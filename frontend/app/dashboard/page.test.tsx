@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import DashboardPage from "./page";
 import {
+  completeProductOnboarding,
   getContinueStudyingRecommendation,
   getDashboardOverview,
   getMe,
@@ -8,6 +9,7 @@ import {
   listNotes,
 } from "@/lib/api";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
+import { setAuthUser } from "@/lib/auth";
 
 const routerMock = {
   push: jest.fn(),
@@ -24,10 +26,12 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/auth", () => ({
-  getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
+  getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z", productOnboardingCompletedAt: null }),
+  setAuthUser: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => ({
+  completeProductOnboarding: jest.fn(),
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
   getMe: jest.fn(),
@@ -48,12 +52,17 @@ describe("DashboardPage upgrade messaging", () => {
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (completeProductOnboarding as jest.Mock).mockReset();
+    (setAuthUser as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
 
     (listNotes as jest.Mock).mockResolvedValue([]);
     (getMe as jest.Mock).mockResolvedValue({
       firstName: "Note",
       displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 1,
     });
     (getContinueStudyingRecommendation as jest.Mock).mockResolvedValue(null);
     (getDashboardOverview as jest.Mock).mockResolvedValue({
@@ -103,6 +112,32 @@ describe("DashboardPage upgrade messaging", () => {
       screen.getByText(/unlock Adaptive Practice, choose quiz difficulty, and access higher monthly limits/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Upgrade to Premium/i })).toBeInTheDocument();
+  });
+
+  it("shows first-study onboarding to new users and routes them to create a note", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: null,
+      studyPackCount: 0,
+      profileType: null,
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 0, challengeQuizzesUsed: 0, adaptivePracticeUsed: 0 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Welcome to NoteLib")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create My First Note" }));
+
+    expect(routerMock.push).toHaveBeenCalledWith("/notes/new");
   });
 
   it("does not show the Free plan upgrade card for premium users and shows the premium focus action", async () => {

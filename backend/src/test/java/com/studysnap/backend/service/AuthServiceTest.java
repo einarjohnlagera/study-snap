@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
+import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SignupRequest;
@@ -15,6 +16,7 @@ import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,6 +44,8 @@ class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private StudyPackRepository studyPackRepository;
+    @Mock
     private SubscriptionService subscriptionService;
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -62,6 +66,7 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
                 userRepository,
+                studyPackRepository,
                 subscriptionService,
                 passwordEncoder,
                 jwtService,
@@ -72,6 +77,7 @@ class AuthServiceTest {
         );
         lenient().when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
         lenient().when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));
+        lenient().when(studyPackRepository.countByOwnerUserId(any(UUID.class))).thenReturn(0L);
         lenient().when(refreshTokenService.issue(any(UserEntity.class), any(Boolean.class), any(), any(), any()))
                 .thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", OffsetDateTime.now().plusDays(7)));
     }
@@ -90,6 +96,7 @@ class AuthServiceTest {
 
         assertThat(response.email()).isEqualTo("[email protected]");
         assertThat(response.onboardingCompletedAt()).isNull();
+        assertThat(response.productOnboardingCompletedAt()).isNull();
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -196,6 +203,38 @@ class AuthServiceTest {
         assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
         assertThat(response.onboardingCompletedAt()).isNotNull();
         assertThat(user.getOnboardingCompletedAt()).isNotNull();
+    }
+
+    @Test
+    void completeProductOnboarding_setsCompletionTimestamp() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("[email protected]");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+        when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(0L);
+
+        MeResponse response = authService.completeProductOnboarding(
+                userId,
+                new CompleteProductOnboardingRequest(false)
+        );
+
+        assertThat(response.productOnboardingCompletedAt()).isNotNull();
+        assertThat(user.getProductOnboardingCompletedAt()).isNotNull();
     }
 
     @Test

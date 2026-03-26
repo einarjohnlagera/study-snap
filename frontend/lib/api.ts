@@ -314,6 +314,7 @@ export type AuthResponse = {
   profileType: ProfileType | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
+  productOnboardingCompletedAt: string | null;
   role: UserRole;
   planType: PlanType;
   token: string;
@@ -335,6 +336,8 @@ export type MeResponse = {
   weakConceptRemindersEnabled: boolean;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
+  productOnboardingCompletedAt: string | null;
+  studyPackCount: number;
   role: UserRole;
   status: "ACTIVE" | "SUSPENDED";
   planType: PlanType;
@@ -758,6 +761,7 @@ function toAuthUser(payload: AuthResponse): AuthUser {
     profileType: payload.profileType,
     emailVerifiedAt: payload.emailVerifiedAt,
     onboardingCompletedAt: payload.onboardingCompletedAt,
+    productOnboardingCompletedAt: payload.productOnboardingCompletedAt,
     role: payload.role,
     planType: payload.planType,
     accessToken: payload.token,
@@ -953,6 +957,21 @@ export async function completeOnboarding(
       method: "POST",
       headers: buildAuthHeaders("application/json"),
       body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+}
+
+export async function completeProductOnboarding(
+  skipped = false,
+): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/auth/product-onboarding/complete",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ skipped }),
     },
     true,
   );

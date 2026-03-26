@@ -13,6 +13,7 @@ public record AuthResponse(
         ProfileType profileType,
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,
+        OffsetDateTime productOnboardingCompletedAt,
         UserRole role,
         PlanType planType,
         String token,

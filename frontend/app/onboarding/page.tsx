@@ -106,6 +106,7 @@ export default function OnboardingPage() {
           profileType: me.profileType,
           emailVerifiedAt: me.emailVerifiedAt,
           onboardingCompletedAt: me.onboardingCompletedAt,
+          productOnboardingCompletedAt: me.productOnboardingCompletedAt,
         });
       }
       router.push("/dashboard");

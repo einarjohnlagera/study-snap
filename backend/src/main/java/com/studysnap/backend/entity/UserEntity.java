@@ -94,6 +94,9 @@ public class UserEntity {
     @Column(name = "onboarding_completed_at")
     private OffsetDateTime onboardingCompletedAt;
 
+    @Column(name = "product_onboarding_completed_at")
+    private OffsetDateTime productOnboardingCompletedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

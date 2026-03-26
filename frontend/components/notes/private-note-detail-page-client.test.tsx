@@ -1,12 +1,15 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
 import {
+  createStudyPackFromNote,
+  completeProductOnboarding,
   getBillingPricing,
   getMyPlan,
   getChallengeQuizPerformanceSummary,
   getNote,
   getQuickReviewPerformanceSummary,
   joinPremiumWaitlist,
+  startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
 } from "@/lib/api";
@@ -39,6 +42,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
@@ -90,11 +94,14 @@ describe("PrivateNoteDetailPageClient", () => {
     window.sessionStorage.clear();
     (getNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (createStudyPackFromNote as jest.Mock).mockReset();
+    (completeProductOnboarding as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
+    (startQuickReviewSession as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockResolvedValue({
@@ -258,6 +265,24 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
     expect(await screen.findByText("Adaptive Practice is a Premium feature")).toBeInTheDocument();
+  });
+
+  it("shows the generate study pack guide for first-time users after creating a note", async () => {
+    window.localStorage.setItem("notelib-first-study-onboarding:user-1", JSON.stringify({ step: "saved-note" }));
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      productOnboardingCompletedAt: null,
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Step 2: Generate your Study Pack")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Generate Study Pack" }).at(-1) as HTMLButtonElement);
+
+    expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
   });
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {

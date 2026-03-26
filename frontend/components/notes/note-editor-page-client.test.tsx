@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
 import {
+  completeProductOnboarding,
   createStudyPackFromNote,
   extractNoteTextFromFile,
   getBillingPricing,
@@ -31,6 +32,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  completeProductOnboarding: jest.fn(),
   createNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   extractNoteTextFromFile: jest.fn(),
@@ -76,6 +78,7 @@ describe("NoteEditorPageClient", () => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     (createStudyPackFromNote as jest.Mock).mockReset();
+    (completeProductOnboarding as jest.Mock).mockReset();
     (extractNoteTextFromFile as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
@@ -137,6 +140,20 @@ describe("NoteEditorPageClient", () => {
     expect(subjectInput).not.toBeDisabled();
     expect(contentInput).not.toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
+  });
+
+  it("shows the first-study hint on the create note page when onboarding is in progress", async () => {
+    window.localStorage.setItem("notelib-first-study-onboarding:user-1", JSON.stringify({ step: "create-note" }));
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      productOnboardingCompletedAt: null,
+    });
+
+    render(<NoteEditorPageClient />);
+
+    expect(await screen.findByText("Step 1: Add your notes here.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Content")).toHaveClass("border-blue-500");
   });
 
   it("locks content editing for generated notes but keeps metadata fields editable", async () => {

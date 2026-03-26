@@ -85,6 +85,13 @@ Core loop:
 - Profile Type can be edited later in `Profile`.
 - Learning Style can be edited later in `Settings > Preferences`.
 - Public pages and anonymous flows must not be blocked by onboarding.
+- NoteLib also has a separate first-study product onboarding flow for brand-new users with `studyPackCount == 0`.
+- Product onboarding guides the first workflow:
+  - `Create Note`
+  - `Generate Study Pack`
+  - `Quick Review`
+  - `Dashboard`
+- Product onboarding completion is tracked separately from preferences onboarding and should not reuse `onboardingCompletedAt`.
 
 ### Preferences Rule
 

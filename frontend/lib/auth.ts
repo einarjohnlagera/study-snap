@@ -9,6 +9,7 @@ export type AuthUser = {
   profileType: "STUDENT" | "TEACHER" | "PARENT" | "PROFESSIONAL" | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt?: string | null;
+  productOnboardingCompletedAt?: string | null;
   role: "USER" | "ADMIN";
   planType: "FREE" | "PREMIUM";
   accessToken: string;

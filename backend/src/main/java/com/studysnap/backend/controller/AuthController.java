@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
+import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
@@ -82,6 +83,15 @@ public class AuthController {
             @Valid @RequestBody CompleteOnboardingRequest request
     ) {
         return authService.completeOnboarding(user.userId(), request);
+    }
+
+    @PostMapping("/product-onboarding/complete")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse completeProductOnboarding(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody(required = false) CompleteProductOnboardingRequest request
+    ) {
+        return authService.completeProductOnboarding(user.userId(), request);
     }
 
     @PostMapping("/verify-email/request")

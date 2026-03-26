@@ -10,7 +10,7 @@ import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   hasReachedUsageLimit,
@@ -20,6 +20,7 @@ import {
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
+  completeProductOnboarding,
   copyNote,
   createStudyPackFromNote,
   deleteNote,
@@ -37,6 +38,13 @@ import {
   type NoteVisibility,
   type QuickReviewPerformanceSummaryResponse,
 } from "@/lib/api";
+import {
+  clearFirstStudyOnboardingStep,
+  getFirstStudyOnboardingStep,
+  hasPendingFirstStudyOnboarding,
+  setFirstStudyOnboardingStep,
+  type FirstStudyOnboardingStep,
+} from "@/lib/first-study-onboarding";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
   if (status === "STUDY_PACK_READY") {
@@ -103,6 +111,9 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
+  const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
+  const [showGenerateStudyPackGuide, setShowGenerateStudyPackGuide] = useState(false);
+  const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -181,6 +192,11 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       const authUser = getAuthUser();
       setIsPremiumPlan((authUser?.planType ?? "FREE") === "PREMIUM");
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
+      if (authUser && hasPendingFirstStudyOnboarding(authUser)) {
+        setFirstStudyStep(getFirstStudyOnboardingStep(authUser.id));
+        return;
+      }
+      setFirstStudyStep(null);
     };
     syncAuthState();
     globalThis.addEventListener("studysnap-auth-change", syncAuthState);
@@ -204,6 +220,33 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     const timeout = globalThis.setTimeout(() => setShareModalCopied(false), 2000);
     return () => globalThis.clearTimeout(timeout);
   }, [shareModalCopied]);
+
+  useEffect(() => {
+    if (!note) {
+      return;
+    }
+    if (firstStudyStep === "saved-note" && note.studyPackStatus === "DRAFT") {
+      setShowGenerateStudyPackGuide(true);
+      setShowQuickReviewGuide(false);
+      return;
+    }
+    if (firstStudyStep === "saved-note" && note.studyPackStatus === "STUDY_PACK_READY") {
+      const authUser = getAuthUser();
+      if (authUser) {
+        setFirstStudyOnboardingStep(authUser.id, "study-pack-ready");
+      }
+      setFirstStudyStep("study-pack-ready");
+      setShowGenerateStudyPackGuide(false);
+      setShowQuickReviewGuide(true);
+      return;
+    }
+    if (firstStudyStep === "study-pack-ready" && note.studyPackStatus === "STUDY_PACK_READY") {
+      setShowGenerateStudyPackGuide(false);
+      setShowQuickReviewGuide(true);
+      return;
+    }
+    setShowGenerateStudyPackGuide(false);
+  }, [firstStudyStep, note]);
 
   useEffect(() => {
     if (!visibilityMenuOpen) {
@@ -333,6 +376,11 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
     setGenerating(true);
     try {
       await createStudyPackFromNote(note.id);
+      const authUser = getAuthUser();
+      if (authUser && firstStudyStep === "saved-note") {
+        setFirstStudyOnboardingStep(authUser.id, "study-pack-ready");
+        setFirstStudyStep("study-pack-ready");
+      }
       const next = new URLSearchParams(searchParams.toString());
       next.set("created", "1");
       router.replace(`${pathname}?${next.toString()}`);
@@ -477,6 +525,31 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
       setError(message);
     }
   };
+
+  const dismissFirstStudyGuide = useCallback(async () => {
+    const authUser = getAuthUser();
+    if (!authUser) {
+      return;
+    }
+    try {
+      const me = await completeProductOnboarding(true);
+      setAuthUser({
+        ...authUser,
+        displayName: me.displayName,
+        profileType: me.profileType,
+        emailVerifiedAt: me.emailVerifiedAt,
+        onboardingCompletedAt: me.onboardingCompletedAt,
+        productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+      });
+    } catch {
+      // Ignore best-effort onboarding dismissal failures.
+    } finally {
+      clearFirstStudyOnboardingStep(authUser.id);
+      setFirstStudyStep(null);
+      setShowGenerateStudyPackGuide(false);
+      setShowQuickReviewGuide(false);
+    }
+  }, []);
 
   const handleStartChallengeQuiz = () => {
     if (!note) {
@@ -1000,6 +1073,68 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
             void handleDeleteNote();
           }
         }}
+      />
+
+      <AppModal
+        isOpen={showGenerateStudyPackGuide}
+        title="Step 2: Generate your Study Pack"
+        description="This will create a summary, key concepts, and quiz from your notes."
+        onClose={() => {
+          void dismissFirstStudyGuide();
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void dismissFirstStudyGuide();
+              }}
+            >
+              Skip guide
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowGenerateStudyPackGuide(false);
+                void handleGenerate();
+              }}
+            >
+              Generate Study Pack
+            </Button>
+          </div>
+        )}
+      />
+
+      <AppModal
+        isOpen={showQuickReviewGuide}
+        title="Step 3: Try Quick Review"
+        description="Quick Review helps you remember what you just studied."
+        onClose={() => {
+          void dismissFirstStudyGuide();
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                void dismissFirstStudyGuide();
+              }}
+            >
+              Skip guide
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowQuickReviewGuide(false);
+                void handleStartQuickReview();
+              }}
+            >
+              Start Quick Review
+            </Button>
+          </div>
+        )}
       />
 
       <PaywallModal
