@@ -1,17 +1,17 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EmailLogEntity;
-import com.studysnap.backend.entity.NoteEntity;
-import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
+import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
-import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -21,8 +21,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,11 +45,11 @@ class RetentionServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
-    private NoteRepository noteRepository;
-    @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
+    @Mock
+    private ActivityEventRepository activityEventRepository;
     @Mock
     private EmailLogRepository emailLogRepository;
     @Mock
@@ -61,12 +63,17 @@ class RetentionServiceTest {
     void setUp() {
         StudySnapProperties properties = new StudySnapProperties();
         properties.getEmail().setAppBaseUrl("https://www.notelib.app");
+        properties.getRetention().setInactivityDays(3);
+        properties.getRetention().setInactivityCooldownDays(3);
+        properties.getRetention().setWeakConceptInactivityDays(3);
+        properties.getRetention().setWeakConceptCooldownDays(5);
+        properties.getRetention().setWeeklyCooldownDays(7);
         retentionService = new RetentionService(
                 properties,
                 userRepository,
-                noteRepository,
                 studyPackRepository,
                 quickReviewSessionRepository,
+                activityEventRepository,
                 emailLogRepository,
                 emailTemplateService,
                 emailService
@@ -74,29 +81,36 @@ class RetentionServiceTest {
     }
 
     @Test
-    void findInactiveUsers_returnsEligibleUsersAndRespectsCooldown() {
+    void findInactiveUsers_returnsEligibleUsersBasedOnMeaningfulActivity() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
         UserEntity inactiveUser = verifiedUser();
-        inactiveUser.setLastLoginAt(now.minusDays(8));
 
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(inactiveUser));
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(inactiveUser.getId()), anyCollection()))
+                .thenReturn(true);
+        when(activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(inactiveUser.getId()),
+                anyCollection(),
+                eq(now.minusDays(3))
+        )).thenReturn(false);
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
                 inactiveUser.getId(),
                 RetentionEmailType.INACTIVITY,
-                now.minusDays(7)
+                now.minusDays(3)
         )).thenReturn(false);
 
         List<RetentionService.InactiveUserReminder> candidates = retentionService.findInactiveUsers(now);
 
         assertThat(candidates).hasSize(1);
-        assertThat(candidates.getFirst().dashboardUrl()).isEqualTo("https://www.notelib.app/dashboard");
+        assertThat(candidates.getFirst().resumeUrl()).isEqualTo("https://www.notelib.app/dashboard");
     }
 
     @Test
-    void findUsersWithWeakConcepts_returnsRemainingWeakTopicsWithoutAdaptiveFollowUp() {
+    void findUsersWithWeakConcepts_returnsRemainingTopicsAfterAdaptiveFollowUp() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
         UserEntity user = verifiedUser();
+
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
@@ -108,7 +122,7 @@ class RetentionServiceTest {
         QuickReviewSessionEntity challengeSession = completedSession(
                 user.getId(),
                 QuickReviewSessionMode.CHALLENGE,
-                now.minusDays(1),
+                now.minusDays(4),
                 Map.of("weakConcepts", List.of("Mitosis", "DNA replication"))
         );
         challengeSession.setStudyPackId(UUID.fromString("00000000-0000-0000-0000-000000000101"));
@@ -116,13 +130,13 @@ class RetentionServiceTest {
         when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                 user.getId(),
                 QuickReviewSessionMode.CHALLENGE,
-                Pageable.ofSize(1).withPage(0)
+                PageRequest.of(0, 1)
         )).thenReturn(List.of(challengeSession));
 
         QuickReviewSessionEntity adaptiveSession = completedSession(
                 user.getId(),
                 QuickReviewSessionMode.ADAPTIVE,
-                now.minusHours(12),
+                now.minusDays(2),
                 Map.of("weakConcepts", List.of("Mitosis"))
         );
         adaptiveSession.setStudyPackId(challengeSession.getStudyPackId());
@@ -130,7 +144,7 @@ class RetentionServiceTest {
                 user.getId(),
                 challengeSession.getStudyPackId(),
                 QuickReviewSessionMode.ADAPTIVE,
-                Pageable.ofSize(10).withPage(0)
+                PageRequest.of(0, 10)
         )).thenReturn(List.of(adaptiveSession));
 
         StudyPackEntity studyPack = new StudyPackEntity();
@@ -142,58 +156,39 @@ class RetentionServiceTest {
 
         assertThat(candidates).hasSize(1);
         assertThat(candidates.getFirst().weakConcepts()).containsExactly("DNA replication");
+        assertThat(candidates.getFirst().adaptivePracticeUrl())
+                .isEqualTo("https://www.notelib.app/notes/" + challengeSession.getNoteId() + "/adaptive-practice");
     }
 
     @Test
-    void findUsersWithUnfinishedNotes_returnsOldDraftNotes() {
+    void sendDailyEmails_logsSentInactiveEmails() {
         OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
         UserEntity user = verifiedUser();
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
-                .thenReturn(List.of(user));
-        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
-                user.getId(),
-                RetentionEmailType.UNFINISHED_NOTE,
-                now.minusDays(3)
-        )).thenReturn(false);
 
-        NoteEntity note = new NoteEntity();
-        note.setId(UUID.fromString("00000000-0000-0000-0000-000000000303"));
-        note.setOwnerUserId(user.getId());
-        note.setTitle("Stoichiometry");
-        note.setStatus(NoteStatus.DRAFT);
-        note.setCreatedAt(now.minusDays(4));
-        note.setUpdatedAt(now.minusDays(1));
-        when(noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(user.getId())).thenReturn(List.of(note));
-
-        List<RetentionService.UnfinishedNoteReminder> candidates = retentionService.findUsersWithUnfinishedNotes(now);
-
-        assertThat(candidates).hasSize(1);
-        assertThat(candidates.getFirst().noteTitle()).isEqualTo("Stoichiometry");
-        assertThat(candidates.getFirst().noteUrl()).isEqualTo("https://www.notelib.app/notes/" + note.getId());
-    }
-
-    @Test
-    void sendDueEmails_logsSentEmails() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
-        UserEntity user = verifiedUser();
-        user.setLastLoginAt(now.minusDays(8));
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
         when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
                 .thenReturn(List.of());
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
+                .thenReturn(true);
+        when(activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(user.getId()),
+                anyCollection(),
+                eq(now.minusDays(3))
+        )).thenReturn(false);
         when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(any(UUID.class), any(RetentionEmailType.class), any(OffsetDateTime.class)))
                 .thenReturn(false);
-        when(noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(user.getId())).thenReturn(List.of());
         when(emailTemplateService.render(eq("retention-inactivity-reminder"), any()))
                 .thenReturn(new EmailTemplateService.RenderedEmailTemplate(
-                        "Continue your study where you left off",
+                        "Continue your study pack 📚",
                         "<p>Body</p>",
                         "Body"
                 ));
 
-        RetentionService.RetentionDispatchSummary summary = retentionService.sendDueEmails(now);
+        RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails(now);
 
         assertThat(summary.inactivitySent()).isEqualTo(1);
+        assertThat(summary.weakConceptSent()).isZero();
         verify(emailService).sendEmail(any(EmailMessage.class));
         ArgumentCaptor<EmailLogEntity> logCaptor = ArgumentCaptor.forClass(EmailLogEntity.class);
         verify(emailLogRepository).save(logCaptor.capture());
@@ -202,23 +197,73 @@ class RetentionServiceTest {
     }
 
     @Test
-    void sendDueEmails_doesNotLogWhenTemplateSendFails() {
-        OffsetDateTime now = OffsetDateTime.parse("2026-03-25T00:00:00Z");
+    void findWeeklySummaryUsers_buildsWeeklyMetrics() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
+        OffsetDateTime weekStart = now.minusDays(7);
         UserEntity user = verifiedUser();
-        user.setLastLoginAt(now.minusDays(8));
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE))
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
                 .thenReturn(List.of(user));
-        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus.ACTIVE))
-                .thenReturn(List.of());
-        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(any(UUID.class), any(RetentionEmailType.class), any(OffsetDateTime.class)))
-                .thenReturn(false);
-        when(noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(user.getId())).thenReturn(List.of());
-        when(emailTemplateService.render(eq("retention-inactivity-reminder"), any()))
-                .thenThrow(new RuntimeException("Template missing"));
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
+                .thenReturn(true);
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.WEEKLY_SUMMARY,
+                now.minusDays(7)
+        )).thenReturn(false);
+        when(studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                user.getId(),
+                weekStart,
+                now
+        )).thenReturn(2L);
+        when(activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                eq(user.getId()),
+                anyCollection(),
+                eq(weekStart)
+        )).thenReturn(List.of(
+                activityEvent(user.getId(), ActivityType.CREATED_STUDY_PACK, now.minusDays(6)),
+                activityEvent(user.getId(), ActivityType.COMPLETED_QUICK_REVIEW, now.minusDays(5)),
+                activityEvent(user.getId(), ActivityType.COMPLETED_CHALLENGE_QUIZ, now.minusDays(4)),
+                activityEvent(user.getId(), ActivityType.STARTED_ADAPTIVE_PRACTICE, now.minusDays(3))
+        ));
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                user.getId(),
+                List.of(QuickReviewSessionMode.QUICK_REVIEW, QuickReviewSessionMode.CHALLENGE)
+        )).thenReturn(List.of(
+                completedScoredSession(user.getId(), QuickReviewSessionMode.QUICK_REVIEW, now.minusDays(5), "80"),
+                completedScoredSession(user.getId(), QuickReviewSessionMode.CHALLENGE, now.minusDays(4), "90")
+        ));
 
-        RetentionService.RetentionDispatchSummary summary = retentionService.sendDueEmails(now);
+        List<RetentionService.WeeklySummaryReminder> candidates = retentionService.findWeeklySummaryUsers(now);
 
-        assertThat(summary.inactivitySent()).isZero();
+        assertThat(candidates).hasSize(1);
+        RetentionService.WeeklySummaryReminder weeklySummary = candidates.getFirst();
+        assertThat(weeklySummary.studyPacksCreated()).isEqualTo(2);
+        assertThat(weeklySummary.quizzesTaken()).isEqualTo(2);
+        assertThat(weeklySummary.adaptiveSessions()).isEqualTo(1);
+        assertThat(weeklySummary.averageQuizScore()).isEqualTo(85);
+        assertThat(weeklySummary.dashboardUrl()).isEqualTo("https://www.notelib.app/dashboard");
+    }
+
+    @Test
+    void sendWeeklySummaryEmails_respectsCooldownAndDoesNotLogWhenSkipped() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-03-29T10:00:00Z");
+        UserEntity user = verifiedUser();
+
+        when(userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE))
+                .thenReturn(List.of(user));
+        when(activityEventRepository.existsByUserIdAndActivityTypeIn(eq(user.getId()), anyCollection()))
+                .thenReturn(true);
+        when(emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(
+                user.getId(),
+                RetentionEmailType.WEEKLY_SUMMARY,
+                now.minusDays(7)
+        )).thenReturn(true);
+
+        RetentionService.WeeklyRetentionDispatchSummary summary = retentionService.sendWeeklySummaryEmails(now);
+
+        assertThat(summary.weeklySummarySent()).isZero();
+        verify(emailTemplateService, never()).render(eq("retention-weekly-summary"), any());
         verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
     }
 
@@ -248,5 +293,25 @@ class RetentionServiceTest {
         session.setCompletedAt(completedAt);
         session.setSessionMetadata(metadata);
         return session;
+    }
+
+    private QuickReviewSessionEntity completedScoredSession(
+            UUID userId,
+            QuickReviewSessionMode mode,
+            OffsetDateTime completedAt,
+            String scorePercentage
+    ) {
+        QuickReviewSessionEntity session = completedSession(userId, mode, completedAt, Map.of());
+        session.setScorePercentage(new BigDecimal(scorePercentage));
+        return session;
+    }
+
+    private UserActivityEventEntity activityEvent(UUID userId, ActivityType activityType, OffsetDateTime createdAt) {
+        UserActivityEventEntity event = new UserActivityEventEntity();
+        event.setId(UUID.randomUUID());
+        event.setUserId(userId);
+        event.setActivityType(activityType);
+        event.setCreatedAt(createdAt);
+        return event;
     }
 }

@@ -249,6 +249,11 @@ Primary routes:
 - Unverified users are also blocked from OCR upload
 - Verification email delivery uses provider-agnostic `EmailService`
 - Transactional email content uses file-based templates
+- Retention emails use Resend-backed delivery with file-based templates and `email_log` cooldown tracking
+- Retention reminders include:
+  - inactive-user reminder after `3` days without meaningful study activity
+  - weak-concept reminder after `3` days without follow-up practice on weak Challenge Quiz concepts
+  - weekly progress summary every Sunday at `6:00 PM`
 
 ### Plan and Billing
 

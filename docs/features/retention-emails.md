@@ -1,23 +1,24 @@
 # Retention Emails
 
-NoteLib sends a small set of behavior-based retention emails to help verified users come back without spamming them.
+NoteLib sends a small set of behavior-based retention emails through Resend to help verified users come back without spamming them.
 
 ## Email Types
 
-V1 includes:
+Current reminders include:
 
 - `INACTIVITY`
-  - trigger: no login for `7` days
-  - gated by `inactivityRemindersEnabled`
-  - cooldown: `7` days
-- `WEAK_CONCEPT`
-  - trigger: latest completed Challenge Quiz has weak concepts and the user has not completed Adaptive Practice for those concepts
-  - gated by `weakConceptRemindersEnabled`
-  - cooldown: `5` days
-- `UNFINISHED_NOTE`
-  - trigger: note stays `DRAFT` for `2` days without a generated Study Pack
+  - trigger: no meaningful study activity for `3` days
+  - activity includes Study Pack creation, Quick Review, Challenge Quiz, and Adaptive Practice
   - gated by `inactivityRemindersEnabled`
   - cooldown: `3` days
+- `WEAK_CONCEPT`
+  - trigger: latest completed Challenge Quiz has weak concepts (`< 60%` accuracy metadata) and the user has not practiced those concepts for `3` days
+  - gated by `weakConceptRemindersEnabled`
+  - cooldown: `5` days
+- `WEEKLY_SUMMARY`
+  - trigger: weekly summary run every Sunday at `6:00 PM`
+  - includes study packs created, quizzes taken, adaptive sessions, and average quiz score for the last `7` days
+  - cooldown: `7` days
 
 ## Persistence
 
@@ -32,15 +33,20 @@ The log prevents same-type reminders from being sent again before cooldown expir
 
 ## Scheduler
 
-`RetentionEmailScheduler` runs once per day and calls `RetentionService`.
+`RetentionEmailScheduler` runs:
+
+- daily for inactivity and weak concept reminders
+- weekly for the weekly study summary
 
 Default cron:
 
 - `0 45 2 * * *`
+- `0 0 18 * * SUN`
 
 Configured under:
 
 - `studysnap.retention.daily-cron`
+- `studysnap.retention.weekly-cron`
 
 ## Email Delivery
 

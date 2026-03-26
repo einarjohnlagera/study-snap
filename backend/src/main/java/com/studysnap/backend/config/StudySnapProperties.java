@@ -231,11 +231,14 @@ public class StudySnapProperties {
     @Setter
     public static class Retention {
         private String dailyCron = "0 45 2 * * *";
-        private int inactivityDays = 7;
-        private int inactivityCooldownDays = 7;
+        private String weeklyCron = "0 0 18 * * SUN";
+        private int inactivityDays = 3;
+        private int inactivityCooldownDays = 3;
+        private int weakConceptInactivityDays = 3;
         private int weakConceptCooldownDays = 5;
         private int unfinishedNoteDays = 2;
         private int unfinishedNoteCooldownDays = 3;
+        private int weeklyCooldownDays = 7;
         private int weakConceptThresholdPercent = 60;
     }
 }

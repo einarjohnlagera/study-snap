@@ -15,6 +15,7 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
     boolean existsByEmailIgnoreCase(String email);
     Optional<UserEntity> findByEmailIgnoreCase(String email);
     long countByEmailVerifiedAtIsNotNull();
+    List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNull(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus status);
     List<UserEntity> findByStatusAndEmailVerifiedAtIsNotNullAndWeakConceptRemindersEnabledTrue(UserStatus status);
 

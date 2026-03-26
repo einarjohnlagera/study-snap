@@ -4,5 +4,6 @@ public enum RetentionEmailType {
     WELCOME,
     INACTIVITY,
     WEAK_CONCEPT,
-    UNFINISHED_NOTE
+    UNFINISHED_NOTE,
+    WEEKLY_SUMMARY
 }

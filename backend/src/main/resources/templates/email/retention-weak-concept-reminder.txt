@@ -1,9 +1,9 @@
 Hi {{name}},
 
-Your recent Challenge Quiz showed that these topics need more review:
-{{weakConcepts}}
+We noticed some topics that might need a bit more review:
+{{weakConceptList}}
 
-Open Adaptive Practice for {{noteTitle}} here:
+Practice here:
 {{adaptivePracticeUrl}}
 
 Keep going,

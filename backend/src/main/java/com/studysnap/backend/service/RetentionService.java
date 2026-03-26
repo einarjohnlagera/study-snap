@@ -1,17 +1,17 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EmailLogEntity;
-import com.studysnap.backend.entity.NoteEntity;
-import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.RetentionEmailType;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserStatus;
+import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.EmailLogRepository;
-import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -21,13 +21,19 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -35,12 +41,24 @@ import java.util.UUID;
 @Slf4j
 public class RetentionService {
     private static final int SESSION_LOOKBACK_LIMIT = 10;
+    private static final Set<ActivityType> MEANINGFUL_STUDY_ACTIVITIES = EnumSet.of(
+            ActivityType.CREATED_STUDY_PACK,
+            ActivityType.STARTED_QUICK_REVIEW,
+            ActivityType.STARTED_ADAPTIVE_PRACTICE,
+            ActivityType.COMPLETED_QUICK_REVIEW,
+            ActivityType.COMPLETED_CHALLENGE_QUIZ,
+            ActivityType.COMPLETED_ADAPTIVE_QUIZ
+    );
+    private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
+            QuickReviewSessionMode.QUICK_REVIEW,
+            QuickReviewSessionMode.CHALLENGE
+    );
 
     private final StudySnapProperties properties;
     private final UserRepository userRepository;
-    private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
+    private final ActivityEventRepository activityEventRepository;
     private final EmailLogRepository emailLogRepository;
     private final EmailTemplateService emailTemplateService;
     private final EmailService emailService;
@@ -56,19 +74,35 @@ public class RetentionService {
     }
 
     @Transactional(readOnly = true)
-    public List<UnfinishedNoteReminder> findUsersWithUnfinishedNotes() {
-        return findUsersWithUnfinishedNotes(OffsetDateTime.now(ZoneOffset.UTC));
+    public List<WeeklySummaryReminder> findWeeklySummaryUsers() {
+        return findWeeklySummaryUsers(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
     @Transactional
-    public RetentionDispatchSummary sendDueEmails() {
-        return sendDueEmails(OffsetDateTime.now(ZoneOffset.UTC));
+    public DailyRetentionDispatchSummary sendDailyEmails() {
+        return sendDailyEmails(OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Transactional
+    public int sendInactiveUserEmails() {
+        return dispatchInactivityEmails(findInactiveUsers(), OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Transactional
+    public int sendWeakConceptEmails() {
+        return dispatchWeakConceptEmails(findUsersWithWeakConcepts(), OffsetDateTime.now(ZoneOffset.UTC));
+    }
+
+    @Transactional
+    public WeeklyRetentionDispatchSummary sendWeeklySummaryEmails() {
+        return sendWeeklySummaryEmails(OffsetDateTime.now(ZoneOffset.UTC));
     }
 
     List<InactiveUserReminder> findInactiveUsers(OffsetDateTime now) {
         OffsetDateTime cutoff = now.minusDays(properties.getRetention().getInactivityDays());
         return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE).stream()
-                .filter(user -> user.getLastLoginAt() != null && !user.getLastLoginAt().isAfter(cutoff))
+                .filter(user -> hasRecordedStudyActivity(user.getId()))
+                .filter(user -> !hasRecentMeaningfulActivity(user.getId(), cutoff))
                 .filter(user -> cooldownElapsed(
                         user.getId(),
                         RetentionEmailType.INACTIVITY,
@@ -91,19 +125,29 @@ public class RetentionService {
                 .toList();
     }
 
-    List<UnfinishedNoteReminder> findUsersWithUnfinishedNotes(OffsetDateTime now) {
-        OffsetDateTime cutoff = now.minusDays(properties.getRetention().getUnfinishedNoteDays());
-        return userRepository.findByStatusAndEmailVerifiedAtIsNotNullAndInactivityRemindersEnabledTrue(UserStatus.ACTIVE).stream()
-                .map(user -> findUnfinishedNoteReminderForUser(user, cutoff, now))
-                .flatMap(Optional::stream)
+    List<WeeklySummaryReminder> findWeeklySummaryUsers(OffsetDateTime now) {
+        OffsetDateTime weekStart = now.minusDays(7);
+        return userRepository.findByStatusAndEmailVerifiedAtIsNotNull(UserStatus.ACTIVE).stream()
+                .filter(user -> hasRecordedStudyActivity(user.getId()))
+                .filter(user -> cooldownElapsed(
+                        user.getId(),
+                        RetentionEmailType.WEEKLY_SUMMARY,
+                        properties.getRetention().getWeeklyCooldownDays(),
+                        now
+                ))
+                .map(user -> buildWeeklySummaryReminder(user, weekStart, now))
                 .toList();
     }
 
-    RetentionDispatchSummary sendDueEmails(OffsetDateTime now) {
+    DailyRetentionDispatchSummary sendDailyEmails(OffsetDateTime now) {
         int inactivitySent = dispatchInactivityEmails(findInactiveUsers(now), now);
         int weakConceptSent = dispatchWeakConceptEmails(findUsersWithWeakConcepts(now), now);
-        int unfinishedNoteSent = dispatchUnfinishedNoteEmails(findUsersWithUnfinishedNotes(now), now);
-        return new RetentionDispatchSummary(inactivitySent, weakConceptSent, unfinishedNoteSent);
+        return new DailyRetentionDispatchSummary(inactivitySent, weakConceptSent);
+    }
+
+    WeeklyRetentionDispatchSummary sendWeeklySummaryEmails(OffsetDateTime now) {
+        int weeklySummarySent = dispatchWeeklySummaryEmails(findWeeklySummaryUsers(now), now);
+        return new WeeklyRetentionDispatchSummary(weeklySummarySent);
     }
 
     private Optional<WeakConceptReminder> findWeakConceptReminderForUser(UserEntity user, OffsetDateTime now) {
@@ -129,6 +173,11 @@ public class RetentionService {
             return Optional.empty();
         }
 
+        OffsetDateTime cutoff = now.minusDays(properties.getRetention().getWeakConceptInactivityDays());
+        if (latestChallenge.getCompletedAt().isAfter(cutoff)) {
+            return Optional.empty();
+        }
+
         LinkedHashSet<String> remainingWeakConcepts = new LinkedHashSet<>(extractWeakConcepts(latestChallenge));
         if (remainingWeakConcepts.isEmpty()) {
             return Optional.empty();
@@ -143,7 +192,7 @@ public class RetentionService {
             if (session.getCompletedAt() == null || session.getCompletedAt().isBefore(latestChallenge.getCompletedAt())) {
                 return;
             }
-            remainingWeakConcepts.removeAll(extractWeakConcepts(session));
+            extractWeakConcepts(session).forEach(remainingWeakConcepts::remove);
         });
 
         if (remainingWeakConcepts.isEmpty()) {
@@ -152,7 +201,7 @@ public class RetentionService {
 
         String noteTitle = studyPackRepository.findById(latestChallenge.getStudyPackId())
                 .map(StudyPackEntity::getTitle)
-                .filter(value -> value != null && !value.isBlank())
+                .filter(value -> !value.isBlank())
                 .orElse("your study pack");
 
         return Optional.of(new WeakConceptReminder(
@@ -161,37 +210,41 @@ public class RetentionService {
                 resolveFirstName(user),
                 latestChallenge.getNoteId(),
                 noteTitle,
-                List.copyOf(remainingWeakConcepts),
+                List.copyOf(remainingWeakConcepts).stream().limit(3).toList(),
                 buildAbsoluteUrl("/notes/" + latestChallenge.getNoteId() + "/adaptive-practice")
         ));
     }
 
-    private Optional<UnfinishedNoteReminder> findUnfinishedNoteReminderForUser(
-            UserEntity user,
-            OffsetDateTime cutoff,
-            OffsetDateTime now
-    ) {
-        if (!cooldownElapsed(
+    private WeeklySummaryReminder buildWeeklySummaryReminder(UserEntity user, OffsetDateTime weekStart, OffsetDateTime now) {
+        int studyPacksCreated = (int) studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 user.getId(),
-                RetentionEmailType.UNFINISHED_NOTE,
-                properties.getRetention().getUnfinishedNoteCooldownDays(),
+                weekStart,
                 now
-        )) {
-            return Optional.empty();
-        }
+        );
 
-        return noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(user.getId()).stream()
-                .filter(note -> note.getStatus() == NoteStatus.DRAFT)
-                .filter(note -> !note.getCreatedAt().isAfter(cutoff))
-                .findFirst()
-                .map(note -> new UnfinishedNoteReminder(
-                        user.getId(),
-                        user.getEmail(),
-                        resolveFirstName(user),
-                        note.getId(),
-                        resolveNoteTitle(note),
-                        buildAbsoluteUrl("/notes/" + note.getId())
-                ));
+        List<UserActivityEventEntity> weeklyEvents = activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                user.getId(),
+                MEANINGFUL_STUDY_ACTIVITIES,
+                weekStart
+        ).stream()
+                .filter(event -> event.getCreatedAt() != null && event.getCreatedAt().isBefore(now))
+                .toList();
+
+        int quizzesTaken = countEventsByType(weeklyEvents, ActivityType.COMPLETED_QUICK_REVIEW)
+                + countEventsByType(weeklyEvents, ActivityType.COMPLETED_CHALLENGE_QUIZ);
+        int adaptiveSessions = countEventsByType(weeklyEvents, ActivityType.STARTED_ADAPTIVE_PRACTICE);
+        int averageQuizScore = calculateAverageQuizScore(user.getId(), weekStart, now);
+
+        return new WeeklySummaryReminder(
+                user.getId(),
+                user.getEmail(),
+                resolveFirstName(user),
+                studyPacksCreated,
+                quizzesTaken,
+                adaptiveSessions,
+                averageQuizScore,
+                buildAbsoluteUrl("/dashboard")
+        );
     }
 
     private int dispatchInactivityEmails(List<InactiveUserReminder> candidates, OffsetDateTime now) {
@@ -204,7 +257,7 @@ public class RetentionService {
                     "retention-inactivity-reminder",
                     Map.of(
                             "name", candidate.firstName(),
-                            "dashboardUrl", candidate.dashboardUrl()
+                            "resumeUrl", candidate.resumeUrl()
                     ),
                     now
             )) {
@@ -224,8 +277,7 @@ public class RetentionService {
                     "retention-weak-concept-reminder",
                     Map.of(
                             "name", candidate.firstName(),
-                            "noteTitle", candidate.noteTitle(),
-                            "weakConcepts", String.join(", ", candidate.weakConcepts()),
+                            "weakConceptList", formatWeakConcepts(candidate.weakConcepts()),
                             "adaptivePracticeUrl", candidate.adaptivePracticeUrl()
                     ),
                     now
@@ -236,18 +288,21 @@ public class RetentionService {
         return sent;
     }
 
-    private int dispatchUnfinishedNoteEmails(List<UnfinishedNoteReminder> candidates, OffsetDateTime now) {
+    private int dispatchWeeklySummaryEmails(List<WeeklySummaryReminder> candidates, OffsetDateTime now) {
         int sent = 0;
-        for (UnfinishedNoteReminder candidate : candidates) {
+        for (WeeklySummaryReminder candidate : candidates) {
             if (sendRetentionEmail(
                     candidate.userId(),
                     candidate.email(),
-                    RetentionEmailType.UNFINISHED_NOTE,
-                    "retention-unfinished-note-reminder",
+                    RetentionEmailType.WEEKLY_SUMMARY,
+                    "retention-weekly-summary",
                     Map.of(
                             "name", candidate.firstName(),
-                            "noteTitle", candidate.noteTitle(),
-                            "noteUrl", candidate.noteUrl()
+                            "studyPacksCreated", Integer.toString(candidate.studyPacksCreated()),
+                            "quizzesTaken", Integer.toString(candidate.quizzesTaken()),
+                            "adaptiveSessions", Integer.toString(candidate.adaptiveSessions()),
+                            "averageQuizScore", Integer.toString(candidate.averageQuizScore()),
+                            "dashboardUrl", candidate.dashboardUrl()
                     ),
                     now
             )) {
@@ -290,6 +345,48 @@ public class RetentionService {
         return !emailLogRepository.existsByUserIdAndEmailTypeAndSentAtAfter(userId, emailType, cooldownCutoff);
     }
 
+    private boolean hasRecordedStudyActivity(UUID userId) {
+        return activityEventRepository.existsByUserIdAndActivityTypeIn(userId, MEANINGFUL_STUDY_ACTIVITIES);
+    }
+
+    private boolean hasRecentMeaningfulActivity(UUID userId, OffsetDateTime cutoff) {
+        return activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
+                userId,
+                MEANINGFUL_STUDY_ACTIVITIES,
+                cutoff
+        );
+    }
+
+    private int calculateAverageQuizScore(UUID userId, OffsetDateTime fromInclusive, OffsetDateTime toExclusive) {
+        List<QuickReviewSessionEntity> completedQuizSessions = quickReviewSessionRepository
+                .findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                        userId,
+                        WEEKLY_SUMMARY_QUIZ_MODES
+                ).stream()
+                .filter(session -> session.getCompletedAt() != null)
+                .filter(session -> !session.getCompletedAt().isBefore(fromInclusive))
+                .filter(session -> session.getCompletedAt().isBefore(toExclusive))
+                .filter(session -> session.getScorePercentage() != null)
+                .toList();
+        if (completedQuizSessions.isEmpty()) {
+            return 0;
+        }
+
+        BigDecimal totalScore = completedQuizSessions.stream()
+                .map(QuickReviewSessionEntity::getScorePercentage)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return totalScore
+                .divide(BigDecimal.valueOf(completedQuizSessions.size()), 0, RoundingMode.HALF_UP)
+                .intValue();
+    }
+
+    private int countEventsByType(Collection<UserActivityEventEntity> events, ActivityType activityType) {
+        return (int) events.stream()
+                .filter(event -> event.getActivityType() == activityType)
+                .count();
+    }
+
     private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
         if (session.getSessionMetadata() == null) {
             return List.of();
@@ -312,6 +409,13 @@ public class RetentionService {
         return concepts;
     }
 
+    private String formatWeakConcepts(List<String> weakConcepts) {
+        return weakConcepts.stream()
+                .map(concept -> "- " + concept)
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse("");
+    }
+
     private String resolveFirstName(UserEntity user) {
         if (user.getFirstName() != null && !user.getFirstName().isBlank()) {
             return user.getFirstName().trim();
@@ -320,13 +424,6 @@ public class RetentionService {
             return user.getDisplayName().trim();
         }
         return "there";
-    }
-
-    private String resolveNoteTitle(NoteEntity note) {
-        if (note.getTitle() != null && !note.getTitle().isBlank()) {
-            return note.getTitle().trim();
-        }
-        return "your note";
     }
 
     private String buildAbsoluteUrl(String path) {
@@ -339,7 +436,7 @@ public class RetentionService {
             UUID userId,
             String email,
             String firstName,
-            String dashboardUrl
+            String resumeUrl
     ) {
     }
 
@@ -354,20 +451,26 @@ public class RetentionService {
     ) {
     }
 
-    public record UnfinishedNoteReminder(
+    public record WeeklySummaryReminder(
             UUID userId,
             String email,
             String firstName,
-            UUID noteId,
-            String noteTitle,
-            String noteUrl
+            int studyPacksCreated,
+            int quizzesTaken,
+            int adaptiveSessions,
+            int averageQuizScore,
+            String dashboardUrl
     ) {
     }
 
-    public record RetentionDispatchSummary(
+    public record DailyRetentionDispatchSummary(
             int inactivitySent,
-            int weakConceptSent,
-            int unfinishedNoteSent
+            int weakConceptSent
+    ) {
+    }
+
+    public record WeeklyRetentionDispatchSummary(
+            int weeklySummarySent
     ) {
     }
 }

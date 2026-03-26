@@ -13,13 +13,18 @@ public class RetentionEmailScheduler {
     private final RetentionService retentionService;
 
     @Scheduled(cron = "${studysnap.retention.daily-cron:0 45 2 * * *}")
-    public void run() {
-        RetentionService.RetentionDispatchSummary summary = retentionService.sendDueEmails();
+    public void runDaily() {
+        RetentionService.DailyRetentionDispatchSummary summary = retentionService.sendDailyEmails();
         log.info(
-                "retention.email.scheduler sent inactivity={} weakConcept={} unfinishedNote={}",
+                "retention.email.scheduler.daily sent inactivity={} weakConcept={}",
                 summary.inactivitySent(),
-                summary.weakConceptSent(),
-                summary.unfinishedNoteSent()
+                summary.weakConceptSent()
         );
+    }
+
+    @Scheduled(cron = "${studysnap.retention.weekly-cron:0 0 18 * * SUN}")
+    public void runWeekly() {
+        RetentionService.WeeklyRetentionDispatchSummary summary = retentionService.sendWeeklySummaryEmails();
+        log.info("retention.email.scheduler.weekly sent weeklySummary={}", summary.weeklySummarySent());
     }
 }
