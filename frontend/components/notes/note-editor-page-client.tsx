@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
-import { PremiumWaitlistModal } from "@/components/billing/premium-waitlist-modal";
 import {
   createNote,
   createStudyPackFromNote,
@@ -12,6 +11,7 @@ import {
   getNote,
   isEmailNotVerifiedError,
   isOcrLimitReachedError,
+  trackAnalyticsEvent,
   type NoteResponse,
   updateNote,
 } from "@/lib/api";
@@ -65,6 +65,7 @@ function hasExistingMetadata(note: NoteResponse): boolean {
 
 export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientProps>) {
   const router = useRouter();
+  const pathname = usePathname();
   const isDetailPage = Boolean(noteId);
   const [studyPackStatus, setStudyPackStatus] = useState<NoteResponse["studyPackStatus"] | null>(null);
   const [draft, setDraft] = useState<NoteEditorDraft>({
@@ -91,8 +92,8 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
-  const [showOcrUpgradeModal, setShowOcrUpgradeModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
+  const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -139,6 +140,22 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
 
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
   const contentLocked = isDetailPage && studyPackStatus === "STUDY_PACK_READY";
+  const openLockedFeaturePaywall = useCallback((variant: "study-pack-limit" | "ocr-limit", source: string) => {
+    void trackAnalyticsEvent({
+      eventType: "FEATURE_LOCKED_CLICKED",
+      metadata: {
+        feature: variant === "study-pack-limit" ? "study_pack_limit" : "ocr_limit",
+        source,
+        path: pathname,
+        noteId: currentNoteId,
+      },
+    });
+    if (variant === "study-pack-limit") {
+      setShowLimitReachedModal(true);
+      return;
+    }
+    setShowOcrLimitModal(true);
+  }, [currentNoteId, pathname]);
 
   const handleImportFileChange = useCallback(async (file: File | null) => {
     const resetImportInput = () => {
@@ -215,7 +232,11 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
         setImportStatusMessage(null);
         setImportReviewMessage(null);
         resetImportInput();
-        setShowOcrLimitModal(true);
+        if (currentPlan === "FREE") {
+          openLockedFeaturePaywall("ocr-limit", "note_editor_ocr_limit");
+        } else {
+          setShowOcrLimitModal(true);
+        }
         return;
       }
       setImportFlowState("failure");
@@ -224,7 +245,7 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
       resetImportInput();
       showToast(message, "error");
     }
-  }, [appendExtractedTextToContent, contentLocked, showToast]);
+  }, [appendExtractedTextToContent, contentLocked, currentPlan, openLockedFeaturePaywall, showToast]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -337,7 +358,7 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
       return;
     }
     if (hasReachedStudyPackLimit) {
-      setShowLimitReachedModal(true);
+      openLockedFeaturePaywall("study-pack-limit", "note_editor_generate");
       return;
     }
 
@@ -377,7 +398,7 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
       } else {
         const message = error instanceof Error ? error.message : "Could not generate Study Pack.";
         if (isStudyPackLimitReachedMessage(message)) {
-          setShowLimitReachedModal(true);
+          openLockedFeaturePaywall("study-pack-limit", "note_editor_generate_error");
         } else {
           showToast(message, "error");
         }
@@ -392,6 +413,7 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
     isEmailVerified,
     isGenerating,
     isSaving,
+    openLockedFeaturePaywall,
     showToast,
     upsertNote,
   ]);
@@ -434,7 +456,6 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
   const studyPackMessage = isDetailPage
     ? "Generate a Study Pack from this note when you are ready."
     : "Save your note for later, or generate immediately when the content is ready.";
-  const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
 
   if (loadingNote) {
     return (
@@ -521,48 +542,37 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
       <PaywallModal
         isOpen={showLimitReachedModal}
         variant="study-pack-limit"
+        source="note_editor"
         onClose={() => setShowLimitReachedModal(false)}
       />
 
-      <AppModal
-        isOpen={showOcrLimitModal}
-        title="OCR limit reached"
-        description={currentPlan === "PREMIUM"
-          ? "You’ve reached your OCR limit for this billing cycle. Your limits will reset on your next billing date."
-          : "You’ve reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade to Premium for higher OCR limits."}
-        onClose={() => setShowOcrLimitModal(false)}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setShowOcrLimitModal(false)}
-            >
-              OK
-            </Button>
-            {currentPlan === "FREE" ? (
+      {currentPlan === "FREE" ? (
+        <PaywallModal
+          isOpen={showOcrLimitModal}
+          variant="ocr-limit"
+          source="note_editor_ocr_limit"
+          onClose={() => setShowOcrLimitModal(false)}
+        />
+      ) : (
+        <AppModal
+          isOpen={showOcrLimitModal}
+          title="OCR limit reached"
+          description="You’ve reached your OCR limit for this billing cycle. Your limits will reset on your next billing date."
+          onClose={() => setShowOcrLimitModal(false)}
+          actions={(
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button
                 type="button"
+                variant="outline"
                 className="w-full sm:w-auto"
-                onClick={() => {
-                  setShowOcrLimitModal(false);
-                  setShowOcrUpgradeModal(true);
-                }}
+                onClick={() => setShowOcrLimitModal(false)}
               >
-                Upgrade to Premium
+                OK
               </Button>
-            ) : null}
-          </div>
-        )}
-      />
-
-      <PremiumWaitlistModal
-        isOpen={showOcrUpgradeModal}
-        onClose={() => setShowOcrUpgradeModal(false)}
-        source="note_editor_ocr_limit"
-        feature="ocr"
-      />
+            </div>
+          )}
+        />
+      )}
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
     </>

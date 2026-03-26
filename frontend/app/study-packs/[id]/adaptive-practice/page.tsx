@@ -15,6 +15,7 @@ import {
   getMyStudyPack,
   getNote,
   isEmailNotVerifiedError,
+  trackAnalyticsEvent,
   type NoteResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
@@ -59,6 +60,18 @@ export default function AdaptivePracticePage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const openAdaptivePracticePaywall = useCallback((source: string) => {
+    void trackAnalyticsEvent({
+      eventType: "FEATURE_LOCKED_CLICKED",
+      metadata: {
+        feature: "adaptive",
+        source,
+        path: pathname,
+        noteId,
+      },
+    });
+    setShowPremiumPaywall(true);
+  }, [noteId, pathname]);
 
   const loadAdaptiveQuiz = useCallback(async () => {
     if (requestInFlightRef.current) {
@@ -99,6 +112,7 @@ export default function AdaptivePracticePage() {
       if (!detail.adaptivePracticeAvailable) {
         setAdaptiveQuiz(null);
         setPremiumLocked(true);
+        setShowPremiumPaywall(true);
         return;
       }
       const response = await generateAdaptiveQuickReviewQuiz(detail.id);
@@ -240,7 +254,7 @@ export default function AdaptivePracticePage() {
             This feature is available in the Premium plan.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="w-full sm:w-auto" onClick={() => setShowPremiumPaywall(true)}>
+            <Button type="button" className="w-full sm:w-auto" onClick={() => openAdaptivePracticePaywall("adaptive_practice_page_card")}>
               See Premium options
             </Button>
             <Link href={noteDetailHref} className="w-full sm:w-auto">
@@ -396,6 +410,7 @@ export default function AdaptivePracticePage() {
       <PaywallModal
         isOpen={showPremiumPaywall}
         variant="adaptive-practice"
+        source="adaptive_practice_page"
         onClose={() => setShowPremiumPaywall(false)}
       />
     </main>

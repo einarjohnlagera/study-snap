@@ -18,6 +18,7 @@ import {
   getNote,
   isEmailNotVerifiedError,
   startChallengeQuizSession,
+  trackAnalyticsEvent,
   updateChallengeQuizSessionProgress,
   type NoteResponse,
   type ChallengeQuizSessionResponse,
@@ -131,7 +132,7 @@ export default function ChallengeQuizPage() {
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
+  const [activePaywallModal, setActivePaywallModal] = useState<"difficulty-selection" | "challenge-quiz-limit" | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
 
   const noteId = useMemo(() => {
@@ -141,6 +142,21 @@ export default function ChallengeQuizPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const openLockedFeaturePaywall = useCallback(
+    (variant: "difficulty-selection" | "challenge-quiz-limit", source: string) => {
+      void trackAnalyticsEvent({
+        eventType: "FEATURE_LOCKED_CLICKED",
+        metadata: {
+          feature: variant === "difficulty-selection" ? "difficulty" : "quiz_limit",
+          source,
+          path: pathname,
+          noteId,
+        },
+      });
+      setActivePaywallModal(variant);
+    },
+    [noteId, pathname],
+  );
 
   useEffect(() => {
     const syncVerification = () => {
@@ -246,7 +262,11 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setPhase(inProgress.usedThisMonth >= inProgress.monthlyLimit ? "limit-reached" : "prestart");
+        const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
+        setPhase(hasReachedMonthlyLimit ? "limit-reached" : "prestart");
+        if (hasReachedMonthlyLimit) {
+          setActivePaywallModal("challenge-quiz-limit");
+        }
       }
     } catch (err) {
       if (pathname.startsWith("/study-packs/")) {
@@ -424,11 +444,12 @@ export default function ChallengeQuizPage() {
       setError(message);
       if (message.toLowerCase().includes("monthly challenge quiz limit")) {
         setPhase("limit-reached");
+        openLockedFeaturePaywall("challenge-quiz-limit", "challenge_quiz_start");
       }
     } finally {
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, selectedDifficulty, starting]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, starting]);
 
   const handleRetry = () => {
     setChallengeSession(null);
@@ -545,7 +566,11 @@ export default function ChallengeQuizPage() {
                 <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm capitalize">
                   Recommended difficulty: {selectedDifficulty}
                 </p>
-                <Button type="button" variant="outline" onClick={() => setShowPremiumPaywall(true)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => openLockedFeaturePaywall("difficulty-selection", "challenge_quiz_difficulty_button")}
+                >
                   Choose Difficulty (Premium)
                 </Button>
               </div>
@@ -764,9 +789,10 @@ export default function ChallengeQuizPage() {
       />
 
       <PaywallModal
-        isOpen={showPremiumPaywall}
-        variant="challenge-quiz"
-        onClose={() => setShowPremiumPaywall(false)}
+        isOpen={activePaywallModal !== null}
+        variant={activePaywallModal ?? "challenge-quiz-limit"}
+        source="challenge_quiz_page"
+        onClose={() => setActivePaywallModal(null)}
       />
     </main>
   );

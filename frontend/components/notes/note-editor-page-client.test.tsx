@@ -73,6 +73,8 @@ const baseNote = {
 describe("NoteEditorPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
     (createStudyPackFromNote as jest.Mock).mockReset();
     (extractNoteTextFromFile as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
@@ -218,11 +220,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getByRole("button", { name: /Generate Study Pack/i }));
 
-    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
-
-    expect(await screen.findByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
+    expect(await screen.findByText("You’ve reached your study pack limit")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
 
   it("imports image OCR text into Content without generating a Study Pack and shows an inline warning for low confidence", async () => {
@@ -433,7 +433,7 @@ describe("NoteEditorPageClient", () => {
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/You’ve reached your image-to-text limit for this month\./i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
-    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
 
   it("shows the premium OCR limit modal without upgrade CTA", async () => {
