@@ -89,6 +89,23 @@ Roadmap decisions should reinforce this loop rather than one-time output generat
 - Reminder Scheduler (daily job)
 - Email templates via Resend
 
+## Future Feature - Profile Types and Board Exam Mode
+
+NoteLib will support different Profile Types so the app can adapt to the user's goal.
+
+Profile Types:
+
+- Student -> Normal study flow (Study Packs, Quick Review, Challenge Quiz, Weak Concepts)
+- Teacher -> Generate quizzes and question banks from notes and reviewers
+- Board Exam Taker -> Focus on Challenge Quiz, Weak Concepts, Adaptive Practice, and Progress Tracking
+
+Future Board Exam Mode features may include:
+
+- Exam readiness indicator
+- Study schedule
+- Weekly progress tracking
+- Recommended study topics based on weak concepts
+
 ## Legacy planning context
 
 Older phase-by-phase roadmap details are preserved in `/legacy/ROADMAP.md`.

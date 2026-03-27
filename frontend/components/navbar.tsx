@@ -6,8 +6,14 @@ import { ThemeToggle } from "./theme-toggle";
 import { useEffect, useState } from "react";
 import { getAuthUser } from "@/lib/auth";
 import { usePathname, useRouter } from "next/navigation";
-import { Button } from "./ui/button";
+import { Button, buttonVariants } from "./ui/button";
 import { logout } from "@/lib/api";
+
+const PUBLIC_NAV = [
+  { href: "/", label: "Home" },
+  { href: "/learn", label: "Learn" },
+  { href: "/pricing", label: "Pricing" },
+];
 
 export function Navbar() {
   const router = useRouter();
@@ -75,17 +81,34 @@ export function Navbar() {
                 Settings
               </Link>
             </>
-          ) : null}
+          ) : (
+            <>
+              {PUBLIC_NAV.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </>
+          )}
           {displayName ? (
             <span className="text-sm text-foreground/80">Hi, {displayName}</span>
           ) : null}
           {showAuthLinks ? (
-            <Link
-              href="/auth"
-              className="text-sm text-foreground/80 transition-colors hover:text-foreground"
-            >
-              Log in
-            </Link>
+            <>
+              <Link
+                href="/login"
+                className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+              >
+                Login
+              </Link>
+              <Link href="/signup" className={buttonVariants({ size: "sm" })}>
+                Sign Up
+              </Link>
+            </>
           ) : (
             <Button type="button" variant="outline" size="sm" onClick={() => void handleLogout()}>
               Log out

@@ -199,6 +199,48 @@ function HowItWorksSection() {
   );
 }
 
+function StudyMethodSection() {
+  const flowItems = ["Notes", "Quiz", "Weak Areas", "Review", "Repeat"];
+
+  return (
+    <section className="space-y-5 rounded-[2rem] border border-border bg-background p-6 shadow-sm sm:p-8">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Study Method
+        </p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Study Smarter for Exams</h2>
+        <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+          Most students reread notes, but exams require recall. A better method is to test yourself, find weak areas, and review those topics. NoteLib is designed around this study method.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-2xl border border-border bg-muted/25 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        {flowItems.map((item, index) => (
+          <div key={item} className="flex items-center gap-3">
+            <span className="inline-flex items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground">
+              {item}
+            </span>
+            {index < flowItems.length - 1 ? (
+              <ArrowRight className="hidden h-4 w-4 text-blue-600 dark:text-blue-400 sm:block" />
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <TrackedLink
+          href="/learn/how-to-study-for-board-exams"
+          className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+          eventType="LANDING_CTA_CLICKED"
+          eventMetadata={{ placement: "study_method_section", destination: "/learn/how-to-study-for-board-exams" }}
+        >
+          Learn This Study Method
+        </TrackedLink>
+      </div>
+    </section>
+  );
+}
+
 function FeaturesSection() {
   return (
     <section className="space-y-5">
@@ -284,6 +326,7 @@ export default function Home() {
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
       <HowItWorksSection />
+      <StudyMethodSection />
       <FeaturesSection />
       <PricingPlansSection />
       <DemoSection />
