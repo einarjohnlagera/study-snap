@@ -6,6 +6,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 public record MeResponse(
@@ -16,6 +17,7 @@ public record MeResponse(
         String displayName,
         String countryCode,
         ProfileType profileType,
+        LocalDate examDate,
         EngagementMode engagementMode,
         boolean inactivityRemindersEnabled,
         boolean weakConceptRemindersEnabled,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,6 +53,7 @@ export default function AdaptivePracticePage() {
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
+  const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -95,6 +97,7 @@ export default function AdaptivePracticePage() {
     if (!authUser?.emailVerifiedAt) {
       setAdaptiveQuiz(null);
       setError("Verify your email to use this feature.");
+      setShowVerifyEmailModal(true);
       setLoading(false);
       requestInFlightRef.current = false;
       return;
@@ -140,6 +143,9 @@ export default function AdaptivePracticePage() {
         : err instanceof Error
           ? err.message
           : "Could not generate adaptive practice.";
+      if (isEmailNotVerifiedError(err)) {
+        setShowVerifyEmailModal(true);
+      }
       setError(message);
       setAdaptiveQuiz(null);
     } finally {
@@ -412,6 +418,10 @@ export default function AdaptivePracticePage() {
         variant="adaptive-practice"
         source="adaptive_practice_page"
         onClose={() => setShowPremiumPaywall(false)}
+      />
+      <VerifyEmailRequiredModal
+        isOpen={showVerifyEmailModal}
+        onClose={() => setShowVerifyEmailModal(false)}
       />
     </main>
   );

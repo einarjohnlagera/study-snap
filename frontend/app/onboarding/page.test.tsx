@@ -38,7 +38,7 @@ describe("OnboardingPage", () => {
     (completeOnboarding as jest.Mock).mockReset();
   });
 
-  it("submits profile type and learning style, then redirects to dashboard", async () => {
+  it("walks through the board exam flow and saves exam date plus reminder preferences", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       email: "[email protected]",
@@ -48,33 +48,56 @@ describe("OnboardingPage", () => {
     });
     (getMe as jest.Mock).mockResolvedValue({
       profileType: null,
+      examDate: null,
       engagementMode: "FOCUSED",
+      inactivityRemindersEnabled: false,
+      weakConceptRemindersEnabled: false,
       onboardingCompletedAt: null,
     });
     (completeOnboarding as jest.Mock).mockResolvedValue({
       displayName: "Note",
-      profileType: "TEACHER",
+      profileType: "BOARD_EXAM",
+      examDate: "2026-10-18",
       engagementMode: "STREAK",
+      inactivityRemindersEnabled: true,
+      weakConceptRemindersEnabled: true,
       emailVerifiedAt: "2026-03-24T00:00:00Z",
       onboardingCompletedAt: "2026-03-24T00:05:00Z",
+      productOnboardingCompletedAt: null,
     });
 
     render(<OnboardingPage />);
 
-    expect(await screen.findByText("Let's set up your study style.")).toBeInTheDocument();
-    expect(await screen.findByText("Teacher")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Teacher"));
-    fireEvent.click(screen.getByDisplayValue("STREAK"));
+    expect(await screen.findByText("Let's set up NoteLib for you.")).toBeInTheDocument();
+    expect(await screen.findByText("What will you use NoteLib for?")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Board Exam"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Learning Style")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Streak"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Study Reminder Frequency")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Stay on track"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("When is your exam?")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Select date"), {
+      target: { value: "2026-10-18" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
 
     await waitFor(() => {
       expect(completeOnboarding).toHaveBeenCalledWith({
-        profileType: "TEACHER",
+        profileType: "BOARD_EXAM",
         engagementMode: "STREAK",
+        inactivityRemindersEnabled: true,
+        weakConceptRemindersEnabled: true,
+        examDate: "2026-10-18",
       });
     });
     expect(setAuthUser).toHaveBeenCalledWith(expect.objectContaining({
-      profileType: "TEACHER",
+      profileType: "BOARD_EXAM",
       onboardingCompletedAt: "2026-03-24T00:05:00Z",
     }));
     expect(routerMock.push).toHaveBeenCalledWith("/dashboard");

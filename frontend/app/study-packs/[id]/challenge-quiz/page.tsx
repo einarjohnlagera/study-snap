@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
+import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -134,6 +135,7 @@ export default function ChallengeQuizPage() {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<"difficulty-selection" | "challenge-quiz-limit" | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
+  const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -420,6 +422,7 @@ export default function ChallengeQuizPage() {
     }
     if (!isEmailVerified) {
       setError("Verify your email to use this feature.");
+      setShowVerifyEmailModal(true);
       return;
     }
 
@@ -441,6 +444,9 @@ export default function ChallengeQuizPage() {
         : err instanceof Error
           ? err.message
           : "Could not start Challenge Quiz.";
+      if (isEmailNotVerifiedError(err)) {
+        setShowVerifyEmailModal(true);
+      }
       setError(message);
       if (message.toLowerCase().includes("monthly challenge quiz limit")) {
         setPhase("limit-reached");
@@ -793,6 +799,10 @@ export default function ChallengeQuizPage() {
         variant={activePaywallModal ?? "challenge-quiz-limit"}
         source="challenge_quiz_page"
         onClose={() => setActivePaywallModal(null)}
+      />
+      <VerifyEmailRequiredModal
+        isOpen={showVerifyEmailModal}
+        onClose={() => setShowVerifyEmailModal(false)}
       />
     </main>
   );

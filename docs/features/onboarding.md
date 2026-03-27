@@ -26,13 +26,14 @@ Onboarding collects:
 
 - `profileType`
 - `learningStyle` (stored as `engagementMode`)
+- reminder preferences
+- `examDate` for board exam users
 
 Profile Type options:
 
 - `Student`
+- `Board Exam`
 - `Teacher`
-- `Professional`
-- `Parent`
 
 Learning Style options:
 
@@ -40,12 +41,23 @@ Learning Style options:
 - `Consistency` -> Light encouragement to study regularly.
 - `Streak` -> Track consecutive study days.
 
+Reminder step:
+
+- `No reminders for now`
+- `Light reminders`
+- `Stay on track`
+
+Board exam users also select an `Exam Date` before finishing onboarding.
+
 ## Persistence
 
 Backend should store:
 
 - `profileType`
+- `examDate`
 - `engagementMode`
+- `inactivityRemindersEnabled`
+- `weakConceptRemindersEnabled`
 - `onboardingCompletedAt`
 
 On submit:

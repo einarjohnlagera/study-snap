@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.entity.PremiumWaitlistEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.PremiumWaitlistRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -94,11 +95,27 @@ class PremiumWaitlistServiceTest {
                 .isInstanceOf(UserNotFoundException.class);
     }
 
+    @Test
+    void joinWaitlist_requiresVerifiedEmail() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = buildUser(userId, "[email protected]", "Note");
+        user.setEmailVerifiedAt(null);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> premiumWaitlistService.joinWaitlist(userId))
+                .isInstanceOf(AppException.class)
+                .hasMessage("Verify your email before joining the Premium waitlist.");
+
+        verify(premiumWaitlistRepository, never()).save(any(PremiumWaitlistEntity.class));
+        verify(emailService, never()).sendEmail(any(EmailMessage.class));
+    }
+
     private UserEntity buildUser(UUID userId, String email, String firstName) {
         UserEntity user = new UserEntity();
         user.setId(userId);
         user.setEmail(email);
         user.setFirstName(firstName);
+        user.setEmailVerifiedAt(OffsetDateTime.now());
         user.setCreatedAt(OffsetDateTime.now());
         user.setUpdatedAt(OffsetDateTime.now());
         return user;

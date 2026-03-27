@@ -26,6 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -171,7 +172,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void completeOnboarding_savesProfileTypeLearningStyleAndCompletionTimestamp() {
+    void completeOnboarding_savesProfileTypeLearningStyleReminderPreferencesAndCompletionTimestamp() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -196,13 +197,50 @@ class AuthServiceTest {
 
         MeResponse response = authService.completeOnboarding(
                 userId,
-                new CompleteOnboardingRequest(ProfileType.TEACHER, EngagementMode.STREAK)
+                new CompleteOnboardingRequest(ProfileType.TEACHER, EngagementMode.STREAK, true, false, null)
         );
 
         assertThat(response.profileType()).isEqualTo(ProfileType.TEACHER);
         assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
+        assertThat(response.inactivityRemindersEnabled()).isTrue();
+        assertThat(response.weakConceptRemindersEnabled()).isFalse();
         assertThat(response.onboardingCompletedAt()).isNotNull();
         assertThat(user.getOnboardingCompletedAt()).isNotNull();
+    }
+
+    @Test
+    void completeOnboarding_savesExamDateForBoardExamUsers() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("[email protected]");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+
+        LocalDate examDate = LocalDate.of(2026, 10, 18);
+        MeResponse response = authService.completeOnboarding(
+                userId,
+                new CompleteOnboardingRequest(ProfileType.BOARD_EXAM, EngagementMode.CONSISTENCY, true, true, examDate)
+        );
+
+        assertThat(response.profileType()).isEqualTo(ProfileType.BOARD_EXAM);
+        assertThat(response.examDate()).isEqualTo(examDate);
+        assertThat(user.getExamDate()).isEqualTo(examDate);
     }
 
     @Test

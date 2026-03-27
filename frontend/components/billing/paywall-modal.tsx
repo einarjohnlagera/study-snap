@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { trackAnalyticsEvent } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
 
 export type PaywallModalVariant =
@@ -130,11 +132,13 @@ export function PaywallModal({
   const router = useRouter();
   const pathname = usePathname();
   const hasTrackedOpenRef = useRef(false);
+  const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
   const config = useMemo(() => PAYWALL_CONTENT[variant], [variant]);
 
   useEffect(() => {
     if (!isOpen) {
       hasTrackedOpenRef.current = false;
+      setVerifyEmailModalOpen(false);
       return;
     }
     if (hasDismissedInCurrentSession(variant)) {
@@ -171,6 +175,11 @@ export function PaywallModal({
   };
 
   const handleUpgrade = () => {
+    const authUser = getAuthUser();
+    if (authUser && !authUser.emailVerifiedAt) {
+      setVerifyEmailModalOpen(true);
+      return;
+    }
     void trackAnalyticsEvent({
       eventType: "UPGRADE_CLICKED",
       metadata: {
@@ -186,22 +195,28 @@ export function PaywallModal({
   };
 
   return (
-    <AppModal
-      isOpen={isOpen && !hasDismissedInCurrentSession(variant)}
-      title={config.title}
-      description={config.message}
-      onClose={handleDismiss}
-      panelClassName="max-w-[460px]"
-      actions={(
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={handleDismiss}>
-            {config.dismissLabel}
-          </Button>
-          <Button type="button" onClick={handleUpgrade}>
-            Upgrade to Premium
-          </Button>
-        </div>
-      )}
-    />
+    <>
+      <AppModal
+        isOpen={isOpen && !hasDismissedInCurrentSession(variant)}
+        title={config.title}
+        description={config.message}
+        onClose={handleDismiss}
+        panelClassName="max-w-[460px]"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={handleDismiss}>
+              {config.dismissLabel}
+            </Button>
+            <Button type="button" onClick={handleUpgrade}>
+              Upgrade to Premium
+            </Button>
+          </div>
+        )}
+      />
+      <VerifyEmailRequiredModal
+        isOpen={verifyEmailModalOpen}
+        onClose={() => setVerifyEmailModalOpen(false)}
+      />
+    </>
   );
 }

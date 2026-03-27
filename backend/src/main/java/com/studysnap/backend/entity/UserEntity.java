@@ -46,6 +46,9 @@ public class UserEntity {
     @Column(name = "profile_type")
     private ProfileType profileType;
 
+    @Column(name = "exam_date")
+    private LocalDate examDate;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "engagement_mode", nullable = false, length = 32)
     private EngagementMode engagementMode;

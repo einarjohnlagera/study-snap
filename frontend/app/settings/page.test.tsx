@@ -7,6 +7,7 @@ import {
   getMyPlan,
   getMe,
   joinPremiumWaitlist,
+  requestEmailVerification,
   updateEngagementMode,
   updateStudyReminders,
 } from "@/lib/api";
@@ -22,7 +23,7 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/lib/auth", () => ({
-  getAuthUser: () => ({ id: "user-1" }),
+  getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -37,6 +38,7 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   joinPremiumWaitlist: jest.fn(),
   logout: jest.fn(),
+  requestEmailVerification: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateEngagementMode: jest.fn(),
   updateStudyReminders: jest.fn(),
@@ -50,10 +52,13 @@ const premiumProfile = {
   displayName: "Note",
   countryCode: null,
   profileType: "STUDENT",
+  examDate: null,
   engagementMode: "FOCUSED",
   inactivityRemindersEnabled: false,
   weakConceptRemindersEnabled: false,
   emailVerifiedAt: "2026-03-20T00:00:00Z",
+  onboardingCompletedAt: "2026-03-20T00:05:00Z",
+  productOnboardingCompletedAt: null,
   role: "USER",
   status: "ACTIVE",
   planType: "PREMIUM",
@@ -137,6 +142,9 @@ describe("Settings page cancellation flow", () => {
     });
     (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
       message: "You're on the list! We'll notify you when Premium launches.",
+    });
+    (requestEmailVerification as jest.Mock).mockResolvedValue({
+      message: "Verification email sent. Please check your inbox.",
     });
   });
 

@@ -189,6 +189,7 @@ class BillingControllerTest {
                 "Note",
                 null,
                 ProfileType.STUDENT,
+                null,
                 EngagementMode.FOCUSED,
                 false,
                 false,

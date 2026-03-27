@@ -129,7 +129,7 @@ export type DashboardOverviewResponse = {
   weeklyActivity: DashboardWeeklyActivityResponse;
 };
 
-export type ProfileType = "STUDENT" | "TEACHER" | "PARENT" | "PROFESSIONAL";
+export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";
 export type PlanType = "FREE" | "PREMIUM";
 export type BillingCycle = "MONTHLY" | "YEARLY";
 export type UserRole = "USER" | "ADMIN";
@@ -331,6 +331,7 @@ export type MeResponse = {
   displayName: string;
   countryCode: string | null;
   profileType: ProfileType | null;
+  examDate: string | null;
   engagementMode: EngagementMode;
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
@@ -378,6 +379,9 @@ export type OnboardingProfileTypeRequest = {
 export type CompleteOnboardingRequest = {
   profileType: ProfileType;
   engagementMode: EngagementMode;
+  inactivityRemindersEnabled: boolean;
+  weakConceptRemindersEnabled: boolean;
+  examDate: string | null;
 };
 
 export type SimpleMessageResponse = {
