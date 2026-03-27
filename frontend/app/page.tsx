@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
-import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
+import { SimplePricingSection } from "@/components/billing/pricing-plans-section";
 import { PublicFooter } from "@/components/public/public-footer";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { buttonVariants } from "@/components/ui/button";
@@ -97,10 +97,10 @@ function HeroSection() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <TrackedLink
-              href="/auth"
+              href="/signup"
               className={buttonVariants({ className: "w-full sm:w-auto" })}
               eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_primary", destination: "/auth" }}
+              eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
             >
               Get Started Free
             </TrackedLink>
@@ -300,15 +300,26 @@ function BottomCtaSection() {
             Start Today
           </p>
           <h2 className="text-2xl font-semibold sm:text-3xl">Start studying smarter today.</h2>
+          <p className="mx-auto max-w-2xl text-sm text-foreground/75 sm:text-base">
+            Turn your notes into summaries, quizzes, and reviewers in seconds.
+          </p>
         </div>
-        <div className="flex justify-center">
+        <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <TrackedLink
-            href="/auth"
+            href="/signup"
             className={buttonVariants({ className: "w-full sm:w-auto" })}
             eventType="LANDING_CTA_CLICKED"
-            eventMetadata={{ placement: "bottom_cta", destination: "/auth" }}
+            eventMetadata={{ placement: "bottom_cta_primary", destination: "/signup" }}
           >
-            Create Free Account
+            Get Started Free
+          </TrackedLink>
+          <TrackedLink
+            href="/demo"
+            className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+            eventType="LANDING_CTA_CLICKED"
+            eventMetadata={{ placement: "bottom_cta_demo", destination: "/demo" }}
+          >
+            Try Demo
           </TrackedLink>
         </div>
       </div>
@@ -328,9 +339,9 @@ export default function Home() {
       <HowItWorksSection />
       <StudyMethodSection />
       <FeaturesSection />
-      <PricingPlansSection />
-      <DemoSection />
+      <SimplePricingSection />
       <BottomCtaSection />
+      <DemoSection />
       <PublicFooter />
     </main>
   );

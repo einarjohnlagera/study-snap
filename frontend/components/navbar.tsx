@@ -103,10 +103,10 @@ export function Navbar() {
                 href="/login"
                 className="text-sm text-foreground/80 transition-colors hover:text-foreground"
               >
-                Login
+                Log in
               </Link>
               <Link href="/signup" className={buttonVariants({ size: "sm" })}>
-                Sign Up
+                Get Started Free
               </Link>
             </>
           ) : (
