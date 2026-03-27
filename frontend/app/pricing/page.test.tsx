@@ -18,6 +18,7 @@ jest.mock("@/lib/api", () => ({
   joinPremiumWaitlist: jest.fn().mockResolvedValue({
     message: "You're on the list! We'll notify you when Premium launches.",
   }),
+  requestEmailVerification: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
 
@@ -90,22 +91,22 @@ describe("PricingPage", () => {
 
   it("exports pricing metadata with canonical and social preview fields", () => {
     expect(metadata).toMatchObject({
-      title: "NoteLib Pricing – Upgrade to Premium Study Tools",
-      description: "Unlock Challenge Quiz, Adaptive Practice, and higher monthly limits with NoteLib Premium.",
+      title: "NoteLib Pricing — Free and Premium Plans",
+      description: "Choose between Free and Premium plans. Generate study packs, quizzes, and reviewers from your notes.",
       alternates: {
-        canonical: "https://www.notelib.app/pricing",
+        canonical: "https://notelib.app/pricing",
       },
       openGraph: expect.objectContaining({
         type: "website",
-        url: "https://www.notelib.app/pricing",
+        url: "https://notelib.app/pricing",
         siteName: "NoteLib",
         images: expect.arrayContaining([
-          expect.objectContaining({ url: "https://www.notelib.app/og-image.png" }),
+          expect.objectContaining({ url: "https://notelib.app/og-image.png" }),
         ]),
       }),
       twitter: expect.objectContaining({
         card: "summary_large_image",
-        images: ["https://www.notelib.app/og-image.png"],
+        images: ["https://notelib.app/og-image.png"],
       }),
     });
   });

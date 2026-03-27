@@ -33,6 +33,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.Map;
@@ -176,7 +177,10 @@ public class AuthService {
 
         OffsetDateTime now = OffsetDateTime.now();
         user.setProfileType(request.profileType());
+        user.setExamDate(resolveExamDate(request));
         user.setEngagementMode(request.engagementMode());
+        user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
+        user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
         if (user.getOnboardingCompletedAt() == null) {
             user.setOnboardingCompletedAt(now);
         }
@@ -241,6 +245,7 @@ public class AuthService {
                 user.getDisplayName(),
                 user.getCountryCode(),
                 user.getProfileType(),
+                user.getExamDate(),
                 user.getEngagementMode(),
                 Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
@@ -267,6 +272,20 @@ public class AuthService {
                     HttpStatus.FORBIDDEN
             );
         }
+    }
+
+    private LocalDate resolveExamDate(CompleteOnboardingRequest request) {
+        if (request.profileType() != com.studysnap.backend.entity.ProfileType.BOARD_EXAM) {
+            return null;
+        }
+        if (request.examDate() == null) {
+            throw new AppException(
+                    "EXAM_DATE_REQUIRED",
+                    "Select your exam date to finish board exam setup.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return request.examDate();
     }
 
     private AuthResponse buildAuthResponse(

@@ -6,7 +6,7 @@ export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
-  profileType: "STUDENT" | "TEACHER" | "PARENT" | "PROFESSIONAL" | null;
+  profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL" | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt?: string | null;
   productOnboardingCompletedAt?: string | null;
