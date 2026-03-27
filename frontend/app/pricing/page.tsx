@@ -8,8 +8,8 @@ import { Card } from "@/components/ui/card";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib Pricing – Upgrade to Premium Study Tools",
-  description: "Unlock Challenge Quiz, Adaptive Practice, and higher monthly limits with NoteLib Premium.",
+  title: "NoteLib Pricing — Free and Premium Plans",
+  description: "Choose between Free and Premium plans. Generate study packs, quizzes, and reviewers from your notes.",
   path: "/pricing",
 });
 

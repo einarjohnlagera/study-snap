@@ -7,8 +7,8 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 import { learnGuides } from "@/lib/learn-guides";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "Learn How to Study Smarter",
-  description: "Study guides and tips for students, board exam reviewees, and teachers.",
+  title: "Study Guides — How to Study Smarter | NoteLib",
+  description: "Learn effective study methods like active recall, quiz-based learning, and board exam preparation strategies.",
   path: "/learn",
 });
 
