@@ -26,8 +26,19 @@ type ShellUser = {
   role: "USER" | "ADMIN" | null;
 };
 
-function shouldUseAuthenticatedShell(hasAuthUser: boolean): boolean {
-  return hasAuthUser;
+function isMarketingPublicRoute(pathname: string): boolean {
+  return (
+    pathname === "/"
+    || pathname === "/learn"
+    || pathname.startsWith("/learn/")
+    || pathname === "/pricing"
+    || pathname === "/privacy"
+    || pathname === "/terms"
+  );
+}
+
+function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): boolean {
+  return hasAuthUser && !isMarketingPublicRoute(pathname);
 }
 
 function isProtectedAppRoute(pathname: string): boolean {
@@ -224,11 +235,11 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   }, []);
 
   const shouldUseShell = useMemo(() => {
-    return shouldUseAuthenticatedShell(hasAuthUser);
-  }, [hasAuthUser]);
+    return shouldUseAuthenticatedShell(hasAuthUser, pathname || "");
+  }, [hasAuthUser, pathname]);
 
   useEffect(() => {
-    if (!hasAuthUser || pathname !== "/") {
+    if (!hasAuthUser || pathname !== "/" || isMarketingPublicRoute(pathname)) {
       return;
     }
     router.replace("/dashboard");
