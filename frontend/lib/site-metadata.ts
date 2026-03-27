@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const SITE_NAME = "NoteLib";
-export const SITE_URL = "https://www.notelib.app";
+export const SITE_URL = "https://notelib.app";
 export const DEFAULT_OG_IMAGE_URL = `${SITE_URL}/og-image.png`;
 
 type PageMetadataInput = {

@@ -21,10 +21,10 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 import { buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
-  "Turn your notes into summaries, key concepts, and practice questions so you can study smarter.";
+  "Turn your notes into summaries, key concepts, and quizzes in seconds. Perfect for students and board exam review.";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes",
+  title: "NoteLib — Turn Notes into Summaries, Quizzes, and Reviewers",
   description: landingPageDescription,
   path: "/",
 });
