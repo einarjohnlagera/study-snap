@@ -18,6 +18,14 @@ import {
 
 type Mode = "login" | "signup";
 
+function resolveModeFromLocation(): Mode {
+  if (globalThis.window === undefined) {
+    return "login";
+  }
+  const params = new URLSearchParams(globalThis.location.search);
+  return params.get("mode") === "signup" ? "signup" : "login";
+}
+
 function resolveSafeRedirectTarget(redirectParam: string | null): string | null {
   if (!redirectParam) {
     return null;
@@ -33,7 +41,7 @@ function resolveSafeRedirectTarget(redirectParam: string | null): string | null 
 
 export default function AuthPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(resolveModeFromLocation);
   const [firstName, setFirstName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
@@ -59,6 +67,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(globalThis.location.search);
+    setMode(params.get("mode") === "signup" ? "signup" : "login");
     setRedirectTarget(resolveSafeRedirectTarget(params.get(LOGIN_REDIRECT_QUERY_KEY)));
     setShowSessionExpiredMessage(params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED);
   }, []);
