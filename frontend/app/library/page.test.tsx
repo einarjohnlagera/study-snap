@@ -45,6 +45,7 @@ describe("My Library page", () => {
   it("opens note detail when a card is clicked", async () => {
     render(<LibraryPage />);
 
+    expect(await screen.findByRole("button", { name: "+ Create Note" })).toBeInTheDocument();
     const title = await screen.findByText("Cell Respiration");
     const card = title.closest("[role='link']");
     expect(card).not.toBeNull();
@@ -69,5 +70,15 @@ describe("My Library page", () => {
     await waitFor(() => {
       expect(deleteNote).toHaveBeenCalledWith("note-42");
     });
+  });
+
+  it("shows create-note and demo actions when the library is empty", async () => {
+    (listNotes as jest.Mock).mockResolvedValueOnce([]);
+
+    render(<LibraryPage />);
+
+    expect(await screen.findByText("You don't have any notes yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Your First Note" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try Demo" })).toBeInTheDocument();
   });
 });

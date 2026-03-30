@@ -369,6 +369,13 @@ export default function LibraryPage() {
         eyebrow="LIBRARY"
         title="My Library"
         description="Browse and revisit all of your saved notes."
+        actions={(
+          <Link href="/notes/new" className="block w-full sm:w-auto">
+            <Button type="button" className="w-full sm:w-auto">
+              + Create Note
+            </Button>
+          </Link>
+        )}
       />
 
       {loading ? (
@@ -383,15 +390,22 @@ export default function LibraryPage() {
         </Card>
       ) : !hasItems ? (
         <Card className="space-y-4 p-4 sm:p-6">
-          <h2 className="text-xl font-semibold">You don't have notes yet</h2>
+          <h2 className="text-xl font-semibold">You don&apos;t have any notes yet.</h2>
           <p className="text-sm text-foreground/75">
             Save your first note to start building Study Packs.
           </p>
-          <Link href="/study" className="w-full sm:w-auto">
-            <Button type="button" className="w-full sm:w-auto">
-              New Note
-            </Button>
-          </Link>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link href="/notes/new" className="w-full sm:w-auto">
+              <Button type="button" className="w-full sm:w-auto">
+                Create Your First Note
+              </Button>
+            </Link>
+            <Link href="/demo" className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
+                Try Demo
+              </Button>
+            </Link>
+          </div>
         </Card>
       ) : (
         <div className="space-y-4">

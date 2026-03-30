@@ -131,6 +131,20 @@ High-level model:
 - Email changes are not applied immediately.
 - Requested email changes are stored as `pendingEmail` and only replace the current email after the new address is verified.
 
+## Note Creation UX
+
+- `My Library` includes a direct `Create Note` entry so note creation does not depend on `Dashboard`.
+- Note Editor keeps a short primary CTA with profile-aware labels:
+  - `Generate`
+  - `Practice`
+  - `Create Quiz`
+- Longer action explanations live below the primary button:
+  - `Creates summary, key concepts, and quiz.`
+  - `Generates a new quiz from your material.`
+  - `Generates quiz questions from your material.`
+- Desktop repeats note actions at the top and bottom of long forms.
+- Mobile keeps generation visible through a floating primary CTA.
+
 ## Onboarding
 
 - Verified users go through a short preferences onboarding once.
