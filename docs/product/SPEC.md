@@ -172,12 +172,18 @@ Dashboard guidance rules:
   - `Recently Generated Quizzes`
   - `Activity`
   - `Usage`
+- Note entry modes may change the initial editor focus and post-generation destination without changing the underlying note pipeline:
+  - `/notes/new?mode=quiz` focuses quiz creation and should open note detail with `tab=quiz`
+  - `/notes/new?source=paste` focuses pasted material entry and should open note detail with `tab=quiz`
+  - `/notes/new?source=upload` focuses the upload panel and should open note detail with `tab=quiz`
+  - `/notes/new` remains the normal note-creation flow and should open note detail with `tab=summary`
 - Dashboard performance and weak-concept insights must be computed from existing quiz session data only.
 - Dashboard must not use LLM calls for statistics or recommendations.
 - `Focus Areas` should show the top weak concepts and route Premium users to Adaptive Practice through `noteId`.
 - Free users should see the same weak concepts but hit the soft Premium paywall when trying to start Adaptive Practice from Dashboard.
 - Board Exam CTA wording may use exam-prep labels such as `Practice Challenge Quiz` and `Weak Areas`, but must still use the same shared note, quiz-session, activity, and usage data.
 - Teacher CTA wording may use material and quiz-generation labels, but the underlying workflow remains `Note -> Study Pack -> Quiz`.
+- Post-generation note detail should stay on the same unified note route and use `tab=summary` or `tab=quiz` to choose the initial study view rather than creating separate note-detail pages.
 - Dashboard monthly usage should show:
   - Study Packs
   - Challenge Quiz

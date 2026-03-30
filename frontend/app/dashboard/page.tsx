@@ -268,8 +268,9 @@ export default function DashboardPage() {
     )
     : false;
   const shouldShowFreeUpgradeCard = usageSummary?.plan === "FREE";
-  const teacherQuizBuilderHref = "/notes/new?focus=quiz";
-  const teacherUploadHref = "/notes/new?focus=upload";
+  const teacherQuizBuilderHref = "/notes/new?mode=quiz";
+  const teacherPasteMaterialHref = "/notes/new?source=paste";
+  const teacherUploadHref = "/notes/new?source=upload";
   const showTeacherRecentQuizSection = recentReadyNotes.length > 0;
 
   return (
@@ -436,7 +437,7 @@ export default function DashboardPage() {
                 title="Upload / Paste Material"
                 description="Start with pasted notes, reviewer text, or uploaded files to build quiz material faster."
                 actionLabel="Paste Material"
-                actionHref="/notes/new"
+                actionHref={teacherPasteMaterialHref}
                 secondaryActionLabel="Upload Material"
                 secondaryActionHref={teacherUploadHref}
               />
