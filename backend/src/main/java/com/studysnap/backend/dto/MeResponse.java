@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 public record MeResponse(
         String id,
         String email,
+        String pendingEmail,
         String firstName,
         String lastName,
         String displayName,

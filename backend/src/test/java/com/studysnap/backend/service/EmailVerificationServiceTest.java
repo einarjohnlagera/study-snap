@@ -79,7 +79,7 @@ class EmailVerificationServiceTest {
         verify(emailTemplateService).render(any(), paramsCaptor.capture());
         Map<String, String> templateParams = paramsCaptor.getValue();
         assertThat(templateParams.get("verification_url")).startsWith("https://app.notelib.test/verify-email?token=");
-        assertThat(templateParams.get("app_name")).isEqualTo("NoteLib");
+        assertThat(templateParams).containsEntry("app_name", "NoteLib");
 
         ArgumentCaptor<EmailVerificationTokenEntity> tokenCaptor = ArgumentCaptor.forClass(EmailVerificationTokenEntity.class);
         verify(tokenRepository).save(tokenCaptor.capture());
@@ -118,6 +118,27 @@ class EmailVerificationServiceTest {
     }
 
     @Test
+    void sendVerificationEmail_sendsToPendingEmailWhenPresent() {
+        UserEntity user = UserEntityBuilder.aUser().build();
+        user.setEmailVerifiedAt(OffsetDateTime.now().minusDays(1));
+        user.setPendingEmail("updated@example.com");
+        when(tokenRepository.findByUserIdAndUsedAtIsNull(user.getId())).thenReturn(List.of());
+        when(tokenRepository.save(any(EmailVerificationTokenEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(emailTemplateService.render(any(), any())).thenReturn(new EmailTemplateService.RenderedEmailTemplate(
+                "Verify your email for NoteLib",
+                "<p>Verify</p>",
+                "Verify"
+        ));
+
+        service.sendVerificationEmail(user, false);
+
+        ArgumentCaptor<EmailMessage> emailCaptor = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(emailService).sendEmail(emailCaptor.capture());
+        assertThat(emailCaptor.getValue().to()).isEqualTo("updated@example.com");
+    }
+
+    @Test
     void verifyToken_marksUserAsVerified() {
         UserEntity user = UserEntityBuilder.aUser().build();
         user.setEmailVerifiedAt(null);
@@ -151,6 +172,36 @@ class EmailVerificationServiceTest {
         assertThat(token.getUsedAt()).isNotNull();
         verify(emailService).sendEmail(any(EmailMessage.class));
         verify(emailLogRepository).save(any(EmailLogEntity.class));
+    }
+
+    @Test
+    void verifyToken_updatesPendingEmailWithoutSendingWelcomeAgain() {
+        UserEntity user = UserEntityBuilder.aUser().build();
+        user.setEmail("current@example.com");
+        user.setPendingEmail("updated@example.com");
+        user.setEmailVerifiedAt(OffsetDateTime.now().minusDays(2));
+        user.setUpdatedAt(OffsetDateTime.now().minusDays(1));
+
+        String rawToken = "pending-email-token";
+        EmailVerificationTokenEntity token = new EmailVerificationTokenEntity();
+        token.setId(UUID.randomUUID());
+        token.setUserId(user.getId());
+        token.setUsedAt(null);
+        token.setCreatedAt(OffsetDateTime.now().minusMinutes(1));
+        token.setExpiresAt(OffsetDateTime.now().plusHours(1));
+        token.setTokenHash(hash(rawToken));
+
+        when(tokenRepository.findByTokenHash(hash(rawToken))).thenReturn(Optional.of(token));
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(tokenRepository.findByUserIdAndUsedAtIsNull(user.getId())).thenReturn(List.of(token));
+
+        EmailVerificationService.EmailVerificationResult result = service.verifyToken(rawToken);
+
+        assertThat(result.alreadyVerified()).isFalse();
+        assertThat(result.message()).isEqualTo("Your new email address has been verified and updated.");
+        assertThat(user.getEmail()).isEqualTo("updated@example.com");
+        assertThat(user.getPendingEmail()).isNull();
+        verify(emailLogRepository, never()).save(any(EmailLogEntity.class));
     }
 
     @Test
@@ -192,7 +243,7 @@ class EmailVerificationServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
         verify(emailTemplateService).render(any(), paramsCaptor.capture());
-        assertThat(paramsCaptor.getValue().get("dashboard_url")).isEqualTo("https://app.notelib.test/dashboard");
+        assertThat(paramsCaptor.getValue()).containsEntry("dashboard_url", "https://app.notelib.test/dashboard");
     }
 
     private String hash(String rawValue) {

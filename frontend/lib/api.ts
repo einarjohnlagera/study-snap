@@ -326,6 +326,7 @@ export type AuthResponse = {
 export type MeResponse = {
   id: string;
   email: string;
+  pendingEmail: string | null;
   firstName: string;
   lastName: string | null;
   displayName: string;
@@ -352,6 +353,12 @@ export type UpdateEngagementModeRequest = {
 export type UpdateStudyRemindersRequest = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
+};
+
+export type UpdateUserProfileRequest = {
+  firstName: string;
+  lastName: string;
+  email: string;
 };
 
 export type CancelPremiumSubscriptionRequest = {
@@ -878,6 +885,19 @@ export async function getMe(): Promise<MeResponse> {
     true,
   );
   return parseApiResponse<MeResponse>(response, "Could not load profile. Please try again.");
+}
+
+export async function updateUserProfile(request: UpdateUserProfileRequest): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/profile",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<MeResponse>(response, "Could not update profile. Please try again.");
 }
 
 export async function getAdminDashboardSummary(): Promise<AdminDashboardSummaryResponse> {

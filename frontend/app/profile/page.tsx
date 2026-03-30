@@ -8,9 +8,9 @@ import { PageHeader } from "@/components/page-header";
 import {
   completeOnboardingProfileType,
   getMe,
-  listMyStudyPacks,
   type MeResponse,
   type ProfileType,
+  updateUserProfile,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
@@ -62,12 +62,12 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
-  const [studyPackCount, setStudyPackCount] = useState(0);
   const [identityForm, setIdentityForm] = useState<IdentityForm>({
     firstName: "",
     lastName: "",
     email: "",
   });
+  const [savingIdentity, setSavingIdentity] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
   const [savingProfileType, setSavingProfileType] = useState(false);
@@ -85,23 +85,18 @@ export default function ProfilePage() {
     setSaveMessage(null);
     setProfileTypeMessage(null);
     try {
-      const [me, studyPacks] = await Promise.all([
-        getMe(),
-        listMyStudyPacks(),
-      ]);
+      const me = await getMe();
       setProfile(me);
-      setStudyPackCount(studyPacks.length);
       setIdentityForm({
         firstName: me.firstName ?? "",
         lastName: me.lastName ?? "",
-        email: me.email ?? "",
+        email: me.pendingEmail ?? me.email ?? "",
       });
       setSelectedProfileType(me.profileType ?? "");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load profile.";
       setError(message);
       setProfile(null);
-      setStudyPackCount(0);
       setSelectedProfileType("");
     } finally {
       setLoading(false);
@@ -138,9 +133,35 @@ export default function ProfilePage() {
     }));
   };
 
-  const handleSaveIdentity = () => {
-    // Placeholder flow until profile update endpoint is available.
-    setSaveMessage("Profile updates are not connected yet. Changes are local for this session.");
+  const handleSaveIdentity = async () => {
+    if (savingIdentity) {
+      return;
+    }
+    setSavingIdentity(true);
+    setSaveMessage(null);
+    try {
+      const updated = await updateUserProfile({
+        firstName: identityForm.firstName.trim(),
+        lastName: identityForm.lastName.trim(),
+        email: identityForm.email.trim(),
+      });
+      setProfile(updated);
+      setIdentityForm({
+        firstName: updated.firstName ?? "",
+        lastName: updated.lastName ?? "",
+        email: updated.pendingEmail ?? updated.email,
+      });
+      setSaveMessage(
+        updated.pendingEmail
+          ? "Please verify your new email address before it replaces your current email."
+          : "Profile updated successfully.",
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update profile.";
+      setSaveMessage(message);
+    } finally {
+      setSavingIdentity(false);
+    }
   };
 
   const handleSaveProfileType = async () => {
@@ -190,6 +211,11 @@ export default function ProfilePage() {
               <div className="min-w-0 space-y-1">
                 <h1 className="truncate text-2xl font-semibold tracking-tight">{resolvedDisplayName}</h1>
                 <p className="truncate text-sm text-foreground/75">{profile.email}</p>
+                {profile.pendingEmail ? (
+                  <p className="truncate text-xs text-foreground/60">
+                    Pending email change: {profile.pendingEmail}
+                  </p>
+                ) : null}
               </div>
             </div>
           </Card>
@@ -224,8 +250,13 @@ export default function ProfilePage() {
               </label>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button type="button" className="w-full sm:w-auto" onClick={handleSaveIdentity}>
-                Save Identity
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSaveIdentity()}
+                disabled={savingIdentity}
+              >
+                {savingIdentity ? "Saving..." : "Save Identity"}
               </Button>
               {saveMessage ? (
                 <p className="text-xs text-foreground/60">{saveMessage}</p>
@@ -282,7 +313,7 @@ export default function ProfilePage() {
               </div>
               <div className="rounded-md border border-border bg-background p-3">
                 <p className="text-xs uppercase tracking-wide text-foreground/60">Study Packs created</p>
-                <p className="mt-1 font-medium">{studyPackCount}</p>
+                <p className="mt-1 font-medium">{profile.studyPackCount}</p>
               </div>
             </div>
           </Card>

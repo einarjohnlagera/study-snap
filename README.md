@@ -108,6 +108,20 @@ High-level model:
 - Unverified users also cannot use OCR upload.
 - OCR is optional on Create/Edit Note and is used to populate Note content for review before save/generate.
 
+## Profile and Settings
+
+- `Profile` owns identity and account information:
+  - `firstName`
+  - `lastName`
+  - `email`
+  - `profileType`
+- `Settings` owns preferences and app behavior:
+  - `Learning Style`
+  - `Study Reminders`
+  - billing and usage
+- Email changes are not applied immediately.
+- Requested email changes are stored as `pendingEmail` and only replace the current email after the new address is verified.
+
 ## Product Philosophy
 
 Learning loop:
