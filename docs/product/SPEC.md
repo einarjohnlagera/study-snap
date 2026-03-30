@@ -260,6 +260,55 @@ Primary routes:
   - complete Quick Review
   - return to Dashboard
 
+### Profile
+
+Route: `/profile`
+
+`Profile` owns identity and account-oriented fields only.
+
+Identity section:
+
+- `firstName`
+- `lastName`
+- `email`
+- `Save Identity`
+
+Profile section:
+
+- `profileType`
+- separate `Save Profile Type` action
+
+Account information section:
+
+- `Member Since`
+- `Plan`
+- `Study Packs Created`
+
+`Profile` must not include:
+
+- `Learning Style`
+- `Study Reminder Frequency`
+- other app-behavior preferences that belong in Settings
+
+Email change flow:
+
+- saving identity updates `firstName` and `lastName` immediately
+- if `email` changes, NoteLib stores the new value in `pendingEmail`
+- verification is sent to `pendingEmail`
+- the UI should tell the user: `Please verify your new email address before it replaces your current email.`
+- after verification, `email = pendingEmail`, `pendingEmail = null`, and `emailVerifiedAt` is refreshed
+- email changes must never replace the active account email before verification
+
+### Settings Preferences
+
+Route: `/settings`
+
+`Settings > Preferences` remains the only place for:
+
+- `Learning Style`
+- `Study Reminders`
+- future behavior and reminder preferences
+
 ### Plan and Billing
 
 Settings route section: `Plan & Billing`

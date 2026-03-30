@@ -5,7 +5,9 @@ import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
+import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
@@ -36,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -110,7 +113,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
-        user.setEmail("[email protected]");
+        user.setEmail("current@example.com");
         user.setDisplayName("note");
         user.setPasswordHash("hashed");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
@@ -118,17 +121,17 @@ class AuthServiceTest {
         user.setTokenVersion(0);
         user.setFailedLoginAttempts(0);
 
-        when(userRepository.findByEmailIgnoreCase("[email protected]")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("current@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
 
         AuthResponse response = authService.login(
-                new LoginRequest("[email protected]", "password123", true),
+                new LoginRequest("current@example.com", "password123", true),
                 "127.0.0.1",
                 "JUnit"
         );
 
-        assertThat(response.email()).isEqualTo("[email protected]");
+        assertThat(response.email()).isEqualTo("current@example.com");
         verify(analyticsService).trackEvent(userId, AnalyticsEventType.LOGIN, userId, java.util.Map.of(
                 "keepSignedIn", true
         ));
@@ -138,8 +141,9 @@ class AuthServiceTest {
     void login_throwsInvalidCredentialsException_whenUserDoesNotExist() {
         when(userRepository.findByEmailIgnoreCase("[email protected]")).thenReturn(Optional.empty());
 
+        LoginRequest request = new LoginRequest("[email protected]", "password123", false);
         assertThatThrownBy(() -> authService.login(
-                new LoginRequest("[email protected]", "password123", false),
+                request,
                 "127.0.0.1",
                 "JUnit"
         )).isInstanceOf(InvalidCredentialsException.class)
@@ -163,8 +167,9 @@ class AuthServiceTest {
                 .thenReturn(new RefreshTokenEntityBuilder().withUserId(userId).build());
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
+        RefreshTokenRequest request = new RefreshTokenRequest("refresh-token");
         assertThatThrownBy(() -> authService.refresh(
-                new com.studysnap.backend.dto.RefreshTokenRequest("refresh-token"),
+                request,
                 "127.0.0.1",
                 "JUnit"
         )).isInstanceOf(InvalidRefreshTokenException.class)
@@ -176,7 +181,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
-        user.setEmail("[email protected]");
+        user.setEmail("current@example.com");
         user.setFirstName("Note");
         user.setDisplayName("note");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
@@ -213,7 +218,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
-        user.setEmail("[email protected]");
+        user.setEmail("current@example.com");
         user.setFirstName("Note");
         user.setDisplayName("note");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
@@ -248,7 +253,7 @@ class AuthServiceTest {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
-        user.setEmail("[email protected]");
+        user.setEmail("current@example.com");
         user.setFirstName("Note");
         user.setDisplayName("note");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
@@ -309,6 +314,102 @@ class AuthServiceTest {
         assertThat(response.weakConceptRemindersEnabled()).isTrue();
         assertThat(user.getInactivityRemindersEnabled()).isTrue();
         assertThat(user.getWeakConceptRemindersEnabled()).isTrue();
+    }
+
+    @Test
+    void updateUserProfile_updatesIdentityImmediatelyAndKeepsEmailWhenUnchanged() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Old");
+        user.setLastName("Name");
+        user.setDisplayName("Old Name");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+
+        MeResponse response = authService.updateUserProfile(
+                userId,
+                new UpdateUserProfileRequest("New", "Person", "current@example.com")
+        );
+
+        assertThat(response.firstName()).isEqualTo("New");
+        assertThat(response.lastName()).isEqualTo("Person");
+        assertThat(response.email()).isEqualTo("current@example.com");
+        assertThat(response.pendingEmail()).isNull();
+        assertThat(user.getDisplayName()).isEqualTo("New Person");
+        verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
+    }
+
+    @Test
+    void updateUserProfile_storesPendingEmailAndSendsVerification() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setLastName("User");
+        user.setDisplayName("Note User");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-20T00:00:00Z"));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCase("updated@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByPendingEmailIgnoreCase("updated@example.com")).thenReturn(Optional.empty());
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+
+        MeResponse response = authService.updateUserProfile(
+                userId,
+                new UpdateUserProfileRequest("Note", "User", "updated@example.com")
+        );
+
+        assertThat(response.email()).isEqualTo("current@example.com");
+        assertThat(response.pendingEmail()).isEqualTo("updated@example.com");
+        assertThat(user.getPendingEmail()).isEqualTo("updated@example.com");
+        verify(emailVerificationService).sendVerificationEmail(user, false);
+    }
+
+    @Test
+    void requestEmailVerification_allowsResendForPendingEmailChange() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setPendingEmail("updated@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("Note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-20T00:00:00Z"));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThat(authService.requestEmailVerification(userId).message())
+                .isEqualTo("Verification email sent. Please check your inbox.");
+
+        verify(emailVerificationService).sendVerificationEmail(user, true);
     }
 
     private static final class RefreshTokenEntityBuilder {

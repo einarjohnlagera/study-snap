@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -63,6 +64,7 @@ public class AuthService {
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         user.setEmail(email);
+        user.setPendingEmail(null);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFirstName(request.firstName().trim());
         user.setDisplayName(resolveDisplayName(request.displayName(), request.firstName()));
@@ -199,7 +201,7 @@ public class AuthService {
 
     public SimpleMessageResponse requestEmailVerification(UUID userId) {
         UserEntity user = findUserOrThrow(userId);
-        if (user.getEmailVerifiedAt() != null) {
+        if (user.getEmailVerifiedAt() != null && user.getPendingEmail() == null) {
             return new SimpleMessageResponse("Your email is already verified.");
         }
         emailVerificationService.sendVerificationEmail(user, true);
@@ -234,12 +236,36 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    public MeResponse updateUserProfile(UUID userId, UpdateUserProfileRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+
+        String normalizedFirstName = normalizeRequiredText(request.firstName());
+        String normalizedLastName = normalizeOptionalText(request.lastName());
+        String normalizedEmail = normalizeEmail(request.email());
+
+        user.setFirstName(normalizedFirstName);
+        user.setLastName(normalizedLastName);
+        user.setDisplayName(resolveProfileDisplayName(normalizedFirstName, normalizedLastName));
+
+        if (normalizedEmail.equalsIgnoreCase(user.getEmail())) {
+            user.setPendingEmail(null);
+        } else if (!normalizedEmail.equalsIgnoreCase(user.getPendingEmail())) {
+            ensureEmailAvailable(user.getId(), normalizedEmail);
+            user.setPendingEmail(normalizedEmail);
+            emailVerificationService.sendVerificationEmail(user, false);
+        }
+
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
     private MeResponse toMeResponse(UserEntity user) {
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(user.getId());
         long studyPackCount = studyPackRepository.countByOwnerUserId(user.getId());
         return new MeResponse(
                 user.getId().toString(),
                 user.getEmail(),
+                user.getPendingEmail(),
                 user.getFirstName(),
                 user.getLastName(),
                 user.getDisplayName(),
@@ -350,10 +376,45 @@ public class AuthService {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String normalizeRequiredText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim();
+    }
+
+    private String normalizeOptionalText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
     private String resolveDisplayName(String displayName, String firstName) {
         if (displayName != null && !displayName.isBlank()) {
             return displayName.trim();
         }
         return firstName == null ? null : firstName.trim();
+    }
+
+    private String resolveProfileDisplayName(String firstName, String lastName) {
+        if (lastName == null || lastName.isBlank()) {
+            return firstName;
+        }
+        return firstName + " " + lastName;
+    }
+
+    private void ensureEmailAvailable(UUID currentUserId, String email) {
+        userRepository.findByEmailIgnoreCase(email)
+                .filter(existing -> !existing.getId().equals(currentUserId))
+                .ifPresent(existing -> {
+                    throw new AppException("EMAIL_ALREADY_EXISTS", "This email is already registered.", HttpStatus.CONFLICT);
+                });
+        userRepository.findByPendingEmailIgnoreCase(email)
+                .filter(existing -> !existing.getId().equals(currentUserId))
+                .ifPresent(existing -> {
+                    throw new AppException("EMAIL_ALREADY_EXISTS", "This email is already registered.", HttpStatus.CONFLICT);
+                });
     }
 }

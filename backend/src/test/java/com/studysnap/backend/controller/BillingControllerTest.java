@@ -184,6 +184,7 @@ class BillingControllerTest {
         MeResponse expected = new MeResponse(
                 userId.toString(),
                 "[email protected]",
+                null,
                 "Note",
                 null,
                 "Note",

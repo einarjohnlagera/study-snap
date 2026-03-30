@@ -41,7 +41,7 @@ public class EmailVerificationService {
     private final StudySnapProperties properties;
 
     public void sendVerificationEmail(UserEntity user, boolean enforceCooldown) {
-        if (user.getEmailVerifiedAt() != null) {
+        if (user.getEmailVerifiedAt() != null && !hasPendingEmailChange(user)) {
             return;
         }
 
@@ -73,7 +73,7 @@ public class EmailVerificationService {
         );
 
         emailService.sendEmail(new EmailMessage(
-                user.getEmail(),
+                resolveVerificationTargetEmail(user),
                 renderedTemplate.subject(),
                 renderedTemplate.htmlBody(),
                 renderedTemplate.textBody()
@@ -89,7 +89,9 @@ public class EmailVerificationService {
         UserEntity user = userRepository.findById(token.getUserId())
                 .orElseThrow(this::invalidTokenException);
 
-        if (user.getEmailVerifiedAt() != null) {
+        boolean pendingEmailChange = hasPendingEmailChange(user);
+
+        if (user.getEmailVerifiedAt() != null && !pendingEmailChange) {
             markTokenAsUsed(token, now);
             return new EmailVerificationResult(
                     user.getId(),
@@ -102,16 +104,25 @@ public class EmailVerificationService {
             throw invalidTokenException();
         }
 
+        if (pendingEmailChange) {
+            user.setEmail(user.getPendingEmail());
+            user.setPendingEmail(null);
+        }
         user.setEmailVerifiedAt(now);
         user.setUpdatedAt(now);
         markTokenAsUsed(token, now);
         markOtherActiveTokensAsUsed(user.getId(), token.getId(), now);
-        sendWelcomeEmail(user);
+
+        if (!pendingEmailChange) {
+            sendWelcomeEmail(user);
+        }
 
         return new EmailVerificationResult(
                 user.getId(),
                 false,
-                "Email verified successfully. You can continue in NoteLib."
+                pendingEmailChange
+                        ? "Your new email address has been verified and updated."
+                        : "Email verified successfully. You can continue in NoteLib."
         );
     }
 
@@ -232,6 +243,19 @@ public class EmailVerificationService {
             return "there";
         }
         return user.getFirstName().trim();
+    }
+
+    private boolean hasPendingEmailChange(UserEntity user) {
+        return user.getPendingEmail() != null
+                && !user.getPendingEmail().isBlank()
+                && !user.getPendingEmail().equalsIgnoreCase(user.getEmail());
+    }
+
+    private String resolveVerificationTargetEmail(UserEntity user) {
+        if (hasPendingEmailChange(user)) {
+            return user.getPendingEmail().trim();
+        }
+        return user.getEmail();
     }
 
     private String generateRawToken() {

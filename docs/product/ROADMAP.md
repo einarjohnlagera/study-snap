@@ -59,6 +59,15 @@ Potential expansion areas:
 - deeper progress insights from quiz history
 - optional snapshot/history table if product value is proven
 
+## v0.4.0 Account & Personalization
+
+- Profile identity save polish
+  - keep `Profile` focused on identity and account information
+  - keep `Settings` focused on preferences and app behavior
+  - support email-change verification through `pendingEmail`
+- Profile type remains editable in `Profile`
+- Learning Style and Study Reminders remain editable only in `Settings > Preferences`
+
 ## Product learning loop
 
 Capture -> Generate -> Review -> Improve -> Copy -> Repeat

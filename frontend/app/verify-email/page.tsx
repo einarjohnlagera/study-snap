@@ -61,7 +61,7 @@ function VerifyEmailPageContent() {
         }
         setMessage(response.message);
         setToastTone("success");
-        setToastMessage("Your email has been verified. You can now generate Study Packs.");
+        setToastMessage(response.message);
         const activeAuthUser = getAuthUser();
         if (!activeAuthUser) {
           return;
@@ -74,6 +74,7 @@ function VerifyEmailPageContent() {
           ]);
           const nextAuthUser: AuthUser = {
             ...activeAuthUser,
+            email: me.email,
             displayName: me.displayName,
             profileType: me.profileType,
             emailVerifiedAt: me.emailVerifiedAt,

@@ -251,6 +251,32 @@ Auth and onboarding:
 - `GET /api/auth/me`
 - `POST /api/auth/resend-verification`
 - `GET /api/auth/verify-email?token=...`
+- `PUT /api/users/profile`
+
+Profile update architecture:
+
+- `PUT /api/users/profile` updates identity fields only:
+  - `firstName`
+  - `lastName`
+  - `email`
+- `profileType` remains a separate write action from the existing profile-type endpoint
+- preference writes such as `engagementMode` and study reminders remain under settings/preferences APIs
+- the user aggregate stores:
+  - `email`
+  - `pendingEmail`
+  - `emailVerifiedAt`
+  - `firstName`
+  - `lastName`
+  - `profileType`
+  - `engagementMode`
+  - reminder-toggle fields
+  - `examDate`
+- email-change verification reuses the existing verification-token flow
+- when a pending email is verified:
+  - `users.email` is updated from `users.pending_email`
+  - `users.pending_email` is cleared
+  - `users.email_verified_at` is refreshed
+- welcome-email logic must remain one-time for first verification and must not re-fire for pending-email verification
 
 ## API Security Model
 

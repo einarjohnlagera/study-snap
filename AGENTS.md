@@ -93,6 +93,22 @@ Core loop:
   - `Dashboard`
 - Product onboarding completion is tracked separately from preferences onboarding and should not reuse `onboardingCompletedAt`.
 
+### Profile Rule
+
+- `Profile` owns identity and account-related information only.
+- `Profile` sections are:
+  - `Identity`
+  - `Profile Type`
+  - `Account Information`
+- Identity uses:
+  - `firstName`
+  - `lastName`
+  - `email`
+- Do not collapse `firstName` and `lastName` into one `name` field in product UI or API contracts unless explicitly requested.
+- `Profile Type` remains editable in `Profile` as a separate save action.
+- Do not move `Learning Style` or study-reminder preferences into `Profile`.
+- Email changes must write `pendingEmail` first and only update `email` after verification.
+
 ### Preferences Rule
 
 - `Settings` should show `Preferences` before `Plan & Billing` and `Account`.
