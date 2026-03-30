@@ -260,6 +260,34 @@ Primary routes:
   - complete Quick Review
   - return to Dashboard
 
+### Preferences Onboarding
+
+Route: `/onboarding`
+
+Preferences onboarding is reused and extended rather than duplicated.
+
+Current onboarding order:
+
+1. `Profile Type`
+2. `Learning Style`
+3. `Study Reminder Frequency`
+4. `Exam Date` only when `profileType = BOARD_EXAM`
+5. finish and redirect to `Dashboard`
+
+Profile Type options:
+
+- `STUDENT`
+- `BOARD_EXAM`
+- `TEACHER`
+
+Rules:
+
+- `Learning Style` and `Study Reminder Frequency` remain the existing onboarding steps
+- `Exam Date` is conditional and must be skipped for `STUDENT` and `TEACHER`
+- onboarding state is loaded from `GET /auth/me`
+- onboarding completion is persisted through the existing onboarding completion flow
+- users who already completed onboarding should be redirected to `Dashboard`
+
 ### Profile
 
 Route: `/profile`
