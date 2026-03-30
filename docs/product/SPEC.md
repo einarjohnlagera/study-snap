@@ -117,10 +117,14 @@ CTA behavior:
   - desktop: sticky top actions plus repeated bottom actions
   - mobile: fixed floating primary generate CTA
   - `Save` stays secondary
-- Generate button copy may vary by `profileType` without changing backend generation:
-  - `STUDENT` -> `Generate Study Pack`
-  - `BOARD_EXAM` -> `Generate Practice Quiz`
-  - `TEACHER` -> `Generate Quiz`
+- Generate button copy should stay short and may vary by `profileType` without changing backend generation:
+  - `STUDENT` -> `Generate`
+  - `BOARD_EXAM` -> `Practice`
+  - `TEACHER` -> `Create Quiz`
+- The longer explanation belongs in helper text below the primary generate button:
+  - `STUDENT` -> `Creates summary, key concepts, and quiz.`
+  - `BOARD_EXAM` -> `Generates a new quiz from your material.`
+  - `TEACHER` -> `Generates quiz questions from your material.`
 - Demo mode must not call real generation pipeline, persist data, or consume usage
 - Unverified users are blocked from generation with structured `403`:
   - `code=EMAIL_VERIFICATION_REQUIRED`

@@ -134,10 +134,14 @@ High-level model:
 ## Note Creation UX
 
 - `My Library` includes a direct `Create Note` entry so note creation does not depend on `Dashboard`.
-- Note Editor keeps `Generate` as the primary CTA with profile-aware labels:
-  - `Generate Study Pack`
-  - `Generate Practice Quiz`
-  - `Generate Quiz`
+- Note Editor keeps a short primary CTA with profile-aware labels:
+  - `Generate`
+  - `Practice`
+  - `Create Quiz`
+- Longer action explanations live below the primary button:
+  - `Creates summary, key concepts, and quiz.`
+  - `Generates a new quiz from your material.`
+  - `Generates quiz questions from your material.`
 - Desktop repeats note actions at the top and bottom of long forms.
 - Mobile keeps generation visible through a floating primary CTA.
 

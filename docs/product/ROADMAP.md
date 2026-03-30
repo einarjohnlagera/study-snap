@@ -80,7 +80,7 @@ Potential expansion areas:
   - `TEACHER` emphasizes material upload and quiz creation without introducing teacher-specific entities
   - add frontend-only note entry modes so teacher CTA buttons can share one note pipeline with clearer routing intent
 - Note editor UX improvements
-  - keep generate as the primary action with profile-aware copy
+  - keep generate as the primary action with short profile-aware labels plus helper text
   - repeat desktop actions at the top and bottom of long note forms
   - keep mobile generation reachable through a floating CTA
   - expose direct note creation from `My Library`

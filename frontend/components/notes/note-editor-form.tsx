@@ -43,6 +43,7 @@ type NoteEditorFormProps = {
   importPanelHighlighted?: boolean;
   saveLabel?: string;
   generateLabel: string;
+  generateHelperText: string;
   generatingLabel: string;
 };
 
@@ -82,6 +83,7 @@ export function NoteEditorForm({
   importPanelHighlighted = false,
   saveLabel = "Save",
   generateLabel,
+  generateHelperText,
   generatingLabel,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
@@ -154,25 +156,32 @@ export function NoteEditorForm({
     </Button>
   );
 
-  const renderGenerateButton = (className: string) => (
-    <Button
-      type="button"
-      onClick={onGenerate}
-      disabled={actionsDisabled || disableGenerateAction}
-      className={className}
-    >
-      {isGenerating ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          {generatingLabel}
-        </>
-      ) : (
-        <>
-          <Sparkles className="mr-2 h-4 w-4" />
-          {generateLabel}
-        </>
-      )}
-    </Button>
+  const renderGenerateAction = (buttonClassName: string, containerClassName: string) => (
+    <div className={containerClassName}>
+      <Button
+        type="button"
+        onClick={onGenerate}
+        disabled={actionsDisabled || disableGenerateAction}
+        className={buttonClassName}
+      >
+        {isGenerating ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            {generatingLabel}
+          </>
+        ) : (
+          <>
+            <Sparkles className="mr-2 h-4 w-4" />
+            {generateLabel}
+          </>
+        )}
+      </Button>
+      {!isGenerating ? (
+        <p className="text-center text-[11px] text-foreground/60 sm:text-right">
+          {generateHelperText}
+        </p>
+      ) : null}
+    </div>
   );
 
   return (
@@ -184,10 +193,10 @@ export function NoteEditorForm({
               <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{pageTitle}</h1>
               <p className="max-w-xl text-xs text-foreground/70">{helperText}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-start gap-2">
               {renderSaveButton("w-full sm:w-auto")}
               <div className="hidden sm:block">
-                {renderGenerateButton("w-full sm:w-auto")}
+                {renderGenerateAction("w-full sm:w-auto", "space-y-1")}
               </div>
             </div>
           </div>
@@ -406,13 +415,13 @@ export function NoteEditorForm({
         </p>
         <div className="hidden justify-end gap-2 pt-2 sm:flex">
           {renderSaveButton("w-auto")}
-          {renderGenerateButton("w-auto")}
+          {renderGenerateAction("w-auto", "space-y-1")}
         </div>
       </Card>
 
       <div className="fixed inset-x-4 bottom-4 z-30 sm:hidden">
         <div className="flex justify-end">
-          {renderGenerateButton("w-full max-w-xs rounded-full shadow-lg")}
+          {renderGenerateAction("w-full max-w-xs rounded-full shadow-lg", "w-full max-w-xs space-y-1")}
         </div>
       </div>
     </main>

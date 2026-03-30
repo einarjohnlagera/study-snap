@@ -81,12 +81,22 @@ function hasExistingMetadata(note: NoteResponse): boolean {
 
 function resolveGenerateLabel(profileType: string | null | undefined): string {
   if (profileType === "BOARD_EXAM") {
-    return "Generate Practice Quiz";
+    return "Practice";
   }
   if (profileType === "TEACHER") {
-    return "Generate Quiz";
+    return "Create Quiz";
   }
-  return "Generate Study Pack";
+  return "Generate";
+}
+
+function resolveGenerateHelperText(profileType: string | null | undefined): string {
+  if (profileType === "BOARD_EXAM") {
+    return "Generates a new quiz from your material.";
+  }
+  if (profileType === "TEACHER") {
+    return "Generates quiz questions from your material.";
+  }
+  return "Creates summary, key concepts, and quiz.";
 }
 
 export function NoteEditorPageClient({
@@ -127,11 +137,12 @@ export function NoteEditorPageClient({
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
   const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
   const generateLabel = resolveGenerateLabel(currentProfileType);
+  const generateHelperText = resolveGenerateHelperText(currentProfileType);
   const generatingLabel = currentProfileType === "BOARD_EXAM"
-    ? "Generating Practice Quiz..."
+    ? "Preparing practice..."
     : currentProfileType === "TEACHER"
-      ? "Generating Quiz..."
-      : "Generating Study Pack...";
+      ? "Creating quiz..."
+      : "Generating...";
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -622,6 +633,7 @@ export function NoteEditorPageClient({
         importPanelHighlighted={autoFocusImport}
         saveLabel="Save"
         generateLabel={generateLabel}
+        generateHelperText={generateHelperText}
         generatingLabel={generatingLabel}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
