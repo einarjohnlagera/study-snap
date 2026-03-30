@@ -6,6 +6,11 @@ import type { DashboardFocusAreasResponse } from "@/lib/api";
 type DashboardFocusAreasCardProps = {
   focusAreas: DashboardFocusAreasResponse | null;
   onUnlockAdaptivePractice: () => void;
+  title?: string;
+  emptyStateText?: string;
+  primaryActionLabel?: string;
+  lockedActionLabel?: string;
+  showAction?: boolean;
 };
 
 function getBarTone(accuracyPercentage: number) {
@@ -28,13 +33,18 @@ function formatPercent(value: number) {
 export function DashboardFocusAreasCard({
   focusAreas,
   onUnlockAdaptivePractice,
-}: DashboardFocusAreasCardProps) {
+  title = "Focus Areas",
+  emptyStateText = "Finish a few Challenge Quizzes to surface the concepts that need extra attention.",
+  primaryActionLabel = "Practice Weak Concepts",
+  lockedActionLabel = "Unlock Adaptive Practice",
+  showAction = true,
+}: Readonly<DashboardFocusAreasCardProps>) {
   const concepts = focusAreas?.concepts ?? [];
   const hasConcepts = concepts.length > 0;
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold sm:text-xl">Focus Areas</h2>
+      <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
       <Card className="space-y-4 p-4 sm:p-6">
         {hasConcepts ? (
           <div className="space-y-4">
@@ -58,18 +68,18 @@ export function DashboardFocusAreasCard({
           </div>
         ) : (
           <p className="text-sm leading-relaxed text-foreground/75">
-            Finish a few Challenge Quizzes to surface the concepts that need extra attention.
+            {emptyStateText}
           </p>
         )}
 
-        {hasConcepts ? (
+        {hasConcepts && showAction ? (
           focusAreas?.adaptivePracticeAvailable && focusAreas.practiceNoteId ? (
             <Link href={`/notes/${focusAreas.practiceNoteId}/adaptive-practice`} className="inline-flex">
-              <Button type="button">Practice Weak Concepts</Button>
+              <Button type="button">{primaryActionLabel}</Button>
             </Link>
           ) : (
             <Button type="button" variant="outline" onClick={onUnlockAdaptivePractice}>
-              Unlock Adaptive Practice
+              {lockedActionLabel}
             </Button>
           )
         ) : null}

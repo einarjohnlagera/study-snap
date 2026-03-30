@@ -92,6 +92,14 @@ Primary product pages:
 - Note Detail: `/notes/{id}`
 - Public Note Detail (read-only): `/public/notes/{id}`
 
+## Personalized Dashboard
+
+- Dashboard presentation adapts to `Profile Type` without changing the shared core system.
+- `STUDENT` emphasizes review continuity, weak concepts, and recent notes.
+- `BOARD_EXAM` emphasizes challenge-quiz practice, weak areas, adaptive practice, and exam countdown.
+- `TEACHER` emphasizes material upload, quiz creation, and recently generated quiz-ready notes.
+- All variants still use the same note -> Study Pack -> quiz -> activity workflow.
+
 ## Architecture Overview
 
 High-level model:

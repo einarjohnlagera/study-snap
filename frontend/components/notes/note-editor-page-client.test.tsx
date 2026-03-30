@@ -2,13 +2,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
 import {
   completeProductOnboarding,
+  createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
   getBillingPricing,
   getMyPlan,
   getNote,
-  isOcrLimitReachedError,
   joinPremiumWaitlist,
+  updateNote,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -40,7 +41,6 @@ jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
-  isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
   joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
@@ -79,11 +79,13 @@ describe("NoteEditorPageClient", () => {
     window.sessionStorage.clear();
     (createStudyPackFromNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
+    (createNote as jest.Mock).mockReset();
     (extractNoteTextFromFile as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
+    (updateNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
@@ -123,6 +125,28 @@ describe("NoteEditorPageClient", () => {
     });
     (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
       message: "You're on the list! We'll notify you when Premium launches.",
+    });
+    (createNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      id: "note-created",
+      title: "",
+      subject: null,
+      tags: [],
+      content: "Generated from teacher flow",
+    });
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue({
+      title: "Suggested Title",
+      subject: "Biology",
+      tags: ["cells"],
+    });
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      id: "note-created",
+      title: "Suggested Title",
+      subject: "Biology",
+      tags: ["cells"],
+      content: "Generated from teacher flow",
+      studyPackStatus: "STUDY_PACK_READY",
     });
   });
 
@@ -494,5 +518,20 @@ describe("NoteEditorPageClient", () => {
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/Your limits will reset on your next billing date\./i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Upgrade to Premium" })).not.toBeInTheDocument();
+  });
+
+  it("redirects generated quiz-focused notes to the practice quiz section", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient initialFocus="quiz" />);
+
+    const contentInput = await screen.findByLabelText("Content");
+    fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Study Pack/i }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1#practice-quiz");
+    });
   });
 });

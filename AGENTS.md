@@ -452,7 +452,11 @@ Rules:
 
 - Dashboard is guidance-first and non-destructive.
 - Keep delete actions out of Dashboard.
-- Dashboard should show `Resume Study`, `Performance Summary`, `Focus Areas`, `This Week`, and `This Month` before recent-note browsing.
+- Dashboard should personalize section order, CTA emphasis, and labels by `profileType` while reusing the same shared note, quiz, activity, and usage data.
+- `STUDENT` dashboard should prioritize `Continue Studying`, weak concepts, recent notes, and quick review.
+- `BOARD_EXAM` dashboard should prioritize challenge-quiz practice, weak areas, adaptive practice, exam countdown, and weekly activity.
+- `TEACHER` dashboard should prioritize quiz creation, material upload, recent materials, and recently generated quizzes.
+- Dashboard variants must not introduce separate entities or profile-specific tables; personalization is presentation only.
 - Dashboard statistics and weak-concept insights must be computed from stored quiz sessions and activity logs only, never by LLM calls.
 - `Focus Areas` should surface top weak concepts for all users, but Adaptive Practice CTA remains Premium-gated through the shared soft paywall for Free users.
 - Keep destructive actions (delete) in Note Detail/My Library with explicit confirmation.

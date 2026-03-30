@@ -72,6 +72,12 @@ Potential expansion areas:
   - add `Profile Type` before Learning Style
   - add conditional `Exam Date` for `BOARD_EXAM`
   - keep `Learning Style` and `Study Reminder Frequency` as the existing middle steps
+- Personalized Dashboard
+  - keep one shared note-first learning engine across all profile types
+  - change dashboard CTA, section order, labels, and recommendations by `profileType`
+  - `STUDENT` emphasizes review continuity and weak concepts
+  - `BOARD_EXAM` emphasizes challenge-quiz practice, exam countdown, and weak-area drilling
+  - `TEACHER` emphasizes material upload and quiz creation without introducing teacher-specific entities
 
 ## Product learning loop
 
