@@ -249,9 +249,23 @@ Auth and onboarding:
 - `POST /api/auth/refresh`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
+- `POST /api/auth/onboarding`
+- `POST /api/auth/onboarding/profile-type`
 - `POST /api/auth/resend-verification`
 - `GET /api/auth/verify-email?token=...`
 - `PUT /api/users/profile`
+
+Onboarding architecture:
+
+- frontend onboarding state is initialized from `GET /api/auth/me`
+- `POST /api/auth/onboarding` persists:
+  - `profileType`
+  - `engagementMode`
+  - reminder preferences
+  - conditional `examDate`
+- `examDate` is required only when `profileType = BOARD_EXAM`
+- existing learning-style and reminder onboarding steps are reused; Profile Type is inserted before them
+- completion writes `users.onboarding_completed_at`
 
 Profile update architecture:
 

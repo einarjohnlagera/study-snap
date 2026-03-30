@@ -79,11 +79,15 @@ Core loop:
 
 - Onboarding is active again for all verified users, not only Premium users.
 - Onboarding should happen once after email verification / first verified entry into the app.
-- Onboarding must stay short and collect only:
+- Onboarding must stay short and reuse the existing step flow.
+- Preferences onboarding order is:
   - `Profile Type`
   - `Learning Style` (`engagementMode`)
+  - `Study Reminder Frequency`
+  - `Exam Date` only for `BOARD_EXAM`
 - Profile Type can be edited later in `Profile`.
 - Learning Style can be edited later in `Settings > Preferences`.
+- Study Reminder Frequency can be edited later in `Settings > Preferences`.
 - Public pages and anonymous flows must not be blocked by onboarding.
 - NoteLib also has a separate first-study product onboarding flow for brand-new users with `studyPackCount == 0`.
 - Product onboarding guides the first workflow:

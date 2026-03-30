@@ -67,6 +67,11 @@ Potential expansion areas:
   - support email-change verification through `pendingEmail`
 - Profile type remains editable in `Profile`
 - Learning Style and Study Reminders remain editable only in `Settings > Preferences`
+- Onboarding personalization
+  - reuse the existing onboarding flow
+  - add `Profile Type` before Learning Style
+  - add conditional `Exam Date` for `BOARD_EXAM`
+  - keep `Learning Style` and `Study Reminder Frequency` as the existing middle steps
 
 ## Product learning loop
 

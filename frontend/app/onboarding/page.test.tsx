@@ -120,4 +120,59 @@ describe("OnboardingPage", () => {
     expect(getMe).not.toHaveBeenCalled();
     expect(completeOnboarding).not.toHaveBeenCalled();
   });
+
+  it("reuses the existing steps and skips exam date for student onboarding", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      email: "[email protected]",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      onboardingCompletedAt: null,
+    });
+    (getMe as jest.Mock).mockResolvedValue({
+      profileType: null,
+      examDate: null,
+      engagementMode: "FOCUSED",
+      inactivityRemindersEnabled: true,
+      weakConceptRemindersEnabled: false,
+      onboardingCompletedAt: null,
+    });
+    (completeOnboarding as jest.Mock).mockResolvedValue({
+      displayName: "Note",
+      profileType: "STUDENT",
+      examDate: null,
+      engagementMode: "CONSISTENCY",
+      inactivityRemindersEnabled: true,
+      weakConceptRemindersEnabled: false,
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      onboardingCompletedAt: "2026-03-24T00:05:00Z",
+      productOnboardingCompletedAt: null,
+    });
+
+    render(<OnboardingPage />);
+
+    expect(await screen.findByText("What will you use NoteLib for?")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Learning Style")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Consistency"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Study Reminder Frequency")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Light reminders"));
+    fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
+
+    await waitFor(() => {
+      expect(completeOnboarding).toHaveBeenCalledWith({
+        profileType: "STUDENT",
+        engagementMode: "CONSISTENCY",
+        inactivityRemindersEnabled: true,
+        weakConceptRemindersEnabled: false,
+        examDate: null,
+      });
+    });
+    expect(screen.queryByText("When is your exam?")).not.toBeInTheDocument();
+    expect(routerMock.push).toHaveBeenCalledWith("/dashboard");
+  });
 });

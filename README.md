@@ -122,6 +122,16 @@ High-level model:
 - Email changes are not applied immediately.
 - Requested email changes are stored as `pendingEmail` and only replace the current email after the new address is verified.
 
+## Onboarding
+
+- Verified users go through a short preferences onboarding once.
+- Current onboarding flow:
+  - `Profile Type`
+  - `Learning Style`
+  - `Study Reminder Frequency`
+  - `Exam Date` only for `BOARD_EXAM`
+- The app reuses the existing onboarding flow and persists completion on the user record.
+
 ## Product Philosophy
 
 Learning loop:
