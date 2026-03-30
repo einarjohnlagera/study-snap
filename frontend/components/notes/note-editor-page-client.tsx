@@ -79,6 +79,16 @@ function hasExistingMetadata(note: NoteResponse): boolean {
   );
 }
 
+function resolveGenerateLabel(profileType: string | null | undefined): string {
+  if (profileType === "BOARD_EXAM") {
+    return "Generate Practice Quiz";
+  }
+  if (profileType === "TEACHER") {
+    return "Generate Quiz";
+  }
+  return "Generate Study Pack";
+}
+
 export function NoteEditorPageClient({
   noteId,
   initialMode = null,
@@ -116,6 +126,12 @@ export function NoteEditorPageClient({
   const { usageSummary } = useBillingUsageSummary();
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
   const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
+  const generateLabel = resolveGenerateLabel(currentProfileType);
+  const generatingLabel = currentProfileType === "BOARD_EXAM"
+    ? "Generating Practice Quiz..."
+    : currentProfileType === "TEACHER"
+      ? "Generating Quiz..."
+      : "Generating Study Pack...";
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -604,6 +620,9 @@ export function NoteEditorPageClient({
         autoFocusContent={autoFocusContent}
         autoFocusImport={autoFocusImport}
         importPanelHighlighted={autoFocusImport}
+        saveLabel="Save"
+        generateLabel={generateLabel}
+        generatingLabel={generatingLabel}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
         } : undefined}

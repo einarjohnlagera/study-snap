@@ -113,6 +113,14 @@ CTA behavior:
 - Output: title, summary, key concepts, quiz questions, metadata (`subject`, `tags`)
 - OCR upload is part of Note authoring (Create/Edit Note) and populates Note `content` for manual review.
 - OCR upload does not auto-save and does not auto-generate.
+- Note Editor should keep `Generate` as the primary action:
+  - desktop: sticky top actions plus repeated bottom actions
+  - mobile: fixed floating primary generate CTA
+  - `Save` stays secondary
+- Generate button copy may vary by `profileType` without changing backend generation:
+  - `STUDENT` -> `Generate Study Pack`
+  - `BOARD_EXAM` -> `Generate Practice Quiz`
+  - `TEACHER` -> `Generate Quiz`
 - Demo mode must not call real generation pipeline, persist data, or consume usage
 - Unverified users are blocked from generation with structured `403`:
   - `code=EMAIL_VERIFICATION_REQUIRED`
@@ -135,6 +143,10 @@ Users can:
 - start Quick Review for Study Pack Ready notes
 - manage note visibility (`Make Public` / `Make Private`)
 - make a copy (`Make a Copy`) to create a new Draft version
+- create a new note directly from the My Library header
+- empty-state actions should include:
+  - `Create Your First Note`
+  - `Try Demo`
 
 ### Public Library
 

@@ -41,6 +41,9 @@ type NoteEditorFormProps = {
   autoFocusContent?: boolean;
   autoFocusImport?: boolean;
   importPanelHighlighted?: boolean;
+  saveLabel?: string;
+  generateLabel: string;
+  generatingLabel: string;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -77,6 +80,9 @@ export function NoteEditorForm({
   autoFocusContent = false,
   autoFocusImport = false,
   importPanelHighlighted = false,
+  saveLabel = "Save",
+  generateLabel,
+  generatingLabel,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -129,51 +135,63 @@ export function NoteEditorForm({
     importInputRef.current?.focus();
   }, [autoFocusImport, disableContentEditing, importFileInputKey]);
 
+  const renderSaveButton = (className: string) => (
+    <Button
+      type="button"
+      onClick={onSave}
+      disabled={actionsDisabled}
+      variant="outline"
+      className={className}
+    >
+      {isSaving ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Saving...
+        </>
+      ) : (
+        saveLabel
+      )}
+    </Button>
+  );
+
+  const renderGenerateButton = (className: string) => (
+    <Button
+      type="button"
+      onClick={onGenerate}
+      disabled={actionsDisabled || disableGenerateAction}
+      className={className}
+    >
+      {isGenerating ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          {generatingLabel}
+        </>
+      ) : (
+        <>
+          <Sparkles className="mr-2 h-4 w-4" />
+          {generateLabel}
+        </>
+      )}
+    </Button>
+  );
+
   return (
-    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-      <header className="space-y-3">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{pageTitle}</h1>
-          <div className="space-y-2">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                onClick={onSave}
-                disabled={actionsDisabled}
-                variant="outline"
-                className="w-full sm:w-auto"
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  "Save Note"
-                )}
-              </Button>
-              <Button
-                type="button"
-                onClick={onGenerate}
-                disabled={actionsDisabled || disableGenerateAction}
-                className="w-full sm:w-auto"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Study Pack...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Study Pack (1 credit)
-                  </>
-                )}
-              </Button>
+    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 pb-28 sm:px-6 sm:py-8 sm:pb-8">
+      <header className="sticky top-4 z-20 space-y-3">
+        <Card className="space-y-3 border-border/80 bg-background/95 p-4 shadow-sm backdrop-blur sm:p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{pageTitle}</h1>
+              <p className="max-w-xl text-xs text-foreground/70">{helperText}</p>
             </div>
-            <p className="max-w-xl text-xs text-foreground/70">{helperText}</p>
+            <div className="flex items-center gap-2">
+              {renderSaveButton("w-full sm:w-auto")}
+              <div className="hidden sm:block">
+                {renderGenerateButton("w-full sm:w-auto")}
+              </div>
+            </div>
           </div>
-        </div>
+        </Card>
         {saveStateLabel ? (
           <p className="text-xs text-foreground/60">{saveStateLabel}</p>
         ) : null}
@@ -386,7 +404,17 @@ export function NoteEditorForm({
         <p className="text-xs text-foreground/60">
           Generate when you&apos;re ready. To create a new version later, make a copy first.
         </p>
+        <div className="hidden justify-end gap-2 pt-2 sm:flex">
+          {renderSaveButton("w-auto")}
+          {renderGenerateButton("w-auto")}
+        </div>
       </Card>
+
+      <div className="fixed inset-x-4 bottom-4 z-30 sm:hidden">
+        <div className="flex justify-end">
+          {renderGenerateButton("w-full max-w-xs rounded-full shadow-lg")}
+        </div>
+      </div>
     </main>
   );
 }

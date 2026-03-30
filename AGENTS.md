@@ -236,6 +236,12 @@ Keep app shell grouping:
 - Keep note cards consistent across Dashboard, My Library, and Public Library:
   - entire card click opens note detail
   - tertiary actions live in card menu (My Library) rather than primary card buttons
+- `My Library` should expose a direct `Create Note` entry in the header and empty state so users are not forced through `Dashboard` to start a note.
+- Note Editor actions:
+  - keep `Generate` as the primary CTA and `Save` as the secondary CTA
+  - desktop should show actions at the top and bottom of long note forms
+  - mobile should keep a floating primary generate button visible while scrolling
+- Generate button wording may vary by `profileType` (`Generate Study Pack`, `Generate Practice Quiz`, `Generate Quiz`) but must still hit the same Study Pack generation flow.
 - Use one shared modal component for confirmations/dialogs (`AppModal`), including delete/share/visibility/leave-flow prompts.
 - Do not use browser-native `window.confirm` or `alert` for product dialogs.
 - Note Detail edit rules:
