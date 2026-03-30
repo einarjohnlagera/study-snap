@@ -292,6 +292,27 @@ Profile update architecture:
   - `users.email_verified_at` is refreshed
 - welcome-email logic must remain one-time for first verification and must not re-fire for pending-email verification
 
+Dashboard personalization architecture:
+
+- dashboard personalization is a presentation-layer concern driven by `users.profile_type`
+- the same shared core entities back every dashboard variant:
+  - `Note`
+  - `Study Pack`
+  - `QuizSession`
+  - `WeakConcept`
+  - `Activity`
+  - `Usage`
+- switching `profileType` must not migrate, delete, or rewrite notes, study packs, quiz sessions, weak concepts, or usage rows
+- `STUDENT`, `BOARD_EXAM`, and `TEACHER` dashboards reuse the same backend dashboard overview and note list APIs
+- profile-specific differences are limited to:
+  - section order
+  - CTA destination
+  - labels and wording
+  - recommendation emphasis
+- teacher quiz creation still follows the same flow:
+  - material -> note -> study pack -> quiz
+- board-exam countdown is derived from `users.exam_date`; it does not introduce a separate exam entity
+
 ## API Security Model
 
 - non-public endpoints require Bearer access token

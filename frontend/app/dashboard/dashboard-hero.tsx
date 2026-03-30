@@ -1,10 +1,9 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 
 type DashboardHeroProps = {
   greetingName: string;
+  description: string;
 };
 
 function resolveGreetingLabel(hour: number): string {
@@ -17,7 +16,7 @@ function resolveGreetingLabel(hour: number): string {
   return "Good evening";
 }
 
-export function DashboardHero({ greetingName }: DashboardHeroProps) {
+export function DashboardHero({ greetingName, description }: DashboardHeroProps) {
   const greetingLabel = resolveGreetingLabel(new Date().getHours());
 
   return (
@@ -31,19 +30,8 @@ export function DashboardHero({ greetingName }: DashboardHeroProps) {
       <PageHeader
         eyebrow="DASHBOARD"
         title="Dashboard"
-        description="Your note workspace. Revisit saved notes, continue studying, and stay organized."
+        description={description}
       />
-      <Card className="space-y-3 p-4 sm:p-6">
-        <h2 className="text-lg font-semibold sm:text-xl">New Note</h2>
-        <p className="text-sm text-foreground/75">
-          Write now, study smarter later.
-          <br />
-          Save your notes and turn them into a Study Pack anytime.
-        </p>
-        <Link href="/notes/new" className="w-full sm:w-auto">
-          <Button type="button" className="w-full sm:w-auto">New Note</Button>
-        </Link>
-      </Card>
     </section>
   );
 }

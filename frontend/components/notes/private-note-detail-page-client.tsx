@@ -84,7 +84,7 @@ type PrivateNoteDetailPageClientProps = {
   routeId: string;
 };
 
-export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageClientProps) {
+export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDetailPageClientProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -947,12 +947,14 @@ export function PrivateNoteDetailPageClient({ routeId }: PrivateNoteDetailPageCl
           </Card>
 
           {isDraft ? (
-            <Card className="space-y-3 p-4 sm:p-6">
+            <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
               <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
               <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
             </Card>
           ) : (
-            <PracticeQuizCard quiz={note.quiz} />
+            <div id="practice-quiz">
+              <PracticeQuizCard quiz={note.quiz} />
+            </div>
           )}
         </div>
       ) : null}

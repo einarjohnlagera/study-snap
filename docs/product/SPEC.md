@@ -151,16 +151,33 @@ Dashboard guidance rules:
 
 - Dashboard is non-destructive and guidance-first.
 - Deletion is not available from Dashboard.
-- Dashboard should surface:
-  - `Resume Study`
-  - `Performance Summary`
-  - `Focus Areas`
-  - `This Week`
-  - `This Month`
+- Dashboard is personalized by `profileType` presentation only; it must not create separate note, study-pack, quiz, or activity systems.
+- `STUDENT` dashboard should prioritize:
+  - `Continue Studying`
+  - `Weak Concepts`
+  - `Recent Notes`
+  - `Quick Review`
+  - `Usage / Progress`
+- `BOARD_EXAM` dashboard should prioritize:
+  - `Exam Countdown` when `examDate` exists
+  - `Practice Challenge Quiz`
+  - `Weak Areas`
+  - `Adaptive Practice`
+  - `Study Activity This Week`
+  - `Usage / Progress`
+- `TEACHER` dashboard should prioritize:
+  - `Create Quiz`
+  - `Upload / Paste Material`
+  - `Recent Materials`
+  - `Recently Generated Quizzes`
+  - `Activity`
+  - `Usage`
 - Dashboard performance and weak-concept insights must be computed from existing quiz session data only.
 - Dashboard must not use LLM calls for statistics or recommendations.
 - `Focus Areas` should show the top weak concepts and route Premium users to Adaptive Practice through `noteId`.
 - Free users should see the same weak concepts but hit the soft Premium paywall when trying to start Adaptive Practice from Dashboard.
+- Board Exam CTA wording may use exam-prep labels such as `Practice Challenge Quiz` and `Weak Areas`, but must still use the same shared note, quiz-session, activity, and usage data.
+- Teacher CTA wording may use material and quiz-generation labels, but the underlying workflow remains `Note -> Study Pack -> Quiz`.
 - Dashboard monthly usage should show:
   - Study Packs
   - Challenge Quiz

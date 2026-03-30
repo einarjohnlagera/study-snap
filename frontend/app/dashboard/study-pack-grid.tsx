@@ -6,6 +6,11 @@ type StudyPackGridProps = {
   notes: NoteListItemResponse[];
   totalNotes: number;
   recentNoteMetaById: Record<string, { lastReviewedAt: string | null; quizCount: number | null }>;
+  title?: string;
+  countLabel?: string;
+  viewAllLabel?: string;
+  readyStatusLabel?: string;
+  draftStatusLabel?: string;
 };
 
 function toPreview(contentPreview: string, maxLength = 160) {
@@ -27,12 +32,21 @@ function toFormattedDate(value: string | null | undefined) {
   return timestamp.toLocaleString();
 }
 
-export function StudyPackGrid({ notes, totalNotes, recentNoteMetaById }: StudyPackGridProps) {
+export function StudyPackGrid({
+  notes,
+  totalNotes,
+  recentNoteMetaById,
+  title = "Recent Notes",
+  countLabel = "saved",
+  viewAllLabel = "View All in Library",
+  readyStatusLabel = "Study Pack",
+  draftStatusLabel = "Draft",
+}: Readonly<StudyPackGridProps>) {
   return (
     <section className="space-y-3 sm:space-y-4">
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold sm:text-xl">Recent Notes</h2>
-        <p className="text-xs text-foreground/65">{totalNotes} saved</p>
+        <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
+        <p className="text-xs text-foreground/65">{totalNotes} {countLabel}</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -53,7 +67,7 @@ export function StudyPackGrid({ notes, totalNotes, recentNoteMetaById }: StudyPa
                       : "border-border bg-muted/50 text-foreground/70"
                   }`}
                 >
-                  {item.studyPackStatus === "STUDY_PACK_READY" ? "Study Pack" : "Draft"}
+                  {item.studyPackStatus === "STUDY_PACK_READY" ? readyStatusLabel : draftStatusLabel}
                 </span>
                 <p className="text-sm leading-relaxed text-foreground/75">
                   {toPreview(item.contentPreview)}
@@ -104,7 +118,7 @@ export function StudyPackGrid({ notes, totalNotes, recentNoteMetaById }: StudyPa
 
       <div className="pt-0.5">
         <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          View All in Library &rarr;
+          {viewAllLabel} &rarr;
         </Link>
       </div>
     </section>

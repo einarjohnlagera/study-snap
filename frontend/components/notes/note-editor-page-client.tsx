@@ -40,6 +40,7 @@ import {
 
 type NoteEditorPageClientProps = {
   noteId?: string;
+  initialFocus?: string | null;
 };
 
 type PendingSuggestion = {
@@ -71,7 +72,7 @@ function hasExistingMetadata(note: NoteResponse): boolean {
   );
 }
 
-export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientProps>) {
+export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<NoteEditorPageClientProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const isDetailPage = Boolean(noteId);
@@ -367,8 +368,9 @@ export function NoteEditorPageClient({ noteId }: Readonly<NoteEditorPageClientPr
   }, [contentEmpty, firstStudyStep, isDetailPage, isGenerating, isSaving, router, showToast, upsertNote]);
 
   const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
-    router.push(`/notes/${noteIdToOpen}?from=notes&created=1`);
-  }, [router]);
+    const hash = initialFocus === "quiz" ? "#practice-quiz" : "";
+    router.push(`/notes/${noteIdToOpen}?from=notes&created=1${hash}`);
+  }, [initialFocus, router]);
 
   const handleGenerate = useCallback(async () => {
     if (isGenerating || isSaving || contentEmpty) {

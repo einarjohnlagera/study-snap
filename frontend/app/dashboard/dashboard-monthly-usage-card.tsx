@@ -4,6 +4,7 @@ import { getUsageProgressPercent } from "@/lib/plans";
 
 type DashboardMonthlyUsageCardProps = {
   usageSummary: MePlanResponse | null;
+  title?: string;
 };
 
 function getBarTone(used: number, limit: number) {
@@ -19,6 +20,7 @@ function getBarTone(used: number, limit: number) {
 
 export function DashboardMonthlyUsageCard({
   usageSummary,
+  title = "This Month",
 }: DashboardMonthlyUsageCardProps) {
   if (!usageSummary) {
     return null;
@@ -46,7 +48,7 @@ export function DashboardMonthlyUsageCard({
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold sm:text-xl">This Month</h2>
+      <h2 className="text-lg font-semibold sm:text-xl">{title}</h2>
       <Card className="space-y-4 p-4 sm:p-6">
         {items.map((item) => {
           const width = getUsageProgressPercent(item.used, item.limit);
