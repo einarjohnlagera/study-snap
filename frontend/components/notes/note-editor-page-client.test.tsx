@@ -41,6 +41,7 @@ jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
+  isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
   joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
@@ -521,9 +522,9 @@ describe("NoteEditorPageClient", () => {
   });
 
   it("redirects generated quiz-focused notes to the practice quiz section", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
 
-    render(<NoteEditorPageClient initialFocus="quiz" />);
+    render(<NoteEditorPageClient initialMode="quiz" />);
 
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
@@ -531,7 +532,34 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: /Generate Study Pack/i }));
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1#practice-quiz");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=quiz");
+    });
+  });
+
+  it("redirects student note generation to the summary view by default", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "STUDENT" });
+
+    render(<NoteEditorPageClient />);
+
+    const contentInput = await screen.findByLabelText("Content");
+    fireEvent.change(contentInput, { target: { value: "Student note content" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Study Pack/i }));
+
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=summary");
+    });
+  });
+
+  it("focuses the upload input when opened in upload mode", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+
+    render(<NoteEditorPageClient initialSource="upload" />);
+
+    expect(await screen.findByRole("heading", { name: "Upload Material" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(document.getElementById("note-import-file")).toHaveFocus();
     });
   });
 });

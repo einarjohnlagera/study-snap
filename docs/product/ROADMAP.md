@@ -78,6 +78,7 @@ Potential expansion areas:
   - `STUDENT` emphasizes review continuity and weak concepts
   - `BOARD_EXAM` emphasizes challenge-quiz practice, exam countdown, and weak-area drilling
   - `TEACHER` emphasizes material upload and quiz creation without introducing teacher-specific entities
+  - add frontend-only note entry modes so teacher CTA buttons can share one note pipeline with clearer routing intent
 
 ## Product learning loop
 

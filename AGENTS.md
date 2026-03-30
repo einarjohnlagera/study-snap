@@ -457,6 +457,15 @@ Rules:
 - `BOARD_EXAM` dashboard should prioritize challenge-quiz practice, weak areas, adaptive practice, exam countdown, and weekly activity.
 - `TEACHER` dashboard should prioritize quiz creation, material upload, recent materials, and recently generated quizzes.
 - Dashboard variants must not introduce separate entities or profile-specific tables; personalization is presentation only.
+- Teacher CTA routes should stay explicit:
+  - `Create Quiz` -> `/notes/new?mode=quiz`
+  - `Paste Material` -> `/notes/new?source=paste`
+  - `Upload Material` -> `/notes/new?source=upload`
+  - normal `Add Material` -> `/notes/new`
+- Post-generation default note-detail view should use query-driven presentation on the unified note route:
+  - normal note flow -> `tab=summary`
+  - board-exam flow -> `tab=quiz`
+  - teacher quiz-focused entry modes -> `tab=quiz`
 - Dashboard statistics and weak-concept insights must be computed from stored quiz sessions and activity logs only, never by LLM calls.
 - `Focus Areas` should surface top weak concepts for all users, but Adaptive Practice CTA remains Premium-gated through the shared soft paywall for Free users.
 - Keep destructive actions (delete) in Note Detail/My Library with explicit confirmation.

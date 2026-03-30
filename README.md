@@ -99,6 +99,7 @@ Primary product pages:
 - `BOARD_EXAM` emphasizes challenge-quiz practice, weak areas, adaptive practice, and exam countdown.
 - `TEACHER` emphasizes material upload, quiz creation, and recently generated quiz-ready notes.
 - All variants still use the same note -> Study Pack -> quiz -> activity workflow.
+- Teacher CTAs use mode-based entry routes on the same note editor so quiz creation, paste, and upload flows remain unified.
 
 ## Architecture Overview
 

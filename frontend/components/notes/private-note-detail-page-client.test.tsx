@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
 import {
   createStudyPackFromNote,
@@ -21,9 +21,10 @@ const routerMock = {
   push: pushMock,
   replace: replaceMock,
 };
+let searchParamValues: Record<string, string> = {};
 const searchParamsMock = {
-  get: () => null,
-  toString: () => "",
+  get: (key: string) => searchParamValues[key] ?? null,
+  toString: () => new URLSearchParams(searchParamValues).toString(),
 };
 
 jest.mock("next/navigation", () => ({
@@ -90,6 +91,7 @@ describe("PrivateNoteDetailPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    searchParamValues = {};
     window.localStorage.clear();
     window.sessionStorage.clear();
     (getNote as jest.Mock).mockReset();
@@ -283,6 +285,54 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Generate Study Pack" }).at(-1) as HTMLButtonElement);
 
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
+  });
+
+  it("routes board exam note generation to quiz view after creating a Study Pack", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "BOARD_EXAM",
+      productOnboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=quiz");
+    });
+  });
+
+  it("shows quiz view when tab=quiz is requested", async () => {
+    searchParamValues = { tab: "quiz" };
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: true,
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      quiz: [
+        {
+          question: "What is a cell?",
+          choices: ["Basic unit of life", "A tissue", "An organ", "A molecule"],
+          correctAnswerIndex: 0,
+          explanation: "Cells are the basic unit of life.",
+        },
+      ],
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByRole("tab", { name: "Quiz" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("heading", { name: "Summary" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
   });
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {

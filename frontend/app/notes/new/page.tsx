@@ -1,15 +1,17 @@
 import { NoteEditorPageClient } from "@/components/notes/note-editor-page-client";
+import { normalizeNoteEntryMode, normalizeNoteEntrySource } from "@/lib/note-entry";
 
 type NewNotePageProps = {
   searchParams?: Promise<{
-    focus?: string | string[];
+    mode?: string | string[];
+    source?: string | string[];
   }>;
 };
 
 export default async function NewNotePage({ searchParams }: Readonly<NewNotePageProps>) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const rawFocus = resolvedSearchParams.focus;
-  const initialFocus = Array.isArray(rawFocus) ? rawFocus[0] ?? null : rawFocus ?? null;
+  const initialMode = normalizeNoteEntryMode(resolvedSearchParams.mode);
+  const initialSource = normalizeNoteEntrySource(resolvedSearchParams.source);
 
-  return <NoteEditorPageClient initialFocus={initialFocus} />;
+  return <NoteEditorPageClient initialMode={initialMode} initialSource={initialSource} />;
 }

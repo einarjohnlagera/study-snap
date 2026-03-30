@@ -37,10 +37,17 @@ import {
   setFirstStudyOnboardingStep,
   type FirstStudyOnboardingStep,
 } from "@/lib/first-study-onboarding";
+import {
+  buildGeneratedNoteDetailPath,
+  resolveGeneratedNoteTab,
+  type NoteEntryMode,
+  type NoteEntrySource,
+} from "@/lib/note-entry";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
-  initialFocus?: string | null;
+  initialMode?: NoteEntryMode;
+  initialSource?: NoteEntrySource;
 };
 
 type PendingSuggestion = {
@@ -72,7 +79,11 @@ function hasExistingMetadata(note: NoteResponse): boolean {
   );
 }
 
-export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<NoteEditorPageClientProps>) {
+export function NoteEditorPageClient({
+  noteId,
+  initialMode = null,
+  initialSource = null,
+}: Readonly<NoteEditorPageClientProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const isDetailPage = Boolean(noteId);
@@ -104,6 +115,7 @@ export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<N
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
+  const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -368,9 +380,9 @@ export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<N
   }, [contentEmpty, firstStudyStep, isDetailPage, isGenerating, isSaving, router, showToast, upsertNote]);
 
   const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
-    const hash = initialFocus === "quiz" ? "#practice-quiz" : "";
-    router.push(`/notes/${noteIdToOpen}?from=notes&created=1${hash}`);
-  }, [initialFocus, router]);
+    const tab = resolveGeneratedNoteTab(currentProfileType, initialMode, initialSource);
+    router.push(buildGeneratedNoteDetailPath(noteIdToOpen, tab));
+  }, [currentProfileType, initialMode, initialSource, router]);
 
   const handleGenerate = useCallback(async () => {
     if (isGenerating || isSaving || contentEmpty) {
@@ -476,10 +488,26 @@ export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<N
   }, [finalizeGenerationRedirect, pendingSuggestion]);
 
   const pageTitle = isDetailPage ? "Note" : "New Note";
+  const pageTitleLabel = !isDetailPage && initialMode === "quiz"
+    ? "Create Quiz"
+    : !isDetailPage && initialSource === "paste"
+      ? "Paste Material"
+      : !isDetailPage && initialSource === "upload"
+        ? "Upload Material"
+        : pageTitle;
+  const helperText = !isDetailPage && initialMode === "quiz"
+    ? "Start with your material, then generate a Study Pack to open quiz practice first."
+    : !isDetailPage && initialSource === "paste"
+      ? "Paste your material into Content, then generate a Study Pack to open quiz practice first."
+      : !isDetailPage && initialSource === "upload"
+        ? "Upload your material first, then generate a Study Pack to open quiz practice first."
+        : "Create or import your notes first, then generate a Study Pack when you are ready.";
   const studyPackMessage = isDetailPage
     ? "Generate a Study Pack from this note when you are ready."
     : "Save your note for later, or generate immediately when the content is ready.";
   const showFirstStudyHint = !isDetailPage && firstStudyStep === "create-note";
+  const autoFocusContent = !isDetailPage && (initialMode === "quiz" || initialSource === "paste");
+  const autoFocusImport = !isDetailPage && initialSource === "upload";
 
   const dismissFirstStudyHint = useCallback(async () => {
     const authUser = getAuthUser();
@@ -539,7 +567,7 @@ export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<N
       ) : null}
 
       <NoteEditorForm
-        pageTitle={pageTitle}
+        pageTitle={pageTitleLabel}
         note={draft}
         onTitleChange={(value) => setDraft((previous) => ({ ...previous, title: value }))}
         onSubjectChange={(value) => setDraft((previous) => ({ ...previous, subject: value }))}
@@ -558,7 +586,7 @@ export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<N
         isSaving={isSaving}
         isGenerating={isGenerating}
         saveStateLabel={saveStateLabel}
-        helperText="Create or import your notes first, then generate a Study Pack when you are ready."
+        helperText={helperText}
         showTagsSection={isDetailPage}
         studyPackMessage={studyPackMessage}
         importFile={importFile}
@@ -573,6 +601,9 @@ export function NoteEditorPageClient({ noteId, initialFocus = null }: Readonly<N
         contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."
         disableGenerateAction={!isEmailVerified}
         firstStudyHintVisible={showFirstStudyHint}
+        autoFocusContent={autoFocusContent}
+        autoFocusImport={autoFocusImport}
+        importPanelHighlighted={autoFocusImport}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
         } : undefined}

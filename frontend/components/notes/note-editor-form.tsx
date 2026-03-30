@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,6 +38,9 @@ type NoteEditorFormProps = {
   disableGenerateAction?: boolean;
   firstStudyHintVisible?: boolean;
   onDismissFirstStudyHint?: () => void;
+  autoFocusContent?: boolean;
+  autoFocusImport?: boolean;
+  importPanelHighlighted?: boolean;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -71,9 +74,14 @@ export function NoteEditorForm({
   disableGenerateAction = false,
   firstStudyHintVisible = false,
   onDismissFirstStudyHint,
+  autoFocusContent = false,
+  autoFocusImport = false,
+  importPanelHighlighted = false,
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const contentEmpty = note.content.trim().length === 0;
   const actionsDisabled = contentEmpty || isSaving || isGenerating;
   const importInFlight = importFlowState === "uploading" || importFlowState === "extracting";
@@ -106,6 +114,20 @@ export function NoteEditorForm({
     setTagDraft("");
     setAddingTag(false);
   };
+
+  useEffect(() => {
+    if (!autoFocusContent || disableContentEditing) {
+      return;
+    }
+    contentRef.current?.focus();
+  }, [autoFocusContent, disableContentEditing]);
+
+  useEffect(() => {
+    if (!autoFocusImport || disableContentEditing) {
+      return;
+    }
+    importInputRef.current?.focus();
+  }, [autoFocusImport, disableContentEditing, importFileInputKey]);
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
@@ -273,6 +295,7 @@ export function NoteEditorForm({
         <section className="space-y-2">
           <label htmlFor="note-content" className="text-sm font-medium text-foreground">Content</label>
           <textarea
+            ref={contentRef}
             id="note-content"
             value={note.content}
             onChange={(event) => onContentChange(event.target.value)}
@@ -306,7 +329,7 @@ export function NoteEditorForm({
         </section>
 
         <section className={`space-y-4 rounded-lg border border-dashed border-border/70 bg-muted/20 p-4 ${
-          firstStudyHintVisible ? "border-blue-500/60 ring-2 ring-blue-500/20" : ""
+          firstStudyHintVisible || importPanelHighlighted ? "border-blue-500/60 ring-2 ring-blue-500/20" : ""
         }`}>
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">Import Notes</p>
@@ -320,6 +343,7 @@ export function NoteEditorForm({
               <UploadCloud className="h-4 w-4 text-foreground/60" />
               <FileText className="h-4 w-4 text-foreground/60" />
               <input
+                ref={importInputRef}
                 key={importFileInputKey}
                 id="note-import-file"
                 type="file"
