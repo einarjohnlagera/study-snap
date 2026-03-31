@@ -84,13 +84,17 @@ export function setAuthUser(user: AuthUser): void {
   if (globalThis.window === undefined) {
     return;
   }
+  hasTriggeredSessionExpiryRedirect = false;
   globalThis.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   emitAuthChangeEvent();
 }
 
-export function clearAuthUser(): void {
+export function clearAuthUser(options?: { preserveSessionExpiryGuard?: boolean }): void {
   if (globalThis.window === undefined) {
     return;
+  }
+  if (!options?.preserveSessionExpiryGuard) {
+    hasTriggeredSessionExpiryRedirect = false;
   }
   globalThis.localStorage.removeItem(AUTH_USER_KEY);
   emitAuthChangeEvent();
@@ -136,7 +140,7 @@ export function handleUnauthorizedSession(): void {
 
   hasTriggeredSessionExpiryRedirect = true;
   const redirectTo = getCurrentPathWithQuery();
-  clearAuthUser();
+  clearAuthUser({ preserveSessionExpiryGuard: true });
   globalThis.location.replace(
     buildLoginPath({
       redirectTo,

@@ -11,7 +11,7 @@ import {
   getAuthUser,
   LOGIN_REASON_QUERY_KEY,
   LOGIN_REASON_SESSION_EXPIRED,
-  LOGIN_REDIRECT_QUERY_KEY,
+  type AuthUser,
   resolveAuthenticatedHome,
   setAuthUser,
 } from "@/lib/auth";
@@ -26,21 +26,9 @@ function resolveModeFromLocation(): Mode {
   return params.get("mode") === "signup" ? "signup" : "login";
 }
 
-function resolveSafeRedirectTarget(redirectParam: string | null): string | null {
-  if (!redirectParam) {
-    return null;
-  }
-  if (!redirectParam.startsWith("/") || redirectParam.startsWith("//")) {
-    return null;
-  }
-  if (redirectParam.startsWith("/auth") || redirectParam.startsWith("/login")) {
-    return null;
-  }
-  return redirectParam;
-}
-
 export default function AuthPage() {
   const router = useRouter();
+  const [authenticatedUser, setAuthenticatedUser] = useState<AuthUser | null>(() => getAuthUser());
   const [mode, setMode] = useState<Mode>(resolveModeFromLocation);
   const [firstName, setFirstName] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -50,13 +38,6 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasTrackedSignupStartRef = useRef(false);
-  const [redirectTarget, setRedirectTarget] = useState<string | null>(() => {
-    if (globalThis.window === undefined) {
-      return null;
-    }
-    const params = new URLSearchParams(globalThis.location.search);
-    return resolveSafeRedirectTarget(params.get(LOGIN_REDIRECT_QUERY_KEY));
-  });
   const [showSessionExpiredMessage, setShowSessionExpiredMessage] = useState(() => {
     if (globalThis.window === undefined) {
       return false;
@@ -68,20 +49,29 @@ export default function AuthPage() {
   useEffect(() => {
     const params = new URLSearchParams(globalThis.location.search);
     setMode(params.get("mode") === "signup" ? "signup" : "login");
-    setRedirectTarget(resolveSafeRedirectTarget(params.get(LOGIN_REDIRECT_QUERY_KEY)));
     setShowSessionExpiredMessage(params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED);
   }, []);
 
   useEffect(() => {
-    const authUser = getAuthUser();
-    if (!authUser) {
+    const syncAuthenticatedUser = () => {
+      setAuthenticatedUser(getAuthUser());
+    };
+
+    globalThis.addEventListener("studysnap-auth-change", syncAuthenticatedUser);
+    globalThis.addEventListener("storage", syncAuthenticatedUser);
+    return () => {
+      globalThis.removeEventListener("studysnap-auth-change", syncAuthenticatedUser);
+      globalThis.removeEventListener("storage", syncAuthenticatedUser);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authenticatedUser) {
       return;
     }
 
-    const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
-    const defaultRoute = resolveAuthenticatedHome(authUser);
-    router.replace(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
-  }, [redirectTarget, router]);
+    router.replace(resolveAuthenticatedHome(authenticatedUser));
+  }, [authenticatedUser, router]);
 
   useEffect(() => {
     if (mode !== "signup" || hasTrackedSignupStartRef.current) {
@@ -127,9 +117,8 @@ export default function AuthPage() {
         planSummary: await getMyPlan().catch(() => null),
       };
       setAuthUser(nextAuthUser);
-      const defaultRoute = resolveAuthenticatedHome(nextAuthUser);
-      const shouldUseRedirect = Boolean(authUser.emailVerifiedAt && redirectTarget);
-      router.push(shouldUseRedirect ? (redirectTarget as string) : defaultRoute);
+      setAuthenticatedUser(nextAuthUser);
+      router.replace(resolveAuthenticatedHome(nextAuthUser));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not continue. Please try again.");
@@ -137,6 +126,10 @@ export default function AuthPage() {
       setLoading(false);
     }
   };
+
+  if (authenticatedUser) {
+    return null;
+  }
 
   return (
     <div className="mx-auto w-full max-w-xl px-4 py-6 sm:px-6 sm:py-10">

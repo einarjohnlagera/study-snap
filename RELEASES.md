@@ -12,3 +12,4 @@
 - Create note from My Library
 - Profile-based button labels and CTAs
 - Email template refresh with first-name personalization, shared NoteLib footer, and updated Free vs Premium welcome messaging
+- Auth redirect fix for expired-session re-login so successful login returns cleanly to Dashboard without rendering the app shell on auth pages
