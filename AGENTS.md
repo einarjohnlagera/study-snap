@@ -223,7 +223,9 @@ Core loop:
 - Subject UI rules:
   - render subjects as badges across library cards and note headers
   - note headers should place `Subject Badge • Author`
-  - note editor subject fields should offer predefined subject suggestions while still accepting custom values
+  - `notes.subject` remains the persisted source of truth; do not add a subjects table unless explicitly requested
+  - note editor and library subject filters should use backend-driven distinct subject suggestions from persisted notes
+  - subject inputs must still accept custom typed values and save them directly into `notes.subject`
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { RECOMMENDED_SUBJECTS } from "@/lib/subjects";
 
 export type NoteEditorDraft = {
   title: string;
@@ -46,6 +45,7 @@ type NoteEditorFormProps = {
   generateLabel: string;
   generateHelperText: string;
   generatingLabel: string;
+  subjectSuggestions?: string[];
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -86,6 +86,7 @@ export function NoteEditorForm({
   generateLabel,
   generateHelperText,
   generatingLabel,
+  subjectSuggestions = [],
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -234,11 +235,11 @@ export function NoteEditorForm({
                 className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
               />
               <datalist id="note-subject-suggestions">
-                {RECOMMENDED_SUBJECTS.map((subjectOption) => (
+                {subjectSuggestions.map((subjectOption) => (
                   <option key={subjectOption} value={subjectOption} />
                 ))}
               </datalist>
-              <p className="text-xs text-foreground/60">Choose a common subject or type your own.</p>
+              <p className="text-xs text-foreground/60">Select an existing subject or type your own.</p>
             </div>
             {showTagsSection ? (
               <div className="space-y-2">

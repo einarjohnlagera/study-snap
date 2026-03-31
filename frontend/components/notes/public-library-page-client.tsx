@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser } from "@/lib/auth";
 import {
+  listSubjects,
   listPublicNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
@@ -72,6 +73,7 @@ export function PublicLibraryPageClient() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,8 +81,15 @@ export function PublicLibraryPageClient() {
     setLoading(true);
     setError(null);
     try {
-      const response = await listPublicNotes();
-      setItems(response);
+      const [notesResult, subjectsResult] = await Promise.allSettled([
+        listPublicNotes(),
+        listSubjects("public"),
+      ]);
+      if (notesResult.status !== "fulfilled") {
+        throw notesResult.reason;
+      }
+      setItems(notesResult.value);
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load public notes.";
       setError(message);
@@ -105,7 +114,7 @@ export function PublicLibraryPageClient() {
     };
   }, []);
 
-  const availableSubjects = useMemo(() => {
+  const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();
     items.forEach((item) => {
       const subject = normalizeSubject(item.subject);
@@ -115,6 +124,7 @@ export function PublicLibraryPageClient() {
     });
     return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
+  const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();

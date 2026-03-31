@@ -12,6 +12,7 @@ import {
   getNote,
   isEmailNotVerifiedError,
   isOcrLimitReachedError,
+  listSubjects,
   trackAnalyticsEvent,
   type NoteResponse,
   updateNote,
@@ -133,6 +134,7 @@ export function NoteEditorPageClient({
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const { usageSummary } = useBillingUsageSummary();
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
   const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
@@ -170,6 +172,26 @@ export function NoteEditorPageClient({
     }, 3200);
     return () => globalThis.clearTimeout(timeout);
   }, [toastMessage]);
+
+  useEffect(() => {
+    let active = true;
+
+    void listSubjects("mine")
+      .then((subjects) => {
+        if (active) {
+          setSubjectSuggestions(subjects);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSubjectSuggestions([]);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     setToastTone(tone);
@@ -635,6 +657,7 @@ export function NoteEditorPageClient({
         generateLabel={generateLabel}
         generateHelperText={generateHelperText}
         generatingLabel={generatingLabel}
+        subjectSuggestions={subjectSuggestions}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
         } : undefined}

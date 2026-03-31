@@ -30,6 +30,7 @@ import {
   getNote,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
+  listSubjects,
   trackAnalyticsEvent,
   startQuickReviewSession,
   updateNote,
@@ -51,7 +52,6 @@ import {
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
-import { RECOMMENDED_SUBJECTS } from "@/lib/subjects";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
   if (status === "STUDY_PACK_READY") {
@@ -128,6 +128,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">("STUDENT");
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
 
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
@@ -211,6 +212,26 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     globalThis.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
       globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    void listSubjects("mine")
+      .then((subjects) => {
+        if (active) {
+          setSubjectSuggestions(subjects);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSubjectSuggestions([]);
+        }
+      });
+
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -840,7 +861,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     placeholder="Choose or type a subject"
                   />
                   <datalist id="note-subject-inline-suggestions">
-                    {RECOMMENDED_SUBJECTS.map((subjectOption) => (
+                    {subjectSuggestions.map((subjectOption) => (
                       <option key={subjectOption} value={subjectOption} />
                     ))}
                   </datalist>

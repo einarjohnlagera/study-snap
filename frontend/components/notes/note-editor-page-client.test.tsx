@@ -8,6 +8,7 @@ import {
   getBillingPricing,
   getMyPlan,
   getNote,
+  listSubjects,
   joinPremiumWaitlist,
   updateNote,
 } from "@/lib/api";
@@ -40,6 +41,7 @@ jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
   joinPremiumWaitlist: jest.fn(),
@@ -85,9 +87,11 @@ describe("NoteEditorPageClient", () => {
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockResolvedValue(["Anatomy", "Biology", "Chemistry"]);
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
       limits: {
@@ -166,7 +170,8 @@ describe("NoteEditorPageClient", () => {
     expect(contentInput).not.toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
     expect(document.querySelector("#note-subject-suggestions")).not.toBeNull();
-    expect(screen.getByText("Choose a common subject or type your own.")).toBeInTheDocument();
+    expect(screen.getByText("Select an existing subject or type your own.")).toBeInTheDocument();
+    expect(listSubjects).toHaveBeenCalledWith("mine");
   });
 
   it("shows the first-study hint on the create note page when onboarding is in progress", async () => {

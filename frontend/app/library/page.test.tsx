@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
-import { deleteNote, listNotes } from "@/lib/api";
+import { deleteNote, listNotes, listSubjects } from "@/lib/api";
 
 const pushMock = jest.fn();
 
@@ -16,6 +16,7 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/api", () => ({
   listNotes: jest.fn(),
+  listSubjects: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
   copyNote: jest.fn(),
   deleteNote: jest.fn(),
@@ -24,6 +25,7 @@ jest.mock("@/lib/api", () => ({
 describe("My Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
     (listNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-42",
@@ -46,6 +48,7 @@ describe("My Library page", () => {
     render(<LibraryPage />);
 
     expect(await screen.findByRole("button", { name: "+ Create Note" })).toBeInTheDocument();
+    expect(listSubjects).toHaveBeenCalledWith("mine");
     const title = await screen.findByText("Cell Respiration");
     const card = title.closest("[role='link']");
     expect(card).not.toBeNull();

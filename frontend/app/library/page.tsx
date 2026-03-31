@@ -13,6 +13,7 @@ import {
   copyNote,
   deleteNote,
   getQuickReviewPerformanceSummary,
+  listSubjects,
   listNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
@@ -118,6 +119,7 @@ export default function LibraryPage() {
   const [reviewSummaryByNoteId, setReviewSummaryByNoteId] = useState<Record<string, ReviewSummaryMeta>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
   const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null);
@@ -159,8 +161,16 @@ export default function LibraryPage() {
     setLoading(true);
     setError(null);
     try {
-      const notes = await listNotes();
+      const [notesResult, subjectsResult] = await Promise.allSettled([
+        listNotes(),
+        listSubjects("mine"),
+      ]);
+      if (notesResult.status !== "fulfilled") {
+        throw notesResult.reason;
+      }
+      const notes = notesResult.value;
       setItems(notes);
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setVisibleCount(LIBRARY_PAGE_SIZE);
       void hydrateLastReviewed(notes);
     } catch (err) {
@@ -209,7 +219,7 @@ export default function LibraryPage() {
   }, [tagFilterOpen, tagSearchQuery]);
 
   const hasItems = items.length > 0;
-  const availableSubjects = useMemo(() => {
+  const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();
     items.forEach((item) => {
       const subject = normalizeSubject(item.subject);
@@ -219,6 +229,7 @@ export default function LibraryPage() {
     });
     return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
+  const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
