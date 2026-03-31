@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
+import { SubjectBadge } from "@/components/notes/subject-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
@@ -12,10 +13,12 @@ import {
   copyNote,
   deleteNote,
   getQuickReviewPerformanceSummary,
+  listSubjects,
   listNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { normalizeSubject } from "@/lib/subjects";
 
 type LibrarySortOption = "RECENTLY_UPDATED" | "RECENTLY_REVIEWED" | "TITLE";
 const LIBRARY_PAGE_SIZE = 20;
@@ -24,11 +27,6 @@ const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 type ReviewSummaryMeta = {
   lastReviewedAt: string | null;
 };
-
-function normalizeSubject(subject: string | null | undefined): string | null {
-  const value = subject?.trim();
-  return value && value.length > 0 ? value : null;
-}
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -121,6 +119,7 @@ export default function LibraryPage() {
   const [reviewSummaryByNoteId, setReviewSummaryByNoteId] = useState<Record<string, ReviewSummaryMeta>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
   const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null);
@@ -162,8 +161,16 @@ export default function LibraryPage() {
     setLoading(true);
     setError(null);
     try {
-      const notes = await listNotes();
+      const [notesResult, subjectsResult] = await Promise.allSettled([
+        listNotes(),
+        listSubjects("mine"),
+      ]);
+      if (notesResult.status !== "fulfilled") {
+        throw notesResult.reason;
+      }
+      const notes = notesResult.value;
       setItems(notes);
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setVisibleCount(LIBRARY_PAGE_SIZE);
       void hydrateLastReviewed(notes);
     } catch (err) {
@@ -186,8 +193,8 @@ export default function LibraryPage() {
     if (!toast) {
       return;
     }
-    const timeout = window.setTimeout(() => setToast(null), 2400);
-    return () => window.clearTimeout(timeout);
+    const timeout = globalThis.setTimeout(() => setToast(null), 2400);
+    return () => globalThis.clearTimeout(timeout);
   }, [toast]);
 
   useEffect(() => {
@@ -201,8 +208,8 @@ export default function LibraryPage() {
       }
       setCardMenuOpenId(null);
     };
-    window.addEventListener("mousedown", closeMenu);
-    return () => window.removeEventListener("mousedown", closeMenu);
+    globalThis.addEventListener("mousedown", closeMenu);
+    return () => globalThis.removeEventListener("mousedown", closeMenu);
   }, [cardMenuOpenId]);
 
   useEffect(() => {
@@ -212,7 +219,7 @@ export default function LibraryPage() {
   }, [tagFilterOpen, tagSearchQuery]);
 
   const hasItems = items.length > 0;
-  const availableSubjects = useMemo(() => {
+  const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();
     items.forEach((item) => {
       const subject = normalizeSubject(item.subject);
@@ -222,6 +229,7 @@ export default function LibraryPage() {
     });
     return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
+  const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
@@ -586,11 +594,6 @@ export default function LibraryPage() {
                 const reviewSummary = reviewSummaryByNoteId[item.id] ?? { lastReviewedAt: null };
                 const stateMeta = getNoteStateMeta(item.studyPackStatus);
                 const itemTags = normalizeTags(item.tags);
-                const subject = normalizeSubject(item.subject);
-                const subjectLabel = subject ?? "Uncategorized";
-                const subjectClassName = subject
-                  ? "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                  : "border-border bg-muted/40 text-foreground/65";
 
                 return (
                   <Card
@@ -608,11 +611,7 @@ export default function LibraryPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-2">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${subjectClassName}`}
-                        >
-                          {subjectLabel}
-                        </span>
+                        <SubjectBadge subject={item.subject} />
                         <h3 className="text-base font-semibold transition-colors sm:text-lg">
                           {item.title?.trim() || "Untitled note"}
                         </h3>

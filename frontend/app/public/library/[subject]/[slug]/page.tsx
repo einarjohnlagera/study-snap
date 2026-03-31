@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
+import { PublicNoteAuthorLine } from "@/components/notes/public-note-ownership-actions";
 import { PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
@@ -62,7 +63,6 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
   }
 
   const title = note.title?.trim() || "Untitled note";
-  const subjectLabel = note.subject?.trim() || "General";
   const hasGeneratedStudyPack = note.studyPackStatus === "STUDY_PACK_READY";
   const quizPreview = note.quiz.slice(0, 3);
   const description = buildDescription(title, note.summary);
@@ -94,11 +94,10 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               </span>
             </div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
-            <PublicNoteOwnershipActions
-              noteId={note.id}
+            <PublicNoteAuthorLine
               ownerUserId={note.ownerUserId}
               official={note.official}
-              subjectLabel={subjectLabel}
+              subject={note.subject}
             />
             <div className="flex flex-wrap gap-2">
               {note.tags.length > 0 ? note.tags.map((tag) => (
@@ -114,6 +113,10 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
                 </span>
               )}
             </div>
+            <PublicNoteOwnershipActions
+              noteId={note.id}
+              ownerUserId={note.ownerUserId}
+            />
           </div>
         </header>
 

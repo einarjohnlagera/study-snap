@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
-import { listPublicNotes } from "@/lib/api";
+import { listPublicNotes, listSubjects } from "@/lib/api";
 
 const pushMock = jest.fn();
 
@@ -16,6 +16,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   listPublicNotes: jest.fn(),
+  listSubjects: jest.fn(),
 }));
 
 describe("PublicLibraryPageClient", () => {
@@ -29,7 +30,9 @@ describe("PublicLibraryPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
     (listPublicNotes as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockReset();
     currentAuthUser = { id: "user-1" };
+    (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Physics"]);
   });
 
   it("shows By You, NoteLib, and Community badges for public notes", async () => {
@@ -83,6 +86,7 @@ describe("PublicLibraryPageClient", () => {
     await waitFor(() => {
       expect(listPublicNotes).toHaveBeenCalled();
     });
+    expect(listSubjects).toHaveBeenCalledWith("public");
 
     expect(await screen.findByText("By You")).toBeInTheDocument();
     expect(screen.getByText("By NoteLib")).toBeInTheDocument();

@@ -8,18 +8,16 @@ import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser } from "@/lib/auth";
 import {
+  listSubjects,
   listPublicNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
 import { resolvePublicNoteAuthorLabel, type PublicNoteAuthorLabel } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
+import { normalizeSubject } from "@/lib/subjects";
+import { SubjectBadge } from "./subject-badge";
 
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
-
-function normalizeSubject(subject: string | null | undefined): string | null {
-  const value = subject?.trim();
-  return value && value.length > 0 ? value : null;
-}
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -75,6 +73,7 @@ export function PublicLibraryPageClient() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,8 +81,15 @@ export function PublicLibraryPageClient() {
     setLoading(true);
     setError(null);
     try {
-      const response = await listPublicNotes();
-      setItems(response);
+      const [notesResult, subjectsResult] = await Promise.allSettled([
+        listPublicNotes(),
+        listSubjects("public"),
+      ]);
+      if (notesResult.status !== "fulfilled") {
+        throw notesResult.reason;
+      }
+      setItems(notesResult.value);
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load public notes.";
       setError(message);
@@ -108,7 +114,7 @@ export function PublicLibraryPageClient() {
     };
   }, []);
 
-  const availableSubjects = useMemo(() => {
+  const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();
     items.forEach((item) => {
       const subject = normalizeSubject(item.subject);
@@ -118,6 +124,7 @@ export function PublicLibraryPageClient() {
     });
     return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
+  const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
@@ -363,12 +370,7 @@ export function PublicLibraryPageClient() {
             <div className="grid gap-4 md:grid-cols-2">
               {filteredItems.map((item) => {
                 const itemTags = normalizeTags(item.tags);
-                const subject = normalizeSubject(item.subject);
-                const subjectLabel = subject ?? "Uncategorized";
                 const authorBadge = resolveAuthorBadge(item, currentUserId);
-                const subjectClassName = subject
-                  ? "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                  : "border-border bg-muted/40 text-foreground/65";
 
                 return (
                   <Card
@@ -386,11 +388,7 @@ export function PublicLibraryPageClient() {
                   >
                     <div className="min-w-0 space-y-2">
                       <div className="flex flex-wrap gap-2">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${subjectClassName}`}
-                        >
-                          {subjectLabel}
-                        </span>
+                        <SubjectBadge subject={item.subject} />
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
                         >

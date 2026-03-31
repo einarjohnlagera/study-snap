@@ -282,6 +282,27 @@ class NoteServiceTest {
         assertThat(response.get(1).official()).isTrue();
     }
 
+    @Test
+    void listMineSubjects_returnsDistinctNormalizedSubjectsSortedAlphabetically() {
+        UUID ownerUserId = UUID.randomUUID();
+        when(noteRepository.findSubjectValuesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of(" Biology ", "anatomy", "biology", "", "  ", "Chemistry"));
+
+        List<String> subjects = noteService.listMineSubjects(ownerUserId);
+
+        assertThat(subjects).containsExactly("anatomy", "Biology", "Chemistry");
+    }
+
+    @Test
+    void listPublicSubjects_returnsDistinctNormalizedSubjectsSortedAlphabetically() {
+        when(noteRepository.findSubjectValuesByVisibility(NoteVisibility.PUBLIC))
+                .thenReturn(List.of("Physics", "biology", "Biology", "History"));
+
+        List<String> subjects = noteService.listPublicSubjects();
+
+        assertThat(subjects).containsExactly("biology", "History", "Physics");
+    }
+
     private NoteEntity buildNote(
             UUID noteId,
             UUID ownerUserId,

@@ -16,3 +16,4 @@
 - First-time activation flow improvements across verification, empty dashboard states, first Study Pack guidance, and first quiz weak-concept follow-up
 - Public Library now includes your own public notes and labels cards as `By You`, `By NoteLib`, or `By Community`
 - Public note detail now stays read/copy/share only with `Open Note` for owners, `Make a Copy` for non-owners, and viewer-relative author labels in the header
+- Subject display is now standardized with shared badges across library cards and note headers, and subject suggestions now come from persisted backend `notes.subject` values while still allowing custom subjects

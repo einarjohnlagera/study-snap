@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
+import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -45,6 +46,7 @@ type NoteEditorFormProps = {
   generateLabel: string;
   generateHelperText: string;
   generatingLabel: string;
+  subjectSuggestions?: string[];
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -85,6 +87,7 @@ export function NoteEditorForm({
   generateLabel,
   generateHelperText,
   generatingLabel,
+  subjectSuggestions = [],
 }: NoteEditorFormProps) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -223,13 +226,11 @@ export function NoteEditorForm({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject (optional)</label>
-              <input
+              <SubjectCombobox
                 id="note-subject"
-                type="text"
                 value={note.subject}
-                onChange={(event) => onSubjectChange(event.target.value)}
-                placeholder="Biology"
-                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+                suggestions={subjectSuggestions}
+                onChange={onSubjectChange}
               />
             </div>
             {showTagsSection ? (

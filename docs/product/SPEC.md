@@ -191,7 +191,7 @@ Users can:
 - search by title/tags/content preview
 - filter by subject (single select, `All subjects` default)
 - filter by tags (multi-select OR matching)
-- combine search + subject + tag filters (frontend-only on loaded items)
+- combine search + subject + tag filters on the loaded note list
 - sort by recent/title/recently reviewed
 - open by clicking card/title
 - start Quick Review for Study Pack Ready notes
@@ -239,6 +239,16 @@ Users can:
   - `Quick Review`
   - `Challenge Quiz`
   - `Adaptive Practice`
+- Subject display should stay consistent across My Library, Public Library, Private Note Detail, and Public Note Detail:
+  - render subject as a reusable badge, not `Subject: ...` text
+  - place subject on the same line as the author label on note headers
+- Subject persistence and suggestions:
+  - `notes.subject` remains the persisted source of truth
+  - subject suggestions come from `GET /api/subjects` using distinct existing note subject values
+  - My Library and Note Editor use the authenticated `mine` subject scope
+  - Public Library uses the `public` subject scope
+  - users can still type a custom subject and save it directly into `notes.subject`
+  - no normalized `subjects` table is required for the current version
 
 Dashboard guidance rules:
 

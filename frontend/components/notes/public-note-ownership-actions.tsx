@@ -5,21 +5,56 @@ import { useEffect, useMemo, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { getAuthUser } from "@/lib/auth";
+import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorLabel } from "@/lib/public-note-author";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
   noteId: string;
   ownerUserId: string | null;
-  official: boolean;
-  subjectLabel?: string | null;
 };
+
+type PublicNoteAuthorLineProps = {
+  ownerUserId: string | null;
+  official: boolean;
+  subject?: string | null;
+};
+
+export function PublicNoteAuthorLine({
+  ownerUserId,
+  official,
+  subject,
+}: Readonly<PublicNoteAuthorLineProps>) {
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
+
+  useEffect(() => {
+    const syncAuth = () => {
+      setCurrentUserId(getAuthUser()?.id ?? null);
+    };
+    syncAuth();
+    globalThis.addEventListener("studysnap-auth-change", syncAuth);
+    return () => {
+      globalThis.removeEventListener("studysnap-auth-change", syncAuth);
+    };
+  }, []);
+
+  const authorLabel = useMemo(
+    () => resolvePublicNoteAuthorLabel({ ownerUserId, currentUserId, official }),
+    [currentUserId, official, ownerUserId],
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
+      <SubjectBadge subject={subject} />
+      <span className="text-foreground/45">•</span>
+      <span>{authorLabel}</span>
+    </div>
+  );
+}
 
 export function PublicNoteOwnershipActions({
   noteId,
   ownerUserId,
-  official,
-  subjectLabel,
 }: Readonly<PublicNoteOwnershipActionsProps>) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [shareState, setShareState] = useState<"idle" | "copied" | "error">("idle");
@@ -37,10 +72,6 @@ export function PublicNoteOwnershipActions({
   }, []);
 
   const isOwner = isPublicNoteOwner({ ownerUserId, currentUserId });
-  const authorLabel = useMemo(
-    () => resolvePublicNoteAuthorLabel({ ownerUserId, currentUserId, official }),
-    [currentUserId, official, ownerUserId],
-  );
   const openNoteHref = `/notes/${noteId}`;
 
   useEffect(() => {
@@ -73,10 +104,6 @@ export function PublicNoteOwnershipActions({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-foreground/80">
-        {subjectLabel ? `${subjectLabel} • ${authorLabel}` : authorLabel}
-      </p>
-
       {isOwner ? (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">

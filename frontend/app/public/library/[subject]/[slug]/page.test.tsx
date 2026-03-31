@@ -15,19 +15,28 @@ jest.mock("@/lib/server-public-notes", () => ({
 }));
 
 jest.mock("@/components/notes/public-note-ownership-actions", () => ({
+  PublicNoteAuthorLine: ({
+    ownerUserId,
+    official,
+    subject,
+  }: {
+    ownerUserId: string | null;
+    official: boolean;
+    subject?: string | null;
+  }) => (
+    <div>
+      Author line for {ownerUserId ?? "none"} / {official ? "official" : "community"} / {subject ?? "none"}
+    </div>
+  ),
   PublicNoteOwnershipActions: ({
     noteId,
     ownerUserId,
-    official,
-    subjectLabel,
   }: {
     noteId: string;
     ownerUserId: string | null;
-    official: boolean;
-    subjectLabel?: string | null;
   }) => (
     <div>
-      Ownership actions for {noteId} / {ownerUserId ?? "none"} / {official ? "official" : "community"} / {subjectLabel ?? "none"}
+      Ownership actions for {noteId} / {ownerUserId ?? "none"}
     </div>
   ),
 }));
@@ -73,7 +82,8 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByText("Public Library")).toBeInTheDocument();
     expect(screen.getByText("Generated with NoteLib")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
-    expect(screen.getByText("Ownership actions for note-1 / user-2 / community / Science")).toBeInTheDocument();
+    expect(screen.getByText("Author line for user-2 / community / Science")).toBeInTheDocument();
+    expect(screen.getByText("Ownership actions for note-1 / user-2")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
     expect(screen.getByText("Cell structure summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Key Concepts" })).toBeInTheDocument();

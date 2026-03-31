@@ -78,6 +78,14 @@ Implementation details:
 - keep `Settings` focused on preferences and app behavior
 - support email-change verification through `pendingEmail`
 - keep one shared note-first learning engine across all profile types
+
+Future Improvement - Normalize Subjects Table
+
+- create a dedicated `subjects` table (`id`, `name`, `created_at`)
+- migrate distinct `notes.subject` values into `subjects`
+- add `notes.subject_id` while keeping a safe backfill path from existing `notes.subject`
+- eventually use normalized subject IDs for filtering, SEO subject pages, and reuse
+- this is intentionally deferred; the current product continues to persist subject directly in `notes.subject`
 - change dashboard CTA, section order, labels, and recommendations by `profileType`
 - let teacher CTA buttons share one note pipeline through mode-based routing
 - keep short profile-based primary button labels with helper text in the Note Editor

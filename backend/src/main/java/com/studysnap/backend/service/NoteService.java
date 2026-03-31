@@ -28,7 +28,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -230,6 +232,16 @@ public class NoteService {
     public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
         List<NoteEntity> notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
         return toListItems(notes);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> listMineSubjects(UUID ownerUserId) {
+        return normalizeSubjects(noteRepository.findSubjectValuesByOwnerUserId(ownerUserId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> listPublicSubjects() {
+        return normalizeSubjects(noteRepository.findSubjectValuesByVisibility(NoteVisibility.PUBLIC));
     }
 
     @Transactional(readOnly = true)
@@ -440,6 +452,16 @@ public class NoteService {
 
     private StudyPackEntity findLinkedStudyPack(UUID noteId) {
         return studyPackRepository.findByNoteId(noteId).orElse(null);
+    }
+
+    private List<String> normalizeSubjects(List<String> rawSubjects) {
+        Map<String, String> normalized = new LinkedHashMap<>();
+        rawSubjects.stream()
+                .map(this::normalizeOptionalText)
+                .filter(Objects::nonNull)
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .forEach(subject -> normalized.putIfAbsent(subject.toLowerCase(Locale.ROOT), subject));
+        return List.copyOf(normalized.values());
     }
 
     private NoteVisibility parseVisibility(String visibilityRaw) {
