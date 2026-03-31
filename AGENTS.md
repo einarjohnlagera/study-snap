@@ -203,6 +203,16 @@ Core loop:
 - Generated outputs (summary/key concepts/quizzes), Quick Review, Challenge Quiz, Adaptive Practice, and performance are scoped to `noteId`.
 - If legacy payload fields still expose `studyPackId`, treat them as compatibility fields, not primary ownership.
 
+### Profile Type UX Rule
+
+- Do not create separate entities or table flows per profile type.
+- Profile Type only changes UI, workflow emphasis, labels, recommendations, and default presentation.
+- Shared engine remains:
+  - `Note -> Study Pack -> Quiz -> Activity -> Weak Concepts`
+- `STUDENT` emphasizes review continuity.
+- `BOARD_EXAM` emphasizes quiz practice and weak-area drilling.
+- `TEACHER` emphasizes quiz creation from the same note pipeline.
+
 ## UI Terminology (Use Consistently)
 
 - `Dashboard`
@@ -243,6 +253,11 @@ Keep app shell grouping:
   - mobile should keep a floating primary generate button visible while scrolling
 - Generate button wording may vary by `profileType` (`Generate`, `Practice`, `Create Quiz`) but must still hit the same Study Pack generation flow.
 - Keep primary button labels short; longer outcome explanations belong in helper text below the generate button.
+- After generation, default tab should vary by `profileType`:
+  - `STUDENT` -> `tab=summary`
+  - `BOARD_EXAM` -> `tab=quiz`
+  - `TEACHER` -> `tab=quiz`
+- Teacher dashboard should prioritize quiz creation and material upload, but still use the shared note-first pipeline.
 - Use one shared modal component for confirmations/dialogs (`AppModal`), including delete/share/visibility/leave-flow prompts.
 - Do not use browser-native `window.confirm` or `alert` for product dialogs.
 - Note Detail edit rules:

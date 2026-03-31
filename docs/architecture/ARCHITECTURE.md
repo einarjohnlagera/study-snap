@@ -42,6 +42,13 @@ Routes:
 - `/profile` account profile
 - `/p/{token}` public shared Study Pack
 
+Mode-based note creation stays on the same Note pipeline:
+
+- `/notes/new` -> normal note creation
+- `/notes/new?mode=quiz` -> quiz-first creation flow
+- `/notes/new?source=paste` -> paste-material entry
+- `/notes/new?source=upload` -> upload-material entry
+
 Frontend calls backend via `NEXT_PUBLIC_API_BASE_URL`.
 
 ### Backend (Spring Boot)
@@ -96,6 +103,38 @@ Versioning model:
 - review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context via `noteId`
 - share links reference generated Study Pack view data
 - copy creates a new Draft Note identity with user-authored fields only
+
+## Profile-Based UX Layer
+
+Profile Type is a presentation and workflow layer, not a data-ownership layer.
+
+All profile types use the same shared entities and tables:
+
+- `User`
+- `Note`
+- `StudyPack`
+- `Quiz`
+- `QuizSession`
+- `WeakConcept`
+- `Activity`
+- `Usage`
+
+Profile Type only affects:
+
+- dashboard layout and section order
+- CTA behavior
+- labels and wording
+- default tab after generation
+- recommendation emphasis
+
+Profile Type does not affect:
+
+- note ownership
+- Study Pack persistence
+- quiz-session persistence
+- activity tracking
+- usage tracking
+- generation orchestration
 
 ## Backend Modules
 
@@ -202,6 +241,12 @@ Recommended flow:
 9. persist validated generated output linked to Note
 10. set Note state to `Study Pack Ready`
 11. return generated payload
+
+Default post-generation presentation stays on the unified note detail route:
+
+- `STUDENT` -> open `tab=summary`
+- `BOARD_EXAM` -> open `tab=quiz`
+- `TEACHER` -> open `tab=quiz`
 
 ## API Endpoints (Current and Near-Future)
 

@@ -2,7 +2,13 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-NoteLib is an AI-powered study workspace that helps users turn their notes into structured study materials such as summaries, key concepts, and quizzes.
+NoteLib is an AI-powered study and quiz generation workspace that helps users turn notes and materials into summaries, key concepts, and quizzes.
+
+It can be used by:
+
+- students for reviewing notes
+- board exam takers for practice quizzes
+- teachers for creating quiz materials
 
 Users can paste notes or upload photos of their study material, and NoteLib can generate:
 
@@ -90,7 +96,7 @@ Primary product pages:
 - My Library: `/library`
 - Public Library: `/library/public`
 - Note Detail: `/notes/{id}`
-- Public Note Detail (read-only): `/public/notes/{id}`
+- Public Note Detail (read-only): `/public/library/{subject}/{slug}`
 
 ## Personalized Dashboard
 
@@ -100,6 +106,14 @@ Primary product pages:
 - `TEACHER` emphasizes material upload, quiz creation, and recently generated quiz-ready notes.
 - All variants still use the same note -> Study Pack -> quiz -> activity workflow.
 - Teacher CTAs use mode-based entry routes on the same note editor so quiz creation, paste, and upload flows remain unified.
+
+## Shared Learning Engine
+
+All profile types use the same core system:
+
+`Note -> Study Pack -> Quiz -> Activity -> Weak Concepts`
+
+Profile type changes presentation and workflow emphasis only. It does not create separate note, quiz, or activity systems.
 
 ## Architecture Overview
 
@@ -144,6 +158,15 @@ High-level model:
   - `Generates quiz questions from your material.`
 - Desktop repeats note actions at the top and bottom of long forms.
 - Mobile keeps generation visible through a floating primary CTA.
+- Entry modes reuse the same note pipeline:
+  - `/notes/new`
+  - `/notes/new?mode=quiz`
+  - `/notes/new?source=paste`
+  - `/notes/new?source=upload`
+- Default post-generation behavior:
+  - `STUDENT` -> open Summary first
+  - `BOARD_EXAM` -> open Quiz first
+  - `TEACHER` -> open Quiz first
 
 ## Onboarding
 
