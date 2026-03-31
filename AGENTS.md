@@ -206,11 +206,16 @@ Core loop:
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes
-  - `NoteLib` for official/admin-owned public notes
-  - `Community` for other public notes
+  - `By NoteLib` for official/admin-owned public notes
+  - `By Community` for other public notes
+- Public author labels are viewer-relative:
+  - owner viewing own public note -> `By You`
+  - official/admin-owned public note -> `By NoteLib`
+  - all other public notes -> `By Community`
 - Public note detail should switch its primary CTA by ownership:
   - owner -> `Edit Note`
   - non-owner -> `Make a Copy`
+- Public note detail header should show `Subject • Author` using the same viewer-relative label logic as library cards.
 - Public note detail should not expose generation actions; generation remains a Note Editor responsibility.
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.

@@ -11,6 +11,7 @@ import {
   listPublicNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
+import { resolvePublicNoteAuthorLabel, type PublicNoteAuthorLabel } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -40,28 +41,34 @@ function toPreview(contentPreview: string, maxLength = 160) {
 function resolveAuthorBadge(
   item: Pick<NoteListItemResponse, "ownerUserId" | "official">,
   currentUserId: string | null,
-): { label: "By You" | "NoteLib" | "Community"; className: string } {
-  if (currentUserId && item.ownerUserId === currentUserId) {
+): { label: PublicNoteAuthorLabel; className: string } {
+  const label = resolvePublicNoteAuthorLabel({
+    ownerUserId: item.ownerUserId,
+    currentUserId,
+    official: item.official,
+  });
+
+  if (label === "By You") {
     return {
-      label: "By You",
+      label,
       className: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
     };
   }
-  if (item.official) {
+  if (label === "By NoteLib") {
     return {
-      label: "NoteLib",
+      label,
       className: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300",
     };
   }
   return {
-    label: "Community",
+    label,
     className: "border-border bg-muted/40 text-foreground/70",
   };
 }
 
 export function PublicLibraryPageClient() {
   const router = useRouter();
-  const currentUserId = getAuthUser()?.id ?? null;
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
@@ -88,6 +95,18 @@ export function PublicLibraryPageClient() {
   useEffect(() => {
     void loadNotes();
   }, [loadNotes]);
+
+  useEffect(() => {
+    const syncAuth = () => {
+      setCurrentUserId(getAuthUser()?.id ?? null);
+    };
+
+    syncAuth();
+    globalThis.addEventListener("studysnap-auth-change", syncAuth);
+    return () => {
+      globalThis.removeEventListener("studysnap-auth-change", syncAuth);
+    };
+  }, []);
 
   const availableSubjects = useMemo(() => {
     const subjectSet = new Set<string>();

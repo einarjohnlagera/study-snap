@@ -7,6 +7,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { getAuthUser } from "@/lib/auth";
 import { deleteNote } from "@/lib/api";
+import { isPublicNoteOwner, resolvePublicNoteAuthorLabel } from "@/lib/public-note-author";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
@@ -14,27 +15,15 @@ type PublicNoteOwnershipActionsProps = {
   ownerUserId: string | null;
   official: boolean;
   studyPackStatus: "DRAFT" | "STUDY_PACK_READY";
+  subjectLabel?: string | null;
 };
-
-function resolveAuthorLabel(
-  ownerUserId: string | null,
-  currentUserId: string | null,
-  official: boolean,
-): "By You" | "By NoteLib" | "By Community" {
-  if (currentUserId && ownerUserId === currentUserId) {
-    return "By You";
-  }
-  if (official) {
-    return "By NoteLib";
-  }
-  return "By Community";
-}
 
 export function PublicNoteOwnershipActions({
   noteId,
   ownerUserId,
   official,
   studyPackStatus,
+  subjectLabel,
 }: Readonly<PublicNoteOwnershipActionsProps>) {
   const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
@@ -54,9 +43,9 @@ export function PublicNoteOwnershipActions({
     };
   }, []);
 
-  const isOwner = Boolean(currentUserId && ownerUserId === currentUserId);
+  const isOwner = isPublicNoteOwner({ ownerUserId, currentUserId });
   const authorLabel = useMemo(
-    () => resolveAuthorLabel(ownerUserId, currentUserId, official),
+    () => resolvePublicNoteAuthorLabel({ ownerUserId, currentUserId, official }),
     [currentUserId, official, ownerUserId],
   );
   const editHref = studyPackStatus === "DRAFT" ? `/notes/${noteId}/edit` : `/notes/${noteId}`;
@@ -93,7 +82,9 @@ export function PublicNoteOwnershipActions({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-foreground/80">{authorLabel}</p>
+      <p className="text-sm text-foreground/80">
+        {subjectLabel ? `${subjectLabel} • ${authorLabel}` : authorLabel}
+      </p>
 
       {isOwner ? (
         <div className="space-y-3">

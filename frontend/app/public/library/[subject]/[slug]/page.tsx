@@ -94,7 +94,13 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               </span>
             </div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
-            <p className="text-sm text-foreground/75 sm:text-base">Subject: {subjectLabel}</p>
+            <PublicNoteOwnershipActions
+              noteId={note.id}
+              ownerUserId={note.ownerUserId}
+              official={note.official}
+              studyPackStatus={note.studyPackStatus}
+              subjectLabel={subjectLabel}
+            />
             <div className="flex flex-wrap gap-2">
               {note.tags.length > 0 ? note.tags.map((tag) => (
                 <span
@@ -109,12 +115,6 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
                 </span>
               )}
             </div>
-            <PublicNoteOwnershipActions
-              noteId={note.id}
-              ownerUserId={note.ownerUserId}
-              official={note.official}
-              studyPackStatus={note.studyPackStatus}
-            />
           </div>
         </header>
 

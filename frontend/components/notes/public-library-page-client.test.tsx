@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
 import { listPublicNotes } from "@/lib/api";
 
@@ -19,9 +19,17 @@ jest.mock("@/lib/api", () => ({
 }));
 
 describe("PublicLibraryPageClient", () => {
+  let currentAuthUser: { id: string } | null = { id: "user-1" };
+
+  beforeAll(() => {
+    const authModule = jest.requireMock("@/lib/auth") as { getAuthUser: jest.Mock };
+    authModule.getAuthUser.mockImplementation(() => currentAuthUser);
+  });
+
   beforeEach(() => {
     pushMock.mockReset();
     (listPublicNotes as jest.Mock).mockReset();
+    currentAuthUser = { id: "user-1" };
   });
 
   it("shows By You, NoteLib, and Community badges for public notes", async () => {
@@ -77,10 +85,41 @@ describe("PublicLibraryPageClient", () => {
     });
 
     expect(await screen.findByText("By You")).toBeInTheDocument();
-    expect(screen.getByText("NoteLib")).toBeInTheDocument();
-    expect(screen.getByText("Community")).toBeInTheDocument();
+    expect(screen.getByText("By NoteLib")).toBeInTheDocument();
+    expect(screen.getByText("By Community")).toBeInTheDocument();
     expect(screen.getByText("My Public Note")).toBeInTheDocument();
     expect(screen.getByText("Official Example")).toBeInTheDocument();
     expect(screen.getByText("Community Note")).toBeInTheDocument();
+  });
+
+  it("updates the author badge when auth state hydrates after mount", async () => {
+    currentAuthUser = null;
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-1",
+        ownerUserId: "user-1",
+        title: "My Public Note",
+        subject: "Biology",
+        tags: ["cells"],
+        contentPreview: "My note preview",
+        visibility: "PUBLIC",
+        studyPackId: "pack-1",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        official: false,
+        updatedAt: "2026-03-31T10:00:00Z",
+      },
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("By Community")).toBeInTheDocument();
+
+    await act(async () => {
+      currentAuthUser = { id: "user-1" };
+      globalThis.dispatchEvent(new Event("studysnap-auth-change"));
+    });
+
+    expect(await screen.findByText("By You")).toBeInTheDocument();
   });
 });

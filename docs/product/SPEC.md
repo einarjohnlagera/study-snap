@@ -214,11 +214,16 @@ Users can:
 - copy a public note into My Library (`Copy to My Library`)
 - see source badges on cards:
   - `By You` for their own public notes
-  - `NoteLib` for official/admin-owned public notes
-  - `Community` for other users' public notes
+  - `By NoteLib` for official/admin-owned public notes
+  - `By Community` for other users' public notes
+- Public Library author labels are viewer-relative:
+  - if `note.ownerId == currentUser.id` -> `By You`
+  - else if the note is official/admin-owned -> `By NoteLib`
+  - else -> `By Community`
 - Public note detail should change the primary action by ownership:
   - owner -> `Edit Note`
   - non-owner -> `Make a Copy`
+- Public note detail header should show `Subject • Author` using the same viewer-relative author label.
 - Public note detail should not show generation actions.
 - Owner actions on public note detail may include:
   - `Edit Note`
