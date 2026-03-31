@@ -177,8 +177,9 @@ class NoteControllerTest {
                 "Summary",
                 List.of("Nucleus"),
                 List.of(),
-                false,
                 "noteguru",
+                false,
+                false,
                 OffsetDateTime.now()
         );
         when(noteService.getPublicBySeoPath("science", "cell-structure", null)).thenReturn(expected);
@@ -205,7 +206,9 @@ class NoteControllerTest {
                         null,
                         "STUDY_PACK_READY",
                         4,
+                        "My Notes",
                         false,
+                        true,
                         OffsetDateTime.now()
                 )
         );

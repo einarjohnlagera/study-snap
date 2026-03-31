@@ -12,7 +12,7 @@ import {
   listPublicNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
-import { resolvePublicNoteAuthorLabel, type PublicNoteAuthorLabel } from "@/lib/public-note-author";
+import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
 import { SubjectBadge } from "./subject-badge";
@@ -37,30 +37,35 @@ function toPreview(contentPreview: string, maxLength = 160) {
 }
 
 function resolveAuthorBadge(
-  item: Pick<NoteListItemResponse, "ownerUserId" | "official">,
+  item: Pick<NoteListItemResponse, "ownerUserId" | "authorDisplayName" | "isCurrentUser" | "isOfficialAuthor">,
   currentUserId: string | null,
-): { label: PublicNoteAuthorLabel; className: string } {
-  const label = resolvePublicNoteAuthorLabel({
+): { label: string; className: string; showOfficialBadge: boolean } {
+  const authorMeta = resolvePublicNoteAuthorMeta({
     ownerUserId: item.ownerUserId,
     currentUserId,
-    official: item.official,
+    authorDisplayName: item.authorDisplayName,
+    isCurrentUser: item.isCurrentUser,
+    isOfficialAuthor: item.isOfficialAuthor,
   });
 
-  if (label === "By You") {
+  if (authorMeta.label === "By You") {
     return {
-      label,
+      label: authorMeta.label,
       className: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      showOfficialBadge: false,
     };
   }
-  if (label === "By NoteLib") {
+  if (authorMeta.showOfficialBadge) {
     return {
-      label,
-      className: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+      label: authorMeta.label,
+      className: "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+      showOfficialBadge: true,
     };
   }
   return {
-    label,
+    label: authorMeta.label,
     className: "border-border bg-muted/40 text-foreground/70",
+    showOfficialBadge: false,
   };
 }
 
@@ -394,6 +399,11 @@ export function PublicLibraryPageClient() {
                         >
                           {authorBadge.label}
                         </span>
+                        {authorBadge.showOfficialBadge ? (
+                          <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                            Official
+                          </span>
+                        ) : null}
                       </div>
                       <h3 className="text-base font-semibold sm:text-lg">{item.title?.trim() || "Untitled note"}</h3>
                       <p className="text-sm leading-relaxed text-foreground/75">{toPreview(item.contentPreview)}</p>

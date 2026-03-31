@@ -310,7 +310,7 @@ export type LoginRequest = {
 export type AuthResponse = {
   userId: string;
   email: string;
-  displayName: string;
+  displayName: string | null;
   profileType: ProfileType | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
@@ -329,7 +329,7 @@ export type MeResponse = {
   pendingEmail: string | null;
   firstName: string;
   lastName: string | null;
-  displayName: string;
+  displayName: string | null;
   countryCode: string | null;
   profileType: ProfileType | null;
   examDate: string | null;
@@ -358,6 +358,7 @@ export type UpdateStudyRemindersRequest = {
 export type UpdateUserProfileRequest = {
   firstName: string;
   lastName: string;
+  displayName: string;
   email: string;
 };
 
@@ -679,7 +680,9 @@ export type NoteListItemResponse = {
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
   quizCount: number | null;
-  official: boolean;
+  authorDisplayName: string;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
   updatedAt: string;
 };
 
@@ -694,8 +697,9 @@ export type PublicNoteDetailResponse = {
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];
-  official: boolean;
   authorDisplayName: string;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
   updatedAt: string;
 };
 

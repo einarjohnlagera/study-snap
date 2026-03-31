@@ -14,7 +14,9 @@ public record NoteListItemResponse(
         String studyPackId,
         String studyPackStatus,
         Integer quizCount,
-        boolean official,
+        String authorDisplayName,
+        boolean isOfficialAuthor,
+        boolean isCurrentUser,
         OffsetDateTime updatedAt
 ) {
 }

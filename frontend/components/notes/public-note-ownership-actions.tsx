@@ -6,23 +6,28 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { getAuthUser } from "@/lib/auth";
 import { SubjectBadge } from "@/components/notes/subject-badge";
-import { isPublicNoteOwner, resolvePublicNoteAuthorLabel } from "@/lib/public-note-author";
+import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
   noteId: string;
   ownerUserId: string | null;
+  isCurrentUser?: boolean;
 };
 
 type PublicNoteAuthorLineProps = {
   ownerUserId: string | null;
-  official: boolean;
+  authorDisplayName: string;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
   subject?: string | null;
 };
 
 export function PublicNoteAuthorLine({
   ownerUserId,
-  official,
+  authorDisplayName,
+  isOfficialAuthor,
+  isCurrentUser,
   subject,
 }: Readonly<PublicNoteAuthorLineProps>) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
@@ -38,16 +43,27 @@ export function PublicNoteAuthorLine({
     };
   }, []);
 
-  const authorLabel = useMemo(
-    () => resolvePublicNoteAuthorLabel({ ownerUserId, currentUserId, official }),
-    [currentUserId, official, ownerUserId],
+  const authorMeta = useMemo(
+    () => resolvePublicNoteAuthorMeta({
+      ownerUserId,
+      currentUserId,
+      authorDisplayName,
+      isOfficialAuthor,
+      isCurrentUser,
+    }),
+    [authorDisplayName, currentUserId, isCurrentUser, isOfficialAuthor, ownerUserId],
   );
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
       <SubjectBadge subject={subject} />
       <span className="text-foreground/45">•</span>
-      <span>{authorLabel}</span>
+      <span>{authorMeta.label}</span>
+      {authorMeta.showOfficialBadge ? (
+        <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
+          Official
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -55,6 +71,7 @@ export function PublicNoteAuthorLine({
 export function PublicNoteOwnershipActions({
   noteId,
   ownerUserId,
+  isCurrentUser = false,
 }: Readonly<PublicNoteOwnershipActionsProps>) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [shareState, setShareState] = useState<"idle" | "copied" | "error">("idle");
@@ -71,7 +88,7 @@ export function PublicNoteOwnershipActions({
     };
   }, []);
 
-  const isOwner = isPublicNoteOwner({ ownerUserId, currentUserId });
+  const isOwner = isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId });
   const openNoteHref = `/notes/${noteId}`;
 
   useEffect(() => {

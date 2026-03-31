@@ -1,4 +1,7 @@
-export type PublicNoteAuthorLabel = "By You" | "By NoteLib" | "By Community";
+export type PublicNoteAuthorMeta = {
+  label: string;
+  showOfficialBadge: boolean;
+};
 
 function normalizeComparableId(value: string | null | undefined): string | null {
   const normalized = value?.trim();
@@ -14,20 +17,32 @@ export function isPublicNoteOwner(params: {
   return ownerUserId !== null && currentUserId !== null && ownerUserId === currentUserId;
 }
 
-export function resolvePublicNoteAuthorLabel(params: {
+export function resolvePublicNoteAuthorMeta(params: {
   ownerUserId: string | null | undefined;
   currentUserId: string | null | undefined;
-  official: boolean;
-}): PublicNoteAuthorLabel {
-  const { ownerUserId, currentUserId, official } = params;
+  authorDisplayName: string | null | undefined;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
+}): PublicNoteAuthorMeta {
+  const { ownerUserId, currentUserId, authorDisplayName, isOfficialAuthor, isCurrentUser } = params;
 
-  if (isPublicNoteOwner({ ownerUserId, currentUserId })) {
-    return "By You";
+  if (isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId })) {
+    return {
+      label: "By You",
+      showOfficialBadge: false,
+    };
   }
 
-  if (official) {
-    return "By NoteLib";
+  if (isOfficialAuthor) {
+    return {
+      label: "By NoteLib",
+      showOfficialBadge: true,
+    };
   }
 
-  return "By Community";
+  const normalizedAuthorDisplayName = authorDisplayName?.trim();
+  return {
+    label: normalizedAuthorDisplayName ? `By ${normalizedAuthorDisplayName}` : "By Community",
+    showOfficialBadge: false,
+  };
 }
