@@ -54,8 +54,8 @@ public class PremiumWaitlistService {
             EmailTemplateService.RenderedEmailTemplate rendered = emailTemplateService.render(
                     "premium-waitlist-confirmation",
                     Map.of(
-                            "name", resolveFirstName(user),
-                            "dashboardUrl", "https://www.notelib.app/dashboard"
+                            "firstName", resolveFirstName(user),
+                            "dashboardUrl", "https://notelib.app/dashboard"
                     )
             );
             emailService.sendEmail(new EmailMessage(user.getEmail(), rendered.subject(), rendered.htmlBody(), rendered.textBody()));

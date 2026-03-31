@@ -65,6 +65,7 @@ public class EmailVerificationService {
         EmailTemplateService.RenderedEmailTemplate renderedTemplate = emailTemplateService.render(
                 "verification-email",
                 Map.of(
+                        "firstName", resolveFirstName(user),
                         "app_name", resolveAppName(),
                         "verification_url", verificationUrl,
                         "email_from", resolveEmailFrom(),
@@ -182,7 +183,7 @@ public class EmailVerificationService {
         EmailTemplateService.RenderedEmailTemplate renderedTemplate = emailTemplateService.render(
                 "welcome-email",
                 Map.of(
-                        "name", resolveFirstName(user),
+                        "firstName", resolveFirstName(user),
                         "dashboard_url", resolveAppBaseUrl() + "/dashboard"
                 )
         );

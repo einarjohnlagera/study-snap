@@ -1,4 +1,6 @@
-Welcome to NoteLib!
+Hi {{firstName}},
+
+Welcome to NoteLib.
 
 NoteLib helps you turn your notes into:
 - Summaries
@@ -10,22 +12,23 @@ Here's how to get started:
 1. Create a note
 2. Generate your Study Pack
 3. Take a Quick Review
-4. Try Challenge Quiz (Premium — coming soon)
+4. Try Challenge Quiz when you're ready
 
 You can start here:
 {{dashboard_url}}
 
 Free Plan includes:
-- Up to 5 Study Packs per month
+- 10 Study Packs per month
 - Quick Review
+- Challenge Quiz (limited per month)
 - Public Library access
 
-Premium (coming soon) will include:
-- Challenge Quiz
+Premium includes:
 - Adaptive Practice
 - Weak Concept Training
+- Difficulty Selection
 - Higher monthly limits
 
-Thanks for trying NoteLib and good luck with your studies!
-
 — NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

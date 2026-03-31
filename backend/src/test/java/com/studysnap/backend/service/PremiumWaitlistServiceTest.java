@@ -69,6 +69,11 @@ class PremiumWaitlistServiceTest {
         assertThat(saved.getEmail()).isEqualTo("[email protected]");
         assertThat(saved.getCreatedAt()).isNotNull();
         verify(emailService).sendEmail(any(EmailMessage.class));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(emailTemplateService).render(eq("premium-waitlist-confirmation"), paramsCaptor.capture());
+        assertThat(paramsCaptor.getValue()).containsEntry("firstName", "Note");
     }
 
     @Test

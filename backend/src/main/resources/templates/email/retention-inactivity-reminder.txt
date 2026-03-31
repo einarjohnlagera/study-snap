@@ -1,4 +1,4 @@
-Hi {{name}},
+Hi {{firstName}},
 
 You started studying on NoteLib but haven’t continued recently.
 
@@ -8,5 +8,6 @@ Try doing a quick review today — it only takes a few minutes.
 Continue studying here:
 {{resumeUrl}}
 
-See you soon,
-NoteLib
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

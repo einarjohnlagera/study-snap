@@ -1,4 +1,4 @@
-Hi {{name}},
+Hi {{firstName}},
 
 Here’s your study summary this week:
 
@@ -12,4 +12,6 @@ Keep going — you’re making progress.
 Continue studying:
 {{dashboardUrl}}
 
-NoteLib
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app
