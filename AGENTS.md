@@ -91,10 +91,16 @@ Core loop:
 - Public pages and anonymous flows must not be blocked by onboarding.
 - NoteLib also has a separate first-study product onboarding flow for brand-new users with `studyPackCount == 0`.
 - Product onboarding guides the first workflow:
+  - `Verify Email`
   - `Create Note`
   - `Generate Study Pack`
-  - `Quick Review`
+  - `Challenge Quiz`
+  - `Weak Concepts`
   - `Dashboard`
+- After email verification, first-time users should see a welcome CTA before an empty dashboard so they know to create their first note immediately.
+- Empty dashboard states for first-time users must be instructional, not generic.
+- After the first Study Pack is generated, Note Detail should point users to Challenge Quiz as the next action.
+- After the first Challenge Quiz is completed, surface weak-concept guidance before returning users to normal study flows.
 - Product onboarding completion is tracked separately from preferences onboarding and should not reuse `onboardingCompletedAt`.
 
 ### Profile Rule

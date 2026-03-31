@@ -69,6 +69,7 @@ Potential expansion areas:
 - Note Editor UX Improvements
 - Mode-based Note Creation
 - Create Note from Library
+- First-Time User Activation Flow
 
 Implementation details:
 
@@ -80,6 +81,7 @@ Implementation details:
 - let teacher CTA buttons share one note pipeline through mode-based routing
 - keep short profile-based primary button labels with helper text in the Note Editor
 - repeat note-editor actions at the top and bottom on desktop and keep a floating CTA on mobile
+- add explicit first-time activation guidance from verification through first Study Pack and first Challenge Quiz
 
 ## v0.5.0 - Board Exam Mode
 

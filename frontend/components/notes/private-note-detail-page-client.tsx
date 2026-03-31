@@ -320,6 +320,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const shouldShowNearLimitBanner = usageSummary
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksUsed, studyPacksLimit)
     : false;
+  const showFirstStudyPackSuccessBanner = firstStudyStep === "study-pack-ready"
+    && note?.studyPackStatus === "STUDY_PACK_READY";
   const activeStudyPackTab: NoteDetailTab = searchParams.get("tab") === "quiz" ? "quiz" : "summary";
   const openPaywallModal = useCallback((variant: PaywallModalVariant, source: string) => {
     void trackAnalyticsEvent({
@@ -685,6 +687,29 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       ) : note ? (
         <div className="space-y-6">
           {shouldShowNearLimitBanner ? <NearLimitBanner /> : null}
+          {showFirstStudyPackSuccessBanner ? (
+            <Card className="space-y-3 border-blue-500/30 bg-blue-500/5 p-4 sm:p-6">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold sm:text-xl">Your Study Pack is ready!</h2>
+                <p className="text-sm text-foreground/80">
+                  Now try the Challenge Quiz to test yourself.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="button" className="w-full sm:w-auto" onClick={handleStartChallengeQuiz}>
+                  Start Challenge Quiz
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => setShowQuickReviewGuide(true)}
+                >
+                  View Next Steps
+                </Button>
+              </div>
+            </Card>
+          ) : null}
           <Card className="space-y-4 p-4 sm:p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-3">

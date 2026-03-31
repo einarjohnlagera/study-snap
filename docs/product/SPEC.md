@@ -357,10 +357,21 @@ Primary routes:
   - weekly progress summary every Sunday at `6:00 PM`
 - Session-expiry recovery must clear stale local auth state before redirecting to login so a re-login behaves like a fresh auth success.
 - First-study product onboarding is separate from preferences onboarding and guides new users through:
+  - verify email and see the first-study activation welcome screen
   - create note
   - generate Study Pack
-  - complete Quick Review
+  - start the first Challenge Quiz from the Study Pack success banner
+  - review weak concepts after the first quiz result
   - return to Dashboard
+- After email verification, first-time users with `studyPackCount == 0` should see a welcome CTA before landing on an empty dashboard:
+  - `Create First Note`
+  - `Go to Dashboard`
+- Dashboard empty state for first-time users should be explicit:
+  - title: `You don't have any Study Packs yet`
+  - description: `Create a note and generate your first quiz in a few minutes.`
+  - primary CTA: `Create Your First Note`
+- After the first Study Pack is generated, Note Detail should show a success banner that points the user to `Start Challenge Quiz`.
+- After the first Challenge Quiz is completed, the result screen should show a weak-concepts guidance banner with `View Weak Concepts`.
 
 ### Preferences Onboarding
 

@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ChallengeQuizPage from "./page";
 import { getAuthUser } from "@/lib/auth";
-import { getInProgressChallengeQuizSession, getNote } from "@/lib/api";
+import {
+  completeChallengeQuizSession,
+  getInProgressChallengeQuizSession,
+  getNote,
+  updateChallengeQuizSessionProgress,
+} from "@/lib/api";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -42,9 +47,13 @@ describe("ChallengeQuizPage", () => {
     replaceMock.mockReset();
     window.localStorage.clear();
     window.sessionStorage.clear();
+    Element.prototype.scrollIntoView = jest.fn();
     (getAuthUser as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (getInProgressChallengeQuizSession as jest.Mock).mockReset();
+    (completeChallengeQuizSession as jest.Mock).mockReset();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockReset();
+    (updateChallengeQuizSessionProgress as jest.Mock).mockResolvedValue(undefined);
   });
 
   it("loads note/session once and does not loop initialization calls", async () => {
@@ -163,5 +172,93 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose Difficulty (Premium)" }));
 
     expect(await screen.findByText("Difficulty Selection is a Premium feature")).toBeInTheDocument();
+  });
+
+  it("shows the first-quiz completion banner after completing the first challenge quiz", async () => {
+    window.localStorage.setItem("notelib-first-study-onboarding:user-1", JSON.stringify({ step: "study-pack-ready" }));
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: ["cells"],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: ["Concept"],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 1,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 5,
+      difficultySelectionAvailable: true,
+      selectedDifficulty: "medium",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["A", "B", "C", "D"],
+          answer: "A",
+          concept: "Concept",
+          explanation: "Explanation",
+        },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: {
+        selectedChoices: {},
+        timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000),
+      },
+    });
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 1,
+      scorePercentage: 100,
+      performanceLevel: "Excellent",
+      conceptBreakdown: [
+        {
+          concept: "Concept",
+          correctAnswers: 1,
+          totalQuestions: 1,
+          accuracyPercentage: 100,
+        },
+      ],
+      weakConcepts: ["Concept"],
+      durationSeconds: 24,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:10:00Z",
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "A" }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
+
+    expect(await screen.findByText("Great job! Keep studying and improve your weak areas.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View Weak Concepts" })).toBeInTheDocument();
   });
 });

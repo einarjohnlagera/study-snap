@@ -287,6 +287,30 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
   });
 
+  it("shows a first-study success banner after the first Study Pack is ready", async () => {
+    window.localStorage.setItem("notelib-first-study-onboarding:user-1", JSON.stringify({ step: "study-pack-ready" }));
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      productOnboardingCompletedAt: null,
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Your Study Pack is ready!")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start Challenge Quiz" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
+  });
+
   it("routes board exam note generation to quiz view after creating a Study Pack", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
