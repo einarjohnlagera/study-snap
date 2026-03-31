@@ -139,6 +139,27 @@ Roadmap decisions should reinforce this loop rather than one-time output generat
 - Email templates via Resend
 - Standardize user-facing emails around first-name personalization, consistent NoteLib branding, and current Free vs Premium plan messaging
 
+## Future Feature — Public Profiles & Community
+
+NoteLib will introduce public profiles to allow users to showcase their public notes and contributions.
+
+Planned features:
+- Public profile page (/u/{displayName})
+- Display public notes created by the user
+- Show total public notes
+- Show total copies
+- Show total views (future)
+- Show total likes (future)
+- Show top subjects
+- Allow users to share their profile
+- Official NoteLib profile for curated content
+
+Purpose:
+- Encourage knowledge sharing
+- Motivate users to create high-quality notes
+- Build a learning community around NoteLib
+- Support board exam preparation content
+
 ## Legacy planning context
 
 Older phase-by-phase roadmap details are preserved in `/legacy/ROADMAP.md`.
