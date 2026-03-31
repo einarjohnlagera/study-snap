@@ -1,4 +1,4 @@
-Hi {{name}},
+Hi {{firstName}},
 
 We noticed some topics that might need a bit more review:
 {{weakConceptList}}
@@ -6,5 +6,6 @@ We noticed some topics that might need a bit more review:
 Practice here:
 {{adaptivePracticeUrl}}
 
-Keep going,
-NoteLib
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

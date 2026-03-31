@@ -118,6 +118,7 @@ Roadmap decisions should reinforce this loop rather than one-time output generat
 
 - Reminder Scheduler (daily job)
 - Email templates via Resend
+- Standardize user-facing emails around first-name personalization, consistent NoteLib branding, and current Free vs Premium plan messaging
 
 ## Legacy planning context
 

@@ -1,10 +1,12 @@
-Hi {{name}},
+Hi {{firstName}},
 
 You started {{noteTitle}} but have not generated a Study Pack yet.
 
 Open your note here:
 {{noteUrl}}
 
-When you are ready, generate your Study Pack and keep studying.
+When you are ready, generate your Study Pack to turn it into a summary, key concepts, and quiz.
 
-NoteLib
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

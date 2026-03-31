@@ -1,8 +1,14 @@
-Hi {{name}},
+Hi {{firstName}},
 
 Thanks for your interest in NoteLib Premium.
+
+Premium adds adaptive practice, weak concept training, difficulty selection, and higher monthly limits.
 
 We're currently enabling payments. We'll let you know as soon as Premium becomes available.
 
 You can keep studying anytime from your dashboard:
 {{dashboardUrl}}
+
+— NoteLib
+Turn Notes Into Quizzes
+https://notelib.app

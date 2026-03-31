@@ -80,6 +80,7 @@ class EmailVerificationServiceTest {
         Map<String, String> templateParams = paramsCaptor.getValue();
         assertThat(templateParams.get("verification_url")).startsWith("https://app.notelib.test/verify-email?token=");
         assertThat(templateParams).containsEntry("app_name", "NoteLib");
+        assertThat(templateParams).containsEntry("firstName", "Study");
 
         ArgumentCaptor<EmailVerificationTokenEntity> tokenCaptor = ArgumentCaptor.forClass(EmailVerificationTokenEntity.class);
         verify(tokenRepository).save(tokenCaptor.capture());
@@ -244,6 +245,7 @@ class EmailVerificationServiceTest {
         ArgumentCaptor<Map<String, String>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
         verify(emailTemplateService).render(any(), paramsCaptor.capture());
         assertThat(paramsCaptor.getValue()).containsEntry("dashboard_url", "https://app.notelib.test/dashboard");
+        assertThat(paramsCaptor.getValue()).containsEntry("firstName", "Note");
     }
 
     private String hash(String rawValue) {

@@ -150,6 +150,17 @@ Core loop:
 - After a user successfully verifies their email, send a one-time welcome email.
 - The welcome email should link to `Dashboard` and explain the first-study-pack flow.
 - Welcome emails must only send once per user and should be guarded through `email_log`.
+- User-facing email templates should greet recipients with:
+  - `Hi {firstName},` when `firstName` exists
+  - `Hi there,` when it does not
+- User-facing email templates should end with the standard footer:
+  - `— NoteLib`
+  - `Turn Notes Into Quizzes`
+  - `https://notelib.app`
+- Welcome email copy must reflect the current Free vs Premium plan:
+  - Free includes `10` Study Packs/month, Quick Review, limited Challenge Quiz, and Public Library access
+  - Premium messaging highlights Adaptive Practice, Weak Concept Training, Difficulty Selection, and higher limits
+- Do not describe Challenge Quiz as Premium-only in onboarding, welcome, or reminder emails.
 
 ### Admin Dashboard Rule
 

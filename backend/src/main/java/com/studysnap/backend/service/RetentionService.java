@@ -256,7 +256,7 @@ public class RetentionService {
                     RetentionEmailType.INACTIVITY,
                     "retention-inactivity-reminder",
                     Map.of(
-                            "name", candidate.firstName(),
+                            "firstName", candidate.firstName(),
                             "resumeUrl", candidate.resumeUrl()
                     ),
                     now
@@ -276,7 +276,7 @@ public class RetentionService {
                     RetentionEmailType.WEAK_CONCEPT,
                     "retention-weak-concept-reminder",
                     Map.of(
-                            "name", candidate.firstName(),
+                            "firstName", candidate.firstName(),
                             "weakConceptList", formatWeakConcepts(candidate.weakConcepts()),
                             "adaptivePracticeUrl", candidate.adaptivePracticeUrl()
                     ),
@@ -297,7 +297,7 @@ public class RetentionService {
                     RetentionEmailType.WEEKLY_SUMMARY,
                     "retention-weekly-summary",
                     Map.of(
-                            "name", candidate.firstName(),
+                            "firstName", candidate.firstName(),
                             "studyPacksCreated", Integer.toString(candidate.studyPacksCreated()),
                             "quizzesTaken", Integer.toString(candidate.quizzesTaken()),
                             "adaptiveSessions", Integer.toString(candidate.adaptiveSessions()),

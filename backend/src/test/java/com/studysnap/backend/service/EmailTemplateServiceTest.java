@@ -18,6 +18,7 @@ class EmailTemplateServiceTest {
         EmailTemplateService.RenderedEmailTemplate rendered = service.render(
                 "verification-email",
                 Map.of(
+                        "firstName", "Note",
                         "app_name", "NoteLib",
                         "verification_url", "https://notelib.test/verify-email?token=abc",
                         "email_from", "noreply@notelib.test",
@@ -26,8 +27,26 @@ class EmailTemplateServiceTest {
         );
 
         assertThat(rendered.subject()).isEqualTo("Verify your email for NoteLib");
+        assertThat(rendered.textBody()).contains("Hi Note,");
         assertThat(rendered.htmlBody()).contains("https://notelib.test/verify-email?token=abc");
         assertThat(rendered.textBody()).contains("This verification link expires in 24 hours.");
+    }
+
+    @Test
+    void render_welcomeTemplateReflectsCurrentPlanMessaging() {
+        EmailTemplateService.RenderedEmailTemplate rendered = service.render(
+                "welcome-email",
+                Map.of(
+                        "firstName", "Note",
+                        "dashboard_url", "https://notelib.test/dashboard"
+                )
+        );
+
+        assertThat(rendered.subject()).isEqualTo("Welcome to NoteLib — Turn Notes Into Quizzes");
+        assertThat(rendered.textBody()).contains("10 Study Packs per month");
+        assertThat(rendered.textBody()).contains("Challenge Quiz (limited per month)");
+        assertThat(rendered.textBody()).contains("Difficulty Selection");
+        assertThat(rendered.textBody()).doesNotContain("Challenge Quiz (Premium — coming soon)");
     }
 
     @Test
@@ -35,6 +54,7 @@ class EmailTemplateServiceTest {
         assertThatThrownBy(() -> service.render(
                 "verification-email",
                 Map.of(
+                        "firstName", "Note",
                         "app_name", "NoteLib",
                         "verification_url", "https://notelib.test/verify-email?token=abc"
                 )

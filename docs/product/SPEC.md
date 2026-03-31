@@ -342,6 +342,11 @@ Primary routes:
 - Verification email delivery uses provider-agnostic `EmailService`
 - Transactional email content uses file-based templates
 - Retention emails use Resend-backed delivery with file-based templates and `email_log` cooldown tracking
+- User-facing email templates should use first-name personalization when available and fall back to `Hi there,`
+- User-facing email templates should share the standard footer:
+  - `— NoteLib`
+  - `Turn Notes Into Quizzes`
+  - `https://notelib.app`
 - Retention reminders include:
   - inactive-user reminder after `3` days without meaningful study activity
   - weak-concept reminder after `3` days without follow-up practice on weak Challenge Quiz concepts
@@ -418,6 +423,32 @@ Email change flow:
 - the UI should tell the user: `Please verify your new email address before it replaces your current email.`
 - after verification, `email = pendingEmail`, `pendingEmail = null`, and `emailVerifiedAt` is refreshed
 - email changes must never replace the active account email before verification
+
+### Email Templates
+
+Current user-facing template set:
+
+- verification email
+- welcome email
+- inactivity reminder
+- weak concept reminder
+- weekly summary
+- premium waitlist confirmation
+
+Welcome email requirements:
+
+- position NoteLib as `Turn Notes Into Quizzes`
+- Free plan includes:
+  - `10` Study Packs per month
+  - Quick Review
+  - Challenge Quiz with a monthly limit
+  - Public Library access
+- Premium includes:
+  - Adaptive Practice
+  - Weak Concept Training
+  - Difficulty Selection
+  - Higher monthly limits
+- welcome copy must not say Challenge Quiz is Premium-only
 
 ### Settings Preferences
 
