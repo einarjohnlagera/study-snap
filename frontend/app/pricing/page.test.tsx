@@ -28,7 +28,7 @@ describe("PricingPage", () => {
 
     expect(screen.getByText("Study smarter. Pass exams faster.")).toBeInTheDocument();
     expect(
-      screen.getByText("Turn your notes into summaries, quizzes, and reviewers in seconds."),
+      screen.getByText("Turn your notes into reviewers, practice questions, and better exam prep."),
     ).toBeInTheDocument();
     expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
     expect(screen.getByText("₱1,999/year (Save ₱989)")).toBeInTheDocument();
@@ -92,7 +92,8 @@ describe("PricingPage", () => {
   it("exports pricing metadata with canonical and social preview fields", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib Pricing — Free and Premium Plans",
-      description: "Choose between Free and Premium plans. Generate study packs, quizzes, and reviewers from your notes.",
+      description:
+        "Choose between Free and Premium plans for turning notes into reviewers, practice questions, and better exam prep.",
       alternates: {
         canonical: "https://notelib.app/pricing",
       },

@@ -59,7 +59,7 @@ Potential expansion areas:
 - deeper progress insights from quiz history
 - optional snapshot/history table if product value is proven
 
-## v0.4.0 - Personalization & UX
+## v0.4.0 - Profile-Based Experience & UX
 
 - Profile Identity Save
 - Email Change Verification

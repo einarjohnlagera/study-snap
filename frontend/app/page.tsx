@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import {
   ArrowRight,
   Brain,
-  CheckCircle2,
   FileText,
+  GraduationCap,
   ListChecks,
-  ScanText,
-  Sparkles,
+  School,
+  Stethoscope,
   Target,
-  Zap,
 } from "lucide-react";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
@@ -21,10 +20,10 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 import { buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
-  "Turn your notes into summaries, key concepts, and quizzes in seconds. Perfect for students and board exam review.";
+  "NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib — Turn Notes into Summaries, Quizzes, and Reviewers",
+  title: "NoteLib — Turn Notes Into Quizzes",
   description: landingPageDescription,
   path: "/",
 });
@@ -32,67 +31,92 @@ export const metadata: Metadata = buildPageMetadata({
 const howItWorksSteps = [
   {
     step: "Step 1",
-    title: "Create or Import Notes",
-    description: "Type, paste, or import your notes from an image or file.",
-    icon: ScanText,
+    title: "Add Notes",
+    description: "Paste notes, upload files, or scan handwritten notes.",
   },
   {
     step: "Step 2",
     title: "Generate Study Pack",
-    description: "Get summary, key concepts, and quiz instantly.",
-    icon: Sparkles,
+    description: "Get summary, key concepts, and quiz.",
   },
   {
     step: "Step 3",
-    title: "Review and Practice",
-    description: "Use Quick Review, Challenge Quiz, and Adaptive Practice.",
-    icon: Target,
+    title: "Practice",
+    description: "Take quizzes and identify weak concepts.",
+  },
+  {
+    step: "Step 4",
+    title: "Improve",
+    description: "Use weak concepts and adaptive practice to improve.",
+  },
+];
+
+const audienceCards = [
+  {
+    eyebrow: "For Students",
+    title: "Turn your notes into reviewers and quizzes to prepare for exams faster.",
+    description: "Move from class notes to reviewers, recall practice, and weaker-topic review without starting from scratch every session.",
+    icon: GraduationCap,
+  },
+  {
+    eyebrow: "For Board Exams",
+    title: "Convert reviewer notes into practice questions and identify weak areas.",
+    description: "Use reviewer notes to build practice questions, spot weak concepts, and focus review time where it matters most.",
+    icon: Stethoscope,
+  },
+  {
+    eyebrow: "For Teachers",
+    title: "Create quiz and reviewer materials from lesson notes faster.",
+    description: "Turn lesson notes into quiz drafts and reviewer material without rebuilding everything by hand.",
+    icon: School,
   },
 ];
 
 const featureCards = [
   {
     title: "Summaries",
-    description: "Understand lessons faster",
+    description: "Turn long notes into faster review material.",
     icon: FileText,
   },
   {
     title: "Key Concepts",
-    description: "Focus on important topics",
+    description: "See the ideas and terms that matter most.",
     icon: Brain,
   },
   {
-    title: "Quick Review",
-    description: "Fast reviewer before quiz",
+    title: "Practice Quiz",
+    description: "Turn notes into practice questions quickly.",
     icon: ListChecks,
   },
   {
-    title: "Challenge Quiz",
-    description: "Exam-style quiz",
-    icon: CheckCircle2,
+    title: "Weak Concept Insights",
+    description: "Spot the topics that need another review pass.",
+    icon: Target,
   },
   {
     title: "Adaptive Practice",
-    description: "Focus on weak topics",
-    icon: Zap,
+    description: "Keep practicing the concepts that still feel weak.",
+    icon: ArrowRight,
   },
 ];
 
 function HeroSection() {
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.16),_transparent_28%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.9))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.22),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.18),_transparent_28%),linear-gradient(135deg,_rgba(2,6,23,0.96),_rgba(15,23,42,0.94))] sm:p-8 lg:p-10">
-      <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+    <section className="relative overflow-hidden rounded-[2rem] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.2),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.14),_transparent_28%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.92))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.24),_transparent_35%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.16),_transparent_28%),linear-gradient(135deg,_rgba(2,6,23,0.96),_rgba(15,23,42,0.94))] sm:p-8 lg:p-10">
+      <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="space-y-5">
           <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-            <Sparkles className="h-4 w-4" />
-            AI study packs for students
+            For students, board exams, and teachers
           </div>
           <div className="space-y-3">
             <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Turn your notes into summaries, quizzes, and reviewers in seconds.
+              Turn Notes Into Quizzes
             </h1>
+            <p className="text-xl font-medium text-foreground/80">
+              Study Smarter. Not Harder.
+            </p>
             <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Study smarter with AI-powered summaries, key concepts, and practice quizzes.
+              Generate summaries, key concepts, and practice quizzes from your notes in seconds.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -106,62 +130,46 @@ function HeroSection() {
             </TrackedLink>
             <TrackedLink
               href="/demo"
-              className={buttonVariants({ variant: "outline", className: "w-full border-blue-500/30 bg-background/80 sm:w-auto" })}
+              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
               eventType="LANDING_CTA_CLICKED"
               eventMetadata={{ placement: "hero_demo", destination: "/demo" }}
             >
               Try Demo
             </TrackedLink>
           </div>
-          <div className="grid gap-3 text-sm text-foreground/75 sm:grid-cols-3">
-            <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
-              <p className="font-semibold text-foreground">Create or import notes</p>
-            </div>
-            <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
-              <p className="font-semibold text-foreground">Generate a Study Pack when you&apos;re ready</p>
-            </div>
-            <div className="rounded-2xl border border-border/80 bg-background/75 px-4 py-3">
-              <p className="font-semibold text-foreground">Review before quizzes and exams</p>
-            </div>
-          </div>
         </div>
 
         <Card className="overflow-hidden border-blue-500/20 bg-background/85 p-0 shadow-lg backdrop-blur">
-          <div className="border-b border-border bg-muted/40 px-5 py-4">
+          <div className="border-b border-border bg-muted/30 px-5 py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              From class notes to exam prep
+              NoteLib workflow
             </p>
             <p className="mt-1 text-sm text-foreground/75">
-              NoteLib turns one note into a review workflow you can actually use.
+              Turn one note into a repeatable study loop built around reviewers, quiz practice, and weak concepts.
             </p>
           </div>
-          <div className="grid gap-3 p-5">
-            <div className="rounded-2xl border border-border bg-muted/20 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Raw Notes</p>
-              <div className="mt-2 space-y-2 text-sm text-foreground/80">
-                <p>Cell structure includes the nucleus, membrane, mitochondria, and ribosomes.</p>
-                <p>Each part has a specific role in keeping the cell alive and functioning.</p>
-              </div>
+          <div className="space-y-4 p-5">
+            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Note</span>
+              <ArrowRight className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Summary</span>
+              <ArrowRight className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Key Concepts</span>
+              <ArrowRight className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Quiz</span>
             </div>
-            <div className="flex items-center justify-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                Generate Study Pack
-                <ArrowRight className="h-3.5 w-3.5" />
-              </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Weak Concepts</span>
+              <ArrowRight className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <span className="rounded-full border border-border bg-blue-500/10 px-3 py-1.5 text-blue-700 dark:text-blue-300">
+                Adaptive Practice
+              </span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Summary</p>
-                <p className="mt-2 text-sm text-foreground/80">Review the lesson quickly before class or exams.</p>
-              </div>
-              <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Key Concepts</p>
-                <p className="mt-2 text-sm text-foreground/80">Spot the terms and ideas most likely to matter.</p>
-              </div>
-              <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Quiz Practice</p>
-                <p className="mt-2 text-sm text-foreground/80">Use Quick Review, Challenge Quiz, and Adaptive Practice.</p>
-              </div>
+            <div className="rounded-2xl border border-border bg-background p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Why it works</p>
+              <p className="mt-2 text-sm text-foreground/80">
+                Most students reread notes. NoteLib helps you move into summaries, practice questions, weak concepts, and focused review faster.
+              </p>
             </div>
           </div>
         </Card>
@@ -171,49 +179,16 @@ function HeroSection() {
 }
 
 function HowItWorksSection() {
+  const flowItems = ["Notes", "Summary", "Quiz", "Weak Concepts", "Practice"];
+
   return (
     <section className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
           How It Works
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">From messy notes to a study routine in three steps</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">From notes to practice in four steps</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        {howItWorksSteps.map((item) => (
-          <Card key={item.title} className="space-y-4 p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                {item.step}
-              </span>
-              <item.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="space-y-2">
-              <CardTitle>{item.title}</CardTitle>
-              <CardDescription className="text-sm">{item.description}</CardDescription>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function StudyMethodSection() {
-  const flowItems = ["Notes", "Quiz", "Weak Areas", "Review", "Repeat"];
-
-  return (
-    <section className="space-y-5 rounded-[2rem] border border-border bg-background p-6 shadow-sm sm:p-8">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Study Method
-        </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Study Smarter for Exams</h2>
-        <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-          Most students reread notes, but exams require recall. A better method is to test yourself, find weak areas, and review those topics. NoteLib is designed around this study method.
-        </p>
-      </div>
-
       <div className="flex flex-col gap-2 rounded-2xl border border-border bg-muted/25 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
         {flowItems.map((item, index) => (
           <div key={item} className="flex items-center gap-3">
@@ -226,16 +201,45 @@ function StudyMethodSection() {
           </div>
         ))}
       </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {howItWorksSteps.map((item) => (
+          <Card key={item.title} className="space-y-3 p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              {item.step}
+            </p>
+            <div className="space-y-2">
+              <CardTitle>{item.title}</CardTitle>
+              <CardDescription className="text-sm">{item.description}</CardDescription>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
 
-      <div>
-        <TrackedLink
-          href="/learn/how-to-study-for-board-exams"
-          className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-          eventType="LANDING_CTA_CLICKED"
-          eventMetadata={{ placement: "study_method_section", destination: "/learn/how-to-study-for-board-exams" }}
-        >
-          Learn This Study Method
-        </TrackedLink>
+function AudienceSection() {
+  return (
+    <section className="space-y-5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+          Who It&apos;s For
+        </p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for real study and quiz prep workflows</h2>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {audienceCards.map((card) => (
+          <Card key={card.eyebrow} className="space-y-4 p-5 sm:p-6">
+            <card.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                {card.eyebrow}
+              </p>
+              <CardTitle className="text-xl">{card.title}</CardTitle>
+              <CardDescription className="text-sm">{card.description}</CardDescription>
+            </div>
+          </Card>
+        ))}
       </div>
     </section>
   );
@@ -246,9 +250,9 @@ function FeaturesSection() {
     <section className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-          Features
+          Features Overview
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Built for review weeks, quizzes, and exam prep</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">A study workflow built around outcomes</h2>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {featureCards.map((feature) => (
@@ -265,33 +269,7 @@ function FeaturesSection() {
   );
 }
 
-function DemoSection() {
-  return (
-    <section className="rounded-[2rem] border border-amber-500/20 bg-[linear-gradient(135deg,_rgba(254,243,199,0.55),_rgba(255,255,255,0.92))] p-6 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(120,53,15,0.32),_rgba(15,23,42,0.92))] sm:p-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-            Demo
-          </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Try a demo Study Pack now — no signup required.</h2>
-          <p className="max-w-2xl text-sm text-foreground/75 sm:text-base">
-            Explore the NoteLib workflow before creating an account. Open the demo, review the generated outputs, and see how fast note review can feel.
-          </p>
-        </div>
-        <TrackedLink
-          href="/demo"
-          className={buttonVariants({ className: "w-full sm:w-auto" })}
-          eventType="LANDING_CTA_CLICKED"
-          eventMetadata={{ placement: "demo_section", destination: "/demo" }}
-        >
-          Try Demo
-        </TrackedLink>
-      </div>
-    </section>
-  );
-}
-
-function BottomCtaSection() {
+function FinalCtaSection() {
   return (
     <section className="rounded-[2rem] border border-blue-500/20 bg-[linear-gradient(135deg,_rgba(219,234,254,0.75),_rgba(255,255,255,0.96))] p-6 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(30,64,175,0.26),_rgba(15,23,42,0.94))] sm:p-8">
       <div className="space-y-4 text-center">
@@ -299,12 +277,9 @@ function BottomCtaSection() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Start Today
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Start studying smarter today.</h2>
-          <p className="mx-auto max-w-2xl text-sm text-foreground/75 sm:text-base">
-            Turn your notes into summaries, quizzes, and reviewers in seconds.
-          </p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Start Turning Your Notes Into Quizzes Today</h2>
         </div>
-        <div className="flex flex-col justify-center gap-3 sm:flex-row">
+        <div className="flex justify-center">
           <TrackedLink
             href="/signup"
             className={buttonVariants({ className: "w-full sm:w-auto" })}
@@ -312,14 +287,6 @@ function BottomCtaSection() {
             eventMetadata={{ placement: "bottom_cta_primary", destination: "/signup" }}
           >
             Get Started Free
-          </TrackedLink>
-          <TrackedLink
-            href="/demo"
-            className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-            eventType="LANDING_CTA_CLICKED"
-            eventMetadata={{ placement: "bottom_cta_demo", destination: "/demo" }}
-          >
-            Try Demo
           </TrackedLink>
         </div>
       </div>
@@ -337,11 +304,10 @@ export default function Home() {
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
       <HowItWorksSection />
-      <StudyMethodSection />
+      <AudienceSection />
       <FeaturesSection />
       <SimplePricingSection />
-      <BottomCtaSection />
-      <DemoSection />
+      <FinalCtaSection />
       <PublicFooter />
     </main>
   );

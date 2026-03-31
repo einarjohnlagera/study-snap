@@ -53,9 +53,9 @@ export function LearnArticleLayout({ guide }: Readonly<LearnArticleLayoutProps>)
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Try NoteLib
           </p>
-          <CardTitle>Turn your notes into a study workflow you can repeat.</CardTitle>
+          <CardTitle>Turn your notes into reviewers and quizzes you can use right away.</CardTitle>
           <CardDescription>
-            Create a note, generate a Study Pack, review weak areas, and keep practicing.
+            Create a note, generate a Study Pack, review weak concepts, and keep practicing.
           </CardDescription>
         </div>
         <div>
