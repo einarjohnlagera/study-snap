@@ -669,6 +669,7 @@ export type NoteVisibility = "PRIVATE" | "PUBLIC";
 
 export type NoteListItemResponse = {
   id: string;
+  ownerUserId: string | null;
   title: string | null;
   subject: string | null;
   tags: string[];
@@ -677,6 +678,7 @@ export type NoteListItemResponse = {
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
   quizCount: number | null;
+  official: boolean;
   updatedAt: string;
 };
 

@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
@@ -239,6 +240,44 @@ class NoteServiceTest {
                 .isInstanceOf(AppException.class)
                 .extracting(error -> ((AppException) error).getCode())
                 .isEqualTo("NOTE_NOT_FOUND");
+    }
+
+    @Test
+    void listPublic_includesViewerOwnPublicNotesAndMarksOfficialOwners() {
+        UUID viewerUserId = UUID.randomUUID();
+        UUID officialOwnerUserId = UUID.randomUUID();
+        UUID viewerNoteId = UUID.randomUUID();
+        UUID officialNoteId = UUID.randomUUID();
+
+        NoteEntity viewerNote = buildNote(viewerNoteId, viewerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "viewer content");
+        viewerNote.setTitle("My public note");
+        NoteEntity officialNote = buildNote(officialNoteId, officialOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "official content");
+        officialNote.setTitle("Official note");
+
+        UserEntity viewer = new UserEntity();
+        viewer.setId(viewerUserId);
+        viewer.setRole(com.studysnap.backend.entity.UserRole.USER);
+        UserEntity officialOwner = new UserEntity();
+        officialOwner.setId(officialOwnerUserId);
+        officialOwner.setRole(com.studysnap.backend.entity.UserRole.ADMIN);
+
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(viewerNote, officialNote));
+        when(studyPackRepository.findByNoteIdIn(List.of(viewerNoteId, officialNoteId)))
+                .thenReturn(List.of());
+        when(userRepository.findAllById(List.of(viewerUserId, officialOwnerUserId)))
+                .thenReturn(List.of(viewer, officialOwner));
+
+        var response = noteService.listPublic(viewerUserId);
+
+        assertThat(response).hasSize(2);
+        assertThat(response)
+                .extracting(NoteListItemResponse::id)
+                .containsExactly(viewerNoteId.toString(), officialNoteId.toString());
+        assertThat(response.get(0).ownerUserId()).isEqualTo(viewerUserId.toString());
+        assertThat(response.get(0).official()).isFalse();
+        assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
+        assertThat(response.get(1).official()).isTrue();
     }
 
     private NoteEntity buildNote(

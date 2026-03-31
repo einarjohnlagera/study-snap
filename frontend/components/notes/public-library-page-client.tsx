@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
+import { getAuthUser } from "@/lib/auth";
 import {
   listPublicNotes,
   type NoteListItemResponse,
@@ -36,8 +37,31 @@ function toPreview(contentPreview: string, maxLength = 160) {
   return `${clean.slice(0, maxLength - 3)}...`;
 }
 
+function resolveAuthorBadge(
+  item: Pick<NoteListItemResponse, "ownerUserId" | "official">,
+  currentUserId: string | null,
+): { label: "By You" | "NoteLib" | "Community"; className: string } {
+  if (currentUserId && item.ownerUserId === currentUserId) {
+    return {
+      label: "By You",
+      className: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    };
+  }
+  if (item.official) {
+    return {
+      label: "NoteLib",
+      className: "border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    };
+  }
+  return {
+    label: "Community",
+    className: "border-border bg-muted/40 text-foreground/70",
+  };
+}
+
 export function PublicLibraryPageClient() {
   const router = useRouter();
+  const currentUserId = getAuthUser()?.id ?? null;
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
@@ -151,7 +175,7 @@ export function PublicLibraryPageClient() {
       <PageHeader
         eyebrow="LIBRARY"
         title="Public Library"
-        description="Explore public notes shared by other learners."
+        description="Explore public notes from you, the community, and official NoteLib examples."
       />
 
       {loading ? (
@@ -322,6 +346,7 @@ export function PublicLibraryPageClient() {
                 const itemTags = normalizeTags(item.tags);
                 const subject = normalizeSubject(item.subject);
                 const subjectLabel = subject ?? "Uncategorized";
+                const authorBadge = resolveAuthorBadge(item, currentUserId);
                 const subjectClassName = subject
                   ? "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300"
                   : "border-border bg-muted/40 text-foreground/65";
@@ -341,11 +366,18 @@ export function PublicLibraryPageClient() {
                     className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
                   >
                     <div className="min-w-0 space-y-2">
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${subjectClassName}`}
-                      >
-                        {subjectLabel}
-                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${subjectClassName}`}
+                        >
+                          {subjectLabel}
+                        </span>
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
+                        >
+                          {authorBadge.label}
+                        </span>
+                      </div>
                       <h3 className="text-base font-semibold sm:text-lg">{item.title?.trim() || "Untitled note"}</h3>
                       <p className="text-sm leading-relaxed text-foreground/75">{toPreview(item.contentPreview)}</p>
                     </div>

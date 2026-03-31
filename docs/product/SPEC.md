@@ -204,7 +204,7 @@ Users can:
 
 ### Public Library
 
-Public Library lists notes where `visibility=PUBLIC` and `owner != current user`.
+Public Library lists notes where `visibility=PUBLIC`, including the current user's own public notes.
 
 Users can:
 
@@ -212,6 +212,10 @@ Users can:
 - filter by search, subject, and tags
 - open read-only public note detail
 - copy a public note into My Library (`Copy to My Library`)
+- see source badges on cards:
+  - `By You` for their own public notes
+  - `NoteLib` for official/admin-owned public notes
+  - `Community` for other users' public notes
 
 Dashboard guidance rules:
 

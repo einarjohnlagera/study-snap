@@ -203,7 +203,11 @@ Core loop:
 
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
-- Public Library should exclude the current user's own notes.
+- Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
+- Public Library cards should label note source as:
+  - `By You` for the current user's own public notes
+  - `NoteLib` for official/admin-owned public notes
+  - `Community` for other public notes
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.

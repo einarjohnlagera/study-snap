@@ -40,6 +40,7 @@ Scope priorities:
 - OCR upload gating for unverified users on Create/Edit Note
 - My Library continuity (browse, filter, sort, revisit)
 - Public Library continuity (browse public notes and copy into My Library)
+- Public Library community polish (include your own public notes and distinguish NoteLib/community authors)
 - sharing and remixing continuity (`/p/{token}`, copy to library without LLM call)
 - note-centric ownership across generated content and quiz sessions (`noteId`)
 

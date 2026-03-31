@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
+import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.StudyPackMeta;
@@ -184,5 +185,33 @@ class NoteControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(noteService).getPublicBySeoPath("science", "cell-structure", null);
+    }
+
+    @Test
+    void listPublic_delegatesViewerIdentityWithoutExcludingOwnNotes() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        List<NoteListItemResponse> expected = List.of(
+                new NoteListItemResponse(
+                        UUID.randomUUID().toString(),
+                        userId.toString(),
+                        "My public note",
+                        "Biology",
+                        List.of("cells"),
+                        "preview",
+                        "PUBLIC",
+                        null,
+                        "STUDY_PACK_READY",
+                        4,
+                        false,
+                        OffsetDateTime.now()
+                )
+        );
+        when(noteService.listPublic(userId)).thenReturn(expected);
+
+        List<NoteListItemResponse> response = noteController.listPublic(user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteService).listPublic(userId);
     }
 }
