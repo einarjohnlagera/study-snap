@@ -5,9 +5,7 @@ import { getPublicSubjectEntries, getServerPublicNotes } from "@/lib/server-publ
 import { absoluteUrl } from "@/lib/site-metadata";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  let publicNotes: NoteListItemResponse[] | null extends ((value: infer V, ...args: infer _) => any) ? Awaited<V> : never extends (object & {
-    then(onfulfilled: infer F, ...args: infer _): any
-  }) ? (F extends ((value: infer V, ...args: infer _) => any) ? Awaited<V> : never) : (null extends ((value: infer V, ...args: infer _) => any) ? Awaited<V> : never);
+  let publicNotes: any[];
   try {
     publicNotes = await getServerPublicNotes();
   } catch {
