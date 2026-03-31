@@ -26,6 +26,9 @@ describe("sitemap metadata route", () => {
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 5,
+        authorDisplayName: "Study Buddy",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
         updatedAt: "2026-03-24T08:30:00Z",
       },
       {
@@ -38,57 +41,77 @@ describe("sitemap metadata route", () => {
         studyPackId: "pack-2",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 5,
+        authorDisplayName: "Study Buddy",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
         updatedAt: "2026-03-22T08:30:00Z",
       },
     ]);
 
     const entries = await sitemap();
 
-    expect(entries).toEqual([
+    expect(entries).toEqual(expect.arrayContaining([
       {
-        url: "https://www.notelib.app/",
+        url: "https://notelib.app/",
         changeFrequency: "weekly",
         priority: 1,
       },
       {
-        url: "https://www.notelib.app/privacy",
+        url: "https://notelib.app/pricing",
+        changeFrequency: "weekly",
+        priority: 0.9,
+      },
+      {
+        url: "https://notelib.app/learn",
+        changeFrequency: "weekly",
+        priority: 0.9,
+      },
+      {
+        url: "https://notelib.app/privacy",
         changeFrequency: "monthly",
         priority: 0.3,
       },
       {
-        url: "https://www.notelib.app/terms",
+        url: "https://notelib.app/terms",
         changeFrequency: "monthly",
         priority: 0.3,
       },
       {
-        url: "https://www.notelib.app/public/library",
+        url: "https://notelib.app/public/library",
         changeFrequency: "daily",
         priority: 0.9,
       },
       {
-        url: "https://www.notelib.app/public/library/accounting",
+        url: "https://notelib.app/public/library/accounting",
         lastModified: "2026-03-22T08:30:00Z",
         changeFrequency: "daily",
         priority: 0.8,
       },
       {
-        url: "https://www.notelib.app/public/library/science",
+        url: "https://notelib.app/public/library/science",
         lastModified: "2026-03-24T08:30:00Z",
         changeFrequency: "daily",
         priority: 0.8,
       },
       {
-        url: "https://www.notelib.app/public/library/accounting/journal-entries",
+        url: "https://notelib.app/public/library/accounting/journal-entries",
         lastModified: "2026-03-22T08:30:00Z",
         changeFrequency: "monthly",
         priority: 0.7,
       },
       {
-        url: "https://www.notelib.app/public/library/science/cell-structure",
+        url: "https://notelib.app/public/library/science/cell-structure",
         lastModified: "2026-03-24T08:30:00Z",
         changeFrequency: "monthly",
         priority: 0.7,
       },
-    ]);
+    ]));
+    expect(entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        url: expect.stringMatching(/^https:\/\/notelib\.app\/learn\//),
+        changeFrequency: "monthly",
+        priority: 0.8,
+      }),
+    ]));
   });
 });

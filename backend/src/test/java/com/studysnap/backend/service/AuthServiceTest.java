@@ -14,6 +14,7 @@ import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
 import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
@@ -341,14 +342,14 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateUserProfile(
                 userId,
-                new UpdateUserProfileRequest("New", "Person", "current@example.com")
+                new UpdateUserProfileRequest("New", "Person", "Study Buddy", "current@example.com")
         );
 
         assertThat(response.firstName()).isEqualTo("New");
         assertThat(response.lastName()).isEqualTo("Person");
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isNull();
-        assertThat(user.getDisplayName()).isEqualTo("New Person");
+        assertThat(user.getDisplayName()).isEqualTo("Study Buddy");
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
     }
 
@@ -380,13 +381,38 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateUserProfile(
                 userId,
-                new UpdateUserProfileRequest("Note", "User", "updated@example.com")
+                new UpdateUserProfileRequest("Note", "User", "Note Hero", "updated@example.com")
         );
 
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isEqualTo("updated@example.com");
         assertThat(user.getPendingEmail()).isEqualTo("updated@example.com");
+        assertThat(user.getDisplayName()).isEqualTo("Note Hero");
         verify(emailVerificationService).sendVerificationEmail(user, false);
+    }
+
+    @Test
+    void updateUserProfile_rejectsReservedDisplayName() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setLastName("User");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.updateUserProfile(
+                userId,
+                new UpdateUserProfileRequest("Note", "User", "NoteLib Support", "current@example.com")
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(Throwable::getMessage)
+                .isEqualTo("This display name is reserved. Please choose another name.");
     }
 
     @Test

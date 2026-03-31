@@ -35,8 +35,9 @@ Routes:
 - `/notes/{id}/edit` Edit Note
 - `/dashboard` guidance + library entry
 - `/library` My Library (owned notes)
-- `/library/public` Public Library (public notes from other users)
+- `/library/public` Public Library (public notes from you, the community, and official NoteLib content)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
+- `/public/library/{subject}` public subject listing
 - `/public/library/{subject}/{slug}` public read-only note detail
 - `/settings` plan/billing and account controls
 - `/profile` account profile
@@ -99,10 +100,25 @@ Versioning model:
 ## High-Level Data Ownership
 
 - `notes` stores user-authored fields (`title`, `subject`, `content`, `tags`, ownership metadata, state, visibility)
+- `notes.subject` remains the persisted source of truth for subject values in v0.4.0
 - generated fields (`summary`, `key_concepts`, `quiz`) are linked to the same Note
 - review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context via `noteId`
 - share links reference generated Study Pack view data
 - copy creates a new Draft Note identity with user-authored fields only
+
+## Public Author Identity
+
+- `users.display_name` is the persisted public author field.
+- Public note responses should include:
+  - `authorDisplayName`
+  - `isOfficialAuthor`
+  - `isCurrentUser`
+- Author resolution rules:
+  - official account email -> `NoteLib`
+  - else `display_name` when present
+  - else `first_name`
+- The official NoteLib badge is derived on the backend from the configured official account email, not from frontend heuristics.
+- Reserved display-name guardrails are enforced in backend profile/signup flows before `users.display_name` is saved.
 
 ## Profile-Based UX Layer
 
@@ -392,13 +408,19 @@ Public Library is the discovery surface for notes where `visibility=PUBLIC`.
 Required backend behavior:
 
 - list owned notes for My Library
-- list public notes excluding owner notes for Public Library
+- list all public notes for Public Library, including the viewer's own public notes
+- support `/public/library/{subject}` subject listing pages from the same public-note data set
 - include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
+- include author-source metadata for Public Library card labeling (`By You`, `By NoteLib`, `By {displayName}`) plus `Official` badge state
 - support public read-only note detail payload for copy flow
 
 Filtering model:
 
-- search + subject + tag filtering remains frontend-side for loaded items
+- search + subject + tag filtering remains frontend-side for loaded note items
+- distinct subject suggestions are backend-driven from persisted `notes.subject` values
+- `GET /api/subjects?scope=mine` returns distinct subjects from the authenticated user's notes
+- `GET /api/subjects?scope=public` returns distinct subjects from public notes only
+- the current system intentionally does not use a normalized `subjects` table yet
 
 ## Share and Public-Copy Architecture
 

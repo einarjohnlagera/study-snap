@@ -1,0 +1,48 @@
+export type PublicNoteAuthorMeta = {
+  label: string;
+  showOfficialBadge: boolean;
+};
+
+function normalizeComparableId(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized.toLowerCase() : null;
+}
+
+export function isPublicNoteOwner(params: {
+  ownerUserId: string | null | undefined;
+  currentUserId: string | null | undefined;
+}): boolean {
+  const ownerUserId = normalizeComparableId(params.ownerUserId);
+  const currentUserId = normalizeComparableId(params.currentUserId);
+  return ownerUserId !== null && currentUserId !== null && ownerUserId === currentUserId;
+}
+
+export function resolvePublicNoteAuthorMeta(params: {
+  ownerUserId: string | null | undefined;
+  currentUserId: string | null | undefined;
+  authorDisplayName: string | null | undefined;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
+}): PublicNoteAuthorMeta {
+  const { ownerUserId, currentUserId, authorDisplayName, isOfficialAuthor, isCurrentUser } = params;
+
+  if (isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId })) {
+    return {
+      label: "By You",
+      showOfficialBadge: false,
+    };
+  }
+
+  if (isOfficialAuthor) {
+    return {
+      label: "By NoteLib",
+      showOfficialBadge: true,
+    };
+  }
+
+  const normalizedAuthorDisplayName = authorDisplayName?.trim();
+  return {
+    label: normalizedAuthorDisplayName ? `By ${normalizedAuthorDisplayName}` : "By Community",
+    showOfficialBadge: false,
+  };
+}

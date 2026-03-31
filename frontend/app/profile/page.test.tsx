@@ -77,6 +77,9 @@ describe("Profile page", () => {
     fireEvent.change(screen.getByLabelText("Last Name"), {
       target: { value: "Person" },
     });
+    fireEvent.change(screen.getByLabelText("Display Name"), {
+      target: { value: "Study Buddy" },
+    });
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "[email protected]" },
     });
@@ -86,6 +89,7 @@ describe("Profile page", () => {
       expect(updateUserProfile).toHaveBeenCalledWith({
         firstName: "Updated",
         lastName: "Person",
+        displayName: "Study Buddy",
         email: "[email protected]",
       });
     });
@@ -103,6 +107,9 @@ describe("Profile page", () => {
 
     render(<ProfilePage />);
 
+    fireEvent.change(await screen.findByLabelText("Display Name"), {
+      target: { value: "Note Hero" },
+    });
     fireEvent.change(await screen.findByLabelText("Email"), {
       target: { value: "[email protected]" },
     });

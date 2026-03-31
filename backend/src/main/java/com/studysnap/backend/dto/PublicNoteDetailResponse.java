@@ -5,6 +5,7 @@ import java.util.List;
 
 public record PublicNoteDetailResponse(
         String id,
+        String ownerUserId,
         String title,
         String subject,
         List<String> tags,
@@ -14,6 +15,8 @@ public record PublicNoteDetailResponse(
         List<String> keyConcepts,
         List<QuizItem> quiz,
         String authorDisplayName,
+        boolean isOfficialAuthor,
+        boolean isCurrentUser,
         OffsetDateTime updatedAt
 ) {
 }

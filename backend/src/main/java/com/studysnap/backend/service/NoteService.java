@@ -27,7 +27,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -40,6 +42,8 @@ public class NoteService {
     private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
     private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
+    private static final String OFFICIAL_AUTHOR_DISPLAY_NAME = "NoteLib";
+    private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
 
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
@@ -222,16 +226,23 @@ public class NoteService {
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
         List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
-        return toListItems(notes);
+        return toListItems(notes, ownerUserId);
     }
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
-        List<NoteEntity> notes = noteRepository.findByVisibilityExcludingOwnerOrderByUpdatedAtDesc(
-                NoteVisibility.PUBLIC,
-                viewerUserId
-        );
-        return toListItems(notes);
+        List<NoteEntity> notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+        return toListItems(notes, viewerUserId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> listMineSubjects(UUID ownerUserId) {
+        return normalizeSubjects(noteRepository.findSubjectValuesByOwnerUserId(ownerUserId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> listPublicSubjects() {
+        return normalizeSubjects(noteRepository.findSubjectValuesByVisibility(NoteVisibility.PUBLIC));
     }
 
     @Transactional(readOnly = true)
@@ -249,7 +260,7 @@ public class NoteService {
                 "pathType", "id",
                 "subject", entity.getSubject()
         ));
-        return mapToPublicDetail(entity, linkedStudyPack);
+        return mapToPublicDetail(entity, linkedStudyPack, viewerUserId);
     }
 
     @Transactional(readOnly = true)
@@ -275,24 +286,37 @@ public class NoteService {
         analyticsMetadata.put("subjectSlug", normalizedSubjectSlug);
         analyticsMetadata.put("titleSlug", normalizedTitleSlug);
         analyticsService.trackEvent(viewerUserId, AnalyticsEventType.PUBLIC_NOTE_VIEWED, matched.getId(), analyticsMetadata);
-        return mapToPublicDetail(matched, linkedStudyPack);
+        return mapToPublicDetail(matched, linkedStudyPack, viewerUserId);
     }
 
-    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes) {
+    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes, UUID viewerUserId) {
         if (notes.isEmpty()) {
             return List.of();
         }
 
         List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
+        List<UUID> ownerIds = notes.stream()
+                .map(NoteEntity::getOwnerUserId)
+                .distinct()
+                .toList();
         Map<UUID, StudyPackEntity> studyPackByNoteId = new HashMap<>();
         for (StudyPackEntity studyPack : studyPackRepository.findByNoteIdIn(noteIds)) {
             if (studyPack.getNoteId() != null) {
                 studyPackByNoteId.put(studyPack.getNoteId(), studyPack);
             }
         }
+        Map<UUID, UserEntity> ownerById = new HashMap<>();
+        for (UserEntity owner : userRepository.findAllById(ownerIds)) {
+            ownerById.put(owner.getId(), owner);
+        }
 
         return notes.stream()
-                .map(note -> mapToListItemResponse(note, studyPackByNoteId.get(note.getId())))
+                .map(note -> mapToListItemResponse(
+                        note,
+                        studyPackByNoteId.get(note.getId()),
+                        ownerById.get(note.getOwnerUserId()),
+                        viewerUserId
+                ))
                 .toList();
     }
 
@@ -372,9 +396,16 @@ public class NoteService {
         );
     }
 
-    private NoteListItemResponse mapToListItemResponse(NoteEntity note, StudyPackEntity studyPack) {
+    private NoteListItemResponse mapToListItemResponse(
+            NoteEntity note,
+            StudyPackEntity studyPack,
+            UserEntity owner,
+            UUID viewerUserId
+    ) {
+        boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new NoteListItemResponse(
                 note.getId().toString(),
+                note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
@@ -383,16 +414,19 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(note, studyPack),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
+                resolvePublicAuthorName(owner),
+                isOfficialAuthor,
+                isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getUpdatedAt()
         );
     }
 
-    private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack) {
-        String authorDisplayName = userRepository.findById(note.getOwnerUserId())
-                .map(this::resolvePublicAuthorName)
-                .orElse(DEFAULT_AUTHOR_NAME);
+    private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack, UUID viewerUserId) {
+        UserEntity owner = userRepository.findById(note.getOwnerUserId()).orElse(null);
+        boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new PublicNoteDetailResponse(
                 note.getId().toString(),
+                note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
@@ -401,12 +435,20 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
-                authorDisplayName,
+                resolvePublicAuthorName(owner),
+                isOfficialAuthor,
+                isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getUpdatedAt()
         );
     }
 
     private String resolvePublicAuthorName(UserEntity user) {
+        if (isOfficialAuthor(user)) {
+            return OFFICIAL_AUTHOR_DISPLAY_NAME;
+        }
+        if (user == null) {
+            return DEFAULT_AUTHOR_NAME;
+        }
         String displayName = normalizeOptionalText(user.getDisplayName());
         if (displayName != null) {
             return displayName;
@@ -416,6 +458,15 @@ public class NoteService {
             return firstName;
         }
         return DEFAULT_AUTHOR_NAME;
+    }
+
+    private boolean isOfficialAuthor(UserEntity user) {
+        String email = user == null ? null : normalizeOptionalText(user.getEmail());
+        return OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(email);
+    }
+
+    private boolean isCurrentUser(UUID ownerUserId, UUID viewerUserId) {
+        return ownerUserId != null && ownerUserId.equals(viewerUserId);
     }
 
     private String resolveStudyPackStatus(NoteEntity note, StudyPackEntity studyPack) {
@@ -431,6 +482,16 @@ public class NoteService {
 
     private StudyPackEntity findLinkedStudyPack(UUID noteId) {
         return studyPackRepository.findByNoteId(noteId).orElse(null);
+    }
+
+    private List<String> normalizeSubjects(List<String> rawSubjects) {
+        Map<String, String> normalized = new LinkedHashMap<>();
+        rawSubjects.stream()
+                .map(this::normalizeOptionalText)
+                .filter(Objects::nonNull)
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .forEach(subject -> normalized.putIfAbsent(subject.toLowerCase(Locale.ROOT), subject));
+        return List.copyOf(normalized.values());
     }
 
     private NoteVisibility parseVisibility(String visibilityRaw) {

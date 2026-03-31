@@ -191,7 +191,7 @@ Users can:
 - search by title/tags/content preview
 - filter by subject (single select, `All subjects` default)
 - filter by tags (multi-select OR matching)
-- combine search + subject + tag filters (frontend-only on loaded items)
+- combine search + subject + tag filters on the loaded note list
 - sort by recent/title/recently reviewed
 - open by clicking card/title
 - start Quick Review for Study Pack Ready notes
@@ -204,7 +204,7 @@ Users can:
 
 ### Public Library
 
-Public Library lists notes where `visibility=PUBLIC` and `owner != current user`.
+Public Library lists notes where `visibility=PUBLIC`, including the current user's own public notes.
 
 Users can:
 
@@ -212,6 +212,73 @@ Users can:
 - filter by search, subject, and tags
 - open read-only public note detail
 - copy a public note into My Library (`Copy to My Library`)
+- see source badges on cards:
+  - `By You` for their own public notes
+  - `By NoteLib` plus an `Official` badge for the official NoteLib account
+  - `By {displayName}` for other users' public notes
+- Public Library author labels are viewer-relative:
+  - if `note.ownerId == currentUser.id` -> `By You`
+  - else if the note author is the official NoteLib account -> `By NoteLib` with `Official`
+  - else -> `By {displayName}`
+- Public note detail should change the primary action by ownership:
+  - owner -> `Open Note`
+  - non-owner -> `Make a Copy`
+- Public note detail header should show `Subject • Author` using the same viewer-relative author label.
+- Public subject pages should reuse the existing `/public/library/{subject}` route and show:
+  - subject heading
+  - descriptive subtitle
+  - list of public notes for that subject
+  - empty state when a known subject has no notes
+- Subject pages should reuse the same Subject badge styling as Public Library cards and note detail headers.
+- Public note detail is read/copy/share only and should not show edit, delete, or study actions.
+- Owner actions on public note detail may include:
+  - `Open Note`
+  - `Share`
+- Non-owner actions on public note detail may include:
+  - `Make a Copy`
+  - `Share`
+- Private Note Detail owns:
+  - `Edit`
+  - `Delete`
+  - `Generate Study Pack`
+- Study surfaces own:
+  - `Quick Review`
+  - `Challenge Quiz`
+  - `Adaptive Practice`
+
+### Display Name And Official Badge
+
+- `users.display_name` is the public author name field.
+- `Profile -> Identity` owns:
+  - `firstName`
+  - `lastName`
+  - `displayName`
+  - `email`
+- If `displayName` is blank, public author fallback is `firstName`.
+- Public pages must never show the user's email address.
+- Reserved display names are rejected server-side. The following are reserved case-insensitively:
+  - `notelib`
+  - `admin`
+  - `support`
+  - `official`
+  - `moderator`
+  - `staff`
+  - `team`
+- Any display name containing `notelib` is also rejected.
+- Validation message: `This display name is reserved. Please choose another name.`
+- The official NoteLib account is backend-driven from the configured official email and renders as:
+  - author label -> `By NoteLib`
+  - badge -> `Official`
+- Subject display should stay consistent across My Library, Public Library, Private Note Detail, and Public Note Detail:
+  - render subject as a reusable badge, not `Subject: ...` text
+  - place subject on the same line as the author label on note headers
+- Subject persistence and suggestions:
+  - `notes.subject` remains the persisted source of truth
+  - subject suggestions come from `GET /api/subjects` using distinct existing note subject values
+  - My Library and Note Editor use the authenticated `mine` subject scope
+  - Public Library uses the `public` subject scope
+  - users can still type a custom subject and save it directly into `notes.subject`
+  - no normalized `subjects` table is required for the current version
 
 Dashboard guidance rules:
 
@@ -283,6 +350,7 @@ Primary routes:
 - `/library` (My Library)
 - `/library/public` (Public Library)
 - `/notes/{id}` (Note Detail)
+- `/public/library/{subject}` (Public Subject Listing, SEO)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only, SEO)
 
 ### Quick Review

@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
+import { SubjectCombobox } from "@/components/notes/subject-combobox";
+import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -29,6 +31,7 @@ import {
   getNote,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
+  listSubjects,
   trackAnalyticsEvent,
   startQuickReviewSession,
   updateNote,
@@ -126,6 +129,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">("STUDENT");
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
 
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
@@ -209,6 +213,26 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     globalThis.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
       globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    void listSubjects("mine")
+      .then((subjects) => {
+        if (active) {
+          setSubjectSuggestions(subjects);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSubjectSuggestions([]);
+        }
+      });
+
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -305,7 +329,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const isDraft = note?.studyPackStatus !== "STUDY_PACK_READY";
   const title = note?.title?.trim() || "Untitled note";
-  const subject = note?.subject?.trim() || "No subject";
   const tags = note?.tags ?? [];
   const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
   const isPublic = visibility === "PUBLIC";
@@ -829,13 +852,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <label htmlFor="note-subject-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
                     Subject
                   </label>
-                  <input
+                  <SubjectCombobox
                     id="note-subject-inline"
-                    type="text"
                     value={metadataDraft.subject}
-                    onChange={(event) => setMetadataDraft((previous) => ({ ...previous, subject: event.target.value }))}
-                    className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                    placeholder="No subject"
+                    suggestions={subjectSuggestions}
+                    onChange={(value) => setMetadataDraft((previous) => ({ ...previous, subject: value }))}
+                    placeholder="Choose or type a subject"
                   />
                 </div>
                 <div className="space-y-2">
@@ -885,7 +907,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </div>
             ) : (
               <>
-                <p className="text-sm text-foreground/75">{subject}</p>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
+                  <SubjectBadge subject={note?.subject} />
+                  <span className="text-foreground/45">•</span>
+                  <span>By You</span>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {tags.length > 0 ? tags.map((tag, index) => (
                     <span key={`${tag}-${index}`} className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75">

@@ -6,18 +6,18 @@ import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
+import { getAuthUser } from "@/lib/auth";
 import {
+  listSubjects,
   listPublicNotes,
   type NoteListItemResponse,
 } from "@/lib/api";
+import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
+import { normalizeSubject } from "@/lib/subjects";
+import { SubjectBadge } from "./subject-badge";
 
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
-
-function normalizeSubject(subject: string | null | undefined): string | null {
-  const value = subject?.trim();
-  return value && value.length > 0 ? value : null;
-}
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -36,14 +36,49 @@ function toPreview(contentPreview: string, maxLength = 160) {
   return `${clean.slice(0, maxLength - 3)}...`;
 }
 
+function resolveAuthorBadge(
+  item: Pick<NoteListItemResponse, "ownerUserId" | "authorDisplayName" | "isCurrentUser" | "isOfficialAuthor">,
+  currentUserId: string | null,
+): { label: string; className: string; showOfficialBadge: boolean } {
+  const authorMeta = resolvePublicNoteAuthorMeta({
+    ownerUserId: item.ownerUserId,
+    currentUserId,
+    authorDisplayName: item.authorDisplayName,
+    isCurrentUser: item.isCurrentUser,
+    isOfficialAuthor: item.isOfficialAuthor,
+  });
+
+  if (authorMeta.label === "By You") {
+    return {
+      label: authorMeta.label,
+      className: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      showOfficialBadge: false,
+    };
+  }
+  if (authorMeta.showOfficialBadge) {
+    return {
+      label: authorMeta.label,
+      className: "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+      showOfficialBadge: true,
+    };
+  }
+  return {
+    label: authorMeta.label,
+    className: "border-border bg-muted/40 text-foreground/70",
+    showOfficialBadge: false,
+  };
+}
+
 export function PublicLibraryPageClient() {
   const router = useRouter();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,8 +86,15 @@ export function PublicLibraryPageClient() {
     setLoading(true);
     setError(null);
     try {
-      const response = await listPublicNotes();
-      setItems(response);
+      const [notesResult, subjectsResult] = await Promise.allSettled([
+        listPublicNotes(),
+        listSubjects("public"),
+      ]);
+      if (notesResult.status !== "fulfilled") {
+        throw notesResult.reason;
+      }
+      setItems(notesResult.value);
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "Could not load public notes.";
       setError(message);
@@ -65,7 +107,19 @@ export function PublicLibraryPageClient() {
     void loadNotes();
   }, [loadNotes]);
 
-  const availableSubjects = useMemo(() => {
+  useEffect(() => {
+    const syncAuth = () => {
+      setCurrentUserId(getAuthUser()?.id ?? null);
+    };
+
+    syncAuth();
+    globalThis.addEventListener("studysnap-auth-change", syncAuth);
+    return () => {
+      globalThis.removeEventListener("studysnap-auth-change", syncAuth);
+    };
+  }, []);
+
+  const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();
     items.forEach((item) => {
       const subject = normalizeSubject(item.subject);
@@ -75,6 +129,7 @@ export function PublicLibraryPageClient() {
     });
     return Array.from(subjectSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
+  const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
@@ -151,7 +206,7 @@ export function PublicLibraryPageClient() {
       <PageHeader
         eyebrow="LIBRARY"
         title="Public Library"
-        description="Explore public notes shared by other learners."
+        description="Explore public notes from you, the community, and official NoteLib examples."
       />
 
       {loading ? (
@@ -320,11 +375,7 @@ export function PublicLibraryPageClient() {
             <div className="grid gap-4 md:grid-cols-2">
               {filteredItems.map((item) => {
                 const itemTags = normalizeTags(item.tags);
-                const subject = normalizeSubject(item.subject);
-                const subjectLabel = subject ?? "Uncategorized";
-                const subjectClassName = subject
-                  ? "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                  : "border-border bg-muted/40 text-foreground/65";
+                const authorBadge = resolveAuthorBadge(item, currentUserId);
 
                 return (
                   <Card
@@ -341,11 +392,19 @@ export function PublicLibraryPageClient() {
                     className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
                   >
                     <div className="min-w-0 space-y-2">
-                      <span
-                        className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${subjectClassName}`}
-                      >
-                        {subjectLabel}
-                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <SubjectBadge subject={item.subject} />
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
+                        >
+                          {authorBadge.label}
+                        </span>
+                        {authorBadge.showOfficialBadge ? (
+                          <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                            Official
+                          </span>
+                        ) : null}
+                      </div>
                       <h3 className="text-base font-semibold sm:text-lg">{item.title?.trim() || "Untitled note"}</h3>
                       <p className="text-sm leading-relaxed text-foreground/75">{toPreview(item.contentPreview)}</p>
                     </div>

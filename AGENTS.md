@@ -203,8 +203,42 @@ Core loop:
 
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
-- Public Library should exclude the current user's own notes.
+- Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
+- Public Library cards should label note source as:
+  - `By You` for the current user's own public notes
+  - `By NoteLib` plus `Official` badge for the official NoteLib account
+  - `By {displayName}` for other public notes
+- Public author labels are viewer-relative:
+  - owner viewing own public note -> `By You`
+  - official NoteLib account -> `By NoteLib` with `Official`
+  - all other public notes -> `By {displayName}`
+- `users.display_name` is the public author field. Never show public author emails.
+- Reserved display names must be blocked server-side. Reject exact matches for:
+  - `notelib`
+  - `admin`
+  - `support`
+  - `official`
+  - `moderator`
+  - `staff`
+  - `team`
+- Also reject any display name containing `notelib` and return:
+  - `This display name is reserved. Please choose another name.`
+- Public note detail should switch its primary CTA by ownership:
+  - owner -> `Open Note`
+  - non-owner -> `Make a Copy`
+- Public note detail header should show `Subject • Author` using the same viewer-relative label logic as library cards.
+- Public note detail is read/copy/share only:
+  - owner -> `Open Note`, `Share`
+  - non-owner -> `Make a Copy`, `Share`
+- Public note detail should not expose edit, delete, generation, or study actions; generation remains a Note Editor responsibility and quizzes remain on study surfaces.
+- Subject UI rules:
+  - render subjects as badges across library cards and note headers
+  - note headers should place `Subject Badge • Author`
+  - `notes.subject` remains the persisted source of truth; do not add a subjects table unless explicitly requested
+  - note editor and library subject filters should use backend-driven distinct subject suggestions from persisted notes
+  - subject inputs must still accept custom typed values and save them directly into `notes.subject`
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
+- Public subject listing pages use `/public/library/{subject}` and must reuse the existing route/data helpers rather than introducing parallel subject-page implementations.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.
 - Public landing page should emit JSON-LD `WebSite` schema.

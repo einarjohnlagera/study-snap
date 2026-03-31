@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
@@ -119,7 +120,9 @@ class NoteServiceTest {
 
         UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", List.of("tag"), "edited content");
 
-        assertThatThrownBy(() -> noteService.update(noteId.toString(), request, ownerUserId))
+
+        String id = noteId.toString();
+        assertThatThrownBy(() -> noteService.update(id, request, ownerUserId))
                 .isInstanceOf(AppException.class)
                 .extracting(error -> ((AppException) error).getCode())
                 .isEqualTo("NOTE_CONTENT_LOCKED");
@@ -216,6 +219,7 @@ class NoteServiceTest {
         owner.setId(ownerUserId);
         owner.setDisplayName("historyhero");
         owner.setFirstName("History");
+        owner.setEmail("history@example.com");
 
         when(noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, "history"))
                 .thenReturn(List.of(publicNote));
@@ -225,7 +229,10 @@ class NoteServiceTest {
         var response = noteService.getPublicBySeoPath("history", "world-war-1-causes", null);
 
         assertThat(response.id()).isEqualTo(noteId.toString());
+        assertThat(response.ownerUserId()).isEqualTo(ownerUserId.toString());
         assertThat(response.authorDisplayName()).isEqualTo("historyhero");
+        assertThat(response.isOfficialAuthor()).isFalse();
+        assertThat(response.isCurrentUser()).isFalse();
         assertThat(response.summary()).isEqualTo("Summary");
         assertThat(response.keyConcepts()).containsExactly("Alliance systems");
     }
@@ -239,6 +246,71 @@ class NoteServiceTest {
                 .isInstanceOf(AppException.class)
                 .extracting(error -> ((AppException) error).getCode())
                 .isEqualTo("NOTE_NOT_FOUND");
+    }
+
+    @Test
+    void listPublic_includesViewerOwnPublicNotesAndMarksOfficialOwners() {
+        UUID viewerUserId = UUID.randomUUID();
+        UUID officialOwnerUserId = UUID.randomUUID();
+        UUID viewerNoteId = UUID.randomUUID();
+        UUID officialNoteId = UUID.randomUUID();
+
+        NoteEntity viewerNote = buildNote(viewerNoteId, viewerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "viewer content");
+        viewerNote.setTitle("My public note");
+        NoteEntity officialNote = buildNote(officialNoteId, officialOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "official content");
+        officialNote.setTitle("Official note");
+
+        UserEntity viewer = new UserEntity();
+        viewer.setId(viewerUserId);
+        viewer.setFirstName("Viewer");
+        viewer.setEmail("viewer@example.com");
+        UserEntity officialOwner = new UserEntity();
+        officialOwner.setId(officialOwnerUserId);
+        officialOwner.setFirstName("Einar");
+        officialOwner.setEmail("einar.lagera@gmail.com");
+
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(viewerNote, officialNote));
+        when(studyPackRepository.findByNoteIdIn(List.of(viewerNoteId, officialNoteId)))
+                .thenReturn(List.of());
+        when(userRepository.findAllById(List.of(viewerUserId, officialOwnerUserId)))
+                .thenReturn(List.of(viewer, officialOwner));
+
+        var response = noteService.listPublic(viewerUserId);
+
+        assertThat(response).hasSize(2);
+        assertThat(response)
+                .extracting(NoteListItemResponse::id)
+                .containsExactly(viewerNoteId.toString(), officialNoteId.toString());
+        assertThat(response.getFirst().ownerUserId()).isEqualTo(viewerUserId.toString());
+        assertThat(response.getFirst().authorDisplayName()).isEqualTo("Viewer");
+        assertThat(response.getFirst().isOfficialAuthor()).isFalse();
+        assertThat(response.getFirst().isCurrentUser()).isTrue();
+        assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
+        assertThat(response.get(1).authorDisplayName()).isEqualTo("NoteLib");
+        assertThat(response.get(1).isOfficialAuthor()).isTrue();
+        assertThat(response.get(1).isCurrentUser()).isFalse();
+    }
+
+    @Test
+    void listMineSubjects_returnsDistinctNormalizedSubjectsSortedAlphabetically() {
+        UUID ownerUserId = UUID.randomUUID();
+        when(noteRepository.findSubjectValuesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of(" Biology ", "anatomy", "biology", "", "  ", "Chemistry"));
+
+        List<String> subjects = noteService.listMineSubjects(ownerUserId);
+
+        assertThat(subjects).containsExactly("anatomy", "Biology", "Chemistry");
+    }
+
+    @Test
+    void listPublicSubjects_returnsDistinctNormalizedSubjectsSortedAlphabetically() {
+        when(noteRepository.findSubjectValuesByVisibility(NoteVisibility.PUBLIC))
+                .thenReturn(List.of("Physics", "biology", "Biology", "History"));
+
+        List<String> subjects = noteService.listPublicSubjects();
+
+        assertThat(subjects).containsExactly("biology", "History", "Physics");
     }
 
     private NoteEntity buildNote(

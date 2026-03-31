@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
-import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
+import { PublicNoteAuthorLine } from "@/components/notes/public-note-ownership-actions";
+import { PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
@@ -62,7 +63,6 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
   }
 
   const title = note.title?.trim() || "Untitled note";
-  const subjectLabel = note.subject?.trim() || "General";
   const hasGeneratedStudyPack = note.studyPackStatus === "STUDY_PACK_READY";
   const quizPreview = note.quiz.slice(0, 3);
   const description = buildDescription(title, note.summary);
@@ -94,7 +94,13 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               </span>
             </div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
-            <p className="text-sm text-foreground/75 sm:text-base">Subject: {subjectLabel}</p>
+            <PublicNoteAuthorLine
+              ownerUserId={note.ownerUserId}
+              authorDisplayName={note.authorDisplayName}
+              isOfficialAuthor={note.isOfficialAuthor}
+              isCurrentUser={note.isCurrentUser}
+              subject={note.subject}
+            />
             <div className="flex flex-wrap gap-2">
               {note.tags.length > 0 ? note.tags.map((tag) => (
                 <span
@@ -109,7 +115,11 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
                 </span>
               )}
             </div>
-            <p className="text-sm text-foreground/80">By {note.authorDisplayName}</p>
+            <PublicNoteOwnershipActions
+              noteId={note.id}
+              ownerUserId={note.ownerUserId}
+              isCurrentUser={note.isCurrentUser}
+            />
           </div>
         </header>
 
@@ -164,7 +174,7 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               Practice Questions Preview
             </h2>
             <p className="text-sm text-foreground/70">
-              Make a copy to try the interactive quiz, see answers, and track your score.
+              Copy this note or open your own version to try the interactive quiz, see answers, and track your score.
             </p>
             {hasGeneratedStudyPack && quizPreview.length > 0 ? (
               <ol className="space-y-4">
@@ -185,10 +195,9 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               <p className="text-sm text-foreground/75">No quiz preview available yet.</p>
             )}
             <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-3 text-sm text-foreground/70">
-              Preview only. The full quiz experience, answer reveal, and score tracking are available after you make a
-              copy to your library.
+              Preview only. The full quiz experience, answer reveal, and score tracking are available from your own
+              note in the app workspace.
             </div>
-            <PublicSeoCopyCta noteId={note.id} />
           </Card>
         </section>
       </article>
@@ -196,7 +205,7 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <PublicLibraryBackLink className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
         <p className="text-xs text-foreground/55">
-          Public pages are read-only. Make a copy to keep studying in your own library.
+          Public pages are read-only. Open your own note in the app workspace to edit, review, or manage it.
         </p>
       </div>
     </main>

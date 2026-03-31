@@ -8,6 +8,7 @@ import {
   getBillingPricing,
   getMyPlan,
   getNote,
+  listSubjects,
   joinPremiumWaitlist,
   updateNote,
 } from "@/lib/api";
@@ -40,6 +41,7 @@ jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
   joinPremiumWaitlist: jest.fn(),
@@ -85,9 +87,11 @@ describe("NoteEditorPageClient", () => {
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockResolvedValue(["Anatomy", "Biology", "Chemistry"]);
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
       limits: {
@@ -160,11 +164,45 @@ describe("NoteEditorPageClient", () => {
     const titleInput = await screen.findByLabelText("Title (optional)");
     const subjectInput = screen.getByLabelText("Subject (optional)");
     const contentInput = screen.getByLabelText("Content");
+    await waitFor(() => {
+      expect(titleInput).toHaveValue("Draft Note");
+      expect(subjectInput).toHaveValue("Biology");
+    });
 
     expect(titleInput).not.toBeDisabled();
     expect(subjectInput).not.toBeDisabled();
     expect(contentInput).not.toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
+    expect(screen.getByText("Select an existing subject or type your own.")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listSubjects).toHaveBeenCalledWith("mine");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle subject suggestions" }));
+    expect(await screen.findByRole("option", { name: "Anatomy" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument();
+  });
+
+  it("saves a custom subject even when it is not in backend suggestions", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    const subjectInput = await screen.findByLabelText("Subject (optional)");
+    const contentInput = screen.getByLabelText("Content");
+    await waitFor(() => {
+      expect(listSubjects).toHaveBeenCalledWith("mine");
+    });
+    fireEvent.change(subjectInput, { target: { value: "Microbiology Lab" } });
+    fireEvent.change(contentInput, { target: { value: "Custom subject note" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]);
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalled();
+    });
+    expect((createNote as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
+      subject: "Microbiology Lab",
+    }));
   });
 
   it("shows the first-study hint on the create note page when onboarding is in progress", async () => {

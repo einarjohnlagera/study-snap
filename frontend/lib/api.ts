@@ -310,7 +310,7 @@ export type LoginRequest = {
 export type AuthResponse = {
   userId: string;
   email: string;
-  displayName: string;
+  displayName: string | null;
   profileType: ProfileType | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
@@ -329,7 +329,7 @@ export type MeResponse = {
   pendingEmail: string | null;
   firstName: string;
   lastName: string | null;
-  displayName: string;
+  displayName: string | null;
   countryCode: string | null;
   profileType: ProfileType | null;
   examDate: string | null;
@@ -358,6 +358,7 @@ export type UpdateStudyRemindersRequest = {
 export type UpdateUserProfileRequest = {
   firstName: string;
   lastName: string;
+  displayName: string;
   email: string;
 };
 
@@ -666,9 +667,11 @@ export type NoteResponse = {
 
 export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
 export type NoteVisibility = "PRIVATE" | "PUBLIC";
+export type SubjectSuggestionScope = "mine" | "public";
 
 export type NoteListItemResponse = {
   id: string;
+  ownerUserId: string | null;
   title: string | null;
   subject: string | null;
   tags: string[];
@@ -677,11 +680,15 @@ export type NoteListItemResponse = {
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
   quizCount: number | null;
+  authorDisplayName: string;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
   updatedAt: string;
 };
 
 export type PublicNoteDetailResponse = {
   id: string;
+  ownerUserId: string | null;
   title: string | null;
   subject: string | null;
   tags: string[];
@@ -691,6 +698,8 @@ export type PublicNoteDetailResponse = {
   keyConcepts: string[];
   quiz: QuizItem[];
   authorDisplayName: string;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
   updatedAt: string;
 };
 
@@ -1831,6 +1840,24 @@ export async function listPublicNotes(): Promise<NoteListItemResponse[]> {
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load public notes.");
+}
+
+export async function listSubjects(scope: SubjectSuggestionScope = "public"): Promise<string[]> {
+  const path = `/subjects?scope=${scope}`;
+  const response = scope === "mine"
+    ? await fetchWithAuth(
+        path,
+        {
+          method: "GET",
+          headers: buildAuthHeaders(),
+        },
+        true,
+      )
+    : await fetch(buildUrl(path), {
+        method: "GET",
+        headers: buildAuthHeaders(),
+      });
+  return parseApiResponse<string[]>(response, "Could not load subjects.");
 }
 
 export async function getPublicNote(noteId: string): Promise<PublicNoteDetailResponse> {

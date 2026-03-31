@@ -8,6 +8,7 @@ import {
   getChallengeQuizPerformanceSummary,
   getNote,
   getQuickReviewPerformanceSummary,
+  listSubjects,
   joinPremiumWaitlist,
   startQuickReviewSession,
   updateNote,
@@ -52,6 +53,7 @@ jest.mock("@/lib/api", () => ({
   getChallengeQuizPerformanceSummary: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
+  listSubjects: jest.fn(),
   isEmailNotVerifiedError: () => false,
   joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -102,10 +104,12 @@ describe("PrivateNoteDetailPageClient", () => {
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
+    (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
       limits: {
