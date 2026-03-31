@@ -21,6 +21,7 @@ describe("PublicNoteOwnershipActions", () => {
       value: { writeText: clipboardWriteText },
       configurable: true,
     });
+    window.history.replaceState({}, "", "/library/public");
   });
 
   it("shows owner actions for the current user's public note", async () => {
@@ -31,6 +32,8 @@ describe("PublicNoteOwnershipActions", () => {
         noteId="note-1"
         ownerUserId="user-1"
         isCurrentUser
+        subject="Biology"
+        title="Cell Structure"
       />,
     );
 
@@ -44,7 +47,9 @@ describe("PublicNoteOwnershipActions", () => {
     expect(screen.getByText("Share this note")).toBeInTheDocument();
     expect(screen.getByText("Shareable URL")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
-    expect(clipboardWriteText).toHaveBeenCalled();
+    expect(clipboardWriteText).toHaveBeenCalledWith(
+      `${window.location.origin}/public/library/biology/cell-structure`,
+    );
     expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
     expect(screen.getByText("Link copied")).toBeInTheDocument();
   });
@@ -72,6 +77,8 @@ describe("PublicNoteOwnershipActions", () => {
       <PublicNoteOwnershipActions
         noteId="note-2"
         ownerUserId="user-2"
+        subject="Chemistry"
+        title="Atomic Bonds"
       />,
     );
 

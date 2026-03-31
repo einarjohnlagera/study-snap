@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { getAuthUser } from "@/lib/auth";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
+import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
   noteId: string;
   ownerUserId: string | null;
   isCurrentUser?: boolean;
+  subject?: string | null;
+  title?: string | null;
 };
 
 type PublicNoteAuthorLineProps = {
@@ -72,6 +75,8 @@ export function PublicNoteOwnershipActions({
   noteId,
   ownerUserId,
   isCurrentUser = false,
+  subject,
+  title,
 }: Readonly<PublicNoteOwnershipActionsProps>) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [shareState, setShareState] = useState<"idle" | "copied" | "error">("idle");
@@ -100,8 +105,12 @@ export function PublicNoteOwnershipActions({
   }, [shareState]);
 
   const resolvedShareUrl = useMemo(() => {
-    return globalThis.window === undefined ? "" : globalThis.location.href;
-  }, []);
+    const path = buildPublicLibraryNotePath({ subject, title });
+    if (globalThis.window === undefined) {
+      return path;
+    }
+    return new URL(path, globalThis.location.origin).toString();
+  }, [subject, title]);
 
   const truncatedShareUrl = useMemo(() => {
     if (resolvedShareUrl.length <= 58) {

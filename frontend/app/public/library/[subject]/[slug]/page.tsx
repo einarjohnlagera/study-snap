@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
-import { PublicNoteAuthorLine } from "@/components/notes/public-note-ownership-actions";
-import { PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
+import { PublicNoteAuthorLine, PublicNoteOwnershipActions} from "@/components/notes/public-note-ownership-actions";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
@@ -18,7 +17,7 @@ type PublicLibrarySeoPageProps = {
 };
 
 function buildDescription(title: string, summary?: string | null) {
-  if (summary && summary.trim()) {
+  if (summary?.trim()) {
     return truncateDescription(summary, 160);
   }
 
@@ -55,7 +54,7 @@ export async function generateMetadata({ params }: PublicLibrarySeoPageProps): P
   };
 }
 
-export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoPageProps) {
+export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLibrarySeoPageProps>) {
   const { subject, slug } = await params;
   const note = await getServerPublicNoteBySeoPath(subject, slug);
   if (!note) {
@@ -119,6 +118,8 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               noteId={note.id}
               ownerUserId={note.ownerUserId}
               isCurrentUser={note.isCurrentUser}
+              subject={note.subject}
+              title={note.title}
             />
           </div>
         </header>
