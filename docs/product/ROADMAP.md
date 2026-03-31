@@ -29,6 +29,7 @@ Scope priorities:
   - `/library` (My Library)
   - `/library/public` (Public Library)
   - `/notes/{id}` (Note Detail)
+  - `/public/library/{subject}` (Public Subject Listing, SEO)
   - `/public/library/{subject}/{slug}` (Public Note Detail, SEO)
 - Premium Challenge Quiz (timed mode generated from Study Pack summary + key concepts)
 - Premium Adaptive Practice (targeted generation from weak concepts)
@@ -41,6 +42,7 @@ Scope priorities:
 - My Library continuity (browse, filter, sort, revisit)
 - Public Library continuity (browse public notes and copy into My Library)
 - Public Library community polish (include your own public notes, public display names, and backend-driven NoteLib official badge)
+- Public Library subject-page polish (subject listing completeness, subject badge consistency, sitemap coverage)
 - sharing and remixing continuity (`/p/{token}`, copy to library without LLM call)
 - note-centric ownership across generated content and quiz sessions (`noteId`)
 

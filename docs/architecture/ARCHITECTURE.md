@@ -37,6 +37,7 @@ Routes:
 - `/library` My Library (owned notes)
 - `/library/public` Public Library (public notes from you, the community, and official NoteLib content)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
+- `/public/library/{subject}` public subject listing
 - `/public/library/{subject}/{slug}` public read-only note detail
 - `/settings` plan/billing and account controls
 - `/profile` account profile
@@ -408,6 +409,7 @@ Required backend behavior:
 
 - list owned notes for My Library
 - list all public notes for Public Library, including the viewer's own public notes
+- support `/public/library/{subject}` subject listing pages from the same public-note data set
 - include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
 - include author-source metadata for Public Library card labeling (`By You`, `By NoteLib`, `By {displayName}`) plus `Official` badge state
 - support public read-only note detail payload for copy flow

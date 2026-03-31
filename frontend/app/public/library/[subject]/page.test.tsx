@@ -56,6 +56,7 @@ describe("PublicLibrarySubjectPage", () => {
     expect(screen.getByRole("heading", { name: "Science Notes" })).toBeInTheDocument();
     expect(screen.getByText("Browse all public subjects")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Public study notes" })).toBeInTheDocument();
+    expect(screen.getAllByText("Science").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Cell Structure/i })).toHaveAttribute(
       "href",
       "/public/library/science/cell-structure",
@@ -78,7 +79,7 @@ describe("PublicLibrarySubjectPage", () => {
       title: "Science Notes and Study Packs | NoteLib Public Library",
       description: "Browse public Science notes, summaries, and practice questions shared by the NoteLib community.",
       alternates: {
-        canonical: "https://www.notelib.app/public/library/science",
+        canonical: "https://notelib.app/public/library/science",
       },
     });
   });
@@ -92,5 +93,19 @@ describe("PublicLibrarySubjectPage", () => {
 
     expect(metadata.title).toBe("Public Subject Not Found | NoteLib");
     expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
+  it("renders an empty state when a known subject has no public notes", async () => {
+    (getServerPublicSubjects as jest.Mock).mockResolvedValue([subjectEntry]);
+    (getServerPublicNotesBySubjectSlug as jest.Mock).mockResolvedValue([]);
+
+    render(
+      await PublicLibrarySubjectPage({
+        params: Promise.resolve({ subject: "science" }),
+      }),
+    );
+
+    expect(screen.getByText("No public notes yet")).toBeInTheDocument();
+    expect(screen.getByText("There are no public notes for Science right now.")).toBeInTheDocument();
   });
 });

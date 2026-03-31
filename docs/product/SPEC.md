@@ -224,6 +224,12 @@ Users can:
   - owner -> `Open Note`
   - non-owner -> `Make a Copy`
 - Public note detail header should show `Subject • Author` using the same viewer-relative author label.
+- Public subject pages should reuse the existing `/public/library/{subject}` route and show:
+  - subject heading
+  - descriptive subtitle
+  - list of public notes for that subject
+  - empty state when a known subject has no notes
+- Subject pages should reuse the same Subject badge styling as Public Library cards and note detail headers.
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
 - Owner actions on public note detail may include:
   - `Open Note`
@@ -344,6 +350,7 @@ Primary routes:
 - `/library` (My Library)
 - `/library/public` (Public Library)
 - `/notes/{id}` (Note Detail)
+- `/public/library/{subject}` (Public Subject Listing, SEO)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only, SEO)
 
 ### Quick Review

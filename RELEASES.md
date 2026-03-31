@@ -17,4 +17,5 @@
 - Public Library now includes your own public notes and labels cards as `By You`, `By NoteLib`, or `By {displayName}` with a backend-driven `Official` badge for NoteLib content
 - Public note detail now stays read/copy/share only with `Open Note` for owners, `Make a Copy` for non-owners, and viewer-relative author labels in the header
 - Profile identity now supports `displayName`, public notes render backend-driven author names, the official NoteLib account gets an `Official` badge, and reserved display names are blocked server-side
+- Public Library subject pages now reuse the existing `/public/library/{subject}` route with subject-badge-consistent cards, empty states, and sitemap coverage for subject and note URLs
 - Subject display is now standardized with shared badges across library cards and note headers, and subject suggestions now come from persisted backend `notes.subject` values while still allowing custom subjects
