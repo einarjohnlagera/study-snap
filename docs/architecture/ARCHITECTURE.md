@@ -300,6 +300,13 @@ Auth and onboarding:
 - `GET /api/auth/verify-email?token=...`
 - `PUT /api/users/profile`
 
+Session and auth-route recovery:
+
+- stale auth state must be cleared before redirecting the browser to `/login` after a `401` / expired session
+- successful login should explicitly navigate to the resolved authenticated home route instead of relying on shared layout state to swap UI underneath the current auth route
+- auth routes (`/auth`, `/login`, `/signup`) should redirect authenticated users away immediately
+- the authenticated app shell must not render on auth routes while the route transition is still pending
+
 Onboarding architecture:
 
 - frontend onboarding state is initialized from `GET /api/auth/me`

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiRequestError, getMe, getMyPlan, logout, requestEmailVerification } from "@/lib/api";
-import { getAuthUser, needsOnboarding, setAuthUser } from "@/lib/auth";
+import { getAuthUser, needsOnboarding, resolveAuthenticatedHome, setAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { Button } from "@/components/ui/button";
@@ -37,8 +37,12 @@ function isMarketingPublicRoute(pathname: string): boolean {
   );
 }
 
+function isAuthRoute(pathname: string): boolean {
+  return pathname === "/auth" || pathname === "/login" || pathname === "/signup";
+}
+
 function shouldUseAuthenticatedShell(hasAuthUser: boolean, pathname: string): boolean {
-  return hasAuthUser && !isMarketingPublicRoute(pathname);
+  return hasAuthUser && !isMarketingPublicRoute(pathname) && !isAuthRoute(pathname);
 }
 
 function isProtectedAppRoute(pathname: string): boolean {
@@ -246,6 +250,19 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   }, [hasAuthUser, pathname, router]);
 
   useEffect(() => {
+    if (!hasAuthUser || !isAuthRoute(pathname)) {
+      return;
+    }
+
+    const authUser = getAuthUser();
+    if (!authUser) {
+      return;
+    }
+
+    router.replace(resolveAuthenticatedHome(authUser));
+  }, [hasAuthUser, pathname, router]);
+
+  useEffect(() => {
     const authUser = getAuthUser();
     if (!authUser) {
       return;
@@ -363,7 +380,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       await logout();
       setAvatarMenuOpen(false);
       setDrawerOpen(false);
-      router.push("/auth");
+      router.replace("/auth");
       router.refresh();
     } finally {
       setSigningOut(false);

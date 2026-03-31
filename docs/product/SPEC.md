@@ -337,6 +337,10 @@ Primary routes:
 - `401` on protected API calls clears auth and redirects to `/login`
 - Preserve destination with `redirect` query param
 - Session-expired redirects include `reason=session_expired`
+- After a successful login, the frontend must route with `router.replace(...)` to the resolved authenticated home instead of relying on shell visibility alone.
+- Verified users who log in successfully should land on `Dashboard`.
+- Auth pages (`/auth`, `/login`, `/signup`) must immediately redirect authenticated users away from the auth form.
+- Auth pages must not remain visible once authentication succeeds.
 - Users can sign up/login before verification; unverified users are blocked from generation
 - Unverified users are also blocked from OCR upload
 - Verification email delivery uses provider-agnostic `EmailService`
@@ -351,6 +355,7 @@ Primary routes:
   - inactive-user reminder after `3` days without meaningful study activity
   - weak-concept reminder after `3` days without follow-up practice on weak Challenge Quiz concepts
   - weekly progress summary every Sunday at `6:00 PM`
+- Session-expiry recovery must clear stale local auth state before redirecting to login so a re-login behaves like a fresh auth success.
 - First-study product onboarding is separate from preferences onboarding and guides new users through:
   - create note
   - generate Study Pack

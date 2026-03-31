@@ -381,6 +381,14 @@ VERIFIED:
 - Dashboard as primary landing
 - Full app access based on plan
 
+Auth routing rules:
+
+- After successful login, the frontend must navigate with `router.replace(...)` to the resolved authenticated home route.
+- Do not rely on app-shell visibility to imply navigation away from `/auth` or `/login`.
+- Auth pages (`/auth`, `/login`, `/signup`) must redirect authenticated users immediately.
+- The authenticated app shell must not render on auth routes.
+- Expired-session recovery must clear stale auth state before redirecting to login so re-login behaves like a fresh successful auth flow.
+
 ## MVP Scope (Do Not Expand Without Request)
 
 In scope:
