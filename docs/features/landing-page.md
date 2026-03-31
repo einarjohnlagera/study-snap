@@ -2,82 +2,103 @@
 
 ## Goal
 
-The marketing landing page should explain NoteLib clearly to students and convert anonymous visitors into demo usage or signup.
+The landing page should explain NoteLib in one glance:
 
-## Structure
+`Turn Notes Into Quizzes`
 
-The landing page should include:
+It should help students, board exam reviewees, and teachers understand what the product does, why practice matters, and how to start.
 
-- Hero section with product explanation and primary CTAs
-- How It Works section with a simple three-step flow
-- Feature section focused on review and exam-preparation value
-- Free vs Premium section using backend-owned pricing data
-- Demo section with no-signup-required access
-- Bottom CTA section for account creation
+## Positioning
+
+Product statement:
+
+`NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.`
+
+Public messaging should focus on outcomes:
+
+- turn notes into quizzes
+- reviewers
+- practice questions
+- weak concepts
+- adaptive practice
+- study faster
+- board exam review
+
+Avoid making AI, OCR, or technical implementation the main marketing message.
+
+## Landing Structure
+
+The landing page should include these sections in order:
+
+1. Hero
+2. How It Works
+3. Who It&apos;s For
+4. Features Overview
+5. Pricing (minimal summary)
+6. Final CTA
 
 ## Hero
 
 Required copy:
 
-- Title: `Turn your notes into summaries, quizzes, and reviewers in seconds.`
-- Subtitle: `Study smarter with AI-powered summaries, key concepts, and practice quizzes.`
-- Buttons:
-  - `Get Started Free` -> signup/auth
-  - `Try Demo` -> demo study pack
+- headline: `Turn Notes Into Quizzes`
+- subheadline: `Study Smarter. Not Harder.`
+- supporting text: `Generate summaries, key concepts, and practice quizzes from your notes in seconds.`
+- primary CTA: `Get Started Free`
+- secondary CTA: `Try Demo`
 
 ## How It Works
 
-Use a three-step explanation:
+Use a four-step explanation:
 
-1. `Create or Import Notes`
+1. `Add Notes`
 2. `Generate Study Pack`
-3. `Review and Practice`
+3. `Practice`
+4. `Improve`
 
-This section should make the workflow understandable in a few seconds for first-time visitors.
+The section should also visually communicate:
 
-## Features
+`Notes -> Summary -> Quiz -> Weak Concepts -> Practice`
 
-Position NoteLib as a student study workflow, not just an AI text tool.
+## Who It&apos;s For
 
-Required feature cards:
+The landing page should call out the main audiences explicitly:
 
-- `Summaries`
-- `Key Concepts`
-- `Quick Review`
-- `Challenge Quiz`
-- `Adaptive Practice`
+- Students
+- Board Exam Reviewees
+- Teachers
 
-## Pricing and Plans
+Each card should explain the outcome for that audience, not the technology behind it.
 
-- Landing page pricing must use the backend pricing API through shared pricing components.
-- Do not hardcode Premium pricing on the landing page.
-- Free vs Premium messaging should highlight exam prep and heavier study usage, not just bigger limits.
+## Features Overview
 
-## Demo
+Focus on the learning outcomes:
 
-- Demo must remain accessible without signup.
-- Demo messaging should encourage visitors to try a Study Pack before creating an account.
+- Summaries
+- Key Concepts
+- Practice Quiz
+- Weak Concept Insights
+- Adaptive Practice
+
+## Pricing
+
+- Landing page pricing should stay minimal.
+- Use a simple Free vs Premium summary.
+- Link to the full pricing page with `View Pricing`.
+- Pricing display must still come from shared/backend-owned pricing surfaces.
+
+## Final CTA
+
+Required copy:
+
+- title: `Start Turning Your Notes Into Quizzes Today`
+- button: `Get Started Free`
 
 ## SEO
 
-Landing page metadata should use:
+Landing page metadata should position NoteLib as a notes-to-quizzes product.
 
-- title: `NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes`
-- description: `Turn your notes into summaries, key concepts, and practice questions so you can study smarter.`
+- title: `NoteLib — Turn Notes Into Quizzes`
+- description should reflect summaries, key concepts, quizzes, and exam preparation value
 
-Landing page structured data should use JSON-LD WebSite schema:
-
-- `@type: WebSite`
-- `name: NoteLib`
-- `url: https://www.notelib.app`
-- the same page description as the landing metadata
-
-## UX Notes
-
-- Keep the page mobile-friendly.
-- Keep CTA paths explicit: signup/auth and demo.
-- Landing page should remain readable in both light and dark mode.
-- Landing page should include footer links for:
-  - `Privacy Policy`
-  - `Terms of Service`
-  - `Contact`
+Landing page structured data should continue using JSON-LD `WebSite`.

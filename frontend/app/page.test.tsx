@@ -3,10 +3,10 @@ import { render, screen } from "@testing-library/react";
 import Home, { metadata } from "./page";
 
 jest.mock("@/components/billing/pricing-plans-section", () => ({
-  PricingPlansSection: () => (
+  SimplePricingSection: () => (
     <section>
-      <h2>Move from note-taking to exam prep</h2>
-      <p>Pricing section placeholder</p>
+      <h2>Simple, Transparent Pricing</h2>
+      <a href="/pricing">View Pricing</a>
     </section>
   ),
 }));
@@ -24,32 +24,38 @@ jest.mock("@/components/analytics/tracked-link", () => ({
 }));
 
 describe("LandingPage", () => {
-  it("renders the core marketing sections and CTAs", () => {
+  it("renders the updated marketing sections and CTAs", () => {
     const { container } = render(<Home />);
 
-    expect(screen.getByRole("heading", {
-      name: "Turn your notes into summaries, quizzes, and reviewers in seconds.",
-    })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Turn Notes Into Quizzes" })).toBeInTheDocument();
+    expect(screen.getByText("Study Smarter. Not Harder.")).toBeInTheDocument();
     expect(
-      screen.getByText("Study smarter with AI-powered summaries, key concepts, and practice quizzes."),
+      screen.getByText("Generate summaries, key concepts, and practice quizzes from your notes in seconds."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Get Started Free" })).toHaveAttribute("href", "/auth");
-    expect(screen.getAllByRole("link", { name: "Try Demo" })[0]).toHaveAttribute("href", "/demo");
+    expect(screen.getAllByRole("link", { name: "Get Started Free" })[0]).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: "Try Demo" })).toHaveAttribute("href", "/demo");
 
-    expect(screen.getByText("Create or Import Notes")).toBeInTheDocument();
-    expect(screen.getAllByText("Generate Study Pack")).not.toHaveLength(0);
-    expect(screen.getByText("Review and Practice")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "From notes to practice in four steps" })).toBeInTheDocument();
+    expect(screen.getByText("Add Notes")).toBeInTheDocument();
+    expect(screen.getByText("Generate Study Pack")).toBeInTheDocument();
+    expect(screen.getAllByText("Practice")).not.toHaveLength(0);
+    expect(screen.getByText("Improve")).toBeInTheDocument();
+    expect(screen.getByText("Notes")).toBeInTheDocument();
+    expect(screen.getAllByText("Weak Concepts")).not.toHaveLength(0);
+
+    expect(screen.getByText("For Students")).toBeInTheDocument();
+    expect(screen.getByText("For Board Exams")).toBeInTheDocument();
+    expect(screen.getByText("For Teachers")).toBeInTheDocument();
 
     expect(screen.getAllByText("Summaries")).not.toHaveLength(0);
     expect(screen.getAllByText("Key Concepts")).not.toHaveLength(0);
-    expect(screen.getByText("Quick Review")).toBeInTheDocument();
-    expect(screen.getByText("Challenge Quiz")).toBeInTheDocument();
-    expect(screen.getByText("Adaptive Practice")).toBeInTheDocument();
+    expect(screen.getByText("Practice Quiz")).toBeInTheDocument();
+    expect(screen.getByText("Weak Concept Insights")).toBeInTheDocument();
+    expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
 
-    expect(screen.getByText("Move from note-taking to exam prep")).toBeInTheDocument();
-    expect(screen.getByText("Try a demo Study Pack now — no signup required.")).toBeInTheDocument();
-    expect(screen.getByText("Start studying smarter today.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Create Free Account" })).toHaveAttribute("href", "/auth");
+    expect(screen.getByText("Simple, Transparent Pricing")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View Pricing" })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("heading", { name: "Start Turning Your Notes Into Quizzes Today" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
     expect(screen.getByRole("link", { name: "Contact" })).toHaveAttribute("href", "mailto:support@mail.notelib.app");
@@ -62,22 +68,22 @@ describe("LandingPage", () => {
 
   it("exports landing page SEO metadata", () => {
     expect(metadata).toMatchObject({
-      title: "NoteLib – Turn Notes into Study Packs, Summaries, and Quizzes",
-      description: "Turn your notes into summaries, key concepts, and practice questions so you can study smarter.",
+      title: "NoteLib — Turn Notes Into Quizzes",
+      description: "NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.",
       alternates: {
-        canonical: "https://www.notelib.app/",
+        canonical: "https://notelib.app/",
       },
       openGraph: expect.objectContaining({
         type: "website",
-        url: "https://www.notelib.app/",
+        url: "https://notelib.app/",
         siteName: "NoteLib",
         images: expect.arrayContaining([
-          expect.objectContaining({ url: "https://www.notelib.app/og-image.png" }),
+          expect.objectContaining({ url: "https://notelib.app/og-image.png" }),
         ]),
       }),
       twitter: expect.objectContaining({
         card: "summary_large_image",
-        images: ["https://www.notelib.app/og-image.png"],
+        images: ["https://notelib.app/og-image.png"],
       }),
     });
   });

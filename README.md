@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-NoteLib is an AI-powered study workspace that helps users turn their notes into structured study materials such as summaries, key concepts, and quizzes.
+NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.
 
 Users can paste notes or upload photos of their study material, and NoteLib can generate:
 
@@ -17,7 +17,7 @@ Users can paste notes or upload photos of their study material, and NoteLib can 
 
 ## One-liner
 
-Write notes. Generate knowledge. Practice smarter.
+Turn notes into quizzes.
 
 ## Core Concept
 
@@ -90,7 +90,14 @@ Primary product pages:
 - My Library: `/library`
 - Public Library: `/library/public`
 - Note Detail: `/notes/{id}`
-- Public Note Detail (read-only): `/public/notes/{id}`
+- Public Note Detail (read-only): `/public/library/{subject}/{slug}`
+
+## Public Positioning
+
+- Turn notes into summaries, key concepts, and quizzes
+- Study with practice questions instead of only rereading
+- Find weak concepts and keep improving
+- Use the same workflow for class notes, board exam reviewers, and teacher quiz prep
 
 ## Personalized Dashboard
 
