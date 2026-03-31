@@ -392,8 +392,9 @@ Public Library is the discovery surface for notes where `visibility=PUBLIC`.
 Required backend behavior:
 
 - list owned notes for My Library
-- list public notes excluding owner notes for Public Library
+- list all public notes for Public Library, including the viewer's own public notes
 - include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
+- include author-source metadata for Public Library card labeling (`By You`, `NoteLib`, `Community`)
 - support public read-only note detail payload for copy flow
 
 Filtering model:

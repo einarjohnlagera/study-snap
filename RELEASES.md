@@ -14,3 +14,5 @@
 - Email template refresh with first-name personalization, shared NoteLib footer, and updated Free vs Premium welcome messaging
 - Auth redirect fix for expired-session re-login so successful login returns cleanly to Dashboard without rendering the app shell on auth pages
 - First-time activation flow improvements across verification, empty dashboard states, first Study Pack guidance, and first quiz weak-concept follow-up
+- Public Library now includes your own public notes and labels cards as `By You`, `By NoteLib`, or `By Community`
+- Public note detail now stays read/copy/share only with `Open Note` for owners, `Make a Copy` for non-owners, and viewer-relative author labels in the header

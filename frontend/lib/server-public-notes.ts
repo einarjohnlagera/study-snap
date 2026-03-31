@@ -10,7 +10,7 @@ function buildApiUrl(path: string) {
 async function fetchPublicNote(path: string): Promise<PublicNoteDetailResponse | null> {
   const response = await fetch(buildApiUrl(path), {
     method: "GET",
-    next: { revalidate: 300 },
+    cache: "no-store",
   });
 
   if (response.status === 404) {

@@ -669,6 +669,7 @@ export type NoteVisibility = "PRIVATE" | "PUBLIC";
 
 export type NoteListItemResponse = {
   id: string;
+  ownerUserId: string | null;
   title: string | null;
   subject: string | null;
   tags: string[];
@@ -677,11 +678,13 @@ export type NoteListItemResponse = {
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
   quizCount: number | null;
+  official: boolean;
   updatedAt: string;
 };
 
 export type PublicNoteDetailResponse = {
   id: string;
+  ownerUserId: string | null;
   title: string | null;
   subject: string | null;
   tags: string[];
@@ -690,6 +693,7 @@ export type PublicNoteDetailResponse = {
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];
+  official: boolean;
   authorDisplayName: string;
   updatedAt: string;
 };

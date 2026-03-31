@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -227,10 +228,7 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
-        List<NoteEntity> notes = noteRepository.findByVisibilityExcludingOwnerOrderByUpdatedAtDesc(
-                NoteVisibility.PUBLIC,
-                viewerUserId
-        );
+        List<NoteEntity> notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
         return toListItems(notes);
     }
 
@@ -284,15 +282,23 @@ public class NoteService {
         }
 
         List<UUID> noteIds = notes.stream().map(NoteEntity::getId).toList();
+        List<UUID> ownerIds = notes.stream()
+                .map(NoteEntity::getOwnerUserId)
+                .distinct()
+                .toList();
         Map<UUID, StudyPackEntity> studyPackByNoteId = new HashMap<>();
         for (StudyPackEntity studyPack : studyPackRepository.findByNoteIdIn(noteIds)) {
             if (studyPack.getNoteId() != null) {
                 studyPackByNoteId.put(studyPack.getNoteId(), studyPack);
             }
         }
+        Map<UUID, UserEntity> ownerById = new HashMap<>();
+        for (UserEntity owner : userRepository.findAllById(ownerIds)) {
+            ownerById.put(owner.getId(), owner);
+        }
 
         return notes.stream()
-                .map(note -> mapToListItemResponse(note, studyPackByNoteId.get(note.getId())))
+                .map(note -> mapToListItemResponse(note, studyPackByNoteId.get(note.getId()), ownerById.get(note.getOwnerUserId())))
                 .toList();
     }
 
@@ -372,9 +378,10 @@ public class NoteService {
         );
     }
 
-    private NoteListItemResponse mapToListItemResponse(NoteEntity note, StudyPackEntity studyPack) {
+    private NoteListItemResponse mapToListItemResponse(NoteEntity note, StudyPackEntity studyPack, UserEntity owner) {
         return new NoteListItemResponse(
                 note.getId().toString(),
+                note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
@@ -383,16 +390,17 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(note, studyPack),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
+                owner != null && owner.getRole() == UserRole.ADMIN,
                 note.getUpdatedAt()
         );
     }
 
     private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack) {
-        String authorDisplayName = userRepository.findById(note.getOwnerUserId())
-                .map(this::resolvePublicAuthorName)
-                .orElse(DEFAULT_AUTHOR_NAME);
+        UserEntity owner = userRepository.findById(note.getOwnerUserId()).orElse(null);
+        String authorDisplayName = owner == null ? DEFAULT_AUTHOR_NAME : resolvePublicAuthorName(owner);
         return new PublicNoteDetailResponse(
                 note.getId().toString(),
+                note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
@@ -401,6 +409,7 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
+                owner != null && owner.getRole() == UserRole.ADMIN,
                 authorDisplayName,
                 note.getUpdatedAt()
         );

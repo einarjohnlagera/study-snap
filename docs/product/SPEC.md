@@ -204,7 +204,7 @@ Users can:
 
 ### Public Library
 
-Public Library lists notes where `visibility=PUBLIC` and `owner != current user`.
+Public Library lists notes where `visibility=PUBLIC`, including the current user's own public notes.
 
 Users can:
 
@@ -212,6 +212,33 @@ Users can:
 - filter by search, subject, and tags
 - open read-only public note detail
 - copy a public note into My Library (`Copy to My Library`)
+- see source badges on cards:
+  - `By You` for their own public notes
+  - `By NoteLib` for official/admin-owned public notes
+  - `By Community` for other users' public notes
+- Public Library author labels are viewer-relative:
+  - if `note.ownerId == currentUser.id` -> `By You`
+  - else if the note is official/admin-owned -> `By NoteLib`
+  - else -> `By Community`
+- Public note detail should change the primary action by ownership:
+  - owner -> `Open Note`
+  - non-owner -> `Make a Copy`
+- Public note detail header should show `Subject • Author` using the same viewer-relative author label.
+- Public note detail is read/copy/share only and should not show edit, delete, or study actions.
+- Owner actions on public note detail may include:
+  - `Open Note`
+  - `Share`
+- Non-owner actions on public note detail may include:
+  - `Make a Copy`
+  - `Share`
+- Private Note Detail owns:
+  - `Edit`
+  - `Delete`
+  - `Generate Study Pack`
+- Study surfaces own:
+  - `Quick Review`
+  - `Challenge Quiz`
+  - `Adaptive Practice`
 
 Dashboard guidance rules:
 

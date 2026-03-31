@@ -5,6 +5,7 @@ import java.util.List;
 
 public record NoteListItemResponse(
         String id,
+        String ownerUserId,
         String title,
         String subject,
         List<String> tags,
@@ -13,6 +14,7 @@ public record NoteListItemResponse(
         String studyPackId,
         String studyPackStatus,
         Integer quizCount,
+        boolean official,
         OffsetDateTime updatedAt
 ) {
 }
