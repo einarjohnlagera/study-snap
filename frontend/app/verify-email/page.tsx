@@ -15,6 +15,7 @@ function VerifyEmailPageContent() {
   const token = searchParams.get("token");
 
   const [authUser, setAuthUserState] = useState<AuthUser | null>(null);
+  const [verifiedMe, setVerifiedMe] = useState<Awaited<ReturnType<typeof getMe>> | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +73,7 @@ function VerifyEmailPageContent() {
             getMe(),
             getMyPlan().catch(() => null),
           ]);
+          setVerifiedMe(me);
           const nextAuthUser: AuthUser = {
             ...activeAuthUser,
             email: me.email,
@@ -85,6 +87,7 @@ function VerifyEmailPageContent() {
           setAuthUser(nextAuthUser);
           setAuthUserState(nextAuthUser);
         } catch {
+          setVerifiedMe(null);
           const fallbackAuthUser: AuthUser = {
             ...activeAuthUser,
             emailVerifiedAt: new Date().toISOString(),
@@ -151,18 +154,30 @@ function VerifyEmailPageContent() {
       }),
     [],
   );
+  const showFirstStudyWelcome = Boolean(
+    token
+    && !loading
+    && authUser?.emailVerifiedAt
+    && verifiedMe?.studyPackCount === 0,
+  );
 
   return (
     <div className="mx-auto w-full max-w-xl px-6 py-10">
       <Card className="space-y-5">
         <div className="space-y-2">
-          <CardTitle>Verify your email</CardTitle>
+          <CardTitle>{showFirstStudyWelcome ? "Welcome to NoteLib!" : "Verify your email"}</CardTitle>
           <CardDescription>
-            Email verification is required before generating Study Packs.
+            {showFirstStudyWelcome
+              ? "Let’s create your first Study Pack."
+              : "Email verification is required before generating Study Packs."}
           </CardDescription>
         </div>
 
-        {token ? (
+        {showFirstStudyWelcome ? (
+          <p className="text-sm text-foreground/80">
+            Your email is verified. Create your first note to generate a Study Pack and start practicing right away.
+          </p>
+        ) : token ? (
           <p className="text-sm text-foreground/80">
             {loading ? "Verifying your email..." : "Verification request processed."}
           </p>
@@ -182,7 +197,16 @@ function VerifyEmailPageContent() {
             </Button>
           ) : null}
 
-          {token && !loading ? (
+          {showFirstStudyWelcome ? (
+            <>
+              <Link href="/notes/new" className={buttonVariants({ variant: "default" })}>
+                Create First Note
+              </Link>
+              <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>
+                Go to Dashboard
+              </Link>
+            </>
+          ) : token && !loading ? (
             <Link href={continueHref} className={buttonVariants({ variant: "default" })}>
               Continue
             </Link>

@@ -243,4 +243,29 @@ describe("DashboardPage profile variants", () => {
 
     expect(routerMock.push).toHaveBeenCalledWith("/notes/new");
   });
+
+  it("shows the first-study dashboard empty state when the user has no notes yet", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 0,
+      profileType: "STUDENT",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (listNotes as jest.Mock).mockResolvedValue([]);
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 0, challengeQuizzesUsed: 0, adaptivePracticeUsed: 0 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("You don't have any Study Packs yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create Your First Note" })).toBeInTheDocument();
+  });
 });

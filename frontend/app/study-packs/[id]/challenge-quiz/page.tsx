@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
+import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   type ChallengeQuizStartRequest,
@@ -114,6 +115,7 @@ export default function ChallengeQuizPage() {
     currentIndex: 0,
     selectedChoices: {},
   });
+  const weakConceptsRef = useRef<HTMLDivElement | null>(null);
   const leaveGuardInsertedRef = useRef(false);
   const showLeaveDialogRef = useRef(false);
   const legacyRedirectTargetRef = useRef<string | null>(null);
@@ -132,6 +134,7 @@ export default function ChallengeQuizPage() {
   const [timedOut, setTimedOut] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
+  const [showFirstQuizCompletionBanner, setShowFirstQuizCompletionBanner] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<"difficulty-selection" | "challenge-quiz-limit" | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
@@ -165,9 +168,9 @@ export default function ChallengeQuizPage() {
       setIsEmailVerified(Boolean(getAuthUser()?.emailVerifiedAt));
     };
     syncVerification();
-    window.addEventListener("studysnap-auth-change", syncVerification);
+    globalThis.addEventListener("studysnap-auth-change", syncVerification);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncVerification);
+      globalThis.removeEventListener("studysnap-auth-change", syncVerification);
     };
   }, []);
 
@@ -274,9 +277,9 @@ export default function ChallengeQuizPage() {
       if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
         if (byStudyPack?.noteId) {
-          const nextQuery = typeof window === "undefined"
+          const nextQuery = globalThis.window === undefined
             ? ""
-            : window.location.search.replace(/^\?/, "");
+            : globalThis.location.search.replace(/^\?/, "");
           const targetHref = nextQuery
             ? `/notes/${byStudyPack.noteId}/challenge-quiz?${nextQuery}`
             : `/notes/${byStudyPack.noteId}/challenge-quiz`;
@@ -332,6 +335,11 @@ export default function ChallengeQuizPage() {
         totalQuestions: total,
         durationSeconds,
       });
+      const authUser = getAuthUser();
+      if (authUser?.id && getFirstStudyOnboardingStep(authUser.id) === "study-pack-ready") {
+        setShowFirstQuizCompletionBanner(true);
+        clearFirstStudyOnboardingStep(authUser.id);
+      }
       setResult(completed);
       setPhase("complete");
     } catch (err) {
@@ -356,10 +364,10 @@ export default function ChallengeQuizPage() {
     };
 
     tick();
-    const timer = window.setInterval(tick, 1000);
+    const timer = globalThis.setInterval(tick, 1000);
 
     return () => {
-      window.clearInterval(timer);
+      globalThis.clearInterval(timer);
     };
   }, [challengeSession, deadlineEpochSeconds, handleSubmit, phase, submitting]);
 
@@ -388,10 +396,10 @@ export default function ChallengeQuizPage() {
     const handlePopState = () => {
       persistLatestProgress(true);
       if (showLeaveDialogRef.current) {
-        window.history.pushState(null, "", window.location.href);
+        globalThis.history.pushState(null, "", globalThis.location.href);
         return;
       }
-      window.history.pushState(null, "", window.location.href);
+      globalThis.history.pushState(null, "", globalThis.location.href);
       setShowLeaveDialog(true);
     };
 
@@ -402,16 +410,16 @@ export default function ChallengeQuizPage() {
     };
 
     if (!leaveGuardInsertedRef.current) {
-      window.history.pushState(null, "", window.location.href);
+      globalThis.history.pushState(null, "", globalThis.location.href);
       leaveGuardInsertedRef.current = true;
     }
     window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("popstate", handlePopState);
+    globalThis.addEventListener("popstate", handlePopState);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("popstate", handlePopState);
+      globalThis.removeEventListener("popstate", handlePopState);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [persistProgress, phase]);
@@ -675,6 +683,26 @@ export default function ChallengeQuizPage() {
             Challenge Quiz Result
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? "Challenge Quiz"}</h1>
+          {showFirstQuizCompletionBanner ? (
+            <Card className="space-y-3 border-emerald-500/30 bg-emerald-500/5 p-4">
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">Great job! Keep studying and improve your weak areas.</h2>
+                <p className="text-sm text-foreground/80">
+                  Review the concepts below to see what needs more attention next.
+                </p>
+              </div>
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setShowFirstQuizCompletionBanner(false);
+                  weakConceptsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                View Weak Concepts
+              </Button>
+            </Card>
+          ) : null}
           <div className="rounded-md border border-border bg-background p-4">
             <p className="text-lg font-semibold">{result.scorePercentage}%</p>
             <p className="mt-1 text-sm text-foreground/80">
@@ -725,18 +753,20 @@ export default function ChallengeQuizPage() {
               <p className="text-sm text-foreground/70">No concept breakdown is available for this session.</p>
             )}
           </Card>
-          <Card className="space-y-3 p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Weak Concepts</h2>
-            {result.weakConcepts.length > 0 ? (
-              <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
-                {result.weakConcepts.map((concept) => (
-                  <li key={concept}>{concept}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-foreground/70">No weak concepts identified in this challenge.</p>
-            )}
-          </Card>
+          <div ref={weakConceptsRef}>
+            <Card className="space-y-3 p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/70">Weak Concepts</h2>
+              {result.weakConcepts.length > 0 ? (
+                <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/85">
+                  {result.weakConcepts.map((concept) => (
+                    <li key={concept}>{concept}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-foreground/70">No weak concepts identified in this challenge.</p>
+              )}
+            </Card>
+          </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
