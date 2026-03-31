@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
+import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -50,6 +51,7 @@ import {
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
+import { RECOMMENDED_SUBJECTS } from "@/lib/subjects";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
   if (status === "STUDY_PACK_READY") {
@@ -305,7 +307,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const isDraft = note?.studyPackStatus !== "STUDY_PACK_READY";
   const title = note?.title?.trim() || "Untitled note";
-  const subject = note?.subject?.trim() || "No subject";
   const tags = note?.tags ?? [];
   const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
   const isPublic = visibility === "PUBLIC";
@@ -832,11 +833,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <input
                     id="note-subject-inline"
                     type="text"
+                    list="note-subject-inline-suggestions"
                     value={metadataDraft.subject}
                     onChange={(event) => setMetadataDraft((previous) => ({ ...previous, subject: event.target.value }))}
                     className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-                    placeholder="No subject"
+                    placeholder="Choose or type a subject"
                   />
+                  <datalist id="note-subject-inline-suggestions">
+                    {RECOMMENDED_SUBJECTS.map((subjectOption) => (
+                      <option key={subjectOption} value={subjectOption} />
+                    ))}
+                  </datalist>
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Tags</p>
@@ -885,7 +892,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </div>
             ) : (
               <>
-                <p className="text-sm text-foreground/75">{subject}</p>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
+                  <SubjectBadge subject={note?.subject} />
+                  <span className="text-foreground/45">•</span>
+                  <span>By You</span>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {tags.length > 0 ? tags.map((tag, index) => (
                     <span key={`${tag}-${index}`} className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75">

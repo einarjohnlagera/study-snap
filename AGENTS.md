@@ -220,6 +220,10 @@ Core loop:
   - owner -> `Open Note`, `Share`
   - non-owner -> `Make a Copy`, `Share`
 - Public note detail should not expose edit, delete, generation, or study actions; generation remains a Note Editor responsibility and quizzes remain on study surfaces.
+- Subject UI rules:
+  - render subjects as badges across library cards and note headers
+  - note headers should place `Subject Badge • Author`
+  - note editor subject fields should offer predefined subject suggestions while still accepting custom values
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.

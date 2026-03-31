@@ -165,6 +165,8 @@ describe("NoteEditorPageClient", () => {
     expect(subjectInput).not.toBeDisabled();
     expect(contentInput).not.toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
+    expect(document.querySelector("#note-subject-suggestions")).not.toBeNull();
+    expect(screen.getByText("Choose a common subject or type your own.")).toBeInTheDocument();
   });
 
   it("shows the first-study hint on the create note page when onboarding is in progress", async () => {

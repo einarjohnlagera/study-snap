@@ -239,6 +239,12 @@ Users can:
   - `Quick Review`
   - `Challenge Quiz`
   - `Adaptive Practice`
+- Subject display should stay consistent across My Library, Public Library, Private Note Detail, and Public Note Detail:
+  - render subject as a reusable badge, not `Subject: ...` text
+  - place subject on the same line as the author label on note headers
+- Note Editor subject input should use recommended subjects plus custom entry:
+  - show predefined suggestions such as `Biology`, `Chemistry`, `Physics`, `Board Exam`, and `General`
+  - still allow free-typed custom subjects without schema changes
 
 Dashboard guidance rules:
 
