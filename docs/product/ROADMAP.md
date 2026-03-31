@@ -100,7 +100,45 @@ Future Improvement - Normalize Subjects Table
 - repeat note-editor actions at the top and bottom on desktop and keep a floating CTA on mobile
 - add explicit first-time activation guidance from verification through first Study Pack and first Challenge Quiz
 
-## v0.5.0 - Board Exam Mode
+## Public Profiles (Planned – v0.5.x)
+
+Public profiles allow users to showcase their public notes and contributions.
+
+Route:
+- /u/{displayName} (future)
+- /profile/{userId} (initial implementation)
+
+Public profile will display:
+- Display Name
+- Profile Type (Student / Teacher / Board Taker / Parent)
+- Official Badge (for NoteLib account)
+- Total Public Notes
+- Total Copies (how many times their notes were copied)
+- Subjects contributed to
+- List of public notes by the user
+
+Public note card should show:
+- Title
+- Subject badge
+- Tags
+- Copy count
+- “Open Note” button
+
+System rules:
+- Display Name is public identity
+- Email is never shown publicly
+- Official badge is only for system/admin accounts
+- Notes created by NoteLib should show “By NoteLib” with Official badge
+
+Future enhancements:
+- Views count per note
+- Likes / Helpful button
+- Followers
+- Creator leaderboard
+- Public profile bio
+- Achievements / badges
+
+## v0.6.0 - Board Exam Mode
 
 - Exam Countdown
 - Exam Readiness Score
@@ -138,27 +176,6 @@ Roadmap decisions should reinforce this loop rather than one-time output generat
 - Reminder Scheduler (daily job)
 - Email templates via Resend
 - Standardize user-facing emails around first-name personalization, consistent NoteLib branding, and current Free vs Premium plan messaging
-
-## Future Feature — Public Profiles & Community
-
-NoteLib will introduce public profiles to allow users to showcase their public notes and contributions.
-
-Planned features:
-- Public profile page (/u/{displayName})
-- Display public notes created by the user
-- Show total public notes
-- Show total copies
-- Show total views (future)
-- Show total likes (future)
-- Show top subjects
-- Allow users to share their profile
-- Official NoteLib profile for curated content
-
-Purpose:
-- Encourage knowledge sharing
-- Motivate users to create high-quality notes
-- Build a learning community around NoteLib
-- Support board exam preparation content
 
 ## Legacy planning context
 
