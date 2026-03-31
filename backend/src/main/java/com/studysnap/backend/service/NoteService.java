@@ -12,7 +12,6 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
-import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -41,6 +40,8 @@ public class NoteService {
     private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
     private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
+    private static final String OFFICIAL_AUTHOR_DISPLAY_NAME = "NoteLib";
+    private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
 
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
@@ -223,13 +224,13 @@ public class NoteService {
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
         List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
-        return toListItems(notes);
+        return toListItems(notes, ownerUserId);
     }
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
         List<NoteEntity> notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
-        return toListItems(notes);
+        return toListItems(notes, viewerUserId);
     }
 
     @Transactional(readOnly = true)
@@ -247,7 +248,7 @@ public class NoteService {
                 "pathType", "id",
                 "subject", entity.getSubject()
         ));
-        return mapToPublicDetail(entity, linkedStudyPack);
+        return mapToPublicDetail(entity, linkedStudyPack, viewerUserId);
     }
 
     @Transactional(readOnly = true)
@@ -273,10 +274,10 @@ public class NoteService {
         analyticsMetadata.put("subjectSlug", normalizedSubjectSlug);
         analyticsMetadata.put("titleSlug", normalizedTitleSlug);
         analyticsService.trackEvent(viewerUserId, AnalyticsEventType.PUBLIC_NOTE_VIEWED, matched.getId(), analyticsMetadata);
-        return mapToPublicDetail(matched, linkedStudyPack);
+        return mapToPublicDetail(matched, linkedStudyPack, viewerUserId);
     }
 
-    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes) {
+    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes, UUID viewerUserId) {
         if (notes.isEmpty()) {
             return List.of();
         }
@@ -298,7 +299,12 @@ public class NoteService {
         }
 
         return notes.stream()
-                .map(note -> mapToListItemResponse(note, studyPackByNoteId.get(note.getId()), ownerById.get(note.getOwnerUserId())))
+                .map(note -> mapToListItemResponse(
+                        note,
+                        studyPackByNoteId.get(note.getId()),
+                        ownerById.get(note.getOwnerUserId()),
+                        viewerUserId
+                ))
                 .toList();
     }
 
@@ -378,7 +384,13 @@ public class NoteService {
         );
     }
 
-    private NoteListItemResponse mapToListItemResponse(NoteEntity note, StudyPackEntity studyPack, UserEntity owner) {
+    private NoteListItemResponse mapToListItemResponse(
+            NoteEntity note,
+            StudyPackEntity studyPack,
+            UserEntity owner,
+            UUID viewerUserId
+    ) {
+        boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new NoteListItemResponse(
                 note.getId().toString(),
                 note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
@@ -390,14 +402,16 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(note, studyPack),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
-                owner != null && owner.getRole() == UserRole.ADMIN,
+                resolvePublicAuthorName(owner),
+                isOfficialAuthor,
+                isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getUpdatedAt()
         );
     }
 
-    private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack) {
+    private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack, UUID viewerUserId) {
         UserEntity owner = userRepository.findById(note.getOwnerUserId()).orElse(null);
-        String authorDisplayName = owner == null ? DEFAULT_AUTHOR_NAME : resolvePublicAuthorName(owner);
+        boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new PublicNoteDetailResponse(
                 note.getId().toString(),
                 note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
@@ -409,13 +423,20 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
-                owner != null && owner.getRole() == UserRole.ADMIN,
-                authorDisplayName,
+                resolvePublicAuthorName(owner),
+                isOfficialAuthor,
+                isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getUpdatedAt()
         );
     }
 
     private String resolvePublicAuthorName(UserEntity user) {
+        if (isOfficialAuthor(user)) {
+            return OFFICIAL_AUTHOR_DISPLAY_NAME;
+        }
+        if (user == null) {
+            return DEFAULT_AUTHOR_NAME;
+        }
         String displayName = normalizeOptionalText(user.getDisplayName());
         if (displayName != null) {
             return displayName;
@@ -425,6 +446,15 @@ public class NoteService {
             return firstName;
         }
         return DEFAULT_AUTHOR_NAME;
+    }
+
+    private boolean isOfficialAuthor(UserEntity user) {
+        String email = user == null ? null : normalizeOptionalText(user.getEmail());
+        return OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(email);
+    }
+
+    private boolean isCurrentUser(UUID ownerUserId, UUID viewerUserId) {
+        return ownerUserId != null && ownerUserId.equals(viewerUserId);
     }
 
     private String resolveStudyPackStatus(NoteEntity note, StudyPackEntity studyPack) {

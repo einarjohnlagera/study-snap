@@ -217,6 +217,7 @@ class NoteServiceTest {
         owner.setId(ownerUserId);
         owner.setDisplayName("historyhero");
         owner.setFirstName("History");
+        owner.setEmail("history@example.com");
 
         when(noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, "history"))
                 .thenReturn(List.of(publicNote));
@@ -227,8 +228,9 @@ class NoteServiceTest {
 
         assertThat(response.id()).isEqualTo(noteId.toString());
         assertThat(response.ownerUserId()).isEqualTo(ownerUserId.toString());
-        assertThat(response.official()).isFalse();
         assertThat(response.authorDisplayName()).isEqualTo("historyhero");
+        assertThat(response.isOfficialAuthor()).isFalse();
+        assertThat(response.isCurrentUser()).isFalse();
         assertThat(response.summary()).isEqualTo("Summary");
         assertThat(response.keyConcepts()).containsExactly("Alliance systems");
     }
@@ -258,10 +260,12 @@ class NoteServiceTest {
 
         UserEntity viewer = new UserEntity();
         viewer.setId(viewerUserId);
-        viewer.setRole(com.studysnap.backend.entity.UserRole.USER);
+        viewer.setFirstName("Viewer");
+        viewer.setEmail("viewer@example.com");
         UserEntity officialOwner = new UserEntity();
         officialOwner.setId(officialOwnerUserId);
-        officialOwner.setRole(com.studysnap.backend.entity.UserRole.ADMIN);
+        officialOwner.setFirstName("Einar");
+        officialOwner.setEmail("einar.lagera@gmail.com");
 
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(viewerNote, officialNote));
@@ -276,10 +280,14 @@ class NoteServiceTest {
         assertThat(response)
                 .extracting(NoteListItemResponse::id)
                 .containsExactly(viewerNoteId.toString(), officialNoteId.toString());
-        assertThat(response.get(0).ownerUserId()).isEqualTo(viewerUserId.toString());
-        assertThat(response.get(0).official()).isFalse();
+        assertThat(response.getFirst().ownerUserId()).isEqualTo(viewerUserId.toString());
+        assertThat(response.getFirst().authorDisplayName()).isEqualTo("Viewer");
+        assertThat(response.getFirst().isOfficialAuthor()).isFalse();
+        assertThat(response.getFirst().isCurrentUser()).isTrue();
         assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
-        assertThat(response.get(1).official()).isTrue();
+        assertThat(response.get(1).authorDisplayName()).isEqualTo("NoteLib");
+        assertThat(response.get(1).isOfficialAuthor()).isTrue();
+        assertThat(response.get(1).isCurrentUser()).isFalse();
     }
 
     private NoteEntity buildNote(

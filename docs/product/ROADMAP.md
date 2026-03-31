@@ -40,7 +40,7 @@ Scope priorities:
 - OCR upload gating for unverified users on Create/Edit Note
 - My Library continuity (browse, filter, sort, revisit)
 - Public Library continuity (browse public notes and copy into My Library)
-- Public Library community polish (include your own public notes and distinguish NoteLib/community authors)
+- Public Library community polish (include your own public notes, public display names, and backend-driven NoteLib official badge)
 - sharing and remixing continuity (`/p/{token}`, copy to library without LLM call)
 - note-centric ownership across generated content and quiz sessions (`noteId`)
 
@@ -48,6 +48,12 @@ Implementation stance:
 
 - keep UX calm, practical, and non-overengineered
 - keep data model and backend flows simple
+
+Future Improvement - Public Profiles
+
+- build lightweight public profile pages on top of persisted `users.display_name`
+- keep impersonation guardrails through reserved display-name validation
+- extend official/system-author handling without exposing private account emails
 - keep Note as primary entity and Study Pack as generated enhancement state
 
 ## V3 (future direction)

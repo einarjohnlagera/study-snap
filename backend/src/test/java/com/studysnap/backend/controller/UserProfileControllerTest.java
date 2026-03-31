@@ -40,14 +40,14 @@ class UserProfileControllerTest {
     void updateProfile_delegatesIdentitySaveToAuthService() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "[email protected]");
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "Study Note", "[email protected]");
         MeResponse expected = new MeResponse(
                 userId.toString(),
                 "[email protected]",
                 "[email protected]",
                 "Note",
                 "User",
-                "Note User",
+                "Study Note",
                 null,
                 ProfileType.STUDENT,
                 null,

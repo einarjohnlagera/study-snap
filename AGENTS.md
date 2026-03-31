@@ -206,12 +206,23 @@ Core loop:
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes
-  - `By NoteLib` for official/admin-owned public notes
-  - `By Community` for other public notes
+  - `By NoteLib` plus `Official` badge for the official NoteLib account
+  - `By {displayName}` for other public notes
 - Public author labels are viewer-relative:
   - owner viewing own public note -> `By You`
-  - official/admin-owned public note -> `By NoteLib`
-  - all other public notes -> `By Community`
+  - official NoteLib account -> `By NoteLib` with `Official`
+  - all other public notes -> `By {displayName}`
+- `users.display_name` is the public author field. Never show public author emails.
+- Reserved display names must be blocked server-side. Reject exact matches for:
+  - `notelib`
+  - `admin`
+  - `support`
+  - `official`
+  - `moderator`
+  - `staff`
+  - `team`
+- Also reject any display name containing `notelib` and return:
+  - `This display name is reserved. Please choose another name.`
 - Public note detail should switch its primary CTA by ownership:
   - owner -> `Open Note`
   - non-owner -> `Make a Copy`

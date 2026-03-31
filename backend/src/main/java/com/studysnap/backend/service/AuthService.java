@@ -38,12 +38,24 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @Transactional
 @RequiredArgsConstructor
 public class AuthService {
+    private static final String RESERVED_DISPLAY_NAME_MESSAGE = "This display name is reserved. Please choose another name.";
+    private static final Set<String> RESERVED_DISPLAY_NAMES = Set.of(
+            "notelib",
+            "admin",
+            "support",
+            "official",
+            "moderator",
+            "staff",
+            "team"
+    );
+
     private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
     private final SubscriptionService subscriptionService;
@@ -67,7 +79,7 @@ public class AuthService {
         user.setPendingEmail(null);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFirstName(request.firstName().trim());
-        user.setDisplayName(resolveDisplayName(request.displayName(), request.firstName()));
+        user.setDisplayName(resolveDisplayName(request.displayName()));
         user.setCountryCode(null);
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
@@ -241,11 +253,12 @@ public class AuthService {
 
         String normalizedFirstName = normalizeRequiredText(request.firstName());
         String normalizedLastName = normalizeOptionalText(request.lastName());
+        String normalizedDisplayName = normalizeOptionalText(request.displayName());
         String normalizedEmail = normalizeEmail(request.email());
 
         user.setFirstName(normalizedFirstName);
         user.setLastName(normalizedLastName);
-        user.setDisplayName(resolveProfileDisplayName(normalizedFirstName, normalizedLastName));
+        user.setDisplayName(resolveDisplayName(normalizedDisplayName));
 
         if (normalizedEmail.equalsIgnoreCase(user.getEmail())) {
             user.setPendingEmail(null);
@@ -391,18 +404,20 @@ public class AuthService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private String resolveDisplayName(String displayName, String firstName) {
-        if (displayName != null && !displayName.isBlank()) {
-            return displayName.trim();
+    private String resolveDisplayName(String displayName) {
+        String normalizedDisplayName = normalizeOptionalText(displayName);
+        if (normalizedDisplayName == null) {
+            return null;
         }
-        return firstName == null ? null : firstName.trim();
+        validateDisplayName(normalizedDisplayName);
+        return normalizedDisplayName;
     }
 
-    private String resolveProfileDisplayName(String firstName, String lastName) {
-        if (lastName == null || lastName.isBlank()) {
-            return firstName;
+    private void validateDisplayName(String displayName) {
+        String normalized = displayName.trim().toLowerCase(Locale.ROOT);
+        if (normalized.contains("notelib") || RESERVED_DISPLAY_NAMES.contains(normalized)) {
+            throw new AppException("DISPLAY_NAME_RESERVED", RESERVED_DISPLAY_NAME_MESSAGE, HttpStatus.BAD_REQUEST);
         }
-        return firstName + " " + lastName;
     }
 
     private void ensureEmailAvailable(UUID currentUserId, String email) {

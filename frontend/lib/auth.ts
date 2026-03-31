@@ -5,7 +5,7 @@ import type { MePlanResponse } from "./me-plan";
 export type AuthUser = {
   id: string;
   email: string;
-  displayName: string;
+  displayName: string | null;
   profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL" | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt?: string | null;

@@ -18,16 +18,20 @@ jest.mock("@/components/notes/public-note-ownership-actions", () => ({
   PublicNoteOwnershipActions: ({
     noteId,
     ownerUserId,
-    official,
+    authorDisplayName,
+    isOfficialAuthor,
+    isCurrentUser,
     subjectLabel,
   }: {
     noteId: string;
     ownerUserId: string | null;
-    official: boolean;
+    authorDisplayName: string;
+    isOfficialAuthor: boolean;
+    isCurrentUser: boolean;
     subjectLabel?: string | null;
   }) => (
     <div>
-      Ownership actions for {noteId} / {ownerUserId ?? "none"} / {official ? "official" : "community"} / {subjectLabel ?? "none"}
+      Ownership actions for {noteId} / {ownerUserId ?? "none"} / {authorDisplayName} / {isOfficialAuthor ? "official" : "regular"} / {isCurrentUser ? "current" : "other"} / {subjectLabel ?? "none"}
     </div>
   ),
 }));
@@ -50,8 +54,9 @@ const baseNote = {
       explanation: "The nucleus controls cell activity.",
     },
   ],
-  official: false,
   authorDisplayName: "studybuddy",
+  isOfficialAuthor: false,
+  isCurrentUser: false,
   updatedAt: "2026-03-23T09:00:00Z",
 };
 
@@ -73,7 +78,7 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByText("Public Library")).toBeInTheDocument();
     expect(screen.getByText("Generated with NoteLib")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
-    expect(screen.getByText("Ownership actions for note-1 / user-2 / community / Science")).toBeInTheDocument();
+    expect(screen.getByText("Ownership actions for note-1 / user-2 / studybuddy / regular / other / Science")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
     expect(screen.getByText("Cell structure summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Key Concepts" })).toBeInTheDocument();

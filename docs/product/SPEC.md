@@ -214,12 +214,12 @@ Users can:
 - copy a public note into My Library (`Copy to My Library`)
 - see source badges on cards:
   - `By You` for their own public notes
-  - `By NoteLib` for official/admin-owned public notes
-  - `By Community` for other users' public notes
+  - `By NoteLib` plus an `Official` badge for the official NoteLib account
+  - `By {displayName}` for other users' public notes
 - Public Library author labels are viewer-relative:
   - if `note.ownerId == currentUser.id` -> `By You`
-  - else if the note is official/admin-owned -> `By NoteLib`
-  - else -> `By Community`
+  - else if the note author is the official NoteLib account -> `By NoteLib` with `Official`
+  - else -> `By {displayName}`
 - Public note detail should change the primary action by ownership:
   - owner -> `Open Note`
   - non-owner -> `Make a Copy`
@@ -239,6 +239,30 @@ Users can:
   - `Quick Review`
   - `Challenge Quiz`
   - `Adaptive Practice`
+
+### Display Name And Official Badge
+
+- `users.display_name` is the public author name field.
+- `Profile -> Identity` owns:
+  - `firstName`
+  - `lastName`
+  - `displayName`
+  - `email`
+- If `displayName` is blank, public author fallback is `firstName`.
+- Public pages must never show the user's email address.
+- Reserved display names are rejected server-side. The following are reserved case-insensitively:
+  - `notelib`
+  - `admin`
+  - `support`
+  - `official`
+  - `moderator`
+  - `staff`
+  - `team`
+- Any display name containing `notelib` is also rejected.
+- Validation message: `This display name is reserved. Please choose another name.`
+- The official NoteLib account is backend-driven from the configured official email and renders as:
+  - author label -> `By NoteLib`
+  - badge -> `Official`
 
 Dashboard guidance rules:
 

@@ -30,7 +30,9 @@ describe("PublicNoteOwnershipActions", () => {
       <PublicNoteOwnershipActions
         noteId="note-1"
         ownerUserId="user-1"
-        official={false}
+        authorDisplayName="Study Buddy"
+        isOfficialAuthor={false}
+        isCurrentUser={true}
       />,
     );
 
@@ -57,25 +59,30 @@ describe("PublicNoteOwnershipActions", () => {
       <PublicNoteOwnershipActions
         noteId="note-2"
         ownerUserId="user-2"
-        official={false}
+        authorDisplayName="Study Buddy"
+        isOfficialAuthor={false}
+        isCurrentUser={false}
       />,
     );
 
-    expect(screen.getByText("By Community")).toBeInTheDocument();
+    expect(screen.getByText("By Study Buddy")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
   });
 
-  it("shows NoteLib label for official public content", () => {
+  it("shows NoteLib label and official badge for official public content", () => {
     render(
       <PublicNoteOwnershipActions
         noteId="note-3"
         ownerUserId="admin-1"
-        official
+        authorDisplayName="NoteLib"
+        isOfficialAuthor
+        isCurrentUser={false}
       />,
     );
 
     expect(screen.getByText("By NoteLib")).toBeInTheDocument();
+    expect(screen.getByText("Official")).toBeInTheDocument();
   });
 });

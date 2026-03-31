@@ -5,20 +5,24 @@ import { useEffect, useMemo, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { getAuthUser } from "@/lib/auth";
-import { isPublicNoteOwner, resolvePublicNoteAuthorLabel } from "@/lib/public-note-author";
+import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
   noteId: string;
   ownerUserId: string | null;
-  official: boolean;
+  authorDisplayName: string;
+  isOfficialAuthor: boolean;
+  isCurrentUser: boolean;
   subjectLabel?: string | null;
 };
 
 export function PublicNoteOwnershipActions({
   noteId,
   ownerUserId,
-  official,
+  authorDisplayName,
+  isOfficialAuthor,
+  isCurrentUser,
   subjectLabel,
 }: Readonly<PublicNoteOwnershipActionsProps>) {
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
@@ -36,10 +40,16 @@ export function PublicNoteOwnershipActions({
     };
   }, []);
 
-  const isOwner = isPublicNoteOwner({ ownerUserId, currentUserId });
-  const authorLabel = useMemo(
-    () => resolvePublicNoteAuthorLabel({ ownerUserId, currentUserId, official }),
-    [currentUserId, official, ownerUserId],
+  const isOwner = isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId });
+  const authorMeta = useMemo(
+    () => resolvePublicNoteAuthorMeta({
+      ownerUserId,
+      currentUserId,
+      authorDisplayName,
+      isOfficialAuthor,
+      isCurrentUser,
+    }),
+    [authorDisplayName, currentUserId, isCurrentUser, isOfficialAuthor, ownerUserId],
   );
   const openNoteHref = `/notes/${noteId}`;
 
@@ -73,9 +83,16 @@ export function PublicNoteOwnershipActions({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-foreground/80">
-        {subjectLabel ? `${subjectLabel} • ${authorLabel}` : authorLabel}
-      </p>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
+        {subjectLabel ? <span>{subjectLabel}</span> : null}
+        {subjectLabel ? <span aria-hidden="true">•</span> : null}
+        <span>{authorMeta.label}</span>
+        {authorMeta.showOfficialBadge ? (
+          <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
+            Official
+          </span>
+        ) : null}
+      </div>
 
       {isOwner ? (
         <div className="space-y-3">
