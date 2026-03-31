@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
+import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -851,20 +852,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <label htmlFor="note-subject-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
                     Subject
                   </label>
-                  <input
+                  <SubjectCombobox
                     id="note-subject-inline"
-                    type="text"
-                    list="note-subject-inline-suggestions"
                     value={metadataDraft.subject}
-                    onChange={(event) => setMetadataDraft((previous) => ({ ...previous, subject: event.target.value }))}
-                    className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                    suggestions={subjectSuggestions}
+                    onChange={(value) => setMetadataDraft((previous) => ({ ...previous, subject: value }))}
                     placeholder="Choose or type a subject"
                   />
-                  <datalist id="note-subject-inline-suggestions">
-                    {subjectSuggestions.map((subjectOption) => (
-                      <option key={subjectOption} value={subjectOption} />
-                    ))}
-                  </datalist>
                 </div>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Tags</p>

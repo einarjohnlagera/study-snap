@@ -164,14 +164,45 @@ describe("NoteEditorPageClient", () => {
     const titleInput = await screen.findByLabelText("Title (optional)");
     const subjectInput = screen.getByLabelText("Subject (optional)");
     const contentInput = screen.getByLabelText("Content");
+    await waitFor(() => {
+      expect(titleInput).toHaveValue("Draft Note");
+      expect(subjectInput).toHaveValue("Biology");
+    });
 
     expect(titleInput).not.toBeDisabled();
     expect(subjectInput).not.toBeDisabled();
     expect(contentInput).not.toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
-    expect(document.querySelector("#note-subject-suggestions")).not.toBeNull();
     expect(screen.getByText("Select an existing subject or type your own.")).toBeInTheDocument();
-    expect(listSubjects).toHaveBeenCalledWith("mine");
+    await waitFor(() => {
+      expect(listSubjects).toHaveBeenCalledWith("mine");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle subject suggestions" }));
+    expect(await screen.findByRole("option", { name: "Anatomy" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument();
+  });
+
+  it("saves a custom subject even when it is not in backend suggestions", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    const subjectInput = await screen.findByLabelText("Subject (optional)");
+    const contentInput = screen.getByLabelText("Content");
+    await waitFor(() => {
+      expect(listSubjects).toHaveBeenCalledWith("mine");
+    });
+    fireEvent.change(subjectInput, { target: { value: "Microbiology Lab" } });
+    fireEvent.change(contentInput, { target: { value: "Custom subject note" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]);
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalled();
+    });
+    expect((createNote as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
+      subject: "Microbiology Lab",
+    }));
   });
 
   it("shows the first-study hint on the create note page when onboarding is in progress", async () => {

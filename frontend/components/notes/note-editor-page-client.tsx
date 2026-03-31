@@ -363,7 +363,7 @@ export function NoteEditorPageClient({
     return () => {
       active = false;
     };
-  }, [noteId, router]);
+  }, [noteId]);
   const studyPacksUsed = usageSummary?.usage.studyPacksUsed ?? 0;
   const studyPacksLimit = usageSummary?.limits.studyPacksPerMonth ?? 0;
   const hasReachedStudyPackLimit = usageSummary?.plan === "FREE"
