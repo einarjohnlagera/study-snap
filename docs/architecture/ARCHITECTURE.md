@@ -35,7 +35,7 @@ Routes:
 - `/notes/{id}/edit` Edit Note
 - `/dashboard` guidance + library entry
 - `/library` My Library (owned notes)
-- `/library/public` Public Library (public notes from other users)
+- `/library/public` Public Library (public notes from you, the community, and official NoteLib content)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
 - `/public/library/{subject}/{slug}` public read-only note detail
 - `/settings` plan/billing and account controls
@@ -104,6 +104,20 @@ Versioning model:
 - review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context via `noteId`
 - share links reference generated Study Pack view data
 - copy creates a new Draft Note identity with user-authored fields only
+
+## Public Author Identity
+
+- `users.display_name` is the persisted public author field.
+- Public note responses should include:
+  - `authorDisplayName`
+  - `isOfficialAuthor`
+  - `isCurrentUser`
+- Author resolution rules:
+  - official account email -> `NoteLib`
+  - else `display_name` when present
+  - else `first_name`
+- The official NoteLib badge is derived on the backend from the configured official account email, not from frontend heuristics.
+- Reserved display-name guardrails are enforced in backend profile/signup flows before `users.display_name` is saved.
 
 ## Profile-Based UX Layer
 
@@ -395,7 +409,7 @@ Required backend behavior:
 - list owned notes for My Library
 - list all public notes for Public Library, including the viewer's own public notes
 - include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
-- include author-source metadata for Public Library card labeling (`By You`, `NoteLib`, `Community`)
+- include author-source metadata for Public Library card labeling (`By You`, `By NoteLib`, `By {displayName}`) plus `Official` badge state
 - support public read-only note detail payload for copy flow
 
 Filtering model:

@@ -96,7 +96,9 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
             <PublicNoteAuthorLine
               ownerUserId={note.ownerUserId}
-              official={note.official}
+              authorDisplayName={note.authorDisplayName}
+              isOfficialAuthor={note.isOfficialAuthor}
+              isCurrentUser={note.isCurrentUser}
               subject={note.subject}
             />
             <div className="flex flex-wrap gap-2">
@@ -116,6 +118,7 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
             <PublicNoteOwnershipActions
               noteId={note.id}
               ownerUserId={note.ownerUserId}
+              isCurrentUser={note.isCurrentUser}
             />
           </div>
         </header>

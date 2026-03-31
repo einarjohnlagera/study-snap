@@ -35,7 +35,7 @@ describe("PublicLibraryPageClient", () => {
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Physics"]);
   });
 
-  it("shows By You, NoteLib, and Community badges for public notes", async () => {
+  it("shows By You, NoteLib, and display-name badges for public notes", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-1",
@@ -48,7 +48,9 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
-        official: false,
+        authorDisplayName: "My Notes",
+        isOfficialAuthor: false,
+        isCurrentUser: true,
         updatedAt: "2026-03-31T10:00:00Z",
       },
       {
@@ -62,7 +64,9 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-2",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 4,
-        official: true,
+        authorDisplayName: "NoteLib",
+        isOfficialAuthor: true,
+        isCurrentUser: false,
         updatedAt: "2026-03-31T09:00:00Z",
       },
       {
@@ -76,7 +80,9 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-3",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 2,
-        official: false,
+        authorDisplayName: "Study Buddy",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
         updatedAt: "2026-03-31T08:00:00Z",
       },
     ]);
@@ -90,7 +96,8 @@ describe("PublicLibraryPageClient", () => {
 
     expect(await screen.findByText("By You")).toBeInTheDocument();
     expect(screen.getByText("By NoteLib")).toBeInTheDocument();
-    expect(screen.getByText("By Community")).toBeInTheDocument();
+    expect(screen.getByText("Official")).toBeInTheDocument();
+    expect(screen.getByText("By Study Buddy")).toBeInTheDocument();
     expect(screen.getByText("My Public Note")).toBeInTheDocument();
     expect(screen.getByText("Official Example")).toBeInTheDocument();
     expect(screen.getByText("Community Note")).toBeInTheDocument();
@@ -110,14 +117,16 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
-        official: false,
+        authorDisplayName: "My Notes",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
         updatedAt: "2026-03-31T10:00:00Z",
       },
     ]);
 
     render(<PublicLibraryPageClient />);
 
-    expect(await screen.findByText("By Community")).toBeInTheDocument();
+    expect(await screen.findByText("By My Notes")).toBeInTheDocument();
 
     await act(async () => {
       currentAuthUser = { id: "user-1" };

@@ -18,6 +18,7 @@ import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 type IdentityForm = {
   firstName: string;
   lastName: string;
+  displayName: string;
   email: string;
 };
 
@@ -65,6 +66,7 @@ export default function ProfilePage() {
   const [identityForm, setIdentityForm] = useState<IdentityForm>({
     firstName: "",
     lastName: "",
+    displayName: "",
     email: "",
   });
   const [savingIdentity, setSavingIdentity] = useState(false);
@@ -90,6 +92,7 @@ export default function ProfilePage() {
       setIdentityForm({
         firstName: me.firstName ?? "",
         lastName: me.lastName ?? "",
+        displayName: me.displayName ?? "",
         email: me.pendingEmail ?? me.email ?? "",
       });
       setSelectedProfileType(me.profileType ?? "");
@@ -143,12 +146,14 @@ export default function ProfilePage() {
       const updated = await updateUserProfile({
         firstName: identityForm.firstName.trim(),
         lastName: identityForm.lastName.trim(),
+        displayName: identityForm.displayName.trim(),
         email: identityForm.email.trim(),
       });
       setProfile(updated);
       setIdentityForm({
         firstName: updated.firstName ?? "",
         lastName: updated.lastName ?? "",
+        displayName: updated.displayName ?? "",
         email: updated.pendingEmail ?? updated.email,
       });
       setSaveMessage(
@@ -237,6 +242,14 @@ export default function ProfilePage() {
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
                   value={identityForm.lastName}
                   onChange={(event) => handleIdentityFieldChange("lastName", event.target.value)}
+                />
+              </label>
+              <label className="block space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium">Display Name</span>
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={identityForm.displayName}
+                  onChange={(event) => handleIdentityFieldChange("displayName", event.target.value)}
                 />
               </label>
               <label className="block space-y-2 sm:col-span-2">
