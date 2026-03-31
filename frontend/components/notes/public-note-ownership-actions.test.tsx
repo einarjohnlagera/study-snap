@@ -1,23 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PublicNoteOwnershipActions } from "./public-note-ownership-actions";
-import { deleteNote } from "@/lib/api";
-
-const pushMock = jest.fn();
 
 let currentAuthUser: { id: string } | null = null;
 
-jest.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: pushMock,
-  }),
-}));
-
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(() => currentAuthUser),
-}));
-
-jest.mock("@/lib/api", () => ({
-  deleteNote: jest.fn(),
 }));
 
 jest.mock("./public-seo-copy-cta", () => ({
@@ -28,10 +15,8 @@ describe("PublicNoteOwnershipActions", () => {
   const clipboardWriteText = jest.fn();
 
   beforeEach(() => {
-    pushMock.mockReset();
     clipboardWriteText.mockReset();
     currentAuthUser = null;
-    (deleteNote as jest.Mock).mockReset();
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: clipboardWriteText },
       configurable: true,
@@ -46,20 +31,23 @@ describe("PublicNoteOwnershipActions", () => {
         noteId="note-1"
         ownerUserId="user-1"
         official={false}
-        studyPackStatus="STUDY_PACK_READY"
       />,
     );
 
     expect(screen.getByText("By You")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Edit Note" })).toHaveAttribute("href", "/notes/note-1");
-    expect(screen.getByRole("link", { name: "Start Quick Review" })).toHaveAttribute("href", "/notes/note-1/quick-review");
-    expect(screen.getByRole("link", { name: "Challenge Quiz" })).toHaveAttribute("href", "/notes/note-1/challenge-quiz");
+    expect(screen.getByRole("link", { name: "Open Note" })).toHaveAttribute("href", "/notes/note-1");
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Start Quick Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Challenge Quiz" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    expect(screen.getByText("Share this note")).toBeInTheDocument();
+    expect(screen.getByText("Shareable URL")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
     expect(clipboardWriteText).toHaveBeenCalled();
-    expect(await screen.findByRole("button", { name: "Link Copied" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+    expect(screen.getByText("Link copied")).toBeInTheDocument();
   });
 
   it("shows copy action and community label for a non-owner public note", () => {
@@ -70,14 +58,13 @@ describe("PublicNoteOwnershipActions", () => {
         noteId="note-2"
         ownerUserId="user-2"
         official={false}
-        studyPackStatus="STUDY_PACK_READY"
       />,
     );
 
     expect(screen.getByText("By Community")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Edit Note" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
   });
 
   it("shows NoteLib label for official public content", () => {
@@ -86,7 +73,6 @@ describe("PublicNoteOwnershipActions", () => {
         noteId="note-3"
         ownerUserId="admin-1"
         official
-        studyPackStatus="STUDY_PACK_READY"
       />,
     );
 

@@ -98,7 +98,6 @@ export default async function PublicLibrarySeoPage({ params }: PublicLibrarySeoP
               noteId={note.id}
               ownerUserId={note.ownerUserId}
               official={note.official}
-              studyPackStatus={note.studyPackStatus}
               subjectLabel={subjectLabel}
             />
             <div className="flex flex-wrap gap-2">

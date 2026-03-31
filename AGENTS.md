@@ -213,10 +213,13 @@ Core loop:
   - official/admin-owned public note -> `By NoteLib`
   - all other public notes -> `By Community`
 - Public note detail should switch its primary CTA by ownership:
-  - owner -> `Edit Note`
+  - owner -> `Open Note`
   - non-owner -> `Make a Copy`
 - Public note detail header should show `Subject • Author` using the same viewer-relative label logic as library cards.
-- Public note detail should not expose generation actions; generation remains a Note Editor responsibility.
+- Public note detail is read/copy/share only:
+  - owner -> `Open Note`, `Share`
+  - non-owner -> `Make a Copy`, `Share`
+- Public note detail should not expose edit, delete, generation, or study actions; generation remains a Note Editor responsibility and quizzes remain on study surfaces.
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.

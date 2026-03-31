@@ -221,19 +221,24 @@ Users can:
   - else if the note is official/admin-owned -> `By NoteLib`
   - else -> `By Community`
 - Public note detail should change the primary action by ownership:
-  - owner -> `Edit Note`
+  - owner -> `Open Note`
   - non-owner -> `Make a Copy`
 - Public note detail header should show `Subject • Author` using the same viewer-relative author label.
-- Public note detail should not show generation actions.
+- Public note detail is read/copy/share only and should not show edit, delete, or study actions.
 - Owner actions on public note detail may include:
-  - `Edit Note`
-  - `Start Quick Review`
-  - `Challenge Quiz`
+  - `Open Note`
   - `Share`
-  - `Delete`
 - Non-owner actions on public note detail may include:
   - `Make a Copy`
   - `Share`
+- Private Note Detail owns:
+  - `Edit`
+  - `Delete`
+  - `Generate Study Pack`
+- Study surfaces own:
+  - `Quick Review`
+  - `Challenge Quiz`
+  - `Adaptive Practice`
 
 Dashboard guidance rules:
 

@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { getAuthUser } from "@/lib/auth";
-import { deleteNote } from "@/lib/api";
 import { isPublicNoteOwner, resolvePublicNoteAuthorLabel } from "@/lib/public-note-author";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
@@ -14,7 +12,6 @@ type PublicNoteOwnershipActionsProps = {
   noteId: string;
   ownerUserId: string | null;
   official: boolean;
-  studyPackStatus: "DRAFT" | "STUDY_PACK_READY";
   subjectLabel?: string | null;
 };
 
@@ -22,15 +19,11 @@ export function PublicNoteOwnershipActions({
   noteId,
   ownerUserId,
   official,
-  studyPackStatus,
   subjectLabel,
 }: Readonly<PublicNoteOwnershipActionsProps>) {
-  const router = useRouter();
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [shareState, setShareState] = useState<"idle" | "copied" | "error">("idle");
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   useEffect(() => {
     const syncAuth = () => {
@@ -48,36 +41,34 @@ export function PublicNoteOwnershipActions({
     () => resolvePublicNoteAuthorLabel({ ownerUserId, currentUserId, official }),
     [currentUserId, official, ownerUserId],
   );
-  const editHref = studyPackStatus === "DRAFT" ? `/notes/${noteId}/edit` : `/notes/${noteId}`;
+  const openNoteHref = `/notes/${noteId}`;
 
-  const handleShare = async () => {
+  useEffect(() => {
+    if (shareState !== "copied") {
+      return;
+    }
+    const timeout = globalThis.setTimeout(() => setShareState("idle"), 2000);
+    return () => globalThis.clearTimeout(timeout);
+  }, [shareState]);
+
+  const resolvedShareUrl = useMemo(() => {
+    return globalThis.window === undefined ? "" : globalThis.location.href;
+  }, []);
+
+  const truncatedShareUrl = useMemo(() => {
+    if (resolvedShareUrl.length <= 58) {
+      return resolvedShareUrl;
+    }
+    return `${resolvedShareUrl.slice(0, 55)}...`;
+  }, [resolvedShareUrl]);
+
+  const handleCopyShareLink = async () => {
     try {
-      await navigator.clipboard.writeText(globalThis.location.href);
+      await navigator.clipboard.writeText(resolvedShareUrl);
       setShareState("copied");
     } catch {
       setShareState("error");
     }
-    globalThis.setTimeout(() => {
-      setShareState("idle");
-    }, 2000);
-  };
-
-  const handleDelete = async () => {
-    if (deleting) {
-      return;
-    }
-    setDeleting(true);
-    setDeleteError(null);
-    try {
-      await deleteNote(noteId);
-      router.push("/library");
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Could not delete note.");
-      setDeleting(false);
-      return;
-    }
-    setDeleting(false);
-    setShowDeleteConfirm(false);
   };
 
   return (
@@ -89,88 +80,64 @@ export function PublicNoteOwnershipActions({
       {isOwner ? (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <Link href={editHref} className="w-full sm:w-auto">
+            <Link href={openNoteHref} className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
-                Edit Note
+                Open Note
               </Button>
             </Link>
-            {studyPackStatus === "STUDY_PACK_READY" ? (
-              <>
-                <Link href={`/notes/${noteId}/quick-review`} className="w-full sm:w-auto">
-                  <Button type="button" variant="outline" className="w-full sm:w-auto">
-                    Start Quick Review
-                  </Button>
-                </Link>
-                <Link href={`/notes/${noteId}/challenge-quiz`} className="w-full sm:w-auto">
-                  <Button type="button" variant="outline" className="w-full sm:w-auto">
-                    Challenge Quiz
-                  </Button>
-                </Link>
-              </>
-            ) : null}
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleShare()}>
-              {shareState === "copied" ? "Link Copied" : "Share"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400 sm:w-auto"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              Delete
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)}>
+              Share
             </Button>
           </div>
-          {shareState === "error" ? (
-            <p className="text-xs text-red-600 dark:text-red-400">Could not copy the note link.</p>
-          ) : null}
         </div>
       ) : (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <PublicSeoCopyCta noteId={noteId} label="Make a Copy" />
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleShare()}>
-              {shareState === "copied" ? "Link Copied" : "Share"}
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)}>
+              Share
             </Button>
           </div>
-          {shareState === "error" ? (
-            <p className="text-xs text-red-600 dark:text-red-400">Could not copy the note link.</p>
-          ) : null}
         </div>
       )}
 
       <AppModal
-        isOpen={showDeleteConfirm}
-        title="Delete this note?"
-        description="This removes the note from your library. This action cannot be undone."
+        isOpen={showShareModal}
+        title="Share this note"
         onClose={() => {
-          if (!deleting) {
-            setShowDeleteConfirm(false);
-          }
+          setShowShareModal(false);
+          setShareState("idle");
         }}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => setShowDeleteConfirm(false)}
-              disabled={deleting}
+              onClick={() => {
+                setShowShareModal(false);
+                setShareState("idle");
+              }}
             >
-              Cancel
+              Close
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full border-red-500/40 text-red-600 hover:bg-red-500/10 dark:text-red-400 sm:w-auto"
-              onClick={() => void handleDelete()}
-              disabled={deleting}
-            >
-              {deleting ? "Deleting..." : "Delete"}
+            <Button type="button" onClick={() => void handleCopyShareLink()}>
+              {shareState === "copied" ? "Copied" : "Copy Link"}
             </Button>
           </div>
         )}
       >
-        {deleteError ? <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p> : null}
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-wide text-foreground/60">Shareable URL</p>
+          <p className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground/85">
+            {truncatedShareUrl}
+          </p>
+          {shareState === "copied" ? (
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">Link copied</p>
+          ) : null}
+          {shareState === "error" ? (
+            <p className="text-xs text-red-600 dark:text-red-400">Could not copy the note link.</p>
+          ) : null}
+        </div>
       </AppModal>
     </div>
   );
