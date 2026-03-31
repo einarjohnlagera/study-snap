@@ -9,7 +9,7 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Pricing — Free and Premium Plans",
-  description: "Choose between Free and Premium plans. Generate study packs, quizzes, and reviewers from your notes.",
+  description: "Choose between Free and Premium plans for turning notes into reviewers, practice questions, and better exam prep.",
   path: "/pricing",
 });
 
@@ -27,7 +27,7 @@ export default function PricingPage() {
               Study smarter. Pass exams faster.
             </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Turn your notes into summaries, quizzes, and reviewers in seconds.
+              Turn your notes into reviewers, practice questions, and better exam prep.
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="/auth" className="w-full sm:w-auto">
