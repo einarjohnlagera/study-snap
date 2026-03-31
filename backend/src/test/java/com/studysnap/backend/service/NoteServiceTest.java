@@ -226,6 +226,8 @@ class NoteServiceTest {
         var response = noteService.getPublicBySeoPath("history", "world-war-1-causes", null);
 
         assertThat(response.id()).isEqualTo(noteId.toString());
+        assertThat(response.ownerUserId()).isEqualTo(ownerUserId.toString());
+        assertThat(response.official()).isFalse();
         assertThat(response.authorDisplayName()).isEqualTo("historyhero");
         assertThat(response.summary()).isEqualTo("Summary");
         assertThat(response.keyConcepts()).containsExactly("Alliance systems");

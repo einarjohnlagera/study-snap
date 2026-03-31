@@ -8,9 +8,10 @@ import { copyNote, trackAnalyticsEvent } from "@/lib/api";
 
 type PublicSeoCopyCtaProps = {
   noteId: string;
+  label?: string;
 };
 
-export function PublicSeoCopyCta({ noteId }: PublicSeoCopyCtaProps) {
+export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate Your Own Study Pack" }: Readonly<PublicSeoCopyCtaProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -78,7 +79,7 @@ export function PublicSeoCopyCta({ noteId }: PublicSeoCopyCtaProps) {
   return (
     <div className="space-y-2">
       <Button type="button" className="w-full sm:w-auto" onClick={() => void handleCopy()} disabled={copying}>
-        {copying ? "Preparing your copy..." : "Make a Copy and Generate Your Own Study Pack"}
+        {copying ? "Preparing your copy..." : label}
       </Button>
       {copyError ? <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p> : null}
     </div>

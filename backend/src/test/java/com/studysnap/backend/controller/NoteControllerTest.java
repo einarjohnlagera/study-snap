@@ -168,6 +168,7 @@ class NoteControllerTest {
     void getPublicBySeoPath_delegatesToService() {
         PublicNoteDetailResponse expected = new PublicNoteDetailResponse(
                 UUID.randomUUID().toString(),
+                UUID.randomUUID().toString(),
                 "Cell Structure",
                 "Science",
                 List.of("cells"),
@@ -176,6 +177,7 @@ class NoteControllerTest {
                 "Summary",
                 List.of("Nucleus"),
                 List.of(),
+                false,
                 "noteguru",
                 OffsetDateTime.now()
         );

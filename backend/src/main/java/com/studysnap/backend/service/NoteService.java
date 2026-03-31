@@ -396,11 +396,11 @@ public class NoteService {
     }
 
     private PublicNoteDetailResponse mapToPublicDetail(NoteEntity note, StudyPackEntity studyPack) {
-        String authorDisplayName = userRepository.findById(note.getOwnerUserId())
-                .map(this::resolvePublicAuthorName)
-                .orElse(DEFAULT_AUTHOR_NAME);
+        UserEntity owner = userRepository.findById(note.getOwnerUserId()).orElse(null);
+        String authorDisplayName = owner == null ? DEFAULT_AUTHOR_NAME : resolvePublicAuthorName(owner);
         return new PublicNoteDetailResponse(
                 note.getId().toString(),
+                note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
@@ -409,6 +409,7 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
+                owner != null && owner.getRole() == UserRole.ADMIN,
                 authorDisplayName,
                 note.getUpdatedAt()
         );

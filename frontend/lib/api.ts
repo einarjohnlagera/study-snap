@@ -684,6 +684,7 @@ export type NoteListItemResponse = {
 
 export type PublicNoteDetailResponse = {
   id: string;
+  ownerUserId: string | null;
   title: string | null;
   subject: string | null;
   tags: string[];
@@ -692,6 +693,7 @@ export type PublicNoteDetailResponse = {
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];
+  official: boolean;
   authorDisplayName: string;
   updatedAt: string;
 };

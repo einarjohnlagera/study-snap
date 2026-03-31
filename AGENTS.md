@@ -208,6 +208,10 @@ Core loop:
   - `By You` for the current user's own public notes
   - `NoteLib` for official/admin-owned public notes
   - `Community` for other public notes
+- Public note detail should switch its primary CTA by ownership:
+  - owner -> `Edit Note`
+  - non-owner -> `Make a Copy`
+- Public note detail should not expose generation actions; generation remains a Note Editor responsibility.
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.

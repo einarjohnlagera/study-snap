@@ -216,6 +216,19 @@ Users can:
   - `By You` for their own public notes
   - `NoteLib` for official/admin-owned public notes
   - `Community` for other users' public notes
+- Public note detail should change the primary action by ownership:
+  - owner -> `Edit Note`
+  - non-owner -> `Make a Copy`
+- Public note detail should not show generation actions.
+- Owner actions on public note detail may include:
+  - `Edit Note`
+  - `Start Quick Review`
+  - `Challenge Quiz`
+  - `Share`
+  - `Delete`
+- Non-owner actions on public note detail may include:
+  - `Make a Copy`
+  - `Share`
 
 Dashboard guidance rules:
 
