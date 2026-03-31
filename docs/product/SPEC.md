@@ -76,6 +76,42 @@ High-level model:
 - Quiz sessions and performance are linked by `noteId`.
 - Copy creates a new Draft Note row with copied user-authored fields only.
 
+## Profile Types
+
+Supported profile types:
+
+- `STUDENT`
+- `BOARD_EXAM`
+- `TEACHER`
+
+Profile type is a personalization setting on `User`.
+
+Profile type affects:
+
+- Dashboard layout and section priority
+- CTA behavior
+- Labels and wording
+- Workflow emphasis
+- Recommendations
+- Default tab after generation
+
+Profile type does not affect:
+
+- Note ownership
+- Study Pack generation pipeline
+- Quiz-session persistence
+- Activity history
+- Weak-concept storage
+- Core table structure
+
+## Shared Learning Engine
+
+All users share the same learning engine:
+
+`Note -> Study Pack -> Quiz -> Activity -> Weak Concepts`
+
+Do not create separate note, study-pack, quiz, or activity systems per profile type.
+
 ## Product Philosophy
 
 Learning loop:
@@ -125,6 +161,15 @@ CTA behavior:
   - `STUDENT` -> `Creates summary, key concepts, and quiz.`
   - `BOARD_EXAM` -> `Generates a new quiz from your material.`
   - `TEACHER` -> `Generates quiz questions from your material.`
+- Default behavior after generation stays on the same unified note route:
+  - `STUDENT` -> open `tab=summary`
+  - `BOARD_EXAM` -> open `tab=quiz`
+  - `TEACHER` -> open `tab=quiz`
+- Entry modes reuse the same note pipeline:
+  - `/notes/new` -> normal note creation
+  - `/notes/new?mode=quiz` -> quiz-first flow
+  - `/notes/new?source=paste` -> paste-material flow
+  - `/notes/new?source=upload` -> upload-material flow
 - Demo mode must not call real generation pipeline, persist data, or consume usage
 - Unverified users are blocked from generation with structured `403`:
   - `code=EMAIL_VERIFICATION_REQUIRED`
@@ -174,6 +219,7 @@ Dashboard guidance rules:
   - `Recent Notes`
   - `Quick Review`
   - `Usage / Progress`
+  - main CTA -> `Continue Studying`
 - `BOARD_EXAM` dashboard should prioritize:
   - `Exam Countdown` when `examDate` exists
   - `Practice Challenge Quiz`
@@ -181,6 +227,7 @@ Dashboard guidance rules:
   - `Adaptive Practice`
   - `Study Activity This Week`
   - `Usage / Progress`
+  - main CTA -> `Practice Challenge Quiz`
 - `TEACHER` dashboard should prioritize:
   - `Create Quiz`
   - `Upload / Paste Material`
@@ -188,6 +235,7 @@ Dashboard guidance rules:
   - `Recently Generated Quizzes`
   - `Activity`
   - `Usage`
+  - main CTA -> `Create Quiz`
 - Note entry modes may change the initial editor focus and post-generation destination without changing the underlying note pipeline:
   - `/notes/new?mode=quiz` focuses quiz creation and should open note detail with `tab=quiz`
   - `/notes/new?source=paste` focuses pasted material entry and should open note detail with `tab=quiz`

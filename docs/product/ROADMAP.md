@@ -59,31 +59,35 @@ Potential expansion areas:
 - deeper progress insights from quiz history
 - optional snapshot/history table if product value is proven
 
-## v0.4.0 Account & Personalization
+## v0.4.0 - Personalization & UX
 
-- Profile identity save polish
-  - keep `Profile` focused on identity and account information
-  - keep `Settings` focused on preferences and app behavior
-  - support email-change verification through `pendingEmail`
-- Profile type remains editable in `Profile`
-- Learning Style and Study Reminders remain editable only in `Settings > Preferences`
-- Onboarding personalization
-  - reuse the existing onboarding flow
-  - add `Profile Type` before Learning Style
-  - add conditional `Exam Date` for `BOARD_EXAM`
-  - keep `Learning Style` and `Study Reminder Frequency` as the existing middle steps
+- Profile Identity Save
+- Email Change Verification
+- Onboarding per Profile Type
 - Personalized Dashboard
-  - keep one shared note-first learning engine across all profile types
-  - change dashboard CTA, section order, labels, and recommendations by `profileType`
-  - `STUDENT` emphasizes review continuity and weak concepts
-  - `BOARD_EXAM` emphasizes challenge-quiz practice, exam countdown, and weak-area drilling
-  - `TEACHER` emphasizes material upload and quiz creation without introducing teacher-specific entities
-  - add frontend-only note entry modes so teacher CTA buttons can share one note pipeline with clearer routing intent
-- Note editor UX improvements
-  - keep generate as the primary action with short profile-aware labels plus helper text
-  - repeat desktop actions at the top and bottom of long note forms
-  - keep mobile generation reachable through a floating CTA
-  - expose direct note creation from `My Library`
+- Teacher Dashboard
+- Note Editor UX Improvements
+- Mode-based Note Creation
+- Create Note from Library
+
+Implementation details:
+
+- keep `Profile` focused on identity and account information
+- keep `Settings` focused on preferences and app behavior
+- support email-change verification through `pendingEmail`
+- keep one shared note-first learning engine across all profile types
+- change dashboard CTA, section order, labels, and recommendations by `profileType`
+- let teacher CTA buttons share one note pipeline through mode-based routing
+- keep short profile-based primary button labels with helper text in the Note Editor
+- repeat note-editor actions at the top and bottom on desktop and keep a floating CTA on mobile
+
+## v0.5.0 - Board Exam Mode
+
+- Exam Countdown
+- Exam Readiness Score
+- Study Plan
+- Mock Exam Mode
+- Performance Analytics
 
 ## Product learning loop
 
@@ -114,23 +118,6 @@ Roadmap decisions should reinforce this loop rather than one-time output generat
 
 - Reminder Scheduler (daily job)
 - Email templates via Resend
-
-## Future Feature - Profile Types and Board Exam Mode
-
-NoteLib will support different Profile Types so the app can adapt to the user's goal.
-
-Profile Types:
-
-- Student -> Normal study flow (Study Packs, Quick Review, Challenge Quiz, Weak Concepts)
-- Teacher -> Generate quizzes and question banks from notes and reviewers
-- Board Exam Taker -> Focus on Challenge Quiz, Weak Concepts, Adaptive Practice, and Progress Tracking
-
-Future Board Exam Mode features may include:
-
-- Exam readiness indicator
-- Study schedule
-- Weekly progress tracking
-- Recommended study topics based on weak concepts
 
 ## Legacy planning context
 
