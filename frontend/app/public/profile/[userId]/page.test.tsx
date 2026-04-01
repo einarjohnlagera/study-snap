@@ -55,7 +55,8 @@ describe("PublicProfilePage", () => {
     expect(screen.getByText("Public notes")).toBeInTheDocument();
     expect(screen.getByText("Plant Cells")).toBeInTheDocument();
     expect(screen.getByText("5 copies")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Open Note" })[0]).toHaveAttribute("href", "/public/library/biology/plant-cells");
+    expect(screen.getByRole("link", { name: /Plant Cells/i })).toHaveAttribute("href", "/public/library/biology/plant-cells");
+    expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
   });
 
   it("shows the empty state when the user has no public notes", async () => {

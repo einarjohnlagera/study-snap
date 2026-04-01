@@ -239,10 +239,14 @@ Users can:
   - Official badge when the account is official/admin
   - Total public notes
   - Total copies across that user's public notes
-  - list of that user's public notes with Title, Subject badge, Tags, Copy count, and `Open Note`
+  - list of that user's public notes with Title, Subject badge, Tags, and Copy count
 - Public Profiles must only include notes where `visibility=PUBLIC`.
 - Public Profiles must never show email.
 - If the user has no public notes, show `This user has no public notes yet.`
+- Public Profile note cards should use the same interaction model as My Library and Public Library:
+  - whole card click opens the public note detail page
+  - do not add a redundant `Open Note` button inside the card
+- Public Profile remains a public showcase page and should not mix in private workspace actions, even for the owner.
 - Owner actions on public note detail may include:
   - `Open Note`
   - `Share`

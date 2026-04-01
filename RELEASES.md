@@ -19,3 +19,4 @@
 - Profile identity now supports `displayName`, public notes render backend-driven author names, the official NoteLib account gets an `Official` badge, and reserved display names are blocked server-side
 - Public Library subject pages now reuse the existing `/public/library/{subject}` route with subject-badge-consistent cards, empty states, and sitemap coverage for subject and note URLs
 - Subject display is now standardized with shared badges across library cards and note headers, and subject suggestions now come from persisted backend `notes.subject` values while still allowing custom subjects
+- Public Profile cards now follow the shared library interaction model with whole-card click navigation to public note detail and no redundant `Open Note` button
