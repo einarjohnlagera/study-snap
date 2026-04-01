@@ -287,6 +287,15 @@ Core loop:
 
 Primary CTAs may keep full text on mobile when the action would be ambiguous as icon-only.
 
+### Tabs vs Buttons Rule
+
+- Tabs are for switching views such as `Summary` and `Quiz` within the same note.
+- Buttons are for actions such as `Start Quiz`, `Delete`, `Save`, and `Share`.
+- Tabs should use an underline-style navigation treatment, not filled or outline button styling.
+- Tabs may include small outline icons.
+- Desktop tabs should show icon + text.
+- Mobile tabs should show icon only and keep an accessible label.
+
 ### Dark Mode Button Contrast Rule
 
 - Outline buttons must use lighter borders and lighter text in dark mode.
