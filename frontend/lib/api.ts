@@ -703,6 +703,24 @@ export type PublicNoteDetailResponse = {
   updatedAt: string;
 };
 
+export type PublicProfileNoteResponse = {
+  noteId: string;
+  title: string | null;
+  subject: string | null;
+  tags: string[];
+  copyCount: number;
+  slug: string;
+};
+
+export type PublicProfileResponse = {
+  displayName: string;
+  profileType: ProfileType | null;
+  isOfficial: boolean;
+  publicNotesCount: number;
+  totalCopies: number;
+  publicNotes: PublicProfileNoteResponse[];
+};
+
 type ApiErrorPayload = {
   error?: {
     code?: string;
@@ -1877,6 +1895,14 @@ export async function getPublicNoteBySeoPath(
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<PublicNoteDetailResponse>(response, "Could not load this public note.");
+}
+
+export async function getPublicProfile(userId: string): Promise<PublicProfileResponse> {
+  const response = await fetch(buildUrl(`/public/profile/${userId}`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileResponse>(response, "Could not load this public profile.");
 }
 
 export async function updateNote(

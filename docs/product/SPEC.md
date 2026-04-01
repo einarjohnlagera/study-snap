@@ -220,10 +220,12 @@ Users can:
   - if `note.ownerId == currentUser.id` -> `By You`
   - else if the note author is the official NoteLib account -> `By NoteLib` with `Official`
   - else -> `By {displayName}`
+- Public Library author labels should link to `/public/profile/{userId}`.
 - Public note detail should change the primary action by ownership:
   - owner -> `Open Note`
   - non-owner -> `Make a Copy`
 - Public note detail header should show `Subject • Author` using the same viewer-relative author label.
+- Public note detail author label should link to `/public/profile/{userId}`.
 - Public subject pages should reuse the existing `/public/library/{subject}` route and show:
   - subject heading
   - descriptive subtitle
@@ -231,6 +233,20 @@ Users can:
   - empty state when a known subject has no notes
 - Subject pages should reuse the same Subject badge styling as Public Library cards and note detail headers.
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
+- Public Profiles should use `/public/profile/{userId}` in V1 and show:
+  - Display Name
+  - Profile Type
+  - Official badge when the account is official/admin
+  - Total public notes
+  - Total copies across that user's public notes
+  - list of that user's public notes with Title, Subject badge, Tags, and Copy count
+- Public Profiles must only include notes where `visibility=PUBLIC`.
+- Public Profiles must never show email.
+- If the user has no public notes, show `This user has no public notes yet.`
+- Public Profile note cards should use the same interaction model as My Library and Public Library:
+  - whole card click opens the public note detail page
+  - do not add a redundant `Open Note` button inside the card
+- Public Profile remains a public showcase page and should not mix in private workspace actions, even for the owner.
 - Owner actions on public note detail may include:
   - `Open Note`
   - `Share`
@@ -266,7 +282,8 @@ Users can:
   - `team`
 - Any display name containing `notelib` is also rejected.
 - Validation message: `This display name is reserved. Please choose another name.`
-- The official NoteLib account is backend-driven from the configured official email and renders as:
+- Official/public-profile badge state is backend-driven from the configured official email plus eligible admin accounts.
+- The official NoteLib account renders as:
   - author label -> `By NoteLib`
   - badge -> `Official`
 - Subject display should stay consistent across My Library, Public Library, Private Note Detail, and Public Note Detail:
@@ -352,6 +369,7 @@ Primary routes:
 - `/notes/{id}` (Note Detail)
 - `/public/library/{subject}` (Public Subject Listing, SEO)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only, SEO)
+- `/public/profile/{userId}` (Public Profile, public/non-canonical V1 route)
 
 ### Quick Review
 

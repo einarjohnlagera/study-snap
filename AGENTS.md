@@ -203,6 +203,7 @@ Core loop:
 
 - My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
+- Public Profile is a public showcase of one creator's public notes and contribution stats.
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes
@@ -231,6 +232,7 @@ Core loop:
   - owner -> `Open Note`, `Share`
   - non-owner -> `Make a Copy`, `Share`
 - Public note detail should not expose edit, delete, generation, or study actions; generation remains a Note Editor responsibility and quizzes remain on study surfaces.
+- Public Profile note cards should reuse the public-note route and must not expose private workspace actions.
 - Subject UI rules:
   - render subjects as badges across library cards and note headers
   - note headers should place `Subject Badge • Author`
@@ -248,6 +250,20 @@ Core loop:
 - `sitemap.xml` must include only public SEO-safe routes: `/`, `/privacy`, `/terms`, `/public/library`, canonical public subject URLs, and canonical public note URLs.
 - Private notes must never be exposed through the public SEO route.
 - Copying a public note must preserve attribution via `copiedFromNoteId` and `copiedFromUserId`.
+
+### Card Interaction Rule
+
+- Library cards, Public Library cards, and Public Profile cards must use a consistent interaction model.
+- The whole card should be clickable to open the detail page.
+- Avoid adding redundant `Open Note` buttons inside cards unless there is a strong exception.
+- Public showcase pages should remain clean and must not inherit private workspace actions.
+
+### Page Responsibility Rule
+
+- My Library = private workspace
+- Public Library = discovery
+- Public Profile = public showcase
+- Do not merge responsibilities casually.
 
 ### Note Ownership Rule
 
@@ -297,6 +313,7 @@ Keep app shell grouping:
 - Keep note cards consistent across Dashboard, My Library, and Public Library:
   - entire card click opens note detail
   - tertiary actions live in card menu (My Library) rather than primary card buttons
+- Public Profile note cards should follow the same whole-card click pattern as My Library and Public Library.
 - `My Library` should expose a direct `Create Note` entry in the header and empty state so users are not forced through `Dashboard` to start a note.
 - Note Editor actions:
   - keep `Generate` as the primary CTA and `Save` as the secondary CTA

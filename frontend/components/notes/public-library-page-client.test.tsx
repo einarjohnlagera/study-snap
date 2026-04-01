@@ -101,6 +101,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("My Public Note")).toBeInTheDocument();
     expect(screen.getByText("Official Example")).toBeInTheDocument();
     expect(screen.getByText("Community Note")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
   });
 
   it("updates the author badge when auth state hydrates after mount", async () => {

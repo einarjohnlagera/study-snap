@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { getAuthUser } from "@/lib/auth";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
-import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
+import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
@@ -61,7 +61,16 @@ export function PublicNoteAuthorLine({
     <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
       <SubjectBadge subject={subject} />
       <span className="text-foreground/45">•</span>
-      <span>{authorMeta.label}</span>
+      {ownerUserId ? (
+        <Link
+          href={buildPublicProfilePath(ownerUserId)}
+          className="font-medium text-blue-700 hover:underline dark:text-blue-300"
+        >
+          {authorMeta.label}
+        </Link>
+      ) : (
+        <span>{authorMeta.label}</span>
+      )}
       {authorMeta.showOfficialBadge ? (
         <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300">
           Official

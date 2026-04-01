@@ -36,6 +36,7 @@ Routes:
 - `/dashboard` guidance + library entry
 - `/library` My Library (owned notes)
 - `/library/public` Public Library (public notes from you, the community, and official NoteLib content)
+- `/public/profile/{userId}` public creator profile (public notes and contribution stats)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
 - `/public/library/{subject}` public subject listing
 - `/public/library/{subject}/{slug}` public read-only note detail
@@ -113,11 +114,18 @@ Versioning model:
   - `authorDisplayName`
   - `isOfficialAuthor`
   - `isCurrentUser`
+- Public profile responses should include:
+  - `displayName`
+  - `profileType`
+  - `isOfficial`
+  - `publicNotesCount`
+  - `totalCopies`
+  - `publicNotes[]` with `noteId`, `title`, `subject`, `tags`, `copyCount`, and `slug`
 - Author resolution rules:
   - official account email -> `NoteLib`
   - else `display_name` when present
   - else `first_name`
-- The official NoteLib badge is derived on the backend from the configured official account email, not from frontend heuristics.
+- Official badge state is derived on the backend from the configured official account email plus eligible admin accounts, not from frontend heuristics.
 - Reserved display-name guardrails are enforced in backend profile/signup flows before `users.display_name` is saved.
 
 ## Profile-Based UX Layer
@@ -410,9 +418,11 @@ Required backend behavior:
 - list owned notes for My Library
 - list all public notes for Public Library, including the viewer's own public notes
 - support `/public/library/{subject}` subject listing pages from the same public-note data set
+- support `/public/profile/{userId}` creator pages from persisted `users` plus public-note aggregates
 - include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
 - include author-source metadata for Public Library card labeling (`By You`, `By NoteLib`, `By {displayName}`) plus `Official` badge state
 - support public read-only note detail payload for copy flow
+- expose `GET /api/public/profile/{userId}` for public profile header stats and public-note listings
 
 Filtering model:
 

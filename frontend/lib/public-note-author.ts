@@ -25,6 +25,7 @@ export function resolvePublicNoteAuthorMeta(params: {
   isCurrentUser: boolean;
 }): PublicNoteAuthorMeta {
   const { ownerUserId, currentUserId, authorDisplayName, isOfficialAuthor, isCurrentUser } = params;
+  const normalizedAuthorDisplayName = authorDisplayName?.trim();
 
   if (isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId })) {
     return {
@@ -35,12 +36,11 @@ export function resolvePublicNoteAuthorMeta(params: {
 
   if (isOfficialAuthor) {
     return {
-      label: "By NoteLib",
+      label: normalizedAuthorDisplayName ? `By ${normalizedAuthorDisplayName}` : "By NoteLib",
       showOfficialBadge: true,
     };
   }
 
-  const normalizedAuthorDisplayName = authorDisplayName?.trim();
   return {
     label: normalizedAuthorDisplayName ? `By ${normalizedAuthorDisplayName}` : "By Community",
     showOfficialBadge: false,

@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/analytics/events").permitAll()
                         .requestMatchers("/billing/webhook").permitAll()
                         .requestMatchers("/billing/pricing").permitAll()
+                        .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/notes/public/**").permitAll()
                         .requestMatchers("/share/**").permitAll()
                         .requestMatchers("/p/**").permitAll()

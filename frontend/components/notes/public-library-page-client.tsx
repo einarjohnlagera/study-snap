@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
@@ -13,7 +14,7 @@ import {
   type NoteListItemResponse,
 } from "@/lib/api";
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
-import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
+import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
 import { SubjectBadge } from "./subject-badge";
 
@@ -394,11 +395,22 @@ export function PublicLibraryPageClient() {
                     <div className="min-w-0 space-y-2">
                       <div className="flex flex-wrap gap-2">
                         <SubjectBadge subject={item.subject} />
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
-                        >
-                          {authorBadge.label}
-                        </span>
+                        {item.ownerUserId ? (
+                          <Link
+                            href={buildPublicProfilePath(item.ownerUserId)}
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => event.stopPropagation()}
+                            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
+                          >
+                            {authorBadge.label}
+                          </Link>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
+                          >
+                            {authorBadge.label}
+                          </span>
+                        )}
                         {authorBadge.showOfficialBadge ? (
                           <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
                             Official

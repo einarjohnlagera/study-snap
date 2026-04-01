@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -443,7 +444,7 @@ public class NoteService {
     }
 
     private String resolvePublicAuthorName(UserEntity user) {
-        if (isOfficialAuthor(user)) {
+        if (isNoteLibOfficialAccount(user)) {
             return OFFICIAL_AUTHOR_DISPLAY_NAME;
         }
         if (user == null) {
@@ -461,6 +462,10 @@ public class NoteService {
     }
 
     private boolean isOfficialAuthor(UserEntity user) {
+        return isNoteLibOfficialAccount(user) || (user != null && user.getRole() == UserRole.ADMIN);
+    }
+
+    private boolean isNoteLibOfficialAccount(UserEntity user) {
         String email = user == null ? null : normalizeOptionalText(user.getEmail());
         return OFFICIAL_AUTHOR_EMAIL.equalsIgnoreCase(email);
     }

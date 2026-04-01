@@ -91,6 +91,7 @@ This supports iterative learning and avoids accidental overwrites.
    - `Make Public` -> appears in Public Library
    - `Make Private` -> only visible in My Library
 8. User can copy public notes into My Library and continue studying.
+9. User can open a creator's Public Profile to view public notes and contribution stats.
 
 ## Navigation
 
@@ -105,6 +106,7 @@ Primary product pages:
 - Public Library: `/library/public`
 - Note Detail: `/notes/{id}`
 - Public Note Detail (read-only): `/public/library/{subject}/{slug}`
+- Public Profile: `/public/profile/{userId}`
 
 ## Personalized Dashboard
 
@@ -199,6 +201,7 @@ This repo currently centers on:
 - note-to-study-pack generation
 - OCR support for image-based notes
 - My Library and Public Library support
+- Public Profiles for creator discovery and public-note browsing
 - demo mode
 - shareable Study Pack links
 - freemium plans and subscriptions (PayMongo recurring subscriptions)
