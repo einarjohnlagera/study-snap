@@ -288,6 +288,11 @@ Users can:
   - primary CTAs may keep text on mobile when icon-only would reduce clarity
   - visibility controls use badge/dropdown presentation, not large standalone buttons
   - header actions sit top-right and card actions sit bottom-right when present
+- Dark-mode outline button styling should remain readable across secondary actions such as `Challenge Quiz`, `Adaptive Practice`, `Make a Copy`, `Share`, and `Edit`:
+  - use a lighter dark-mode border than the surrounding card background
+  - use near-white text in dark mode
+  - keep a visible dark-mode hover fill
+  - do not reuse light-mode border contrast assumptions in dark mode
 - Navigation icon mapping should stay fixed across desktop and mobile sidebars:
   - `Dashboard` -> `Home`
   - `Library` -> `Book`

@@ -287,6 +287,14 @@ Core loop:
 
 Primary CTAs may keep full text on mobile when the action would be ambiguous as icon-only.
 
+### Dark Mode Button Contrast Rule
+
+- Outline buttons must use lighter borders and lighter text in dark mode.
+- Border contrast must be visibly brighter than the card/background surface behind it.
+- Text should be near-white for readability in dark mode.
+- Outline buttons should have a visible dark-mode hover fill.
+- Do not reuse light-mode border contrast assumptions in dark mode.
+
 ### Note Card Consistency Rule
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
