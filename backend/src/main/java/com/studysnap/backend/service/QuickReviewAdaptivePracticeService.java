@@ -4,8 +4,8 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
-import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.QuickReviewRound;
@@ -13,7 +13,9 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.exception.AdaptivePracticeSessionNotFoundException;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -21,22 +23,22 @@ import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 
 @Service
 @Transactional
@@ -64,14 +66,9 @@ public class QuickReviewAdaptivePracticeService {
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         authService.requireEmailVerified(userId);
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-            studyPackIdRaw,
-            "STUDY_PACK_NOT_FOUND",
-            "Study pack not found.",
-            HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-            .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+            .orElseThrow(StudyPackNotFoundException::new);
         PlanType planType = subscriptionService.resolvePlan(userId);
         featureGateService.checkFeatureAccess(planType, Feature.ADAPTIVE_QUIZ);
 
@@ -219,25 +216,22 @@ public class QuickReviewAdaptivePracticeService {
         Integer totalQuestions,
         Integer durationSeconds
     ) {
-        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
-            sessionIdRaw,
-            "SESSION_NOT_FOUND",
-            "Adaptive Practice session not found.",
-            HttpStatus.NOT_FOUND
-        );
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, AdaptivePracticeSessionNotFoundException::new);
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.ADAPTIVE
             )
-            .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Adaptive Practice session not found.",
-                HttpStatus.NOT_FOUND));
+            .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             return new SimpleMessageResponse("Adaptive Practice session already completed.");
         }
 
-        int safeTotalQuestions = session.getTotalQuestions() == null ? (totalQuestions == null ? 0 : totalQuestions) : session.getTotalQuestions();
+        int safeTotalQuestions = session.getTotalQuestions() == null
+            ? Optional.ofNullable(totalQuestions)
+              .orElse(0)
+            : session.getTotalQuestions();
         int safeCorrectAnswers = correctAnswers == null ? 0 : Math.max(0, correctAnswers);
         if (safeCorrectAnswers > safeTotalQuestions) {
             throw new AppException(
@@ -250,8 +244,8 @@ public class QuickReviewAdaptivePracticeService {
         BigDecimal scorePercentage = safeTotalQuestions == 0
             ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
             : BigDecimal.valueOf(safeCorrectAnswers)
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(safeTotalQuestions), 2, RoundingMode.HALF_UP);
+              .multiply(BigDecimal.valueOf(100))
+              .divide(BigDecimal.valueOf(safeTotalQuestions), 2, RoundingMode.HALF_UP);
         session.setStatus(QuickReviewSessionStatus.COMPLETED);
         session.setCurrentQuestionIndex(safeTotalQuestions);
         session.setTotalQuestions(safeTotalQuestions);

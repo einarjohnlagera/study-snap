@@ -16,6 +16,8 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
+import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -46,14 +48,9 @@ public class QuickReviewSessionService {
     private final FeatureGateService featureGateService;
 
     public QuickReviewSessionStartResponse startSession(String studyPackIdRaw, UUID userId) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                studyPackIdRaw,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
@@ -95,14 +92,9 @@ public class QuickReviewSessionService {
 
     @Transactional(readOnly = true)
     public QuickReviewSessionStartResponse getInProgressSession(String studyPackIdRaw, UUID userId) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                studyPackIdRaw,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
 
         return quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
@@ -120,18 +112,13 @@ public class QuickReviewSessionService {
             UUID userId,
             QuickReviewSessionProgressRequest request
     ) {
-        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
-                sessionIdRaw,
-                "SESSION_NOT_FOUND",
-                "Quick Review session not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
-                .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Quick Review session not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(QuickReviewSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new AppException(
@@ -151,18 +138,13 @@ public class QuickReviewSessionService {
     }
 
     public QuickReviewSessionResponse completeSession(String sessionIdRaw, UUID userId, QuickReviewSessionCompleteRequest request) {
-        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
-                sessionIdRaw,
-                "SESSION_NOT_FOUND",
-                "Quick Review session not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
-                .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Quick Review session not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(QuickReviewSessionNotFoundException::new);
 
         if (request.correctAnswers() > request.totalQuestions()) {
             throw new AppException(
@@ -199,18 +181,13 @@ public class QuickReviewSessionService {
             UUID userId,
             QuickReviewConfidenceLevel confidenceLevel
     ) {
-        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(
-                sessionIdRaw,
-                "SESSION_NOT_FOUND",
-                "Quick Review session not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
         QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
-                .orElseThrow(() -> new AppException("SESSION_NOT_FOUND", "Quick Review session not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(QuickReviewSessionNotFoundException::new);
 
         if (session.getStatus() != QuickReviewSessionStatus.COMPLETED) {
             throw new AppException(
@@ -228,16 +205,11 @@ public class QuickReviewSessionService {
 
     @Transactional(readOnly = true)
     public List<QuickReviewSessionResponse> listRecentSessions(String studyPackIdRaw, UUID userId, int limit) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                studyPackIdRaw,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
 
-        int normalizedLimit = Math.max(1, Math.min(limit, 10));
+        int normalizedLimit = Math.clamp(limit, 1, 10);
         PlanType planType = subscriptionService.resolvePlan(userId);
         return quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                         userId,
@@ -251,14 +223,9 @@ public class QuickReviewSessionService {
 
     @Transactional(readOnly = true)
     public QuickReviewPerformanceSummaryResponse getPerformanceSummary(String studyPackIdRaw, UUID userId) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                studyPackIdRaw,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
         studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
 
         long attempts = quickReviewSessionRepository.countByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNull(
                 userId,

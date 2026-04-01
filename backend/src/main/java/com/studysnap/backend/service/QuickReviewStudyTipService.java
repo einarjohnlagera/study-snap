@@ -4,13 +4,12 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuickReviewIncorrectQuestionRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
-import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,21 +34,16 @@ public class QuickReviewStudyTipService {
             QuickReviewStudyTipRequest request
     ) {
         authService.requireEmailVerified(userId);
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                studyPackIdRaw,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
 
         studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
 
         if (!properties.getQuickReview().getStudyTip().isEnabled()) {
             return new QuickReviewStudyTipResponse(null);
         }
 
-        if (request == null || request.incorrectQuestions() == null || request.incorrectQuestions().isEmpty()) {
+        if (request == null || request.incorrectQuestions().isEmpty()) {
             return new QuickReviewStudyTipResponse(null);
         }
 

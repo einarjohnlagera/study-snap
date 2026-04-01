@@ -14,6 +14,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -84,14 +85,9 @@ public class NoteService {
     }
 
     public NoteResponse update(String id, UpsertNoteRequest request, UUID ownerUserId) {
-        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "NOTE_NOT_FOUND",
-                "Note not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
 
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         NoteStatus currentStatus = resolveStatus(entity);
@@ -120,14 +116,9 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public NoteResponse getById(String id, UUID ownerUserId) {
-        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "NOTE_NOT_FOUND",
-                "Note not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(entity.getId());
         return mapToResponse(entity, linkedStudyPack);
     }
@@ -146,17 +137,12 @@ public class NoteService {
     }
 
     public NoteResponse copyNote(String id, UUID ownerUserId) {
-        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "NOTE_NOT_FOUND",
-                "Note not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity source = noteRepository.findById(noteId)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
         boolean isOwner = source.getOwnerUserId() != null && source.getOwnerUserId().equals(ownerUserId);
         if (!isOwner && resolveVisibility(source) != NoteVisibility.PUBLIC) {
-            throw new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND);
+            throw new NoteNotFoundException();
         }
 
         NoteEntity copy = new NoteEntity();
@@ -196,14 +182,9 @@ public class NoteService {
     }
 
     public void deleteById(String id, UUID ownerUserId) {
-        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "NOTE_NOT_FOUND",
-                "Note not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
 
         studyPackRepository.findByOwnerUserIdAndNoteId(ownerUserId, noteId)
                 .ifPresent(studyPackRepository::delete);
@@ -211,14 +192,9 @@ public class NoteService {
     }
 
     public NoteResponse updateVisibility(String id, String visibilityRaw, UUID ownerUserId) {
-        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "NOTE_NOT_FOUND",
-                "Note not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
 
         NoteVisibility visibility = parseVisibility(visibilityRaw);
         entity.setVisibility(visibility);
@@ -252,14 +228,9 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public PublicNoteDetailResponse getPublicById(String id, UUID viewerUserId) {
-        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "NOTE_NOT_FOUND",
-                "Note not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(entity.getId());
         analyticsService.trackEvent(viewerUserId, AnalyticsEventType.PUBLIC_NOTE_VIEWED, entity.getId(), buildMetadata(
                 "pathType", "id",
@@ -283,7 +254,7 @@ public class NoteService {
                 .filter(note -> slugify(note.getSubject(), DEFAULT_PUBLIC_SUBJECT_SLUG).equals(normalizedSubjectSlug))
                 .filter(note -> slugify(note.getTitle(), DEFAULT_PUBLIC_TITLE_SLUG).equals(normalizedTitleSlug))
                 .findFirst()
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
 
         StudyPackEntity linkedStudyPack = findLinkedStudyPack(matched.getId());
         LinkedHashMap<String, Object> analyticsMetadata = new LinkedHashMap<>();
