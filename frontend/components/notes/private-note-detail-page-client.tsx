@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { Brain, ChevronDown, FileText } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
@@ -55,6 +55,7 @@ import {
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
+import { cn } from "@/lib/utils";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
   if (status === "STUDY_PACK_READY") {
@@ -75,6 +76,56 @@ function truncateShareUrl(url: string, maxLength = 58) {
     return url;
   }
   return `${url.slice(0, maxLength - 3)}...`;
+}
+
+function StudyPackTabs({
+  activeTab,
+  onChange,
+}: Readonly<{
+  activeTab: NoteDetailTab;
+  onChange: (tab: NoteDetailTab) => void;
+}>) {
+  const tabs: Array<{
+    label: string;
+    tab: NoteDetailTab;
+    icon: typeof FileText;
+  }> = [
+    { label: "Summary", tab: "summary", icon: FileText },
+    { label: "Quiz", tab: "quiz", icon: Brain },
+  ];
+
+  return (
+    <div className="border-b border-border" role="tablist" aria-label="Study Pack view">
+      <div className="flex items-center gap-5 sm:gap-6">
+        {tabs.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.tab;
+          return (
+            <button
+              key={item.tab}
+              type="button"
+              role="tab"
+              aria-label={item.label}
+              aria-selected={isActive}
+              onClick={() => {
+                onChange(item.tab);
+              }}
+              className={cn(
+                "inline-flex min-h-10 items-center justify-center gap-2 border-b-2 border-transparent px-1 pb-3 pt-1 text-sm font-medium transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                isActive
+                  ? "border-blue-600 text-foreground dark:border-blue-400"
+                  : "text-foreground/55 hover:text-foreground/80",
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function buildShareUrl(subject: string | null, title: string | null) {
@@ -963,30 +1014,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
       {!isDraft ? (
         <Card className="space-y-3 p-4 sm:p-6">
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Study Pack view">
-            <Button
-              type="button"
-              variant={activeStudyPackTab === "summary" ? "default" : "outline"}
-              role="tab"
-              aria-selected={activeStudyPackTab === "summary"}
-              onClick={() => {
-                handleChangeStudyPackTab("summary");
-              }}
-            >
-              Summary
-            </Button>
-            <Button
-              type="button"
-              variant={activeStudyPackTab === "quiz" ? "default" : "outline"}
-              role="tab"
-              aria-selected={activeStudyPackTab === "quiz"}
-              onClick={() => {
-                handleChangeStudyPackTab("quiz");
-              }}
-            >
-              Quiz
-            </Button>
-          </div>
+          <StudyPackTabs activeTab={activeStudyPackTab} onChange={handleChangeStudyPackTab} />
           <p className="text-xs text-foreground/60">
             Switch between summary review and quiz-first practice without leaving this note.
           </p>

@@ -322,6 +322,11 @@ Users can:
 - Use outline-style icons only and do not mix filled and outline icon sets on the same product surface.
 - Do not use emoji as icons in product UI.
 - Quiz entry buttons on Note Detail and other quiz launch surfaces should use distinct icons so users can distinguish fast review, exam challenge, and weak-area practice at a glance.
+- `Summary` and `Quiz` on Private Note Detail are view tabs, not action buttons:
+  - place the tab row below `Note Content` and above Study Pack content
+  - use underline-style navigation with muted inactive labels and an active bottom border
+  - desktop tabs show icon + text and mobile tabs show icon only with an accessible label
+  - tab switches should stay on the same note view and update content without a full page reload
 
 ### Display Name And Official Badge
 

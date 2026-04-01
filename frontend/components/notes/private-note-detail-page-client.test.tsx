@@ -363,6 +363,39 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
   });
 
+  it("switches study pack views through tabs without reloading", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: true,
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      quiz: [
+        {
+          question: "What is a cell?",
+          choices: ["Basic unit of life", "A tissue", "An organ", "A molecule"],
+          correctAnswerIndex: 0,
+          explanation: "Cells are the basic unit of life.",
+        },
+      ],
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    const summaryTab = await screen.findByRole("tab", { name: "Summary" });
+    const quizTab = screen.getByRole("tab", { name: "Quiz" });
+
+    expect(summaryTab).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.click(quizTab);
+
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?tab=quiz");
+  });
+
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({

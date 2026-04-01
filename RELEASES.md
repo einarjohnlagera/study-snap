@@ -27,3 +27,4 @@
 - Sidebar/navigation icon polish now assigns `Home`, `Book`, `Globe`, `User`, `Gear`, and `Shield` consistently, and action icons now use a single outline-style set with no emoji-based UI icons
 - Outline buttons now use higher-contrast dark-mode borders, lighter text, and a clearer hover fill so secondary actions remain readable on dark surfaces
 - Quick Review, Challenge Quiz, and Adaptive Practice now use distinct outline-style icons so quiz entry points are easier to distinguish at a glance
+- Private Note Detail now uses icon-supported underline tabs for `Summary` and `Quiz`, making those controls read as view navigation instead of action buttons
