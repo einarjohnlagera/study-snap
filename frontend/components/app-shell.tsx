@@ -336,7 +336,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     };
   }, [shouldUseShell, pathname]);
 
-  const secondaryNav = useMemo(() => {
+  const secondaryNav = useMemo<NavLinkItem[]>(() => {
     return user.role === "ADMIN"
       ? [...SECONDARY_NAV, { href: "/admin", label: "Admin", action: "admin" }]
       : SECONDARY_NAV;

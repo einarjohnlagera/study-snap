@@ -16,7 +16,7 @@ describe("TermsPage", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib Terms of Service",
       alternates: {
-        canonical: "https://www.notelib.app/terms",
+        canonical: "https://notelib.app/terms",
       },
     });
   });
