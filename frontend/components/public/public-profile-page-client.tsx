@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,10 +39,18 @@ function formatProfileType(profileType: string | null) {
   return PROFILE_TYPE_LABELS[profileType as ProfileType] ?? profileType.replaceAll("_", " ");
 }
 
+function visibilityChip(publicProfileVisible: boolean) {
+  if (publicProfileVisible) {
+    return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  }
+  return "border-border bg-muted/50 text-foreground/70";
+}
+
 export function PublicProfilePageClient({
   userId,
   initialResult,
 }: Readonly<PublicProfilePageClientProps>) {
+  const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [profile, setProfile] = useState<PublicProfileResponse | null>(
     initialResult.status === "ok" ? initialResult.profile : null,
@@ -58,6 +66,7 @@ export function PublicProfilePageClient({
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [visibilityMessage, setVisibilityMessage] = useState<string | null>(null);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
+  const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
 
   const isOwner = currentUserId === userId;
 
@@ -106,7 +115,25 @@ export function PublicProfilePageClient({
     };
   }, [isOwner, userId]);
 
-  const visibilityEnabled = profile?.publicProfileVisible ?? false;
+  useEffect(() => {
+    if (!visibilityMenuOpen) {
+      return;
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (visibilityMenuRef.current && !visibilityMenuRef.current.contains(target)) {
+        setVisibilityMenuOpen(false);
+      }
+    };
+
+    globalThis.addEventListener("mousedown", handleOutsideClick);
+    return () => globalThis.removeEventListener("mousedown", handleOutsideClick);
+  }, [visibilityMenuOpen]);
+
   const notesCountLabel = useMemo(() => {
     if (!profile) {
       return "0 notes";
@@ -116,7 +143,7 @@ export function PublicProfilePageClient({
 
   const handleShareProfile = async () => {
     try {
-      const shareUrl = new URL(buildPublicProfilePath(userId), window.location.origin).toString();
+      const shareUrl = new URL(buildPublicProfilePath(userId), globalThis.location.origin).toString();
       await navigator.clipboard.writeText(shareUrl);
       setShareMessage("Public profile link copied.");
       setVisibilityMessage(null);
@@ -131,6 +158,7 @@ export function PublicProfilePageClient({
     }
 
     setUpdatingVisibility(true);
+    setVisibilityMenuOpen(false);
     setShareMessage(null);
     setVisibilityMessage(null);
     try {
@@ -212,38 +240,47 @@ export function PublicProfilePageClient({
                 Official
               </span>
             ) : null}
+            {isOwner ? (
+              <div className="relative" ref={visibilityMenuRef}>
+                <button
+                  type="button"
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${visibilityChip(profile.publicProfileVisible)}`}
+                  onClick={() => setVisibilityMenuOpen((open) => !open)}
+                  aria-haspopup="menu"
+                  aria-expanded={visibilityMenuOpen}
+                  disabled={updatingVisibility}
+                >
+                  {profile.publicProfileVisible ? "🌍 Public ▼" : "🔒 Private ▼"}
+                </button>
+                {visibilityMenuOpen ? (
+                  <div className="absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
+                    <button
+                      type="button"
+                      className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                      onClick={() => void handleToggleVisibility()}
+                      disabled={!profile.publicProfileVisible}
+                    >
+                      <p className="text-sm font-medium">🔒 Private</p>
+                      <p className="text-xs text-foreground/70">Hide this profile from other users.</p>
+                    </button>
+                    <button
+                      type="button"
+                      className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                      onClick={() => void handleToggleVisibility()}
+                      disabled={profile.publicProfileVisible}
+                    >
+                      <p className="text-sm font-medium">🌍 Public</p>
+                      <p className="text-xs text-foreground/70">Allow other users to view and share this profile.</p>
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="space-y-2">
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{profile.displayName}</h1>
             <p className="text-sm text-foreground/75 sm:text-base">{formatProfileType(profile.profileType)}</p>
           </div>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          {isOwner ? (
-            <Link href="/profile" className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Edit Profile
-              </Button>
-            </Link>
-          ) : null}
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleShareProfile()}>
-            Share Profile
-          </Button>
-          {isOwner ? (
-            <Button
-              type="button"
-              variant={visibilityEnabled ? "default" : "outline"}
-              className="w-full sm:w-auto"
-              aria-pressed={visibilityEnabled}
-              onClick={() => void handleToggleVisibility()}
-              disabled={updatingVisibility}
-            >
-              {updatingVisibility
-                ? "Updating..."
-                : `Public Profile ${visibilityEnabled ? "On" : "Off"}`}
-            </Button>
-          ) : null}
         </div>
 
         {shareMessage ? (
@@ -266,6 +303,23 @@ export function PublicProfilePageClient({
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Profile Type</p>
             <p className="text-lg font-semibold">{formatProfileType(profile.profileType)}</p>
           </Card>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {isOwner ? (
+              <Link href="/profile" className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  Edit Profile
+                </Button>
+              </Link>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleShareProfile()}>
+              Share Profile
+            </Button>
+          </div>
         </div>
       </header>
 

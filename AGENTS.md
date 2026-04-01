@@ -277,6 +277,12 @@ Core loop:
 - Non-owners may see a share action on Public Profile, but they must not see owner-only editing or privacy controls.
 - If a public profile is turned off, non-owners should see `This profile is private.`
 
+### UI Consistency Rule
+
+- Public Profile should reuse the Note Detail control pattern for visibility and share actions.
+- Visibility controls should appear as badge/dropdown controls near the header identity cluster, not as detached toggle buttons.
+- Share actions should sit in the lower action row of the header card rather than in the top metadata cluster.
+
 ### Note Ownership Rule
 
 - Generated outputs (summary/key concepts/quizzes), Quick Review, Challenge Quiz, Adaptive Practice, and performance are scoped to `noteId`.

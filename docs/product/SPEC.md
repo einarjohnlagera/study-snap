@@ -247,6 +247,10 @@ Users can:
   - `Edit Profile` -> routes to `/profile`
   - `Share Profile`
   - `Public Profile On` / `Public Profile Off`
+- Public Profile owner controls should follow the Note Detail header pattern:
+  - visibility is shown as a badge/dropdown near the title cluster
+  - stats remain in their own section below the identity summary
+  - `Share Profile` sits in the lower-right action row of the header card
 - Non-owners must not see `Edit Profile` or the visibility toggle on Public Profile.
 - If `publicProfileVisible = false`, non-owners should see `This profile is private.`
 - If the user has no public notes, show `This user has no public notes yet.`

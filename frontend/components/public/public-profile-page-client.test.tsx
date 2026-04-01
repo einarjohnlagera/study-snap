@@ -64,20 +64,22 @@ describe("PublicProfilePageClient", () => {
     );
 
     expect(await screen.findByRole("link", { name: "Edit Profile" })).toHaveAttribute("href", "/profile");
-    expect(screen.getByRole("button", { name: "Public Profile On" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "🌍 Public ▼" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
     await waitFor(() => {
       expect(clipboardWriteText).toHaveBeenCalledWith("http://localhost/public/profile/user-1");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Public Profile On" }));
+    fireEvent.click(screen.getByRole("button", { name: "🌍 Public ▼" }));
+    expect(screen.getByText("Hide this profile from other users.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /🔒 Private/i }));
 
     await waitFor(() => {
       expect(updatePublicProfileVisibility).toHaveBeenCalledWith({ publicProfileVisible: false });
     });
     expect(await screen.findByText("Public profile is now private.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Public Profile Off" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "🔒 Private ▼" })).toBeInTheDocument();
   });
 
   it("does not show owner controls for other viewers", async () => {
@@ -91,7 +93,8 @@ describe("PublicProfilePageClient", () => {
     );
 
     expect(screen.queryByRole("link", { name: "Edit Profile" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Public Profile On" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "🌍 Public ▼" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "🔒 Private ▼" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share Profile" })).toBeInTheDocument();
   });
 
@@ -111,6 +114,6 @@ describe("PublicProfilePageClient", () => {
 
     expect(screen.getByText("Loading public profile...")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Study Buddy" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Public Profile Off" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "🔒 Private ▼" })).toBeInTheDocument();
   });
 });
