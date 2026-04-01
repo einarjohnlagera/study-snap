@@ -16,6 +16,7 @@ public record MeResponse(
         String firstName,
         String lastName,
         String displayName,
+        boolean publicProfileVisible,
         String countryCode,
         ProfileType profileType,
         LocalDate examDate,

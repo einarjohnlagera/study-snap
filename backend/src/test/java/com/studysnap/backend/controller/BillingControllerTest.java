@@ -188,6 +188,7 @@ class BillingControllerTest {
                 "Note",
                 null,
                 "Note",
+                true,
                 null,
                 ProfileType.STUDENT,
                 null,

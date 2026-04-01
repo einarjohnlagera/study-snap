@@ -1,0 +1,325 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { SubjectBadge } from "@/components/notes/subject-badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { getAuthUser } from "@/lib/auth";
+import {
+  ApiRequestError,
+  getPublicProfile,
+  type ProfileType,
+  type PublicProfileResponse,
+  updatePublicProfileVisibility,
+} from "@/lib/api";
+import {
+  buildPublicLibraryNotePathFromSlug,
+  buildPublicProfilePath,
+} from "@/lib/public-note-path";
+import type { ServerPublicProfileResult } from "@/lib/server-public-profiles";
+
+type PublicProfilePageClientProps = {
+  userId: string;
+  initialResult: ServerPublicProfileResult;
+};
+
+const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
+  STUDENT: "Student",
+  BOARD_EXAM: "Board Exam",
+  TEACHER: "Teacher",
+  PARENT: "Parent",
+  PROFESSIONAL: "Professional",
+};
+
+function formatProfileType(profileType: string | null) {
+  if (!profileType) {
+    return "Community member";
+  }
+  return PROFILE_TYPE_LABELS[profileType as ProfileType] ?? profileType.replaceAll("_", " ");
+}
+
+export function PublicProfilePageClient({
+  userId,
+  initialResult,
+}: Readonly<PublicProfilePageClientProps>) {
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
+  const [profile, setProfile] = useState<PublicProfileResponse | null>(
+    initialResult.status === "ok" ? initialResult.profile : null,
+  );
+  const [pageState, setPageState] = useState<"loading" | "ready" | "private" | "error">(
+    initialResult.status === "ok"
+      ? "ready"
+      : initialResult.status === "private"
+        ? "private"
+        : "loading",
+  );
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [visibilityMessage, setVisibilityMessage] = useState<string | null>(null);
+  const [updatingVisibility, setUpdatingVisibility] = useState(false);
+
+  const isOwner = currentUserId === userId;
+
+  useEffect(() => {
+    const syncAuthUser = () => {
+      setCurrentUserId(getAuthUser()?.id ?? null);
+    };
+
+    syncAuthUser();
+    globalThis.addEventListener("studysnap-auth-change", syncAuthUser);
+    return () => globalThis.removeEventListener("studysnap-auth-change", syncAuthUser);
+  }, []);
+
+  useEffect(() => {
+    if (!isOwner) {
+      return;
+    }
+
+    let cancelled = false;
+    setPageState((current) => (current === "private" ? "loading" : current));
+    setErrorMessage(null);
+
+    void getPublicProfile(userId)
+      .then((nextProfile) => {
+        if (cancelled) {
+          return;
+        }
+        setProfile(nextProfile);
+        setPageState("ready");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        if (error instanceof ApiRequestError && error.code === "PUBLIC_PROFILE_PRIVATE") {
+          setProfile(null);
+          setPageState("private");
+          return;
+        }
+        setErrorMessage(error instanceof Error ? error.message : "Could not load public profile.");
+        setPageState("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOwner, userId]);
+
+  const visibilityEnabled = profile?.publicProfileVisible ?? false;
+  const notesCountLabel = useMemo(() => {
+    if (!profile) {
+      return "0 notes";
+    }
+    return `${profile.publicNotesCount} ${profile.publicNotesCount === 1 ? "note" : "notes"}`;
+  }, [profile]);
+
+  const handleShareProfile = async () => {
+    try {
+      const shareUrl = new URL(buildPublicProfilePath(userId), window.location.origin).toString();
+      await navigator.clipboard.writeText(shareUrl);
+      setShareMessage("Public profile link copied.");
+      setVisibilityMessage(null);
+    } catch {
+      setShareMessage("Could not copy public profile link.");
+    }
+  };
+
+  const handleToggleVisibility = async () => {
+    if (!profile || updatingVisibility) {
+      return;
+    }
+
+    setUpdatingVisibility(true);
+    setShareMessage(null);
+    setVisibilityMessage(null);
+    try {
+      const updated = await updatePublicProfileVisibility({
+        publicProfileVisible: !profile.publicProfileVisible,
+      });
+      setProfile((current) => (current ? { ...current, publicProfileVisible: updated.publicProfileVisible } : current));
+      setVisibilityMessage(
+        updated.publicProfileVisible
+          ? "Public profile is now visible."
+          : "Public profile is now private.",
+      );
+    } catch (error) {
+      setVisibilityMessage(error instanceof Error ? error.message : "Could not update public profile visibility.");
+    } finally {
+      setUpdatingVisibility(false);
+    }
+  };
+
+  if (pageState === "loading") {
+    return (
+      <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
+        <Card className="p-6">Loading public profile...</Card>
+      </main>
+    );
+  }
+
+  if (pageState === "error") {
+    return (
+      <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
+        <Card className="space-y-3 p-6">
+          <h1 className="text-xl font-semibold">Could not load public profile</h1>
+          <p className="text-sm text-foreground/75">{errorMessage ?? "Could not load public profile."}</p>
+        </Card>
+      </main>
+    );
+  }
+
+  if (pageState === "private" || !profile) {
+    return (
+      <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
+        <header className="space-y-3 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
+          <Link
+            href="/public/library"
+            className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Back to Public Library
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+              Public Profile
+            </span>
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">This profile is private.</h1>
+        </header>
+        <Card className="space-y-3 p-4 sm:p-6">
+          <p className="text-sm text-foreground/75">This profile is private.</p>
+        </Card>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
+      <header className="space-y-4 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
+        <div className="space-y-3">
+          <Link
+            href="/public/library"
+            className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Back to Public Library
+          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+              Public Profile
+            </span>
+            {profile.isOfficial ? (
+              <span className="rounded-full border border-blue-500/35 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                Official
+              </span>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{profile.displayName}</h1>
+            <p className="text-sm text-foreground/75 sm:text-base">{formatProfileType(profile.profileType)}</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          {isOwner ? (
+            <Link href="/profile" className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="w-full sm:w-auto">
+                Edit Profile
+              </Button>
+            </Link>
+          ) : null}
+          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleShareProfile()}>
+            Share Profile
+          </Button>
+          {isOwner ? (
+            <Button
+              type="button"
+              variant={visibilityEnabled ? "default" : "outline"}
+              className="w-full sm:w-auto"
+              aria-pressed={visibilityEnabled}
+              onClick={() => void handleToggleVisibility()}
+              disabled={updatingVisibility}
+            >
+              {updatingVisibility
+                ? "Updating..."
+                : `Public Profile ${visibilityEnabled ? "On" : "Off"}`}
+            </Button>
+          ) : null}
+        </div>
+
+        {shareMessage ? (
+          <p className="text-xs text-foreground/60">{shareMessage}</p>
+        ) : null}
+        {visibilityMessage ? (
+          <p className="text-xs text-foreground/60">{visibilityMessage}</p>
+        ) : null}
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Card className="space-y-1 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Public Notes</p>
+            <p className="text-2xl font-semibold">{profile.publicNotesCount}</p>
+          </Card>
+          <Card className="space-y-1 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Total Copies</p>
+            <p className="text-2xl font-semibold">{profile.totalCopies}</p>
+          </Card>
+          <Card className="space-y-1 p-4 sm:col-span-2 lg:col-span-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Profile Type</p>
+            <p className="text-lg font-semibold">{formatProfileType(profile.profileType)}</p>
+          </Card>
+        </div>
+      </header>
+
+      <section aria-labelledby="public-profile-notes" className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="public-profile-notes" className="text-xl font-semibold">
+            Public notes
+          </h2>
+          <p className="text-sm text-foreground/65">{notesCountLabel}</p>
+        </div>
+
+        {profile.publicNotes.length === 0 ? (
+          <Card className="space-y-3 p-4 sm:p-6">
+            <h3 className="text-lg font-semibold">No public notes yet</h3>
+            <p className="text-sm text-foreground/75">This user has no public notes yet.</p>
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {profile.publicNotes.map((note) => (
+              <Link
+                key={note.noteId}
+                href={buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug })}
+                className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              >
+                <Card className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <SubjectBadge subject={note.subject} />
+                      <span className="rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-foreground/70">
+                        {note.copyCount} {note.copyCount === 1 ? "copy" : "copies"}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-semibold">{note.title?.trim() || "Untitled note"}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {note.tags.length > 0 ? note.tags.map((tag) => (
+                        <span
+                          key={`${note.noteId}-${tag}`}
+                          className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
+                        >
+                          {tag}
+                        </span>
+                      )) : (
+                        <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
+                          No tags
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}

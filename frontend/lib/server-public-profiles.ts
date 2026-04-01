@@ -6,18 +6,29 @@ function buildApiUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
 
-export async function getServerPublicProfile(userId: string): Promise<PublicProfileResponse | null> {
+export type ServerPublicProfileResult =
+  | { status: "ok"; profile: PublicProfileResponse }
+  | { status: "private" }
+  | { status: "not_found" };
+
+export async function getServerPublicProfile(userId: string): Promise<ServerPublicProfileResult> {
   const response = await fetch(buildApiUrl(`/public/profile/${userId}`), {
     method: "GET",
     next: { revalidate: 300 },
   });
 
   if (response.status === 404) {
-    return null;
+    return { status: "not_found" };
+  }
+  if (response.status === 403) {
+    return { status: "private" };
   }
   if (!response.ok) {
     throw new Error("Could not load public profile.");
   }
 
-  return (await response.json()) as PublicProfileResponse;
+  return {
+    status: "ok",
+    profile: (await response.json()) as PublicProfileResponse,
+  };
 }

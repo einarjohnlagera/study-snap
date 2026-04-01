@@ -35,7 +35,7 @@ public class PublicProfileService {
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
 
-    public PublicProfileResponse getByUserId(String userIdRaw) {
+    public PublicProfileResponse getByUserId(String userIdRaw, UUID viewerUserId) {
         UUID userId = UuidParsingUtils.parseUuidOrThrow(
                 userIdRaw,
                 "PUBLIC_PROFILE_NOT_FOUND",
@@ -44,6 +44,11 @@ public class PublicProfileService {
         );
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException("PUBLIC_PROFILE_NOT_FOUND", "Public profile not found.", HttpStatus.NOT_FOUND));
+        boolean publicProfileVisible = Boolean.TRUE.equals(user.getPublicProfileVisible());
+        boolean viewerOwnsProfile = userId.equals(viewerUserId);
+        if (!publicProfileVisible && !viewerOwnsProfile) {
+            throw new AppException("PUBLIC_PROFILE_PRIVATE", "This profile is private.", HttpStatus.FORBIDDEN);
+        }
 
         List<NoteEntity> publicNotes = noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC);
         Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(publicNotes);
@@ -53,6 +58,7 @@ public class PublicProfileService {
                 resolvePublicDisplayName(user),
                 user.getProfileType() == null ? null : user.getProfileType().name(),
                 isOfficialAuthor(user),
+                publicProfileVisible,
                 publicNotes.size(),
                 totalCopies,
                 publicNotes.stream()

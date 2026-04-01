@@ -330,6 +330,7 @@ export type MeResponse = {
   firstName: string;
   lastName: string | null;
   displayName: string | null;
+  publicProfileVisible: boolean;
   countryCode: string | null;
   profileType: ProfileType | null;
   examDate: string | null;
@@ -360,6 +361,10 @@ export type UpdateUserProfileRequest = {
   lastName: string;
   displayName: string;
   email: string;
+};
+
+export type UpdatePublicProfileVisibilityRequest = {
+  publicProfileVisible: boolean;
 };
 
 export type CancelPremiumSubscriptionRequest = {
@@ -716,6 +721,7 @@ export type PublicProfileResponse = {
   displayName: string;
   profileType: ProfileType | null;
   isOfficial: boolean;
+  publicProfileVisible: boolean;
   publicNotesCount: number;
   totalCopies: number;
   publicNotes: PublicProfileNoteResponse[];
@@ -925,6 +931,21 @@ export async function updateUserProfile(request: UpdateUserProfileRequest): Prom
     true,
   );
   return parseApiResponse<MeResponse>(response, "Could not update profile. Please try again.");
+}
+
+export async function updatePublicProfileVisibility(
+  request: UpdatePublicProfileVisibilityRequest,
+): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/users/profile/public-visibility",
+    {
+      method: "PUT",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<MeResponse>(response, "Could not update public profile visibility.");
 }
 
 export async function getAdminDashboardSummary(): Promise<AdminDashboardSummaryResponse> {

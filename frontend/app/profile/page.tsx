@@ -56,7 +56,6 @@ export default function ProfilePage() {
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
-  const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -68,7 +67,6 @@ export default function ProfilePage() {
     setLoading(true);
     setError(null);
     setSaveMessage(null);
-    setShareMessage(null);
     try {
       const me = await getMe();
       setProfile(me);
@@ -113,7 +111,6 @@ export default function ProfilePage() {
 
   const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
     setSaveMessage(null);
-    setShareMessage(null);
     setIdentityForm((current) => ({
       ...current,
       [field]: value,
@@ -126,7 +123,6 @@ export default function ProfilePage() {
     }
     setSavingIdentity(true);
     setSaveMessage(null);
-    setShareMessage(null);
     try {
       const updatedIdentity = await updateUserProfile({
         firstName: identityForm.firstName.trim(),
@@ -157,19 +153,6 @@ export default function ProfilePage() {
       setSaveMessage(message);
     } finally {
       setSavingIdentity(false);
-    }
-  };
-
-  const handleSharePublicProfile = async () => {
-    if (!profile?.id) {
-      return;
-    }
-    try {
-      const shareUrl = new URL(buildPublicProfilePath(profile.id), window.location.origin).toString();
-      await navigator.clipboard.writeText(shareUrl);
-      setShareMessage("Public profile link copied.");
-    } catch {
-      setShareMessage("Could not copy public profile link.");
     }
   };
 
@@ -259,7 +242,6 @@ export default function ProfilePage() {
                   value={selectedProfileType}
                   onChange={(event) => {
                     setSaveMessage(null);
-                    setShareMessage(null);
                     setSelectedProfileType(event.target.value as ProfileType);
                   }}
                 >
@@ -276,7 +258,7 @@ export default function ProfilePage() {
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Public Profile</h2>
             <p className="text-sm text-foreground/75">
-              View or share the public page that showcases your display name and public notes.
+              Open your public profile page to manage sharing and visibility controls.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <Button
@@ -292,20 +274,9 @@ export default function ProfilePage() {
                   View Public Profile
                 </Button>
               </Link>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => void handleSharePublicProfile()}
-              >
-                Share Public Profile
-              </Button>
             </div>
             {saveMessage ? (
               <p className="text-xs text-foreground/60">{saveMessage}</p>
-            ) : null}
-            {shareMessage ? (
-              <p className="text-xs text-foreground/60">{shareMessage}</p>
             ) : null}
           </Card>
         </div>

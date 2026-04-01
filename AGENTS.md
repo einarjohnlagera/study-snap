@@ -109,13 +109,15 @@ Core loop:
 - `Profile` sections are:
   - `Identity`
   - `Profile Type`
-  - `Account Information`
+  - `Public Profile Link`
 - Identity uses:
   - `firstName`
   - `lastName`
+  - `displayName`
   - `email`
 - Do not collapse `firstName` and `lastName` into one `name` field in product UI or API contracts unless explicitly requested.
 - `Profile Type` remains editable in `Profile` as a separate save action.
+- `Profile` may link to `View Public Profile`, but Public Profile sharing and visibility controls do not belong on `/profile`.
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.
 
@@ -267,6 +269,13 @@ Core loop:
 - Profile = identity
 - Settings = app preferences
 - Do not merge responsibilities casually.
+
+### Public Profile Owner Controls Rule
+
+- Public Profile owner controls belong on `/public/profile/{userId}`, not on `/profile`.
+- Only the profile owner may see `Edit Profile` and the Public Profile visibility toggle.
+- Non-owners may see a share action on Public Profile, but they must not see owner-only editing or privacy controls.
+- If a public profile is turned off, non-owners should see `This profile is private.`
 
 ### Note Ownership Rule
 

@@ -6,6 +6,7 @@ public record PublicProfileResponse(
         String displayName,
         String profileType,
         boolean isOfficial,
+        boolean publicProfileVisible,
         int publicNotesCount,
         long totalCopies,
         List<PublicProfileNoteResponse> publicNotes

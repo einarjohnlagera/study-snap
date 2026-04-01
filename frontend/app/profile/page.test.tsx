@@ -32,6 +32,7 @@ const profileResponse = {
   firstName: "Note",
   lastName: "User",
   displayName: "Note User",
+  publicProfileVisible: true,
   countryCode: null,
   profileType: "STUDENT",
   examDate: null,
@@ -53,19 +54,12 @@ const profileResponse = {
 } as const;
 
 describe("Profile page", () => {
-  const clipboardWriteText = jest.fn();
-
   beforeEach(() => {
     (getMe as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue(profileResponse);
     (completeOnboardingProfileType as jest.Mock).mockResolvedValue(profileResponse);
-    clipboardWriteText.mockReset();
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: clipboardWriteText },
-      configurable: true,
-    });
   });
 
   it("saves profile identity fields and profile type without mixing in settings", async () => {
@@ -143,19 +137,13 @@ describe("Profile page", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows public profile actions and copies the share link", async () => {
+  it("shows a public profile navigation link without share controls", async () => {
     render(<ProfilePage />);
 
     expect(await screen.findByRole("link", { name: "View Public Profile" })).toHaveAttribute(
       "href",
       "/public/profile/user-1",
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "Share Public Profile" }));
-
-    await waitFor(() => {
-      expect(clipboardWriteText).toHaveBeenCalledWith("http://localhost/public/profile/user-1");
-    });
-    expect(await screen.findByText("Public profile link copied.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Share Public Profile" })).not.toBeInTheDocument();
   });
 });

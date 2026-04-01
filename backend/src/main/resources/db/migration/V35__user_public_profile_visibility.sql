@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN public_profile_visible BOOLEAN NOT NULL DEFAULT TRUE;

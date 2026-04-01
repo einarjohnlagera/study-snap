@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
@@ -80,6 +81,7 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFirstName(request.firstName().trim());
         user.setDisplayName(resolveDisplayName(request.displayName()));
+        user.setPublicProfileVisible(true);
         user.setCountryCode(null);
         user.setProfileType(null);
         user.setEngagementMode(EngagementMode.FOCUSED);
@@ -272,6 +274,13 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    public MeResponse updatePublicProfileVisibility(UUID userId, UpdatePublicProfileVisibilityRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        user.setPublicProfileVisible(Boolean.TRUE.equals(request.publicProfileVisible()));
+        user.setUpdatedAt(OffsetDateTime.now());
+        return toMeResponse(user);
+    }
+
     private MeResponse toMeResponse(UserEntity user) {
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(user.getId());
         long studyPackCount = studyPackRepository.countByOwnerUserId(user.getId());
@@ -282,6 +291,7 @@ public class AuthService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getDisplayName(),
+                Boolean.TRUE.equals(user.getPublicProfileVisible()),
                 user.getCountryCode(),
                 user.getProfileType(),
                 user.getExamDate(),

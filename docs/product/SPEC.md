@@ -242,6 +242,13 @@ Users can:
   - list of that user's public notes with Title, Subject badge, Tags, and Copy count
 - Public Profiles must only include notes where `visibility=PUBLIC`.
 - Public Profiles must never show email.
+- Public Profile owner controls belong on `/public/profile/{userId}`, not on `/profile`.
+- Owner-only Public Profile controls are:
+  - `Edit Profile` -> routes to `/profile`
+  - `Share Profile`
+  - `Public Profile On` / `Public Profile Off`
+- Non-owners must not see `Edit Profile` or the visibility toggle on Public Profile.
+- If `publicProfileVisible = false`, non-owners should see `This profile is private.`
 - If the user has no public notes, show `This user has no public notes yet.`
 - Public Profile note cards should use the same interaction model as Library and Public Library:
   - whole card click opens the public note detail page
@@ -270,6 +277,12 @@ Users can:
   - `lastName`
   - `displayName`
   - `email`
+- `Profile` should include:
+  - identity fields
+  - profile type editing
+  - save actions
+  - `View Public Profile` navigation only
+- `Profile` should not own Public Profile sharing or visibility controls.
 - If `displayName` is blank, public author fallback is `firstName`.
 - Public pages must never show the user's email address.
 - Reserved display names are rejected server-side. The following are reserved case-insensitively:

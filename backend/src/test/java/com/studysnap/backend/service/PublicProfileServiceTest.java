@@ -54,6 +54,7 @@ class PublicProfileServiceTest {
         user.setFirstName("Study");
         user.setProfileType(ProfileType.TEACHER);
         user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(true);
 
         NoteEntity noteOne = buildPublicNote(noteOneId, userId, "Plant Cells", "Biology", new String[]{"cells", "plants"});
         NoteEntity noteTwo = buildPublicNote(noteTwoId, userId, "Atomic Bonds", "Chemistry", new String[]{"atoms"});
@@ -67,11 +68,12 @@ class PublicProfileServiceTest {
                         projection(noteTwoId, 2L)
                 ));
 
-        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString());
+        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
         assertThat(response.displayName()).isEqualTo("Study Buddy");
         assertThat(response.profileType()).isEqualTo("TEACHER");
         assertThat(response.isOfficial()).isFalse();
+        assertThat(response.publicProfileVisible()).isTrue();
         assertThat(response.publicNotesCount()).isEqualTo(2);
         assertThat(response.totalCopies()).isEqualTo(7);
         assertThat(response.publicNotes())
@@ -91,12 +93,13 @@ class PublicProfileServiceTest {
         user.setEmail("creator@example.com");
         user.setFirstName("Creator");
         user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(true);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
 
-        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString());
+        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
         assertThat(response.displayName()).isEqualTo("Creator");
         assertThat(response.publicNotesCount()).isZero();
@@ -112,12 +115,13 @@ class PublicProfileServiceTest {
         user.setEmail("admin@example.com");
         user.setDisplayName("Moderator Mia");
         user.setRole(UserRole.ADMIN);
+        user.setPublicProfileVisible(true);
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
 
-        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString());
+        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
         assertThat(response.displayName()).isEqualTo("Moderator Mia");
         assertThat(response.isOfficial()).isTrue();
@@ -129,10 +133,50 @@ class PublicProfileServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         String id = userId.toString();
-        assertThatThrownBy(() -> publicProfileService.getByUserId(id))
+        assertThatThrownBy(() -> publicProfileService.getByUserId(id, null))
                 .isInstanceOf(AppException.class)
                 .extracting(error -> ((AppException) error).getCode())
                 .isEqualTo("PUBLIC_PROFILE_NOT_FOUND");
+    }
+
+    @Test
+    void getByUserId_blocksPrivateProfilesForOtherViewers() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("creator@example.com");
+        user.setDisplayName("Hidden Helper");
+        user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(false);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        String id = userId.toString();
+        UUID uuid = UUID.randomUUID();
+        assertThatThrownBy(() -> publicProfileService.getByUserId(id, uuid))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode(), Throwable::getMessage)
+                .containsExactly("PUBLIC_PROFILE_PRIVATE", "This profile is private.");
+    }
+
+    @Test
+    void getByUserId_allowsOwnerToViewPrivateProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("creator@example.com");
+        user.setDisplayName("Hidden Helper");
+        user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(false);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of());
+
+        PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), userId);
+
+        assertThat(response.displayName()).isEqualTo("Hidden Helper");
+        assertThat(response.publicProfileVisible()).isFalse();
     }
 
     private NoteEntity buildPublicNote(UUID noteId, UUID ownerUserId, String title, String subject, String[] tags) {
