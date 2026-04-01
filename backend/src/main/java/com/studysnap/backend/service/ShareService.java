@@ -10,11 +10,13 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ShareLinkEntity;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.ShareLinkRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -41,15 +43,10 @@ public class ShareService {
     private final ActivityTrackingService activityTrackingService;
 
     public ShareLinkResponse createShareLink(String studyPackId, UUID ownerUserId) {
-        UUID id;
-        try {
-            id = UUID.fromString(studyPackId);
-        } catch (IllegalArgumentException ex) {
-            throw new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND);
-        }
+        UUID id = UuidParsingUtils.parseUuidOrThrow(studyPackId, StudyPackNotFoundException::new);
 
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserIdForUpdate(id, ownerUserId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
 
         String existingToken = normalizeToken(studyPack.getShareToken());
         if (existingToken != null) {

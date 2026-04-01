@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -33,9 +34,10 @@ public class BillingHistoryService {
     private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionService subscriptionService;
     private final StudySnapProperties properties;
+    private final Clock clock;
 
     public BillingHistoryResponse getHistory(UUID userId) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(userId);
         SubscriptionEntity currentPremiumSubscription = subscriptionRepository
                 .findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(userId, PlanType.PREMIUM, SubscriptionStatus.ACTIVE)

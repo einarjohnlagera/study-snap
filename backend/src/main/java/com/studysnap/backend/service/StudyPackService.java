@@ -20,6 +20,9 @@ import com.studysnap.backend.entity.StudyPackDraftEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.StudyPackStatus;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.DraftNotFoundException;
+import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -31,6 +34,7 @@ import com.studysnap.backend.util.CreatedAtIdCursorUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +64,7 @@ public class StudyPackService {
     private static final int MAX_TITLE_LENGTH = 180;
     private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_TAGS_PER_STUDY_PACK = 30;
+    private static final String STUDY_PACK = "study-pack";
 
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
@@ -84,7 +89,7 @@ public class StudyPackService {
                 ? normalizeAndValidateText(request.notesText())
                 : normalizeAndValidateText(requestedSourceNote.getContent());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
-        aiRateLimitService.assertAllowed(ownerUserId, planType, "study-pack");
+        aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
 
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
         NoteEntity sourceNote = requestedSourceNote == null
@@ -145,7 +150,7 @@ public class StudyPackService {
         }
 
         String normalizedText = normalizeAndValidateText(extractedText);
-        aiRateLimitService.assertAllowed(ownerUserId, planType, "study-pack");
+        aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
         NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated);
         StudyPackEntity saved = saveStudyPack(
@@ -173,16 +178,11 @@ public class StudyPackService {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
 
-        UUID draftId = UuidParsingUtils.parseUuidOrThrow(
-                request.draftId(),
-                "DRAFT_NOT_FOUND",
-                "Draft not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID draftId = UuidParsingUtils.parseUuidOrThrow(request.draftId(), DraftNotFoundException::new);
         StudyPackDraftEntity draft = studyPackDraftRepository.findById(draftId)
-                .orElseThrow(() -> new AppException("DRAFT_NOT_FOUND", "Draft not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(DraftNotFoundException::new);
         if (draft.getOwnerUserId() == null || !draft.getOwnerUserId().equals(ownerUserId)) {
-            throw new AppException("DRAFT_NOT_FOUND", "Draft not found.", HttpStatus.NOT_FOUND);
+            throw new DraftNotFoundException();
         }
 
         if (draft.getExpiresAt().isBefore(OffsetDateTime.now())) {
@@ -196,7 +196,7 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(request.notesText());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
-        aiRateLimitService.assertAllowed(ownerUserId, planType, "study-pack");
+        aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(normalizedText);
         NoteEntity generatedNote = createGeneratedNote(ownerUserId, normalizedText, generated);
         StudyPackEntity saved = saveStudyPack(
@@ -223,14 +223,9 @@ public class StudyPackService {
 
     @Transactional(readOnly = true)
     public StudyPackResponse getById(String id, UUID ownerUserId) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(id, StudyPackNotFoundException::new);
         StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
         activityTrackingService.recordActivity(ownerUserId, ActivityType.OPENED_STUDY_PACK, studyPack.getId());
         return mapToResponse(studyPack, null, null);
     }
@@ -264,14 +259,9 @@ public class StudyPackService {
     }
 
     public void deleteMine(String id, UUID ownerUserId) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(id, StudyPackNotFoundException::new);
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
         UUID linkedNoteId = entity.getNoteId();
         studyPackRepository.delete(entity);
         if (linkedNoteId != null) {
@@ -284,14 +274,9 @@ public class StudyPackService {
     }
 
     public StudyPackResponse updateTags(String id, UUID ownerUserId, List<String> tags) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(id, StudyPackNotFoundException::new);
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
         assertNoteEditable(entity.getNoteId(), ownerUserId);
 
         List<String> normalizedTags = normalizeEditableTags(tags);
@@ -310,14 +295,9 @@ public class StudyPackService {
     }
 
     public StudyPackResponse updateMetadata(String id, UUID ownerUserId, String title, String subject) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(id, StudyPackNotFoundException::new);
         StudyPackEntity entity = studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
         assertNoteEditable(entity.getNoteId(), ownerUserId);
 
         String normalizedTitle = normalizeEditableTitle(title);
@@ -336,14 +316,9 @@ public class StudyPackService {
     }
 
     public void recordQuickReviewActivity(String id, UUID ownerUserId, ActivityType activityType) {
-        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(
-                id,
-                "STUDY_PACK_NOT_FOUND",
-                "Study pack not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(id, StudyPackNotFoundException::new);
         studyPackRepository.findByIdAndOwnerUserId(studyPackId, ownerUserId)
-                .orElseThrow(() -> new AppException("STUDY_PACK_NOT_FOUND", "Study pack not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(StudyPackNotFoundException::new);
 
         if (activityType != ActivityType.STARTED_QUICK_REVIEW
                 && activityType != ActivityType.COMPLETED_QUICK_REVIEW
@@ -389,7 +364,7 @@ public class StudyPackService {
             );
         }
 
-        String contentType = image.getContentType() == null ? "" : image.getContentType().toLowerCase();
+        String contentType = StringUtils.defaultString(image.getContentType()).toLowerCase();
         if (!ALLOWED_IMAGE_TYPES.contains(contentType)) {
             throw new AppException(
                     "UNSUPPORTED_IMAGE_TYPE",
@@ -480,15 +455,10 @@ public class StudyPackService {
             return null;
         }
 
-        UUID noteId = UuidParsingUtils.parseUuidOrThrow(
-                noteIdRaw,
-                "NOTE_NOT_FOUND",
-                "Note not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
 
         NoteEntity sourceNote = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
 
         if (sourceNote.getStatus() == NoteStatus.GENERATED) {
             throw new AppException(
@@ -611,11 +581,7 @@ public class StudyPackService {
 
         LinkedHashMap<String, String> normalizedByKey = new LinkedHashMap<>();
         for (String rawTag : rawTags) {
-            if (rawTag == null) {
-                continue;
-            }
-
-            String normalizedTag = rawTag.trim();
+            String normalizedTag = StringUtils.defaultString(rawTag).trim();
             if (normalizedTag.isBlank()) {
                 continue;
             }
@@ -759,7 +725,7 @@ public class StudyPackService {
             return;
         }
         NoteEntity linkedNote = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
-                .orElseThrow(() -> new AppException("NOTE_NOT_FOUND", "Note not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(NoteNotFoundException::new);
         if (linkedNote.getStatus() == NoteStatus.GENERATED) {
             throw new AppException(
                     "NOTE_LOCKED",

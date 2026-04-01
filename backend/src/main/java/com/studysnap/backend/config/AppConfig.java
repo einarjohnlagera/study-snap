@@ -9,6 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import com.studysnap.backend.security.SecurityProperties;
 
+import java.time.Clock;
+
 @Configuration
 @EnableConfigurationProperties({StudySnapProperties.class, SecurityProperties.class})
 public class AppConfig {
@@ -26,5 +28,10 @@ public class AppConfig {
         executor.setQueueCapacity(500);
         executor.initialize();
         return executor;
+    }
+
+    @Bean
+    public Clock systemClock() {
+        return Clock.systemUTC();
     }
 }

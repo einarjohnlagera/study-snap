@@ -7,7 +7,8 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
-import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.PublicProfileNotFoundException;
+import com.studysnap.backend.exception.PublicProfilePrivateException;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -16,7 +17,6 @@ import com.studysnap.backend.util.ContentPreviewUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,18 +43,13 @@ public class PublicProfileService {
     private final StudyPackRepository studyPackRepository;
 
     public PublicProfileResponse getByUserId(String userIdRaw, UUID viewerUserId) {
-        UUID userId = UuidParsingUtils.parseUuidOrThrow(
-                userIdRaw,
-                "PUBLIC_PROFILE_NOT_FOUND",
-                "Public profile not found.",
-                HttpStatus.NOT_FOUND
-        );
+        UUID userId = UuidParsingUtils.parseUuidOrThrow(userIdRaw, PublicProfileNotFoundException::new);
         UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> new AppException("PUBLIC_PROFILE_NOT_FOUND", "Public profile not found.", HttpStatus.NOT_FOUND));
+                .orElseThrow(PublicProfileNotFoundException::new);
         boolean publicProfileVisible = Boolean.TRUE.equals(user.getPublicProfileVisible());
         boolean viewerOwnsProfile = userId.equals(viewerUserId);
         if (!publicProfileVisible && !viewerOwnsProfile) {
-            throw new AppException("PUBLIC_PROFILE_PRIVATE", "This profile is private.", HttpStatus.FORBIDDEN);
+            throw new PublicProfilePrivateException();
         }
 
         List<NoteEntity> publicNotes = noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC);

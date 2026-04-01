@@ -19,7 +19,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,7 +53,8 @@ class BillingHistoryServiceTest {
                 paymentTransactionRepository,
                 subscriptionRepository,
                 subscriptionService,
-                properties
+                properties,
+                Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
         );
 
         UUID userId = UUID.randomUUID();
@@ -124,7 +128,8 @@ class BillingHistoryServiceTest {
                 paymentTransactionRepository,
                 subscriptionRepository,
                 subscriptionService,
-                properties
+                properties,
+                Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
         );
 
         UUID userId = UUID.randomUUID();
