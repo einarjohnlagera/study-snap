@@ -67,7 +67,7 @@ describe("PublicNoteOwnershipActions", () => {
       />,
     );
 
-    expect(screen.getByText("By You")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "By You" })).toHaveAttribute("href", "/public/profile/user-1");
   });
 
   it("shows copy action and community label for a non-owner public note", () => {
@@ -98,7 +98,7 @@ describe("PublicNoteOwnershipActions", () => {
       />,
     );
 
-    expect(screen.getByText("By NoteLib")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "By NoteLib" })).toHaveAttribute("href", "/public/profile/admin-1");
     expect(screen.getByText("Official")).toBeInTheDocument();
   });
 });

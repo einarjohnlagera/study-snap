@@ -13,6 +13,7 @@ import java.util.UUID;
 public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     Optional<NoteEntity> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
+    List<NoteEntity> findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(UUID ownerUserId, NoteVisibility visibility);
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);
     List<NoteEntity> findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility visibility, String subject);
     List<NoteEntity> findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility visibility);
@@ -37,4 +38,13 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
               and trim(n.subject) <> ''
             """)
     List<String> findSubjectValuesByVisibility(@Param("visibility") NoteVisibility visibility);
+
+    @Query("""
+            select n.copiedFromNoteId as noteId, count(n) as copyCount
+            from NoteEntity n
+            where n.copiedFromNoteId in :noteIds
+              and n.copiedFromPublic = true
+            group by n.copiedFromNoteId
+            """)
+    List<NoteCopyCountProjection> countCopiedPublicNotesBySourceNoteIds(@Param("noteIds") List<UUID> noteIds);
 }

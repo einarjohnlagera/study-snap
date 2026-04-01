@@ -7,8 +7,8 @@ function slugify(value: string | null | undefined, fallback: string) {
   const normalized = (value ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
 
   return normalized.length > 0 ? normalized : fallback;
 }
@@ -32,9 +32,20 @@ export function buildPublicLibraryNotePath(input: {
   return `${buildPublicLibrarySubjectPath(input.subject)}/${getPublicTitleSlug(input.title)}`;
 }
 
+export function buildPublicLibraryNotePathFromSlug(input: {
+  subject: string | null | undefined;
+  slug: string;
+}) {
+  return `${buildPublicLibrarySubjectPath(input.subject)}/${input.slug}`;
+}
+
 export function buildPublicLibraryNotePathFromDetail(note: PublicNoteDetailResponse) {
   return buildPublicLibraryNotePath({
     subject: note.subject,
     title: note.title,
   });
+}
+
+export function buildPublicProfilePath(userId: string | null | undefined) {
+  return `/public/profile/${userId ?? ""}`;
 }

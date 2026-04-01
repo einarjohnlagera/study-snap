@@ -51,7 +51,7 @@ Implementation stance:
 - keep UX calm, practical, and non-overengineered
 - keep data model and backend flows simple
 
-Future Improvement - Public Profiles
+In Progress - Public Profiles
 
 - build lightweight public profile pages on top of persisted `users.display_name`
 - keep impersonation guardrails through reserved display-name validation
@@ -100,13 +100,13 @@ Future Improvement - Normalize Subjects Table
 - repeat note-editor actions at the top and bottom on desktop and keep a floating CTA on mobile
 - add explicit first-time activation guidance from verification through first Study Pack and first Challenge Quiz
 
-## Public Profiles (Planned – v0.5.x)
+## Public Profiles (In Progress – v0.5.x)
 
 Public profiles allow users to showcase their public notes and contributions.
 
 Route:
 - /u/{displayName} (future)
-- /profile/{userId} (initial implementation)
+- /public/profile/{userId} (initial implementation)
 
 Public profile will display:
 - Display Name
@@ -114,7 +114,6 @@ Public profile will display:
 - Official Badge (for NoteLib account)
 - Total Public Notes
 - Total Copies (how many times their notes were copied)
-- Subjects contributed to
 - List of public notes by the user
 
 Public note card should show:
@@ -128,6 +127,7 @@ System rules:
 - Display Name is public identity
 - Email is never shown publicly
 - Official badge is only for system/admin accounts
+- V1 route is public but non-canonical until a future display-name route is introduced
 - Notes created by NoteLib should show “By NoteLib” with Official badge
 
 Future enhancements:
