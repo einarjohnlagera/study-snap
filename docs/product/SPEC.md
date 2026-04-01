@@ -282,10 +282,13 @@ Users can:
   - `displayName`
   - `email`
 - `Profile` should include:
-  - identity fields
-  - profile type editing
-  - save actions
-  - `View Public Profile` navigation only
+  - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page ->` navigation
+  - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
+  - a `Profile Type` card with the profile-type selector
+- `Profile` save actions should be section-specific:
+  - `Save Identity` only saves identity fields
+  - `Save Profile Type` only saves the profile type field
+- `View Public Page ->` on `/profile` is navigation only and should live in the top Display Name card.
 - `Profile` should not own Public Profile sharing or visibility controls.
 - If `displayName` is blank, public author fallback is `firstName`.
 - Public pages must never show the user's email address.

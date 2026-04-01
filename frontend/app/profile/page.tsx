@@ -54,7 +54,9 @@ export default function ProfilePage() {
     email: "",
   });
   const [savingIdentity, setSavingIdentity] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [identityMessage, setIdentityMessage] = useState<string | null>(null);
+  const [savingProfileType, setSavingProfileType] = useState(false);
+  const [profileTypeMessage, setProfileTypeMessage] = useState<string | null>(null);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
 
   const loadProfile = useCallback(async () => {
@@ -66,7 +68,8 @@ export default function ProfilePage() {
 
     setLoading(true);
     setError(null);
-    setSaveMessage(null);
+    setIdentityMessage(null);
+    setProfileTypeMessage(null);
     try {
       const me = await getMe();
       setProfile(me);
@@ -110,19 +113,19 @@ export default function ProfilePage() {
   }, [profile?.email, resolvedDisplayName]);
 
   const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
-    setSaveMessage(null);
+    setIdentityMessage(null);
     setIdentityForm((current) => ({
       ...current,
       [field]: value,
     }));
   };
 
-  const handleSaveProfile = async () => {
+  const handleSaveIdentity = async () => {
     if (savingIdentity) {
       return;
     }
     setSavingIdentity(true);
-    setSaveMessage(null);
+    setIdentityMessage(null);
     try {
       const updatedIdentity = await updateUserProfile({
         firstName: identityForm.firstName.trim(),
@@ -130,29 +133,49 @@ export default function ProfilePage() {
         displayName: identityForm.displayName.trim(),
         email: identityForm.email.trim(),
       });
-      let updatedProfile = updatedIdentity;
-      if (selectedProfileType && selectedProfileType !== updatedIdentity.profileType) {
-        updatedProfile = await completeOnboardingProfileType({ profileType: selectedProfileType });
-      }
 
-      setProfile(updatedProfile);
+      setProfile(updatedIdentity);
       setIdentityForm({
-        firstName: updatedProfile.firstName ?? "",
-        lastName: updatedProfile.lastName ?? "",
-        displayName: updatedProfile.displayName ?? "",
-        email: updatedProfile.pendingEmail ?? updatedProfile.email,
+        firstName: updatedIdentity.firstName ?? "",
+        lastName: updatedIdentity.lastName ?? "",
+        displayName: updatedIdentity.displayName ?? "",
+        email: updatedIdentity.pendingEmail ?? updatedIdentity.email,
       });
-      setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
-      setSaveMessage(
-        updatedProfile.pendingEmail
+      setSelectedProfileType(updatedIdentity.profileType ?? selectedProfileType);
+      setIdentityMessage(
+        updatedIdentity.pendingEmail
           ? "Please verify your new email address before it replaces your current email."
-          : "Profile updated successfully.",
+          : "Identity updated successfully.",
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update profile.";
-      setSaveMessage(message);
+      setIdentityMessage(message);
     } finally {
       setSavingIdentity(false);
+    }
+  };
+
+  const handleSaveProfileType = async () => {
+    if (savingProfileType || !selectedProfileType || !profile) {
+      return;
+    }
+    if (selectedProfileType === profile.profileType) {
+      setProfileTypeMessage("Profile type is already up to date.");
+      return;
+    }
+
+    setSavingProfileType(true);
+    setProfileTypeMessage(null);
+    try {
+      const updatedProfile = await completeOnboardingProfileType({ profileType: selectedProfileType });
+      setProfile(updatedProfile);
+      setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
+      setProfileTypeMessage("Profile type updated successfully.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update profile type.";
+      setProfileTypeMessage(message);
+    } finally {
+      setSavingProfileType(false);
     }
   };
 
@@ -177,19 +200,26 @@ export default function ProfilePage() {
           />
 
           <Card className="space-y-4 p-4 sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white dark:bg-blue-500">
-                {avatarLetter}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white dark:bg-blue-500">
+                  {avatarLetter}
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <h1 className="truncate text-2xl font-semibold tracking-tight">{resolvedDisplayName}</h1>
+                  <p className="truncate text-sm text-foreground/75">{profile.email}</p>
+                  {profile.pendingEmail ? (
+                    <p className="truncate text-xs text-foreground/60">
+                      Pending email change: {profile.pendingEmail}
+                    </p>
+                  ) : null}
+                </div>
               </div>
-              <div className="min-w-0 space-y-1">
-                <h1 className="truncate text-2xl font-semibold tracking-tight">{resolvedDisplayName}</h1>
-                <p className="truncate text-sm text-foreground/75">{profile.email}</p>
-                {profile.pendingEmail ? (
-                  <p className="truncate text-xs text-foreground/60">
-                    Pending email change: {profile.pendingEmail}
-                  </p>
-                ) : null}
-              </div>
+              <Link href={buildPublicProfilePath(profile.id)} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  View Public Page →
+                </Button>
+              </Link>
             </div>
           </Card>
 
@@ -230,6 +260,17 @@ export default function ProfilePage() {
                 />
               </label>
             </div>
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+              {identityMessage ? <p className="text-xs text-foreground/60">{identityMessage}</p> : <div />}
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSaveIdentity()}
+                disabled={savingIdentity}
+              >
+                {savingIdentity ? "Saving..." : "Save Identity"}
+              </Button>
+            </div>
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
@@ -241,7 +282,7 @@ export default function ProfilePage() {
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
                   value={selectedProfileType}
                   onChange={(event) => {
-                    setSaveMessage(null);
+                    setProfileTypeMessage(null);
                     setSelectedProfileType(event.target.value as ProfileType);
                   }}
                 >
@@ -253,31 +294,23 @@ export default function ProfilePage() {
                 </select>
               </label>
             </div>
-          </Card>
-
-          <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Public Profile</h2>
-            <p className="text-sm text-foreground/75">
-              Open your public profile page to manage sharing and visibility controls.
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+              {profileTypeMessage ? (
+                <p className="text-xs text-foreground/60">{profileTypeMessage}</p>
+              ) : (
+                <p className="text-xs text-foreground/60">
+                  Profile Type shapes dashboard emphasis and study guidance only.
+                </p>
+              )}
               <Button
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={() => void handleSaveProfile()}
-                disabled={savingIdentity || !selectedProfileType}
+                onClick={() => void handleSaveProfileType()}
+                disabled={savingProfileType || !selectedProfileType}
               >
-                {savingIdentity ? "Saving..." : "Save Profile"}
+                {savingProfileType ? "Saving..." : "Save Profile Type"}
               </Button>
-              <Link href={buildPublicProfilePath(profile.id)} className="w-full sm:w-auto">
-                <Button type="button" variant="outline" className="w-full sm:w-auto">
-                  View Public Profile
-                </Button>
-              </Link>
             </div>
-            {saveMessage ? (
-              <p className="text-xs text-foreground/60">{saveMessage}</p>
-            ) : null}
           </Card>
         </div>
       ) : null}

@@ -55,6 +55,8 @@ const profileResponse = {
 
 describe("Profile page", () => {
   beforeEach(() => {
+    routerMock.push.mockReset();
+    routerMock.refresh.mockReset();
     (getMe as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
@@ -62,19 +64,12 @@ describe("Profile page", () => {
     (completeOnboardingProfileType as jest.Mock).mockResolvedValue(profileResponse);
   });
 
-  it("saves profile identity fields and profile type without mixing in settings", async () => {
+  it("saves identity fields without changing profile type settings", async () => {
     (updateUserProfile as jest.Mock).mockResolvedValue({
       ...profileResponse,
       firstName: "Updated",
       lastName: "Person",
       displayName: "Updated Person",
-    });
-    (completeOnboardingProfileType as jest.Mock).mockResolvedValue({
-      ...profileResponse,
-      firstName: "Updated",
-      lastName: "Person",
-      displayName: "Updated Person",
-      profileType: "TEACHER",
     });
 
     render(<ProfilePage />);
@@ -91,10 +86,7 @@ describe("Profile page", () => {
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "[email protected]" },
     });
-    fireEvent.change(screen.getByDisplayValue("Student"), {
-      target: { value: "TEACHER" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Identity" }));
 
     await waitFor(() => {
       expect(updateUserProfile).toHaveBeenCalledWith({
@@ -104,11 +96,31 @@ describe("Profile page", () => {
         email: "[email protected]",
       });
     });
-    expect(completeOnboardingProfileType).toHaveBeenCalledWith({ profileType: "TEACHER" });
+    expect(completeOnboardingProfileType).not.toHaveBeenCalled();
 
-    expect(await screen.findByText("Profile updated successfully.")).toBeInTheDocument();
+    expect(await screen.findByText("Identity updated successfully.")).toBeInTheDocument();
     expect(screen.queryByText("Learning Style")).not.toBeInTheDocument();
     expect(screen.queryByText("Study Reminder Frequency")).not.toBeInTheDocument();
+  });
+
+  it("saves profile type separately from identity fields", async () => {
+    (completeOnboardingProfileType as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      profileType: "TEACHER",
+    });
+
+    render(<ProfilePage />);
+
+    fireEvent.change(await screen.findByDisplayValue("Student"), {
+      target: { value: "TEACHER" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
+
+    await waitFor(() => {
+      expect(completeOnboardingProfileType).toHaveBeenCalledWith({ profileType: "TEACHER" });
+    });
+    expect(updateUserProfile).not.toHaveBeenCalled();
+    expect(await screen.findByText("Profile type updated successfully.")).toBeInTheDocument();
   });
 
   it("shows pending email verification guidance after email change", async () => {
@@ -125,7 +137,7 @@ describe("Profile page", () => {
     fireEvent.change(await screen.findByLabelText("Email"), {
       target: { value: "[email protected]" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Identity" }));
 
     expect(
       await screen.findByText("Please verify your new email address before it replaces your current email."),
@@ -137,13 +149,14 @@ describe("Profile page", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows a public profile navigation link without share controls", async () => {
+  it("shows a public profile navigation link in the top card without share controls", async () => {
     render(<ProfilePage />);
 
-    expect(await screen.findByRole("link", { name: "View Public Profile" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "View Public Page →" })).toHaveAttribute(
       "href",
       "/public/profile/user-1",
     );
     expect(screen.queryByRole("button", { name: "Share Public Profile" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Public Profile On")).not.toBeInTheDocument();
   });
 });

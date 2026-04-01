@@ -118,6 +118,11 @@ Core loop:
 - Do not collapse `firstName` and `lastName` into one `name` field in product UI or API contracts unless explicitly requested.
 - `Profile Type` remains editable in `Profile` as a separate save action.
 - `Profile` may link to `View Public Profile`, but Public Profile sharing and visibility controls do not belong on `/profile`.
+- `/profile` layout should stay split into:
+  - a top Display Name card with avatar, display name, email, and `View Public Page ->`
+  - an `Identity` card with its own `Save Identity` action
+  - a `Profile Type` card with its own `Save Profile Type` action
+- Profile save buttons must remain section-specific rather than global.
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.
 
@@ -269,6 +274,12 @@ Core loop:
 - Profile = identity
 - Settings = app preferences
 - Do not merge responsibilities casually.
+
+### Profile Page Responsibility Rule
+
+- `/profile` is a private identity settings surface, not a public-page controls surface.
+- Keep Public Profile sharing and visibility controls on `/public/profile/{userId}` only.
+- `View Public Page ->` on `/profile` is navigation only and should not be grouped with save actions.
 
 ### Public Profile Owner Controls Rule
 
