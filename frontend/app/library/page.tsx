@@ -375,7 +375,7 @@ export default function LibraryPage() {
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <PageHeader
         eyebrow="LIBRARY"
-        title="My Library"
+        title="Library"
         description="Browse and revisit all of your saved notes."
         actions={(
           <Link href="/notes/new" className="block w-full sm:w-auto">

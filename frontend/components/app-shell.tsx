@@ -72,7 +72,7 @@ function getPageTitle(pathname: string): string {
     return "Public Library";
   }
   if (pathname.startsWith("/library")) {
-    return "My Library";
+    return "Library";
   }
   if (pathname.startsWith("/public/notes/")) {
     return "Public Note";
@@ -132,7 +132,7 @@ type NavLinkItem = {
 
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/library", label: "My Library" },
+  { href: "/library", label: "Library" },
   { href: "/library/public", label: "Public Library" },
 ];
 

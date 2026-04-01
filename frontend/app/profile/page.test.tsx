@@ -53,20 +53,34 @@ const profileResponse = {
 } as const;
 
 describe("Profile page", () => {
+  const clipboardWriteText = jest.fn();
+
   beforeEach(() => {
     (getMe as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue(profileResponse);
     (completeOnboardingProfileType as jest.Mock).mockResolvedValue(profileResponse);
+    clipboardWriteText.mockReset();
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: clipboardWriteText },
+      configurable: true,
+    });
   });
 
-  it("saves identity fields without mixing in preferences", async () => {
+  it("saves profile identity fields and profile type without mixing in settings", async () => {
     (updateUserProfile as jest.Mock).mockResolvedValue({
       ...profileResponse,
       firstName: "Updated",
       lastName: "Person",
       displayName: "Updated Person",
+    });
+    (completeOnboardingProfileType as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      firstName: "Updated",
+      lastName: "Person",
+      displayName: "Updated Person",
+      profileType: "TEACHER",
     });
 
     render(<ProfilePage />);
@@ -83,7 +97,10 @@ describe("Profile page", () => {
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "[email protected]" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save Identity" }));
+    fireEvent.change(screen.getByDisplayValue("Student"), {
+      target: { value: "TEACHER" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
 
     await waitFor(() => {
       expect(updateUserProfile).toHaveBeenCalledWith({
@@ -93,8 +110,9 @@ describe("Profile page", () => {
         email: "[email protected]",
       });
     });
+    expect(completeOnboardingProfileType).toHaveBeenCalledWith({ profileType: "TEACHER" });
 
-    expect(screen.getByText("Profile updated successfully.")).toBeInTheDocument();
+    expect(await screen.findByText("Profile updated successfully.")).toBeInTheDocument();
     expect(screen.queryByText("Learning Style")).not.toBeInTheDocument();
     expect(screen.queryByText("Study Reminder Frequency")).not.toBeInTheDocument();
   });
@@ -113,7 +131,7 @@ describe("Profile page", () => {
     fireEvent.change(await screen.findByLabelText("Email"), {
       target: { value: "[email protected]" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save Identity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Profile" }));
 
     expect(
       await screen.findByText("Please verify your new email address before it replaces your current email."),
@@ -123,5 +141,21 @@ describe("Profile page", () => {
         element?.textContent === "Pending email change: [email protected]",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("shows public profile actions and copies the share link", async () => {
+    render(<ProfilePage />);
+
+    expect(await screen.findByRole("link", { name: "View Public Profile" })).toHaveAttribute(
+      "href",
+      "/public/profile/user-1",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share Public Profile" }));
+
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledWith("http://localhost/public/profile/user-1");
+    });
+    expect(await screen.findByText("Public profile link copied.")).toBeInTheDocument();
   });
 });

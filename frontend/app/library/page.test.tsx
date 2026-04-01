@@ -22,7 +22,7 @@ jest.mock("@/lib/api", () => ({
   deleteNote: jest.fn(),
 }));
 
-describe("My Library page", () => {
+describe("Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
@@ -47,6 +47,7 @@ describe("My Library page", () => {
   it("opens note detail when a card is clicked", async () => {
     render(<LibraryPage />);
 
+    expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "+ Create Note" })).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
     const title = await screen.findByText("Cell Respiration");

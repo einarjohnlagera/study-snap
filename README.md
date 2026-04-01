@@ -89,24 +89,33 @@ This supports iterative learning and avoids accidental overwrites.
 6. To improve content, user makes a copy, edits it, and generates a new Study Pack from the copy.
 7. User can set note visibility:
    - `Make Public` -> appears in Public Library
-   - `Make Private` -> only visible in My Library
-8. User can copy public notes into My Library and continue studying.
+   - `Make Private` -> only visible in Library
+8. User can copy public notes into Library and continue studying.
 9. User can open a creator's Public Profile to view public notes and contribution stats.
 
 ## Navigation
 
 Sidebar structure:
 
-- Main: Dashboard, My Library, Public Library
+- Main: Dashboard, Library, Public Library
 - Account: Profile, Settings
 
 Primary product pages:
 
-- My Library: `/library`
+- Library: `/library`
 - Public Library: `/library/public`
 - Note Detail: `/notes/{id}`
 - Public Note Detail (read-only): `/public/library/{subject}/{slug}`
 - Public Profile: `/public/profile/{userId}`
+
+Page responsibilities:
+
+- Dashboard = what to do now
+- Library = private workspace
+- Public Library = discovery
+- Public Profile = public showcase
+- Profile = identity
+- Settings = app preferences
 
 ## Personalized Dashboard
 
@@ -143,21 +152,27 @@ High-level model:
 
 ## Profile and Settings
 
-- `Profile` owns identity and account information:
+- `Profile` owns identity information:
   - `firstName`
   - `lastName`
+  - `displayName`
   - `email`
   - `profileType`
+  - `View Public Profile`
+  - `Share Public Profile`
 - `Settings` owns preferences and app behavior:
+  - theme
+  - notifications
   - `Learning Style`
   - `Study Reminders`
+  - account settings
   - billing and usage
 - Email changes are not applied immediately.
 - Requested email changes are stored as `pendingEmail` and only replace the current email after the new address is verified.
 
 ## Note Creation UX
 
-- `My Library` includes a direct `Create Note` entry so note creation does not depend on `Dashboard`.
+- `Library` includes a direct `Create Note` entry so note creation does not depend on `Dashboard`.
 - Note Editor keeps a short primary CTA with profile-aware labels:
   - `Generate`
   - `Practice`
@@ -200,7 +215,7 @@ This repo currently centers on:
 
 - note-to-study-pack generation
 - OCR support for image-based notes
-- My Library and Public Library support
+- Library and Public Library support
 - Public Profiles for creator discovery and public-note browsing
 - demo mode
 - shareable Study Pack links

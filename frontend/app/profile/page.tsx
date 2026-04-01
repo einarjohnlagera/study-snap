@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
   updateUserProfile,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type IdentityForm = {
@@ -21,24 +23,6 @@ type IdentityForm = {
   displayName: string;
   email: string;
 };
-
-function formatPlan(value: MeResponse["planType"]): string {
-  return value.charAt(0) + value.slice(1).toLowerCase();
-}
-
-function formatMemberSince(value: string | null): string {
-  if (!value) {
-    return "Not available yet";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Not available yet";
-  }
-  return date.toLocaleDateString(undefined, {
-    month: "long",
-    year: "numeric",
-  });
-}
 
 const PROFILE_TYPE_OPTIONS: Array<{ value: ProfileType; label: string }> = [
   { value: "STUDENT", label: "Student" },
@@ -72,8 +56,7 @@ export default function ProfilePage() {
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
-  const [savingProfileType, setSavingProfileType] = useState(false);
-  const [profileTypeMessage, setProfileTypeMessage] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -85,7 +68,7 @@ export default function ProfilePage() {
     setLoading(true);
     setError(null);
     setSaveMessage(null);
-    setProfileTypeMessage(null);
+    setShareMessage(null);
     try {
       const me = await getMe();
       setProfile(me);
@@ -130,34 +113,42 @@ export default function ProfilePage() {
 
   const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
     setSaveMessage(null);
+    setShareMessage(null);
     setIdentityForm((current) => ({
       ...current,
       [field]: value,
     }));
   };
 
-  const handleSaveIdentity = async () => {
+  const handleSaveProfile = async () => {
     if (savingIdentity) {
       return;
     }
     setSavingIdentity(true);
     setSaveMessage(null);
+    setShareMessage(null);
     try {
-      const updated = await updateUserProfile({
+      const updatedIdentity = await updateUserProfile({
         firstName: identityForm.firstName.trim(),
         lastName: identityForm.lastName.trim(),
         displayName: identityForm.displayName.trim(),
         email: identityForm.email.trim(),
       });
-      setProfile(updated);
+      let updatedProfile = updatedIdentity;
+      if (selectedProfileType && selectedProfileType !== updatedIdentity.profileType) {
+        updatedProfile = await completeOnboardingProfileType({ profileType: selectedProfileType });
+      }
+
+      setProfile(updatedProfile);
       setIdentityForm({
-        firstName: updated.firstName ?? "",
-        lastName: updated.lastName ?? "",
-        displayName: updated.displayName ?? "",
-        email: updated.pendingEmail ?? updated.email,
+        firstName: updatedProfile.firstName ?? "",
+        lastName: updatedProfile.lastName ?? "",
+        displayName: updatedProfile.displayName ?? "",
+        email: updatedProfile.pendingEmail ?? updatedProfile.email,
       });
+      setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
       setSaveMessage(
-        updated.pendingEmail
+        updatedProfile.pendingEmail
           ? "Please verify your new email address before it replaces your current email."
           : "Profile updated successfully.",
       );
@@ -169,22 +160,16 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSaveProfileType = async () => {
-    if (!selectedProfileType || savingProfileType) {
+  const handleSharePublicProfile = async () => {
+    if (!profile?.id) {
       return;
     }
-    setSavingProfileType(true);
-    setProfileTypeMessage(null);
     try {
-      const updated = await completeOnboardingProfileType({ profileType: selectedProfileType });
-      setProfile(updated);
-      setSelectedProfileType(updated.profileType ?? selectedProfileType);
-      setProfileTypeMessage("Profile type updated.");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not update profile type.";
-      setProfileTypeMessage(message);
-    } finally {
-      setSavingProfileType(false);
+      const shareUrl = new URL(buildPublicProfilePath(profile.id), window.location.origin).toString();
+      await navigator.clipboard.writeText(shareUrl);
+      setShareMessage("Public profile link copied.");
+    } catch {
+      setShareMessage("Could not copy public profile link.");
     }
   };
 
@@ -205,7 +190,7 @@ export default function ProfilePage() {
           <PageHeader
             eyebrow="PROFILE"
             title="Profile"
-            description="Manage your personal information and profile type."
+            description="Manage your identity and access your public profile."
           />
 
           <Card className="space-y-4 p-4 sm:p-6">
@@ -262,19 +247,6 @@ export default function ProfilePage() {
                 />
               </label>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => void handleSaveIdentity()}
-                disabled={savingIdentity}
-              >
-                {savingIdentity ? "Saving..." : "Save Identity"}
-              </Button>
-              {saveMessage ? (
-                <p className="text-xs text-foreground/60">{saveMessage}</p>
-              ) : null}
-            </div>
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
@@ -286,7 +258,8 @@ export default function ProfilePage() {
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
                   value={selectedProfileType}
                   onChange={(event) => {
-                    setProfileTypeMessage(null);
+                    setSaveMessage(null);
+                    setShareMessage(null);
                     setSelectedProfileType(event.target.value as ProfileType);
                   }}
                 >
@@ -297,38 +270,43 @@ export default function ProfilePage() {
                   ))}
                 </select>
               </label>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
-                  type="button"
-                  className="w-full sm:w-auto"
-                  onClick={() => void handleSaveProfileType()}
-                  disabled={!selectedProfileType || savingProfileType}
-                >
-                  {savingProfileType ? "Saving..." : "Save Profile Type"}
-                </Button>
-                {profileTypeMessage ? (
-                  <p className="text-xs text-foreground/60">{profileTypeMessage}</p>
-                ) : null}
-              </div>
             </div>
           </Card>
 
           <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Account Information</h2>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Member since</p>
-                <p className="mt-1 font-medium">{formatMemberSince(profile.emailVerifiedAt)}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Plan</p>
-                <p className="mt-1 font-medium">{formatPlan(profile.planType)}</p>
-              </div>
-              <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-xs uppercase tracking-wide text-foreground/60">Study Packs created</p>
-                <p className="mt-1 font-medium">{profile.studyPackCount}</p>
-              </div>
+            <h2 className="text-lg font-semibold sm:text-xl">Public Profile</h2>
+            <p className="text-sm text-foreground/75">
+              View or share the public page that showcases your display name and public notes.
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSaveProfile()}
+                disabled={savingIdentity || !selectedProfileType}
+              >
+                {savingIdentity ? "Saving..." : "Save Profile"}
+              </Button>
+              <Link href={buildPublicProfilePath(profile.id)} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  View Public Profile
+                </Button>
+              </Link>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSharePublicProfile()}
+              >
+                Share Public Profile
+              </Button>
             </div>
+            {saveMessage ? (
+              <p className="text-xs text-foreground/60">{saveMessage}</p>
+            ) : null}
+            {shareMessage ? (
+              <p className="text-xs text-foreground/60">{shareMessage}</p>
+            ) : null}
           </Card>
         </div>
       ) : null}

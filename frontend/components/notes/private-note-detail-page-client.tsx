@@ -304,7 +304,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (created) {
       setToast("Study Pack generated successfully.");
     } else if (copied) {
-      setToast("Copied to My Library");
+      setToast("Copied to Library");
     } else {
       setToast("Note saved.");
     }
@@ -696,7 +696,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-        Back to My Library
+        Back to Library
       </Link>
 
       {loading ? (
@@ -799,7 +799,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                             onClick={() => handleSelectVisibility("PRIVATE")}
                           >
                             <p className="text-sm font-medium">🔒 Private</p>
-                            <p className="text-xs text-foreground/70">Only visible in My Library</p>
+                            <p className="text-xs text-foreground/70">Only visible in Library</p>
                           </button>
                           <button
                             type="button"

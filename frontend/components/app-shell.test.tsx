@@ -157,6 +157,9 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
+    expect(await screen.findByRole("link", { name: "Library" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "My Library" })).not.toBeInTheDocument();
+
     fireEvent.click(await screen.findByLabelText("Open user menu"));
     fireEvent.click(screen.getByRole("button", { name: "Sign Out" }));
 
