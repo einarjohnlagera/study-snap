@@ -34,7 +34,7 @@ Routes:
 - `/notes/new` New Note
 - `/notes/{id}/edit` Edit Note
 - `/dashboard` guidance + library entry
-- `/library` My Library (owned notes)
+- `/library` Library (owned notes, private workspace)
 - `/library/public` Public Library (public notes from you, the community, and official NoteLib content)
 - `/public/profile/{userId}` public creator profile (public notes and contribution stats)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
@@ -170,7 +170,7 @@ Profile Type does not affect:
   - note-scoped quiz entry/performance APIs (`/notes/{id}/quick-review/*`, `/notes/{id}/challenge-quiz/*`, `/notes/{id}/adaptive-practice/start`)
   - copy note
   - update visibility (`PUBLIC`/`PRIVATE`)
-  - list My Library notes
+  - list Library notes
   - list Public Library notes
   - get public note detail
 - `StudyPackController` (legacy/compatibility surface)
@@ -293,7 +293,7 @@ Notes:
 - `GET /api/notes/{id}/challenge-quiz/performance-summary`
 - `POST /api/notes/{id}/adaptive-practice/start`
 - `DELETE /api/notes/{id}`
-- `GET /api/notes` (My Library list)
+- `GET /api/notes` (Library list)
 - `GET /api/notes/public` (Public Library list)
 - `GET /api/notes/public/{id}` (public read-only note detail)
 
@@ -410,12 +410,14 @@ Dashboard personalization architecture:
 
 ## Library Architecture
 
-My Library is the owner workspace for Draft and Study Pack Ready notes.
+Library is the owner workspace for Draft and Study Pack Ready notes.
 Public Library is the discovery surface for notes where `visibility=PUBLIC`.
+Profile is the identity surface for first name, last name, display name, email, and profile type.
+Settings is the preferences surface for theme, notifications, study preferences, account settings, and subscription/billing.
 
 Required backend behavior:
 
-- list owned notes for My Library
+- list owned notes for Library
 - list all public notes for Public Library, including the viewer's own public notes
 - support `/public/library/{subject}` subject listing pages from the same public-note data set
 - support `/public/profile/{userId}` creator pages from persisted `users` plus public-note aggregates
@@ -437,7 +439,7 @@ Filtering model:
 - shared links use unguessable tokens
 - public page is read-only
 - shared payload omits private/raw input where not needed
-- copy duplicates into current user My Library without LLM generation
+- copy duplicates into the current user's Library without LLM generation
 - title collisions are auto-resolved with `(Copy)`, `(Copy 2)`, ...
 
 ## Quiz Architecture

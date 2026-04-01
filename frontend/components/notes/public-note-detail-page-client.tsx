@@ -38,9 +38,9 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
       setIsAuthenticated(Boolean(getAuthUser()));
     };
     syncAuth();
-    window.addEventListener("studysnap-auth-change", syncAuth);
+    globalThis.addEventListener("studysnap-auth-change", syncAuth);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncAuth);
+      globalThis.removeEventListener("studysnap-auth-change", syncAuth);
     };
   }, []);
 
@@ -74,8 +74,8 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
     if (!toast) {
       return;
     }
-    const timeout = window.setTimeout(() => setToast(null), 2600);
-    return () => window.clearTimeout(timeout);
+    const timeout = globalThis.setTimeout(() => setToast(null), 2600);
+    return () => globalThis.clearTimeout(timeout);
   }, [toast]);
 
   const isDraft = !note || note.studyPackStatus !== "STUDY_PACK_READY";
@@ -95,7 +95,7 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
     setCopyError(null);
     try {
       const copied = await copyNote(note.id);
-      setToast("Copied to My Library");
+      setToast("Copied to Library");
       router.push(`/notes/${copied.id}?copied=1`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not copy note.";
@@ -138,7 +138,7 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
             <div className="space-y-2">
               {isAuthenticated ? (
                 <Button type="button" onClick={() => void handleCopy()} disabled={copying}>
-                  {copying ? "Copying..." : "Copy to My Library"}
+                  {copying ? "Copying..." : "Copy to Library"}
                 </Button>
               ) : (
                 <Link href="/auth" className="w-full sm:w-auto">

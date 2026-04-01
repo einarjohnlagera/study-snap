@@ -64,7 +64,7 @@ This supports iterative learning and avoids accidental overwrites.
 5. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice.
 6. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
 7. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
-8. Public notes can be copied into My Library as new Draft notes.
+8. Public notes can be copied into Library as new Draft notes.
 
 ## Architecture Overview
 
@@ -181,9 +181,9 @@ Hero positioning:
   - `action=RESEND_VERIFICATION`
 - Unverified users are also blocked from OCR upload in Create/Edit Note.
 
-### My Library
+### Library
 
-My Library is where users manage and revisit their own notes (Draft and Study Pack Ready).
+Library is the user's private workspace for managing and revisiting their own notes (Draft and Study Pack Ready).
 
 Users can:
 
@@ -197,7 +197,7 @@ Users can:
 - start Quick Review for Study Pack Ready notes
 - manage note visibility (`Make Public` / `Make Private`)
 - make a copy (`Make a Copy`) to create a new Draft version
-- create a new note directly from the My Library header
+- create a new note directly from the Library header
 - empty-state actions should include:
   - `Create Your First Note`
   - `Try Demo`
@@ -211,7 +211,7 @@ Users can:
 - browse public notes
 - filter by search, subject, and tags
 - open read-only public note detail
-- copy a public note into My Library (`Copy to My Library`)
+- copy a public note into Library (`Copy to Library`)
 - see source badges on cards:
   - `By You` for their own public notes
   - `By NoteLib` plus an `Official` badge for the official NoteLib account
@@ -243,7 +243,7 @@ Users can:
 - Public Profiles must only include notes where `visibility=PUBLIC`.
 - Public Profiles must never show email.
 - If the user has no public notes, show `This user has no public notes yet.`
-- Public Profile note cards should use the same interaction model as My Library and Public Library:
+- Public Profile note cards should use the same interaction model as Library and Public Library:
   - whole card click opens the public note detail page
   - do not add a redundant `Open Note` button inside the card
 - Public Profile remains a public showcase page and should not mix in private workspace actions, even for the owner.
@@ -286,13 +286,13 @@ Users can:
 - The official NoteLib account renders as:
   - author label -> `By NoteLib`
   - badge -> `Official`
-- Subject display should stay consistent across My Library, Public Library, Private Note Detail, and Public Note Detail:
+- Subject display should stay consistent across Library, Public Library, Private Note Detail, and Public Note Detail:
   - render subject as a reusable badge, not `Subject: ...` text
   - place subject on the same line as the author label on note headers
 - Subject persistence and suggestions:
   - `notes.subject` remains the persisted source of truth
   - subject suggestions come from `GET /api/subjects` using distinct existing note subject values
-  - My Library and Note Editor use the authenticated `mine` subject scope
+  - Library and Note Editor use the authenticated `mine` subject scope
   - Public Library uses the `public` subject scope
   - users can still type a custom subject and save it directly into `notes.subject`
   - no normalized `subjects` table is required for the current version
@@ -359,17 +359,26 @@ Dashboard guidance rules:
 
 Sidebar groups:
 
-- Main: Dashboard, My Library, Public Library
+- Main: Dashboard, Library, Public Library
 - Account: Profile, Settings
 
 Primary routes:
 
-- `/library` (My Library)
+- `/library` (Library, private workspace)
 - `/library/public` (Public Library)
 - `/notes/{id}` (Note Detail)
 - `/public/library/{subject}` (Public Subject Listing, SEO)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only, SEO)
 - `/public/profile/{userId}` (Public Profile, public/non-canonical V1 route)
+
+Page responsibilities:
+
+- Dashboard = what to do now
+- Library = private workspace
+- Public Library = discovery
+- Public Profile = public showcase
+- Profile = identity
+- Settings = app preferences
 
 ### Quick Review
 

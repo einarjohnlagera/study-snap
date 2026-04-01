@@ -4,16 +4,16 @@
 
 Library surfaces make NoteLib a reusable workspace:
 
-- **My Library** for owned notes (Draft and Study Pack Ready)
+- **Library** for owned notes (Draft and Study Pack Ready)
 - **Public Library** for discoverable public notes from other users
 
 Core learning loop:
 
 New Note -> Save (Draft) -> Generate Study Pack (Study Pack Ready) -> Review -> Improve -> Make a Copy -> Repeat
 
-## My Library
+## Library
 
-My Library contains all notes owned by the current user:
+Library contains all notes owned by the current user:
 
 - includes `PRIVATE` and `PUBLIC` notes
 - cards show note title, subject, tags, content preview, state, and updated date
@@ -52,7 +52,7 @@ Capabilities:
 
 - search, subject filter, and tag filter
 - open Public Note Detail (read-only)
-- `Copy to My Library`
+- `Copy to Library`
 
 SEO public detail route:
 
@@ -88,7 +88,7 @@ Structured data rules:
 Both flows use the same copy rules:
 
 - **Make a Copy** (own note)
-- **Copy to My Library** (public note)
+- **Copy to Library** (public note)
 
 Copy includes only:
 
@@ -128,11 +128,11 @@ Do not add delete actions to Dashboard.
 
 Use:
 
-- `My Library`
+- `Library`
 - `Public Library`
 - `New Note`
 - `Make a Copy`
-- `Copy to My Library`
+- `Copy to Library`
 - `Generate Study Pack`
 
 ## Dialog Consistency

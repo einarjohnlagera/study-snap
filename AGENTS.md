@@ -201,7 +201,7 @@ Core loop:
 
 ### Library Rule
 
-- My Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
+- Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Profile is a public showcase of one creator's public notes and contribution stats.
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
@@ -260,9 +260,12 @@ Core loop:
 
 ### Page Responsibility Rule
 
-- My Library = private workspace
+- Dashboard = what to do now
+- Library = private workspace
 - Public Library = discovery
 - Public Profile = public showcase
+- Profile = identity
+- Settings = app preferences
 - Do not merge responsibilities casually.
 
 ### Note Ownership Rule
@@ -283,13 +286,13 @@ Core loop:
 ## UI Terminology (Use Consistently)
 
 - `Dashboard`
-- `My Library`
+- `Library`
 - `Public Library`
 - `Note Detail` (unified Note + Study Pack view)
 - `New Note`
 - `Generate Study Pack`
 - `Make a Copy`
-- `Copy to My Library`
+- `Copy to Library`
 - `Make Public`
 - `Make Private`
 
@@ -301,7 +304,7 @@ Keep app shell grouping:
 
 - Main:
   - Dashboard
-  - My Library
+  - Library
   - Public Library
 - Account:
   - Profile
@@ -310,11 +313,11 @@ Keep app shell grouping:
 
 ## UI Interaction Guardrails
 
-- Keep note cards consistent across Dashboard, My Library, and Public Library:
+- Keep note cards consistent across Dashboard, Library, and Public Library:
   - entire card click opens note detail
-  - tertiary actions live in card menu (My Library) rather than primary card buttons
-- Public Profile note cards should follow the same whole-card click pattern as My Library and Public Library.
-- `My Library` should expose a direct `Create Note` entry in the header and empty state so users are not forced through `Dashboard` to start a note.
+  - tertiary actions live in card menu (Library) rather than primary card buttons
+- Public Profile note cards should follow the same whole-card click pattern as Library and Public Library.
+- `Library` should expose a direct `Create Note` entry in the header and empty state so users are not forced through `Dashboard` to start a note.
 - Note Editor actions:
   - keep `Generate` as the primary CTA and `Save` as the secondary CTA
   - desktop should show actions at the top and bottom of long note forms
@@ -453,7 +456,7 @@ In scope:
 - Note creation/editing
 - Study Pack generation from notes
 - OCR-assisted note input
-- My Library/Public Library flows
+- Library/Public Library flows
 - Quick Review, Challenge Quiz, Adaptive Practice
 - Share/copy flows
 - Plan and billing usage display
@@ -566,7 +569,7 @@ Rules:
   - teacher quiz-focused entry modes -> `tab=quiz`
 - Dashboard statistics and weak-concept insights must be computed from stored quiz sessions and activity logs only, never by LLM calls.
 - `Focus Areas` should surface top weak concepts for all users, but Adaptive Practice CTA remains Premium-gated through the shared soft paywall for Free users.
-- Keep destructive actions (delete) in Note Detail/My Library with explicit confirmation.
+- Keep destructive actions (delete) in Note Detail/Library with explicit confirmation.
 
 ## Documentation Source of Truth
 
