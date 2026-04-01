@@ -288,22 +288,32 @@ Users can:
   - primary CTAs may keep text on mobile when icon-only would reduce clarity
   - visibility controls use badge/dropdown presentation, not large standalone buttons
   - header actions sit top-right and card actions sit bottom-right when present
+- Navigation icon mapping should stay fixed across desktop and mobile sidebars:
+  - `Dashboard` -> `Home`
+  - `Library` -> `Book`
+  - `Public Library` -> `Globe`
+  - `Profile` -> `User`
+  - `Settings` -> `Gear`
+  - `Admin` -> `Shield`
 - Standard action icon mapping should remain consistent:
   - `Edit` -> `Pencil`
   - `Delete` -> `Trash`
   - `Share` -> `Share` / `Link`
   - `Copy` -> `Duplicate`
-  - `Open` / `View` -> `Eye` / open-view icon
+  - `Open` / `View` -> open / external arrow icon
   - `Public` -> `Globe`
   - `Private` -> `Lock`
   - `Library` -> `Book`
   - `Dashboard` -> `Home`
   - `Profile` -> `User`
   - `Settings` -> `Gear`
+  - `Admin` -> `Shield`
   - `Back` -> `Arrow Left`
   - `Save` -> `Disk`
   - `Quiz` -> `Brain` / quiz icon
   - `Study Pack` -> `Sparkles` / book icon
+- Use outline-style icons only and do not mix filled and outline icon sets on the same product surface.
+- Do not use emoji as icons in product UI.
 
 ### Display Name And Official Badge
 

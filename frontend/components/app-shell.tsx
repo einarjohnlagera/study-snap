@@ -128,13 +128,13 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "dashboard" | "library" | "profile" | "settings";
+  action: "admin" | "dashboard" | "library" | "profile" | "publicLibrary" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard", action: "dashboard" },
   { href: "/library", label: "Library", action: "library" },
-  { href: "/library/public", label: "Public Library", action: "library" },
+  { href: "/library/public", label: "Public Library", action: "publicLibrary" },
 ];
 
 const SECONDARY_NAV: NavLinkItem[] = [
@@ -338,7 +338,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
 
   const secondaryNav = useMemo(() => {
     return user.role === "ADMIN"
-      ? [...SECONDARY_NAV, { href: "/admin", label: "Admin", action: "settings" }]
+      ? [...SECONDARY_NAV, { href: "/admin", label: "Admin", action: "admin" }]
       : SECONDARY_NAV;
   }, [user.role]);
 

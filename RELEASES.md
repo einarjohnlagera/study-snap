@@ -24,3 +24,4 @@
 - Profile page layout is now split into a top Display Name summary card plus separate `Identity` and `Profile Type` cards, each with its own save action and a navigation-only `View Public Page ->` link
 - Shared note cards across Library, Public Library, Public Profile, and public subject pages now show both a clamped `Note Preview` and `Summary Preview`, with a fallback message when no summary exists
 - Shared action buttons now use a centralized icon mapping with consistent desktop icon+text, mobile icon-first behavior, and aligned controls across Dashboard, Library, Note Detail, Profile, Public Profile, and Settings
+- Sidebar/navigation icon polish now assigns `Home`, `Book`, `Globe`, `User`, `Gear`, and `Shield` consistently, and action icons now use a single outline-style set with no emoji-based UI icons

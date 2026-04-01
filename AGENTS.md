@@ -275,6 +275,15 @@ Core loop:
 6. Visibility should be shown as a badge/dropdown, not a large button.
 7. Entire note cards should be clickable; do not add `Open` buttons inside cards.
 8. Do not introduce a new icon for an existing action without updating this document.
+9. Sidebar navigation icons must stay consistent:
+   - `Dashboard` -> `Home`
+   - `Library` -> `Book`
+   - `Public Library` -> `Globe`
+   - `Profile` -> `User`
+   - `Settings` -> `Gear`
+   - `Admin` -> `Shield`
+10. Use outline-style icons only. Do not mix outline and filled icon styles.
+11. Do not use emoji as icons in product UI.
 
 Primary CTAs may keep full text on mobile when the action would be ambiguous as icon-only.
 

@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -629,7 +628,7 @@ export default function LibraryPage() {
                             }}
                             onKeyDown={(event) => event.stopPropagation()}
                           >
-                            ⋯
+                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                           </button>
                           {cardMenuOpenId === item.id ? (
                             <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">

@@ -773,7 +773,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(isDraft ? "DRAFT" : "STUDY_PACK_READY")}`}>
-                    {isDraft ? "Draft" : "✨ Study Pack"}
+                    {isDraft ? "Draft" : "Study Pack"}
                   </span>
                   {isInlineMetadataEditMode ? (
                     <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${visibilityChip(visibility)}`}>

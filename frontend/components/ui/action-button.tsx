@@ -3,10 +3,10 @@ import type { LinkProps } from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeft,
+  ArrowUpRight,
   BookOpen,
   Brain,
   Copy,
-  Eye,
   Globe,
   House,
   Link2,
@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Save,
   Settings,
+  Shield,
   Sparkles,
   Trash2,
   User,
@@ -33,9 +34,11 @@ export type ActionIconName =
   | "delete"
   | "edit"
   | "library"
+  | "admin"
   | "open"
   | "private"
   | "profile"
+  | "publicLibrary"
   | "public"
   | "quiz"
   | "retry"
@@ -53,9 +56,11 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   delete: Trash2,
   edit: Pencil,
   library: BookOpen,
-  open: Eye,
+  admin: Shield,
+  open: ArrowUpRight,
   private: Lock,
   profile: User,
+  publicLibrary: Globe,
   public: Globe,
   quiz: Brain,
   retry: RotateCcw,
