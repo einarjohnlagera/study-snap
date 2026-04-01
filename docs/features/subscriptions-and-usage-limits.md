@@ -10,7 +10,7 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - 10 Study Packs per month
 - OCR (20/month by default, backend-configurable)
 - File uploads available
-- My Library and Public Library access
+- Library and Public Library access
 - Quick Review
 - Challenge Quiz (5/month)
 - Weak concepts remain visible after quiz/review completion

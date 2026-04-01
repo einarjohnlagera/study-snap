@@ -1,0 +1,56 @@
+# library.md - NoteLib Feature Context
+
+## Goal
+
+Library surfaces make NoteLib a reusable note-first workspace with a clear split between private work and public discovery.
+
+## Library
+
+Route:
+
+- `/library`
+
+Responsibility:
+
+- private workspace for the current user's notes
+
+Library contains:
+
+- `PRIVATE` notes
+- `PUBLIC` notes owned by the current user
+- Draft and Study Pack Ready notes
+
+Shared note-card layout:
+
+- subject badge
+- copy count when available
+- title
+- `Note Preview`
+- `Summary Preview`
+- tags
+
+Interaction:
+
+- whole card opens Note Detail
+- tertiary actions stay in the card menu
+
+## Public Library
+
+Route:
+
+- `/library/public` in the authenticated app shell
+- canonical public discovery route is `/public/library`
+
+Responsibility:
+
+- discovery of public notes from you, other creators, and official NoteLib content
+
+Public Library cards use the same shared preview layout and whole-card interaction as Library.
+
+## Public Profile
+
+Public Profile is not a private library surface.
+
+- route: `/public/profile/{userId}`
+- purpose: public showcase only
+- note cards reuse the same shared layout but must not expose private workspace actions

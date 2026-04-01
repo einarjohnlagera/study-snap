@@ -2,6 +2,8 @@
 
 This document describes the NoteLib system architecture and how backend services connect to the web frontend.
 
+Current architecture baseline: `v0.5.0 - Public Profiles & Public Notes`
+
 Core workflow:
 
 Notes (Draft) -> Generate Study Pack -> Review (Quick/Challenge/Adaptive) -> Improve -> Make a Copy -> Generate again

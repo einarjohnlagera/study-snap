@@ -21,7 +21,7 @@ Private note share UX:
 ## Public Note Rules
 
 - public list includes only notes where `visibility=PUBLIC`
-- owner notes are excluded from Public Library listing
+- public list includes the current user's own public notes as well as community and official NoteLib notes
 - public detail is read-only
 - public detail is accessible without login and should remain indexable
 - public detail shows: title, subject, tags, summary, key concepts, practice quiz, author attribution
@@ -31,9 +31,9 @@ Private note share UX:
 
 ## Copy Flow
 
-Public content can be copied into My Library using:
+Public content can be copied into Library using:
 
-- `Copy to My Library`
+- `Copy to Library`
 
 Copy behavior:
 

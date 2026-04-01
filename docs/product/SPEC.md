@@ -2,6 +2,8 @@
 
 Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table names remain unchanged unless explicitly requested.
 
+Current documentation baseline: `v0.5.0 - Public Profiles & Public Notes`
+
 ## Product Overview
 
 NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.

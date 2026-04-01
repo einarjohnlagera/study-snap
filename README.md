@@ -2,6 +2,8 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
+Current release baseline: `v0.5.0 - Public Profiles & Public Notes`
+
 NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.
 
 It can be used by:
@@ -159,7 +161,10 @@ High-level model:
   - `email`
   - `profileType`
   - `View Public Profile`
-  - `Share Public Profile`
+- `Public Profile` owns public-page controls:
+  - `Share Profile`
+  - Public visibility toggle
+  - owner-only `Edit Profile`
 - `Settings` owns preferences and app behavior:
   - theme
   - notifications
@@ -217,6 +222,8 @@ This repo currently centers on:
 - OCR support for image-based notes
 - Library and Public Library support
 - Public Profiles for creator discovery and public-note browsing
+- shared public-note card previews and whole-card navigation
+- responsive action patterns, standardized icons, and tab-based note-detail navigation
 - demo mode
 - shareable Study Pack links
 - freemium plans and subscriptions (PayMongo recurring subscriptions)

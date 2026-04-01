@@ -5,6 +5,11 @@ Follow these rules to keep the codebase consistent and shippable.
 
 Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database schema/table names unless explicitly requested.
 
+Current documentation baseline:
+
+- `v0.5.0 - Public Profiles & Public Notes`
+- next planned milestone: `v0.6.0 - Board Exam Mode`
+
 When working on a feature, always check the corresponding document under `docs/features/`.
 
 ## Product Summary
