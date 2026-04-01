@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowUpRight,
   BookOpen,
-  Brain,
   Copy,
   Globe,
   House,
@@ -18,9 +17,12 @@ import {
   Settings,
   Shield,
   Sparkles,
+  Target,
+  Trophy,
   Trash2,
   User,
   Lock,
+  Zap,
 } from "lucide-react";
 import * as React from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -40,7 +42,9 @@ export type ActionIconName =
   | "profile"
   | "publicLibrary"
   | "public"
-  | "quiz"
+  | "quickReview"
+  | "challengeQuiz"
+  | "adaptivePractice"
   | "retry"
   | "save"
   | "settings"
@@ -62,7 +66,9 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   profile: User,
   publicLibrary: Globe,
   public: Globe,
-  quiz: Brain,
+  quickReview: Zap,
+  challengeQuiz: Trophy,
+  adaptivePractice: Target,
   retry: RotateCcw,
   save: Save,
   settings: Settings,

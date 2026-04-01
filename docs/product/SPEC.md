@@ -315,10 +315,13 @@ Users can:
   - `Admin` -> `Shield`
   - `Back` -> `Arrow Left`
   - `Save` -> `Disk`
-  - `Quiz` -> `Brain` / quiz icon
+  - `Quick Review` -> `Lightning`
+  - `Challenge Quiz` -> `Trophy` / challenge icon
+  - `Adaptive Practice` -> `Target` / focused-practice icon
   - `Study Pack` -> `Sparkles` / book icon
 - Use outline-style icons only and do not mix filled and outline icon sets on the same product surface.
 - Do not use emoji as icons in product UI.
+- Quiz entry buttons on Note Detail and other quiz launch surfaces should use distinct icons so users can distinguish fast review, exam challenge, and weak-area practice at a glance.
 
 ### Display Name And Official Badge
 

@@ -75,12 +75,12 @@ export function DashboardFocusAreasCard({
           focusAreas?.adaptivePracticeAvailable && focusAreas.practiceNoteId ? (
             <ResponsiveActionLink
               href={`/notes/${focusAreas.practiceNoteId}/adaptive-practice`}
-              action="quiz"
+              action="adaptivePractice"
               label={primaryActionLabel}
               className="w-full sm:w-auto"
             />
           ) : (
-            <ResponsiveActionButton type="button" variant="outline" onClick={onUnlockAdaptivePractice} action="quiz" label={lockedActionLabel} />
+            <ResponsiveActionButton type="button" variant="outline" onClick={onUnlockAdaptivePractice} action="adaptivePractice" label={lockedActionLabel} />
           )
         ) : null}
       </Card>

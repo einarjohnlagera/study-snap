@@ -295,6 +295,13 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Outline buttons should have a visible dark-mode hover fill.
 - Do not reuse light-mode border contrast assumptions in dark mode.
 
+### Quiz Mode Icon Rule
+
+- `Quick Review` uses a lightning icon.
+- `Challenge Quiz` uses a trophy or clipboard-style challenge icon.
+- `Adaptive Practice` uses a target or focused-practice icon.
+- Do not use the same icon for different quiz modes.
+
 ### Note Card Consistency Rule
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.

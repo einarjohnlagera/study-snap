@@ -721,7 +721,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={handleStartChallengeQuiz} action="quiz" label="Start Challenge Quiz" showTextOnMobile />
+                <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={handleStartChallengeQuiz} action="challengeQuiz" label="Start Challenge Quiz" showTextOnMobile />
                 <ResponsiveActionButton
                   type="button"
                   variant="outline"
@@ -938,10 +938,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <ResponsiveActionButton type="button" onClick={() => void handleGenerate()} disabled={generating || !isEmailVerified} action="studyPack" label={generating ? "Generating..." : "Generate Study Pack"} showTextOnMobile />
                   ) : (
                     <>
-                      <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quiz" label="Start Quick Review" showTextOnMobile />
-                      <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="quiz" label="Challenge Quiz" />
+                      <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quickReview" label="Start Quick Review" showTextOnMobile />
+                      <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="challengeQuiz" label="Challenge Quiz" />
                       {hasAdaptiveTargets ? (
-                        <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="quiz" label="Adaptive Practice" />
+                        <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="adaptivePractice" label="Adaptive Practice" />
                       ) : null}
                     </>
                   )}

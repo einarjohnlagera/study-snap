@@ -26,3 +26,4 @@
 - Shared action buttons now use a centralized icon mapping with consistent desktop icon+text, mobile icon-first behavior, and aligned controls across Dashboard, Library, Note Detail, Profile, Public Profile, and Settings
 - Sidebar/navigation icon polish now assigns `Home`, `Book`, `Globe`, `User`, `Gear`, and `Shield` consistently, and action icons now use a single outline-style set with no emoji-based UI icons
 - Outline buttons now use higher-contrast dark-mode borders, lighter text, and a clearer hover fill so secondary actions remain readable on dark surfaces
+- Quick Review, Challenge Quiz, and Adaptive Practice now use distinct outline-style icons so quiz entry points are easier to distinguish at a glance

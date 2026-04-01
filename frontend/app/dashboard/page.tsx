@@ -353,7 +353,7 @@ export default function DashboardPage() {
                 description="Use Quick Review to reinforce what you just studied and keep recall active."
                 actionLabel="Start Quick Review"
                 actionHref={recentReadyNotes[0]?.id ? `/notes/${recentReadyNotes[0].id}/quick-review` : "/notes/new"}
-                actionIcon="quiz"
+                actionIcon="quickReview"
                 secondaryActionLabel="Review Recent Note"
                 secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
                 secondaryActionIcon="open"
@@ -375,7 +375,7 @@ export default function DashboardPage() {
                 description="Use timed quiz practice to prepare for test conditions and sharpen exam recall."
                 actionLabel="Practice Challenge Quiz"
                 actionHref={boardExamChallengeHref}
-                actionIcon="quiz"
+                actionIcon="challengeQuiz"
                 secondaryActionLabel="Review Recent Note"
                 secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
                 secondaryActionIcon="open"
@@ -396,11 +396,11 @@ export default function DashboardPage() {
                   overview.focusAreas.adaptivePracticeAvailable ? (
                     <ResponsiveActionLink
                       href={`/notes/${overview.focusAreas.practiceNoteId}/adaptive-practice`}
-                      action="quiz"
+                      action="adaptivePractice"
                       label="Practice Weak Areas"
                     />
                   ) : (
-                    <ResponsiveActionButton type="button" variant="outline" onClick={() => setActivePaywallModal("adaptive-practice")} action="quiz" label="Unlock Adaptive Practice" />
+                    <ResponsiveActionButton type="button" variant="outline" onClick={() => setActivePaywallModal("adaptive-practice")} action="adaptivePractice" label="Unlock Adaptive Practice" />
                   )
                 ) : (
                   <p className="text-sm text-foreground/70">
@@ -423,7 +423,7 @@ export default function DashboardPage() {
                 description="Turn teaching materials into quiz-ready study packs and question sets for class review."
                 actionLabel="Create Quiz"
                 actionHref={teacherQuizBuilderHref}
-                actionIcon="quiz"
+                actionIcon="challengeQuiz"
                 secondaryActionLabel="Add Material"
                 secondaryActionHref="/notes/new"
                 secondaryActionIcon="create"
