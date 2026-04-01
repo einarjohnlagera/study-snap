@@ -20,3 +20,5 @@
 - Public Library subject pages now reuse the existing `/public/library/{subject}` route with subject-badge-consistent cards, empty states, and sitemap coverage for subject and note URLs
 - Subject display is now standardized with shared badges across library cards and note headers, and subject suggestions now come from persisted backend `notes.subject` values while still allowing custom subjects
 - Public Profile cards now follow the shared library interaction model with whole-card click navigation to public note detail and no redundant `Open Note` button
+- Public Profile header controls now align with Note Detail by using a badge/dropdown visibility control near the header identity cluster and placing `Share Profile` in the lower-right action row
+- Profile page layout is now split into a top Display Name summary card plus separate `Identity` and `Profile Type` cards, each with its own save action and a navigation-only `View Public Page ->` link

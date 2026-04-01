@@ -42,6 +42,9 @@ public class UserEntity {
     @Column(name = "display_name", length = 100)
     private String displayName;
 
+    @Column(name = "public_profile_visible", nullable = false)
+    private Boolean publicProfileVisible;
+
     @Column(name = "country_code", length = 8)
     private String countryCode;
 

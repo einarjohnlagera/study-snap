@@ -2,6 +2,8 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.PublicProfileService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,7 @@ class PublicProfileControllerTest {
                 "Study Buddy",
                 "STUDENT",
                 false,
+                true,
                 1,
                 3,
                 List.of(new PublicProfileNoteResponse(
@@ -45,11 +48,12 @@ class PublicProfileControllerTest {
                         "cell-structure"
                 ))
         );
-        when(publicProfileService.getByUserId("user-1")).thenReturn(expected);
+        AuthenticatedUser viewer = new AuthenticatedUser(java.util.UUID.randomUUID(), UserRole.USER, true, 1);
+        when(publicProfileService.getByUserId("user-1", viewer.userId())).thenReturn(expected);
 
-        PublicProfileResponse response = controller.getByUserId("user-1");
+        PublicProfileResponse response = controller.getByUserId("user-1", viewer);
 
         assertThat(response).isEqualTo(expected);
-        verify(publicProfileService).getByUserId("user-1");
+        verify(publicProfileService).getByUserId("user-1", viewer.userId());
     }
 }

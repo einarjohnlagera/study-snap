@@ -10,6 +10,19 @@ jest.mock("next/navigation", () => ({
   notFound: () => notFoundMock(),
 }));
 
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: () => null,
+}));
+
+jest.mock("@/lib/api", () => {
+  const actual = jest.requireActual("@/lib/api");
+  return {
+    ...actual,
+    getPublicProfile: jest.fn(),
+    updatePublicProfileVisibility: jest.fn(),
+  };
+});
+
 jest.mock("@/lib/server-public-profiles", () => ({
   getServerPublicProfile: jest.fn(),
 }));
@@ -22,29 +35,33 @@ describe("PublicProfilePage", () => {
 
   it("renders the public profile and public notes", async () => {
     (getServerPublicProfile as jest.Mock).mockResolvedValue({
-      displayName: "Study Buddy",
-      profileType: "TEACHER",
-      isOfficial: true,
-      publicNotesCount: 2,
-      totalCopies: 7,
-      publicNotes: [
-        {
-          noteId: "note-1",
-          title: "Plant Cells",
-          subject: "Biology",
-          tags: ["cells", "plants"],
-          copyCount: 5,
-          slug: "plant-cells",
-        },
-        {
-          noteId: "note-2",
-          title: "Atomic Bonds",
-          subject: "Chemistry",
-          tags: [],
-          copyCount: 2,
-          slug: "atomic-bonds",
-        },
-      ],
+      status: "ok",
+      profile: {
+        displayName: "Study Buddy",
+        profileType: "TEACHER",
+        isOfficial: true,
+        publicProfileVisible: true,
+        publicNotesCount: 2,
+        totalCopies: 7,
+        publicNotes: [
+          {
+            noteId: "note-1",
+            title: "Plant Cells",
+            subject: "Biology",
+            tags: ["cells", "plants"],
+            copyCount: 5,
+            slug: "plant-cells",
+          },
+          {
+            noteId: "note-2",
+            title: "Atomic Bonds",
+            subject: "Chemistry",
+            tags: [],
+            copyCount: 2,
+            slug: "atomic-bonds",
+          },
+        ],
+      },
     });
 
     render(await PublicProfilePage({ params: Promise.resolve({ userId: "user-1" }) }));
@@ -56,17 +73,21 @@ describe("PublicProfilePage", () => {
     expect(screen.getByText("Plant Cells")).toBeInTheDocument();
     expect(screen.getByText("5 copies")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Plant Cells/i })).toHaveAttribute("href", "/public/library/biology/plant-cells");
-    expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Profile" })).not.toBeInTheDocument();
   });
 
   it("shows the empty state when the user has no public notes", async () => {
     (getServerPublicProfile as jest.Mock).mockResolvedValue({
-      displayName: "Quiet Creator",
-      profileType: "STUDENT",
-      isOfficial: false,
-      publicNotesCount: 0,
-      totalCopies: 0,
-      publicNotes: [],
+      status: "ok",
+      profile: {
+        displayName: "Quiet Creator",
+        profileType: "STUDENT",
+        isOfficial: false,
+        publicProfileVisible: true,
+        publicNotesCount: 0,
+        totalCopies: 0,
+        publicNotes: [],
+      },
     });
 
     render(await PublicProfilePage({ params: Promise.resolve({ userId: "user-2" }) }));
@@ -74,14 +95,28 @@ describe("PublicProfilePage", () => {
     expect(screen.getByText("This user has no public notes yet.")).toBeInTheDocument();
   });
 
-  it("returns noindex metadata for v1 public profile pages", async () => {
+  it("shows the private-profile message when the profile is not public", async () => {
     (getServerPublicProfile as jest.Mock).mockResolvedValue({
-      displayName: "Study Buddy",
-      profileType: "TEACHER",
-      isOfficial: false,
-      publicNotesCount: 1,
-      totalCopies: 5,
-      publicNotes: [],
+      status: "private",
+    });
+
+    render(await PublicProfilePage({ params: Promise.resolve({ userId: "user-3" }) }));
+
+    expect(screen.getAllByText("This profile is private.")).not.toHaveLength(0);
+  });
+
+  it("returns noindex metadata for visible public profile pages", async () => {
+    (getServerPublicProfile as jest.Mock).mockResolvedValue({
+      status: "ok",
+      profile: {
+        displayName: "Study Buddy",
+        profileType: "TEACHER",
+        isOfficial: false,
+        publicProfileVisible: true,
+        publicNotesCount: 1,
+        totalCopies: 5,
+        publicNotes: [],
+      },
     });
 
     const metadata = await generateMetadata({
@@ -95,8 +130,23 @@ describe("PublicProfilePage", () => {
     });
   });
 
+  it("returns noindex metadata for private profiles", async () => {
+    (getServerPublicProfile as jest.Mock).mockResolvedValue({
+      status: "private",
+    });
+
+    const metadata = await generateMetadata({
+      params: Promise.resolve({ userId: "user-1" }),
+    });
+
+    expect(metadata.title).toBe("This Profile Is Private | NoteLib");
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
   it("does not render missing profiles", async () => {
-    (getServerPublicProfile as jest.Mock).mockResolvedValue(null);
+    (getServerPublicProfile as jest.Mock).mockResolvedValue({
+      status: "not_found",
+    });
 
     await expect(
       PublicProfilePage({ params: Promise.resolve({ userId: "missing-user" }) }),

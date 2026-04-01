@@ -242,6 +242,17 @@ Users can:
   - list of that user's public notes with Title, Subject badge, Tags, and Copy count
 - Public Profiles must only include notes where `visibility=PUBLIC`.
 - Public Profiles must never show email.
+- Public Profile owner controls belong on `/public/profile/{userId}`, not on `/profile`.
+- Owner-only Public Profile controls are:
+  - `Edit Profile` -> routes to `/profile`
+  - `Share Profile`
+  - `Public Profile On` / `Public Profile Off`
+- Public Profile owner controls should follow the Note Detail header pattern:
+  - visibility is shown as a badge/dropdown near the title cluster
+  - stats remain in their own section below the identity summary
+  - `Share Profile` sits in the lower-right action row of the header card
+- Non-owners must not see `Edit Profile` or the visibility toggle on Public Profile.
+- If `publicProfileVisible = false`, non-owners should see `This profile is private.`
 - If the user has no public notes, show `This user has no public notes yet.`
 - Public Profile note cards should use the same interaction model as Library and Public Library:
   - whole card click opens the public note detail page
@@ -270,6 +281,15 @@ Users can:
   - `lastName`
   - `displayName`
   - `email`
+- `Profile` should include:
+  - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page ->` navigation
+  - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
+  - a `Profile Type` card with the profile-type selector
+- `Profile` save actions should be section-specific:
+  - `Save Identity` only saves identity fields
+  - `Save Profile Type` only saves the profile type field
+- `View Public Page ->` on `/profile` is navigation only and should live in the top Display Name card.
+- `Profile` should not own Public Profile sharing or visibility controls.
 - If `displayName` is blank, public author fallback is `firstName`.
 - Public pages must never show the user's email address.
 - Reserved display names are rejected server-side. The following are reserved case-insensitively:

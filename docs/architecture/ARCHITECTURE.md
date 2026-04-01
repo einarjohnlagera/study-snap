@@ -36,7 +36,7 @@ Routes:
 - `/dashboard` guidance + library entry
 - `/library` Library (owned notes, private workspace)
 - `/library/public` Public Library (public notes from you, the community, and official NoteLib content)
-- `/public/profile/{userId}` public creator profile (public notes and contribution stats)
+- `/public/profile/{userId}` public creator profile (public notes, contribution stats, and owner-only public-page controls)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
 - `/public/library/{subject}` public subject listing
 - `/public/library/{subject}/{slug}` public read-only note detail
@@ -296,6 +296,8 @@ Notes:
 - `GET /api/notes` (Library list)
 - `GET /api/notes/public` (Public Library list)
 - `GET /api/notes/public/{id}` (public read-only note detail)
+- `GET /api/public/profile/{userId}` (public profile; returns private-profile state to non-owners when visibility is off)
+- `PUT /api/users/profile/public-visibility` (owner toggles public profile visibility)
 
 Legacy/Compatibility Study Pack APIs:
 
@@ -414,6 +416,7 @@ Library is the owner workspace for Draft and Study Pack Ready notes.
 Public Library is the discovery surface for notes where `visibility=PUBLIC`.
 Profile is the identity surface for first name, last name, display name, email, and profile type.
 Settings is the preferences surface for theme, notifications, study preferences, account settings, and subscription/billing.
+Public Profile is the public showcase surface and owns share/edit-profile entry plus owner-only public-visibility controls.
 
 Required backend behavior:
 
@@ -424,7 +427,11 @@ Required backend behavior:
 - include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
 - include author-source metadata for Public Library card labeling (`By You`, `By NoteLib`, `By {displayName}`) plus `Official` badge state
 - support public read-only note detail payload for copy flow
+- persist `users.public_profile_visible` as the owner-controlled switch for public-profile access
 - expose `GET /api/public/profile/{userId}` for public profile header stats and public-note listings
+- allow the owner to read `/api/public/profile/{userId}` even when `users.public_profile_visible = false`
+- return `403` / `PUBLIC_PROFILE_PRIVATE` for non-owners when `users.public_profile_visible = false`
+- expose `PUT /api/users/profile/public-visibility` so the owner can toggle public-profile visibility from the Public Profile page
 
 Filtering model:
 

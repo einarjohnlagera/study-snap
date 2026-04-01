@@ -109,13 +109,20 @@ Core loop:
 - `Profile` sections are:
   - `Identity`
   - `Profile Type`
-  - `Account Information`
+  - `Public Profile Link`
 - Identity uses:
   - `firstName`
   - `lastName`
+  - `displayName`
   - `email`
 - Do not collapse `firstName` and `lastName` into one `name` field in product UI or API contracts unless explicitly requested.
 - `Profile Type` remains editable in `Profile` as a separate save action.
+- `Profile` may link to `View Public Profile`, but Public Profile sharing and visibility controls do not belong on `/profile`.
+- `/profile` layout should stay split into:
+  - a top Display Name card with avatar, display name, email, and `View Public Page ->`
+  - an `Identity` card with its own `Save Identity` action
+  - a `Profile Type` card with its own `Save Profile Type` action
+- Profile save buttons must remain section-specific rather than global.
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.
 
@@ -267,6 +274,25 @@ Core loop:
 - Profile = identity
 - Settings = app preferences
 - Do not merge responsibilities casually.
+
+### Profile Page Responsibility Rule
+
+- `/profile` is a private identity settings surface, not a public-page controls surface.
+- Keep Public Profile sharing and visibility controls on `/public/profile/{userId}` only.
+- `View Public Page ->` on `/profile` is navigation only and should not be grouped with save actions.
+
+### Public Profile Owner Controls Rule
+
+- Public Profile owner controls belong on `/public/profile/{userId}`, not on `/profile`.
+- Only the profile owner may see `Edit Profile` and the Public Profile visibility toggle.
+- Non-owners may see a share action on Public Profile, but they must not see owner-only editing or privacy controls.
+- If a public profile is turned off, non-owners should see `This profile is private.`
+
+### UI Consistency Rule
+
+- Public Profile should reuse the Note Detail control pattern for visibility and share actions.
+- Visibility controls should appear as badge/dropdown controls near the header identity cluster, not as detached toggle buttons.
+- Share actions should sit in the lower action row of the header card rather than in the top metadata cluster.
 
 ### Note Ownership Rule
 

@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
+import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
@@ -48,6 +49,7 @@ class UserProfileControllerTest {
                 "Note",
                 "User",
                 "Study Note",
+                true,
                 null,
                 ProfileType.STUDENT,
                 null,
@@ -69,5 +71,41 @@ class UserProfileControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(authService).updateUserProfile(userId, request);
+    }
+
+    @Test
+    void updatePublicProfileVisibility_delegatesToAuthService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        UpdatePublicProfileVisibilityRequest request = new UpdatePublicProfileVisibilityRequest(false);
+        MeResponse expected = new MeResponse(
+                userId.toString(),
+                "[email protected]",
+                null,
+                "Note",
+                "User",
+                "Study Note",
+                false,
+                null,
+                ProfileType.STUDENT,
+                null,
+                EngagementMode.FOCUSED,
+                false,
+                false,
+                OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                OffsetDateTime.parse("2026-03-21T00:00:00Z"),
+                null,
+                4,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                new SubscriptionPlanStatusResponse(false, null, null)
+        );
+        when(authService.updatePublicProfileVisibility(userId, request)).thenReturn(expected);
+
+        MeResponse response = controller.updatePublicProfileVisibility(user, request);
+
+        assertThat(response).isEqualTo(expected);
+        verify(authService).updatePublicProfileVisibility(userId, request);
     }
 }

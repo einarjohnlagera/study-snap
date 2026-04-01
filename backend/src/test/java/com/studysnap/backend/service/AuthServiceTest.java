@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
+import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
@@ -349,6 +350,7 @@ class AuthServiceTest {
         assertThat(response.lastName()).isEqualTo("Person");
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isNull();
+        assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getDisplayName()).isEqualTo("Study Buddy");
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
     }
@@ -386,9 +388,42 @@ class AuthServiceTest {
 
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isEqualTo("updated@example.com");
+        assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getPendingEmail()).isEqualTo("updated@example.com");
         assertThat(user.getDisplayName()).isEqualTo("Note Hero");
         verify(emailVerificationService).sendVerificationEmail(user, false);
+    }
+
+    @Test
+    void updatePublicProfileVisibility_persistsVisibilitySetting() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("Note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setPublicProfileVisible(true);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+
+        MeResponse response = authService.updatePublicProfileVisibility(
+                userId,
+                new UpdatePublicProfileVisibilityRequest(false)
+        );
+
+        assertThat(response.publicProfileVisible()).isFalse();
+        assertThat(user.getPublicProfileVisible()).isFalse();
     }
 
     @Test
@@ -406,9 +441,10 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "NoteLib Support", "current@example.com");
         assertThatThrownBy(() -> authService.updateUserProfile(
                 userId,
-                new UpdateUserProfileRequest("Note", "User", "NoteLib Support", "current@example.com")
+                request
         ))
                 .isInstanceOf(AppException.class)
                 .extracting(Throwable::getMessage)
