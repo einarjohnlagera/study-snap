@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiRequestError, getMe, getMyPlan, logout, requestEmailVerification } from "@/lib/api";
-import { getAuthUser, needsOnboarding, resolveAuthenticatedHome, setAuthUser } from "@/lib/auth";
+import { getAuthUser, getCurrentPathWithQuery, needsOnboarding, rememberLastVisitedPath, resolveAuthenticatedHome, setAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
@@ -206,6 +206,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
+  const lastTrackedPathRef = useRef<string | null>(null);
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -251,6 +252,18 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     }
     router.replace("/dashboard");
   }, [hasAuthUser, pathname, router]);
+
+  useEffect(() => {
+    if (!pathname) {
+      return;
+    }
+    const currentPath = getCurrentPathWithQuery();
+    if (lastTrackedPathRef.current === currentPath) {
+      return;
+    }
+    lastTrackedPathRef.current = currentPath;
+    rememberLastVisitedPath(currentPath);
+  });
 
   useEffect(() => {
     if (!hasAuthUser || !isAuthRoute(pathname)) {

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthPage from "./page";
 import { getMyPlan, login } from "@/lib/api";
+import { rememberLastVisitedPath } from "@/lib/auth";
 
 const routerMock = {
   push: jest.fn(),
@@ -23,15 +24,14 @@ jest.mock("next/image", () => ({
   default: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
 
-jest.mock("@/lib/auth", () => ({
-  getAuthUser: jest.fn(() => currentAuthUser),
-  LOGIN_REASON_QUERY_KEY: "reason",
-  LOGIN_REASON_SESSION_EXPIRED: "session_expired",
-  resolveAuthenticatedHome: jest.fn((authUser: { emailVerifiedAt?: string | null } | null) =>
-    authUser?.emailVerifiedAt ? "/dashboard" : "/verify-email",
-  ),
-  setAuthUser: (user: Record<string, unknown>) => setAuthUserMock(user),
-}));
+jest.mock("@/lib/auth", () => {
+  const actual = jest.requireActual("@/lib/auth");
+  return {
+    ...actual,
+    getAuthUser: jest.fn(() => currentAuthUser),
+    setAuthUser: (user: Record<string, unknown>) => setAuthUserMock(user),
+  };
+});
 
 jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
@@ -59,6 +59,7 @@ const verifiedAuthUser = {
 describe("AuthPage", () => {
   beforeEach(() => {
     currentAuthUser = null;
+    window.localStorage.clear();
     setAuthUserMock.mockClear();
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
@@ -109,7 +110,7 @@ describe("AuthPage", () => {
   });
 
   it("shows the session-expired banner and redirects cleanly after re-login", async () => {
-    window.history.replaceState({}, "", "/login?reason=session_expired");
+    window.history.replaceState({}, "", "/login?reason=session_expired&redirect=%2Fnotes%2Fnote-1%3Ftab%3Dquiz");
     (login as jest.Mock).mockResolvedValue(verifiedAuthUser);
 
     const { container } = render(<AuthPage />);
@@ -125,7 +126,7 @@ describe("AuthPage", () => {
     fireEvent.submit(container.querySelector("form") as HTMLFormElement);
 
     await waitFor(() => {
-      expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
+      expect(routerMock.replace).toHaveBeenCalledWith("/notes/note-1?tab=quiz");
     });
     await waitFor(() => {
       expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
@@ -134,12 +135,51 @@ describe("AuthPage", () => {
 
   it("redirects authenticated visitors away from the login page", async () => {
     currentAuthUser = verifiedAuthUser;
+    window.history.replaceState({}, "", "/login?redirect=%2Fprofile");
 
     render(<AuthPage />);
 
     await waitFor(() => {
-      expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
+      expect(routerMock.replace).toHaveBeenCalledWith("/profile");
     });
     expect(screen.queryByRole("heading", { name: "Log in to NoteLib" })).not.toBeInTheDocument();
+  });
+
+  it("redirects a successful login to the requested page when redirect query is present", async () => {
+    window.history.replaceState({}, "", "/login?redirect=%2Fnotes%2Fnote-1%3Ftab%3Dsummary");
+    (login as jest.Mock).mockResolvedValue(verifiedAuthUser);
+
+    const { container } = render(<AuthPage />);
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "note@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(routerMock.replace).toHaveBeenCalledWith("/notes/note-1?tab=summary");
+    });
+  });
+
+  it("falls back to the last visited page when login has no explicit redirect", async () => {
+    rememberLastVisitedPath("/public/library");
+    (login as jest.Mock).mockResolvedValue(verifiedAuthUser);
+
+    const { container } = render(<AuthPage />);
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "note@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(routerMock.replace).toHaveBeenCalledWith("/public/library");
+    });
   });
 });

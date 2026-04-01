@@ -20,6 +20,7 @@ export type AuthUser = {
 };
 
 const AUTH_USER_KEY = "study_snap_auth_user";
+const LAST_VISITED_PATH_KEY = "study_snap_last_visited_path";
 export const LOGIN_REDIRECT_QUERY_KEY = "redirect";
 export const LOGIN_REASON_QUERY_KEY = "reason";
 export const LOGIN_REASON_SESSION_EXPIRED = "session_expired";
@@ -43,11 +44,41 @@ function getSafeRedirectPath(path: string | null | undefined): string | null {
   return path;
 }
 
+function isAuthRoutePath(path: string): boolean {
+  const pathname = path.split("?")[0]?.split("#")[0] ?? path;
+  return pathname === "/auth" || pathname === "/login" || pathname === "/signup";
+}
+
 export function getCurrentPathWithQuery(): string {
   if (globalThis.window === undefined) {
     return "/dashboard";
   }
   return `${globalThis.location.pathname}${globalThis.location.search}`;
+}
+
+export function rememberLastVisitedPath(path: string | null | undefined): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+  const safePath = getSafeRedirectPath(path);
+  if (!safePath || isAuthRoutePath(safePath)) {
+    return;
+  }
+  globalThis.localStorage.setItem(LAST_VISITED_PATH_KEY, safePath);
+}
+
+export function getLastVisitedPath(): string | null {
+  if (globalThis.window === undefined) {
+    return null;
+  }
+  return getSafeRedirectPath(globalThis.localStorage.getItem(LAST_VISITED_PATH_KEY));
+}
+
+export function clearLastVisitedPath(): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+  globalThis.localStorage.removeItem(LAST_VISITED_PATH_KEY);
 }
 
 export function buildLoginPath(options?: {
@@ -120,6 +151,31 @@ export function resolveAuthenticatedHome(authUser: AuthUser | null): string {
   if (needsOnboarding(authUser)) {
     return "/onboarding";
   }
+  return "/dashboard";
+}
+
+export function resolvePostLoginDestination(
+  authUser: AuthUser | null,
+  options?: { search?: string | URLSearchParams | null },
+): string {
+  const authenticatedHome = resolveAuthenticatedHome(authUser);
+  if (authenticatedHome !== "/dashboard") {
+    return authenticatedHome;
+  }
+
+  const params = options?.search instanceof URLSearchParams
+    ? options.search
+    : new URLSearchParams(options?.search ?? globalThis.location?.search ?? "");
+  const redirectTarget = getSafeRedirectPath(params.get(LOGIN_REDIRECT_QUERY_KEY));
+  if (redirectTarget && !isAuthRoutePath(redirectTarget)) {
+    return redirectTarget;
+  }
+
+  const lastVisitedPath = getLastVisitedPath();
+  if (lastVisitedPath && !isAuthRoutePath(lastVisitedPath)) {
+    return lastVisitedPath;
+  }
+
   return "/dashboard";
 }
 

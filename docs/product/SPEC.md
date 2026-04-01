@@ -507,8 +507,13 @@ Page responsibilities:
 - `401` on protected API calls clears auth and redirects to `/login`
 - Preserve destination with `redirect` query param
 - Session-expired redirects include `reason=session_expired`
-- After a successful login, the frontend must route with `router.replace(...)` to the resolved authenticated home instead of relying on shell visibility alone.
-- Verified users who log in successfully should land on `Dashboard`.
+- After a successful login, the frontend must route with `router.replace(...)` instead of relying on shell visibility alone.
+- Post-login destination order is:
+  - verification/onboarding destination first when required
+  - explicit `redirect` query destination when present
+  - remembered last visited in-app/public page when no explicit redirect exists
+  - `Dashboard` as the fallback
+- Query-string state such as `?tab=quiz` must be preserved in redirect restoration.
 - Auth pages (`/auth`, `/login`, `/signup`) must immediately redirect authenticated users away from the auth form.
 - Auth pages must not remain visible once authentication succeeds.
 - Users can sign up/login before verification; unverified users are blocked from generation
