@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
-import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
@@ -142,23 +142,15 @@ export function PublicNoteOwnershipActions({
       {isOwner ? (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <Link href={openNoteHref} className="w-full sm:w-auto">
-              <Button type="button" className="w-full sm:w-auto">
-                Open Note
-              </Button>
-            </Link>
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)}>
-              Share
-            </Button>
+            <ResponsiveActionLink href={openNoteHref} action="open" label="Open Note" className="w-full sm:w-auto" />
+            <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share" />
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <PublicSeoCopyCta noteId={noteId} label="Make a Copy" />
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)}>
-              Share
-            </Button>
+            <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share" />
           </div>
         </div>
       )}
@@ -172,19 +164,18 @@ export function PublicNoteOwnershipActions({
         }}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
+            <ResponsiveActionButton
               type="button"
               variant="outline"
               onClick={() => {
                 setShowShareModal(false);
                 setShareState("idle");
               }}
-            >
-              Close
-            </Button>
-            <Button type="button" onClick={() => void handleCopyShareLink()}>
-              {shareState === "copied" ? "Copied" : "Copy Link"}
-            </Button>
+              action="back"
+              label="Close"
+              showTextOnMobile
+            />
+            <ResponsiveActionButton type="button" onClick={() => void handleCopyShareLink()} action="share" label={shareState === "copied" ? "Copied" : "Copy Link"} />
           </div>
         )}
       >

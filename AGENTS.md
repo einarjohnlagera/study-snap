@@ -265,6 +265,19 @@ Core loop:
 - Avoid adding redundant `Open Note` buttons inside cards unless there is a strong exception.
 - Public showcase pages should remain clean and must not inherit private workspace actions.
 
+### Design System — Icons and Buttons
+
+1. Use consistent icons for common actions (`edit`, `delete`, `share`, `copy`, `open`, `public/private`) and do not drift per page.
+2. Desktop buttons must show icon + text.
+3. Mobile buttons must show icon only.
+4. Card actions should be placed at the bottom-right of cards.
+5. Header/page actions should be placed at the top-right.
+6. Visibility should be shown as a badge/dropdown, not a large button.
+7. Entire note cards should be clickable; do not add `Open` buttons inside cards.
+8. Do not introduce a new icon for an existing action without updating this document.
+
+Primary CTAs may keep full text on mobile when the action would be ambiguous as icon-only.
+
 ### Note Card Consistency Rule
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.

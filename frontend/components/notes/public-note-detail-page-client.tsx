@@ -1,10 +1,8 @@
 "use client";
-
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
-import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { copyNote, getPublicNote, type PublicNoteDetailResponse } from "@/lib/api";
@@ -115,7 +113,7 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
         <Card className="space-y-3 p-6">
           <h1 className="text-xl font-semibold">Could not load public note</h1>
           <p className="text-sm text-foreground/75">{error}</p>
-          <Button type="button" onClick={() => void loadDetail()}>Retry</Button>
+          <ResponsiveActionButton type="button" onClick={() => void loadDetail()} action="retry" label="Retry" />
         </Card>
       ) : note ? (
         <div className="space-y-6">
@@ -137,13 +135,9 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
             </div>
             <div className="space-y-2">
               {isAuthenticated ? (
-                <Button type="button" onClick={() => void handleCopy()} disabled={copying}>
-                  {copying ? "Copying..." : "Copy to Library"}
-                </Button>
+                <ResponsiveActionButton type="button" onClick={() => void handleCopy()} disabled={copying} action="copy" label={copying ? "Copying..." : "Copy to Library"} />
               ) : (
-                <Link href="/auth" className="w-full sm:w-auto">
-                  <Button type="button" className="w-full sm:w-auto">Login or Sign up</Button>
-                </Link>
+                <ResponsiveActionLink href="/auth" action="open" label="Login or Sign up" className="w-full sm:w-auto" showTextOnMobile />
               )}
               {copyError ? <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p> : null}
             </div>

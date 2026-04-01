@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
+import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -705,7 +707,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         <Card className="space-y-3 p-6">
           <h1 className="text-xl font-semibold">Could not load note</h1>
           <p className="text-sm text-foreground/75">{error}</p>
-          <Button type="button" onClick={() => void loadDetail()}>Retry</Button>
+          <ResponsiveActionButton type="button" onClick={() => void loadDetail()} action="retry" label="Retry" />
         </Card>
       ) : note ? (
         <div className="space-y-6">
@@ -719,17 +721,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button type="button" className="w-full sm:w-auto" onClick={handleStartChallengeQuiz}>
-                  Start Challenge Quiz
-                </Button>
-                <Button
+                <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={handleStartChallengeQuiz} action="quiz" label="Start Challenge Quiz" showTextOnMobile />
+                <ResponsiveActionButton
                   type="button"
                   variant="outline"
                   className="w-full sm:w-auto"
                   onClick={() => setShowQuickReviewGuide(true)}
-                >
-                  View Next Steps
-                </Button>
+                  action="open"
+                  label="View Next Steps"
+                />
               </div>
             </Card>
           ) : null}
@@ -777,7 +777,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </span>
                   {isInlineMetadataEditMode ? (
                     <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${visibilityChip(visibility)}`}>
-                      {visibility === "PUBLIC" ? "🌍 Public" : "🔒 Private"}
+                      <ResponsiveActionContent action={visibility === "PUBLIC" ? "public" : "private"} label={visibility === "PUBLIC" ? "Public" : "Private"} showTextOnMobile iconClassName="h-3.5 w-3.5" />
                     </span>
                   ) : (
                     <div className="relative" ref={visibilityMenuRef}>
@@ -789,7 +789,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         aria-expanded={visibilityMenuOpen}
                         disabled={togglingVisibility || !canManageVisibility}
                       >
-                        {visibility === "PUBLIC" ? "🌍 Public ▼" : "🔒 Private ▼"}
+                        <ResponsiveActionContent action={visibility === "PUBLIC" ? "public" : "private"} label={visibility === "PUBLIC" ? "Public" : "Private"} showTextOnMobile iconClassName="h-3.5 w-3.5" />
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                       {visibilityMenuOpen ? (
                         <div className="absolute left-0 top-8 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
@@ -798,7 +799,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                             className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
                             onClick={() => handleSelectVisibility("PRIVATE")}
                           >
-                            <p className="text-sm font-medium">🔒 Private</p>
+                            <p className="text-sm font-medium">
+                              <ResponsiveActionContent action="private" label="Private" showTextOnMobile />
+                            </p>
                             <p className="text-xs text-foreground/70">Only visible in Library</p>
                           </button>
                           <button
@@ -807,7 +810,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                             onClick={() => handleSelectVisibility("PUBLIC")}
                             disabled={!isEmailVerified}
                           >
-                            <p className="text-sm font-medium">🌍 Public</p>
+                            <p className="text-sm font-medium">
+                              <ResponsiveActionContent action="public" label="Public" showTextOnMobile />
+                            </p>
                             <p className="text-xs text-foreground/70">Visible in Public Library</p>
                           </button>
                         </div>
@@ -819,28 +824,22 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <div className="flex items-center gap-2">
                 {isInlineMetadataEditMode ? (
                   <>
-                    <Button type="button" variant="outline" size="sm" onClick={handleCancelMetadataEdit} disabled={savingMetadata}>
-                      Cancel
-                    </Button>
-                    <Button type="button" size="sm" onClick={() => void handleSaveMetadata()} disabled={savingMetadata}>
-                      {savingMetadata ? "Saving..." : "Save"}
-                    </Button>
+                    <ResponsiveActionButton type="button" variant="outline" size="sm" onClick={handleCancelMetadataEdit} disabled={savingMetadata} action="back" label="Cancel" showTextOnMobile />
+                    <ResponsiveActionButton type="button" size="sm" onClick={() => void handleSaveMetadata()} disabled={savingMetadata} action="save" label={savingMetadata ? "Saving..." : "Save"} />
                   </>
                 ) : (
                   <>
-                    <Button type="button" variant="outline" size="sm" onClick={handleEdit}>
-                      Edit
-                    </Button>
-                    <Button
+                    <ResponsiveActionButton type="button" variant="outline" size="sm" onClick={handleEdit} action="edit" label="Edit" />
+                    <ResponsiveActionButton
                       type="button"
                       variant="outline"
                       size="sm"
                       className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
                       onClick={() => setShowDeleteConfirm(true)}
                       disabled={deleting}
-                    >
-                      Delete
-                    </Button>
+                      action="delete"
+                      label="Delete"
+                    />
                   </>
                 )}
               </div>
@@ -936,32 +935,20 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {isDraft ? (
-                    <Button type="button" onClick={() => void handleGenerate()} disabled={generating || !isEmailVerified}>
-                      {generating ? "Generating..." : "Generate Study Pack"}
-                    </Button>
+                    <ResponsiveActionButton type="button" onClick={() => void handleGenerate()} disabled={generating || !isEmailVerified} action="studyPack" label={generating ? "Generating..." : "Generate Study Pack"} showTextOnMobile />
                   ) : (
                     <>
-                      <Button type="button" onClick={() => void handleStartQuickReview()}>
-                        Start Quick Review
-                      </Button>
-                      <Button type="button" variant="outline" onClick={handleStartChallengeQuiz}>
-                        Challenge Quiz
-                      </Button>
+                      <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quiz" label="Start Quick Review" showTextOnMobile />
+                      <ResponsiveActionButton type="button" variant="outline" onClick={handleStartChallengeQuiz} action="quiz" label="Challenge Quiz" />
                       {hasAdaptiveTargets ? (
-                        <Button type="button" variant="outline" onClick={handleStartAdaptivePractice}>
-                          Adaptive Practice
-                        </Button>
+                        <ResponsiveActionButton type="button" variant="outline" onClick={handleStartAdaptivePractice} action="quiz" label="Adaptive Practice" />
                       ) : null}
                     </>
                   )}
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button type="button" variant="outline" onClick={() => void handleMakeCopy()} disabled={copying}>
-                    {copying ? "Copying..." : "Make a Copy"}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => void handleCopyLink()} disabled={sharing}>
-                    {sharing ? "Sharing..." : "Share"}
-                  </Button>
+                  <ResponsiveActionButton type="button" variant="outline" onClick={() => void handleMakeCopy()} disabled={copying} action="copy" label={copying ? "Copying..." : "Make a Copy"} />
+                  <ResponsiveActionButton type="button" variant="outline" onClick={() => void handleCopyLink()} disabled={sharing} action="share" label={sharing ? "Sharing..." : "Share"} />
                 </div>
               </div>
             ) : null}

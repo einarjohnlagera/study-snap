@@ -282,6 +282,28 @@ Users can:
   - `Quick Review`
   - `Challenge Quiz`
   - `Adaptive Practice`
+- Action-button behavior should stay consistent across Dashboard, Library, Public Library, Note Detail, Public Note Detail, Profile, Public Profile, Settings, and Admin surfaces:
+  - desktop buttons show icon + text
+  - mobile buttons default to icon-only and must keep an `aria-label`
+  - primary CTAs may keep text on mobile when icon-only would reduce clarity
+  - visibility controls use badge/dropdown presentation, not large standalone buttons
+  - header actions sit top-right and card actions sit bottom-right when present
+- Standard action icon mapping should remain consistent:
+  - `Edit` -> `Pencil`
+  - `Delete` -> `Trash`
+  - `Share` -> `Share` / `Link`
+  - `Copy` -> `Duplicate`
+  - `Open` / `View` -> `Eye` / open-view icon
+  - `Public` -> `Globe`
+  - `Private` -> `Lock`
+  - `Library` -> `Book`
+  - `Dashboard` -> `Home`
+  - `Profile` -> `User`
+  - `Settings` -> `Gear`
+  - `Back` -> `Arrow Left`
+  - `Save` -> `Disk`
+  - `Quiz` -> `Brain` / quiz icon
+  - `Study Pack` -> `Sparkles` / book icon
 
 ### Display Name And Official Badge
 

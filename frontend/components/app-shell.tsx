@@ -9,7 +9,7 @@ import { ApiRequestError, getMe, getMyPlan, logout, requestEmailVerification } f
 import { getAuthUser, needsOnboarding, resolveAuthenticatedHome, setAuthUser } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
-import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
 
@@ -128,17 +128,18 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
+  action: "dashboard" | "library" | "profile" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/library", label: "Library" },
-  { href: "/library/public", label: "Public Library" },
+  { href: "/dashboard", label: "Dashboard", action: "dashboard" },
+  { href: "/library", label: "Library", action: "library" },
+  { href: "/library/public", label: "Public Library", action: "library" },
 ];
 
 const SECONDARY_NAV: NavLinkItem[] = [
-  { href: "/profile", label: "Profile" },
-  { href: "/settings", label: "Settings" },
+  { href: "/profile", label: "Profile", action: "profile" },
+  { href: "/settings", label: "Settings", action: "settings" },
 ];
 
 function NavLinks({
@@ -165,7 +166,9 @@ function NavLinks({
             : "text-foreground/80 hover:bg-muted/70 hover:text-foreground"
         }`}
       >
-        {item.label}
+        <span className="inline-flex items-center gap-2">
+          <ResponsiveActionContent action={item.action} label={item.label} showTextOnMobile />
+        </span>
       </Link>
     );
   };
@@ -335,7 +338,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
 
   const secondaryNav = useMemo(() => {
     return user.role === "ADMIN"
-      ? [...SECONDARY_NAV, { href: "/admin", label: "Admin" }]
+      ? [...SECONDARY_NAV, { href: "/admin", label: "Admin", action: "settings" }]
       : SECONDARY_NAV;
   }, [user.role]);
 
@@ -471,13 +474,17 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                     href="/profile"
                     className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
                   >
-                    Profile
+                    <span className="inline-flex items-center gap-2">
+                      <ResponsiveActionContent action="profile" label="Profile" showTextOnMobile />
+                    </span>
                   </Link>
                   <Link
                     href="/settings"
                     className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
                   >
-                    Settings
+                    <span className="inline-flex items-center gap-2">
+                      <ResponsiveActionContent action="settings" label="Settings" showTextOnMobile />
+                    </span>
                   </Link>
                   <button
                     type="button"
@@ -485,7 +492,9 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                     className="block w-full rounded px-3 py-2 text-left text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
                     disabled={signingOut}
                   >
-                    {signingOut ? "Signing out..." : "Sign Out"}
+                    <span className="inline-flex items-center gap-2">
+                      <ResponsiveActionContent action="signOut" label={signingOut ? "Signing out..." : "Sign Out"} showTextOnMobile />
+                    </span>
                   </button>
                 </div>
               ) : null}
@@ -501,7 +510,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   Verify your email to generate Study Packs, use OCR, and publish notes.
                 </p>
               </div>
-              <Button
+              <ResponsiveActionButton
                 type="button"
                 variant="outline"
                 size="sm"
@@ -509,9 +518,9 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   void handleResendVerification();
                 }}
                 disabled={resendingVerification}
-              >
-                {resendingVerification ? "Sending..." : "Resend verification email"}
-              </Button>
+                action="retry"
+                label={resendingVerification ? "Sending..." : "Resend verification email"}
+              />
             </div>
           </div>
         ) : null}
@@ -548,15 +557,16 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
               <NavLinks pathname={pathname || ""} secondaryNav={secondaryNav} onNavigate={() => setDrawerOpen(false)} />
             </nav>
             <div className="border-t border-border p-4">
-              <Button
+              <ResponsiveActionButton
                 type="button"
                 variant="outline"
                 className="w-full"
                 onClick={() => void handleSignOut()}
                 disabled={signingOut}
-              >
-                {signingOut ? "Signing out..." : "Sign Out"}
-              </Button>
+                action="signOut"
+                label={signingOut ? "Signing out..." : "Sign Out"}
+                showTextOnMobile
+              />
             </div>
           </aside>
         </>
