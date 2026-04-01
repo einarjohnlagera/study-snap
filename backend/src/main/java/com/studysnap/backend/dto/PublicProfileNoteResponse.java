@@ -7,6 +7,8 @@ public record PublicProfileNoteResponse(
         String title,
         String subject,
         List<String> tags,
+        String contentPreview,
+        String summaryPreview,
         long copyCount,
         String slug
 ) {

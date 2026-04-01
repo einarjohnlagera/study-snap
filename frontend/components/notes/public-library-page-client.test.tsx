@@ -44,6 +44,7 @@ describe("PublicLibraryPageClient", () => {
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "My note preview",
+        summaryPreview: "My generated summary preview",
         visibility: "PUBLIC",
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",
@@ -60,6 +61,7 @@ describe("PublicLibraryPageClient", () => {
         subject: "Chemistry",
         tags: [],
         contentPreview: "Official preview",
+        summaryPreview: "Official summary preview",
         visibility: "PUBLIC",
         studyPackId: "pack-2",
         studyPackStatus: "STUDY_PACK_READY",
@@ -76,6 +78,7 @@ describe("PublicLibraryPageClient", () => {
         subject: "Physics",
         tags: ["motion"],
         contentPreview: "Community preview",
+        summaryPreview: "",
         visibility: "PUBLIC",
         studyPackId: "pack-3",
         studyPackStatus: "STUDY_PACK_READY",
@@ -101,6 +104,9 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("My Public Note")).toBeInTheDocument();
     expect(screen.getByText("Official Example")).toBeInTheDocument();
     expect(screen.getByText("Community Note")).toBeInTheDocument();
+    expect(screen.getByText("My generated summary preview")).toBeInTheDocument();
+    expect(screen.getByText("Official summary preview")).toBeInTheDocument();
+    expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
   });
 
@@ -114,6 +120,7 @@ describe("PublicLibraryPageClient", () => {
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "My note preview",
+        summaryPreview: "My generated summary preview",
         visibility: "PUBLIC",
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",

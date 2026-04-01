@@ -28,6 +28,7 @@ const subjectNotes = [
     subject: "Science",
     tags: ["biology", "cells"],
     contentPreview: "Cells are the basic unit of life.",
+    summaryPreview: "Cells contain organelles that support life functions.",
     visibility: "PUBLIC",
     studyPackId: "pack-1",
     studyPackStatus: "STUDY_PACK_READY",
@@ -57,6 +58,8 @@ describe("PublicLibrarySubjectPage", () => {
     expect(screen.getByText("Browse all public subjects")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Public study notes" })).toBeInTheDocument();
     expect(screen.getAllByText("Science").length).toBeGreaterThan(0);
+    expect(screen.getByText("Cells are the basic unit of life.")).toBeInTheDocument();
+    expect(screen.getByText("Cells contain organelles that support life functions.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Cell Structure/i })).toHaveAttribute(
       "href",
       "/public/library/science/cell-structure",

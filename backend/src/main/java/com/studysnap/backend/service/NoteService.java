@@ -17,8 +17,11 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
+import com.studysnap.backend.util.ContentPreviewUtils;
+import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +41,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NoteService {
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
+    private static final int SUMMARY_PREVIEW_MAX_LENGTH = 180;
     private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
     private static final String STUDY_PACK_STATUS_READY = "STUDY_PACK_READY";
     private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
@@ -348,10 +352,7 @@ public class NoteService {
 
         LinkedHashMap<String, String> normalizedByKey = new LinkedHashMap<>();
         for (String rawTag : rawTags) {
-            if (rawTag == null) {
-                continue;
-            }
-            String normalized = rawTag.trim();
+            String normalized = StringUtils.defaultString(rawTag).trim();
             if (normalized.isBlank()) {
                 continue;
             }
@@ -410,7 +411,8 @@ public class NoteService {
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
-                toContentPreview(note.getContent()),
+                ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),
+                studyPack == null ? "" : SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), SUMMARY_PREVIEW_MAX_LENGTH),
                 resolveVisibility(note).name(),
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(note, studyPack),
@@ -431,7 +433,7 @@ public class NoteService {
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
-                toContentPreview(note.getContent()),
+                ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),
                 resolveStudyPackStatus(note, studyPack),
                 studyPack == null ? null : studyPack.getSummary(),
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
@@ -549,14 +551,4 @@ public class NoteService {
         return note.getStatus() == null ? NoteStatus.DRAFT : note.getStatus();
     }
 
-    private String toContentPreview(String content) {
-        if (content == null) {
-            return "";
-        }
-        String normalized = content.replaceAll("\\s+", " ").trim();
-        if (normalized.length() <= CONTENT_PREVIEW_MAX_LENGTH) {
-            return normalized;
-        }
-        return normalized.substring(0, CONTENT_PREVIEW_MAX_LENGTH - 3) + "...";
-    }
 }

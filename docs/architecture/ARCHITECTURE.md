@@ -53,6 +53,11 @@ Mode-based note creation stays on the same Note pipeline:
 
 Frontend calls backend via `NEXT_PUBLIC_API_BASE_URL`.
 
+Shared frontend note-list presentation lives in `frontend/components/notes/shared-note-card.tsx`.
+
+- `Library`, `Public Library`, `Public Profile`, and current public subject listing pages should reuse this shared card layout.
+- Shared note cards render backend-provided `contentPreview` plus `summaryPreview`, with a frontend fallback of `No summary available yet.` when the note has no generated Study Pack summary.
+
 ### Backend (Spring Boot)
 
 Responsibilities:
@@ -114,10 +119,14 @@ Versioning model:
   - `authorDisplayName`
   - `isOfficialAuthor`
   - `isCurrentUser`
+  - `contentPreview`
+  - `summaryPreview`
 - Public profile responses should include:
   - `displayName`
   - `profileType`
   - `isOfficial`
+  - public note `contentPreview`
+  - public note `summaryPreview`
   - `publicNotesCount`
   - `totalCopies`
   - `publicNotes[]` with `noteId`, `title`, `subject`, `tags`, `copyCount`, and `slug`

@@ -49,6 +49,8 @@ describe("PublicProfilePage", () => {
             title: "Plant Cells",
             subject: "Biology",
             tags: ["cells", "plants"],
+            contentPreview: "Plant cells contain chloroplasts and cell walls.",
+            summaryPreview: "Plant cells use chloroplasts for photosynthesis.",
             copyCount: 5,
             slug: "plant-cells",
           },
@@ -57,6 +59,8 @@ describe("PublicProfilePage", () => {
             title: "Atomic Bonds",
             subject: "Chemistry",
             tags: [],
+            contentPreview: "Atoms share and transfer electrons to form bonds.",
+            summaryPreview: "",
             copyCount: 2,
             slug: "atomic-bonds",
           },
@@ -72,6 +76,9 @@ describe("PublicProfilePage", () => {
     expect(screen.getByText("Public notes")).toBeInTheDocument();
     expect(screen.getByText("Plant Cells")).toBeInTheDocument();
     expect(screen.getByText("5 copies")).toBeInTheDocument();
+    expect(screen.getByText("Plant cells contain chloroplasts and cell walls.")).toBeInTheDocument();
+    expect(screen.getByText("Plant cells use chloroplasts for photosynthesis.")).toBeInTheDocument();
+    expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Plant Cells/i })).toHaveAttribute("href", "/public/library/biology/plant-cells");
     expect(screen.queryByRole("button", { name: "Edit Profile" })).not.toBeInTheDocument();
   });
