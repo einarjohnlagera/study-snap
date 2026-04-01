@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import {
   ApiRequestError,
@@ -250,7 +251,13 @@ export function PublicProfilePageClient({
                   aria-expanded={visibilityMenuOpen}
                   disabled={updatingVisibility}
                 >
-                  {profile.publicProfileVisible ? "🌍 Public ▼" : "🔒 Private ▼"}
+                  <ResponsiveActionContent
+                    action={profile.publicProfileVisible ? "public" : "private"}
+                    label={profile.publicProfileVisible ? "Public" : "Private"}
+                    showTextOnMobile
+                    iconClassName="h-3.5 w-3.5"
+                  />
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
                 {visibilityMenuOpen ? (
                   <div className="absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
@@ -260,7 +267,9 @@ export function PublicProfilePageClient({
                       onClick={() => void handleToggleVisibility()}
                       disabled={!profile.publicProfileVisible}
                     >
-                      <p className="text-sm font-medium">🔒 Private</p>
+                      <p className="inline-flex items-center gap-2 text-sm font-medium">
+                        <ResponsiveActionContent action="private" label="Private" showTextOnMobile iconClassName="h-4 w-4" />
+                      </p>
                       <p className="text-xs text-foreground/70">Hide this profile from other users.</p>
                     </button>
                     <button
@@ -269,7 +278,9 @@ export function PublicProfilePageClient({
                       onClick={() => void handleToggleVisibility()}
                       disabled={profile.publicProfileVisible}
                     >
-                      <p className="text-sm font-medium">🌍 Public</p>
+                      <p className="inline-flex items-center gap-2 text-sm font-medium">
+                        <ResponsiveActionContent action="public" label="Public" showTextOnMobile iconClassName="h-4 w-4" />
+                      </p>
                       <p className="text-xs text-foreground/70">Allow other users to view and share this profile.</p>
                     </button>
                   </div>
@@ -308,17 +319,18 @@ export function PublicProfilePageClient({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row">
             {isOwner ? (
-              <Link href="/profile" className="w-full sm:w-auto">
-                <Button type="button" variant="outline" className="w-full sm:w-auto">
-                  Edit Profile
-                </Button>
-              </Link>
+              <ResponsiveActionLink href="/profile" action="edit" label="Edit Profile" variant="outline" className="w-full sm:w-auto" />
             ) : null}
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void handleShareProfile()}>
-              Share Profile
-            </Button>
+            <ResponsiveActionButton
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => void handleShareProfile()}
+              action="share"
+              label="Share Profile"
+            />
           </div>
         </div>
       </header>

@@ -265,6 +265,43 @@ Core loop:
 - Avoid adding redundant `Open Note` buttons inside cards unless there is a strong exception.
 - Public showcase pages should remain clean and must not inherit private workspace actions.
 
+### Design System — Icons and Buttons
+
+1. Use consistent icons for common actions (`edit`, `delete`, `share`, `copy`, `open`, `public/private`) and do not drift per page.
+2. Desktop buttons must show icon + text.
+3. Mobile buttons must show icon only.
+4. Card actions should be placed at the bottom-right of cards.
+5. Header/page actions should be placed at the top-right.
+6. Visibility should be shown as a badge/dropdown, not a large button.
+7. Entire note cards should be clickable; do not add `Open` buttons inside cards.
+8. Do not introduce a new icon for an existing action without updating this document.
+9. Sidebar navigation icons must stay consistent:
+   - `Dashboard` -> `Home`
+   - `Library` -> `Book`
+   - `Public Library` -> `Globe`
+   - `Profile` -> `User`
+   - `Settings` -> `Gear`
+   - `Admin` -> `Shield`
+10. Use outline-style icons only. Do not mix outline and filled icon styles.
+11. Do not use emoji as icons in product UI.
+
+Primary CTAs may keep full text on mobile when the action would be ambiguous as icon-only.
+
+### Dark Mode Button Contrast Rule
+
+- Outline buttons must use lighter borders and lighter text in dark mode.
+- Border contrast must be visibly brighter than the card/background surface behind it.
+- Text should be near-white for readability in dark mode.
+- Outline buttons should have a visible dark-mode hover fill.
+- Do not reuse light-mode border contrast assumptions in dark mode.
+
+### Quiz Mode Icon Rule
+
+- `Quick Review` uses a lightning icon.
+- `Challenge Quiz` uses a trophy or clipboard-style challenge icon.
+- `Adaptive Practice` uses a target or focused-practice icon.
+- Do not use the same icon for different quiz modes.
+
 ### Note Card Consistency Rule
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.

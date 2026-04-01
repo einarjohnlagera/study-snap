@@ -1,12 +1,10 @@
 "use client";
-
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { shouldShowNearStudyPackLimitBanner } from "@/lib/plans";
 import {
@@ -306,19 +304,8 @@ export default function DashboardPage() {
                 Welcome to NoteLib! Start by creating a note, then generate your first Study Pack.
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Link href="/notes/new" className="w-full sm:w-auto">
-                  <Button type="button" className="w-full sm:w-auto">
-                    Create Note
-                  </Button>
-                </Link>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={dismissWelcomeMessage}
-                >
-                  Dismiss
-                </Button>
+                <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="w-full sm:w-auto" />
+                <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={dismissWelcomeMessage} action="back" label="Dismiss" />
               </div>
             </Card>
           ) : null}
@@ -335,8 +322,10 @@ export default function DashboardPage() {
                   description="Jump back into your latest note or start a fresh review session."
                   actionLabel="Continue Studying"
                   actionHref={studentPrimaryHref}
+                  actionIcon="open"
                   secondaryActionLabel="Create Note"
                   secondaryActionHref="/notes/new"
+                  secondaryActionIcon="create"
                 />
               )}
               <DashboardFocusAreasCard
@@ -364,8 +353,10 @@ export default function DashboardPage() {
                 description="Use Quick Review to reinforce what you just studied and keep recall active."
                 actionLabel="Start Quick Review"
                 actionHref={recentReadyNotes[0]?.id ? `/notes/${recentReadyNotes[0].id}/quick-review` : "/notes/new"}
+                actionIcon="quickReview"
                 secondaryActionLabel="Review Recent Note"
                 secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
+                secondaryActionIcon="open"
               />
               <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage / Progress" />
             </>
@@ -384,8 +375,10 @@ export default function DashboardPage() {
                 description="Use timed quiz practice to prepare for test conditions and sharpen exam recall."
                 actionLabel="Practice Challenge Quiz"
                 actionHref={boardExamChallengeHref}
+                actionIcon="challengeQuiz"
                 secondaryActionLabel="Review Recent Note"
                 secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
+                secondaryActionIcon="open"
               />
               <DashboardFocusAreasCard
                 title="Weak Areas"
@@ -401,13 +394,13 @@ export default function DashboardPage() {
                 </p>
                 {overview?.focusAreas?.practiceNoteId ? (
                   overview.focusAreas.adaptivePracticeAvailable ? (
-                    <Link href={`/notes/${overview.focusAreas.practiceNoteId}/adaptive-practice`} className="inline-flex">
-                      <Button type="button">Practice Weak Areas</Button>
-                    </Link>
+                    <ResponsiveActionLink
+                      href={`/notes/${overview.focusAreas.practiceNoteId}/adaptive-practice`}
+                      action="adaptivePractice"
+                      label="Practice Weak Areas"
+                    />
                   ) : (
-                    <Button type="button" variant="outline" onClick={() => setActivePaywallModal("adaptive-practice")}>
-                      Unlock Adaptive Practice
-                    </Button>
+                    <ResponsiveActionButton type="button" variant="outline" onClick={() => setActivePaywallModal("adaptive-practice")} action="adaptivePractice" label="Unlock Adaptive Practice" />
                   )
                 ) : (
                   <p className="text-sm text-foreground/70">
@@ -430,16 +423,20 @@ export default function DashboardPage() {
                 description="Turn teaching materials into quiz-ready study packs and question sets for class review."
                 actionLabel="Create Quiz"
                 actionHref={teacherQuizBuilderHref}
+                actionIcon="challengeQuiz"
                 secondaryActionLabel="Add Material"
                 secondaryActionHref="/notes/new"
+                secondaryActionIcon="create"
               />
               <DashboardActionCard
                 title="Upload / Paste Material"
                 description="Start with pasted notes, reviewer text, or uploaded files to build quiz material faster."
                 actionLabel="Paste Material"
                 actionHref={teacherPasteMaterialHref}
+                actionIcon="studyPack"
                 secondaryActionLabel="Upload Material"
                 secondaryActionHref={teacherUploadHref}
+                secondaryActionIcon="studyPack"
               />
               {items.length === 0 ? (
                 <DashboardEmpty />
@@ -506,17 +503,18 @@ export default function DashboardPage() {
         }}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
+            <ResponsiveActionButton
               type="button"
               variant="outline"
               className="w-full sm:w-auto"
               onClick={() => {
                 void handleSkipFirstStudyOnboarding();
               }}
-            >
-              Skip for now
-            </Button>
-            <Button
+              action="back"
+              label="Skip for now"
+              showTextOnMobile
+            />
+            <ResponsiveActionButton
               type="button"
               className="w-full sm:w-auto"
               onClick={() => {
@@ -527,9 +525,10 @@ export default function DashboardPage() {
                 setShowFirstStudyWelcomeModal(false);
                 router.push("/notes/new");
               }}
-            >
-              Create My First Note
-            </Button>
+              action="create"
+              label="Create My First Note"
+              showTextOnMobile
+            />
           </div>
         )}
       />

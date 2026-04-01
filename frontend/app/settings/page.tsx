@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PremiumWaitlistModal } from "@/components/billing/premium-waitlist-modal";
 import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
@@ -62,17 +63,17 @@ function UsageMetric({
   resetDateLabel,
   showUpgradeCta,
   onUpgradeClick,
-}: {
+}: Readonly<{
   label: string;
   used: number;
   limit: number;
   resetDateLabel: string;
   showUpgradeCta: boolean;
   onUpgradeClick: () => void;
-}) {
+}>) {
   const progressPercent = getUsageProgressPercent(used, limit);
   const hasReachedLimit = limit > 0 && used >= limit;
-  const metricTestId = `usage-metric-${label.toLowerCase().replace(/\s+/g, "-")}`;
+  const metricTestId = `usage-metric-${label.toLowerCase().replaceAll(/\s+/g, "-")}`;
   return (
     <div data-testid={metricTestId} className="space-y-3 rounded-md border border-border bg-background p-4">
       <div className="space-y-1">
@@ -399,9 +400,7 @@ export default function SettingsPage() {
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">Could not load settings</h1>
           <p className="text-sm text-foreground/75">{error}</p>
-          <Button type="button" className="w-full sm:w-auto" onClick={() => void loadProfile()}>
-            Retry
-          </Button>
+          <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={() => void loadProfile()} action="retry" label="Retry" />
         </Card>
       ) : profile ? (
         <div className="space-y-6">
@@ -472,14 +471,14 @@ export default function SettingsPage() {
                 </label>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
+                <ResponsiveActionButton
                   type="button"
                   className="w-full sm:w-auto"
                   onClick={() => void handleSaveEngagementMode()}
                   disabled={savingEngagementMode}
-                >
-                  {savingEngagementMode ? "Saving..." : "Save Learning Style"}
-                </Button>
+                  action="save"
+                  label={savingEngagementMode ? "Saving..." : "Save Learning Style"}
+                />
                 {engagementModeMessage ? (
                   <p className="text-xs text-foreground/60">{engagementModeMessage}</p>
                 ) : null}
@@ -521,14 +520,14 @@ export default function SettingsPage() {
                 />
               </label>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button
+                <ResponsiveActionButton
                   type="button"
                   className="w-full sm:w-auto"
                   onClick={() => void handleSaveStudyReminders()}
                   disabled={savingStudyReminders}
-                >
-                  {savingStudyReminders ? "Saving..." : "Save Study Reminders"}
-                </Button>
+                  action="save"
+                  label={savingStudyReminders ? "Saving..." : "Save Study Reminders"}
+                />
                 {studyRemindersMessage ? (
                   <p className="text-xs text-foreground/60">{studyRemindersMessage}</p>
                 ) : null}
@@ -649,13 +648,13 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Button
+                    <ResponsiveActionButton
                       type="button"
                       className="w-full sm:w-auto"
                       onClick={() => setIsWaitlistModalOpen(true)}
-                    >
-                      Upgrade to Premium
-                    </Button>
+                      action="studyPack"
+                      label="Upgrade to Premium"
+                    />
                   </div>
                 </div>
               )}
@@ -668,14 +667,14 @@ export default function SettingsPage() {
                         Premium stays active until the end of your current billing period.
                       </p>
                     </div>
-                    <Button
+                    <ResponsiveActionButton
                       type="button"
                       variant="outline"
                       className="w-full sm:w-auto"
                       onClick={handleOpenCancellationModal}
-                    >
-                      Cancel Subscription
-                    </Button>
+                      action="delete"
+                      label="Cancel Subscription"
+                    />
                   </div>
                 </div>
               ) : null}
@@ -813,12 +812,8 @@ export default function SettingsPage() {
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Account</h2>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void handleSignOut()} disabled={signingOut}>
-                {signingOut ? "Signing out..." : "Sign Out"}
-              </Button>
-              <Button type="button" variant="outline" className="w-full sm:w-auto" disabled>
-                Delete Account (Coming Soon)
-              </Button>
+              <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={() => void handleSignOut()} disabled={signingOut} action="signOut" label={signingOut ? "Signing out..." : "Sign Out"} />
+              <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" disabled action="delete" label="Delete Account (Coming Soon)" />
             </div>
           </Card>
         </div>
@@ -831,23 +826,24 @@ export default function SettingsPage() {
         panelClassName="max-w-[560px]"
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button
+            <ResponsiveActionButton
               type="button"
               variant="outline"
               className="w-full sm:w-auto"
               onClick={handleCloseCancellationModal}
               disabled={cancellingSubscription}
-            >
-              Keep Premium
-            </Button>
-            <Button
+              action="back"
+              label="Keep Premium"
+              showTextOnMobile
+            />
+            <ResponsiveActionButton
               type="button"
               className="w-full sm:w-auto"
               onClick={() => void handleConfirmCancellation()}
               disabled={cancellingSubscription}
-            >
-              {cancellingSubscription ? "Confirming..." : "Confirm Cancellation"}
-            </Button>
+              action="delete"
+              label={cancellingSubscription ? "Confirming..." : "Confirm Cancellation"}
+            />
           </div>
         )}
       >

@@ -1,6 +1,5 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ResponsiveActionLink } from "@/components/ui/action-button";
 
 export function DashboardEmpty() {
   return (
@@ -9,11 +8,7 @@ export function DashboardEmpty() {
       <p className="max-w-2xl text-sm text-foreground/75">
         Create a note and generate your first quiz in a few minutes.
       </p>
-      <Link href="/notes/new" className="w-full sm:w-auto">
-        <Button type="button" className="w-full sm:w-auto">
-          Create Your First Note
-        </Button>
-      </Link>
+      <ResponsiveActionLink href="/notes/new" action="create" label="Create Your First Note" className="w-full sm:w-auto" />
     </Card>
   );
 }

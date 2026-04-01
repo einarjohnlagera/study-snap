@@ -49,7 +49,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "+ Create Note" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Create Note" })).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
     const title = await screen.findByText("Cell Respiration");
     expect(screen.getByText("ATP production in mitochondria...")).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("Library page", () => {
     render(<LibraryPage />);
 
     expect(await screen.findByText("You don't have any notes yet.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create Your First Note" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Try Demo" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create Your First Note" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Try Demo" })).toBeInTheDocument();
   });
 });

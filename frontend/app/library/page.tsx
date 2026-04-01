@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
@@ -370,11 +370,7 @@ export default function LibraryPage() {
         title="Library"
         description="Browse and revisit all of your saved notes."
         actions={(
-          <Link href="/notes/new" className="block w-full sm:w-auto">
-            <Button type="button" className="w-full sm:w-auto">
-              + Create Note
-            </Button>
-          </Link>
+          <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="block w-full sm:w-auto" />
         )}
       />
 
@@ -384,9 +380,7 @@ export default function LibraryPage() {
         <Card className="space-y-4 p-4 sm:p-6">
           <h2 className="text-xl font-semibold">Could not load notes</h2>
           <p className="text-sm text-foreground/75">{error}</p>
-          <Button type="button" className="w-full sm:w-auto" onClick={() => void loadLibrary()}>
-            Retry
-          </Button>
+          <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={() => void loadLibrary()} action="retry" label="Retry" />
         </Card>
       ) : !hasItems ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -395,16 +389,8 @@ export default function LibraryPage() {
             Save your first note to start building Study Packs.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href="/notes/new" className="w-full sm:w-auto">
-              <Button type="button" className="w-full sm:w-auto">
-                Create Your First Note
-              </Button>
-            </Link>
-            <Link href="/demo" className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Try Demo
-              </Button>
-            </Link>
+            <ResponsiveActionLink href="/notes/new" action="create" label="Create Your First Note" className="w-full sm:w-auto" />
+            <ResponsiveActionLink href="/demo" action="open" label="Try Demo" variant="outline" className="w-full sm:w-auto" />
           </div>
         </Card>
       ) : (
@@ -642,7 +628,7 @@ export default function LibraryPage() {
                             }}
                             onKeyDown={(event) => event.stopPropagation()}
                           >
-                            ⋯
+                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                           </button>
                           {cardMenuOpenId === item.id ? (
                             <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">
@@ -655,7 +641,9 @@ export default function LibraryPage() {
                                 }}
                                 disabled={copyingNoteId === item.id}
                               >
-                                {copyingNoteId === item.id ? "Copying..." : "Make a Copy"}
+                                <span className="inline-flex items-center gap-2">
+                                  <ResponsiveActionContent action="copy" label={copyingNoteId === item.id ? "Copying..." : "Make a Copy"} showTextOnMobile />
+                                </span>
                               </button>
                               <button
                                 type="button"
@@ -666,7 +654,9 @@ export default function LibraryPage() {
                                 }}
                                 disabled={deletingNoteId === item.id}
                               >
-                                {deletingNoteId === item.id ? "Deleting..." : "Delete"}
+                                <span className="inline-flex items-center gap-2">
+                                  <ResponsiveActionContent action="delete" label={deletingNoteId === item.id ? "Deleting..." : "Delete"} showTextOnMobile />
+                                </span>
                               </button>
                             </div>
                           ) : null}
@@ -687,7 +677,7 @@ export default function LibraryPage() {
                 onClick={() => setVisibleCount((previous) => previous + LIBRARY_PAGE_SIZE)}
                 className="w-full sm:w-auto"
               >
-                Load More
+                <ResponsiveActionContent action="open" label="Load More" showTextOnMobile />
               </Button>
             </div>
           ) : null}

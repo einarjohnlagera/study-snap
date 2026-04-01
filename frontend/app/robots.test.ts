@@ -5,25 +5,17 @@ describe("robots metadata route", () => {
     expect(robots()).toEqual({
       rules: {
         userAgent: "*",
-        allow: ["/", "/public/", "/public/library/"],
+        allow: "/",
         disallow: [
-          "/admin",
-          "/auth",
-          "/api",
           "/dashboard",
-          "/library",
-          "/login",
-          "/notes",
-          "/onboarding",
-          "/profile",
-          "/settings",
-          "/signup",
           "/study",
-          "/study-packs",
-          "/verify-email",
+          "/settings",
+          "/profile",
+          "/api",
+          "/app",
         ],
       },
-      sitemap: "https://www.notelib.app/sitemap.xml",
+      sitemap: "https://notelib.app/sitemap.xml",
     });
   });
 });

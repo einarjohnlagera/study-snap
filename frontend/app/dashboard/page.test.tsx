@@ -184,7 +184,7 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByRole("heading", { name: "Adaptive Practice" })).toBeInTheDocument();
     expect(screen.getByText("Study Activity This Week")).toBeInTheDocument();
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Practice Weak Areas" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Practice Weak Areas" })).toBeInTheDocument();
   });
 
   it("renders the teacher dashboard with material and quiz-focused sections", async () => {
@@ -266,6 +266,6 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByText("You don't have any Study Packs yet")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create Your First Note" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Create Your First Note" })).toBeInTheDocument();
   });
 });

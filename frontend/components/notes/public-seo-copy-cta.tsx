@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent } from "@/lib/api";
 
@@ -78,9 +78,15 @@ export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate You
 
   return (
     <div className="space-y-2">
-      <Button type="button" className="w-full sm:w-auto" onClick={() => void handleCopy()} disabled={copying}>
-        {copying ? "Preparing your copy..." : label}
-      </Button>
+      <ResponsiveActionButton
+        type="button"
+        className="w-full sm:w-auto"
+        onClick={() => void handleCopy()}
+        disabled={copying}
+        action="copy"
+        label={copying ? "Preparing your copy..." : label}
+        showTextOnMobile
+      />
       {copyError ? <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p> : null}
     </div>
   );

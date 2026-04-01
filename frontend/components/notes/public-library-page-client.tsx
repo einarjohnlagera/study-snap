@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { PageHeader } from "@/components/page-header";
@@ -216,9 +217,7 @@ export function PublicLibraryPageClient() {
         <Card className="space-y-4 p-4 sm:p-6">
           <h2 className="text-xl font-semibold">Could not load public notes</h2>
           <p className="text-sm text-foreground/75">{error}</p>
-          <Button type="button" variant="outline" onClick={() => void loadNotes()}>
-            Retry
-          </Button>
+          <ResponsiveActionButton type="button" variant="outline" onClick={() => void loadNotes()} action="retry" label="Retry" />
         </Card>
       ) : (
         <div className="space-y-4">
@@ -348,8 +347,8 @@ export function PublicLibraryPageClient() {
                       >x</button>
                     </span>
                   ))}
-                  <Button type="button" variant="outline" size="sm" className="h-8" onClick={clearFilters}>
-                    Clear all
+                  <Button type="button" variant="outline" size="sm" className="h-8" onClick={clearFilters} aria-label="Clear all">
+                    <ResponsiveActionContent action="delete" label="Clear all" />
                   </Button>
                 </div>
               </div>
@@ -360,8 +359,8 @@ export function PublicLibraryPageClient() {
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-base font-semibold sm:text-lg">No public notes match your filters.</h2>
               <p className="text-sm text-foreground/75">Try adjusting search or filters.</p>
-              <Button type="button" variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
-                Clear filters
+              <Button type="button" variant="outline" onClick={clearFilters} className="w-full sm:w-auto" aria-label="Clear filters">
+                <ResponsiveActionContent action="delete" label="Clear filters" />
               </Button>
             </Card>
           ) : (

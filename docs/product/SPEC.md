@@ -282,6 +282,46 @@ Users can:
   - `Quick Review`
   - `Challenge Quiz`
   - `Adaptive Practice`
+- Action-button behavior should stay consistent across Dashboard, Library, Public Library, Note Detail, Public Note Detail, Profile, Public Profile, Settings, and Admin surfaces:
+  - desktop buttons show icon + text
+  - mobile buttons default to icon-only and must keep an `aria-label`
+  - primary CTAs may keep text on mobile when icon-only would reduce clarity
+  - visibility controls use badge/dropdown presentation, not large standalone buttons
+  - header actions sit top-right and card actions sit bottom-right when present
+- Dark-mode outline button styling should remain readable across secondary actions such as `Challenge Quiz`, `Adaptive Practice`, `Make a Copy`, `Share`, and `Edit`:
+  - use a lighter dark-mode border than the surrounding card background
+  - use near-white text in dark mode
+  - keep a visible dark-mode hover fill
+  - do not reuse light-mode border contrast assumptions in dark mode
+- Navigation icon mapping should stay fixed across desktop and mobile sidebars:
+  - `Dashboard` -> `Home`
+  - `Library` -> `Book`
+  - `Public Library` -> `Globe`
+  - `Profile` -> `User`
+  - `Settings` -> `Gear`
+  - `Admin` -> `Shield`
+- Standard action icon mapping should remain consistent:
+  - `Edit` -> `Pencil`
+  - `Delete` -> `Trash`
+  - `Share` -> `Share` / `Link`
+  - `Copy` -> `Duplicate`
+  - `Open` / `View` -> open / external arrow icon
+  - `Public` -> `Globe`
+  - `Private` -> `Lock`
+  - `Library` -> `Book`
+  - `Dashboard` -> `Home`
+  - `Profile` -> `User`
+  - `Settings` -> `Gear`
+  - `Admin` -> `Shield`
+  - `Back` -> `Arrow Left`
+  - `Save` -> `Disk`
+  - `Quick Review` -> `Lightning`
+  - `Challenge Quiz` -> `Trophy` / challenge icon
+  - `Adaptive Practice` -> `Target` / focused-practice icon
+  - `Study Pack` -> `Sparkles` / book icon
+- Use outline-style icons only and do not mix filled and outline icon sets on the same product surface.
+- Do not use emoji as icons in product UI.
+- Quiz entry buttons on Note Detail and other quiz launch surfaces should use distinct icons so users can distinguish fast review, exam challenge, and weak-area practice at a glance.
 
 ### Display Name And Official Badge
 

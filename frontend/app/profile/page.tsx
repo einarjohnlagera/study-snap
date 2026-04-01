@@ -1,11 +1,9 @@
 "use client";
-
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
+import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import {
   completeOnboardingProfileType,
   getMe,
@@ -187,9 +185,7 @@ export default function ProfilePage() {
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">Could not load profile</h1>
           <p className="text-sm text-foreground/75">{error}</p>
-          <Button type="button" className="w-full sm:w-auto" onClick={() => void loadProfile()}>
-            Retry
-          </Button>
+          <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={() => void loadProfile()} action="retry" label="Retry" />
         </Card>
       ) : profile ? (
         <div className="space-y-6">
@@ -215,11 +211,13 @@ export default function ProfilePage() {
                   ) : null}
                 </div>
               </div>
-              <Link href={buildPublicProfilePath(profile.id)} className="w-full sm:w-auto">
-                <Button type="button" variant="outline" className="w-full sm:w-auto">
-                  View Public Page →
-                </Button>
-              </Link>
+              <ResponsiveActionLink
+                href={buildPublicProfilePath(profile.id)}
+                action="open"
+                label="View Public Page →"
+                variant="outline"
+                className="w-full sm:w-auto"
+              />
             </div>
           </Card>
 
@@ -262,14 +260,14 @@ export default function ProfilePage() {
             </div>
             <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
               {identityMessage ? <p className="text-xs text-foreground/60">{identityMessage}</p> : <div />}
-              <Button
+              <ResponsiveActionButton
                 type="button"
                 className="w-full sm:w-auto"
                 onClick={() => void handleSaveIdentity()}
                 disabled={savingIdentity}
-              >
-                {savingIdentity ? "Saving..." : "Save Identity"}
-              </Button>
+                action="save"
+                label={savingIdentity ? "Saving..." : "Save Identity"}
+              />
             </div>
           </Card>
 
@@ -302,14 +300,14 @@ export default function ProfilePage() {
                   Profile Type shapes dashboard emphasis and study guidance only.
                 </p>
               )}
-              <Button
+              <ResponsiveActionButton
                 type="button"
                 className="w-full sm:w-auto"
                 onClick={() => void handleSaveProfileType()}
                 disabled={savingProfileType || !selectedProfileType}
-              >
-                {savingProfileType ? "Saving..." : "Save Profile Type"}
-              </Button>
+                action="save"
+                label={savingProfileType ? "Saving..." : "Save Profile Type"}
+              />
             </div>
           </Card>
         </div>
