@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { SubjectBadge } from "@/components/notes/subject-badge";
+import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import {
@@ -20,14 +20,6 @@ type PublicLibrarySubjectPageProps = {
     subject: string;
   }>;
 };
-
-function toPreview(contentPreview: string, maxLength = 180) {
-  const clean = contentPreview.trim();
-  if (clean.length <= maxLength) {
-    return clean;
-  }
-  return `${clean.slice(0, maxLength - 3)}...`;
-}
 
 function buildSubjectDescription(subjectLabel: string) {
   return `Browse public ${subjectLabel} notes, summaries, and practice questions shared by the NoteLib community.`;
@@ -123,29 +115,13 @@ export default async function PublicLibrarySubjectPage({ params }: Readonly<Publ
                 className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
               >
                 <Card className="flex h-full flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-2">
-                      <SubjectBadge subject={note.subject} />
-                    </div>
-                    <h3 className="text-lg font-semibold">{note.title?.trim() || "Untitled note"}</h3>
-                    <p className="text-sm leading-relaxed text-foreground/75">
-                      {toPreview(note.contentPreview)}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {note.tags.length > 0 ? note.tags.map((tag) => (
-                      <span
-                        key={`${note.id}-${tag}`}
-                        className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
-                      >
-                        {tag}
-                      </span>
-                    )) : (
-                      <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
-                        No tags
-                      </span>
-                    )}
-                  </div>
+                  <SharedNoteCard
+                    title={note.title}
+                    subject={note.subject}
+                    tags={note.tags}
+                    contentPreview={note.contentPreview}
+                    summaryPreview={note.summaryPreview}
+                  />
                 </Card>
               </Link>
             ))}

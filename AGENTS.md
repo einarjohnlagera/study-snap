@@ -265,6 +265,20 @@ Core loop:
 - Avoid adding redundant `Open Note` buttons inside cards unless there is a strong exception.
 - Public showcase pages should remain clean and must not inherit private workspace actions.
 
+### Note Card Consistency Rule
+
+- Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
+- Shared note-card content order is:
+  - Subject badge
+  - Copy count when available
+  - Title
+  - `Note Preview`
+  - `Summary Preview`
+  - Tags
+- `Note Preview` comes from note content and `Summary Preview` comes from generated Study Pack summary.
+- If no generated summary exists, show `No summary available yet.`
+- Use clamped preview text so card heights stay consistent across listing grids.
+
 ### Page Responsibility Rule
 
 - Dashboard = what to do now

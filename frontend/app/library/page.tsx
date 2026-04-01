@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
-import { SubjectBadge } from "@/components/notes/subject-badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
+import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { PageHeader } from "@/components/page-header";
 import {
   copyNote,
@@ -35,14 +35,6 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
   return tags
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
-}
-
-function toPreview(contentPreview: string, maxLength = 160) {
-  const clean = contentPreview.trim();
-  if (clean.length <= maxLength) {
-    return clean;
-  }
-  return `${clean.slice(0, maxLength - 3)}...`;
 }
 
 function formatRelativeReviewTime(lastReviewedAt: string | null | undefined): string {
@@ -609,95 +601,78 @@ export default function LibraryPage() {
                     }}
                     className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-2">
-                        <SubjectBadge subject={item.subject} />
-                        <h3 className="text-base font-semibold transition-colors sm:text-lg">
-                          {item.title?.trim() || "Untitled note"}
-                        </h3>
+                    <SharedNoteCard
+                      title={item.title}
+                      subject={item.subject}
+                      tags={itemTags}
+                      contentPreview={item.contentPreview}
+                      summaryPreview={item.summaryPreview}
+                      metadataBadges={(
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateMeta.className}`}
                         >
                           {stateMeta.label}
                         </span>
-                        <p className="text-sm leading-relaxed text-foreground/75">
-                          {toPreview(item.contentPreview)}
-                        </p>
-                      </div>
-                      <div className="relative" data-card-menu="true">
-                        <button
-                          type="button"
-                          aria-label="Open note actions"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-sm text-foreground/70 hover:bg-muted/60 hover:text-foreground"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setCardMenuOpenId((previous) => (previous === item.id ? null : item.id));
-                          }}
-                          onKeyDown={(event) => event.stopPropagation()}
-                        >
-                          ⋯
-                        </button>
-                        {cardMenuOpenId === item.id ? (
-                          <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">
-                            <button
-                              type="button"
-                              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-muted/60"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleMakeCopy(item.id);
-                              }}
-                              disabled={copyingNoteId === item.id}
-                            >
-                              {copyingNoteId === item.id ? "Copying..." : "Make a Copy"}
-                            </button>
-                            <button
-                              type="button"
-                              className="w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleRequestDelete(item.id);
-                              }}
-                              disabled={deletingNoteId === item.id}
-                            >
-                              {deletingNoteId === item.id ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {itemTags.length > 0 ? (
-                        itemTags.map((tag) => (
-                          <span
-                            key={`${item.id}-${tag}`}
-                            className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
+                      )}
+                      footer={(
+                        <div className="space-y-1">
+                          <p className="text-xs text-foreground/65">
+                            Updated {new Date(item.updatedAt).toLocaleString()}
+                          </p>
+                          {reviewSummary.lastReviewedAt ? (
+                            <p className="text-xs text-foreground/65">
+                              Last reviewed {formatRelativeReviewTime(reviewSummary.lastReviewedAt)}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-foreground/65">
+                              Not reviewed yet
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      actionSlot={(
+                        <>
+                          <button
+                            type="button"
+                            aria-label="Open note actions"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-sm text-foreground/70 hover:bg-muted/60 hover:text-foreground"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setCardMenuOpenId((previous) => (previous === item.id ? null : item.id));
+                            }}
+                            onKeyDown={(event) => event.stopPropagation()}
                           >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
-                          No tags
-                        </span>
+                            ⋯
+                          </button>
+                          {cardMenuOpenId === item.id ? (
+                            <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">
+                              <button
+                                type="button"
+                                className="w-full rounded px-3 py-2 text-left text-sm hover:bg-muted/60"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleMakeCopy(item.id);
+                                }}
+                                disabled={copyingNoteId === item.id}
+                              >
+                                {copyingNoteId === item.id ? "Copying..." : "Make a Copy"}
+                              </button>
+                              <button
+                                type="button"
+                                className="w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleRequestDelete(item.id);
+                                }}
+                                disabled={deletingNoteId === item.id}
+                              >
+                                {deletingNoteId === item.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </>
                       )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <p className="text-xs text-foreground/65">
-                        Updated {new Date(item.updatedAt).toLocaleString()}
-                      </p>
-                      {reviewSummary.lastReviewedAt ? (
-                        <p className="text-xs text-foreground/65">
-                          Last reviewed {formatRelativeReviewTime(reviewSummary.lastReviewedAt)}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-foreground/65">
-                          Not reviewed yet
-                        </p>
-                      )}
-                    </div>
-
+                    />
                   </Card>
                 );
               })}

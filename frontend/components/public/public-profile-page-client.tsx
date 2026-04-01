@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SubjectBadge } from "@/components/notes/subject-badge";
+import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getAuthUser } from "@/lib/auth";
@@ -345,29 +345,14 @@ export function PublicProfilePageClient({
                 className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
               >
                 <Card className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <SubjectBadge subject={note.subject} />
-                      <span className="rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-foreground/70">
-                        {note.copyCount} {note.copyCount === 1 ? "copy" : "copies"}
-                      </span>
-                    </div>
-                    <h3 className="text-lg font-semibold">{note.title?.trim() || "Untitled note"}</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {note.tags.length > 0 ? note.tags.map((tag) => (
-                        <span
-                          key={`${note.noteId}-${tag}`}
-                          className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
-                        >
-                          {tag}
-                        </span>
-                      )) : (
-                        <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
-                          No tags
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  <SharedNoteCard
+                    title={note.title}
+                    subject={note.subject}
+                    tags={note.tags}
+                    contentPreview={note.contentPreview}
+                    summaryPreview={note.summaryPreview}
+                    copyCount={note.copyCount}
+                  />
                 </Card>
               </Link>
             ))}

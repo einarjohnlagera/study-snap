@@ -33,6 +33,7 @@ describe("Library page", () => {
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "ATP production in mitochondria...",
+        summaryPreview: "Mitochondria convert glucose into usable ATP energy.",
         visibility: "PRIVATE",
         studyPackId: null,
         studyPackStatus: "DRAFT",
@@ -51,6 +52,8 @@ describe("Library page", () => {
     expect(await screen.findByRole("button", { name: "+ Create Note" })).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
     const title = await screen.findByText("Cell Respiration");
+    expect(screen.getByText("ATP production in mitochondria...")).toBeInTheDocument();
+    expect(screen.getByText("Mitochondria convert glucose into usable ATP energy.")).toBeInTheDocument();
     const card = title.closest("[role='link']");
     expect(card).not.toBeNull();
 

@@ -232,6 +232,15 @@ Users can:
   - list of public notes for that subject
   - empty state when a known subject has no notes
 - Subject pages should reuse the same Subject badge styling as Public Library cards and note detail headers.
+- Library, Public Library, Public Profile, and public subject listing cards should share the same note-card content stack:
+  - Subject badge
+  - Copy count when available
+  - Title
+  - `Note Preview` from note content
+  - `Summary Preview` from generated Study Pack summary
+  - Tags
+- Note-card previews should clamp to 2-3 lines so cards stay visually consistent in a grid.
+- If a note has no generated summary yet, cards should show `No summary available yet.`
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name
@@ -257,6 +266,7 @@ Users can:
 - Public Profile note cards should use the same interaction model as Library and Public Library:
   - whole card click opens the public note detail page
   - do not add a redundant `Open Note` button inside the card
+- Public Profile note cards should use the shared note-card preview layout, including both `Note Preview` and `Summary Preview`.
 - Public Profile remains a public showcase page and should not mix in private workspace actions, even for the owner.
 - Owner actions on public note detail may include:
   - `Open Note`

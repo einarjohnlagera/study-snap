@@ -202,6 +202,7 @@ class NoteControllerTest {
                         "Biology",
                         List.of("cells"),
                         "preview",
+                        "summary preview",
                         "PUBLIC",
                         null,
                         "STUDY_PACK_READY",

@@ -16,7 +16,9 @@ New Note -> Save (Draft) -> Generate Study Pack (Study Pack Ready) -> Review -> 
 Library contains all notes owned by the current user:
 
 - includes `PRIVATE` and `PUBLIC` notes
-- cards show note title, subject, tags, content preview, state, and updated date
+- cards show subject, title, note preview, summary preview, tags, state, and updated date
+- note preview comes from original note content
+- summary preview comes from generated Study Pack summary, or `No summary available yet.` when the note is still a draft
 - supports search, subject filter, tag filter, sorting, and pagination
 - opening a card navigates to the unified Note Detail page
 - card interaction is consistent with Dashboard/Public Library:
@@ -53,6 +55,7 @@ Capabilities:
 - search, subject filter, and tag filter
 - open Public Note Detail (read-only)
 - `Copy to Library`
+- cards use the same shared preview stack as Library, including both note preview and summary preview
 
 SEO public detail route:
 

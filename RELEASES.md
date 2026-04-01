@@ -22,3 +22,4 @@
 - Public Profile cards now follow the shared library interaction model with whole-card click navigation to public note detail and no redundant `Open Note` button
 - Public Profile header controls now align with Note Detail by using a badge/dropdown visibility control near the header identity cluster and placing `Share Profile` in the lower-right action row
 - Profile page layout is now split into a top Display Name summary card plus separate `Identity` and `Profile Type` cards, each with its own save action and a navigation-only `View Public Page ->` link
+- Shared note cards across Library, Public Library, Public Profile, and public subject pages now show both a clamped `Note Preview` and `Summary Preview`, with a fallback message when no summary exists

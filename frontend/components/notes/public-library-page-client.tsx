@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -16,7 +17,6 @@ import {
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
-import { SubjectBadge } from "./subject-badge";
 
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 
@@ -27,14 +27,6 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
   return tags
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
-}
-
-function toPreview(contentPreview: string, maxLength = 160) {
-  const clean = contentPreview.trim();
-  if (clean.length <= maxLength) {
-    return clean;
-  }
-  return `${clean.slice(0, maxLength - 3)}...`;
 }
 
 function resolveAuthorBadge(
@@ -392,51 +384,38 @@ export function PublicLibraryPageClient() {
                     }}
                     className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
                   >
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap gap-2">
-                        <SubjectBadge subject={item.subject} />
-                        {item.ownerUserId ? (
-                          <Link
-                            href={buildPublicProfilePath(item.ownerUserId)}
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => event.stopPropagation()}
-                            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
-                          >
-                            {authorBadge.label}
-                          </Link>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
-                          >
-                            {authorBadge.label}
-                          </span>
-                        )}
-                        {authorBadge.showOfficialBadge ? (
-                          <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
-                            Official
-                          </span>
-                        ) : null}
-                      </div>
-                      <h3 className="text-base font-semibold sm:text-lg">{item.title?.trim() || "Untitled note"}</h3>
-                      <p className="text-sm leading-relaxed text-foreground/75">{toPreview(item.contentPreview)}</p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {itemTags.length > 0 ? (
-                        itemTags.map((tag) => (
-                          <span
-                            key={`${item.id}-${tag}`}
-                            className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
-                          No tags
-                        </span>
+                    <SharedNoteCard
+                      title={item.title}
+                      subject={item.subject}
+                      tags={itemTags}
+                      contentPreview={item.contentPreview}
+                      summaryPreview={item.summaryPreview}
+                      metadataBadges={(
+                        <>
+                          {item.ownerUserId ? (
+                            <Link
+                              href={buildPublicProfilePath(item.ownerUserId)}
+                              onClick={(event) => event.stopPropagation()}
+                              onKeyDown={(event) => event.stopPropagation()}
+                              className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
+                            >
+                              {authorBadge.label}
+                            </Link>
+                          ) : (
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${authorBadge.className}`}
+                            >
+                              {authorBadge.label}
+                            </span>
+                          )}
+                          {authorBadge.showOfficialBadge ? (
+                            <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                              Official
+                            </span>
+                          ) : null}
+                        </>
                       )}
-                    </div>
+                    />
                   </Card>
                 );
               })}

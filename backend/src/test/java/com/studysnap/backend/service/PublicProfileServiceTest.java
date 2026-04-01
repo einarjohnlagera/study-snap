@@ -5,11 +5,13 @@ import com.studysnap.backend.dto.PublicProfileResponse;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,12 +35,14 @@ class PublicProfileServiceTest {
     private UserRepository userRepository;
     @Mock
     private NoteRepository noteRepository;
+    @Mock
+    private StudyPackRepository studyPackRepository;
 
     private PublicProfileService publicProfileService;
 
     @BeforeEach
     void setUp() {
-        publicProfileService = new PublicProfileService(userRepository, noteRepository);
+        publicProfileService = new PublicProfileService(userRepository, noteRepository, studyPackRepository);
     }
 
     @Test
@@ -58,10 +62,14 @@ class PublicProfileServiceTest {
 
         NoteEntity noteOne = buildPublicNote(noteOneId, userId, "Plant Cells", "Biology", new String[]{"cells", "plants"});
         NoteEntity noteTwo = buildPublicNote(noteTwoId, userId, "Atomic Bonds", "Chemistry", new String[]{"atoms"});
+        StudyPackEntity noteOneStudyPack = buildStudyPack(noteOneId, "Cells make up plant tissue.");
+        StudyPackEntity noteTwoStudyPack = buildStudyPack(noteTwoId, "Bonds hold atoms together.");
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
                 .thenReturn(List.of(noteOne, noteTwo));
+        when(studyPackRepository.findByNoteIdIn(List.of(noteOneId, noteTwoId)))
+                .thenReturn(List.of(noteOneStudyPack, noteTwoStudyPack));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(List.of(noteOneId, noteTwoId)))
                 .thenReturn(List.of(
                         projection(noteOneId, 5L),
@@ -77,11 +85,28 @@ class PublicProfileServiceTest {
         assertThat(response.publicNotesCount()).isEqualTo(2);
         assertThat(response.totalCopies()).isEqualTo(7);
         assertThat(response.publicNotes())
-                .extracting(PublicProfileNoteResponse::noteId, PublicProfileNoteResponse::copyCount,
-                    PublicProfileNoteResponse::slug)
+                .extracting(
+                        PublicProfileNoteResponse::noteId,
+                        PublicProfileNoteResponse::contentPreview,
+                        PublicProfileNoteResponse::summaryPreview,
+                        PublicProfileNoteResponse::copyCount,
+                        PublicProfileNoteResponse::slug
+                )
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(noteOneId.toString(), 5L, "plant-cells"),
-                        org.assertj.core.groups.Tuple.tuple(noteTwoId.toString(), 2L, "atomic-bonds")
+                        org.assertj.core.groups.Tuple.tuple(
+                                noteOneId.toString(),
+                                "Plant Cells source note content",
+                                "Cells make up plant tissue.",
+                                5L,
+                                "plant-cells"
+                        ),
+                        org.assertj.core.groups.Tuple.tuple(
+                                noteTwoId.toString(),
+                                "Atomic Bonds source note content",
+                                "Bonds hold atoms together.",
+                                2L,
+                                "atomic-bonds"
+                        )
                 );
     }
 
@@ -186,10 +211,19 @@ class PublicProfileServiceTest {
         note.setTitle(title);
         note.setSubject(subject);
         note.setTags(tags);
+        note.setContent(title + " source note content");
         note.setVisibility(NoteVisibility.PUBLIC);
         note.setCreatedAt(OffsetDateTime.now().minusDays(1));
         note.setUpdatedAt(OffsetDateTime.now().minusHours(1));
         return note;
+    }
+
+    private StudyPackEntity buildStudyPack(UUID noteId, String summary) {
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(UUID.randomUUID());
+        studyPack.setNoteId(noteId);
+        studyPack.setSummary(summary);
+        return studyPack;
     }
 
     private NoteCopyCountProjection projection(UUID noteId, long copyCount) {

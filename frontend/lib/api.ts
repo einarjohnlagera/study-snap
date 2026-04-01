@@ -681,6 +681,7 @@ export type NoteListItemResponse = {
   subject: string | null;
   tags: string[];
   contentPreview: string;
+  summaryPreview: string;
   visibility: NoteVisibility;
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
@@ -713,6 +714,8 @@ export type PublicProfileNoteResponse = {
   title: string | null;
   subject: string | null;
   tags: string[];
+  contentPreview: string;
+  summaryPreview: string;
   copyCount: number;
   slug: string;
 };

@@ -29,6 +29,8 @@ const baseProfile = {
       title: "Plant Cells",
       subject: "Biology",
       tags: ["cells"],
+      contentPreview: "Plant cells contain chloroplasts and cell walls.",
+      summaryPreview: "Plant cells use chloroplasts for photosynthesis.",
       copyCount: 5,
       slug: "plant-cells",
     },
@@ -80,6 +82,8 @@ describe("PublicProfilePageClient", () => {
     });
     expect(await screen.findByText("Public profile is now private.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "🔒 Private ▼" })).toBeInTheDocument();
+    expect(screen.getByText("Plant cells contain chloroplasts and cell walls.")).toBeInTheDocument();
+    expect(screen.getByText("Plant cells use chloroplasts for photosynthesis.")).toBeInTheDocument();
   });
 
   it("does not show owner controls for other viewers", async () => {

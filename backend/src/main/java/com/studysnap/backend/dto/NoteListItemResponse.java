@@ -10,6 +10,7 @@ public record NoteListItemResponse(
         String subject,
         List<String> tags,
         String contentPreview,
+        String summaryPreview,
         String visibility,
         String studyPackId,
         String studyPackStatus,

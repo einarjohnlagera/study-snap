@@ -259,6 +259,10 @@ class NoteServiceTest {
         viewerNote.setTitle("My public note");
         NoteEntity officialNote = buildNote(officialNoteId, officialOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "official content");
         officialNote.setTitle("Official note");
+        StudyPackEntity officialStudyPack = new StudyPackEntity();
+        officialStudyPack.setId(UUID.randomUUID());
+        officialStudyPack.setNoteId(officialNoteId);
+        officialStudyPack.setSummary("Official summary preview");
 
         UserEntity viewer = new UserEntity();
         viewer.setId(viewerUserId);
@@ -272,7 +276,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(viewerNote, officialNote));
         when(studyPackRepository.findByNoteIdIn(List.of(viewerNoteId, officialNoteId)))
-                .thenReturn(List.of());
+                .thenReturn(List.of(officialStudyPack));
         when(userRepository.findAllById(List.of(viewerUserId, officialOwnerUserId)))
                 .thenReturn(List.of(viewer, officialOwner));
 
@@ -284,10 +288,14 @@ class NoteServiceTest {
                 .containsExactly(viewerNoteId.toString(), officialNoteId.toString());
         assertThat(response.getFirst().ownerUserId()).isEqualTo(viewerUserId.toString());
         assertThat(response.getFirst().authorDisplayName()).isEqualTo("Viewer");
+        assertThat(response.getFirst().contentPreview()).isEqualTo("viewer content");
+        assertThat(response.getFirst().summaryPreview()).isEmpty();
         assertThat(response.getFirst().isOfficialAuthor()).isFalse();
         assertThat(response.getFirst().isCurrentUser()).isTrue();
         assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
         assertThat(response.get(1).authorDisplayName()).isEqualTo("NoteLib");
+        assertThat(response.get(1).contentPreview()).isEqualTo("official content");
+        assertThat(response.get(1).summaryPreview()).isEqualTo("Official summary preview");
         assertThat(response.get(1).isOfficialAuthor()).isTrue();
         assertThat(response.get(1).isCurrentUser()).isFalse();
     }
