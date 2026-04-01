@@ -11,6 +11,7 @@ const routerMock = {
 
 let currentPathname = "/dashboard";
 let currentAuthUser: Record<string, unknown> | null = null;
+const rememberLastVisitedPathMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   usePathname: () => currentPathname,
@@ -73,7 +74,9 @@ jest.mock("@/components/ui/button", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(() => currentAuthUser),
+  getCurrentPathWithQuery: jest.fn(() => `${window.location.pathname}${window.location.search}`),
   needsOnboarding: jest.fn(() => false),
+  rememberLastVisitedPath: (...args: unknown[]) => rememberLastVisitedPathMock(...args),
   resolveAuthenticatedHome: jest.fn((authUser: { emailVerifiedAt?: string | null } | null) =>
     authUser?.emailVerifiedAt ? "/dashboard" : "/verify-email",
   ),
@@ -111,6 +114,7 @@ const meResponse = {
 describe("AppShell", () => {
   beforeEach(() => {
     currentPathname = "/dashboard";
+    window.history.replaceState({}, "", "/dashboard");
     currentAuthUser = {
       id: "user-1",
       email: "[email protected]",
@@ -122,6 +126,7 @@ describe("AppShell", () => {
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     routerMock.refresh.mockReset();
+    rememberLastVisitedPathMock.mockReset();
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (logout as jest.Mock).mockReset();
@@ -166,6 +171,21 @@ describe("AppShell", () => {
     await waitFor(() => {
       expect(logout).toHaveBeenCalled();
       expect(routerMock.replace).toHaveBeenCalledWith("/auth");
+    });
+  });
+
+  it("tracks the last visited page including query state", async () => {
+    currentPathname = "/notes/note-1";
+    window.history.replaceState({}, "", "/notes/note-1?tab=quiz");
+
+    render(
+      <AppShell>
+        <div>Note detail content</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(rememberLastVisitedPathMock).toHaveBeenCalledWith("/notes/note-1?tab=quiz");
     });
   });
 });

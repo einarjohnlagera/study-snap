@@ -12,7 +12,7 @@ import {
   LOGIN_REASON_QUERY_KEY,
   LOGIN_REASON_SESSION_EXPIRED,
   type AuthUser,
-  resolveAuthenticatedHome,
+  resolvePostLoginDestination,
   setAuthUser,
 } from "@/lib/auth";
 
@@ -70,7 +70,7 @@ export default function AuthPage() {
       return;
     }
 
-    router.replace(resolveAuthenticatedHome(authenticatedUser));
+    router.replace(resolvePostLoginDestination(authenticatedUser));
   }, [authenticatedUser, router]);
 
   useEffect(() => {
@@ -118,7 +118,7 @@ export default function AuthPage() {
       };
       setAuthUser(nextAuthUser);
       setAuthenticatedUser(nextAuthUser);
-      router.replace(resolveAuthenticatedHome(nextAuthUser));
+      router.replace(resolvePostLoginDestination(nextAuthUser));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not continue. Please try again.");

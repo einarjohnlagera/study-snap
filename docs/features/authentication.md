@@ -39,6 +39,13 @@ Required endpoints:
 - On `401`, clear auth state and redirect to `/login`.
 - Preserve destination with `redirect` query.
 - For expired sessions, include `reason=session_expired`.
+- After successful login, redirect using this order:
+  - `/verify-email` or `/onboarding` when required by the authenticated user state
+  - explicit `redirect` query destination
+  - remembered last visited safe route from local storage
+  - `/dashboard` fallback
+- Preserve query-string state when restoring note/detail views such as `?tab=quiz`.
+- Auth pages should also redirect already-authenticated users to the same resolved post-login destination instead of always sending them to `Dashboard`.
 
 ## Verification Gating Rules
 
@@ -68,7 +75,7 @@ After email verification:
 
 ## Navigation Expectations (Authenticated Shell)
 
-- Main: Dashboard, My Library, Public Library
+- Main: Dashboard, Library, Public Library
 - Account: Profile, Settings
 
 ## Non-Goals
