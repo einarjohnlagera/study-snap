@@ -44,7 +44,7 @@ Copy does not include generated/performance fields:
 
 Sidebar navigation:
 
-- Main: Dashboard, My Library, Public Library
+- Main: Dashboard, Library, Public Library
 - Account: Profile, Settings
 
 Primary routes:
@@ -53,6 +53,7 @@ Primary routes:
 - `/library/public`
 - `/notes/{id}` (Note Detail)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only)
+- `/public/profile/{userId}` (Public Profile)
 
 ## Verification and OCR
 

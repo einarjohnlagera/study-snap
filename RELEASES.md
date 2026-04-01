@@ -1,30 +1,56 @@
 # RELEASES.md - NoteLib
 
-## v0.4.0 - Personalization & UX
+## v0.5.0 - Public Profiles & Public Notes
+
+Public Profile:
+
+- Public profile page at `/public/profile/{userId}`
+- Public identity uses `displayName`; public pages never show email
+- Public profile shows `Profile Type`, public-note stats, and total copies
+- Public profile visibility can be turned `On` or `Off`
+- Owner-only public-page controls live on Public Profile:
+  - `Edit Profile`
+  - `Share Profile`
+  - Public visibility badge/dropdown
+- Non-owners can view/share public profiles only when the profile is public
+
+Public Notes:
+
+- Public notes appear in Public Library and Public Profile
+- Public author labels are viewer-relative:
+  - `By You`
+  - `By NoteLib` with `Official`
+  - `By {Display Name}`
+- Public author labels link to Public Profile
+- Public note detail remains read/copy/share only
+- Public note copying preserves attribution to the source note and creator
+
+UI and UX:
+
+- Shared note-card layout across Library, Public Library, Public Profile, and public subject pages
+- Whole-card click behavior across library-style note cards
+- Removed redundant `Open Note` buttons from public showcase/discovery cards
+- Shared cards now show clamped `Note Preview` plus `Summary Preview`
+- Private Note Detail now uses underline tabs for `Summary` and `Quiz`
+- Icon usage is standardized across navigation and common actions
+- Quick Review, Challenge Quiz, and Adaptive Practice use distinct icons
+- Action buttons now follow a shared responsive desktop/mobile pattern
+- Dark-mode outline buttons use higher-contrast borders, lighter text, and clearer hover states
+- Profile page is split into Display Name, Identity, and Profile Type cards with per-section save actions
+- Public profile controls were moved off `/profile` and onto the Public Profile page
+- Auth recovery now returns users to their interrupted or last visited page after login instead of always forcing `Dashboard`
+
+Documentation baseline:
+
+- `v0.5.0` is the documentation lock point for Public Profiles and Public Notes
+- next planned milestone is `v0.6.0 - Board Exam Mode`
+
+## v0.4.0 - Profile-Based Experience & UX
 
 - Profile identity management
 - Email change verification
 - Onboarding per profile type
 - Personalized dashboards
-- Teacher workflow and quiz-first flow
-- Mode-based note creation
+- Teacher workflow and quiz-first note creation
 - Note editor UX improvements across desktop and mobile
-- Create note from My Library
-- Profile-based button labels and CTAs
-- Email template refresh with first-name personalization, shared NoteLib footer, and updated Free vs Premium welcome messaging
-- Auth redirect fix for expired-session re-login so successful login returns cleanly to Dashboard without rendering the app shell on auth pages
-- First-time activation flow improvements across verification, empty dashboard states, first Study Pack guidance, and first quiz weak-concept follow-up
-- Public Library now includes your own public notes and labels cards as `By You`, `By NoteLib`, or `By {displayName}` with a backend-driven `Official` badge for NoteLib content
-- Public note detail now stays read/copy/share only with `Open Note` for owners, `Make a Copy` for non-owners, and viewer-relative author labels in the header
-- Profile identity now supports `displayName`, public notes render backend-driven author names, the official NoteLib account gets an `Official` badge, and reserved display names are blocked server-side
-- Public Library subject pages now reuse the existing `/public/library/{subject}` route with subject-badge-consistent cards, empty states, and sitemap coverage for subject and note URLs
-- Subject display is now standardized with shared badges across library cards and note headers, and subject suggestions now come from persisted backend `notes.subject` values while still allowing custom subjects
-- Public Profile cards now follow the shared library interaction model with whole-card click navigation to public note detail and no redundant `Open Note` button
-- Public Profile header controls now align with Note Detail by using a badge/dropdown visibility control near the header identity cluster and placing `Share Profile` in the lower-right action row
-- Profile page layout is now split into a top Display Name summary card plus separate `Identity` and `Profile Type` cards, each with its own save action and a navigation-only `View Public Page ->` link
-- Shared note cards across Library, Public Library, Public Profile, and public subject pages now show both a clamped `Note Preview` and `Summary Preview`, with a fallback message when no summary exists
-- Shared action buttons now use a centralized icon mapping with consistent desktop icon+text, mobile icon-first behavior, and aligned controls across Dashboard, Library, Note Detail, Profile, Public Profile, and Settings
-- Sidebar/navigation icon polish now assigns `Home`, `Book`, `Globe`, `User`, `Gear`, and `Shield` consistently, and action icons now use a single outline-style set with no emoji-based UI icons
-- Outline buttons now use higher-contrast dark-mode borders, lighter text, and a clearer hover fill so secondary actions remain readable on dark surfaces
-- Quick Review, Challenge Quiz, and Adaptive Practice now use distinct outline-style icons so quiz entry points are easier to distinguish at a glance
-- Private Note Detail now uses icon-supported underline tabs for `Summary` and `Quiz`, making those controls read as view navigation instead of action buttons
+- First-time activation flow from verification through first Study Pack and first quiz guidance

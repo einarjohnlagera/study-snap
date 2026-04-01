@@ -5,7 +5,7 @@
 Library surfaces make NoteLib a reusable workspace:
 
 - **Library** for owned notes (Draft and Study Pack Ready)
-- **Public Library** for discoverable public notes from other users
+- **Public Library** for discoverable public notes from you, other users, and official NoteLib content
 
 Core learning loop:
 
@@ -48,7 +48,7 @@ Note Detail edit behavior:
 Public Library lists notes where:
 
 - `visibility = PUBLIC`
-- owner is not the current user
+- includes the current user's own public notes
 
 Capabilities:
 
@@ -56,6 +56,7 @@ Capabilities:
 - open Public Note Detail (read-only)
 - `Copy to Library`
 - cards use the same shared preview stack as Library, including both note preview and summary preview
+- author labels use viewer-relative public identity rules (`By You`, `By NoteLib`, `By {Display Name}`)
 
 SEO public detail route:
 

@@ -90,6 +90,7 @@ Recommended fields:
 - `first_name`
 - `last_name` (optional)
 - `display_name` (optional)
+- `public_profile_visible` (boolean, default true)
 - `country_code` (optional)
 - `profile_type` (nullable enum)
 - `role` (`USER` | `ADMIN`)
@@ -162,6 +163,27 @@ Recommended fields:
 - `created_at`
 - `expires_at` (nullable)
 - `view_count` (optional)
+
+## Public Notes And Profiles
+
+Public discovery/showcase is still note-first.
+
+Recommended additional note/profile fields and derived values:
+
+- `notes.visibility` remains the public-note source of truth (`PRIVATE` | `PUBLIC`)
+- `notes.slug` (or equivalent canonical public route segment) powers `/public/library/{subject}/{slug}`
+- `notes.copied_from_note_id`
+- `notes.copied_from_user_id`
+- `users.display_name` is the public identity field
+- `users.public_profile_visible` gates non-owner access to `/public/profile/{userId}`
+
+Derived public-profile response fields:
+
+- `publicNotesCount` = count of public notes owned by the user
+- `totalCopies` = sum of copy attribution from the user's public notes
+- `isOfficial` = backend-derived from the configured official/system account rules
+
+Public-profile pages must never expose email addresses.
 
 ## Quiz Sessions and Performance
 
