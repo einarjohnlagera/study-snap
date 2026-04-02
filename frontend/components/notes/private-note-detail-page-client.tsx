@@ -417,7 +417,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     const next = new URLSearchParams(searchParams.toString());
-    router.replace(buildNoteDetailPathWithTab(note.id, nextTab, next));
+    router.replace(buildNoteDetailPathWithTab(note.id, nextTab, next), { scroll: false });
   }, [activeStudyPackTab, isDraft, note, router, searchParams]);
 
   const performVisibilityUpdate = useCallback(async (

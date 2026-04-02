@@ -44,9 +44,11 @@ Rules:
 - place tabs below `Note Content`
 - active tab uses underline-style navigation
 - desktop shows icon + text
-- mobile shows icon only with an accessible label
+- mobile shows icon + text
 - switching tabs updates the note view without a full page reload
 - preserve query-string state such as `?tab=quiz`
+- switching tabs must not jump the page back to the top
+- keep the user anchored in the same content area when moving between `Summary` and `Quiz`
 
 ## Public Note Detail
 

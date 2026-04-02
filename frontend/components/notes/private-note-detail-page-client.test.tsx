@@ -393,7 +393,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(quizTab);
 
-    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?tab=quiz");
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?tab=quiz", { scroll: false });
   });
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {
