@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthPage from "./page";
 import { getMyPlan, login } from "@/lib/api";
-import { rememberLastVisitedPath } from "@/lib/auth";
 
 const routerMock = {
   push: jest.fn(),
@@ -164,8 +163,7 @@ describe("AuthPage", () => {
     });
   });
 
-  it("falls back to the last visited page when login has no explicit redirect", async () => {
-    rememberLastVisitedPath("/public/library");
+  it("falls back to the dashboard when login has no explicit redirect", async () => {
     (login as jest.Mock).mockResolvedValue(verifiedAuthUser);
 
     const { container } = render(<AuthPage />);
@@ -179,7 +177,7 @@ describe("AuthPage", () => {
     fireEvent.submit(container.querySelector("form") as HTMLFormElement);
 
     await waitFor(() => {
-      expect(routerMock.replace).toHaveBeenCalledWith("/public/library");
+      expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
     });
   });
 });

@@ -349,6 +349,13 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Settings = app preferences
 - Do not merge responsibilities casually.
 
+### Auth Redirect Rule
+
+- If a session expires while the user is inside authenticated app pages, login should return them to that interrupted page through the explicit `redirect` query.
+- If a logged-out user tries to open a protected route, login should return them to that requested protected page through the explicit `redirect` query.
+- Manual login from public pages should land on `Dashboard`.
+- Do not send users back to public marketing or discovery pages automatically after login unless a protected-route redirect explicitly requires it.
+
 ### Profile Page Responsibility Rule
 
 - `/profile` is a private identity settings surface, not a public-page controls surface.

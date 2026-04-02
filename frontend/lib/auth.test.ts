@@ -1,9 +1,4 @@
-import {
-  clearLastVisitedPath,
-  rememberLastVisitedPath,
-  resolvePostLoginDestination,
-  type AuthUser,
-} from "./auth";
+import { resolvePostLoginDestination, type AuthUser } from "./auth";
 
 const verifiedUser: AuthUser = {
   id: "user-1",
@@ -36,16 +31,17 @@ describe("auth redirect helpers", () => {
     expect(destination).toBe("/notes/123?tab=quiz");
   });
 
-  it("falls back to the last visited page when no redirect query exists", () => {
-    rememberLastVisitedPath("/public/library");
-
-    expect(resolvePostLoginDestination(verifiedUser)).toBe("/public/library");
+  it("falls back to the dashboard when no redirect query exists", () => {
+    expect(resolvePostLoginDestination(verifiedUser)).toBe("/dashboard");
   });
 
-  it("ignores auth pages as last visited destinations", () => {
-    rememberLastVisitedPath("/login?redirect=%2Fprofile");
+  it("ignores auth-page redirect targets", () => {
+    const destination = resolvePostLoginDestination(
+      verifiedUser,
+      { search: "?redirect=%2Flogin%3Fredirect%3D%252Fprofile" },
+    );
 
-    expect(resolvePostLoginDestination(verifiedUser)).toBe("/dashboard");
+    expect(destination).toBe("/dashboard");
   });
 
   it("keeps verification and onboarding gating ahead of redirect restoration", () => {
@@ -54,15 +50,9 @@ describe("auth redirect helpers", () => {
       emailVerifiedAt: null,
     };
 
-    rememberLastVisitedPath("/notes/123");
-
-    expect(resolvePostLoginDestination(unverifiedUser)).toBe("/verify-email");
-  });
-
-  it("can clear the remembered last visited path", () => {
-    rememberLastVisitedPath("/profile");
-    clearLastVisitedPath();
-
-    expect(resolvePostLoginDestination(verifiedUser)).toBe("/dashboard");
+    expect(resolvePostLoginDestination(
+      unverifiedUser,
+      { search: "?redirect=%2Fnotes%2F123" },
+    )).toBe("/verify-email");
   });
 });

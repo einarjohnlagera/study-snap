@@ -41,11 +41,11 @@ Required endpoints:
 - For expired sessions, include `reason=session_expired`.
 - After successful login, redirect using this order:
   - `/verify-email` or `/onboarding` when required by the authenticated user state
-  - explicit `redirect` query destination
-  - remembered last visited safe route from local storage
+  - explicit `redirect` query destination for protected-route access and session-expired recovery
   - `/dashboard` fallback
 - Preserve query-string state when restoring note/detail views such as `?tab=quiz`.
-- Auth pages should also redirect already-authenticated users to the same resolved post-login destination instead of always sending them to `Dashboard`.
+- Manual login from public pages such as Landing, Learn, Public Library, or Public Note should resolve to `Dashboard`.
+- Auth pages should also redirect already-authenticated users to the same resolved post-login destination.
 
 ## Verification Gating Rules
 
