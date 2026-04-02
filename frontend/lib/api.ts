@@ -1,12 +1,15 @@
 import {
   clearAuthUser,
   getAccessToken,
+  getAuthUser,
+  patchAuthUser,
   getRefreshToken,
   handleUnauthorizedSession,
   setAuthUser,
   type AuthUser,
 } from "./auth";
 import type { MePlanResponse } from "./me-plan";
+import type { ThemePreference } from "./theme-preferences";
 
 export type { MePlanResponse } from "./me-plan";
 
@@ -315,6 +318,7 @@ export type AuthResponse = {
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
   productOnboardingCompletedAt: string | null;
+  themePreference?: ThemePreference | null;
   role: UserRole;
   planType: PlanType;
   token: string;
@@ -337,6 +341,7 @@ export type MeResponse = {
   engagementMode: EngagementMode;
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
+  themePreference?: ThemePreference | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt: string | null;
   productOnboardingCompletedAt: string | null;
@@ -354,6 +359,10 @@ export type UpdateEngagementModeRequest = {
 export type UpdateStudyRemindersRequest = {
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
+};
+
+export type UpdateThemePreferenceRequest = {
+  themePreference: ThemePreference;
 };
 
 export type UpdateUserProfileRequest = {
@@ -809,6 +818,7 @@ function toAuthUser(payload: AuthResponse): AuthUser {
     emailVerifiedAt: payload.emailVerifiedAt,
     onboardingCompletedAt: payload.onboardingCompletedAt,
     productOnboardingCompletedAt: payload.productOnboardingCompletedAt,
+    themePreference: payload.themePreference,
     role: payload.role,
     planType: payload.planType,
     accessToken: payload.token,
@@ -816,6 +826,23 @@ function toAuthUser(payload: AuthResponse): AuthUser {
     accessTokenExpiresAt: payload.accessTokenExpiresAt,
     refreshTokenExpiresAt: payload.refreshTokenExpiresAt,
   };
+}
+
+function syncStoredAuthUserFromMe(me: MeResponse): void {
+  const authUser = getAuthUser();
+  if (authUser?.id !== me.id) {
+    return;
+  }
+
+  patchAuthUser({
+    email: me.pendingEmail ?? me.email,
+    displayName: me.displayName,
+    profileType: me.profileType,
+    emailVerifiedAt: me.emailVerifiedAt,
+    onboardingCompletedAt: me.onboardingCompletedAt,
+    productOnboardingCompletedAt: me.productOnboardingCompletedAt,
+    themePreference: me.themePreference,
+  });
 }
 
 async function tryRefreshAccessToken(): Promise<boolean> {
@@ -920,7 +947,9 @@ export async function getMe(): Promise<MeResponse> {
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not load profile. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not load profile. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function updateUserProfile(request: UpdateUserProfileRequest): Promise<MeResponse> {
@@ -933,7 +962,9 @@ export async function updateUserProfile(request: UpdateUserProfileRequest): Prom
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not update profile. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not update profile. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function updatePublicProfileVisibility(
@@ -948,7 +979,9 @@ export async function updatePublicProfileVisibility(
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not update public profile visibility.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not update public profile visibility.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function getAdminDashboardSummary(): Promise<AdminDashboardSummaryResponse> {
@@ -1020,7 +1053,9 @@ export async function completeOnboardingProfileType(
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function completeOnboarding(
@@ -1035,7 +1070,9 @@ export async function completeOnboarding(
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function completeProductOnboarding(
@@ -1050,7 +1087,9 @@ export async function completeProductOnboarding(
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not complete onboarding. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function requestEmailVerification(): Promise<SimpleMessageResponse> {
@@ -1116,7 +1155,9 @@ export async function updateEngagementMode(request: UpdateEngagementModeRequest)
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not update engagement mode. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not update engagement mode. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function updateStudyReminders(request: UpdateStudyRemindersRequest): Promise<MeResponse> {
@@ -1129,7 +1170,24 @@ export async function updateStudyReminders(request: UpdateStudyRemindersRequest)
     },
     true,
   );
-  return parseApiResponse<MeResponse>(response, "Could not update study reminders. Please try again.");
+  const me = await parseApiResponse<MeResponse>(response, "Could not update study reminders. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
+}
+
+export async function updateThemePreference(request: UpdateThemePreferenceRequest): Promise<MeResponse> {
+  const response = await fetchWithAuth(
+    "/auth/preferences/theme",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  const me = await parseApiResponse<MeResponse>(response, "Could not update theme preference. Please try again.");
+  syncStoredAuthUserFromMe(me);
+  return me;
 }
 
 export async function createStudyPackFromText(notesText: string): Promise<StudyPackResponse> {

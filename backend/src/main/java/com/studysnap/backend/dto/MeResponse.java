@@ -3,6 +3,7 @@ package com.studysnap.backend.dto;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 
@@ -23,6 +24,7 @@ public record MeResponse(
         EngagementMode engagementMode,
         boolean inactivityRemindersEnabled,
         boolean weakConceptRemindersEnabled,
+        ThemePreference themePreference,
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,
         OffsetDateTime productOnboardingCompletedAt,

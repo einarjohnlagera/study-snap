@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "./theme-toggle";
 import { buttonVariants } from "./ui/button";
 
 const PUBLIC_NAV = [
@@ -60,9 +61,10 @@ export function Navbar() {
               {item.label}
             </Link>
           ))}
+          <ThemeToggle />
           <Link
             href="/login"
-            className={buttonVariants({ variant: "outline", size: "sm", className: "ml-2" })}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
           >
             Login
           </Link>
@@ -72,6 +74,7 @@ export function Navbar() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 md:hidden">
+          <ThemeToggle />
           <Link href="/signup" className={buttonVariants({ size: "sm", className: "px-3" })}>
             Get Started
           </Link>
@@ -119,6 +122,9 @@ export function Navbar() {
               >
                 Login
               </Link>
+              <div className="mt-2 flex justify-center">
+                <ThemeToggle />
+              </div>
               <Link
                 href="/signup"
                 className={buttonVariants({ className: "mt-2 w-full justify-center" })}

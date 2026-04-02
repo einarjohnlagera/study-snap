@@ -12,6 +12,7 @@
 - Private Note Detail `Summary` and `Quiz` tabs now keep text labels on mobile for clearer view switching.
 - Landing page now positions NoteLib as a notes library and study workspace first, with stronger Public Library and active-recall messaging.
 - Public marketing navigation now includes `Home`, `Public Library`, `Learn`, `Pricing`, `Login`, and `Get Started`, and pricing no longer treats Public Library as a paid-plan feature.
+- Theme toggle is now available on the shared public navbar and syncs with a persisted user theme preference for authenticated users.
 
 ### Fixes
 

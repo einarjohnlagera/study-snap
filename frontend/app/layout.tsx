@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { ThemePreferenceSync } from "@/components/theme-preference-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
 import { DEFAULT_OG_IMAGE_URL, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
@@ -56,6 +57,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ThemePreferenceSync />
           <AppShell>{children}</AppShell>
         </ThemeProvider>
       </body>

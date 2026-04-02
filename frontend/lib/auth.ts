@@ -1,6 +1,7 @@
 "use client";
 
 import type { MePlanResponse } from "./me-plan";
+import type { ThemePreference } from "./theme-preferences";
 
 export type AuthUser = {
   id: string;
@@ -12,6 +13,7 @@ export type AuthUser = {
   productOnboardingCompletedAt?: string | null;
   role: "USER" | "ADMIN";
   planType: "FREE" | "PREMIUM";
+  themePreference?: ThemePreference | null;
   accessToken: string;
   refreshToken: string;
   accessTokenExpiresAt: string;
@@ -100,6 +102,17 @@ export function setAuthUser(user: AuthUser): void {
   hasTriggeredSessionExpiryRedirect = false;
   globalThis.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   emitAuthChangeEvent();
+}
+
+export function patchAuthUser(patch: Partial<AuthUser>): void {
+  const authUser = getAuthUser();
+  if (!authUser) {
+    return;
+  }
+  setAuthUser({
+    ...authUser,
+    ...patch,
+  });
 }
 
 export function clearAuthUser(options?: { preserveSessionExpiryGuard?: boolean }): void {

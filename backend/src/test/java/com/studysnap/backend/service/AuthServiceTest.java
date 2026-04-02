@@ -8,12 +8,14 @@ import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.RefreshTokenRequest;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
-import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
+import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
@@ -103,6 +105,7 @@ class AuthServiceTest {
         assertThat(response.email()).isEqualTo("[email protected]");
         assertThat(response.onboardingCompletedAt()).isNull();
         assertThat(response.productOnboardingCompletedAt()).isNull();
+        assertThat(response.themePreference()).isEqualTo(ThemePreference.SYSTEM);
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
@@ -134,6 +137,7 @@ class AuthServiceTest {
         );
 
         assertThat(response.email()).isEqualTo("current@example.com");
+        assertThat(response.themePreference()).isEqualTo(ThemePreference.SYSTEM);
         verify(analyticsService).trackEvent(userId, AnalyticsEventType.LOGIN, userId, java.util.Map.of(
                 "keepSignedIn", true
         ));
@@ -248,6 +252,39 @@ class AuthServiceTest {
         assertThat(response.profileType()).isEqualTo(ProfileType.BOARD_EXAM);
         assertThat(response.examDate()).isEqualTo(examDate);
         assertThat(user.getExamDate()).isEqualTo(examDate);
+    }
+
+    @Test
+    void updateThemePreference_savesThemeAndReturnsUpdatedProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEngagementMode(EngagementMode.FOCUSED);
+        user.setThemePreference(ThemePreference.SYSTEM);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.getPlanSnapshot(userId))
+                .thenReturn(new SubscriptionService.PlanSnapshot(
+                        PlanType.FREE,
+                        false,
+                        null,
+                        null
+                ));
+
+        MeResponse response = authService.updateThemePreference(
+                userId,
+                new UpdateThemePreferenceRequest(ThemePreference.DARK)
+        );
+
+        assertThat(user.getThemePreference()).isEqualTo(ThemePreference.DARK);
+        assertThat(response.themePreference()).isEqualTo(ThemePreference.DARK);
     }
 
     @Test

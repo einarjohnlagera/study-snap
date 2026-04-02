@@ -15,6 +15,7 @@ import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.SubscriptionStatus;
+import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.entity.SubscriptionCancellationReason;
@@ -195,6 +196,7 @@ class BillingControllerTest {
                 EngagementMode.FOCUSED,
                 false,
                 false,
+                ThemePreference.SYSTEM,
                 OffsetDateTime.parse("2026-03-20T00:00:00Z"),
                 OffsetDateTime.parse("2026-03-21T00:00:00Z"),
                 null,
