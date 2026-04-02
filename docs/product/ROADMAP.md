@@ -20,7 +20,25 @@ Completed in `v0.5.0`:
 
 ## Next Release
 
-### v0.6.0 - Board Exam Mode
+### v0.6.0 - Landing Revamp & Positioning
+
+Primary focus:
+
+- Landing-page messaging revamp that positions NoteLib as a notes library and study workspace first
+- Public Library promotion as a top-level public discovery route
+- Learn-page integration for the active-recall study method
+- Public navbar alignment across landing, learn, pricing, login, and Public Library
+- SEO title, meta description, and Open Graph metadata alignment with the new positioning
+- Open Graph image refresh to match the new messaging before the release is cut
+
+Implementation stance:
+
+- keep NoteLib positioned as `Notes Library first, Study Pack second`
+- treat Public Library as a public growth and discovery feature, not a paid feature
+- keep public marketing pages accessible without login
+- align landing, SEO, and README messaging around the same product identity before `v0.6.0` is tagged
+
+### v0.7.0 - Board Exam Mode
 
 Primary focus:
 
@@ -29,7 +47,6 @@ Primary focus:
 - Study Plan
 - Mock Exam Mode
 - Performance Analytics
-- Landing-page revamp that positions NoteLib as a notes library and study workspace first
 
 Implementation stance:
 
@@ -63,7 +80,7 @@ Core routes:
 
 ## Future Directions
 
-Potential expansion areas after `v0.6.0`:
+Potential expansion areas after `v0.7.0`:
 
 - richer note workspace
 - deeper progress insights from quiz history
