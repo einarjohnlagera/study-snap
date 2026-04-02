@@ -91,13 +91,15 @@ describe("LandingPage", () => {
   it("exports landing page SEO metadata", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib — Build your notes library and turn notes into quizzes",
-      description: "Organize your notes, generate summaries, and practice with quizzes — all in one study workspace.",
+      description:
+        "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
       alternates: {
         canonical: "https://www.notelib.app",
       },
       openGraph: expect.objectContaining({
         title: "NoteLib — Build your notes library and turn notes into quizzes",
-        description: "Organize your notes, generate summaries, and practice with quizzes — all in one study workspace.",
+        description:
+          "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
         type: "website",
         url: "https://www.notelib.app",
         siteName: "NoteLib",
@@ -111,7 +113,8 @@ describe("LandingPage", () => {
       twitter: expect.objectContaining({
         card: "summary_large_image",
         title: "NoteLib — Build your notes library and turn notes into quizzes",
-        description: "Organize your notes, generate summaries, and practice with quizzes — all in one study workspace.",
+        description:
+          "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
         images: ["https://www.notelib.app/og-image.png"],
       }),
     });

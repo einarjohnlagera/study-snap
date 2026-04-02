@@ -21,7 +21,7 @@ import { SITE_NAME } from "@/lib/site-metadata";
 import { buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
-  "Organize your notes, generate summaries, and practice with quizzes — all in one study workspace.";
+  "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.";
 const landingPageTitle = "NoteLib — Build your notes library and turn notes into quizzes";
 const landingPageUrl = "https://www.notelib.app";
 const landingPageOgImage = "https://www.notelib.app/og-image.png";
