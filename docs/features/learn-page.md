@@ -60,10 +60,30 @@ Each category should contain guide cards with:
 Article pages should reuse one shared public reading layout:
 
 - H1 title
-- clear intro
+- short introduction
+- summary section
+- key concepts section
+- practice questions / sample quiz section
 - section headings
 - mobile-friendly reading width
 - CTA at the bottom linking to signup
+
+## Article Structure
+
+Each public Learn article should contain:
+
+1. Topic title
+2. Short introduction
+3. Summary
+4. Key concepts
+5. Practice questions (sample quiz)
+6. CTA
+
+Bottom CTA copy should stay aligned with product marketing:
+
+- title: `Want to turn your own notes into summaries and quizzes?`
+- supporting line: `Try NoteLib for free`
+- primary action: `Create Free Account`
 
 ## Messaging Rules
 
@@ -77,3 +97,9 @@ Use outcome-driven language:
 - board exam review
 
 Do not lead with technical terms like AI, OCR, LLM, or SaaS.
+
+## Content Marketing Rule
+
+- Learn pages should be useful even without login.
+- Learn pages should work as public study resources that can rank in search and introduce students to NoteLib.
+- Learn pages should end with a clear account-creation CTA, but the article body must still provide standalone value on its own.

@@ -159,7 +159,8 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             </p>
             <CardTitle>Unlock adaptive practice and deeper quiz training.</CardTitle>
             <CardDescription>
-              Premium is designed for exam preparation periods when you need more practice, more quizzes, and Adaptive Practice to focus on weak topics.
+              Premium is designed for exam preparation periods when you need more practice, more quizzes, and
+              Adaptive Practice to focus on weak topics so you can improve faster.
             </CardDescription>
           </div>
           <div className="space-y-1">
