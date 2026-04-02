@@ -72,6 +72,7 @@ jest.mock("@/components/ui/button", () => ({
 }));
 
 jest.mock("@/lib/auth", () => ({
+  buildLoginPath: jest.fn(() => "/login?reason=logged_out"),
   getAuthUser: jest.fn(() => currentAuthUser),
   needsOnboarding: jest.fn(() => false),
   resolveAuthenticatedHome: jest.fn((authUser: { emailVerifiedAt?: string | null } | null) =>
@@ -166,7 +167,7 @@ describe("AppShell", () => {
 
     await waitFor(() => {
       expect(logout).toHaveBeenCalled();
-      expect(routerMock.replace).toHaveBeenCalledWith("/auth");
+      expect(routerMock.replace).toHaveBeenCalledWith("/login?reason=logged_out");
     });
   });
 });

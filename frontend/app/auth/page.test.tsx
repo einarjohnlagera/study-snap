@@ -16,6 +16,7 @@ const setAuthUserMock = jest.fn((user: Record<string, unknown>) => {
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 jest.mock("next/image", () => ({
@@ -130,6 +131,24 @@ describe("AuthPage", () => {
     await waitFor(() => {
       expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
     });
+  });
+
+  it("shows a neutral message after manual logout", () => {
+    window.history.replaceState({}, "", "/login?reason=logged_out");
+
+    render(<AuthPage />);
+
+    expect(screen.getByText("You have been logged out.")).toBeInTheDocument();
+    expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
+  });
+
+  it("shows a neutral prompt for protected-route access while logged out", () => {
+    window.history.replaceState({}, "", "/login?reason=auth_required&redirect=%2Flibrary");
+
+    render(<AuthPage />);
+
+    expect(screen.getByText("Please log in to continue.")).toBeInTheDocument();
+    expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
   });
 
   it("redirects authenticated visitors away from the login page", async () => {

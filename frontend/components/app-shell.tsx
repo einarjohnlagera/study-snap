@@ -6,7 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { ApiRequestError, getMe, getMyPlan, logout, requestEmailVerification } from "@/lib/api";
-import { getAuthUser, needsOnboarding, resolveAuthenticatedHome, setAuthUser } from "@/lib/auth";
+import {
+  buildLoginPath,
+  getAuthUser,
+  LOGIN_REASON_LOGGED_OUT,
+  needsOnboarding,
+  resolveAuthenticatedHome,
+  setAuthUser,
+} from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
@@ -383,7 +390,11 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       await logout();
       setAvatarMenuOpen(false);
       setDrawerOpen(false);
-      router.replace("/auth");
+      router.replace(
+        buildLoginPath({
+          reason: LOGIN_REASON_LOGGED_OUT,
+        }),
+      );
       router.refresh();
     } finally {
       setSigningOut(false);

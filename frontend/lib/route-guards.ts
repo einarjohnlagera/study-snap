@@ -1,4 +1,10 @@
-import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, needsOnboarding } from "./auth";
+import {
+  buildLoginPath,
+  getAuthUser,
+  getCurrentPathWithQuery,
+  LOGIN_REASON_AUTH_REQUIRED,
+  needsOnboarding,
+} from "./auth";
 
 type RouterLike = {
   replace: (href: string) => void;
@@ -8,6 +14,7 @@ export function redirectToLoginWithCurrentDestination(router: RouterLike): void 
   router.replace(
     buildLoginPath({
       redirectTo: getCurrentPathWithQuery(),
+      reason: LOGIN_REASON_AUTH_REQUIRED,
     }),
   );
 }

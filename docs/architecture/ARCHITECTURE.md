@@ -341,11 +341,17 @@ Session and auth-route recovery:
 
 - stale auth state must be cleared before redirecting the browser to `/login` after a `401` / expired session
 - protected-route redirects should encode the interrupted destination in `?redirect=...`
+- protected-route redirects while logged out may also include a neutral `reason=auth_required`
+- manual logout should redirect to `/login` with a neutral logout reason rather than reusing the session-expired reason
 - successful login should explicitly navigate with this precedence:
   - verification / onboarding route when required
   - `redirect` query destination for protected-route access and session-expired recovery
   - `/dashboard` fallback
 - manual login from public routes should resolve to `/dashboard`
+- login-page messaging must be query-driven:
+  - `reason=session_expired` -> expired-session warning
+  - `reason=logged_out` -> neutral logout message
+  - `reason=auth_required` or no reason -> neutral login prompt
 - auth routes (`/auth`, `/login`, `/signup`) should redirect authenticated users away immediately
 - the authenticated app shell must not render on auth routes while the route transition is still pending
 

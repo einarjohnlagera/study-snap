@@ -1,10 +1,11 @@
 import { requireAuthenticatedOnboardedUser, requireVerifiedOnboardedUser } from "./route-guards";
-import { getAuthUser } from "./auth";
+import { buildLoginPath, getAuthUser } from "./auth";
 
 jest.mock("./auth", () => ({
   buildLoginPath: jest.fn(() => "/login"),
   getAuthUser: jest.fn(),
   getCurrentPathWithQuery: jest.fn(() => "/dashboard"),
+  LOGIN_REASON_AUTH_REQUIRED: "auth_required",
   needsOnboarding: jest.fn((authUser) => Boolean(authUser?.emailVerifiedAt) && authUser?.onboardingCompletedAt === null),
 }));
 
@@ -13,7 +14,20 @@ describe("route guards", () => {
 
   beforeEach(() => {
     router.replace.mockReset();
+    (buildLoginPath as jest.Mock).mockReset();
+    (buildLoginPath as jest.Mock).mockReturnValue("/login");
     (getAuthUser as jest.Mock).mockReset();
+  });
+
+  it("redirects logged-out users to login with an auth-required reason", () => {
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+
+    expect(requireAuthenticatedOnboardedUser(router)).toBe(false);
+    expect(buildLoginPath).toHaveBeenCalledWith({
+      redirectTo: "/dashboard",
+      reason: "auth_required",
+    });
+    expect(router.replace).toHaveBeenCalledWith("/login");
   });
 
   it("redirects verified users without onboarding to onboarding", () => {

@@ -1,4 +1,11 @@
-import { resolvePostLoginDestination, type AuthUser } from "./auth";
+import {
+  buildLoginPath,
+  LOGIN_REASON_AUTH_REQUIRED,
+  LOGIN_REASON_LOGGED_OUT,
+  LOGIN_REASON_SESSION_EXPIRED,
+  resolvePostLoginDestination,
+  type AuthUser,
+} from "./auth";
 
 const verifiedUser: AuthUser = {
   id: "user-1",
@@ -42,6 +49,26 @@ describe("auth redirect helpers", () => {
     );
 
     expect(destination).toBe("/dashboard");
+  });
+
+  it("builds a login path for session expiry recovery", () => {
+    expect(buildLoginPath({
+      redirectTo: "/notes/123?tab=quiz",
+      reason: LOGIN_REASON_SESSION_EXPIRED,
+    })).toBe("/login?redirect=%2Fnotes%2F123%3Ftab%3Dquiz&reason=session_expired");
+  });
+
+  it("builds a neutral login path for protected-route access", () => {
+    expect(buildLoginPath({
+      redirectTo: "/library",
+      reason: LOGIN_REASON_AUTH_REQUIRED,
+    })).toBe("/login?redirect=%2Flibrary&reason=auth_required");
+  });
+
+  it("builds a logged-out login path without a redirect target", () => {
+    expect(buildLoginPath({
+      reason: LOGIN_REASON_LOGGED_OUT,
+    })).toBe("/login?reason=logged_out");
   });
 
   it("keeps verification and onboarding gating ahead of redirect restoration", () => {
