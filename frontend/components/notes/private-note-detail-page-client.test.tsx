@@ -373,6 +373,54 @@ describe("PrivateNoteDetailPageClient", () => {
     });
   });
 
+  it("shows the premium monthly-limit modal when Generate is clicked at the premium limit", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "PREMIUM",
+      limits: {
+        studyPacksPerMonth: 100,
+        challengeQuizzesPerMonth: 50,
+        adaptivePracticePerMonth: 30,
+        ocrPerMonth: 100,
+      },
+      usage: {
+        studyPacksUsed: 100,
+        challengeQuizzesUsed: 1,
+        adaptivePracticeUsed: 1,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 0,
+        challengeQuizzesRemaining: 49,
+        adaptivePracticeRemaining: 29,
+        ocrRemaining: 100,
+      },
+      usageCycle: {
+        startsAt: "2026-03-20T00:00:00Z",
+        endsAt: "2026-04-20T00:00:00Z",
+      },
+      features: {
+        adaptivePracticeAvailable: true,
+        difficultySelectionAvailable: true,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+
+    expect(await screen.findByText("Monthly Limit Reached")).toBeInTheDocument();
+    expect(screen.getByText(/Your limit resets on April 20\./)).toBeInTheDocument();
+  });
+
   it("shows quiz view when tab=quiz is requested", async () => {
     searchParamValues = { tab: "quiz" };
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });

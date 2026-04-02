@@ -1,36 +1,35 @@
 "use client";
 
-import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
-
 type NearLimitBannerProps = {
   className?: string;
+  planType: "FREE" | "PREMIUM";
   remainingCredits?: number | null;
+  resetDateLabel?: string;
 };
 
-export function NearLimitBanner({ className, remainingCredits = null }: Readonly<NearLimitBannerProps>) {
+export function NearLimitBanner({
+  className,
+  planType,
+  remainingCredits = null,
+  resetDateLabel = "your reset date",
+}: Readonly<NearLimitBannerProps>) {
   const normalizedRemaining = typeof remainingCredits === "number"
     ? Math.max(0, remainingCredits)
     : null;
-  const message = normalizedRemaining === 1
-    ? "You have 1 Study Pack left this billing cycle. Upgrade to Premium to keep generating Study Packs and unlock Challenge Quiz and Adaptive Practice."
-    : normalizedRemaining && normalizedRemaining > 1
-      ? `You have ${normalizedRemaining} Study Packs left this billing cycle. Upgrade to Premium to keep generating Study Packs and unlock Challenge Quiz and Adaptive Practice.`
-      : "You’re almost at your monthly limit. Upgrade to Premium to continue generating Study Packs and unlock Challenge Quiz and Adaptive Practice.";
+  const isLimitReached = normalizedRemaining !== null && normalizedRemaining <= 0;
+  const message = planType === "FREE"
+    ? isLimitReached
+      ? `You’ve reached your Free plan limit for this month. You can generate more again on ${resetDateLabel}.`
+      : `You have ${normalizedRemaining} Study Pack${normalizedRemaining === 1 ? "" : "s"} left this month on the Free plan.`
+    : isLimitReached
+      ? `You’ve used all your Study Packs this month. Limit resets on ${resetDateLabel}.`
+      : `You have ${normalizedRemaining} Study Pack${normalizedRemaining === 1 ? "" : "s"} left this month.`;
   return (
     <div
       role="status"
-      className={`rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-foreground/85 ${className ?? ""}`}
+      className={`rounded-xl border p-4 text-sm text-foreground/85 ${isLimitReached ? "border-red-500/30 bg-red-500/10" : "border-amber-500/30 bg-amber-500/10"} ${className ?? ""}`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p>{message}</p>
-        <PremiumWaitlistButton
-          label="Upgrade to Premium"
-          source="near_limit_banner"
-          variant="outline"
-          size="sm"
-          className="w-full sm:w-auto"
-        />
-      </div>
+      <p>{message}</p>
     </div>
   );
 }

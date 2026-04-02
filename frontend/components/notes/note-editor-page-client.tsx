@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
+import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import {
   completeProductOnboarding,
   createNote,
@@ -20,6 +21,8 @@ import {
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
+  formatStudyPackResetDate,
+  isStudyPackLimitReached,
   isStudyPackLimitReachedMessage,
   resolveRemainingUsageCredits,
   shouldShowNearStudyPackLimitBanner,
@@ -364,9 +367,8 @@ export function NoteEditorPageClient({
       usageSummary.remaining?.studyPacksRemaining,
     )
     : null;
-  const hasReachedStudyPackLimit = usageSummary?.plan === "FREE"
-    && studyPacksRemaining !== null
-    && studyPacksRemaining <= 0;
+  const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
+  const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const shouldShowNearLimitBanner = usageSummary
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
@@ -613,7 +615,11 @@ export function NoteEditorPageClient({
     <>
       {shouldShowNearLimitBanner ? (
         <div className="mx-auto w-full max-w-4xl px-4 pt-6 sm:px-6 sm:pt-8">
-          <NearLimitBanner remainingCredits={studyPacksRemaining} />
+          <NearLimitBanner
+            planType={currentPlan}
+            remainingCredits={studyPacksRemaining}
+            resetDateLabel={usageResetDateLabel}
+          />
         </div>
       ) : null}
 
@@ -677,10 +683,10 @@ export function NoteEditorPageClient({
         onKeepMine={keepMineAndContinue}
       />
 
-      <PaywallModal
+      <StudyPackLimitModal
         isOpen={showLimitReachedModal}
-        variant="study-pack-limit"
-        source="note_editor"
+        planType={currentPlan}
+        resetDateLabel={usageResetDateLabel}
         onClose={() => setShowLimitReachedModal(false)}
       />
 

@@ -6,7 +6,11 @@ import { PaywallModal, type PaywallModalVariant } from "@/components/billing/pay
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
-import { resolveRemainingUsageCredits, shouldShowNearStudyPackLimitBanner } from "@/lib/plans";
+import {
+  formatStudyPackResetDate,
+  resolveRemainingUsageCredits,
+  shouldShowNearStudyPackLimitBanner,
+} from "@/lib/plans";
 import {
   completeProductOnboarding,
   getContinueStudyingRecommendation,
@@ -265,6 +269,7 @@ export default function DashboardPage() {
       usageSummary.remaining?.studyPacksRemaining,
     )
     : null;
+  const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const shouldShowNearLimitBanner = usageSummary
     ? shouldShowNearStudyPackLimitBanner(
       usageSummary.plan,
@@ -302,7 +307,13 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
-          {shouldShowNearLimitBanner ? <NearLimitBanner remainingCredits={studyPacksRemaining} /> : null}
+          {shouldShowNearLimitBanner ? (
+            <NearLimitBanner
+              planType={usageSummary?.plan ?? "FREE"}
+              remainingCredits={studyPacksRemaining}
+              resetDateLabel={usageResetDateLabel}
+            />
+          ) : null}
           {shouldShowFreeUpgradeCard ? <FreePlanUpgradeCard /> : null}
           {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">

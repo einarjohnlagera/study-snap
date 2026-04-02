@@ -54,7 +54,8 @@ Core loop:
 - Free users should see a soft paywall modal before any Premium-only quiz feature or Study Pack limit block attempts a paid conversion flow.
 - During the current pre-launch phase, `Upgrade to Premium` should open a `Premium is coming soon` modal and offer `Join Waitlist`, not payment.
 - Waitlist joins should call `POST /api/premium/waitlist` and remain idempotent per authenticated user.
-- When a Free user has `1` Study Pack remaining, show a non-blocking upgrade banner on Dashboard, Note Detail, and Study Pack generation surfaces.
+- When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on Dashboard, Note Detail, and Study Pack generation surfaces.
+- When Study Pack remaining reaches `0`, keep `Generate Study Pack` enabled and show a student-friendly monthly-limit modal on click instead of disabling the action.
 - Upgrade messaging should position Premium as an exam-preparation and mastery tool for students.
 - Pre-launch modal copy should make it clear that payments are still being enabled and that users can join the waitlist for launch access.
 - Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, and the `100` Study Pack Premium limit.

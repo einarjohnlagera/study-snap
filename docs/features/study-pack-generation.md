@@ -124,15 +124,27 @@ Errors should remain supportive and actionable.
 - Free: 5 questions
 - Premium: 10–20 questions
 
-## Free plan usage UX
+## Study Pack usage UX
 
-- Free users keep the existing `5` Study Pack/month product rule.
-- When a Free user has `1` Study Pack remaining, show a non-blocking upgrade warning banner on generation-related surfaces.
-- When a Free user tries to generate after reaching the monthly limit, show the shared paywall modal instead of redirecting immediately to billing.
+- Free users keep the existing `10` Study Packs/month product rule.
+- Premium users keep the existing `100` Study Packs/month product rule.
+- When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on generation-related surfaces.
+- Free near-limit banner copy should say:
+  - `You have {X} Study Packs left this month on the Free plan.`
+- Premium near-limit banner copy should say:
+  - `You have {X} Study Packs left this month.`
+- When a Free user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared limit modal with:
+  - title: `Free Plan Limit Reached`
+  - reset-date messaging
+  - actions: `Upgrade to Premium`, `Maybe Later`, `View My Plan`
+- When a Premium user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared limit modal with:
+  - title: `Monthly Limit Reached`
+  - reset-date messaging
+  - actions: `Upgrade Plan`, `Get More Study Packs`, `Maybe Later`
 - Limit messaging should make it clear that Premium increases Study Pack capacity and unlocks Challenge Quiz + Adaptive Practice.
-- Warning banners and generation blocking must use the same backend-resolved effective usage count so remaining credits and enforcement never disagree.
+- Warning banners and generation blocking must use the same backend-resolved effective usage count so remaining counts and enforcement never disagree.
 - Study Pack quota only increments after a successful Study Pack is saved.
-- Failed generation attempts, note saves, and opening generation surfaces must not consume Study Pack quota.
+- Failed generation attempts, note saves, opening generation surfaces, and failed retries must not consume Study Pack quota.
 
 ## Metadata suggestion parity
 

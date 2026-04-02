@@ -601,7 +601,8 @@ Page responsibilities:
 - Study Pack generation is allowed only when `used < limit` and is blocked when `used >= limit`.
 - Study Pack quota increments only after a successful Study Pack is persisted.
 - Failed Study Pack generation, note saves, opening generation screens, and failed retries must not consume quota.
-- Free-plan near-limit messaging for Study Packs should appear when `studyPacksRemaining <= 1` and should show the actual remaining-credit count.
+- Study Pack near-limit messaging should appear when `studyPacksRemaining <= 2` and should show the actual remaining count with plan-specific monthly-limit copy.
+- When `studyPacksRemaining == 0`, `Generate Study Pack` should remain clickable and open the shared monthly-limit modal instead of rendering as a disabled action.
 
 ## Study Pack Generation Consistency
 
