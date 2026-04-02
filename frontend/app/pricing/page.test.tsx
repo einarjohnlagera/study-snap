@@ -31,13 +31,25 @@ describe("PricingPage", () => {
     expect(
       screen.getByText("Turn your notes into reviewers, practice questions, and better exam prep."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "NoteLib is a notes library and review tool in one — you build your own reviewers, then turn them into summaries, key concepts, and practice quizzes.",
+      ),
+    ).toBeInTheDocument();
     expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
     expect(screen.getByText("₱1,999/year (Save ₱989)")).toBeInTheDocument();
     expect(screen.queryByText("Included")).not.toBeInTheDocument();
     expect(screen.queryByText("Not included")).not.toBeInTheDocument();
+    expect(screen.getByText("Built for serious review")).toBeInTheDocument();
     expect(screen.getByText("Start studying for free.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Free gives you the core NoteLib workflow: Create notes, turn them into Study Packs, and review with quizzes."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Unlock adaptive practice and deeper quiz training.")).toBeInTheDocument();
     expect(screen.getByText("Most students upgrade during exam weeks.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Premium is designed for exam preparation periods when you need more practice, more quizzes, and Adaptive Practice to focus on weak topics."),
+    ).toBeInTheDocument();
     expect(screen.getByText("10 Study Packs per month")).toBeInTheDocument();
     expect(screen.getByText("5 Challenge Quizzes per month")).toBeInTheDocument();
     expect(screen.getAllByText("Weak Concepts Tracking")).not.toHaveLength(0);

@@ -84,12 +84,13 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Pricing page hero copy:
   - title: `Study smarter. Pass exams faster.`
   - subtitle: `Turn your notes into summaries, quizzes, and reviewers in seconds.`
+  - identity line: `NoteLib is a notes library and review tool in one — you build your own reviewers, then turn them into summaries, key concepts, and practice quizzes.`
   - actions: `Start Free` and `Upgrade to Premium`
 - Pricing page must display localized pricing from `GET /api/billing/pricing`.
 - Until payments are enabled, pricing CTAs should open the Premium waitlist modal rather than redirect directly into checkout.
 - Pricing page should compare Free vs Premium clearly for student workflows:
-  - Free: Create Notes, Save Notes, `10` Study Packs/month, Quick Review, `5` Challenge Quizzes/month, Weak concepts, Public Library Access
-  - Premium: Everything in Free, `100` Study Packs/month, `50` Challenge Quizzes/month, `30` Adaptive Practice sessions/month, Difficulty selection, Priority AI generation
+  - Free: core NoteLib workflow, `10` Study Packs/month, Quick Review, `5` Challenge Quizzes/month, Weak concepts
+  - Premium: heavier exam-review workflow, `100` Study Packs/month, `50` Challenge Quizzes/month, `30` Adaptive Practice sessions/month, Difficulty selection, Priority AI generation
 - Dashboard should show a Free-only upgrade card with Premium exam-prep messaging and the same waitlist modal entry point.
 
 ## Billing architecture
