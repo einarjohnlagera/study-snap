@@ -201,6 +201,7 @@ export function PublicLibraryPageClient() {
         eyebrow="LIBRARY"
         title="Public Library"
         description="Explore public notes from you, the community, and official NoteLib examples."
+        brandLogo
       />
 
       {loading ? (

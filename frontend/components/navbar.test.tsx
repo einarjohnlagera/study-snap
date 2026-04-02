@@ -43,6 +43,7 @@ describe("Navbar", () => {
   it("renders the shared public navigation links", () => {
     render(<Navbar />);
 
+    expect(screen.getByAltText("NoteLib")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByRole("link", { name: "Learn" })).toHaveAttribute("href", "/learn");

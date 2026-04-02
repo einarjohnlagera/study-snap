@@ -26,6 +26,7 @@ describe("PricingPage", () => {
   it("renders localized pricing and upgrade messaging", async () => {
     render(<PricingPage />);
 
+    expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(screen.getByText("Study smarter. Pass exams faster.")).toBeInTheDocument();
     expect(
       screen.getByText("Turn your notes into reviewers, practice questions, and better exam prep."),

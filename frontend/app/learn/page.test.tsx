@@ -5,6 +5,7 @@ describe("LearnPage", () => {
   it("renders the categorized learn hub for students, board exams, teachers, and study tips", () => {
     render(<LearnPage />);
 
+    expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
         name: "Learn How to Turn Notes Into Quizzes",

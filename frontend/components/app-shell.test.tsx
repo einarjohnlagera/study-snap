@@ -159,6 +159,7 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
+    expect(await screen.findByAltText("NoteLib")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Library" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "My Library" })).not.toBeInTheDocument();
 

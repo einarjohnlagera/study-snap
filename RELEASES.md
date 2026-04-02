@@ -6,6 +6,7 @@
 
 - Landing page now frames NoteLib as a notes library and study workspace, not just a one-time quiz generator.
 - Public marketing navigation now exposes `Home`, `Public Library`, `Learn`, `Pricing`, `Login`, and `Get Started`.
+- NoteLib now has a standardized favicon and app-icon set based on the NL monogram for desktop, mobile, and home-screen usage.
 
 ### Improvements
 
@@ -17,6 +18,8 @@
 - Landing page SEO title, meta description, and Open Graph metadata now align with the notes-library positioning update.
 - Pricing no longer treats Public Library as a paid-plan feature.
 - Theme toggle is now available on the shared public navbar and syncs with a persisted user theme preference for authenticated users.
+- Navbar and app-shell logos now use the NL monogram, while marketing headers and the public footer use the full NoteLib wordmark.
+- The Open Graph image now uses the standardized NoteLib branding, notes-and-lightning illustration, and notes-library messaging.
 
 ### Fixes
 
@@ -26,7 +29,7 @@
 ### Technical Changes
 
 - Shared responsive action components now default to mobile icon + text labels, with explicit opt-out reserved for true icon-only utility controls.
-- `v0.6.0` tracks an Open Graph image refresh to match the new positioning, but the asset redesign is still pending after the earlier rollback.
+- Added shared brand-asset components for the monogram, full logo, and product icon, plus a local OG-image render pipeline and web manifest for the public icon set.
 
 ## v0.5.0 - Public Profiles & Public Notes
 

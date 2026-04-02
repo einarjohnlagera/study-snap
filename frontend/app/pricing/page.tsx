@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
+import { BrandFullLogo } from "@/components/branding/brand-assets";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { buildPageMetadata } from "@/lib/site-metadata";
@@ -20,6 +21,7 @@ export default function PricingPage() {
         <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div className="space-y-4">
+            <BrandFullLogo width={208} height={44} priority />
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700 dark:text-blue-300">
               Pricing
             </p>
