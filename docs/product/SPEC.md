@@ -286,8 +286,8 @@ Users can:
   - `Adaptive Practice`
 - Action-button behavior should stay consistent across Dashboard, Library, Public Library, Note Detail, Public Note Detail, Profile, Public Profile, Settings, and Admin surfaces:
   - desktop buttons show icon + text
-  - mobile buttons default to icon-only and must keep an `aria-label`
-  - primary CTAs may keep text on mobile when icon-only would reduce clarity
+  - important mobile buttons must show icon + text
+  - icon-only mobile buttons are reserved for small, already-familiar utility controls
   - visibility controls use badge/dropdown presentation, not large standalone buttons
   - header actions sit top-right and card actions sit bottom-right when present
 - Dark-mode outline button styling should remain readable across secondary actions such as `Challenge Quiz`, `Adaptive Practice`, `Make a Copy`, `Share`, and `Edit`:
@@ -327,7 +327,7 @@ Users can:
 - `Summary` and `Quiz` on Private Note Detail are view tabs, not action buttons:
   - place the tab row below `Note Content` and above Study Pack content
   - use underline-style navigation with muted inactive labels and an active bottom border
-  - desktop tabs show icon + text and mobile tabs show icon only with an accessible label
+  - desktop and mobile tabs show icon + text for major note-view switching
   - tab switches should stay on the same note view and update content without a full page reload
 
 ### Display Name And Official Badge
