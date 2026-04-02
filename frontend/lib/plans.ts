@@ -3,8 +3,6 @@ import type { PlanType } from "./api";
 export const PLAN_BILLING_SECTION_ID = "plan-billing";
 export const PLAN_BILLING_PATH = `/settings#${PLAN_BILLING_SECTION_ID}` as const;
 export const PRICING_PAGE_PATH = "/pricing" as const;
-const NEAR_LIMIT_THRESHOLD = 0.8;
-
 type StudyPackDateLike = {
   createdAt: string;
 };
@@ -36,6 +34,17 @@ export function getUsageProgressPercent(used: number, limit: number): number {
   return Math.max(0, Math.min(100, Math.round(ratio)));
 }
 
+export function resolveRemainingUsageCredits(
+  used: number,
+  limit: number,
+  remainingCredits: number | null | undefined,
+): number {
+  if (typeof remainingCredits === "number") {
+    return Math.max(0, remainingCredits);
+  }
+  return Math.max(0, limit - used);
+}
+
 export function hasReachedUsageLimit(used: number, limit: number): boolean {
   return limit > 0 && used >= limit;
 }
@@ -44,15 +53,14 @@ export function isNearUsageLimit(used: number, limit: number): boolean {
   if (limit <= 0 || hasReachedUsageLimit(used, limit)) {
     return false;
   }
-  return used / limit >= NEAR_LIMIT_THRESHOLD;
+  return Math.max(0, limit - used) <= 1;
 }
 
 export function shouldShowNearStudyPackLimitBanner(
   planType: PlanType,
-  used: number,
-  limit: number,
+  remainingCredits: number | null | undefined,
 ): boolean {
-  return planType === "FREE" && isNearUsageLimit(used, limit);
+  return planType === "FREE" && typeof remainingCredits === "number" && remainingCredits > 0 && remainingCredits <= 1;
 }
 
 export function isStudyPackLimitReachedMessage(message: string): boolean {

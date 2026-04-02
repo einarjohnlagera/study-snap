@@ -54,11 +54,19 @@ Core loop:
 - Free users should see a soft paywall modal before any Premium-only quiz feature or Study Pack limit block attempts a paid conversion flow.
 - During the current pre-launch phase, `Upgrade to Premium` should open a `Premium is coming soon` modal and offer `Join Waitlist`, not payment.
 - Waitlist joins should call `POST /api/premium/waitlist` and remain idempotent per authenticated user.
-- At `80%` of the Free Study Pack limit, show a non-blocking upgrade banner on Dashboard, Note Detail, and Study Pack generation surfaces.
+- When a Free user has `1` Study Pack remaining, show a non-blocking upgrade banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 - Upgrade messaging should position Premium as an exam-preparation and mastery tool for students.
 - Pre-launch modal copy should make it clear that payments are still being enabled and that users can join the waitlist for launch access.
 - Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, and the `100` Study Pack Premium limit.
 - Pricing page should clearly compare Free vs Premium with localized backend pricing and student-oriented value messaging.
+
+### Study Pack Usage Rule
+
+- Study Pack enforcement, warning banners, and remaining-credit UI must use the same backend-resolved usage calculation.
+- Allow Study Pack generation only when `used < limit`; block when `used >= limit`.
+- Study Pack usage increments only after a successful Study Pack is persisted.
+- Saving a note, opening generation surfaces, failed generations, and failed retries must not consume Study Pack quota.
+- Frontend warning/blocking surfaces should use `GET /api/me/plan` remaining values and must not recalculate quota from local note lists.
 
 ### Marketing Landing Page Rule
 

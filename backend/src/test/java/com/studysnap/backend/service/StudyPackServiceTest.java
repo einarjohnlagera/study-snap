@@ -8,7 +8,6 @@ import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
-import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.exception.AppException;
@@ -62,7 +61,7 @@ class StudyPackServiceTest {
     @Mock
     private UserUsageService userUsageService;
     @Mock
-    private BillingUsagePeriodService billingUsagePeriodService;
+    private StudyPackUsageService studyPackUsageService;
     @Mock
     private OcrRateLimitService ocrRateLimitService;
     @Mock
@@ -85,7 +84,7 @@ class StudyPackServiceTest {
                 analyticsService,
                 subscriptionService,
                 userUsageService,
-                billingUsagePeriodService,
+                studyPackUsageService,
                 ocrRateLimitService,
                 ocrUsageProtectionService,
                 aiRateLimitService
@@ -122,21 +121,12 @@ class StudyPackServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.FREE,
-                        BillingCycle.MONTHLY,
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
                         OffsetDateTime.now().minusDays(10),
                         OffsetDateTime.now().plusDays(20),
-                        2026,
-                        3
+                        0
                 ));
-        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
-        when(studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                eq(userId),
-                any(OffsetDateTime.class),
-                any(OffsetDateTime.class)
-        )).thenReturn(0L);
         when(llmStudyPackService.generateStudyPack("draft note content")).thenReturn(generated);
 
         StudyPackResponse response = studyPackService.createFromText(
@@ -171,8 +161,9 @@ class StudyPackServiceTest {
         generatedNote.setStatus(NoteStatus.GENERATED);
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(generatedNote));
 
+        CreateStudyPackRequest request = new CreateStudyPackRequest(null, noteId.toString());
         assertThatThrownBy(() -> studyPackService.createFromText(
-                new CreateStudyPackRequest(null, noteId.toString()),
+                request,
                 userId
         ))
                 .isInstanceOf(AppException.class)
@@ -192,29 +183,21 @@ class StudyPackServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.FREE,
-                        BillingCycle.MONTHLY,
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
                         OffsetDateTime.now().minusDays(10),
                         OffsetDateTime.now().plusDays(20),
-                        2026,
-                        3
+                        0
                 ));
-        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
-        when(studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                eq(userId),
-                any(OffsetDateTime.class),
-                any(OffsetDateTime.class)
-        )).thenReturn(0L);
         org.mockito.Mockito.doThrow(new AppException(
                 "TOO_MANY_REQUESTS",
                 "Too many requests. Please wait a moment and try again.",
                 org.springframework.http.HttpStatus.TOO_MANY_REQUESTS
         )).when(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "study-pack");
 
+        CreateStudyPackRequest request = new CreateStudyPackRequest(null, noteId.toString());
         assertThatThrownBy(() -> studyPackService.createFromText(
-                new CreateStudyPackRequest(null, noteId.toString()),
+                request,
                 userId
         ))
                 .isInstanceOf(AppException.class)
@@ -223,6 +206,82 @@ class StudyPackServiceTest {
 
         verify(llmStudyPackService, never()).generateStudyPack(any());
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void createFromText_blocksOnlyAfterStudyPackLimitIsReached() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getPricing().setFreeMonthlyStudyPackLimit(5);
+        studyPackService = new StudyPackService(
+                studyPackRepository,
+                studyPackDraftRepository,
+                noteRepository,
+                ocrService,
+                llmStudyPackService,
+                properties,
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                userUsageService,
+                studyPackUsageService,
+                ocrRateLimitService,
+                ocrUsageProtectionService,
+                aiRateLimitService
+        );
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        5
+                ));
+
+        CreateStudyPackRequest request = new CreateStudyPackRequest(null, noteId.toString());
+        assertThatThrownBy(() -> studyPackService.createFromText(
+                request,
+                userId
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("MONTHLY_STUDY_PACK_LIMIT_REACHED");
+
+        verify(llmStudyPackService, never()).generateStudyPack(any());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void createFromText_doesNotConsumeCreditWhenGenerationFails() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        4
+                ));
+        when(llmStudyPackService.generateStudyPack("draft note content"))
+                .thenThrow(new RuntimeException("LLM unavailable"));
+
+        CreateStudyPackRequest request = new CreateStudyPackRequest(null, noteId.toString());
+        assertThatThrownBy(() -> studyPackService.createFromText(
+                request,
+                userId
+        ))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("LLM unavailable");
+
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
     }
 
     private NoteEntity buildDraftNote(UUID noteId, UUID ownerUserId, String content) {

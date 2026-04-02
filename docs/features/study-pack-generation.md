@@ -127,9 +127,19 @@ Errors should remain supportive and actionable.
 ## Free plan usage UX
 
 - Free users keep the existing `5` Study Pack/month product rule.
-- When a Free user reaches `80%` usage, show a non-blocking upgrade warning banner on generation-related surfaces.
+- When a Free user has `1` Study Pack remaining, show a non-blocking upgrade warning banner on generation-related surfaces.
 - When a Free user tries to generate after reaching the monthly limit, show the shared paywall modal instead of redirecting immediately to billing.
 - Limit messaging should make it clear that Premium increases Study Pack capacity and unlocks Challenge Quiz + Adaptive Practice.
+- Warning banners and generation blocking must use the same backend-resolved effective usage count so remaining credits and enforcement never disagree.
+- Study Pack quota only increments after a successful Study Pack is saved.
+- Failed generation attempts, note saves, and opening generation surfaces must not consume Study Pack quota.
+
+## Metadata suggestion parity
+
+- Create Note and Note Detail must use the same metadata suggestion behavior after successful generation.
+- Generated `title`, `subject`, and `tags` should be suggested from both entry points.
+- If the note has no existing metadata, NoteLib may apply the generated metadata automatically.
+- If the note already has metadata, users should be able to keep their values or apply the AI suggestions before continuing.
 
 ## Validation and retry
 

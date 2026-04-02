@@ -20,8 +20,8 @@ import {
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
-  hasReachedUsageLimit,
   isStudyPackLimitReachedMessage,
+  resolveRemainingUsageCredits,
   shouldShowNearStudyPackLimitBanner,
 } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -44,6 +44,7 @@ import {
   type NoteEntryMode,
   type NoteEntrySource,
 } from "@/lib/note-entry";
+import { hasExistingNoteMetadata } from "@/lib/note-metadata";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
@@ -70,14 +71,6 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
     content: note.content,
     tags: note.tags ?? [],
   };
-}
-
-function hasExistingMetadata(note: NoteResponse): boolean {
-  return Boolean(
-    (note.title && note.title.trim().length > 0)
-    || (note.subject && note.subject.trim().length > 0)
-    || (note.tags && note.tags.length > 0),
-  );
 }
 
 function resolveGenerateLabel(profileType: string | null | undefined): string {
@@ -135,7 +128,7 @@ export function NoteEditorPageClient({
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
-  const { usageSummary } = useBillingUsageSummary();
+  const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
   const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
   const generateLabel = resolveGenerateLabel(currentProfileType);
@@ -364,12 +357,18 @@ export function NoteEditorPageClient({
       active = false;
     };
   }, [noteId]);
-  const studyPacksUsed = usageSummary?.usage.studyPacksUsed ?? 0;
-  const studyPacksLimit = usageSummary?.limits.studyPacksPerMonth ?? 0;
+  const studyPacksRemaining = usageSummary
+    ? resolveRemainingUsageCredits(
+      usageSummary.usage.studyPacksUsed,
+      usageSummary.limits.studyPacksPerMonth,
+      usageSummary.remaining?.studyPacksRemaining,
+    )
+    : null;
   const hasReachedStudyPackLimit = usageSummary?.plan === "FREE"
-    && hasReachedUsageLimit(studyPacksUsed, studyPacksLimit);
+    && studyPacksRemaining !== null
+    && studyPacksRemaining <= 0;
   const shouldShowNearLimitBanner = usageSummary
-    ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksUsed, studyPacksLimit)
+    ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
 
   const buildRequest = useCallback(() => ({
@@ -454,7 +453,8 @@ export function NoteEditorPageClient({
       }
 
       const generated = await createStudyPackFromNote(saved.id);
-      const hasUserMetadata = hasExistingMetadata(saved);
+      await refreshUsageSummary();
+      const hasUserMetadata = hasExistingNoteMetadata(saved);
 
       if (!hasUserMetadata) {
         const autoFillPayload = {
@@ -482,6 +482,7 @@ export function NoteEditorPageClient({
       } else {
         const message = error instanceof Error ? error.message : "Could not generate Study Pack.";
         if (isStudyPackLimitReachedMessage(message)) {
+          void refreshUsageSummary();
           openLockedFeaturePaywall("study-pack-limit", "note_editor_generate_error");
         } else {
           showToast(message, "error");
@@ -500,6 +501,7 @@ export function NoteEditorPageClient({
     openLockedFeaturePaywall,
     showToast,
     upsertNote,
+    refreshUsageSummary,
   ]);
 
   const applySuggestions = useCallback(async () => {
@@ -611,7 +613,7 @@ export function NoteEditorPageClient({
     <>
       {shouldShowNearLimitBanner ? (
         <div className="mx-auto w-full max-w-4xl px-4 pt-6 sm:px-6 sm:pt-8">
-          <NearLimitBanner />
+          <NearLimitBanner remainingCredits={studyPacksRemaining} />
         </div>
       ) : null}
 

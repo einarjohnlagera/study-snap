@@ -24,6 +24,8 @@ class MePlanServiceTest {
     private SubscriptionService subscriptionService;
     @Mock
     private UserUsageService userUsageService;
+    @Mock
+    private StudyPackUsageService studyPackUsageService;
 
     private MePlanService mePlanService;
 
@@ -39,7 +41,7 @@ class MePlanServiceTest {
         properties.getPricing().setPremiumMonthlyOcrLimit(100);
         properties.getPricing().setAdaptivePracticePremiumOnly(true);
         properties.getPricing().setDifficultySelectionPremiumOnly(true);
-        mePlanService = new MePlanService(subscriptionService, userUsageService, properties);
+        mePlanService = new MePlanService(subscriptionService, userUsageService, studyPackUsageService, properties);
     }
 
     @Test
@@ -54,6 +56,12 @@ class MePlanServiceTest {
                         2,
                         0,
                         5
+                ));
+        when(studyPackUsageService.resolveUsage(eq(userId), any(UserUsageService.MonthlyUsage.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                        3
                 ));
 
         MePlanResponse response = mePlanService.getPlan(userId);
@@ -92,6 +100,12 @@ class MePlanServiceTest {
                         33,
                         120
                 ));
+        when(studyPackUsageService.resolveUsage(eq(userId), any(UserUsageService.MonthlyUsage.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.parse("2026-03-20T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-20T00:00:00Z"),
+                        101
+                ));
 
         MePlanResponse response = mePlanService.getPlan(userId);
 
@@ -107,5 +121,31 @@ class MePlanServiceTest {
         assertThat(response.remaining().ocrRemaining()).isZero();
         assertThat(response.features().adaptivePracticeAvailable()).isTrue();
         assertThat(response.features().difficultySelectionAvailable()).isTrue();
+    }
+
+    @Test
+    void usesReconciledStudyPackUsageForPlanSummary() {
+        UUID userId = UUID.randomUUID();
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new UserUsageService.MonthlyUsage(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                        4,
+                        0,
+                        0,
+                        0
+                ));
+        when(studyPackUsageService.resolveUsage(eq(userId), any(UserUsageService.MonthlyUsage.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.parse("2026-03-10T00:00:00Z"),
+                        OffsetDateTime.parse("2026-04-10T00:00:00Z"),
+                        5
+                ));
+
+        MePlanResponse response = mePlanService.getPlan(userId);
+
+        assertThat(response.usage().studyPacksUsed()).isEqualTo(5);
+        assertThat(response.remaining().studyPacksRemaining()).isEqualTo(5);
     }
 }

@@ -2,7 +2,7 @@
 
 Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table names remain unchanged unless explicitly requested.
 
-Current documentation baseline: `v0.5.0 - Public Profiles & Public Notes`
+Current documentation baseline: `v0.6.0 - Landing Revamp & Positioning (In Progress)`
 
 Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
 
@@ -597,6 +597,18 @@ Page responsibilities:
   - `85-100%` danger
 - Usage reset dates are based on the billing cycle, not the calendar month.
 - When a Free user hits a visible limit, Settings should show an `Upgrade to Premium` CTA.
+- Study Pack enforcement and user-facing remaining counts must come from the same backend-resolved usage calculation.
+- Study Pack generation is allowed only when `used < limit` and is blocked when `used >= limit`.
+- Study Pack quota increments only after a successful Study Pack is persisted.
+- Failed Study Pack generation, note saves, opening generation screens, and failed retries must not consume quota.
+- Free-plan near-limit messaging for Study Packs should appear when `studyPacksRemaining <= 1` and should show the actual remaining-credit count.
+
+## Study Pack Generation Consistency
+
+- `Create Note` and `Note Detail` are both valid Study Pack generation entry points for draft notes.
+- Both generation entry points must use the same metadata-suggestion behavior for AI-generated `title`, `subject`, and `tags`.
+- If the note has no existing metadata, generated metadata may be applied automatically.
+- If the note already has metadata, users should see the shared suggestion review modal before replacing their values.
 
 ### Authentication Session Handling
 

@@ -25,11 +25,16 @@
 
 - Auth redirect logic now returns users to interrupted protected pages through explicit redirect intent while sending manual public-page logins to `Dashboard`.
 - Login-page auth messaging now distinguishes `session_expired`, `logged_out`, and `auth_required` so manual logout no longer shows the expired-session warning.
+- Study Pack limit enforcement and usage warnings now use the same effective usage calculation so users are no longer told they have credit left while generation is already blocked.
+- Free-plan near-limit messaging now shows the actual remaining Study Pack count instead of a generic warning.
+- Note Detail generation now applies the same title/subject/tag suggestion flow as Create Note.
+- Mobile Note Editor no longer lets the global `Send Feedback` launcher overlap the primary Generate CTA.
 
 ### Technical Changes
 
 - Shared responsive action components now default to mobile icon + text labels, with explicit opt-out reserved for true icon-only utility controls.
 - Added shared brand-asset components for the monogram, full logo, and product icon, plus a local OG-image render pipeline and web manifest for the public icon set.
+- Added a shared backend Study Pack usage resolver so plan summary and generation-limit enforcement stay synchronized across services.
 
 ## v0.5.0 - Public Profiles & Public Notes
 

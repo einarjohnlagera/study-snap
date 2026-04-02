@@ -17,19 +17,21 @@ import java.util.UUID;
 public class MePlanService {
     private final SubscriptionService subscriptionService;
     private final UserUsageService userUsageService;
+    private final StudyPackUsageService studyPackUsageService;
     private final StudySnapProperties properties;
 
     public MePlanResponse getPlan(UUID userId) {
         PlanType planType = subscriptionService.resolvePlan(userId);
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         UserUsageService.MonthlyUsage usage = userUsageService.getMonthlyUsage(userId, now);
+        StudyPackUsageService.UsageSnapshot studyPackUsage = studyPackUsageService.resolveUsage(userId, usage);
 
         int studyPackLimit = properties.getPricing().resolveMonthlyStudyPackLimit(planType);
         int challengeQuizLimit = properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
         int adaptivePracticeLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
         int ocrLimit = properties.getPricing().resolveMonthlyOcrLimit(planType);
 
-        int studyPackUsed = usage.studyPackGenerations();
+        int studyPackUsed = studyPackUsage.usedCount();
         int challengeQuizUsed = usage.challengeQuizGenerations();
         int adaptivePracticeUsed = usage.adaptiveQuizGenerations();
         int ocrUsed = usage.ocrExtractions();
@@ -37,8 +39,8 @@ public class MePlanService {
         return new MePlanResponse(
                 planType,
                 new MePlanResponse.UsageCycle(
-                        usage.periodStart(),
-                        usage.periodEnd()
+                        studyPackUsage.periodStart(),
+                        studyPackUsage.periodEnd()
                 ),
                 new MePlanResponse.Limits(
                         studyPackLimit,
