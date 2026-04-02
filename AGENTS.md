@@ -78,11 +78,31 @@ Core loop:
 - Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.
 - Landing page metadata should position NoteLib as a note-to-study-pack product, not a generic AI assistant.
 - Landing page title, meta description, and Open Graph metadata must stay aligned with the notes-library-first positioning.
-- Do not claim a refreshed Open Graph image is shipped until the `og-image.png` asset is actually replaced.
 - Public marketing/auth surfaces should expose footer links to:
   - `Privacy Policy`
   - `Terms of Service`
   - `Contact`
+
+### Branding Rule
+
+- `notelib-logo-monogram.png` is the primary small-logo mark.
+- Use the monogram for:
+  - public navbar
+  - authenticated app shell
+  - mobile headers
+  - favicon
+  - apple-touch icon
+- `notelib-logo-full-light.svg` and `notelib-logo-full-dark.svg` are the public/marketing wordmarks.
+- Use the full logo for:
+  - landing hero
+  - public footer
+  - Learn header
+  - Pricing header
+  - other public marketing headers
+  - Open Graph branding
+- `notelib-logo-icon.svg` is a product illustration only.
+- Do not use the product icon as the navbar logo or favicon.
+- Keep favicon and home-screen assets aligned to the NL monogram set.
 
 ### Legal Pages Rule
 

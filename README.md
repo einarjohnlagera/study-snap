@@ -40,6 +40,27 @@ Build your notes library, then turn notes into summaries and quizzes when you ar
 - Public Library is a public discovery surface, not a paid-plan feature
 - Learn page reinforces active recall as the study method behind the product
 
+## Brand Assets
+
+Primary brand assets live in `frontend/public`:
+
+- `notelib-logo-monogram.png`
+  - use for navbar/app-shell brand marks, favicon, apple-touch icon, and other small-logo placements
+- `notelib-logo-full-light.svg`
+  - use on light marketing/public surfaces
+- `notelib-logo-full-dark.svg`
+  - use on dark marketing/public surfaces
+- `notelib-logo-icon.svg`
+  - use as a product illustration, not as the navbar logo or favicon
+- `og-image.png`
+  - social-share image for landing and public metadata
+
+Branding rule:
+
+- monogram = small brand mark
+- full logo = public/marketing headers and footer
+- product icon = illustration only
+
 ## Core Concept
 
 Note-first model:

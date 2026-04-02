@@ -35,6 +35,7 @@ describe("LandingPage", () => {
   it("renders the note-library positioning sections and primary public discovery CTAs", () => {
     const { container } = render(<Home />);
 
+    expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
         name: "Build your own library of notes. Turn them into summaries and quizzes when you're ready to review.",

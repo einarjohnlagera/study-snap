@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,6 +14,7 @@ import {
   setAuthUser,
 } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BrandMonogram } from "@/components/branding/brand-assets";
 import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
@@ -444,8 +444,8 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     <div className="min-h-screen bg-background text-foreground md:grid md:grid-cols-[256px_1fr]">
       <aside className="hidden border-r border-border bg-background md:sticky md:top-0 md:flex md:h-screen md:w-64 md:flex-col">
         <div className="flex h-16 items-center gap-3 border-b border-border px-4">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border">
-            <Image src="/notelib-logo-icon.svg" alt="NoteLib logo" width={20} height={20} priority />
+          <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+            <BrandMonogram size={36} className="h-9 w-9" priority />
           </span>
           <span className="text-sm font-semibold">NoteLib</span>
         </div>
@@ -550,8 +550,8 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           <aside className="fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-border bg-background md:hidden">
             <div className="flex h-16 items-center justify-between border-b border-border px-4">
               <div className="flex items-center gap-3">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border">
-                  <Image src="/notelib-logo-icon.svg" alt="NoteLib logo" width={20} height={20} />
+                <span className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+                  <BrandMonogram size={36} className="h-9 w-9" />
                 </span>
                 <span className="text-sm font-semibold">NoteLib</span>
               </div>

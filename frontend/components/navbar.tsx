@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { BrandMonogram } from "./branding/brand-assets";
 import { ThemeToggle } from "./theme-toggle";
 import { buttonVariants } from "./ui/button";
 
@@ -34,14 +34,8 @@ export function Navbar() {
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
         <Link href="/" className="flex min-w-0 items-center gap-3">
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border">
-            <Image
-              src="/notelib-logo-icon.svg"
-              alt="NoteLib logo"
-              width={20}
-              height={20}
-              priority
-            />
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-white shadow-sm">
+            <BrandMonogram size={36} className="h-9 w-9" priority />
           </span>
           <span className="truncate whitespace-nowrap text-sm font-semibold sm:text-base">NoteLib</span>
         </Link>

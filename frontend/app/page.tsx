@@ -13,6 +13,7 @@ import {
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
 import { SimplePricingSection } from "@/components/billing/pricing-plans-section";
+import { BrandFullLogo, BrandProductIcon } from "@/components/branding/brand-assets";
 import { PublicFooter } from "@/components/public/public-footer";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { buttonVariants } from "@/components/ui/button";
@@ -101,6 +102,7 @@ function HeroSection() {
     <section className="relative overflow-hidden rounded-[2rem] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.94))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,_rgba(2,6,23,0.96),_rgba(15,23,42,0.94))] sm:p-8 lg:p-10">
       <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="space-y-5">
+          <BrandFullLogo width={220} height={48} priority />
           <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-background/85 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
             Notes library + study workspace
           </div>
@@ -165,19 +167,26 @@ function HeroSection() {
           </div>
           <div className="space-y-4 p-5">
             <div className="rounded-2xl border border-border bg-background p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                Notes library
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
-                  Med Surg
-                </span>
-                <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
-                  Pharmacology
-                </span>
-                <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
-                  Board Review
-                </span>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
+                    Notes library
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
+                      Med Surg
+                    </span>
+                    <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
+                      Pharmacology
+                    </span>
+                    <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
+                      Board Review
+                    </span>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3">
+                  <BrandProductIcon size={72} className="h-14 w-14 sm:h-[72px] sm:w-[72px]" priority />
+                </div>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">

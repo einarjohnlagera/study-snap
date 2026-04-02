@@ -39,7 +39,12 @@ Landing page should publish:
 
 - The landing page currently points to `frontend/public/og-image.png`.
 - The metadata update is already live.
-- A redesigned OG image that matches the `Build your notes library` positioning is still a `v0.6.0` follow-up task and should not be documented as shipped until the asset is replaced.
+- The current OG image now uses:
+  - NoteLib full logo
+  - notes-and-lightning illustration
+  - `Build your notes library`
+  - `Turn your notes into summaries and quizzes`
+- The SVG source of truth is `frontend/public/og-image-source.svg`.
 
 ## Structured Data
 

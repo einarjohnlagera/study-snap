@@ -200,7 +200,48 @@ SEO and social metadata:
 - description: `NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.`
 - canonical URL: `https://www.notelib.app`
 - Open Graph / Twitter metadata should reuse the same positioning and point to `/og-image.png`
-- `og-image.png` should ultimately reflect the notes-library headline and supporting study-workspace message used on the landing page
+- `og-image.png` should reflect the notes-library headline and supporting study-workspace message used on the landing page
+
+### Branding and Logo Usage
+
+Brand assets:
+
+- `notelib-logo-monogram.png`
+- `notelib-logo-full-light.svg`
+- `notelib-logo-full-dark.svg`
+- `notelib-logo-icon.svg`
+- `og-image.png`
+
+Usage rules:
+
+- use the NL monogram for:
+  - public navbar logo
+  - authenticated app-shell logo
+  - mobile header logo
+  - favicon
+  - apple-touch icon
+- use the full logo for:
+  - landing hero
+  - public footer
+  - Learn header
+  - Pricing header
+  - other marketing/public page headers
+  - Open Graph image branding
+- use the product icon for:
+  - feature illustrations
+  - marketing visual accents
+  - Open Graph illustration
+- do not use the product icon as the navbar logo or favicon
+
+Favicon requirements:
+
+- `/favicon.ico`
+- `/favicon-16x16.png`
+- `/favicon-32x32.png`
+- `/apple-touch-icon.png`
+- `/favicon-192x192.png`
+- `/favicon-512x512.png`
+- `/site.webmanifest`
 
 ### Study Pack Generation
 

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export const SITE_NAME = "NoteLib";
 export const SITE_URL = "https://notelib.app";
 export const DEFAULT_OG_IMAGE_URL = `${SITE_URL}/og-image.png`;
+export const DEFAULT_OG_IMAGE_ALT = "Build your notes library. Turn your notes into summaries and quizzes.";
 
 type PageMetadataInput = {
   title: string;
@@ -16,7 +17,7 @@ export function absoluteUrl(path: string) {
 }
 
 export function truncateDescription(value: string, maxLength = 160) {
-  const normalized = value.replace(/\s+/g, " ").trim();
+  const normalized = value.replaceAll(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) {
     return normalized;
   }
@@ -49,7 +50,7 @@ export function buildPageMetadata({
           url: DEFAULT_OG_IMAGE_URL,
           width: 1200,
           height: 630,
-          alt: SITE_NAME,
+          alt: DEFAULT_OG_IMAGE_ALT,
         },
       ],
     },

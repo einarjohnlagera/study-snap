@@ -1,0 +1,102 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">NoteLib Open Graph image</title>
+  <desc id="desc">NoteLib branding with the full logo, a notes and lightning illustration, and the message Build your notes library. Turn your notes into summaries and quizzes.</desc>
+  <defs>
+    <linearGradient id="bg-gradient" x1="120" y1="70" x2="1090" y2="610" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="0.55" stop-color="#172554"/>
+      <stop offset="1" stop-color="#0B1120"/>
+    </linearGradient>
+    <radialGradient id="blue-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(278 298) rotate(90) scale(260 260)">
+      <stop stop-color="#4F8CFF" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#4F8CFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="green-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(972 550) rotate(90) scale(230 290)">
+      <stop stop-color="#34D399" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#34D399" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card-blue" x1="117" y1="189" x2="337" y2="478" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F8CFF"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="paper-face" x1="183" y1="145" x2="397" y2="454" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#DDE7F5"/>
+    </linearGradient>
+    <linearGradient id="line-grad" x1="267" y1="230" x2="343" y2="344" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="spark-grad" x1="357" y1="125" x2="473" y2="264" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A3E635"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+    <linearGradient id="logo-paper-blue" x1="20" y1="27" x2="52" y2="73" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F8CFF"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="logo-paper-face" x1="27" y1="19" x2="56" y2="66" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#DDE7F5"/>
+    </linearGradient>
+    <linearGradient id="logo-line-grad" x1="35" y1="33" x2="46" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="1" stop-color="#34D399"/>
+    </linearGradient>
+    <linearGradient id="logo-spark-grad" x1="47" y1="16" x2="64" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A3E635"/>
+      <stop offset="1" stop-color="#22C55E"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" rx="32" fill="url(#bg-gradient)"/>
+  <rect width="1200" height="630" rx="32" fill="url(#blue-glow)"/>
+  <rect width="1200" height="630" rx="32" fill="url(#green-glow)"/>
+
+  <g opacity="0.16">
+    <path d="M838 90C900 158 930 239 930 334C930 429 902 506 846 560" stroke="#60A5FA" stroke-width="1.5"/>
+    <path d="M889 126C937 187 961 253 961 328C961 403 940 463 900 512" stroke="#A5B4FC" stroke-width="1.5"/>
+    <path d="M162 112C210 154 238 201 247 271C255 337 247 400 214 472" stroke="#93C5FD" stroke-width="1.5"/>
+  </g>
+
+  <g transform="translate(78 92)">
+    <rect x="34" y="62" width="228" height="264" rx="40" transform="rotate(-10 34 62)" fill="url(#card-blue)"/>
+    <rect x="101" y="18" width="228" height="264" rx="40" transform="rotate(-10 101 18)" fill="url(#paper-face)"/>
+    <rect x="169" y="102" width="82" height="16" rx="8" transform="rotate(-10 169 102)" fill="url(#line-grad)"/>
+    <rect x="160" y="161" width="119" height="16" rx="8" transform="rotate(-10 160 161)" fill="url(#line-grad)"/>
+    <rect x="151" y="220" width="98" height="16" rx="8" transform="rotate(-10 151 220)" fill="url(#line-grad)"/>
+    <rect x="229" y="273" width="71" height="16" rx="8" transform="rotate(-10 229 273)" fill="url(#line-grad)"/>
+    <path d="M303 35L241 145H294L270 235L391 113H339L371 35H303Z" fill="url(#spark-grad)"/>
+    <circle cx="214" cy="214" r="214" fill="#4F8CFF" opacity="0.08"/>
+  </g>
+
+  <g transform="translate(520 84)">
+    <g transform="translate(0,2)">
+      <g transform="translate(8,16)">
+        <rect x="10" y="18" width="48" height="56" rx="10" transform="rotate(-10 10 18)" fill="url(#logo-paper-blue)"/>
+        <rect x="22" y="7" width="48" height="56" rx="10" transform="rotate(-10 22 7)" fill="url(#logo-paper-face)"/>
+        <rect x="39" y="28" width="17" height="5" rx="2.5" transform="rotate(-10 39 28)" fill="url(#logo-line-grad)"/>
+        <rect x="37" y="40" width="24" height="5" rx="2.5" transform="rotate(-10 37 40)" fill="url(#logo-line-grad)"/>
+        <rect x="36" y="52" width="20" height="5" rx="2.5" transform="rotate(-10 36 52)" fill="url(#logo-line-grad)"/>
+        <path d="M61 6L49 26H59L54 42L74 19H64L69 6H61Z" fill="url(#logo-spark-grad)"/>
+      </g>
+      <text x="112" y="74" fill="#F8FAFC" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="48" font-weight="700" letter-spacing="0.2">NoteLib</text>
+    </g>
+
+    <text x="0" y="250" fill="#F8FAFC" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="60" font-weight="700" letter-spacing="-1">
+      <tspan x="0" dy="0">Build your notes library</tspan>
+    </text>
+    <text x="0" y="332" fill="#DDE7F5" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="32" font-weight="500" letter-spacing="-0.2">
+      <tspan x="0" dy="0">Turn your notes into summaries and quizzes</tspan>
+    </text>
+
+    <g transform="translate(0 398)">
+      <rect width="130" height="44" rx="22" fill="#1E3A8A" fill-opacity="0.66" stroke="#60A5FA" stroke-opacity="0.35"/>
+      <text x="65" y="29" text-anchor="middle" fill="#E0F2FE" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="20" font-weight="600">Summary</text>
+      <rect x="146" width="170" height="44" rx="22" fill="#0F766E" fill-opacity="0.36" stroke="#34D399" stroke-opacity="0.35"/>
+      <text x="231" y="29" text-anchor="middle" fill="#DCFCE7" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="20" font-weight="600">Key Concepts</text>
+      <rect x="332" width="92" height="44" rx="22" fill="#172554" fill-opacity="0.72" stroke="#A5B4FC" stroke-opacity="0.35"/>
+      <text x="378" y="29" text-anchor="middle" fill="#E0E7FF" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="20" font-weight="600">Quiz</text>
+    </g>
+  </g>
+</svg>
