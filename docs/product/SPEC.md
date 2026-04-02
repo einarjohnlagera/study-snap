@@ -329,6 +329,8 @@ Users can:
   - use underline-style navigation with muted inactive labels and an active bottom border
   - desktop and mobile tabs show icon + text for major note-view switching
   - tab switches should stay on the same note view and update content without a full page reload
+  - tab switches must not reset the page scroll to the top
+  - preserve the user's position around the tab content area when switching views
 
 ### Display Name And Official Badge
 

@@ -300,6 +300,7 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Tabs may include small outline icons.
 - Desktop tabs should show icon + text.
 - Mobile tabs should also show icon + text when they switch major note views.
+- Switching tabs must not reset page scroll to the top; preserve the current content area when the tab state changes.
 
 ### Mobile Button Rule
 
