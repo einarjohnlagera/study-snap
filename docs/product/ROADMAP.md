@@ -29,6 +29,7 @@ Primary focus:
 - Study Plan
 - Mock Exam Mode
 - Performance Analytics
+- Landing-page revamp that positions NoteLib as a notes library and study workspace first
 
 Implementation stance:
 

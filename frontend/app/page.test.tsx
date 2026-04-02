@@ -32,46 +32,48 @@ jest.mock("@/components/analytics/tracked-link", () => ({
 }));
 
 describe("LandingPage", () => {
-  it("renders the updated note-to-quiz marketing sections and CTAs", () => {
+  it("renders the note-library positioning sections and primary public discovery CTAs", () => {
     const { container } = render(<Home />);
 
     expect(
       screen.getByRole("heading", {
-        name: "Turn Notes Into Quizzes",
+        name: "Build your own library of notes. Turn them into summaries and quizzes when you're ready to review.",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Study Smarter. Not Harder.")).toBeInTheDocument();
     expect(
-      screen.getByText("Generate summaries, key concepts, and practice quizzes from your notes in seconds."),
+      screen.getByText(
+        "NoteLib helps you organize your notes, generate summaries, extract key concepts, and practice with quizzes all in one study workspace.",
+      ),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Get Started Free" })[0]).toHaveAttribute("href", "/signup");
-    expect(screen.getAllByRole("link", { name: "Try Demo" })[0]).toHaveAttribute("href", "/demo");
+    expect(screen.getAllByRole("link", { name: "Get Started" })[0]).toHaveAttribute("href", "/signup");
+    expect(screen.getAllByRole("link", { name: "View Public Library" })[0]).toHaveAttribute("href", "/public/library");
+    expect(screen.getByRole("link", { name: "Try demo access" })).toHaveAttribute("href", "/demo");
+
+    expect(screen.getByText("What Is NoteLib")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your Notes. Your Library. Your Review Tool." })).toBeInTheDocument();
+    expect(screen.getByText("Notes library first")).toBeInTheDocument();
+    expect(screen.getByText("Study Pack when ready")).toBeInTheDocument();
+    expect(screen.getByText("Active recall built in")).toBeInTheDocument();
 
     expect(screen.getByText("How It Works")).toBeInTheDocument();
-    expect(screen.getAllByText("Add Notes")).not.toHaveLength(0);
-    expect(screen.getAllByText("Generate Study Pack")).not.toHaveLength(0);
-    expect(screen.getAllByText("Practice")).not.toHaveLength(0);
-    expect(screen.getAllByText("Improve")).not.toHaveLength(0);
-    expect(screen.getByText("Notes")).toBeInTheDocument();
-    expect(screen.getAllByText("Summary")).not.toHaveLength(0);
-    expect(screen.getAllByText("Quiz")).not.toHaveLength(0);
-    expect(screen.getAllByText("Weak Concepts")).not.toHaveLength(0);
+    expect(screen.getByText("Create a Note")).toBeInTheDocument();
+    expect(screen.getByText("Build Your Library")).toBeInTheDocument();
+    expect(screen.getByText("Generate Study Pack")).toBeInTheDocument();
+    expect(screen.getByText("Review & Practice")).toBeInTheDocument();
 
-    expect(screen.getByText("Who It's For")).toBeInTheDocument();
-    expect(screen.getByText("For Students")).toBeInTheDocument();
-    expect(screen.getByText("For Board Exams")).toBeInTheDocument();
-    expect(screen.getByText("For Teachers")).toBeInTheDocument();
+    expect(screen.getAllByText("Public Library")).not.toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Explore Public Notes and Reviewers" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
 
-    expect(screen.getByText("Features Overview")).toBeInTheDocument();
-    expect(screen.getAllByText("Summaries")).not.toHaveLength(0);
-    expect(screen.getAllByText("Key Concepts")).not.toHaveLength(0);
-    expect(screen.getByText("Practice Quiz")).toBeInTheDocument();
-    expect(screen.getByText("Weak Concept Insights")).toBeInTheDocument();
-    expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
+    expect(screen.getByText("Study Method")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Study Smarter with Active Recall" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Learn How to Study Using Active Recall" }),
+    ).toHaveAttribute("href", "/learn");
 
     expect(screen.getByText("Simple, Transparent Pricing")).toBeInTheDocument();
     expect(screen.getByText("Pricing section placeholder")).toBeInTheDocument();
-    expect(screen.getByText("Start Turning Your Notes Into Quizzes Today")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Start building your notes library today." })).toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");
@@ -88,9 +90,9 @@ describe("LandingPage", () => {
 
   it("exports landing page SEO metadata", () => {
     expect(metadata).toMatchObject({
-      title: "NoteLib — Turn Notes Into Quizzes",
+      title: "NoteLib — Build Your Notes Library",
       description:
-        "NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.",
+        "NoteLib is a notes library and study workspace where you organize notes, generate summaries and key concepts, and practice with quizzes built around active recall.",
       alternates: {
         canonical: "https://notelib.app/",
       },

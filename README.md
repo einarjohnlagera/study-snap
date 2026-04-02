@@ -4,7 +4,7 @@
 
 Current release baseline: `v0.5.0 - Public Profiles & Public Notes`
 
-NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.
+NoteLib is a notes library and study workspace where students, board exam reviewees, and teachers can organize notes, turn them into summaries and key concepts, and practice with quizzes built around active recall.
 
 It can be used by:
 
@@ -25,14 +25,15 @@ Users can paste notes or upload photos of their study material, and NoteLib can 
 
 ## One-liner
 
-Turn notes into quizzes.
+Build your notes library, then turn notes into summaries and quizzes when you are ready to review.
 
 ## Public Positioning
 
-- Turn notes into quizzes
-- Turn class notes into reviewers
+- Notes library first, Study Pack generation second
+- Build a reusable study workspace instead of using a one-time generator
+- Turn class notes into summaries, key concepts, and quizzes when review starts
 - Practice with questions instead of only rereading
-- Find weak concepts and keep improving
+- Find weak concepts and keep improving through active recall
 - Support students, board exam reviewees, and teachers with one shared workflow
 
 ## Core Concept

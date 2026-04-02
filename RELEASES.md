@@ -10,6 +10,7 @@
 
 - Major action buttons now keep icon + text labels on mobile across the app’s shared action surfaces instead of collapsing to icon-only.
 - Private Note Detail `Summary` and `Quiz` tabs now keep text labels on mobile for clearer view switching.
+- Landing page now positions NoteLib as a notes library and study workspace first, with stronger Public Library and active-recall messaging.
 
 ### Fixes
 
