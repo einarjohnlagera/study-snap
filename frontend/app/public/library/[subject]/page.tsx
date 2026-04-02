@@ -121,6 +121,7 @@ export default async function PublicLibrarySubjectPage({ params }: Readonly<Publ
                     tags={note.tags}
                     contentPreview={note.contentPreview}
                     summaryPreview={note.summaryPreview}
+                    copyCount={typeof note.copyCount === "number" && note.copyCount > 0 ? note.copyCount : null}
                   />
                 </Card>
               </Link>

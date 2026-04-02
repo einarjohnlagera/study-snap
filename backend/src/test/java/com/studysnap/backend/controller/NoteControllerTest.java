@@ -203,13 +203,16 @@ class NoteControllerTest {
                         List.of("cells"),
                         "preview",
                         "summary preview",
-                        "PUBLIC",
-                        null,
-                        "STUDY_PACK_READY",
-                        4,
-                        "My Notes",
-                        false,
-                        true,
+                "PUBLIC",
+                null,
+                "STUDY_PACK_READY",
+                4,
+                2L,
+                1L,
+                5L,
+                "My Notes",
+                false,
+                true,
                         OffsetDateTime.now()
                 )
         );

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
+import { trackAnalyticsEvent } from "@/lib/api";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
@@ -131,6 +132,13 @@ export function PublicNoteOwnershipActions({
   const handleCopyShareLink = async () => {
     try {
       await navigator.clipboard.writeText(resolvedShareUrl);
+      void trackAnalyticsEvent({
+        eventType: "PUBLIC_NOTE_SHARED",
+        entityId: noteId,
+        metadata: {
+          path: buildPublicLibraryNotePath({ subject, title }),
+        },
+      });
       setShareState("copied");
     } catch {
       setShareState("error");
@@ -148,8 +156,12 @@ export function PublicNoteOwnershipActions({
         </div>
       ) : (
         <div className="space-y-3">
+          <p className="text-sm text-foreground/75">
+            This note helped you? Copy it to your library and generate your own quiz.
+          </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <PublicSeoCopyCta noteId={noteId} label="Make a Copy" />
+            <PublicSeoCopyCta noteId={noteId} label="Copy to My Library" />
+            <PublicSeoCopyCta noteId={noteId} label="Generate Study Pack" redirectTarget="generate" />
             <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share" />
           </div>
         </div>

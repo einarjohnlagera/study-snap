@@ -16,6 +16,9 @@ import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.ContentPreviewUtils;
@@ -52,6 +55,7 @@ public class NoteService {
     private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
 
     private final NoteRepository noteRepository;
+    private final AnalyticsEventRepository analyticsEventRepository;
     private final StudyPackRepository studyPackRepository;
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
@@ -275,6 +279,9 @@ public class NoteService {
                 .map(NoteEntity::getOwnerUserId)
                 .distinct()
                 .toList();
+        Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(noteIds);
+        Map<UUID, Long> shareCountsByNoteId = loadPublicEventCounts(noteIds, AnalyticsEventType.PUBLIC_NOTE_SHARED);
+        Map<UUID, Long> viewCountsByNoteId = loadPublicEventCounts(noteIds, AnalyticsEventType.PUBLIC_NOTE_VIEWED);
         Map<UUID, StudyPackEntity> studyPackByNoteId = new HashMap<>();
         for (StudyPackEntity studyPack : studyPackRepository.findByNoteIdIn(noteIds)) {
             if (studyPack.getNoteId() != null) {
@@ -290,10 +297,33 @@ public class NoteService {
                 .map(note -> mapToListItemResponse(
                         note,
                         studyPackByNoteId.get(note.getId()),
+                        copyCountsByNoteId.getOrDefault(note.getId(), 0L),
+                        shareCountsByNoteId.getOrDefault(note.getId(), 0L),
+                        viewCountsByNoteId.getOrDefault(note.getId(), 0L),
                         ownerById.get(note.getOwnerUserId()),
                         viewerUserId
                 ))
                 .toList();
+    }
+
+    private Map<UUID, Long> loadCopyCounts(List<UUID> noteIds) {
+        Map<UUID, Long> countsByNoteId = new HashMap<>();
+        for (NoteCopyCountProjection projection : noteRepository.countCopiedPublicNotesBySourceNoteIds(noteIds)) {
+            if (projection.getNoteId() != null) {
+                countsByNoteId.put(projection.getNoteId(), projection.getCopyCount());
+            }
+        }
+        return countsByNoteId;
+    }
+
+    private Map<UUID, Long> loadPublicEventCounts(List<UUID> noteIds, AnalyticsEventType eventType) {
+        Map<UUID, Long> countsByNoteId = new HashMap<>();
+        for (PublicNoteEventCountProjection projection : analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(eventType, noteIds)) {
+            if (projection.getNoteId() != null) {
+                countsByNoteId.put(projection.getNoteId(), projection.getTotalCount());
+            }
+        }
+        return countsByNoteId;
     }
 
     private String normalizeRequiredContent(String rawContent) {
@@ -372,6 +402,9 @@ public class NoteService {
     private NoteListItemResponse mapToListItemResponse(
             NoteEntity note,
             StudyPackEntity studyPack,
+            long copyCount,
+            long shareCount,
+            long viewCount,
             UserEntity owner,
             UUID viewerUserId
     ) {
@@ -388,6 +421,9 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getId().toString(),
                 resolveStudyPackStatus(note, studyPack),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
+                copyCount,
+                shareCount,
+                viewCount,
                 resolvePublicAuthorName(owner),
                 isOfficialAuthor,
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),

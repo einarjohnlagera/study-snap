@@ -56,5 +56,11 @@ Public note detail is a separate public/read-only surface.
 
 - canonical route: `/public/library/{subject}/{slug}`
 - owner sees `Open Note` and `Share`
-- non-owner sees `Make a Copy` and `Share`
+- non-owner sees `Copy to My Library`, `Generate Study Pack`, and `Share`
 - do not expose private editing or study actions there
+
+Copy-first generation rule:
+
+- `Generate Study Pack` on a public note must create a private copy first.
+- generation continues on the viewer's own note route after the copy is created.
+- do not run private study actions directly against the public source note

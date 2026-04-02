@@ -7,8 +7,14 @@ jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(() => currentAuthUser),
 }));
 
+const publicSeoCopyCtaMock = jest.fn(({ label }: { label?: string }) => <button type="button">{label ?? "Make a Copy"}</button>);
+
 jest.mock("./public-seo-copy-cta", () => ({
-  PublicSeoCopyCta: ({ label }: { label?: string }) => <button type="button">{label ?? "Make a Copy"}</button>,
+  PublicSeoCopyCta: (props: { label?: string; redirectTarget?: "library" | "generate" }) => publicSeoCopyCtaMock(props),
+}));
+
+jest.mock("@/lib/api", () => ({
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 describe("PublicNoteOwnershipActions", () => {
@@ -16,6 +22,7 @@ describe("PublicNoteOwnershipActions", () => {
 
   beforeEach(() => {
     clipboardWriteText.mockReset();
+    publicSeoCopyCtaMock.mockClear();
     currentAuthUser = null;
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: clipboardWriteText },
@@ -82,9 +89,13 @@ describe("PublicNoteOwnershipActions", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
+    expect(screen.getByText("This note helped you? Copy it to your library and generate your own quiz.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy to My Library" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
+    expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(expect.objectContaining({ label: "Copy to My Library" }));
+    expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(expect.objectContaining({ label: "Generate Study Pack", redirectTarget: "generate" }));
   });
 
   it("shows NoteLib label and official badge for official public content", () => {

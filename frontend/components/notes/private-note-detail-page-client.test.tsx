@@ -296,6 +296,19 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
   });
 
+  it("auto-generates when the page is opened with generate=1", async () => {
+    searchParamValues = { generate: "1" };
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await waitFor(() => {
+      expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
+    });
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1", { scroll: false });
+  });
+
   it("shows a first-study success banner after the first Study Pack is ready", async () => {
     window.localStorage.setItem("notelib-first-study-onboarding:user-1", JSON.stringify({ step: "study-pack-ready" }));
     (getAuthUser as jest.Mock).mockReturnValue({

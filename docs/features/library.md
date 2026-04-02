@@ -47,6 +47,15 @@ Responsibility:
 
 Public Library cards use the same shared preview layout and whole-card interaction as Library.
 
+Growth behavior:
+
+- Public Library should encourage copying and studying, not only browsing.
+- Discovery sorting should help users find useful community notes faster:
+  - `Newest`
+  - `Most Copied`
+  - `Most Shared`
+  - `Most Viewed`
+
 ## Public Profile
 
 Public Profile is not a private library surface.
