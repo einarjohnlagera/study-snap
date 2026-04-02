@@ -51,3 +51,16 @@ Landing page should publish:
 - Landing page should emit `WebSite` JSON-LD.
 - Public Library index should emit `CollectionPage` JSON-LD.
 - Canonical public note pages should emit `Article` JSON-LD using real note data only.
+
+## Learn Content Marketing Pages
+
+- Learn hub and Learn article pages are public SEO surfaces.
+- Learn articles should provide standalone student value before asking for signup.
+- Each Learn article should include:
+  - clear title
+  - short introduction
+  - summary
+  - key concepts
+  - practice questions
+  - bottom CTA into account creation
+- Learn CTA copy should position NoteLib as the place to turn personal notes into summaries and quizzes, not as a generic AI tool.

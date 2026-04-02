@@ -41,6 +41,19 @@ describe("PricingPage", () => {
     expect(screen.queryByText("Included")).not.toBeInTheDocument();
     expect(screen.queryByText("Not included")).not.toBeInTheDocument();
     expect(screen.getByText("Built for serious review")).toBeInTheDocument();
+    expect(screen.getByText("Why Go Premium")).toBeInTheDocument();
+    expect(screen.getByText("For serious review and exam preparation")).toBeInTheDocument();
+    expect(
+      screen.getByText("Premium is designed for students who are preparing for exams, board exams, or major tests."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "If you review often, Premium gives you more Study Packs, more Challenge Quizzes, and Adaptive Practice that focuses on the topics you get wrong so you can improve faster.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("This makes NoteLib not just a notes app, but a full review and practice tool."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Start studying for free.")).toBeInTheDocument();
     expect(
       screen.getByText("Free gives you the core NoteLib workflow: Create notes, turn them into Study Packs, and review with quizzes."),
@@ -48,7 +61,9 @@ describe("PricingPage", () => {
     expect(screen.getByText("Unlock adaptive practice and deeper quiz training.")).toBeInTheDocument();
     expect(screen.getByText("Most students upgrade during exam weeks.")).toBeInTheDocument();
     expect(
-      screen.getByText("Premium is designed for exam preparation periods when you need more practice, more quizzes, and Adaptive Practice to focus on weak topics."),
+      screen.getByText(
+        "Premium is designed for exam preparation periods when you need more practice, more quizzes, and Adaptive Practice to focus on weak topics so you can improve faster.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("10 Study Packs per month")).toBeInTheDocument();
     expect(screen.getByText("5 Challenge Quizzes per month")).toBeInTheDocument();

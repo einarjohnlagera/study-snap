@@ -15,8 +15,10 @@
 - Landing page now positions NoteLib as a notes library and study workspace first, with stronger Public Library and active-recall messaging.
 - Public Library is now promoted directly from the landing page as a discovery surface that stays accessible without login.
 - The landing page now integrates the Learn / active-recall message so new users understand the study method, not only the generation workflow.
+- Learn article pages now use a consistent content-marketing structure with introduction, summary, key concepts, sample practice questions, and a bottom account-creation CTA.
 - Landing page SEO title, meta description, and Open Graph metadata now align with the notes-library positioning update.
 - Pricing page messaging now frames NoteLib as a notes library plus review workflow, with Free/Premium copy aligned around core note creation and heavier exam review periods.
+- Pricing page now includes a `Why Go Premium` section that explains Premium in terms of serious review, practice, and exam preparation rather than only limits.
 - Pricing no longer treats Public Library as a paid-plan feature.
 - Theme toggle is now available on the shared public navbar and syncs with a persisted user theme preference for authenticated users.
 - Navbar and app-shell logos now use the NL monogram, while marketing headers and the public footer use the full NoteLib wordmark.

@@ -71,6 +71,25 @@ export default function PricingPage() {
         </div>
       </section>
 
+      <section>
+        <Card className="space-y-3 p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Why Go Premium
+          </p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">For serious review and exam preparation</h2>
+          <p className="max-w-4xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+            Premium is designed for students who are preparing for exams, board exams, or major tests.
+          </p>
+          <p className="max-w-4xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+            If you review often, Premium gives you more Study Packs, more Challenge Quizzes, and Adaptive Practice
+            that focuses on the topics you get wrong so you can improve faster.
+          </p>
+          <p className="max-w-4xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+            This makes NoteLib not just a notes app, but a full review and practice tool.
+          </p>
+        </Card>
+      </section>
+
       <PricingPlansSection showHeading={false} />
     </main>
   );
