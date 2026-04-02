@@ -9,9 +9,22 @@ import { copyNote, trackAnalyticsEvent } from "@/lib/api";
 type PublicSeoCopyCtaProps = {
   noteId: string;
   label?: string;
+  redirectTarget?: "library" | "generate";
 };
 
-export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate Your Own Study Pack" }: Readonly<PublicSeoCopyCtaProps>) {
+function buildCopiedNotePath(noteId: string, redirectTarget: "library" | "generate") {
+  const next = new URLSearchParams({ copied: "1" });
+  if (redirectTarget === "generate") {
+    next.set("generate", "1");
+  }
+  return `/notes/${noteId}?${next.toString()}`;
+}
+
+export function PublicSeoCopyCta({
+  noteId,
+  label = "Make a Copy and Generate Your Own Study Pack",
+  redirectTarget = "library",
+}: Readonly<PublicSeoCopyCtaProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -24,6 +37,7 @@ export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate You
     if (!shouldAutoCopy || copyHandledRef.current || !getAuthUser()) {
       return;
     }
+    const requestedRedirectTarget = searchParams.get("intent") === "generate" ? "generate" : redirectTarget;
 
     let cancelled = false;
     const runCopy = async () => {
@@ -33,7 +47,7 @@ export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate You
       try {
         const copied = await copyNote(noteId);
         if (!cancelled) {
-          router.replace(`/notes/${copied.id}?copied=1`);
+          router.replace(buildCopiedNotePath(copied.id, requestedRedirectTarget));
         }
       } catch (error) {
         if (!cancelled) {
@@ -47,7 +61,7 @@ export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate You
     return () => {
       cancelled = true;
     };
-  }, [noteId, router, searchParams]);
+  }, [noteId, redirectTarget, router, searchParams]);
 
   const handleCopy = async () => {
     if (copying) {
@@ -58,10 +72,11 @@ export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate You
       entityId: noteId,
       metadata: {
         path: pathname,
+        redirectTarget,
       },
     });
     if (!getAuthUser()) {
-      router.push(buildLoginPath({ redirectTo: `${pathname}?copy=1` }));
+      router.push(buildLoginPath({ redirectTo: `${pathname}?copy=1&intent=${redirectTarget}` }));
       return;
     }
 
@@ -69,7 +84,7 @@ export function PublicSeoCopyCta({ noteId, label = "Make a Copy and Generate You
     setCopyError(null);
     try {
       const copied = await copyNote(noteId);
-      router.push(`/notes/${copied.id}?copied=1`);
+      router.push(buildCopiedNotePath(copied.id, redirectTarget));
     } catch (error) {
       setCopyError(error instanceof Error ? error.message : "Could not copy note.");
       setCopying(false);

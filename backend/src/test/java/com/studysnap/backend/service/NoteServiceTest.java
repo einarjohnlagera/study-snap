@@ -12,6 +12,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -42,6 +43,8 @@ class NoteServiceTest {
     @Mock
     private NoteRepository noteRepository;
     @Mock
+    private AnalyticsEventRepository analyticsEventRepository;
+    @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
     private UserRepository userRepository;
@@ -58,6 +61,7 @@ class NoteServiceTest {
     void setUp() {
         noteService = new NoteService(
                 noteRepository,
+                analyticsEventRepository,
                 studyPackRepository,
                 userRepository,
                 subscriptionService,
@@ -65,6 +69,8 @@ class NoteServiceTest {
                 analyticsService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any())).thenReturn(List.of());
+        lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(), any())).thenReturn(List.of());
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.ADAPTIVE_QUIZ))).thenReturn(false);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.DIFFICULTY_SELECTION))).thenReturn(false);
@@ -292,12 +298,18 @@ class NoteServiceTest {
         assertThat(response.getFirst().summaryPreview()).isEmpty();
         assertThat(response.getFirst().isOfficialAuthor()).isFalse();
         assertThat(response.getFirst().isCurrentUser()).isTrue();
+        assertThat(response.getFirst().copyCount()).isZero();
+        assertThat(response.getFirst().shareCount()).isZero();
+        assertThat(response.getFirst().viewCount()).isZero();
         assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
         assertThat(response.get(1).authorDisplayName()).isEqualTo("NoteLib");
         assertThat(response.get(1).contentPreview()).isEqualTo("official content");
         assertThat(response.get(1).summaryPreview()).isEqualTo("Official summary preview");
         assertThat(response.get(1).isOfficialAuthor()).isTrue();
         assertThat(response.get(1).isCurrentUser()).isFalse();
+        assertThat(response.get(1).copyCount()).isZero();
+        assertThat(response.get(1).shareCount()).isZero();
+        assertThat(response.get(1).viewCount()).isZero();
     }
 
     @Test

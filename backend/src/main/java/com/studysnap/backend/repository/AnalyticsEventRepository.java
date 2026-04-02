@@ -34,4 +34,18 @@ public interface AnalyticsEventRepository extends JpaRepository<AnalyticsEventEn
             @Param("eventType") AnalyticsEventType eventType,
             Pageable pageable
     );
+
+    @Query("""
+            select n.id as noteId, count(e.id) as totalCount
+            from AnalyticsEventEntity e
+            join NoteEntity n on n.id = e.entityId
+            where e.eventType = :eventType
+              and n.id in :noteIds
+              and n.visibility = com.studysnap.backend.entity.NoteVisibility.PUBLIC
+            group by n.id
+            """)
+    List<PublicNoteEventCountProjection> countPublicNoteEventsByTypeAndNoteIds(
+            @Param("eventType") AnalyticsEventType eventType,
+            @Param("noteIds") List<UUID> noteIds
+    );
 }

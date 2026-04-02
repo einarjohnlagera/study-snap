@@ -35,6 +35,16 @@ App-shell route:
 
 - `/library/public`
 
+Growth behavior:
+
+- Public Library should help users discover useful notes and copy them into their own Library quickly.
+- Public Library sorting should support:
+  - `Newest`
+  - `Most Copied`
+  - `Most Shared`
+  - `Most Viewed`
+- Discovery sorting should use real copy/share/view signals when available.
+
 Canonical note/detail routes:
 
 - `/public/library/{subject}`
@@ -67,10 +77,17 @@ Owner actions:
 
 Non-owner actions:
 
-- `Make a Copy`
+- `Copy to My Library`
+- `Generate Study Pack`
 - `Share`
 
 Public note detail must not expose edit, delete, generation, or quiz actions.
+
+Copy-first generation rule:
+
+- `Generate Study Pack` on a public note should first copy the note into the viewer's Library.
+- The viewer then continues generation on their own private note route.
+- Public note detail itself stays read-only.
 
 ## Copy Rules
 

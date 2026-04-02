@@ -20,6 +20,7 @@ import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public
 import { normalizeSubject } from "@/lib/subjects";
 
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+type PublicLibrarySortOption = "newest" | "most-copied" | "most-shared" | "most-viewed";
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
@@ -69,6 +70,7 @@ export function PublicLibraryPageClient() {
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
+  const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>("newest");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagSearchQuery, setTagSearchQuery] = useState("");
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
@@ -195,12 +197,45 @@ export function PublicLibraryPageClient() {
     });
   }, [items, searchQuery, selectedSubject, selectedTags]);
 
+  const sortedItems = useMemo(() => {
+    const byNewest = (left: NoteListItemResponse, right: NoteListItemResponse) => (
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+    );
+    const metricValue = (
+      item: NoteListItemResponse,
+      key: "copyCount" | "shareCount" | "viewCount",
+    ) => item[key] ?? 0;
+
+    return [...filteredItems].sort((left, right) => {
+      if (selectedSort === "newest") {
+        return byNewest(left, right);
+      }
+
+      const metricKey = selectedSort === "most-copied"
+        ? "copyCount"
+        : selectedSort === "most-shared"
+          ? "shareCount"
+          : "viewCount";
+      const primaryDelta = metricValue(right, metricKey) - metricValue(left, metricKey);
+      if (primaryDelta !== 0) {
+        return primaryDelta;
+      }
+
+      const copyDelta = metricValue(right, "copyCount") - metricValue(left, "copyCount");
+      if (metricKey !== "copyCount" && copyDelta !== 0) {
+        return copyDelta;
+      }
+
+      return byNewest(left, right);
+    });
+  }, [filteredItems, selectedSort]);
+
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <PageHeader
         eyebrow="LIBRARY"
         title="Public Library"
-        description="Explore public notes from you, the community, and official NoteLib examples."
+        description="Explore public notes from you, the community, and official NoteLib examples. Copy a note into your library to generate your own Study Pack and quizzes."
         brandLogo
       />
 
@@ -223,7 +258,7 @@ export function PublicLibraryPageClient() {
       ) : (
         <div className="space-y-4">
           <Card className="space-y-4 p-4 sm:p-6">
-            <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-4">
               <div className="space-y-2">
                 <label htmlFor="public-library-search" className="text-sm font-medium">
                   Search
@@ -253,6 +288,22 @@ export function PublicLibraryPageClient() {
                       {subject}
                     </option>
                   ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="public-library-sort" className="text-sm font-medium">
+                  Sort by
+                </label>
+                <select
+                  id="public-library-sort"
+                  value={selectedSort}
+                  onChange={(event) => setSelectedSort(event.target.value as PublicLibrarySortOption)}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="most-copied">Most Copied</option>
+                  <option value="most-shared">Most Shared</option>
+                  <option value="most-viewed">Most Viewed</option>
                 </select>
               </div>
               <div className="relative space-y-2">
@@ -356,7 +407,7 @@ export function PublicLibraryPageClient() {
             ) : null}
           </Card>
 
-          {filteredItems.length === 0 ? (
+          {sortedItems.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-base font-semibold sm:text-lg">No public notes match your filters.</h2>
               <p className="text-sm text-foreground/75">Try adjusting search or filters.</p>
@@ -366,7 +417,7 @@ export function PublicLibraryPageClient() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {filteredItems.map((item) => {
+              {sortedItems.map((item) => {
                 const itemTags = normalizeTags(item.tags);
                 const authorBadge = resolveAuthorBadge(item, currentUserId);
 
@@ -390,6 +441,7 @@ export function PublicLibraryPageClient() {
                       tags={itemTags}
                       contentPreview={item.contentPreview}
                       summaryPreview={item.summaryPreview}
+                      copyCount={typeof item.copyCount === "number" && item.copyCount > 0 ? item.copyCount : null}
                       metadataBadges={(
                         <>
                           {item.ownerUserId ? (

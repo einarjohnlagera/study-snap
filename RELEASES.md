@@ -24,6 +24,8 @@
 - Navbar and app-shell logos now use the NL monogram, while marketing headers and the public footer use the full NoteLib wordmark.
 - The Open Graph image now uses the standardized NoteLib branding, notes-and-lightning illustration, and notes-library messaging.
 - Study Pack generation surfaces now use student-friendly monthly-limit banners and plan-specific limit modals for both Free and Premium instead of relying on disabled generate actions.
+- Public Library now supports discovery sorting by newest, most copied, most shared, and most viewed.
+- Public note detail now uses a stronger copy-first growth CTA for non-owners, including a handoff into their own Library note for generation.
 
 ### Fixes
 

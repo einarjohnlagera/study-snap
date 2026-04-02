@@ -176,6 +176,7 @@ export type AnalyticsEventType =
   | "PUBLIC_NOTE_VIEWED"
   | "PUBLIC_NOTE_COPIED"
   | "PUBLIC_NOTE_COPY_CLICKED"
+  | "PUBLIC_NOTE_SHARED"
   | "LOGIN"
   | "SIGNUP"
   | "LANDING_PAGE_VIEWED"
@@ -695,6 +696,9 @@ export type NoteListItemResponse = {
   studyPackId: string | null;
   studyPackStatus: NoteStudyPackStatus;
   quizCount: number | null;
+  copyCount: number | null;
+  shareCount: number | null;
+  viewCount: number | null;
   authorDisplayName: string;
   isOfficialAuthor: boolean;
   isCurrentUser: boolean;

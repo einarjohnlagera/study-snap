@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
 import { listPublicNotes, listSubjects } from "@/lib/api";
 
@@ -49,6 +49,9 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
+        copyCount: 1,
+        shareCount: 0,
+        viewCount: 2,
         authorDisplayName: "My Notes",
         isOfficialAuthor: false,
         isCurrentUser: true,
@@ -66,6 +69,9 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-2",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 4,
+        copyCount: 5,
+        shareCount: 2,
+        viewCount: 8,
         authorDisplayName: "NoteLib",
         isOfficialAuthor: true,
         isCurrentUser: false,
@@ -83,6 +89,9 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-3",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 2,
+        copyCount: 0,
+        shareCount: 1,
+        viewCount: 4,
         authorDisplayName: "Study Buddy",
         isOfficialAuthor: false,
         isCurrentUser: false,
@@ -125,6 +134,9 @@ describe("PublicLibraryPageClient", () => {
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
+        copyCount: 0,
+        shareCount: 0,
+        viewCount: 0,
         authorDisplayName: "My Notes",
         isOfficialAuthor: false,
         isCurrentUser: false,
@@ -142,5 +154,59 @@ describe("PublicLibraryPageClient", () => {
     });
 
     expect(await screen.findByText("By You")).toBeInTheDocument();
+  });
+
+  it("sorts public notes by most copied", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-1",
+        ownerUserId: "user-2",
+        title: "Least Copied",
+        subject: "Biology",
+        tags: ["cells"],
+        contentPreview: "Least copied preview",
+        summaryPreview: "Least copied summary",
+        visibility: "PUBLIC",
+        studyPackId: "pack-1",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        copyCount: 1,
+        shareCount: 0,
+        viewCount: 2,
+        authorDisplayName: "Study Buddy",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        updatedAt: "2026-03-31T10:00:00Z",
+      },
+      {
+        id: "note-2",
+        ownerUserId: "user-3",
+        title: "Most Copied",
+        subject: "Biology",
+        tags: ["genetics"],
+        contentPreview: "Most copied preview",
+        summaryPreview: "Most copied summary",
+        visibility: "PUBLIC",
+        studyPackId: "pack-2",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        copyCount: 9,
+        shareCount: 4,
+        viewCount: 5,
+        authorDisplayName: "Top Creator",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        updatedAt: "2026-03-31T09:00:00Z",
+      },
+    ]);
+
+    const { container } = render(<PublicLibraryPageClient />);
+
+    await screen.findByText("Least Copied");
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "most-copied" } });
+
+    const cardTitles = Array.from(container.querySelectorAll("h3")).map((element) => element.textContent);
+    expect(cardTitles.slice(0, 2)).toEqual(["Most Copied", "Least Copied"]);
+    expect(screen.getByText("9 copies")).toBeInTheDocument();
   });
 });

@@ -162,6 +162,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
+  const autoGenerateHandledRef = useRef(false);
 
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
@@ -550,6 +551,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setGenerating(false);
     }
   };
+
+  useEffect(() => {
+    const shouldAutoGenerate = searchParams.get("generate") === "1";
+    if (!shouldAutoGenerate || autoGenerateHandledRef.current || !note || !isDraft) {
+      return;
+    }
+
+    autoGenerateHandledRef.current = true;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("generate");
+    router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+    void handleGenerate();
+  }, [handleGenerate, isDraft, note, pathname, router, searchParams]);
 
   const applySuggestions = useCallback(async () => {
     if (!note || !pendingSuggestion || applyingSuggestion) {

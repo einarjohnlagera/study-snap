@@ -49,7 +49,7 @@ describe("PublicSeoCopyCta", () => {
     fireEvent.click(screen.getByRole("button", { name: "Make a Copy and Generate Your Own Study Pack" }));
 
     expect(pushMock).toHaveBeenCalledWith(
-      "/login?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1",
+      "/login?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1%26intent%3Dlibrary",
     );
     expect(copyNote).not.toHaveBeenCalled();
   });
@@ -68,6 +68,20 @@ describe("PublicSeoCopyCta", () => {
     });
   });
 
+  it("copies and redirects into generation flow when requested", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1" });
+
+    render(<PublicSeoCopyCta noteId="note-1" label="Generate Study Pack" redirectTarget="generate" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-1");
+      expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&generate=1");
+    });
+  });
+
   it("auto-copies after login when the copy query flag is present", async () => {
     searchParamsMock = new URLSearchParams("copy=1");
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
@@ -78,6 +92,19 @@ describe("PublicSeoCopyCta", () => {
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-1");
       expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1");
+    });
+  });
+
+  it("auto-copies into generation flow after login when the intent is generate", async () => {
+    searchParamsMock = new URLSearchParams("copy=1&intent=generate");
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1" });
+
+    render(<PublicSeoCopyCta noteId="note-1" redirectTarget="generate" />);
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-1");
+      expect(replaceMock).toHaveBeenCalledWith("/notes/copied-note-1?copied=1&generate=1");
     });
   });
 });
