@@ -13,7 +13,7 @@
 
 ### Fixes
 
-- No entries yet.
+- Auth redirect logic now returns users to interrupted protected pages through explicit redirect intent while sending manual public-page logins to `Dashboard`.
 
 ### Technical Changes
 

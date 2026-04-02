@@ -514,10 +514,10 @@ Page responsibilities:
 - After a successful login, the frontend must route with `router.replace(...)` instead of relying on shell visibility alone.
 - Post-login destination order is:
   - verification/onboarding destination first when required
-  - explicit `redirect` query destination when present
-  - remembered last visited in-app/public page when no explicit redirect exists
+  - explicit `redirect` query destination when present for protected-route access and session-expired recovery
   - `Dashboard` as the fallback
 - Query-string state such as `?tab=quiz` must be preserved in redirect restoration.
+- Manual login from public pages should land on `Dashboard`, not return to a public marketing/discovery page automatically.
 - Auth pages (`/auth`, `/login`, `/signup`) must immediately redirect authenticated users away from the auth form.
 - Auth pages must not remain visible once authentication succeeds.
 - Users can sign up/login before verification; unverified users are blocked from generation

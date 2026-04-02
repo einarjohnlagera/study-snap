@@ -20,7 +20,6 @@ export type AuthUser = {
 };
 
 const AUTH_USER_KEY = "study_snap_auth_user";
-const LAST_VISITED_PATH_KEY = "study_snap_last_visited_path";
 export const LOGIN_REDIRECT_QUERY_KEY = "redirect";
 export const LOGIN_REASON_QUERY_KEY = "reason";
 export const LOGIN_REASON_SESSION_EXPIRED = "session_expired";
@@ -54,31 +53,6 @@ export function getCurrentPathWithQuery(): string {
     return "/dashboard";
   }
   return `${globalThis.location.pathname}${globalThis.location.search}`;
-}
-
-export function rememberLastVisitedPath(path: string | null | undefined): void {
-  if (globalThis.window === undefined) {
-    return;
-  }
-  const safePath = getSafeRedirectPath(path);
-  if (!safePath || isAuthRoutePath(safePath)) {
-    return;
-  }
-  globalThis.localStorage.setItem(LAST_VISITED_PATH_KEY, safePath);
-}
-
-export function getLastVisitedPath(): string | null {
-  if (globalThis.window === undefined) {
-    return null;
-  }
-  return getSafeRedirectPath(globalThis.localStorage.getItem(LAST_VISITED_PATH_KEY));
-}
-
-export function clearLastVisitedPath(): void {
-  if (globalThis.window === undefined) {
-    return;
-  }
-  globalThis.localStorage.removeItem(LAST_VISITED_PATH_KEY);
 }
 
 export function buildLoginPath(options?: {
@@ -169,11 +143,6 @@ export function resolvePostLoginDestination(
   const redirectTarget = getSafeRedirectPath(params.get(LOGIN_REDIRECT_QUERY_KEY));
   if (redirectTarget && !isAuthRoutePath(redirectTarget)) {
     return redirectTarget;
-  }
-
-  const lastVisitedPath = getLastVisitedPath();
-  if (lastVisitedPath && !isAuthRoutePath(lastVisitedPath)) {
-    return lastVisitedPath;
   }
 
   return "/dashboard";
