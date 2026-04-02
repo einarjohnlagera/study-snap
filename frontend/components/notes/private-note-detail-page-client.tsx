@@ -119,7 +119,7 @@ function StudyPackTabs({
               )}
             >
               <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">{item.label}</span>
+              <span>{item.label}</span>
             </button>
           );
         })}
@@ -383,7 +383,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const isDraft = note?.studyPackStatus !== "STUDY_PACK_READY";
   const title = note?.title?.trim() || "Untitled note";
   const tags = note?.tags ?? [];
-  const visibility = (note?.visibility ?? "PRIVATE") as NoteVisibility;
+  const visibility = (note?.visibility ?? "PRIVATE");
   const isPublic = visibility === "PUBLIC";
   const canManageVisibility = isEmailVerified || isPublic;
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;

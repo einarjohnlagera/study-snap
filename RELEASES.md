@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.6.0 - Board Exam Mode (In Progress)
+
+### New Features
+
+- No entries yet.
+
+### Improvements
+
+- Major action buttons now keep icon + text labels on mobile across the app’s shared action surfaces instead of collapsing to icon-only.
+- Private Note Detail `Summary` and `Quiz` tabs now keep text labels on mobile for clearer view switching.
+
+### Fixes
+
+- No entries yet.
+
+### Technical Changes
+
+- Shared responsive action components now default to mobile icon + text labels, with explicit opt-out reserved for true icon-only utility controls.
+
 ## v0.5.0 - Public Profiles & Public Notes
 
 Public Profile:

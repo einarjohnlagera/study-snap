@@ -88,7 +88,7 @@ type ResponsiveActionContentProps = {
 export function ResponsiveActionContent({
   action,
   label,
-  showTextOnMobile = false,
+  showTextOnMobile = true,
   className,
   iconClassName,
 }: Readonly<ResponsiveActionContentProps>) {
@@ -111,7 +111,7 @@ type ResponsiveActionButtonProps = React.ComponentProps<typeof Button> & {
 export function ResponsiveActionButton({
   action,
   label,
-  showTextOnMobile = false,
+  showTextOnMobile = true,
   className,
   children,
   ...props
@@ -142,7 +142,7 @@ export function ResponsiveActionLink({
   label,
   variant = "default",
   size = "default",
-  showTextOnMobile = false,
+  showTextOnMobile = true,
   className,
   children,
   ...props

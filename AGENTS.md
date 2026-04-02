@@ -299,7 +299,15 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Tabs should use an underline-style navigation treatment, not filled or outline button styling.
 - Tabs may include small outline icons.
 - Desktop tabs should show icon + text.
-- Mobile tabs should show icon only and keep an accessible label.
+- Mobile tabs should also show icon + text when they switch major note views.
+
+### Mobile Button Rule
+
+- Important action buttons must display icon + text on mobile.
+- Do not use icon-only buttons for major actions such as navigation, quiz entry, copy/share, create, save, upgrade, or public-page actions.
+- Prefer clarity over minimal UI.
+- Keep this behavior consistent across Dashboard, Note Detail, Library, Public pages, Profile, and Settings.
+- Small utility controls may remain icon-only only when the action is already highly familiar (`edit`, `delete`, `back`, menu, theme toggle, notifications, avatar).
 
 ### Dark Mode Button Contrast Rule
 
