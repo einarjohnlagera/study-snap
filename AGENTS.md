@@ -8,7 +8,8 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 Current documentation baseline:
 
 - `v0.5.0 - Public Profiles & Public Notes`
-- next planned milestone: `v0.6.0 - Board Exam Mode`
+- next planned milestone: `v0.6.0 - Landing Revamp & Positioning`
+- following milestone: `v0.7.0 - Board Exam Mode`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -64,10 +65,20 @@ Core loop:
 - The landing page must explain NoteLib in student terms: notes -> summaries -> quizzes -> review.
 - Position NoteLib as a notes library and long-term study workspace first, and as an AI-powered generator second.
 - The homepage should make it clear that users build a reusable library of notes before turning those notes into Study Packs for review.
+- Public marketing navigation should expose:
+  - `Home`
+  - `Public Library`
+  - `Learn`
+  - `Pricing`
+  - `Login`
+  - `Get Started`
 - Keep the home page focused on hero, how-it-works, features, Free vs Premium pricing, demo access, and signup CTA.
 - Demo access must be available without signup.
+- Public Library should be treated as a public discovery feature and must remain accessible without login.
 - Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.
 - Landing page metadata should position NoteLib as a note-to-study-pack product, not a generic AI assistant.
+- Landing page title, meta description, and Open Graph metadata must stay aligned with the notes-library-first positioning.
+- Do not claim a refreshed Open Graph image is shipped until the `og-image.png` asset is actually replaced.
 - Public marketing/auth surfaces should expose footer links to:
   - `Privacy Policy`
   - `Terms of Service`

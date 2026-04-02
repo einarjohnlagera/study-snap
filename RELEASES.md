@@ -1,17 +1,21 @@
 # RELEASES.md - NoteLib
 
-## v0.6.0 - Board Exam Mode (In Progress)
+## v0.6.0 - Landing Revamp & Positioning (In Progress)
 
 ### New Features
 
-- No entries yet.
+- Landing page now frames NoteLib as a notes library and study workspace, not just a one-time quiz generator.
+- Public marketing navigation now exposes `Home`, `Public Library`, `Learn`, `Pricing`, `Login`, and `Get Started`.
 
 ### Improvements
 
 - Major action buttons now keep icon + text labels on mobile across the app’s shared action surfaces instead of collapsing to icon-only.
 - Private Note Detail `Summary` and `Quiz` tabs now keep text labels on mobile for clearer view switching.
 - Landing page now positions NoteLib as a notes library and study workspace first, with stronger Public Library and active-recall messaging.
-- Public marketing navigation now includes `Home`, `Public Library`, `Learn`, `Pricing`, `Login`, and `Get Started`, and pricing no longer treats Public Library as a paid-plan feature.
+- Public Library is now promoted directly from the landing page as a discovery surface that stays accessible without login.
+- The landing page now integrates the Learn / active-recall message so new users understand the study method, not only the generation workflow.
+- Landing page SEO title, meta description, and Open Graph metadata now align with the notes-library positioning update.
+- Pricing no longer treats Public Library as a paid-plan feature.
 - Theme toggle is now available on the shared public navbar and syncs with a persisted user theme preference for authenticated users.
 
 ### Fixes
@@ -22,6 +26,7 @@
 ### Technical Changes
 
 - Shared responsive action components now default to mobile icon + text labels, with explicit opt-out reserved for true icon-only utility controls.
+- `v0.6.0` tracks an Open Graph image refresh to match the new positioning, but the asset redesign is still pending after the earlier rollback.
 
 ## v0.5.0 - Public Profiles & Public Notes
 
@@ -66,7 +71,7 @@ UI and UX:
 Documentation baseline:
 
 - `v0.5.0` is the documentation lock point for Public Profiles and Public Notes
-- next planned milestone is `v0.6.0 - Board Exam Mode`
+- next planned milestone is `v0.6.0 - Landing Revamp & Positioning`
 
 ## v0.4.0 - Profile-Based Experience & UX
 

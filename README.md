@@ -4,6 +4,8 @@
 
 Current release baseline: `v0.5.0 - Public Profiles & Public Notes`
 
+Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
+
 NoteLib is a notes library and study workspace where students, board exam reviewees, and teachers can organize notes, turn them into summaries and key concepts, and practice with quizzes built around active recall.
 
 It can be used by:
@@ -35,6 +37,8 @@ Build your notes library, then turn notes into summaries and quizzes when you ar
 - Practice with questions instead of only rereading
 - Find weak concepts and keep improving through active recall
 - Support students, board exam reviewees, and teachers with one shared workflow
+- Public Library is a public discovery surface, not a paid-plan feature
+- Learn page reinforces active recall as the study method behind the product
 
 ## Core Concept
 
@@ -221,6 +225,7 @@ This repo currently centers on:
 
 - note-to-study-pack generation
 - OCR support for image-based notes
+- landing-page positioning that explains NoteLib as a notes library and review workspace
 - Library and Public Library support
 - Public Profiles for creator discovery and public-note browsing
 - shared public-note card previews and whole-card navigation

@@ -4,9 +4,11 @@ Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table nam
 
 Current documentation baseline: `v0.5.0 - Public Profiles & Public Notes`
 
+Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
+
 ## Product Overview
 
-NoteLib helps students, board exam reviewees, and teachers turn notes into summaries, key concepts, and quizzes so they can study and prepare for exams faster.
+NoteLib is a notes library and study workspace that helps students, board exam reviewees, and teachers organize notes, then turn those notes into summaries, key concepts, and quizzes when review starts.
 
 The goal is to support active recall and repeated practice through a calm, iterative learning workflow built around summaries, key concepts, quiz practice, weak concepts, and adaptive review.
 
@@ -130,6 +132,13 @@ NoteLib is designed to help users iteratively improve understanding, not just ge
 
 Route: `/`
 
+Purpose:
+
+- explain NoteLib as a notes library first and a Study Pack generator second
+- make Public Library visible as a public discovery route
+- connect the product to active recall through the Learn page
+- keep marketing/SEO messaging aligned with the actual product workflow
+
 Required sections:
 
 - hero
@@ -139,6 +148,16 @@ Required sections:
 - active recall / study method
 - pricing teaser
 - final CTA
+
+Public navbar:
+
+- `Home`
+- `Public Library`
+- `Learn`
+- `Pricing`
+- `Login`
+- `Get Started`
+- theme toggle on shared public surfaces
 
 CTA behavior:
 
@@ -173,6 +192,15 @@ Public landing content:
 - Final CTA should include:
   - `Get Started`
   - `View Public Library`
+- Public Library must remain accessible without login and must not be marketed as a Premium-only feature
+
+SEO and social metadata:
+
+- title: `NoteLib — Build your notes library and turn notes into quizzes`
+- description: `NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.`
+- canonical URL: `https://www.notelib.app`
+- Open Graph / Twitter metadata should reuse the same positioning and point to `/og-image.png`
+- `og-image.png` should ultimately reflect the notes-library headline and supporting study-workspace message used on the landing page
 
 ### Study Pack Generation
 
