@@ -66,6 +66,10 @@ public class UserEntity {
     private Boolean weakConceptRemindersEnabled;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "theme_preference", nullable = false, length = 16)
+    private ThemePreference themePreference;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private UserStatus status;
 

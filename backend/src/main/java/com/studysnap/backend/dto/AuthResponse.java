@@ -2,6 +2,7 @@ package com.studysnap.backend.dto;
 
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserRole;
 
 import java.time.OffsetDateTime;
@@ -14,6 +15,7 @@ public record AuthResponse(
         OffsetDateTime emailVerifiedAt,
         OffsetDateTime onboardingCompletedAt,
         OffsetDateTime productOnboardingCompletedAt,
+        ThemePreference themePreference,
         UserRole role,
         PlanType planType,
         String token,

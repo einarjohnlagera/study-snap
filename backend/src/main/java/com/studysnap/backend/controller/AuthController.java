@@ -12,6 +12,7 @@ import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.security.AuthRateLimitService;
 import com.studysnap.backend.service.AuthService;
@@ -127,6 +128,15 @@ public class AuthController {
             @Valid @RequestBody UpdateStudyRemindersRequest request
     ) {
         return authService.updateStudyReminders(user.userId(), request);
+    }
+
+    @PostMapping("/preferences/theme")
+    @PreAuthorize("isAuthenticated()")
+    public MeResponse updateThemePreference(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody UpdateThemePreferenceRequest request
+    ) {
+        return authService.updateThemePreference(user.userId(), request);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

@@ -14,10 +14,12 @@ import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
+import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.RefreshTokenEntity;
+import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
@@ -87,6 +89,7 @@ public class AuthService {
         user.setEngagementMode(EngagementMode.FOCUSED);
         user.setInactivityRemindersEnabled(false);
         user.setWeakConceptRemindersEnabled(false);
+        user.setThemePreference(ThemePreference.SYSTEM);
         user.setStatus(UserStatus.ACTIVE);
         user.setRole(UserRole.USER);
         user.setTokenVersion(0);
@@ -250,6 +253,15 @@ public class AuthService {
         return toMeResponse(user);
     }
 
+    public MeResponse updateThemePreference(UUID userId, UpdateThemePreferenceRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+
+        user.setThemePreference(request.themePreference());
+        user.setUpdatedAt(OffsetDateTime.now());
+
+        return toMeResponse(user);
+    }
+
     public MeResponse updateUserProfile(UUID userId, UpdateUserProfileRequest request) {
         UserEntity user = findUserOrThrow(userId);
 
@@ -298,6 +310,7 @@ public class AuthService {
                 user.getEngagementMode(),
                 Boolean.TRUE.equals(user.getInactivityRemindersEnabled()),
                 Boolean.TRUE.equals(user.getWeakConceptRemindersEnabled()),
+                resolveThemePreference(user),
                 user.getEmailVerifiedAt(),
                 user.getOnboardingCompletedAt(),
                 user.getProductOnboardingCompletedAt(),
@@ -362,6 +375,7 @@ public class AuthService {
             user.getEmailVerifiedAt(),
             user.getOnboardingCompletedAt(),
             user.getProductOnboardingCompletedAt(),
+            resolveThemePreference(user),
             user.getRole(),
             planType,
             accessToken,
@@ -384,6 +398,10 @@ public class AuthService {
     private boolean isLocked(UserEntity user) {
         OffsetDateTime lockedUntil = user.getLockedUntil();
         return lockedUntil != null && lockedUntil.isAfter(OffsetDateTime.now());
+    }
+
+    private ThemePreference resolveThemePreference(UserEntity user) {
+        return user.getThemePreference() == null ? ThemePreference.SYSTEM : user.getThemePreference();
     }
 
     private AppException invalidCredentials() {

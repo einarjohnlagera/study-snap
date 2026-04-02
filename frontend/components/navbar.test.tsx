@@ -12,6 +12,10 @@ jest.mock("next/image", () => ({
   default: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
 
+jest.mock("./theme-toggle", () => ({
+  ThemeToggle: () => <button type="button">Toggle theme</button>,
+}));
+
 jest.mock("next/link", () => ({
   __esModule: true,
   default: ({
@@ -45,6 +49,7 @@ describe("Navbar", () => {
     expect(screen.getByRole("link", { name: "Pricing" })).toHaveAttribute("href", "/pricing");
     expect(screen.getAllByRole("link", { name: "Login" })[0]).toHaveAttribute("href", "/login");
     expect(screen.getAllByRole("link", { name: "Get Started" })[0]).toHaveAttribute("href", "/signup");
+    expect(screen.getAllByRole("button", { name: "Toggle theme" })[0]).toBeInTheDocument();
   });
 
   it("shows the same navigation in the mobile menu", () => {
