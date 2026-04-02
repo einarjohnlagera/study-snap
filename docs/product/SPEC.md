@@ -511,6 +511,8 @@ Page responsibilities:
 - `401` on protected API calls clears auth and redirects to `/login`
 - Preserve destination with `redirect` query param
 - Session-expired redirects include `reason=session_expired`
+- Manual logout should use neutral login messaging and must not show the session-expired warning
+- Logged-out protected-route access may use a neutral auth-required reason and must not show the session-expired warning
 - After a successful login, the frontend must route with `router.replace(...)` instead of relying on shell visibility alone.
 - Post-login destination order is:
   - verification/onboarding destination first when required
@@ -518,6 +520,10 @@ Page responsibilities:
   - `Dashboard` as the fallback
 - Query-string state such as `?tab=quiz` must be preserved in redirect restoration.
 - Manual login from public pages should land on `Dashboard`, not return to a public marketing/discovery page automatically.
+- Login-page messaging should match the auth reason:
+  - `reason=session_expired` -> `Your session has expired. Please log in again.`
+  - `reason=logged_out` -> neutral logout messaging
+  - `reason=auth_required` or no reason -> neutral login prompt
 - Auth pages (`/auth`, `/login`, `/signup`) must immediately redirect authenticated users away from the auth form.
 - Auth pages must not remain visible once authentication succeeds.
 - Users can sign up/login before verification; unverified users are blocked from generation

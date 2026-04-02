@@ -39,6 +39,8 @@ Required endpoints:
 - On `401`, clear auth state and redirect to `/login`.
 - Preserve destination with `redirect` query.
 - For expired sessions, include `reason=session_expired`.
+- For logged-out protected-route access, a neutral `reason=auth_required` may be included.
+- Manual logout should redirect with a neutral logout reason rather than the session-expired reason.
 - After successful login, redirect using this order:
   - `/verify-email` or `/onboarding` when required by the authenticated user state
   - explicit `redirect` query destination for protected-route access and session-expired recovery
@@ -46,6 +48,10 @@ Required endpoints:
 - Preserve query-string state when restoring note/detail views such as `?tab=quiz`.
 - Manual login from public pages such as Landing, Learn, Public Library, or Public Note should resolve to `Dashboard`.
 - Auth pages should also redirect already-authenticated users to the same resolved post-login destination.
+- Login-page messaging should follow the auth reason:
+  - `reason=session_expired` -> `Your session has expired. Please log in again.`
+  - `reason=logged_out` -> `You have been logged out.` or another neutral logout message
+  - `reason=auth_required` or no reason -> neutral login prompt
 
 ## Verification Gating Rules
 

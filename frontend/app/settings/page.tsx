@@ -27,7 +27,7 @@ import {
   type MeResponse,
   type SubscriptionCancellationReason,
 } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
+import { buildLoginPath, getAuthUser, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
@@ -185,7 +185,11 @@ export default function SettingsPage() {
     setSigningOut(true);
     try {
       await logout();
-      router.push("/auth");
+      router.push(
+        buildLoginPath({
+          reason: LOGIN_REASON_LOGGED_OUT,
+        }),
+      );
       router.refresh();
     } finally {
       setSigningOut(false);

@@ -23,6 +23,13 @@ const AUTH_USER_KEY = "study_snap_auth_user";
 export const LOGIN_REDIRECT_QUERY_KEY = "redirect";
 export const LOGIN_REASON_QUERY_KEY = "reason";
 export const LOGIN_REASON_SESSION_EXPIRED = "session_expired";
+export const LOGIN_REASON_LOGGED_OUT = "logged_out";
+export const LOGIN_REASON_AUTH_REQUIRED = "auth_required";
+
+export type LoginReason =
+  | typeof LOGIN_REASON_SESSION_EXPIRED
+  | typeof LOGIN_REASON_LOGGED_OUT
+  | typeof LOGIN_REASON_AUTH_REQUIRED;
 
 let hasTriggeredSessionExpiryRedirect = false;
 
@@ -57,17 +64,18 @@ export function getCurrentPathWithQuery(): string {
 
 export function buildLoginPath(options?: {
   redirectTo?: string | null;
-  sessionExpired?: boolean;
+  reason?: LoginReason | null;
 }): string {
   const params = new URLSearchParams();
   const redirectTo = getSafeRedirectPath(options?.redirectTo ?? null);
   if (redirectTo) {
     params.set(LOGIN_REDIRECT_QUERY_KEY, redirectTo);
   }
-  if (options?.sessionExpired) {
-    params.set(LOGIN_REASON_QUERY_KEY, LOGIN_REASON_SESSION_EXPIRED);
+  if (options?.reason) {
+    params.set(LOGIN_REASON_QUERY_KEY, options.reason);
   }
-  return params.size > 0 ? `/login?${params.toString()}` : "/login";
+  const queryString = params.toString();
+  return queryString.length > 0 ? `/login?${queryString}` : "/login";
 }
 
 export function getAuthUser(): AuthUser | null {
@@ -169,7 +177,7 @@ export function handleUnauthorizedSession(): void {
   globalThis.location.replace(
     buildLoginPath({
       redirectTo,
-      sessionExpired: true,
+      reason: LOGIN_REASON_SESSION_EXPIRED,
     }),
   );
 }

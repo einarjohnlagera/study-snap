@@ -23,7 +23,9 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("@/lib/auth", () => ({
+  buildLoginPath: jest.fn(() => "/login?reason=logged_out"),
   getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
+  LOGIN_REASON_LOGGED_OUT: "logged_out",
 }));
 
 jest.mock("@/lib/route-guards", () => ({

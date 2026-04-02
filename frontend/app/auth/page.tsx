@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { getMyPlan, login, signup, trackAnalyticsEvent } from "@/lib/api";
 import {
   getAuthUser,
+  LOGIN_REASON_AUTH_REQUIRED,
+  LOGIN_REASON_LOGGED_OUT,
   LOGIN_REASON_QUERY_KEY,
   LOGIN_REASON_SESSION_EXPIRED,
   type AuthUser,
@@ -26,8 +28,9 @@ function resolveModeFromLocation(): Mode {
   return params.get("mode") === "signup" ? "signup" : "login";
 }
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [authenticatedUser, setAuthenticatedUser] = useState<AuthUser | null>(() => getAuthUser());
   const [mode, setMode] = useState<Mode>(resolveModeFromLocation);
   const [firstName, setFirstName] = useState("");
@@ -38,19 +41,37 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasTrackedSignupStartRef = useRef(false);
-  const [showSessionExpiredMessage, setShowSessionExpiredMessage] = useState(() => {
-    if (globalThis.window === undefined) {
-      return false;
+  const searchKey = searchParams.toString();
+  const searchMode = searchParams.get("mode");
+  const loginReason = searchParams.get(LOGIN_REASON_QUERY_KEY);
+  const authNotice = useMemo(() => {
+    switch (loginReason) {
+      case LOGIN_REASON_SESSION_EXPIRED:
+        return {
+          message: "Your session has expired. Please log in again.",
+          className:
+            "rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200",
+        };
+      case LOGIN_REASON_LOGGED_OUT:
+        return {
+          message: "You have been logged out.",
+          className:
+            "rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground/80",
+        };
+      case LOGIN_REASON_AUTH_REQUIRED:
+        return {
+          message: "Please log in to continue.",
+          className:
+            "rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground/80",
+        };
+      default:
+        return null;
     }
-    const params = new URLSearchParams(globalThis.location.search);
-    return params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED;
-  });
+  }, [loginReason]);
 
   useEffect(() => {
-    const params = new URLSearchParams(globalThis.location.search);
-    setMode(params.get("mode") === "signup" ? "signup" : "login");
-    setShowSessionExpiredMessage(params.get(LOGIN_REASON_QUERY_KEY) === LOGIN_REASON_SESSION_EXPIRED);
-  }, []);
+    setMode(searchMode === "signup" ? "signup" : "login");
+  }, [searchKey, searchMode]);
 
   useEffect(() => {
     const syncAuthenticatedUser = () => {
@@ -158,9 +179,9 @@ export default function AuthPage() {
               ? "Continue to your study workspace."
               : "Sign up to generate and save Study Packs."}
           </CardDescription>
-          {showSessionExpiredMessage ? (
-            <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200">
-              Your session has expired. Please log in again.
+          {authNotice ? (
+            <p className={authNotice.className}>
+              {authNotice.message}
             </p>
           ) : null}
         </div>
@@ -253,5 +274,13 @@ export default function AuthPage() {
       </Card>
       <PublicFooter className="mt-6" />
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={null}>
+      <AuthPageContent />
+    </Suspense>
   );
 }

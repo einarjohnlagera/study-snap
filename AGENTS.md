@@ -356,6 +356,13 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Manual login from public pages should land on `Dashboard`.
 - Do not send users back to public marketing or discovery pages automatically after login unless a protected-route redirect explicitly requires it.
 
+### Auth Messaging Rule
+
+- `Your session has expired. Please log in again.` must only appear when login is opened with `reason=session_expired`.
+- Manual logout must not reuse the session-expired message; it may show a neutral `You have been logged out.` message instead.
+- Protected-route access while logged out should use neutral login messaging such as `Please log in to continue.`
+- Login-page messaging must be driven by the current auth-route query state, not sticky component state from a previous redirect reason.
+
 ### Profile Page Responsibility Rule
 
 - `/profile` is a private identity settings surface, not a public-page controls surface.
