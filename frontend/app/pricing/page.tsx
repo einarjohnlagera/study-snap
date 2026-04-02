@@ -31,6 +31,10 @@ export default function PricingPage() {
             <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
               Turn your notes into reviewers, practice questions, and better exam prep.
             </p>
+            <p className="max-w-2xl text-sm leading-relaxed text-foreground/75">
+              NoteLib is a notes library and review tool in one — you build your own reviewers, then turn them into
+              summaries, key concepts, and practice quizzes.
+            </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="/auth" className="w-full sm:w-auto">
                 <Button type="button" className="w-full sm:w-auto">
@@ -47,7 +51,7 @@ export default function PricingPage() {
           </div>
           <Card className="space-y-3 border-blue-500/20 bg-background/90 p-5 backdrop-blur sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-              Built for exams and mastery
+              Built for serious review
             </p>
             <ul className="space-y-3 text-sm text-foreground/80">
               <li className="flex items-start gap-2">

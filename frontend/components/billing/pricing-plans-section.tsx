@@ -132,7 +132,9 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
             <CardTitle>Start studying for free.</CardTitle>
-            <CardDescription>Free gives you the core Study Pack and review workflow for everyday studying.</CardDescription>
+            <CardDescription>
+              Free gives you the core NoteLib workflow: Create notes, turn them into Study Packs, and review with quizzes.
+            </CardDescription>
           </div>
           <p className="text-3xl font-semibold">Free</p>
           <ul className="space-y-2 text-sm text-foreground/80">
@@ -157,7 +159,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             </p>
             <CardTitle>Unlock adaptive practice and deeper quiz training.</CardTitle>
             <CardDescription>
-              Premium is for serious review weeks when you want more practice, stronger quiz control, and higher limits.
+              Premium is designed for exam preparation periods when you need more practice, more quizzes, and Adaptive Practice to focus on weak topics.
             </CardDescription>
           </div>
           <div className="space-y-1">
