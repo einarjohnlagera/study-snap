@@ -43,7 +43,7 @@ describe("Navbar", () => {
     expect(screen.getByRole("link", { name: "Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByRole("link", { name: "Learn" })).toHaveAttribute("href", "/learn");
     expect(screen.getByRole("link", { name: "Pricing" })).toHaveAttribute("href", "/pricing");
-    expect(screen.getByRole("link", { name: "Login" })).toHaveAttribute("href", "/login");
+    expect(screen.getAllByRole("link", { name: "Login" })[0]).toHaveAttribute("href", "/login");
     expect(screen.getAllByRole("link", { name: "Get Started" })[0]).toHaveAttribute("href", "/signup");
   });
 

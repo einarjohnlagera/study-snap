@@ -12,8 +12,14 @@ const PUBLIC_NAV = [
   { href: "/public/library", label: "Public Library" },
   { href: "/learn", label: "Learn" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/login", label: "Login" },
 ];
+
+function isActivePublicRoute(currentPathname: string, href: string): boolean {
+  if (href === "/") {
+    return currentPathname === "/";
+  }
+  return currentPathname === href || currentPathname.startsWith(`${href}/`);
+}
 
 export function Navbar() {
   const pathname = usePathname();
@@ -39,16 +45,27 @@ export function Navbar() {
           <span className="truncate whitespace-nowrap text-sm font-semibold sm:text-base">NoteLib</span>
         </Link>
 
-        <nav className="hidden items-center gap-5 md:flex">
+        <nav className="hidden items-center gap-2 md:flex">
           {PUBLIC_NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="whitespace-nowrap text-sm text-foreground/80 transition-colors hover:text-foreground"
+              aria-current={isActivePublicRoute(pathname, item.href) ? "page" : undefined}
+              className={`inline-flex h-16 items-center border-b-2 px-2 text-sm font-medium transition-colors ${
+                isActivePublicRoute(pathname, item.href)
+                  ? "border-blue-600 text-foreground dark:border-blue-400"
+                  : "border-transparent text-foreground/80 hover:border-border hover:text-foreground"
+              }`}
             >
               {item.label}
             </Link>
           ))}
+          <Link
+            href="/login"
+            className={buttonVariants({ variant: "outline", size: "sm", className: "ml-2" })}
+          >
+            Login
+          </Link>
           <Link href="/signup" className={buttonVariants({ size: "sm" })}>
             Get Started
           </Link>
@@ -84,12 +101,24 @@ export function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-foreground/85 transition-colors hover:bg-muted/50 hover:text-foreground"
+                  aria-current={isActivePublicRoute(pathname, item.href) ? "page" : undefined}
+                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isActivePublicRoute(pathname, item.href)
+                      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200"
+                      : "text-foreground/85 hover:bg-muted/50 hover:text-foreground"
+                  }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {item.label}
                 </Link>
               ))}
+              <Link
+                href="/login"
+                className={buttonVariants({ variant: "outline", className: "mt-2 w-full justify-center" })}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Login
+              </Link>
               <Link
                 href="/signup"
                 className={buttonVariants({ className: "mt-2 w-full justify-center" })}
