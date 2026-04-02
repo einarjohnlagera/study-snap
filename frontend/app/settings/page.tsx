@@ -394,7 +394,7 @@ export default function SettingsPage() {
       ? "Yearly"
       : "Monthly"
     : "—";
-  const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle.endsAt);
+  const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Brain, ChevronDown, FileText } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
+import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
+  formatStudyPackResetDate,
+  isStudyPackLimitReached,
   isStudyPackLimitReachedMessage,
   resolveRemainingUsageCredits,
   shouldShowNearStudyPackLimitBanner,
@@ -181,6 +184,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
   const [showShareLinkModal, setShowShareLinkModal] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
+  const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
   const [showGenerateStudyPackGuide, setShowGenerateStudyPackGuide] = useState(false);
   const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
@@ -407,9 +411,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       usageSummary.remaining?.studyPacksRemaining,
     )
     : null;
-  const hasReachedStudyPackLimit = usageSummary?.plan === "FREE"
-    && studyPacksRemaining !== null
-    && studyPacksRemaining <= 0;
+  const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
+  const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const shouldShowNearLimitBanner = usageSummary
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
@@ -427,6 +430,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       },
     });
     setActivePaywallModal(variant);
+  }, [note?.id, pathname]);
+
+  const openStudyPackLimitModal = useCallback((source: string) => {
+    void trackAnalyticsEvent({
+      eventType: "FEATURE_LOCKED_CLICKED",
+      metadata: {
+        feature: "study_pack_limit",
+        source,
+        path: pathname,
+        noteId: note?.id ?? null,
+      },
+    });
+    setShowLimitReachedModal(true);
   }, [note?.id, pathname]);
 
   const handleChangeStudyPackTab = useCallback((nextTab: NoteDetailTab) => {
@@ -488,7 +504,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     if (hasReachedStudyPackLimit) {
-      openPaywallModal("study-pack-limit", "private_note_detail_generate");
+      openStudyPackLimitModal("private_note_detail_generate");
       return;
     }
 
@@ -525,7 +541,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         const message = err instanceof Error ? err.message : "Could not generate Study Pack.";
         if (isStudyPackLimitReachedMessage(message)) {
           void refreshUsageSummary();
-          openPaywallModal("study-pack-limit", "private_note_detail_generate_error");
+          openStudyPackLimitModal("private_note_detail_generate_error");
         } else {
           setError(message);
         }
@@ -833,7 +849,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         </Card>
       ) : note ? (
         <div className="space-y-6">
-          {shouldShowNearLimitBanner ? <NearLimitBanner remainingCredits={studyPacksRemaining} /> : null}
+          {shouldShowNearLimitBanner ? (
+            <NearLimitBanner
+              planType={usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE")}
+              remainingCredits={studyPacksRemaining}
+              resetDateLabel={usageResetDateLabel}
+            />
+          ) : null}
           {showFirstStudyPackSuccessBanner ? (
             <Card className="space-y-3 border-blue-500/30 bg-blue-500/5 p-4 sm:p-6">
               <div className="space-y-1">
@@ -1345,9 +1367,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
       <PaywallModal
         isOpen={activePaywallModal !== null}
-        variant={activePaywallModal ?? "study-pack-limit"}
+        variant={activePaywallModal ?? "adaptive-practice"}
         source="private_note_detail"
         onClose={() => setActivePaywallModal(null)}
+      />
+
+      <StudyPackLimitModal
+        isOpen={showLimitReachedModal}
+        planType={usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE")}
+        resetDateLabel={usageResetDateLabel}
+        onClose={() => setShowLimitReachedModal(false)}
       />
     </main>
   );

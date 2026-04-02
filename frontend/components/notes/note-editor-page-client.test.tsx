@@ -329,9 +329,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
 
-    expect(await screen.findByText("You’ve reached your study pack limit")).toBeInTheDocument();
+    expect(await screen.findByText("Free Plan Limit Reached")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
-    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+    expect(pushMock).toHaveBeenCalledWith("/pricing");
   });
 
   it("shows the exact remaining Study Pack count in the near-limit banner", async () => {
@@ -366,7 +366,7 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    expect(await screen.findByRole("status")).toHaveTextContent("You have 1 Study Pack left this billing cycle.");
+    expect(await screen.findByRole("status")).toHaveTextContent("You have 1 Study Pack left this month on the Free plan.");
   });
 
   it("imports image OCR text into Content without generating a Study Pack and shows an inline warning for low confidence", async () => {

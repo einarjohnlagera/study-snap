@@ -21,6 +21,7 @@
 - Theme toggle is now available on the shared public navbar and syncs with a persisted user theme preference for authenticated users.
 - Navbar and app-shell logos now use the NL monogram, while marketing headers and the public footer use the full NoteLib wordmark.
 - The Open Graph image now uses the standardized NoteLib branding, notes-and-lightning illustration, and notes-library messaging.
+- Study Pack generation surfaces now use student-friendly monthly-limit banners and plan-specific limit modals for both Free and Premium instead of relying on disabled generate actions.
 
 ### Fixes
 

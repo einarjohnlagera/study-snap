@@ -53,14 +53,31 @@ export function isNearUsageLimit(used: number, limit: number): boolean {
   if (limit <= 0 || hasReachedUsageLimit(used, limit)) {
     return false;
   }
-  return Math.max(0, limit - used) <= 1;
+  return Math.max(0, limit - used) <= 2;
+}
+
+export function isStudyPackLimitReached(remainingCredits: number | null | undefined): boolean {
+  return typeof remainingCredits === "number" && remainingCredits <= 0;
 }
 
 export function shouldShowNearStudyPackLimitBanner(
   planType: PlanType,
   remainingCredits: number | null | undefined,
 ): boolean {
-  return planType === "FREE" && typeof remainingCredits === "number" && remainingCredits > 0 && remainingCredits <= 1;
+  return (planType === "FREE" || planType === "PREMIUM")
+    && typeof remainingCredits === "number"
+    && remainingCredits <= 2;
+}
+
+export function formatStudyPackResetDate(rawDate: string | null | undefined): string {
+  if (!rawDate) {
+    return "your reset date";
+  }
+  const value = new Date(rawDate);
+  if (Number.isNaN(value.getTime())) {
+    return rawDate;
+  }
+  return value.toLocaleDateString(undefined, { month: "long", day: "numeric" });
 }
 
 export function isStudyPackLimitReachedMessage(message: string): boolean {

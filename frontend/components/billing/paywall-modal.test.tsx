@@ -52,7 +52,7 @@ describe("PaywallModal", () => {
     render(
       <PaywallModal
         isOpen
-        variant="study-pack-limit"
+        variant="adaptive-practice"
         source="test_source"
         onClose={jest.fn()}
       />,
