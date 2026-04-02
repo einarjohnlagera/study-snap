@@ -62,6 +62,8 @@ Core loop:
 ### Marketing Landing Page Rule
 
 - The landing page must explain NoteLib in student terms: notes -> summaries -> quizzes -> review.
+- Position NoteLib as a notes library and long-term study workspace first, and as an AI-powered generator second.
+- The homepage should make it clear that users build a reusable library of notes before turning those notes into Study Packs for review.
 - Keep the home page focused on hero, how-it-works, features, Free vs Premium pricing, demo access, and signup CTA.
 - Demo access must be available without signup.
 - Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.

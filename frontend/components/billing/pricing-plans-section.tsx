@@ -28,25 +28,15 @@ type ComparisonSection = {
 
 const COMPARISON_SECTIONS: ComparisonSection[] = [
   {
-    title: "Core Features",
+    title: "Included in Free",
     rows: [
       {
-        label: "Unlimited Notes",
+        label: "Quick Review",
         free: "check",
         premium: "check",
       },
       {
-        label: "File Uploads (PDF, DOCX, TXT)",
-        free: "check",
-        premium: "check",
-      },
-      {
-        label: "Public Library Access",
-        free: "check",
-        premium: "check",
-      },
-      {
-        label: "Weak Concepts Insights",
+        label: "Weak Concepts Tracking",
         free: "check",
         premium: "check",
       },
@@ -59,11 +49,6 @@ const COMPARISON_SECTIONS: ComparisonSection[] = [
         label: "AI Study Packs / month",
         free: String(pricingConfig.free.studyPacksPerMonth),
         premium: String(pricingConfig.premium.studyPacksPerMonth),
-      },
-      {
-        label: "Image to Text (OCR)",
-        free: "Limited",
-        premium: "Higher Limits",
       },
       {
         label: "Challenge Quizzes / month",
@@ -85,11 +70,7 @@ const COMPARISON_SECTIONS: ComparisonSection[] = [
         free: null,
         premium: "check",
       },
-      {
-        label: "Priority AI Processing",
-        free: null,
-        premium: "check",
-      },
+      { label: "Future Premium Features", free: null, premium: "check" },
     ],
   },
 ];
@@ -149,19 +130,16 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
             <CardTitle>Start studying for free.</CardTitle>
-            <CardDescription>Free gives you enough room to build notes, generate reviewers, and spot weak areas before exams.</CardDescription>
+            <CardDescription>Free gives you the core Study Pack and review workflow for everyday studying.</CardDescription>
           </div>
           <p className="text-3xl font-semibold">Free</p>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Unlimited Notes</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />File Uploads (PDF, DOCX, TXT)</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Limited OCR (Image to Text)</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Insights</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Public Library Access</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Quick Review</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Tracking</li>
           </ul>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
             Start for Free
@@ -199,8 +177,8 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />More Study Packs and Quizzes</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice for weak topics</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Choose Quiz Difficulty</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher OCR Limits</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI Processing</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher monthly limits</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Future premium features</li>
           </ul>
           <div className="space-y-2">
             <PremiumWaitlistButton
@@ -285,12 +263,10 @@ export function SimplePricingSection() {
             <CardTitle>For casual studying</CardTitle>
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Unlimited notes</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />File uploads</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Limited OCR</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Public Library access</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Quick Review</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Tracking</li>
           </ul>
           <Link href="/signup" className={buttonVariants({ className: "w-full sm:w-auto" })}>
             Get Started Free
@@ -309,8 +285,7 @@ export function SimplePricingSection() {
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher monthly limits</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty Selection</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher OCR limits</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Priority AI processing</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Future premium features</li>
           </ul>
           <Link href="/pricing" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
             View Pricing

@@ -39,40 +39,36 @@ describe("PricingPage", () => {
     expect(screen.getByText("Most students upgrade during exam weeks.")).toBeInTheDocument();
     expect(screen.getByText("10 Study Packs per month")).toBeInTheDocument();
     expect(screen.getByText("5 Challenge Quizzes per month")).toBeInTheDocument();
-    expect(screen.getAllByText("Weak Concepts Insights")).not.toHaveLength(0);
-    expect(screen.getAllByText("File Uploads (PDF, DOCX, TXT)")).not.toHaveLength(0);
-    expect(screen.getByText("Limited OCR (Image to Text)")).toBeInTheDocument();
+    expect(screen.getAllByText("Weak Concepts Tracking")).not.toHaveLength(0);
+    expect(screen.getAllByText("Quick Review")).not.toHaveLength(0);
     expect(screen.getByText("Everything in Free")).toBeInTheDocument();
     expect(screen.getByText("More Study Packs and Quizzes")).toBeInTheDocument();
     expect(screen.getByText("Adaptive Practice for weak topics")).toBeInTheDocument();
-    expect(screen.getByText("Higher OCR Limits")).toBeInTheDocument();
     expect(screen.getAllByText("Choose Quiz Difficulty")).not.toHaveLength(0);
+    expect(screen.getAllByText("Future premium features")).not.toHaveLength(0);
     expect(screen.getByText("More practice. Better results.")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
     expect(
       screen.getByText("Free helps you study consistently. Premium unlocks deeper practice and higher limits when exams get serious."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Core Features")).toBeInTheDocument();
+    expect(screen.getByText("Included in Free")).toBeInTheDocument();
     expect(screen.getByText("Monthly Limits")).toBeInTheDocument();
     expect(screen.getByText("Premium Features")).toBeInTheDocument();
-    expect(screen.getAllByText("Image to Text (OCR)")).not.toHaveLength(0);
-    expect(screen.queryByText("Image to Text (OCR) / month")).not.toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getByText("50")).toBeInTheDocument();
     expect(screen.getByText("30")).toBeInTheDocument();
-    expect(screen.getByText("Limited")).toBeInTheDocument();
-    expect(screen.getByText("Higher Limits")).toBeInTheDocument();
+    expect(screen.queryByText("Public Library Access")).not.toBeInTheDocument();
+    expect(screen.queryByText("File Uploads (PDF, DOCX, TXT)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Image to Text (OCR)")).not.toBeInTheDocument();
 
     const comparisonTable = screen.getByRole("table");
     const pricingText = comparisonTable.textContent ?? "";
-    expect(pricingText.indexOf("Unlimited Notes")).toBeLessThan(pricingText.indexOf("File Uploads (PDF, DOCX, TXT)"));
-    expect(pricingText.indexOf("File Uploads (PDF, DOCX, TXT)")).toBeLessThan(pricingText.indexOf("Public Library Access"));
-    expect(pricingText.indexOf("Public Library Access")).toBeLessThan(pricingText.indexOf("Weak Concepts Insights"));
-    expect(pricingText.indexOf("Weak Concepts Insights")).toBeLessThan(pricingText.indexOf("AI Study Packs / month"));
-    expect(pricingText.indexOf("AI Study Packs / month")).toBeLessThan(pricingText.indexOf("Image to Text (OCR)"));
-    expect(pricingText.indexOf("Image to Text (OCR)")).toBeLessThan(pricingText.indexOf("Challenge Quizzes / month"));
+    expect(pricingText.indexOf("Quick Review")).toBeLessThan(pricingText.indexOf("Weak Concepts Tracking"));
+    expect(pricingText.indexOf("Weak Concepts Tracking")).toBeLessThan(pricingText.indexOf("AI Study Packs / month"));
+    expect(pricingText.indexOf("AI Study Packs / month")).toBeLessThan(pricingText.indexOf("Challenge Quizzes / month"));
     expect(pricingText.indexOf("Challenge Quizzes / month")).toBeLessThan(pricingText.indexOf("Adaptive Practice"));
     expect(pricingText.indexOf("Adaptive Practice")).toBeLessThan(pricingText.indexOf("Choose Quiz Difficulty"));
+    expect(pricingText.indexOf("Choose Quiz Difficulty")).toBeLessThan(pricingText.indexOf("Future Premium Features"));
   });
 
   it("links signup CTA and opens the premium waitlist flow", async () => {

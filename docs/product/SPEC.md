@@ -133,22 +133,46 @@ Route: `/`
 Required sections:
 
 - hero
+- What Is NoteLib
 - how-it-works
-- who-it's-for
-- feature highlights
+- Public Library
+- active recall / study method
 - pricing teaser
 - final CTA
 
 CTA behavior:
 
 - primary CTA: account creation
-- secondary CTA: demo exploration (`/demo`)
+- secondary CTA: Public Library exploration (`/public/library`)
+- demo access may remain available as a supporting public link, but it is not the primary secondary CTA
 
 Hero positioning:
 
-- headline: `Turn Notes Into Quizzes`
-- subheadline: `Study Smarter. Not Harder.`
-- supporting text should focus on summaries, key concepts, and practice quizzes rather than AI tooling
+- headline: `Build your own library of notes. Turn them into summaries and quizzes when you're ready to review.`
+- supporting text should explain NoteLib as a notes library, study workspace, and review tool rather than a one-shot AI utility
+- landing messaging should position NoteLib as:
+  - a notes library
+  - a long-term study workspace
+  - a place where notes become summaries, key concepts, and quizzes
+  - a product built around active recall
+- landing messaging should avoid positioning NoteLib as only:
+  - a quiz generator
+  - a summarizer
+  - a generic AI tool
+
+Public landing content:
+
+- `What Is NoteLib` should reinforce `Your Notes. Your Library. Your Review Tool.`
+- `How It Works` should show:
+  - `Create a Note`
+  - `Build Your Library`
+  - `Generate Study Pack`
+  - `Review & Practice`
+- Public Library should be promoted as a first-class discovery route with CTA `Browse Public Library`
+- Study Method should connect NoteLib to active recall and link to `/learn`
+- Final CTA should include:
+  - `Get Started`
+  - `View Public Library`
 
 ### Study Pack Generation
 

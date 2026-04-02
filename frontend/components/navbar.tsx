@@ -9,9 +9,10 @@ import { buttonVariants } from "./ui/button";
 
 const PUBLIC_NAV = [
   { href: "/", label: "Home" },
+  { href: "/public/library", label: "Public Library" },
   { href: "/learn", label: "Learn" },
   { href: "/pricing", label: "Pricing" },
-  { href: "/login", label: "Log in" },
+  { href: "/login", label: "Login" },
 ];
 
 export function Navbar() {
@@ -49,7 +50,7 @@ export function Navbar() {
             </Link>
           ))}
           <Link href="/signup" className={buttonVariants({ size: "sm" })}>
-            Get Started Free
+            Get Started
           </Link>
         </nav>
 
@@ -94,7 +95,7 @@ export function Navbar() {
                 className={buttonVariants({ className: "mt-2 w-full justify-center" })}
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Get Started Free
+                Get Started
               </Link>
             </nav>
           </div>
