@@ -17,17 +17,43 @@ import { PublicFooter } from "@/components/public/public-footer";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { buildPageMetadata } from "@/lib/site-metadata";
+import { SITE_NAME } from "@/lib/site-metadata";
 import { buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
-  "NoteLib is a notes library and study workspace where you organize notes, generate summaries and key concepts, and practice with quizzes built around active recall.";
+  "Organize your notes, generate summaries, and practice with quizzes — all in one study workspace.";
+const landingPageTitle = "NoteLib — Build your notes library and turn notes into quizzes";
+const landingPageUrl = "https://www.notelib.app";
+const landingPageOgImage = "https://www.notelib.app/og-image.png";
 
-export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib — Build Your Notes Library",
+export const metadata: Metadata = {
+  title: landingPageTitle,
   description: landingPageDescription,
-  path: "/",
-});
+  alternates: {
+    canonical: landingPageUrl,
+  },
+  openGraph: {
+    title: landingPageTitle,
+    description: landingPageDescription,
+    type: "website",
+    url: landingPageUrl,
+    siteName: SITE_NAME,
+    images: [
+      {
+        url: landingPageOgImage,
+        width: 1200,
+        height: 630,
+        alt: "Build your notes library. Turn your notes into summaries and quizzes.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: landingPageTitle,
+    description: landingPageDescription,
+    images: [landingPageOgImage],
+  },
+};
 
 const howItWorksSteps = [
   {
