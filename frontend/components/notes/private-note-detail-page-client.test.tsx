@@ -163,6 +163,11 @@ describe("PrivateNoteDetailPageClient", () => {
     (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
       message: "You're on the list! We'll notify you when Premium launches.",
     });
+    (createStudyPackFromNote as jest.Mock).mockResolvedValue({
+      title: "Suggested Title",
+      subject: "Biology",
+      tags: ["cells"],
+    });
   });
 
   it("routes Edit to note editor for draft note", async () => {
@@ -323,7 +328,20 @@ describe("PrivateNoteDetailPageClient", () => {
       profileType: "BOARD_EXAM",
       productOnboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
-    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      title: "",
+      subject: null,
+      tags: [],
+      studyPackStatus: "DRAFT",
+    });
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      title: "Suggested Title",
+      subject: "Biology",
+      tags: ["cells"],
+      studyPackStatus: "STUDY_PACK_READY",
+    });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
@@ -331,6 +349,27 @@ describe("PrivateNoteDetailPageClient", () => {
 
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=quiz");
+    });
+  });
+
+  it("shows metadata suggestions after generating from note detail when the note already has metadata", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+
+    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Keep mine" }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
     });
   });
 

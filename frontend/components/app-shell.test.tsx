@@ -11,6 +11,7 @@ const routerMock = {
 
 let currentPathname = "/dashboard";
 let currentAuthUser: Record<string, unknown> | null = null;
+const sendFeedbackWidgetMock = jest.fn(() => null);
 
 jest.mock("next/navigation", () => ({
   usePathname: () => currentPathname,
@@ -46,7 +47,7 @@ jest.mock("@/components/theme-toggle", () => ({
 }));
 
 jest.mock("@/components/feedback/send-feedback-widget", () => ({
-  SendFeedbackWidget: () => null,
+  SendFeedbackWidget: (props: unknown) => sendFeedbackWidgetMock(props),
 }));
 
 jest.mock("@/components/navbar", () => ({
@@ -124,6 +125,7 @@ describe("AppShell", () => {
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
     routerMock.refresh.mockReset();
+    sendFeedbackWidgetMock.mockClear();
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (logout as jest.Mock).mockReset();
@@ -169,6 +171,20 @@ describe("AppShell", () => {
     await waitFor(() => {
       expect(logout).toHaveBeenCalled();
       expect(routerMock.replace).toHaveBeenCalledWith("/login?reason=logged_out");
+    });
+  });
+
+  it("hides the mobile feedback widget on note editor routes", async () => {
+    currentPathname = "/notes/new";
+
+    render(
+      <AppShell>
+        <div>New note content</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ mobileHidden: true }));
     });
   });
 });

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Brain, ChevronDown, FileText } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
+import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,8 +18,8 @@ import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
-  hasReachedUsageLimit,
   isStudyPackLimitReachedMessage,
+  resolveRemainingUsageCredits,
   shouldShowNearStudyPackLimitBanner,
 } from "@/lib/plans";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
@@ -55,6 +56,7 @@ import {
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
+import { hasExistingNoteMetadata } from "@/lib/note-metadata";
 import { cn } from "@/lib/utils";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
@@ -145,6 +147,13 @@ type PrivateNoteDetailPageClientProps = {
   routeId: string;
 };
 
+type PendingSuggestion = {
+  noteId: string;
+  title: string;
+  subject: string | null;
+  tags: string[];
+};
+
 export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDetailPageClientProps>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -175,6 +184,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
   const [showGenerateStudyPackGuide, setShowGenerateStudyPackGuide] = useState(false);
   const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
+  const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
+  const [applyingSuggestion, setApplyingSuggestion] = useState(false);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -195,7 +206,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     subject: "",
     tags: [],
   });
-  const { usageSummary } = useBillingUsageSummary();
+  const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
 
@@ -389,12 +400,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const hasAdaptiveTargets = (challengeSummary?.latestWeakConcepts?.length ?? 0) > 0;
   const hasCopyAttribution = Boolean(note?.copiedFromUserId && note?.copiedFromNoteId);
   const copiedSourceTitle = note?.copiedFromTitle?.trim() || "Untitled note";
-  const studyPacksUsed = usageSummary?.usage.studyPacksUsed ?? 0;
-  const studyPacksLimit = usageSummary?.limits.studyPacksPerMonth ?? 0;
+  const studyPacksRemaining = usageSummary
+    ? resolveRemainingUsageCredits(
+      usageSummary.usage.studyPacksUsed,
+      usageSummary.limits.studyPacksPerMonth,
+      usageSummary.remaining?.studyPacksRemaining,
+    )
+    : null;
   const hasReachedStudyPackLimit = usageSummary?.plan === "FREE"
-    && hasReachedUsageLimit(studyPacksUsed, studyPacksLimit);
+    && studyPacksRemaining !== null
+    && studyPacksRemaining <= 0;
   const shouldShowNearLimitBanner = usageSummary
-    ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksUsed, studyPacksLimit)
+    ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
   const showFirstStudyPackSuccessBanner = firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
@@ -419,6 +436,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     const next = new URLSearchParams(searchParams.toString());
     router.replace(buildNoteDetailPathWithTab(note.id, nextTab, next), { scroll: false });
   }, [activeStudyPackTab, isDraft, note, router, searchParams]);
+
+  const finalizeGeneratedRedirect = useCallback((noteId: string) => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("created", "1");
+    const tab = resolveGeneratedNoteTab(profileType, null, null);
+    router.replace(buildNoteDetailPathWithTab(noteId, tab, next));
+    void loadDetail();
+  }, [loadDetail, profileType, router, searchParams]);
 
   const performVisibilityUpdate = useCallback(async (
     nextVisibility: NoteVisibility,
@@ -469,23 +494,37 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
     setGenerating(true);
     try {
-      await createStudyPackFromNote(note.id);
+      const generated = await createStudyPackFromNote(note.id);
+      await refreshUsageSummary();
       const authUser = getAuthUser();
       if (authUser && firstStudyStep === "saved-note") {
         setFirstStudyOnboardingStep(authUser.id, "study-pack-ready");
         setFirstStudyStep("study-pack-ready");
       }
-      const next = new URLSearchParams(searchParams.toString());
-      next.set("created", "1");
-      const tab = resolveGeneratedNoteTab(profileType, null, null);
-      router.replace(buildNoteDetailPathWithTab(note.id, tab, next));
-      void loadDetail();
+      if (!hasExistingNoteMetadata(note)) {
+        const updated = await updateNote(note.id, {
+          title: generated.title,
+          subject: generated.subject ?? null,
+          tags: generated.tags ?? [],
+          content: note.content,
+        });
+        setNote(updated);
+        finalizeGeneratedRedirect(note.id);
+        return;
+      }
+      setPendingSuggestion({
+        noteId: note.id,
+        title: generated.title,
+        subject: generated.subject ?? null,
+        tags: generated.tags ?? [],
+      });
     } catch (err) {
       if (isEmailNotVerifiedError(err)) {
         setToast("Email verification is required before generating Study Packs.");
       } else {
         const message = err instanceof Error ? err.message : "Could not generate Study Pack.";
         if (isStudyPackLimitReachedMessage(message)) {
+          void refreshUsageSummary();
           openPaywallModal("study-pack-limit", "private_note_detail_generate_error");
         } else {
           setError(message);
@@ -495,6 +534,38 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setGenerating(false);
     }
   };
+
+  const applySuggestions = useCallback(async () => {
+    if (!note || !pendingSuggestion || applyingSuggestion) {
+      return;
+    }
+    setApplyingSuggestion(true);
+    try {
+      const updated = await updateNote(pendingSuggestion.noteId, {
+        title: pendingSuggestion.title,
+        subject: pendingSuggestion.subject,
+        tags: pendingSuggestion.tags,
+        content: note.content,
+      });
+      setNote(updated);
+      setPendingSuggestion(null);
+      finalizeGeneratedRedirect(pendingSuggestion.noteId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not apply suggestions.";
+      setError(message);
+    } finally {
+      setApplyingSuggestion(false);
+    }
+  }, [applyingSuggestion, finalizeGeneratedRedirect, note, pendingSuggestion]);
+
+  const keepMineAndContinue = useCallback(() => {
+    if (!pendingSuggestion) {
+      return;
+    }
+    const noteId = pendingSuggestion.noteId;
+    setPendingSuggestion(null);
+    finalizeGeneratedRedirect(noteId);
+  }, [finalizeGeneratedRedirect, pendingSuggestion]);
 
   const handleMakeCopy = async () => {
     if (!note || copying) {
@@ -762,7 +833,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         </Card>
       ) : note ? (
         <div className="space-y-6">
-          {shouldShowNearLimitBanner ? <NearLimitBanner /> : null}
+          {shouldShowNearLimitBanner ? <NearLimitBanner remainingCredits={studyPacksRemaining} /> : null}
           {showFirstStudyPackSuccessBanner ? (
             <Card className="space-y-3 border-blue-500/30 bg-blue-500/5 p-4 sm:p-6">
               <div className="space-y-1">
@@ -1196,6 +1267,18 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             void handleDeleteNote();
           }
         }}
+      />
+
+      <AiSuggestionModal
+        open={Boolean(pendingSuggestion)}
+        title={pendingSuggestion?.title ?? ""}
+        subject={pendingSuggestion?.subject ?? null}
+        tags={pendingSuggestion?.tags ?? []}
+        applying={applyingSuggestion}
+        onApply={() => {
+          void applySuggestions();
+        }}
+        onKeepMine={keepMineAndContinue}
       />
 
       <AppModal

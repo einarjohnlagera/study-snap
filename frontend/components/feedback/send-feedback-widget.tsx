@@ -6,7 +6,11 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { submitFeedback } from "@/lib/api";
 
-export function SendFeedbackWidget() {
+type SendFeedbackWidgetProps = {
+  mobileHidden?: boolean;
+};
+
+export function SendFeedbackWidget({ mobileHidden = false }: Readonly<SendFeedbackWidgetProps>) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +43,7 @@ export function SendFeedbackWidget() {
     setSubmitting(true);
     setError(null);
     try {
-      const pageUrl = typeof window === "undefined" ? null : window.location.href;
+      const pageUrl = globalThis.window === undefined ? null : globalThis.window.location.href;
       const response = await submitFeedback({ message: trimmed }, pageUrl);
       setSuccessMessage(response.message);
       setMessage("");
@@ -54,7 +58,7 @@ export function SendFeedbackWidget() {
     <>
       <Button
         type="button"
-        className="fixed bottom-5 right-5 z-40 gap-2 rounded-full px-4 shadow-lg sm:bottom-6 sm:right-6"
+        className={`fixed bottom-5 right-5 z-40 gap-2 rounded-full px-4 shadow-lg sm:bottom-6 sm:right-6 ${mobileHidden ? "hidden sm:inline-flex" : ""}`}
         onClick={handleOpen}
       >
         <MessageSquarePlus className="h-4 w-4" />

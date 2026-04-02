@@ -47,4 +47,10 @@ describe("SendFeedbackWidget", () => {
 
     expect(await screen.findByText("Could not send feedback.")).toBeInTheDocument();
   });
+
+  it("hides the launcher on mobile when requested", () => {
+    render(<SendFeedbackWidget mobileHidden />);
+
+    expect(screen.getByRole("button", { name: /Send Feedback/i })).toHaveClass("hidden");
+  });
 });

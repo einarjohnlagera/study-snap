@@ -65,6 +65,15 @@ function isProtectedAppRoute(pathname: string): boolean {
   );
 }
 
+function shouldHideMobileFeedbackWidget(pathname: string): boolean {
+  return (
+    pathname === "/notes/new"
+    || /^\/notes\/[^/]+\/edit$/.test(pathname)
+    || pathname === "/study"
+    || pathname.startsWith("/study/")
+  );
+}
+
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/p/")) {
     return "Shared Study Pack";
@@ -584,7 +593,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       ) : null}
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
-      <SendFeedbackWidget />
+      <SendFeedbackWidget mobileHidden={shouldHideMobileFeedbackWidget(pathname)} />
     </div>
   );
 }

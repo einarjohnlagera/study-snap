@@ -76,7 +76,7 @@ public class StudyPackService {
     private final AnalyticsService analyticsService;
     private final SubscriptionService subscriptionService;
     private final UserUsageService userUsageService;
-    private final BillingUsagePeriodService billingUsagePeriodService;
+    private final StudyPackUsageService studyPackUsageService;
     private final OcrRateLimitService ocrRateLimitService;
     private final OcrUsageProtectionService ocrUsageProtectionService;
     private final AiRateLimitService aiRateLimitService;
@@ -635,17 +635,8 @@ public class StudyPackService {
 
     private PlanType assertMonthlyStudyPackQuotaAvailable(UUID ownerUserId) {
         PlanType planType = subscriptionService.resolvePlan(ownerUserId);
-
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(ownerUserId, now);
-
-        long usedFromStudyPacks = studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
-                ownerUserId,
-                usagePeriod.periodStart(),
-                usagePeriod.periodEnd()
-        );
-        long usedFromUsage = userUsageService.getMonthlyUsage(ownerUserId, now).studyPackGenerations();
-        long usedThisMonth = Math.max(usedFromStudyPacks, usedFromUsage);
+        int usedThisMonth = studyPackUsageService.resolveUsage(ownerUserId, now).usedCount();
 
         int monthlyLimit = resolveMonthlyStudyPackLimit(planType);
         if (usedThisMonth < monthlyLimit) {

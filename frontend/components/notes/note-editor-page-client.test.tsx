@@ -334,6 +334,41 @@ describe("NoteEditorPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
 
+  it("shows the exact remaining Study Pack count in the near-limit banner", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 9,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 1,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    expect(await screen.findByRole("status")).toHaveTextContent("You have 1 Study Pack left this billing cycle.");
+  });
+
   it("imports image OCR text into Content without generating a Study Pack and shows an inline warning for low confidence", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (extractNoteTextFromFile as jest.Mock).mockResolvedValue({

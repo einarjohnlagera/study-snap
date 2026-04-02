@@ -88,7 +88,7 @@ export function NoteEditorForm({
   generateHelperText,
   generatingLabel,
   subjectSuggestions = [],
-}: NoteEditorFormProps) {
+}: Readonly<NoteEditorFormProps>) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
@@ -159,7 +159,11 @@ export function NoteEditorForm({
     </Button>
   );
 
-  const renderGenerateAction = (buttonClassName: string, containerClassName: string) => (
+  const renderGenerateAction = (
+    buttonClassName: string,
+    containerClassName: string,
+    options: { showHelperText?: boolean } = {},
+  ) => (
     <div className={containerClassName}>
       <Button
         type="button"
@@ -179,7 +183,7 @@ export function NoteEditorForm({
           </>
         )}
       </Button>
-      {!isGenerating ? (
+      {options.showHelperText !== false && !isGenerating ? (
         <p className="text-center text-[11px] text-foreground/60 sm:text-right">
           {generateHelperText}
         </p>
@@ -188,7 +192,7 @@ export function NoteEditorForm({
   );
 
   return (
-    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 pb-28 sm:px-6 sm:py-8 sm:pb-8">
+    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 pb-24 sm:px-6 sm:py-8 sm:pb-8">
       <header className="sticky top-4 z-20 space-y-3">
         <Card className="space-y-3 border-border/80 bg-background/95 p-4 shadow-sm backdrop-blur sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -420,9 +424,9 @@ export function NoteEditorForm({
         </div>
       </Card>
 
-      <div className="fixed inset-x-4 bottom-4 z-30 sm:hidden">
-        <div className="flex justify-end">
-          {renderGenerateAction("w-full max-w-xs rounded-full shadow-lg", "w-full max-w-xs space-y-1")}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
+        <div className="mx-auto flex w-full max-w-sm justify-center">
+          {renderGenerateAction("w-full rounded-full shadow-lg", "w-full", { showHelperText: false })}
         </div>
       </div>
     </main>
