@@ -39,7 +39,7 @@ export function AppModal({
   actions,
   panelClassName,
   descriptionClassName,
-}: AppModalProps) {
+}: Readonly<AppModalProps>) {
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -63,7 +63,7 @@ export function AppModal({
         panelRef.current?.focus();
       }
     };
-    const frameId = window.requestAnimationFrame(focusFirst);
+    const frameId = globalThis.requestAnimationFrame(focusFirst);
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -83,7 +83,7 @@ export function AppModal({
       }
 
       const first = focusable[0];
-      const last = focusable[focusable.length - 1];
+      const last = focusable.at(-1);
       const active = document.activeElement as HTMLElement | null;
       const isInside = Boolean(active && panelRef.current?.contains(active));
 
@@ -104,7 +104,7 @@ export function AppModal({
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      window.cancelAnimationFrame(frameId);
+      globalThis.cancelAnimationFrame(frameId);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
       previousActiveElement?.focus();

@@ -7,7 +7,8 @@ Keep in-app navigation predictable across private workspace, discovery, and publ
 ## Public Profile Back Behavior
 
 - Public Profile can be opened from Public Library, Public Note, or other entry points.
-- The Public Profile header should use a `Back` button driven by navigation history.
+- Public Profile should use a page-level `Back` button driven by navigation history.
+- Keep the `Back` button above the header card so it reads as navigation rather than header content.
 - Do not hardcode Public Profile back navigation to `Library` or `Public Library`.
 
 ## Button Label Rule

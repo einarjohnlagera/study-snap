@@ -71,6 +71,7 @@ Non-owners:
 Navigation:
 
 - use a `Back` button that calls browser/app history back
+- place the `Back` button above the Public Profile header card
 - do not hardcode Public Profile back navigation to Library or Public Library
 
 ## Public Identity Rules

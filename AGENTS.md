@@ -440,6 +440,7 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Visibility controls should appear as badge/dropdown controls near the header identity cluster, not as detached toggle buttons.
 - Share actions should sit in the lower action row of the header card rather than in the top metadata cluster.
 - Public Profile header back navigation should use history back, not a hardcoded Library/Public Library link.
+- Public Profile `Back` should be page-level navigation above the header card, not inside the card.
 
 ### Note Ownership Rule
 

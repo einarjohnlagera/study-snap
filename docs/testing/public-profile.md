@@ -12,6 +12,7 @@ Verify these cases for Public Profile:
 - private profile shows `This profile is private.` to non-owners
 - profile shows `displayName`, `profileType`, `publicNotesCount`, and `totalCopies`
 - profile `Back` button uses history navigation instead of a hardcoded library link
+- profile `Back` button sits above the header card instead of inside it
 - profile note cards open the canonical public note route
 - profile note cards do not show redundant inline action buttons in the card body
 - only public notes are listed

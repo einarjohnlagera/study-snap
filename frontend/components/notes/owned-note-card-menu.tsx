@@ -31,7 +31,7 @@ type OwnedNoteCardMenuProps = {
   onError?: (message: string) => void;
 };
 
-const DELETE_MENU_ITEM_CLASS = "text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40";
+const DELETE_MENU_ITEM_CLASS = "font-medium text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40";
 
 function buildShareUrl(subject: string | null, title: string | null) {
   const path = buildPublicLibraryNotePath({ subject, title });

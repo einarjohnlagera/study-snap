@@ -156,7 +156,10 @@ describe("PublicProfilePageClient", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    const backButton = screen.getByRole("button", { name: "Back" });
+    expect(backButton.closest("header")).toBeNull();
+
+    fireEvent.click(backButton);
     expect(backMock).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));

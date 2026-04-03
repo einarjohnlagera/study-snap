@@ -12,7 +12,7 @@
 
 - Major action buttons now keep icon + text labels on mobile across the app’s shared action surfaces instead of collapsing to icon-only.
 - Profile now supports a short bio on the private identity page, and Public Profile now renders that bio with avatar/initial styling and derived subject chips.
-- Public Profile now uses a real `Back` action based on navigation history instead of a hardcoded return link to Public Library.
+- Public Profile now uses a page-level `Back` action above the header card, based on navigation history instead of a hardcoded return link to Public Library.
 - Owned-note context menus are now standardized so `Library` and owner-view `Public Profile` expose management actions without changing the shared note-card preview layout.
 - Private Note Detail `Summary` and `Quiz` tabs now keep text labels on mobile for clearer view switching.
 - Landing page now positions NoteLib as a notes library and study workspace first, with stronger Public Library and active-recall messaging.

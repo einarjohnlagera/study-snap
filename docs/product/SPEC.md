@@ -358,6 +358,8 @@ Users can:
   - visibility is shown as a badge/dropdown near the title cluster
   - stats remain in their own section below the identity summary
   - `Share Profile` sits in the lower-right action row of the header card
+- Public Profile should use a page-level `Back` button above the header card.
+- Do not place the `Back` button inside the Public Profile header card.
 - Non-owners must not see `Edit Profile` or the visibility toggle on Public Profile.
 - If `publicProfileVisible = false`, non-owners should see `This profile is private.`
 - If the user has no public notes, show `This user has no public notes yet.`
