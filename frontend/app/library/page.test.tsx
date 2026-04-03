@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
-import { deleteNote, listNotes, listSubjects } from "@/lib/api";
+import {
+  getQuickReviewPerformanceSummary,
+  listNotes,
+  listSubjects,
+} from "@/lib/api";
 
 const pushMock = jest.fn();
 
@@ -18,9 +22,6 @@ jest.mock("@/lib/api", () => ({
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
-  copyNote: jest.fn(),
-  deleteNote: jest.fn(),
-  updateNoteVisibility: jest.fn(),
 }));
 
 describe("Library page", () => {
@@ -41,20 +42,35 @@ describe("Library page", () => {
         quizCount: null,
         updatedAt: "2026-03-21T10:00:00Z",
       },
+      {
+        id: "note-99",
+        title: "Zygote Review",
+        subject: "Chemistry",
+        tags: ["review"],
+        contentPreview: "Generated chemistry review preview...",
+        summaryPreview: "Generated chemistry summary preview.",
+        visibility: "PUBLIC",
+        studyPackId: "pack-99",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        updatedAt: "2026-03-22T10:00:00Z",
+      },
     ]);
-    (deleteNote as jest.Mock).mockReset();
-    (deleteNote as jest.Mock).mockResolvedValue(undefined);
+    (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (getQuickReviewPerformanceSummary as jest.Mock).mockResolvedValue({
+      lastReviewedAt: null,
+    });
   });
 
-  it("opens note detail when a card is clicked", async () => {
+  it("opens note detail when a card is clicked and does not render card action menus", async () => {
     render(<LibraryPage />);
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Create Note" })).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
+    expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
+
     const title = await screen.findByText("Cell Respiration");
-    expect(screen.getByText("ATP production in mitochondria...")).toBeInTheDocument();
-    expect(screen.getByText("Mitochondria convert glucose into usable ATP energy.")).toBeInTheDocument();
     const card = title.closest("[role='link']");
     expect(card).not.toBeNull();
 
@@ -65,35 +81,28 @@ describe("Library page", () => {
     });
   });
 
-  it("uses the shared delete modal from card actions", async () => {
+  it("filters notes from the shared filter sheet", async () => {
     render(<LibraryPage />);
 
-    const menuButton = await screen.findByRole("button", { name: "Open note actions" });
-    fireEvent.click(menuButton);
-    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
-    const deleteButton = screen.getByRole("button", { name: "Delete" });
-    expect(deleteButton.className).toContain("text-red-700");
-    fireEvent.click(deleteButton);
+    expect(await screen.findByText("Cell Respiration")).toBeInTheDocument();
+    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
 
-    expect(screen.getByText("Delete this note?")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    fireEvent.click(screen.getByLabelText("Study Pack Ready"));
 
-    await waitFor(() => {
-      expect(deleteNote).toHaveBeenCalledWith("note-42");
-    });
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
   });
 
-  it("does not open note detail when delete is canceled from the context menu", async () => {
-    render(<LibraryPage />);
+  it("sorts notes from the shared sort sheet", async () => {
+    const { container } = render(<LibraryPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
+    fireEvent.click(screen.getByRole("button", { name: "Title (Z-A)" }));
 
-    expect(pushMock).not.toHaveBeenCalled();
-    expect(screen.queryByText("Delete this note?")).not.toBeInTheDocument();
+    const cardTitles = Array.from(container.querySelectorAll("h3")).map((element) => element.textContent);
+    expect(cardTitles.slice(0, 2)).toEqual(["Zygote Review", "Cell Respiration"]);
   });
 
   it("shows create-note and demo actions when the library is empty", async () => {

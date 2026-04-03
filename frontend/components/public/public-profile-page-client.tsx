@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { OwnedNoteCardMenu } from "@/components/notes/owned-note-card-menu";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { Card } from "@/components/ui/card";
@@ -69,7 +68,6 @@ export function PublicProfilePageClient({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [visibilityMessage, setVisibilityMessage] = useState<string | null>(null);
-  const [noteActionMessage, setNoteActionMessage] = useState<string | null>(null);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
 
@@ -365,10 +363,6 @@ export function PublicProfilePageClient({
         {visibilityMessage ? (
           <p className="text-xs text-foreground/60">{visibilityMessage}</p>
         ) : null}
-        {noteActionMessage ? (
-          <p className="text-xs text-foreground/60">{noteActionMessage}</p>
-        ) : null}
-
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Subjects</p>
           {subjects.length > 0 ? (
@@ -419,39 +413,6 @@ export function PublicProfilePageClient({
                   contentPreview={note.contentPreview}
                   summaryPreview={note.summaryPreview}
                   copyCount={note.copyCount}
-                  actionSlot={isOwner ? (
-                    <OwnedNoteCardMenu
-                      noteId={note.noteId}
-                      title={note.title}
-                      subject={note.subject}
-                      visibility="PUBLIC"
-                      studyPackStatus="STUDY_PACK_READY"
-                      surface="publicProfile"
-                      onRemoved={() => {
-                        setProfile((current) => {
-                          if (!current) {
-                            return current;
-                          }
-                          return {
-                            ...current,
-                            publicNotes: current.publicNotes.filter((candidate) => candidate.noteId !== note.noteId),
-                            publicNotesCount: Math.max(0, current.publicNotesCount - 1),
-                            totalCopies: Math.max(0, current.totalCopies - note.copyCount),
-                          };
-                        });
-                      }}
-                      onMessage={(message) => {
-                        setShareMessage(null);
-                        setVisibilityMessage(null);
-                        setNoteActionMessage(message);
-                      }}
-                      onError={(message) => {
-                        setShareMessage(null);
-                        setVisibilityMessage(null);
-                        setNoteActionMessage(message);
-                      }}
-                    />
-                  ) : undefined}
                 />
               </Card>
             ))}

@@ -367,22 +367,7 @@ Users can:
   - whole card click opens the public note detail page
   - do not add redundant inline action buttons inside the card body
 - Public Profile note cards should use the shared note-card preview layout, including both `Note Preview` and `Summary Preview`.
-- Note cards remain preview/navigation surfaces; note actions belong in:
-  - an owned-note context menu on owned note-card surfaces
-  - Note Detail
-- Owned note-card menus should appear only on:
-  - `Library`
-  - owner-view `Public Profile`
-- Public Library and other users' Public Profiles must not show note-card context menus.
-- Library card menu options:
-  - `Edit`
-  - `Delete`
-  - `Make a Copy`
-  - `Share`
-- Owner-view Public Profile card menu options:
-  - `Delete`
-  - `Make Private`
-  - `Make a Copy`
+- Note cards remain preview/navigation surfaces only; note actions belong in Note Detail.
 - Owner actions on public note detail may include:
   - `Open Note`
   - `Share`
@@ -495,6 +480,36 @@ Users can:
   - Public Library uses the `public` subject scope
   - users can still type a custom subject and save it directly into `notes.subject`
   - no normalized `subjects` table is required for the current version
+- Library and Public Library should share the same control order:
+  - `Search`
+  - `Filter`
+  - `Sort`
+  - notes list
+- On mobile, Library and Public Library filters/sort should open a bottom-sheet or modal instead of remaining always visible.
+- Private Library filters:
+  - `Subject`
+  - `Tags`
+  - `Study Pack Ready`
+  - `Draft`
+  - `Public`
+  - `Private`
+- Public Library filters:
+  - `Subject`
+  - `Tags`
+  - `By You`
+  - `Official`
+- Private Library sort options:
+  - `Recently Updated`
+  - `Recently Reviewed`
+  - `Recently Generated`
+  - `Title (A-Z)`
+  - `Title (Z-A)`
+  - `Oldest`
+- Public Library sort options:
+  - `Newest`
+  - `Most Copied`
+  - `Most Shared`
+  - `Title (A-Z)`
 
 Dashboard guidance rules:
 

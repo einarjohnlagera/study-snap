@@ -311,28 +311,15 @@ Core loop:
 
 - Library cards, Public Library cards, and Public Profile cards must use a consistent interaction model.
 - The whole card should be clickable to open the detail page.
-- Avoid adding redundant inline action buttons inside cards unless there is a strong exception.
-- Note cards are preview/navigation surfaces; note actions belong in context menus or Note Detail.
-- Owned-note context menus are allowed only on:
-  - `Library`
-  - owner-view `Public Profile`
-- Public Library and other users' Public Profiles must not show note-card context menus.
-- Library card-menu actions:
-  - `Edit`
-  - `Delete`
-  - `Make a Copy`
-  - `Share`
-- Owner-view Public Profile card-menu actions:
-  - `Delete`
-  - `Make Private`
-  - `Make a Copy`
+- Do not add inline action buttons or note-card context menus to note cards.
+- Note cards are preview/navigation surfaces only; note actions belong in Note Detail.
 
 ### Design System — Icons and Buttons
 
 1. Use consistent icons for common actions (`edit`, `delete`, `share`, `copy`, `open`, `public/private`) and do not drift per page.
 2. Desktop buttons must show icon + text.
 3. Mobile buttons must show icon only.
-4. Card actions should be placed at the bottom-right of cards.
+4. Avoid note-card action buttons; if a non-note card needs actions, place them at the bottom-right.
 5. Header/page actions should be placed at the top-right.
 6. Visibility should be shown as a badge/dropdown, not a large button.
 7. Entire note cards should be clickable; do not add `Open` buttons inside cards.
@@ -433,7 +420,7 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Public Profile owner controls belong on `/public/profile/{userId}`, not on `/profile`.
 - Only the profile owner may see `Edit Profile` and the Public Profile visibility toggle.
 - Non-owners may see a share action on Public Profile, but they must not see owner-only editing or privacy controls.
-- Only the profile owner may see Public Profile note-card context menus.
+- Public Profile note cards stay action-free for both owners and non-owners.
 - If a public profile is turned off, non-owners should see `This profile is private.`
 
 ### UI Consistency Rule
@@ -491,7 +478,7 @@ Keep app shell grouping:
 
 - Keep note cards consistent across Dashboard, Library, and Public Library:
   - entire card click opens note detail
-  - tertiary actions live in card menu (Library) rather than primary card buttons
+  - note cards stay action-free and rely on Note Detail for management actions
 - Public Profile note cards should follow the same whole-card click pattern as Library and Public Library.
 - `Library` should expose a direct `Create Note` entry in the header and empty state so users are not forced through `Dashboard` to start a note.
 - Note Editor actions:
