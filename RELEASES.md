@@ -38,6 +38,8 @@
 - Free-plan near-limit messaging now shows the actual remaining Study Pack count instead of a generic warning.
 - Note Detail generation now applies the same title/subject/tag suggestion flow as Create Note.
 - Mobile Note Editor no longer lets the global `Send Feedback` launcher overlap the primary Generate CTA.
+- Canceling note deletion from owned note-card menus no longer falls through to the card and opens Note Detail.
+- Destructive note-card actions now use consistent red warning styling across Library and owner-view Public Profile menus.
 
 ### Technical Changes
 

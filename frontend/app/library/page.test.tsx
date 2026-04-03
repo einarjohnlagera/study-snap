@@ -73,7 +73,9 @@ describe("Library page", () => {
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const deleteButton = screen.getByRole("button", { name: "Delete" });
+    expect(deleteButton.className).toContain("text-red-700");
+    fireEvent.click(deleteButton);
 
     expect(screen.getByText("Delete this note?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
@@ -81,6 +83,17 @@ describe("Library page", () => {
     await waitFor(() => {
       expect(deleteNote).toHaveBeenCalledWith("note-42");
     });
+  });
+
+  it("does not open note detail when delete is canceled from the context menu", async () => {
+    render(<LibraryPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Delete this note?")).not.toBeInTheDocument();
   });
 
   it("shows create-note and demo actions when the library is empty", async () => {

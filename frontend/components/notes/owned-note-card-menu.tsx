@@ -31,6 +31,8 @@ type OwnedNoteCardMenuProps = {
   onError?: (message: string) => void;
 };
 
+const DELETE_MENU_ITEM_CLASS = "text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40";
+
 function buildShareUrl(subject: string | null, title: string | null) {
   const path = buildPublicLibraryNotePath({ subject, title });
   if (globalThis.window === undefined) {
@@ -227,7 +229,7 @@ export function OwnedNoteCardMenu({
 
           <button
             type="button"
-            className={`w-full rounded px-3 py-2 text-left text-sm ${surface === "library" ? "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" : "hover:bg-muted/60"}`}
+            className={`w-full rounded px-3 py-2 text-left text-sm ${DELETE_MENU_ITEM_CLASS}`}
             onClick={(event) => {
               event.stopPropagation();
               setMenuOpen(false);

@@ -119,9 +119,13 @@ export function AppModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4"
       onMouseDown={(event) => {
+        event.stopPropagation();
         if (event.target === event.currentTarget) {
           onClose();
         }
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
       }}
     >
       <div
@@ -132,6 +136,12 @@ export function AppModal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={`w-[90%] max-w-[420px] rounded-xl border border-border bg-background p-4 shadow-xl dark:bg-zinc-900 sm:p-5 ${panelClassName ?? ""}`}
+        onMouseDown={(event) => {
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
       >
         <div className="space-y-2">
           <h2 id={titleId} className="text-lg font-semibold text-foreground">

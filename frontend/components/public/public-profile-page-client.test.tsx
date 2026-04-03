@@ -160,8 +160,28 @@ describe("PublicProfilePageClient", () => {
     expect(backMock).toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    const deleteButton = screen.getByRole("button", { name: "Delete" });
+    expect(deleteButton.className).toContain("text-red-700");
     expect(screen.getByRole("button", { name: "Make Private" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
+  });
+
+  it("does not navigate when the owner cancels delete from the public profile card menu", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Delete this note?")).not.toBeInTheDocument();
   });
 });
