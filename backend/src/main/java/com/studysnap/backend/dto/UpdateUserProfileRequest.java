@@ -15,6 +15,9 @@ public record UpdateUserProfileRequest(
         @Size(max = 100, message = "Display name must be 100 characters or less.")
         String displayName,
 
+        @Size(max = 200, message = "Bio must be 200 characters or less.")
+        String bio,
+
         @NotBlank(message = "Email is required.")
         @Email(message = "Enter a valid email address.")
         @Size(max = 255, message = "Email must be 255 characters or less.")

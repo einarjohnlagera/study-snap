@@ -1,7 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PublicProfilePageClient } from "./public-profile-page-client";
 import { getAuthUser } from "@/lib/auth";
-import { getPublicProfile, updatePublicProfileVisibility } from "@/lib/api";
+import { copyNote, deleteNote, getPublicProfile, updateNoteVisibility, updatePublicProfileVisibility } from "@/lib/api";
+
+const backMock = jest.fn();
+const pushMock = jest.fn();
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({
+    back: backMock,
+    push: pushMock,
+  }),
+}));
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
@@ -11,13 +21,17 @@ jest.mock("@/lib/api", () => {
   const actual = jest.requireActual("@/lib/api");
   return {
     ...actual,
+    copyNote: jest.fn(),
+    deleteNote: jest.fn(),
     getPublicProfile: jest.fn(),
+    updateNoteVisibility: jest.fn(),
     updatePublicProfileVisibility: jest.fn(),
   };
 });
 
 const baseProfile = {
   displayName: "Study Buddy",
+  bio: "Biology notes and board-review practice.",
   profileType: "TEACHER",
   isOfficial: false,
   publicProfileVisible: true,
@@ -42,8 +56,13 @@ describe("PublicProfilePageClient", () => {
 
   beforeEach(() => {
     (getAuthUser as jest.Mock).mockReset();
+    (copyNote as jest.Mock).mockReset();
+    (deleteNote as jest.Mock).mockReset();
     (getPublicProfile as jest.Mock).mockReset();
+    (updateNoteVisibility as jest.Mock).mockReset();
     (updatePublicProfileVisibility as jest.Mock).mockReset();
+    backMock.mockReset();
+    pushMock.mockReset();
     clipboardWriteText.mockReset();
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: clipboardWriteText },
@@ -67,6 +86,8 @@ describe("PublicProfilePageClient", () => {
 
     expect(await screen.findByRole("link", { name: "Edit Profile" })).toHaveAttribute("href", "/profile");
     expect(screen.getByRole("button", { name: "Public" })).toBeInTheDocument();
+    expect(screen.getByText("Biology notes and board-review practice.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open note actions" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
     await waitFor(() => {
@@ -99,6 +120,7 @@ describe("PublicProfilePageClient", () => {
     expect(screen.queryByRole("link", { name: "Edit Profile" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Public" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Private" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Share Profile" })).toBeInTheDocument();
   });
 
@@ -119,5 +141,27 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getByText("Loading public profile...")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Study Buddy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
+  });
+
+  it("uses a back button and owner note actions on the public profile page", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" });
+    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
+    (deleteNote as jest.Mock).mockResolvedValue(undefined);
+    (updateNoteVisibility as jest.Mock).mockResolvedValue({ visibility: "PRIVATE" });
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(backMock).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make Private" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
   });
 });

@@ -2,16 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { ChevronDown } from "lucide-react";
+import { OwnedNoteCardMenu } from "@/components/notes/owned-note-card-menu";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { PageHeader } from "@/components/page-header";
 import {
-  copyNote,
-  deleteNote,
   getQuickReviewPerformanceSummary,
   listSubjects,
   listNotes,
@@ -114,10 +112,6 @@ export default function LibraryPage() {
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const [tagFilterOpen, setTagFilterOpen] = useState(false);
-  const [cardMenuOpenId, setCardMenuOpenId] = useState<string | null>(null);
-  const [copyingNoteId, setCopyingNoteId] = useState<string | null>(null);
-  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
-  const [pendingDeleteNoteId, setPendingDeleteNoteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
@@ -190,21 +184,6 @@ export default function LibraryPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (!cardMenuOpenId) {
-      return;
-    }
-    const closeMenu = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (target.closest("[data-card-menu='true']")) {
-        return;
-      }
-      setCardMenuOpenId(null);
-    };
-    globalThis.addEventListener("mousedown", closeMenu);
-    return () => globalThis.removeEventListener("mousedown", closeMenu);
-  }, [cardMenuOpenId]);
-
-  useEffect(() => {
     if (!tagFilterOpen && tagSearchQuery.length > 0) {
       setTagSearchQuery("");
     }
@@ -269,54 +248,6 @@ export default function LibraryPage() {
     setSelectedSubject(ALL_SUBJECTS);
     setSelectedTags([]);
   }, []);
-
-  const handleMakeCopy = useCallback(async (noteId: string) => {
-    if (copyingNoteId || deletingNoteId) {
-      return;
-    }
-    setCopyingNoteId(noteId);
-    setCardMenuOpenId(null);
-    try {
-      const copied = await copyNote(noteId);
-      router.push(`/notes/${copied.id}?copied=1`);
-    } catch (copyError) {
-      const message = copyError instanceof Error ? copyError.message : "Could not copy note.";
-      setError(message);
-    } finally {
-      setCopyingNoteId(null);
-    }
-  }, [copyingNoteId, deletingNoteId, router]);
-
-  const handleRequestDelete = useCallback((noteId: string) => {
-    if (copyingNoteId || deletingNoteId) {
-      return;
-    }
-    setCardMenuOpenId(null);
-    setPendingDeleteNoteId(noteId);
-  }, [copyingNoteId, deletingNoteId]);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (copyingNoteId || deletingNoteId || !pendingDeleteNoteId) {
-      return;
-    }
-    setDeletingNoteId(pendingDeleteNoteId);
-    try {
-      await deleteNote(pendingDeleteNoteId);
-      setItems((previous) => previous.filter((item) => item.id !== pendingDeleteNoteId));
-      setReviewSummaryByNoteId((previous) => {
-        const next = { ...previous };
-        delete next[pendingDeleteNoteId];
-        return next;
-      });
-      setToast("Note deleted.");
-    } catch (deleteError) {
-      const message = deleteError instanceof Error ? deleteError.message : "Could not delete note.";
-      setError(message);
-    } finally {
-      setDeletingNoteId(null);
-      setPendingDeleteNoteId(null);
-    }
-  }, [copyingNoteId, deletingNoteId, pendingDeleteNoteId]);
 
   const sortedFilteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -617,50 +548,27 @@ export default function LibraryPage() {
                         </div>
                       )}
                       actionSlot={(
-                        <>
-                          <button
-                            type="button"
-                            aria-label="Open note actions"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-sm text-foreground/70 hover:bg-muted/60 hover:text-foreground"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setCardMenuOpenId((previous) => (previous === item.id ? null : item.id));
-                            }}
-                            onKeyDown={(event) => event.stopPropagation()}
-                          >
-                            <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          {cardMenuOpenId === item.id ? (
-                            <div className="absolute right-0 top-9 z-20 w-40 rounded-md border border-border bg-background p-1 shadow-sm">
-                              <button
-                                type="button"
-                                className="w-full rounded px-3 py-2 text-left text-sm hover:bg-muted/60"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleMakeCopy(item.id);
-                                }}
-                                disabled={copyingNoteId === item.id}
-                              >
-                                <span className="inline-flex items-center gap-2">
-                                  <ResponsiveActionContent action="copy" label={copyingNoteId === item.id ? "Copying..." : "Make a Copy"} showTextOnMobile />
-                                </span>
-                              </button>
-                              <button
-                                type="button"
-                                className="w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleRequestDelete(item.id);
-                                }}
-                                disabled={deletingNoteId === item.id}
-                              >
-                                <span className="inline-flex items-center gap-2">
-                                  <ResponsiveActionContent action="delete" label={deletingNoteId === item.id ? "Deleting..." : "Delete"} showTextOnMobile />
-                                </span>
-                              </button>
-                            </div>
-                          ) : null}
-                        </>
+                        <OwnedNoteCardMenu
+                          noteId={item.id}
+                          title={item.title}
+                          subject={item.subject}
+                          visibility={item.visibility}
+                          studyPackStatus={item.studyPackStatus}
+                          surface="library"
+                          onRemoved={() => {
+                            setItems((previous) => previous.filter((candidate) => candidate.id !== item.id));
+                            setReviewSummaryByNoteId((previous) => {
+                              const next = { ...previous };
+                              delete next[item.id];
+                              return next;
+                            });
+                          }}
+                          onMessage={(message) => {
+                            setError(null);
+                            setToast(message);
+                          }}
+                          onError={(message) => setError(message)}
+                        />
                       )}
                     />
                   </Card>
@@ -688,22 +596,6 @@ export default function LibraryPage() {
           {toast}
         </div>
       ) : null}
-      <DeleteConfirmationModal
-        isOpen={Boolean(pendingDeleteNoteId)}
-        title="Delete this note?"
-        message="This will permanently delete this note and all generated Study Pack content. This action cannot be undone."
-        confirmText={deletingNoteId ? "Deleting..." : "Delete note"}
-        onCancel={() => {
-          if (!deletingNoteId) {
-            setPendingDeleteNoteId(null);
-          }
-        }}
-        onConfirm={() => {
-          if (!deletingNoteId) {
-            void handleConfirmDelete();
-          }
-        }}
-      />
     </main>
   );
 }

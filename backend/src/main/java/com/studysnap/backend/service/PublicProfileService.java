@@ -59,6 +59,7 @@ public class PublicProfileService {
 
         return new PublicProfileResponse(
                 resolvePublicDisplayName(user),
+                normalizeOptionalText(user.getBio()),
                 user.getProfileType() == null ? null : user.getProfileType().name(),
                 isOfficialAuthor(user),
                 publicProfileVisible,

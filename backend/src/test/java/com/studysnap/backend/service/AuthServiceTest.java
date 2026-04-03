@@ -364,6 +364,7 @@ class AuthServiceTest {
         user.setFirstName("Old");
         user.setLastName("Name");
         user.setDisplayName("Old Name");
+        user.setBio("Old bio");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
         user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
         user.setTokenVersion(0);
@@ -380,15 +381,17 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateUserProfile(
                 userId,
-                new UpdateUserProfileRequest("New", "Person", "Study Buddy", "current@example.com")
+                new UpdateUserProfileRequest("New", "Person", "Study Buddy", "Focused on anatomy review.", "current@example.com")
         );
 
         assertThat(response.firstName()).isEqualTo("New");
         assertThat(response.lastName()).isEqualTo("Person");
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isNull();
+        assertThat(response.bio()).isEqualTo("Focused on anatomy review.");
         assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getDisplayName()).isEqualTo("Study Buddy");
+        assertThat(user.getBio()).isEqualTo("Focused on anatomy review.");
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
     }
 
@@ -401,6 +404,7 @@ class AuthServiceTest {
         user.setFirstName("Note");
         user.setLastName("User");
         user.setDisplayName("Note User");
+        user.setBio(null);
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
         user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
         user.setTokenVersion(0);
@@ -420,14 +424,16 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateUserProfile(
                 userId,
-                new UpdateUserProfileRequest("Note", "User", "Note Hero", "updated@example.com")
+                new UpdateUserProfileRequest("Note", "User", "Note Hero", "Weak areas: physiology and pharma.", "updated@example.com")
         );
 
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isEqualTo("updated@example.com");
+        assertThat(response.bio()).isEqualTo("Weak areas: physiology and pharma.");
         assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getPendingEmail()).isEqualTo("updated@example.com");
         assertThat(user.getDisplayName()).isEqualTo("Note Hero");
+        assertThat(user.getBio()).isEqualTo("Weak areas: physiology and pharma.");
         verify(emailVerificationService).sendVerificationEmail(user, false);
     }
 
@@ -478,7 +484,7 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "NoteLib Support", "current@example.com");
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "NoteLib Support", null, "current@example.com");
         assertThatThrownBy(() -> authService.updateUserProfile(
                 userId,
                 request

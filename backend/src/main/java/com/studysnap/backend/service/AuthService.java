@@ -268,11 +268,13 @@ public class AuthService {
         String normalizedFirstName = normalizeRequiredText(request.firstName());
         String normalizedLastName = normalizeOptionalText(request.lastName());
         String normalizedDisplayName = normalizeOptionalText(request.displayName());
+        String normalizedBio = normalizeOptionalText(request.bio());
         String normalizedEmail = normalizeEmail(request.email());
 
         user.setFirstName(normalizedFirstName);
         user.setLastName(normalizedLastName);
         user.setDisplayName(resolveDisplayName(normalizedDisplayName));
+        user.setBio(normalizedBio);
 
         if (normalizedEmail.equalsIgnoreCase(user.getEmail())) {
             user.setPendingEmail(null);
@@ -303,6 +305,7 @@ public class AuthService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getDisplayName(),
+                user.getBio(),
                 Boolean.TRUE.equals(user.getPublicProfileVisible()),
                 user.getCountryCode(),
                 user.getProfileType(),

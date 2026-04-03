@@ -33,6 +33,11 @@ Interaction:
 
 - whole card opens Note Detail
 - tertiary actions stay in the card menu
+- Library card menu options are:
+  - `Edit`
+  - `Delete`
+  - `Make a Copy`
+  - `Share`
 
 ## Public Library
 
@@ -62,4 +67,9 @@ Public Profile is not a private library surface.
 
 - route: `/public/profile/{userId}`
 - purpose: public showcase only
-- note cards reuse the same shared layout but must not expose private workspace actions
+- note cards reuse the same shared layout
+- owner-view Public Profile may show an owned-note card menu with:
+  - `Delete`
+  - `Make Private`
+  - `Make a Copy`
+- other viewers must not see a note-card menu on Public Profile

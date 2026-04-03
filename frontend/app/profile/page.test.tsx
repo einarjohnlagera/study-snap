@@ -32,6 +32,7 @@ const profileResponse = {
   firstName: "Note",
   lastName: "User",
   displayName: "Note User",
+  bio: "Reviewing pathology one note at a time.",
   publicProfileVisible: true,
   countryCode: null,
   profileType: "STUDENT",
@@ -93,6 +94,7 @@ describe("Profile page", () => {
         firstName: "Updated",
         lastName: "Person",
         displayName: "Study Buddy",
+        bio: "Reviewing pathology one note at a time.",
         email: "[email protected]",
       });
     });
@@ -152,11 +154,35 @@ describe("Profile page", () => {
   it("shows a public profile navigation link in the top card without share controls", async () => {
     render(<ProfilePage />);
 
-    expect(await screen.findByRole("link", { name: "View Public Page →" })).toHaveAttribute(
+    expect(await screen.findByRole("link", { name: "View Public Page" })).toHaveAttribute(
       "href",
       "/public/profile/user-1",
     );
     expect(screen.queryByRole("button", { name: "Share Public Profile" })).not.toBeInTheDocument();
     expect(screen.queryByText("Public Profile On")).not.toBeInTheDocument();
+  });
+
+  it("shows and saves the bio field with identity settings", async () => {
+    (updateUserProfile as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      bio: "Focused on endocrine board review.",
+    });
+
+    render(<ProfilePage />);
+
+    fireEvent.change(await screen.findByLabelText("Bio"), {
+      target: { value: "Focused on endocrine board review." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Identity" }));
+
+    await waitFor(() => {
+      expect(updateUserProfile).toHaveBeenCalledWith({
+        firstName: "Note",
+        lastName: "User",
+        displayName: "Note User",
+        bio: "Focused on endocrine board review.",
+        email: "[email protected]",
+      });
+    });
   });
 });

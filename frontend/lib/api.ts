@@ -335,6 +335,7 @@ export type MeResponse = {
   firstName: string;
   lastName: string | null;
   displayName: string | null;
+  bio: string | null;
   publicProfileVisible: boolean;
   countryCode: string | null;
   profileType: ProfileType | null;
@@ -370,6 +371,7 @@ export type UpdateUserProfileRequest = {
   firstName: string;
   lastName: string;
   displayName: string;
+  bio: string;
   email: string;
 };
 
@@ -735,6 +737,7 @@ export type PublicProfileNoteResponse = {
 
 export type PublicProfileResponse = {
   displayName: string;
+  bio: string | null;
   profileType: ProfileType | null;
   isOfficial: boolean;
   publicProfileVisible: boolean;

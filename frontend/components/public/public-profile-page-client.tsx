@@ -1,9 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { OwnedNoteCardMenu } from "@/components/notes/owned-note-card-menu";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
+import { SubjectBadge } from "@/components/notes/subject-badge";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
@@ -51,6 +53,7 @@ export function PublicProfilePageClient({
   userId,
   initialResult,
 }: Readonly<PublicProfilePageClientProps>) {
+  const router = useRouter();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [profile, setProfile] = useState<PublicProfileResponse | null>(
@@ -66,6 +69,7 @@ export function PublicProfilePageClient({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [visibilityMessage, setVisibilityMessage] = useState<string | null>(null);
+  const [noteActionMessage, setNoteActionMessage] = useState<string | null>(null);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
 
@@ -142,6 +146,29 @@ export function PublicProfilePageClient({
     return `${profile.publicNotesCount} ${profile.publicNotesCount === 1 ? "note" : "notes"}`;
   }, [profile]);
 
+  const avatarLetter = useMemo(() => {
+    const fallback = profile?.displayName?.trim() || "U";
+    return fallback.charAt(0).toUpperCase();
+  }, [profile?.displayName]);
+
+  const bioText = useMemo(() => {
+    const normalized = profile?.bio?.trim();
+    return normalized && normalized.length > 0
+      ? normalized
+      : "This user hasn't added a bio yet.";
+  }, [profile?.bio]);
+
+  const subjects = useMemo(() => {
+    const values = new Set<string>();
+    for (const note of profile?.publicNotes ?? []) {
+      const subject = note.subject?.trim();
+      if (subject) {
+        values.add(subject);
+      }
+    }
+    return Array.from(values).sort((left, right) => left.localeCompare(right));
+  }, [profile?.publicNotes]);
+
   const handleShareProfile = async () => {
     try {
       const shareUrl = new URL(buildPublicProfilePath(userId), globalThis.location.origin).toString();
@@ -202,12 +229,7 @@ export function PublicProfilePageClient({
     return (
       <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
         <header className="space-y-3 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
-          <Link
-            href="/public/library"
-            className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-          >
-            Back to Public Library
-          </Link>
+          <ResponsiveActionButton type="button" variant="outline" onClick={() => router.back()} action="back" label="Back" className="w-full sm:w-auto" />
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
               Public Profile
@@ -225,72 +247,102 @@ export function PublicProfilePageClient({
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <header className="space-y-4 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
-        <div className="space-y-3">
-          <Link
-            href="/public/library"
-            className="inline-flex text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-          >
-            Back to Public Library
-          </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-              Public Profile
-            </span>
-            {profile.isOfficial ? (
-              <span className="rounded-full border border-blue-500/35 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
-                Official
-              </span>
-            ) : null}
-            {isOwner ? (
-              <div className="relative" ref={visibilityMenuRef}>
-                <button
-                  type="button"
-                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${visibilityChip(profile.publicProfileVisible)}`}
-                  onClick={() => setVisibilityMenuOpen((open) => !open)}
-                  aria-haspopup="menu"
-                  aria-expanded={visibilityMenuOpen}
-                  disabled={updatingVisibility}
-                >
-                  <ResponsiveActionContent
-                    action={profile.publicProfileVisible ? "public" : "private"}
-                    label={profile.publicProfileVisible ? "Public" : "Private"}
-                    showTextOnMobile
-                    iconClassName="h-3.5 w-3.5"
-                  />
-                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-                </button>
-                {visibilityMenuOpen ? (
-                  <div className="absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
+        <ResponsiveActionButton type="button" variant="outline" onClick={() => router.back()} action="back" label="Back" className="w-full sm:w-auto" />
+
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 gap-4">
+            <div className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xl font-semibold text-white dark:bg-blue-500">
+              {avatarLetter}
+            </div>
+            <div className="min-w-0 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                  Public Profile
+                </span>
+                {profile.isOfficial ? (
+                  <span className="rounded-full border border-blue-500/35 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                    Official
+                  </span>
+                ) : null}
+                <span className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium text-foreground/75">
+                  {formatProfileType(profile.profileType)}
+                </span>
+                {isOwner ? (
+                  <div className="relative" ref={visibilityMenuRef}>
                     <button
                       type="button"
-                      className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
-                      onClick={() => void handleToggleVisibility()}
-                      disabled={!profile.publicProfileVisible}
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${visibilityChip(profile.publicProfileVisible)}`}
+                      onClick={() => setVisibilityMenuOpen((open) => !open)}
+                      aria-haspopup="menu"
+                      aria-expanded={visibilityMenuOpen}
+                      disabled={updatingVisibility}
                     >
-                      <p className="inline-flex items-center gap-2 text-sm font-medium">
-                        <ResponsiveActionContent action="private" label="Private" showTextOnMobile iconClassName="h-4 w-4" />
-                      </p>
-                      <p className="text-xs text-foreground/70">Hide this profile from other users.</p>
+                      <ResponsiveActionContent
+                        action={profile.publicProfileVisible ? "public" : "private"}
+                        label={profile.publicProfileVisible ? "Public" : "Private"}
+                        showTextOnMobile
+                        iconClassName="h-3.5 w-3.5"
+                      />
+                      <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
-                    <button
-                      type="button"
-                      className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
-                      onClick={() => void handleToggleVisibility()}
-                      disabled={profile.publicProfileVisible}
-                    >
-                      <p className="inline-flex items-center gap-2 text-sm font-medium">
-                        <ResponsiveActionContent action="public" label="Public" showTextOnMobile iconClassName="h-4 w-4" />
-                      </p>
-                      <p className="text-xs text-foreground/70">Allow other users to view and share this profile.</p>
-                    </button>
+                    {visibilityMenuOpen ? (
+                      <div className="absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
+                        <button
+                          type="button"
+                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          onClick={() => void handleToggleVisibility()}
+                          disabled={!profile.publicProfileVisible}
+                        >
+                          <p className="inline-flex items-center gap-2 text-sm font-medium">
+                            <ResponsiveActionContent action="private" label="Private" showTextOnMobile iconClassName="h-4 w-4" />
+                          </p>
+                          <p className="text-xs text-foreground/70">Hide this profile from other users.</p>
+                        </button>
+                        <button
+                          type="button"
+                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          onClick={() => void handleToggleVisibility()}
+                          disabled={profile.publicProfileVisible}
+                        >
+                          <p className="inline-flex items-center gap-2 text-sm font-medium">
+                            <ResponsiveActionContent action="public" label="Public" showTextOnMobile iconClassName="h-4 w-4" />
+                          </p>
+                          <p className="text-xs text-foreground/70">Allow other users to view and share this profile.</p>
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
-            ) : null}
+
+              <div className="space-y-2">
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{profile.displayName}</h1>
+                <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">{bioText}</p>
+              </div>
+
+              <div className="flex flex-wrap gap-3 text-sm text-foreground/70">
+                <span className="rounded-full border border-border bg-background/70 px-3 py-1">
+                  {profile.publicNotesCount} {profile.publicNotesCount === 1 ? "public note" : "public notes"}
+                </span>
+                <span className="rounded-full border border-border bg-background/70 px-3 py-1">
+                  {profile.totalCopies} {profile.totalCopies === 1 ? "copy" : "copies"}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{profile.displayName}</h1>
-            <p className="text-sm text-foreground/75 sm:text-base">{formatProfileType(profile.profileType)}</p>
+
+          <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+            {isOwner ? (
+              <ResponsiveActionLink href="/profile" action="edit" label="Edit Profile" variant="outline" className="w-full sm:w-auto lg:w-full" />
+            ) : null}
+            <ResponsiveActionButton
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto lg:w-full"
+              onClick={() => void handleShareProfile()}
+              action="share"
+              label="Share Profile"
+            />
           </div>
         </div>
 
@@ -300,38 +352,21 @@ export function PublicProfilePageClient({
         {visibilityMessage ? (
           <p className="text-xs text-foreground/60">{visibilityMessage}</p>
         ) : null}
+        {noteActionMessage ? (
+          <p className="text-xs text-foreground/60">{noteActionMessage}</p>
+        ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="space-y-1 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Public Notes</p>
-            <p className="text-2xl font-semibold">{profile.publicNotesCount}</p>
-          </Card>
-          <Card className="space-y-1 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Total Copies</p>
-            <p className="text-2xl font-semibold">{profile.totalCopies}</p>
-          </Card>
-          <Card className="space-y-1 p-4 sm:col-span-2 lg:col-span-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Profile Type</p>
-            <p className="text-lg font-semibold">{formatProfileType(profile.profileType)}</p>
-          </Card>
-        </div>
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {isOwner ? (
-              <ResponsiveActionLink href="/profile" action="edit" label="Edit Profile" variant="outline" className="w-full sm:w-auto" />
-            ) : null}
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <ResponsiveActionButton
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => void handleShareProfile()}
-              action="share"
-              label="Share Profile"
-            />
-          </div>
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Subjects</p>
+          {subjects.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {subjects.map((subject) => (
+                <SubjectBadge key={subject} subject={subject} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-foreground/70">No public subjects yet.</p>
+          )}
         </div>
       </header>
 
@@ -351,22 +386,61 @@ export function PublicProfilePageClient({
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {profile.publicNotes.map((note) => (
-              <Link
+              <Card
                 key={note.noteId}
-                href={buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug })}
-                className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                role="link"
+                tabIndex={0}
+                onClick={() => router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }));
+                  }
+                }}
+                className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
               >
-                <Card className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
-                  <SharedNoteCard
-                    title={note.title}
-                    subject={note.subject}
-                    tags={note.tags}
-                    contentPreview={note.contentPreview}
-                    summaryPreview={note.summaryPreview}
-                    copyCount={note.copyCount}
-                  />
-                </Card>
-              </Link>
+                <SharedNoteCard
+                  title={note.title}
+                  subject={note.subject}
+                  tags={note.tags}
+                  contentPreview={note.contentPreview}
+                  summaryPreview={note.summaryPreview}
+                  copyCount={note.copyCount}
+                  actionSlot={isOwner ? (
+                    <OwnedNoteCardMenu
+                      noteId={note.noteId}
+                      title={note.title}
+                      subject={note.subject}
+                      visibility="PUBLIC"
+                      studyPackStatus="STUDY_PACK_READY"
+                      surface="publicProfile"
+                      onRemoved={() => {
+                        setProfile((current) => {
+                          if (!current) {
+                            return current;
+                          }
+                          return {
+                            ...current,
+                            publicNotes: current.publicNotes.filter((candidate) => candidate.noteId !== note.noteId),
+                            publicNotesCount: Math.max(0, current.publicNotesCount - 1),
+                            totalCopies: Math.max(0, current.totalCopies - note.copyCount),
+                          };
+                        });
+                      }}
+                      onMessage={(message) => {
+                        setShareMessage(null);
+                        setVisibilityMessage(null);
+                        setNoteActionMessage(message);
+                      }}
+                      onError={(message) => {
+                        setShareMessage(null);
+                        setVisibilityMessage(null);
+                        setNoteActionMessage(message);
+                      }}
+                    />
+                  ) : undefined}
+                />
+              </Card>
             ))}
           </div>
         )}

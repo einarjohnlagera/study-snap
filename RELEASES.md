@@ -11,6 +11,9 @@
 ### Improvements
 
 - Major action buttons now keep icon + text labels on mobile across the app’s shared action surfaces instead of collapsing to icon-only.
+- Profile now supports a short bio on the private identity page, and Public Profile now renders that bio with avatar/initial styling and derived subject chips.
+- Public Profile now uses a real `Back` action based on navigation history instead of a hardcoded return link to Public Library.
+- Owned-note context menus are now standardized so `Library` and owner-view `Public Profile` expose management actions without changing the shared note-card preview layout.
 - Private Note Detail `Summary` and `Quiz` tabs now keep text labels on mobile for clearer view switching.
 - Landing page now positions NoteLib as a notes library and study workspace first, with stronger Public Library and active-recall messaging.
 - Public Library is now promoted directly from the landing page as a discovery surface that stays accessible without login.
@@ -39,6 +42,7 @@
 ### Technical Changes
 
 - Shared responsive action components now default to mobile icon + text labels, with explicit opt-out reserved for true icon-only utility controls.
+- Added a shared owned-note card menu component so Library and owner-view Public Profile reuse the same copy/delete/visibility/share menu mechanics.
 - Added shared brand-asset components for the monogram, full logo, and product icon, plus a local OG-image render pipeline and web manifest for the public icon set.
 - Added a shared backend Study Pack usage resolver so plan summary and generation-limit enforcement stay synchronized across services.
 

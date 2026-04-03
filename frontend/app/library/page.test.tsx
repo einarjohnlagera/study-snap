@@ -20,6 +20,7 @@ jest.mock("@/lib/api", () => ({
   getQuickReviewPerformanceSummary: jest.fn(),
   copyNote: jest.fn(),
   deleteNote: jest.fn(),
+  updateNoteVisibility: jest.fn(),
 }));
 
 describe("Library page", () => {
@@ -69,6 +70,9 @@ describe("Library page", () => {
 
     const menuButton = await screen.findByRole("button", { name: "Open note actions" });
     fireEvent.click(menuButton);
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(screen.getByText("Delete this note?")).toBeInTheDocument();

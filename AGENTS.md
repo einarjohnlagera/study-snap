@@ -161,12 +161,13 @@ Core loop:
   - `firstName`
   - `lastName`
   - `displayName`
+  - `bio`
   - `email`
 - Do not collapse `firstName` and `lastName` into one `name` field in product UI or API contracts unless explicitly requested.
 - `Profile Type` remains editable in `Profile` as a separate save action.
 - `Profile` may link to `View Public Profile`, but Public Profile sharing and visibility controls do not belong on `/profile`.
 - `/profile` layout should stay split into:
-  - a top Display Name card with avatar, display name, email, and `View Public Page ->`
+  - a top Display Name card with avatar, display name, email, and `View Public Page`
   - an `Identity` card with its own `Save Identity` action
   - a `Profile Type` card with its own `Save Profile Type` action
 - Profile save buttons must remain section-specific rather than global.
@@ -258,6 +259,7 @@ Core loop:
 - Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Profile is a public showcase of one creator's public notes and contribution stats.
+- Public Profile may show `bio` and derived subject chips, but it remains a learning profile rather than a social-media profile.
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes
@@ -309,8 +311,21 @@ Core loop:
 
 - Library cards, Public Library cards, and Public Profile cards must use a consistent interaction model.
 - The whole card should be clickable to open the detail page.
-- Avoid adding redundant `Open Note` buttons inside cards unless there is a strong exception.
-- Public showcase pages should remain clean and must not inherit private workspace actions.
+- Avoid adding redundant inline action buttons inside cards unless there is a strong exception.
+- Note cards are preview/navigation surfaces; note actions belong in context menus or Note Detail.
+- Owned-note context menus are allowed only on:
+  - `Library`
+  - owner-view `Public Profile`
+- Public Library and other users' Public Profiles must not show note-card context menus.
+- Library card-menu actions:
+  - `Edit`
+  - `Delete`
+  - `Make a Copy`
+  - `Share`
+- Owner-view Public Profile card-menu actions:
+  - `Delete`
+  - `Make Private`
+  - `Make a Copy`
 
 ### Design System — Icons and Buttons
 
@@ -409,13 +424,14 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 
 - `/profile` is a private identity settings surface, not a public-page controls surface.
 - Keep Public Profile sharing and visibility controls on `/public/profile/{userId}` only.
-- `View Public Page ->` on `/profile` is navigation only and should not be grouped with save actions.
+- `View Public Page` on `/profile` is navigation only and should not be grouped with save actions.
 
 ### Public Profile Owner Controls Rule
 
 - Public Profile owner controls belong on `/public/profile/{userId}`, not on `/profile`.
 - Only the profile owner may see `Edit Profile` and the Public Profile visibility toggle.
 - Non-owners may see a share action on Public Profile, but they must not see owner-only editing or privacy controls.
+- Only the profile owner may see Public Profile note-card context menus.
 - If a public profile is turned off, non-owners should see `This profile is private.`
 
 ### UI Consistency Rule
@@ -423,6 +439,7 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Public Profile should reuse the Note Detail control pattern for visibility and share actions.
 - Visibility controls should appear as badge/dropdown controls near the header identity cluster, not as detached toggle buttons.
 - Share actions should sit in the lower action row of the header card rather than in the top metadata cluster.
+- Public Profile header back navigation should use history back, not a hardcoded Library/Public Library link.
 
 ### Note Ownership Rule
 
