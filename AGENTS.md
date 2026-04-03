@@ -180,6 +180,7 @@ Core loop:
   - an `Identity` card with its own `Save Identity` action
   - a `Learning Profile` card with its own `Save Learning Profile` action
   - a `Profile Type` card with its own `Save Profile Type` action
+- Learning Profile combobox-style inputs should reuse the same input-plus-suggestions pattern as the Note Editor `Subject` field.
 - Profile save buttons must remain section-specific rather than global.
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
+import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import {
   completeOnboardingProfileType,
   getMe,
@@ -388,32 +389,35 @@ export default function ProfilePage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2">
                 <span className="text-sm font-medium">Learner Level</span>
-                <select
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                <SuggestionCombobox
+                  id="profile-learner-level"
                   value={learningProfileForm.learnerLevel}
-                  onChange={(event) => handleLearningProfileFieldChange("learnerLevel", event.target.value)}
-                >
-                  <option value="">Select learner level</option>
-                  {LEARNER_LEVEL_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={LEARNER_LEVEL_OPTIONS}
+                  ariaLabel="Learner Level"
+                  onChange={(value) =>
+                    handleLearningProfileFieldChange("learnerLevel", value as LearnerLevel | "")
+                  }
+                  placeholder="Choose learner level"
+                  helperText="Choose the option that best matches your current study stage."
+                  allowCustom={false}
+                  toggleLabel="Toggle learner level suggestions"
+                />
               </label>
               <label className="block space-y-2">
                 <span className="text-sm font-medium">Course / Program</span>
-                <input
-                  list="course-program-suggestions"
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                <SuggestionCombobox
+                  id="profile-course-program"
                   value={learningProfileForm.courseProgram}
-                  onChange={(event) => handleLearningProfileFieldChange("courseProgram", event.target.value.slice(0, 120))}
+                  options={COURSE_PROGRAM_SUGGESTIONS.map((option) => ({ value: option, label: option }))}
+                  ariaLabel="Course / Program"
+                  onChange={(value) =>
+                    handleLearningProfileFieldChange("courseProgram", value.slice(0, 120))
+                  }
+                  placeholder="Choose or type your course/program"
+                  helperText="Pick a suggestion or type your own course/program."
+                  allowCustom
+                  toggleLabel="Toggle course program suggestions"
                 />
-                <datalist id="course-program-suggestions">
-                  {COURSE_PROGRAM_SUGGESTIONS.map((option) => (
-                    <option key={option} value={option} />
-                  ))}
-                </datalist>
               </label>
               <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Bio</span>

@@ -11,6 +11,8 @@
 
 - Private Profile now separates `Identity`, `Learning Profile`, and `Profile Type` into distinct saveable cards.
 - Public Profile can now show learner level and course/program when the owner chooses to provide them.
+- Learner-level and course/program inputs now reuse the same subject-style combobox UX as the Note Editor `Subject` field.
+- Fixed-option learner-level comboboxes now snap back to the last valid saved value if a user types an unsupported option and closes the field.
 
 ### Technical Changes
 

@@ -445,6 +445,7 @@ Users can:
   - `learnerLevel`
   - `courseProgram`
   - `bio`
+- `Learning Profile` combobox-style fields should reuse the same input-plus-suggestions pattern as the Note Editor `Subject` field.
 - `Profile` should include:
   - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page` navigation
   - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
@@ -742,6 +743,7 @@ Rules:
   - required `learnerLevel`
   - optional `courseProgram`
   - optional `bio`
+- learner metadata inputs should reuse the same combobox pattern as the Note Editor `Subject` field instead of plain browser datalists
 - `Learning Style` and `Study Reminder Frequency` remain the existing onboarding steps
 - `Exam Date` is conditional and must be skipped for `STUDENT` and `TEACHER`
 - onboarding state is loaded from `GET /auth/me`

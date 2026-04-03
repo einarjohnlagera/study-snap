@@ -44,6 +44,7 @@ Learning Profile step:
 - `Course / Program` is optional and supports suggestions plus custom values
 - `Bio` is optional
 - helper copy: `Learner level helps NoteLib adjust quiz difficulty and recommendations.`
+- learner-profile comboboxes should reuse the same interaction pattern as the Note Editor `Subject` field
 
 Learning Style options:
 

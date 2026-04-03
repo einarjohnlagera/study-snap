@@ -51,6 +51,7 @@ Rules:
 
 - existing users may still have `null` learner metadata until they update it
 - `courseProgram` stays optional and accepts typed custom values
+- combobox-style fields should reuse the Note Editor `Subject` input-plus-suggestions pattern
 - `Save Learning Profile` should not change identity or profile type
 
 ## Public Profile Link
