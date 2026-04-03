@@ -18,6 +18,7 @@
 
 - Added `users.learner_level` and `users.course_program` with backward-compatible nullable storage for existing users.
 - Backend Study Pack generation now prepares learner-level and course/program metadata in generation context for future prompt tuning, alongside note subject and tags.
+- Refactored the OpenAI Study Pack service to share request/response/error handling across Study Pack, study-tip, and quiz generation flows, and added direct unit coverage for the refactored service.
 
 ## v0.6.0 - Landing Revamp & Positioning (In Progress)
 

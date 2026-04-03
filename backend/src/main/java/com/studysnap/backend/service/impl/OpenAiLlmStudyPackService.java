@@ -48,188 +48,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     @Override
     public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
-        if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
-            throw new AppException(
-                    "LLM_CONFIGURATION_ERROR",
-                    "LLM API key is missing. Please configure LLM_API_KEY.",
-                    HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-        String model = properties.getSettings().getModelFree();
-        if (model == null || model.isBlank()) {
-            throw new AppException(
-                    "LLM_CONFIGURATION_ERROR",
-                    "LLM model is missing. Please configure LLM_MODEL_FREE.",
-                    HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-
-        ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", model);
-        requestBody.set("input", buildInputMessages(normalizedNotesText));
-        ObjectNode textNode = requestBody.putObject("text");
-        ObjectNode formatNode = textNode.putObject("format");
-        formatNode.put("type", "json_schema");
-        formatNode.put("name", "note_lib_study_pack");
-        formatNode.set("schema", promptResources.responseSchema());
-        formatNode.put("strict", true);
-
-        try {
-            String requestBodyJson = objectMapper.writeValueAsString(requestBody);
-            String responseBody = restClient.post()
-                    .uri("/responses")
-                    .body(requestBodyJson)
-                    .retrieve()
-                    .body(String.class);
-
-            if (responseBody == null || responseBody.isBlank()) {
-                throw new AppException(
-                        "LLM_EMPTY_RESPONSE",
-                        "The study pack service returned an empty response. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
-            }
-
-            JsonNode responseJson = objectMapper.readTree(responseBody);
-            String outputJson = LlmResponseUtils.findOutputJson(responseJson)
-                    .orElseThrow(() -> new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned an unexpected format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    ));
-            PromptStudyPack promptStudyPack = objectMapper.readValue(outputJson, PromptStudyPack.class);
-            if (promptStudyPack.quiz().size() != STUDY_PACK_QUIZ_QUESTION_COUNT) {
-                throw new AppException(
-                        "LLM_INVALID_OUTPUT",
-                        "The study pack service returned an invalid quiz format. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
-            }
-            if (StringNormalizationUtils.countWords(promptStudyPack.summary()) > MAX_SUMMARY_WORDS) {
-                throw new AppException(
-                        "LLM_INVALID_OUTPUT",
-                        "The study pack service returned an invalid summary format. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
-            }
-            String normalizedSubject = normalizeAndValidateSubject(promptStudyPack.subject());
-            List<String> normalizedKeyConcepts = normalizeAndValidateKeyConcepts(promptStudyPack.keyConcepts());
-            List<String> normalizedTags = normalizeAndValidateTags(promptStudyPack.tags(), promptStudyPack.title());
-
-            List<QuizItem> quizItems = new ArrayList<>();
-            Set<String> normalizedQuestions = new HashSet<>();
-            Set<String> normalizedConcepts = new HashSet<>();
-            for (PromptQuizItem item : promptStudyPack.quiz()) {
-                if (item.choices() == null || item.choices().size() != 4) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned an invalid quiz format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (item.answerIndex() < 0 || item.answerIndex() >= item.choices().size()) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned an invalid quiz answer. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (StringNormalizationUtils.isBlank(item.question())) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned an invalid quiz format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                String normalizedConcept = normalizeAndValidateConcept(item.concept());
-                if (!normalizedQuestions.add(StringNormalizationUtils.normalizeForDuplicateCheck(item.question()))) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned repetitive quiz questions. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (!normalizedConcepts.add(StringNormalizationUtils.normalizeForDuplicateCheck(normalizedConcept))) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned repetitive quiz concepts. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study pack service returned an invalid quiz format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-
-                List<String> randomizedChoices = QuizValidationUtils.randomizeChoices(item.choices(), item.question());
-                String correctAnswer = item.choices().get(item.answerIndex());
-
-                quizItems.add(new QuizItem(
-                        item.question(),
-                        randomizedChoices,
-                        correctAnswer,
-                        normalizedConcept,
-                        QuizValidationUtils.buildFallbackExplanation(normalizedConcept)
-                ));
-            }
-
-            JsonNode usage = responseJson.path("usage");
-            Integer inputTokens = LlmResponseUtils.asNullableInt(usage.get("input_tokens"));
-            Integer outputTokens = LlmResponseUtils.asNullableInt(usage.get("output_tokens"));
-            Integer cachedInputTokens = LlmResponseUtils.asNullableInt(usage.path("input_tokens_details").get("cached_tokens"));
-            String modelUsed = responseJson.path("model").asText(model);
-
-            return new GeneratedStudyPackContent(
-                    promptStudyPack.title(),
-                    promptStudyPack.summary(),
-                    normalizedSubject,
-                    normalizedTags,
-                    normalizedKeyConcepts,
-                    quizItems,
-                    modelUsed,
-                    inputTokens,
-                    outputTokens,
-                    cachedInputTokens,
-                    null
-            );
-        } catch (RestClientResponseException ex) {
-            String requestId = MDC.get("requestId");
-            String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
-            log.warn(
-                    "openai_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
-                    requestId,
-                    ex.getStatusCode().value(),
-                    ex.getClass().getSimpleName(),
-                    upstreamMessage
-            );
-            throw new AppException(
-                    "LLM_REQUEST_FAILED",
-                    "Study pack generation failed. Please try again in a moment.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        } catch (IOException ex) {
-            throw new AppException(
-                    "LLM_INVALID_OUTPUT",
-                    "The study pack service returned an unexpected format. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        } catch (RestClientException ex) {
-            String requestId = MDC.get("requestId");
-            log.warn(
-                    "openai_unavailable requestId={} errorCode={} message={}",
-                    requestId,
-                    ex.getClass().getSimpleName(),
-                    ex.getMessage()
-            );
-            throw new AppException(
-                    "LLM_UNAVAILABLE",
-                    "Study pack generation is temporarily unavailable. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        }
+        Objects.requireNonNull(context, "context");
+        String model = requireConfiguredModel();
+        JsonSchemaResponse<PromptStudyPack> response = executeJsonSchemaOperation(
+                model,
+                buildInputMessages(normalizedNotesText),
+                studyPackOperation(),
+                promptResources.responseSchema(),
+                PromptStudyPack.class
+        );
+        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model);
     }
 
     private ArrayNode buildInputMessages(String normalizedNotesText) {
@@ -242,6 +70,204 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         input.add(buildTextMessage("user", "Study notes:\n" + normalizedNotesText));
 
         return input;
+    }
+
+    private String requireConfiguredModel() {
+        if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
+            throw configurationError("LLM API key is missing. Please configure LLM_API_KEY.");
+        }
+        String model = properties.getSettings().getModelFree();
+        if (model == null || model.isBlank()) {
+            throw configurationError("LLM model is missing. Please configure LLM_MODEL_FREE.");
+        }
+        return model;
+    }
+
+    private ObjectNode buildJsonSchemaRequest(String model, ArrayNode inputMessages, String schemaName, JsonNode schema) {
+        ObjectNode requestBody = objectMapper.createObjectNode();
+        requestBody.put("model", model);
+        requestBody.set("input", inputMessages);
+        ObjectNode textNode = requestBody.putObject("text");
+        ObjectNode formatNode = textNode.putObject("format");
+        formatNode.put("type", "json_schema");
+        formatNode.put("name", schemaName);
+        formatNode.set("schema", schema);
+        formatNode.put("strict", true);
+        return requestBody;
+    }
+
+    private <T> JsonSchemaResponse<T> executeJsonSchemaOperation(
+            String model,
+            ArrayNode inputMessages,
+            JsonSchemaOperation operation,
+            JsonNode schema,
+            Class<T> payloadType
+    ) {
+        JsonNode responseJson = executeJsonSchemaRequest(
+                buildJsonSchemaRequest(model, inputMessages, operation.schemaName(), schema),
+                operation
+        );
+        T payload = parseOutputPayload(responseJson, payloadType, operation.invalidFormatMessage());
+        return new JsonSchemaResponse<>(payload, responseJson);
+    }
+
+    private JsonNode executeJsonSchemaRequest(
+            ObjectNode requestBody,
+            JsonSchemaOperation operation
+    ) {
+        try {
+            String requestBodyJson = objectMapper.writeValueAsString(requestBody);
+            String responseBody = restClient.post()
+                    .uri("/responses")
+                    .body(requestBodyJson)
+                    .retrieve()
+                    .body(String.class);
+
+            if (responseBody == null || responseBody.isBlank()) {
+                throw emptyResponse(operation.emptyResponseMessage());
+            }
+
+            return objectMapper.readTree(responseBody);
+        } catch (RestClientResponseException ex) {
+            String requestId = MDC.get("requestId");
+            String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
+            log.warn(
+                    "{} requestId={} status={} errorCode={} upstreamMessage={}",
+                    operation.requestFailedLogKey(),
+                    requestId,
+                    ex.getStatusCode().value(),
+                    ex.getClass().getSimpleName(),
+                    upstreamMessage
+            );
+            throw requestFailed(operation.requestFailedMessage());
+        } catch (IOException ex) {
+            throw invalidOutput(operation.invalidFormatMessage());
+        } catch (RestClientException ex) {
+            String requestId = MDC.get("requestId");
+            log.warn(
+                    "{} requestId={} errorCode={} message={}",
+                    operation.unavailableLogKey(),
+                    requestId,
+                    ex.getClass().getSimpleName(),
+                    ex.getMessage()
+            );
+            throw unavailable(operation.unavailableMessage());
+        }
+    }
+
+    private <T> T parseOutputPayload(JsonNode responseJson, Class<T> payloadType, String invalidFormatMessage) {
+        try {
+            String outputJson = LlmResponseUtils.findOutputJson(responseJson)
+                    .orElseThrow(() -> invalidOutput(invalidFormatMessage));
+            return objectMapper.readValue(outputJson, payloadType);
+        } catch (IOException ex) {
+            throw invalidOutput(invalidFormatMessage);
+        }
+    }
+
+    private GeneratedStudyPackContent toGeneratedStudyPackContent(
+            PromptStudyPack promptStudyPack,
+            JsonNode responseJson,
+            String fallbackModel
+    ) {
+        validatePromptStudyPack(promptStudyPack);
+        String normalizedSubject = normalizeAndValidateSubject(promptStudyPack.subject());
+        List<String> normalizedKeyConcepts = normalizeAndValidateKeyConcepts(promptStudyPack.keyConcepts());
+        List<String> normalizedTags = normalizeAndValidateTags(promptStudyPack.tags(), promptStudyPack.title());
+        List<QuizItem> quizItems = buildStudyPackQuizItems(promptStudyPack.quiz());
+
+        UsageMetadata usageMetadata = extractUsageMetadata(responseJson, fallbackModel);
+        return new GeneratedStudyPackContent(
+                promptStudyPack.title(),
+                promptStudyPack.summary(),
+                normalizedSubject,
+                normalizedTags,
+                normalizedKeyConcepts,
+                quizItems,
+                usageMetadata.modelUsed(),
+                usageMetadata.inputTokens(),
+                usageMetadata.outputTokens(),
+                usageMetadata.cachedInputTokens(),
+                null
+        );
+    }
+
+    private void validatePromptStudyPack(PromptStudyPack promptStudyPack) {
+        if (promptStudyPack.quiz().size() != STUDY_PACK_QUIZ_QUESTION_COUNT) {
+            throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
+        }
+        if (StringNormalizationUtils.countWords(promptStudyPack.summary()) > MAX_SUMMARY_WORDS) {
+            throw invalidOutput("The study pack service returned an invalid summary format. Please try again.");
+        }
+    }
+
+    private List<QuizItem> buildStudyPackQuizItems(List<PromptQuizItem> promptQuizItems) {
+        List<QuizItem> quizItems = new ArrayList<>();
+        Set<String> normalizedQuestions = new HashSet<>();
+        Set<String> normalizedConcepts = new HashSet<>();
+        for (PromptQuizItem item : promptQuizItems) {
+            validatePromptQuizItem(item, normalizedQuestions, normalizedConcepts);
+            String normalizedConcept = normalizeAndValidateConcept(item.concept());
+            String normalizedQuestionKey = StringNormalizationUtils.normalizeForDuplicateCheck(item.question());
+            if (!normalizedQuestions.add(normalizedQuestionKey)) {
+                throw invalidOutput("The study pack service returned repetitive quiz questions. Please try again.");
+            }
+            String normalizedConceptKey = StringNormalizationUtils.normalizeForDuplicateCheck(normalizedConcept);
+            if (!normalizedConcepts.add(normalizedConceptKey)) {
+                throw invalidOutput("The study pack service returned repetitive quiz concepts. Please try again.");
+            }
+
+            List<String> randomizedChoices = QuizValidationUtils.randomizeChoices(item.choices(), item.question());
+            String correctAnswer = item.choices().get(item.answerIndex());
+            quizItems.add(new QuizItem(
+                    item.question(),
+                    randomizedChoices,
+                    correctAnswer,
+                    normalizedConcept,
+                    QuizValidationUtils.buildFallbackExplanation(normalizedConcept)
+            ));
+        }
+        return quizItems;
+    }
+
+    private void validatePromptQuizItem(
+            PromptQuizItem item,
+            Set<String> normalizedQuestions,
+            Set<String> normalizedConcepts
+    ) {
+        if (item.choices() == null || item.choices().size() != 4) {
+            throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
+        }
+        if (item.answerIndex() < 0 || item.answerIndex() >= item.choices().size()) {
+            throw invalidOutput("The study pack service returned an invalid quiz answer. Please try again.");
+        }
+        if (StringNormalizationUtils.isBlank(item.question())) {
+            throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
+        }
+        normalizeAndValidateConcept(item.concept());
+        if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
+            throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
+        }
+        String normalizedQuestionKey = StringNormalizationUtils.normalizeForDuplicateCheck(item.question());
+        if (normalizedQuestions.contains(normalizedQuestionKey)) {
+            throw invalidOutput("The study pack service returned repetitive quiz questions. Please try again.");
+        }
+        String normalizedConceptKey = StringNormalizationUtils.normalizeForDuplicateCheck(
+                StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(item.concept())
+        );
+        if (normalizedConcepts.contains(normalizedConceptKey)) {
+            throw invalidOutput("The study pack service returned repetitive quiz concepts. Please try again.");
+        }
+    }
+
+    private UsageMetadata extractUsageMetadata(JsonNode responseJson, String fallbackModel) {
+        JsonNode usage = responseJson.path("usage");
+        return new UsageMetadata(
+                responseJson.path("model").asText(fallbackModel),
+                LlmResponseUtils.asNullableInt(usage.get("input_tokens")),
+                LlmResponseUtils.asNullableInt(usage.get("output_tokens")),
+                LlmResponseUtils.asNullableInt(usage.path("input_tokens_details").get("cached_tokens"))
+        );
     }
 
     private ArrayNode buildQuickReviewStudyTipInputMessages(String incorrectQuestionSummaries) {
@@ -367,22 +393,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private String normalizeAndValidateSubject(String subject) {
         String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(subject);
         if (!StringNormalizationUtils.containsAlphaNumeric(normalized) || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
-            throw new AppException(
-                    "LLM_INVALID_OUTPUT",
-                    "The study pack service returned invalid subject metadata. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
+            throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
         }
         return normalized;
     }
 
     private List<String> normalizeAndValidateTags(List<String> tags, String title) {
         if (tags == null || tags.size() < 3 || tags.size() > 6) {
-            throw new AppException(
-                    "LLM_INVALID_OUTPUT",
-                    "The study pack service returned invalid tag metadata. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
+            throw invalidOutput("The study pack service returned invalid tag metadata. Please try again.");
         }
 
         String normalizedTitle = StringNormalizationUtils.normalizeForDuplicateCheck(title);
@@ -392,22 +410,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String normalizedTag = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(tag);
             if (!StringNormalizationUtils.containsAlphaNumeric(normalizedTag)
                     || !StringNormalizationUtils.hasWordCountBetween(normalizedTag, 1, 3)) {
-                throw new AppException(
-                        "LLM_INVALID_OUTPUT",
-                        "The study pack service returned invalid tag metadata. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
+                throw invalidOutput("The study pack service returned invalid tag metadata. Please try again.");
             }
 
             String normalizedTagForComparison = StringNormalizationUtils.normalizeForDuplicateCheck(normalizedTag);
             if (normalizedTagForComparison.isBlank()
                     || normalizedTagForComparison.equals(normalizedTitle)
                     || !normalizedSeenTags.add(normalizedTagForComparison)) {
-                throw new AppException(
-                        "LLM_INVALID_OUTPUT",
-                        "The study pack service returned invalid tag metadata. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
+                throw invalidOutput("The study pack service returned invalid tag metadata. Please try again.");
             }
             normalizedTags.add(normalizedTag);
         }
@@ -417,11 +427,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private List<String> normalizeAndValidateKeyConcepts(List<String> keyConcepts) {
         if (keyConcepts == null || keyConcepts.size() < 8 || keyConcepts.size() > 10) {
-            throw new AppException(
-                    "LLM_INVALID_OUTPUT",
-                    "The study pack service returned invalid key concepts. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
+            throw invalidOutput("The study pack service returned invalid key concepts. Please try again.");
         }
 
         Set<String> normalizedSeen = new HashSet<>();
@@ -429,20 +435,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         for (String keyConcept : keyConcepts) {
             String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(keyConcept);
             if (!StringNormalizationUtils.containsAlphaNumeric(normalized)) {
-                throw new AppException(
-                        "LLM_INVALID_OUTPUT",
-                        "The study pack service returned invalid key concepts. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
+                throw invalidOutput("The study pack service returned invalid key concepts. Please try again.");
             }
 
             String duplicateKey = StringNormalizationUtils.normalizeForDuplicateCheck(normalized);
             if (duplicateKey.isBlank() || !normalizedSeen.add(duplicateKey)) {
-                throw new AppException(
-                        "LLM_INVALID_OUTPUT",
-                        "The study pack service returned repetitive key concepts. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
+                throw invalidOutput("The study pack service returned repetitive key concepts. Please try again.");
             }
             normalizedConcepts.add(normalized);
         }
@@ -453,11 +451,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private String normalizeAndValidateConcept(String concept) {
         String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(concept);
         if (normalized == null || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
-            throw new AppException(
-                    "LLM_INVALID_OUTPUT",
-                    "The study pack service returned an invalid quiz concept. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
+            throw invalidOutput("The study pack service returned an invalid quiz concept. Please try again.");
         }
         return normalized;
     }
@@ -467,21 +461,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (incorrectQuestionSummaries == null || incorrectQuestionSummaries.isEmpty()) {
             return null;
         }
-        if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
-            throw new AppException(
-                    "LLM_CONFIGURATION_ERROR",
-                    "LLM API key is missing. Please configure LLM_API_KEY.",
-                    HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-        String model = properties.getSettings().getModelFree();
-        if (model == null || model.isBlank()) {
-            throw new AppException(
-                    "LLM_CONFIGURATION_ERROR",
-                    "LLM model is missing. Please configure LLM_MODEL_FREE.",
-                    HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
+        String model = requireConfiguredModel();
 
         String joinedSummaries = incorrectQuestionSummaries.stream()
                 .filter(Objects::nonNull)
@@ -494,76 +474,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             return null;
         }
 
-        ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", model);
-        requestBody.set("input", buildQuickReviewStudyTipInputMessages(joinedSummaries));
-        ObjectNode textNode = requestBody.putObject("text");
-        ObjectNode formatNode = textNode.putObject("format");
-        formatNode.put("type", "json_schema");
-        formatNode.put("name", "note_lib_study_tip");
-        formatNode.set("schema", buildStudyTipSchema());
-        formatNode.put("strict", true);
-
-        try {
-            String requestBodyJson = objectMapper.writeValueAsString(requestBody);
-            String responseBody = restClient.post()
-                    .uri("/responses")
-                    .body(requestBodyJson)
-                    .retrieve()
-                    .body(String.class);
-
-            if (responseBody == null || responseBody.isBlank()) {
-                throw new AppException(
-                        "LLM_EMPTY_RESPONSE",
-                        "The study tip service returned an empty response. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
-            }
-
-            JsonNode responseJson = objectMapper.readTree(responseBody);
-            String outputJson = LlmResponseUtils.findOutputJson(responseJson)
-                    .orElseThrow(() -> new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            "The study tip service returned an unexpected format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    ));
-            PromptStudyTip promptStudyTip = objectMapper.readValue(outputJson, PromptStudyTip.class);
-            return LlmResponseUtils.sanitizeStudyTip(promptStudyTip.tip(), MAX_STUDY_TIP_WORDS);
-        } catch (RestClientResponseException ex) {
-            String requestId = MDC.get("requestId");
-            String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
-            log.warn(
-                    "openai_study_tip_request_failed requestId={} status={} errorCode={} upstreamMessage={}",
-                    requestId,
-                    ex.getStatusCode().value(),
-                    ex.getClass().getSimpleName(),
-                    upstreamMessage
-            );
-            throw new AppException(
-                    "LLM_REQUEST_FAILED",
-                    "Study tip generation failed. Please try again in a moment.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        } catch (IOException ex) {
-            throw new AppException(
-                    "LLM_INVALID_OUTPUT",
-                    "The study tip service returned an unexpected format. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        } catch (RestClientException ex) {
-            String requestId = MDC.get("requestId");
-            log.warn(
-                    "openai_study_tip_unavailable requestId={} errorCode={} message={}",
-                    requestId,
-                    ex.getClass().getSimpleName(),
-                    ex.getMessage()
-            );
-            throw new AppException(
-                    "LLM_UNAVAILABLE",
-                    "Study tip generation is temporarily unavailable. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        }
+        JsonSchemaResponse<PromptStudyTip> response = executeJsonSchemaOperation(
+                model,
+                buildQuickReviewStudyTipInputMessages(joinedSummaries),
+                studyTipOperation(),
+                buildStudyTipSchema(),
+                PromptStudyTip.class
+        );
+        return LlmResponseUtils.sanitizeStudyTip(response.payload().tip(), MAX_STUDY_TIP_WORDS);
     }
 
     @Override
@@ -629,153 +547,67 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String operationLabel,
             List<String> conceptFallbackPool
     ) {
-        if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
-            throw new AppException(
-                    "LLM_CONFIGURATION_ERROR",
-                    "LLM API key is missing. Please configure LLM_API_KEY.",
-                    HttpStatus.INTERNAL_SERVER_ERROR
-            );
-        }
-        String model = properties.getSettings().getModelFree();
-        if (model == null || model.isBlank()) {
-            throw new AppException(
-                    "LLM_CONFIGURATION_ERROR",
-                    "LLM model is missing. Please configure LLM_MODEL_FREE.",
-                    HttpStatus.INTERNAL_SERVER_ERROR
-            );
+        String model = requireConfiguredModel();
+        JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
+                model,
+                inputMessages,
+                quizOperation(schemaName, operationLabel),
+                buildGeneratedQuizSchema(questionCount),
+                PromptGeneratedQuiz.class
+        );
+        PromptGeneratedQuiz promptGeneratedQuiz = response.payload();
+
+        if (promptGeneratedQuiz.questions() == null || promptGeneratedQuiz.questions().size() != questionCount) {
+            throw invalidOutput(operationLabel + " returned an invalid format. Please try again.");
         }
 
-        ObjectNode requestBody = objectMapper.createObjectNode();
-        requestBody.put("model", model);
-        requestBody.set("input", inputMessages);
-        ObjectNode textNode = requestBody.putObject("text");
-        ObjectNode formatNode = textNode.putObject("format");
-        formatNode.put("type", "json_schema");
-        formatNode.put("name", schemaName);
-        formatNode.set("schema", buildGeneratedQuizSchema(questionCount));
-        formatNode.put("strict", true);
+        List<QuizItem> quizItems = new ArrayList<>();
+        int conceptIndex = 0;
+        for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
+            validateGeneratedQuizItem(item, operationLabel);
+            String answer = item.answer().trim();
+            String conceptFallback = conceptFallbackPool.isEmpty()
+                    ? null
+                    : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
+            conceptIndex += 1;
+            quizItems.add(new QuizItem(
+                    item.question().trim(),
+                    item.choices().stream().map(String::trim).toList(),
+                    answer,
+                    conceptFallback,
+                    QuizValidationUtils.buildFallbackExplanation(conceptFallback)
+            ));
+        }
+        return quizItems;
+    }
 
-        try {
-            String requestBodyJson = objectMapper.writeValueAsString(requestBody);
-            String responseBody = restClient.post()
-                    .uri("/responses")
-                    .body(requestBodyJson)
-                    .retrieve()
-                    .body(String.class);
+    private void validateGeneratedQuizItem(PromptGeneratedQuizItem item, String operationLabel) {
+        if (item.choices() == null || item.choices().size() != 4) {
+            throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
+        }
+        if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.answer())) {
+            throw invalidOutput(operationLabel + " returned an invalid question. Please try again.");
+        }
+        if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
+            throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
+        }
 
-            if (responseBody == null || responseBody.isBlank()) {
-                throw new AppException(
-                        "LLM_EMPTY_RESPONSE",
-                        operationLabel + " returned an empty response. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
-            }
-
-            JsonNode responseJson = objectMapper.readTree(responseBody);
-            String outputJson = LlmResponseUtils.findOutputJson(responseJson)
-                    .orElseThrow(() -> new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            operationLabel + " returned an unexpected format. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    ));
-            PromptGeneratedQuiz promptGeneratedQuiz = objectMapper.readValue(outputJson, PromptGeneratedQuiz.class);
-
-            if (promptGeneratedQuiz.questions() == null || promptGeneratedQuiz.questions().size() != questionCount) {
-                throw new AppException(
-                        "LLM_INVALID_OUTPUT",
-                        operationLabel + " returned an invalid format. Please try again.",
-                        HttpStatus.BAD_GATEWAY
-                );
-            }
-
-            List<QuizItem> quizItems = new ArrayList<>();
-            int conceptIndex = 0;
-            for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
-                if (item.choices() == null || item.choices().size() != 4) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            operationLabel + " returned invalid choices. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.answer())) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            operationLabel + " returned an invalid question. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-                if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            operationLabel + " returned invalid choices. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-
-                String answer = item.answer().trim();
-                boolean answerInChoices = item.choices().stream().anyMatch(choice -> choice.trim().equals(answer));
-                if (!answerInChoices) {
-                    throw new AppException(
-                            "LLM_INVALID_OUTPUT",
-                            operationLabel + " returned an invalid answer mapping. Please try again.",
-                            HttpStatus.BAD_GATEWAY
-                    );
-                }
-
-                String conceptFallback = conceptFallbackPool.isEmpty()
-                        ? null
-                        : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
-                conceptIndex += 1;
-                quizItems.add(new QuizItem(
-                        item.question().trim(),
-                        item.choices().stream().map(String::trim).toList(),
-                        answer,
-                        conceptFallback,
-                        QuizValidationUtils.buildFallbackExplanation(conceptFallback)
-                ));
-            }
-            return quizItems;
-        } catch (RestClientResponseException ex) {
-            String requestId = MDC.get("requestId");
-            String upstreamMessage = LlmResponseUtils.extractUpstreamErrorMessage(ex.getResponseBodyAsString(), objectMapper);
-            log.warn(
-                    "openai_quiz_request_failed requestId={} operation={} status={} errorCode={} upstreamMessage={}",
-                    requestId,
-                    operationLabel,
-                    ex.getStatusCode().value(),
-                    ex.getClass().getSimpleName(),
-                    upstreamMessage
-            );
-            throw new AppException(
-                    "LLM_REQUEST_FAILED",
-                    operationLabel + " failed. Please try again in a moment.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        } catch (IOException ex) {
-            throw new AppException(
-                    "LLM_INVALID_OUTPUT",
-                    operationLabel + " returned an unexpected format. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
-        } catch (RestClientException ex) {
-            String requestId = MDC.get("requestId");
-            log.warn(
-                    "openai_quiz_unavailable requestId={} operation={} errorCode={} message={}",
-                    requestId,
-                    operationLabel,
-                    ex.getClass().getSimpleName(),
-                    ex.getMessage()
-            );
-            throw new AppException(
-                    "LLM_UNAVAILABLE",
-                    operationLabel + " is temporarily unavailable. Please try again.",
-                    HttpStatus.BAD_GATEWAY
-            );
+        String answer = item.answer().trim();
+        boolean answerInChoices = item.choices().stream().anyMatch(choice -> choice.trim().equals(answer));
+        if (!answerInChoices) {
+            throw invalidOutput(operationLabel + " returned an invalid answer mapping. Please try again.");
         }
     }
 
     private List<String> sanitizeConceptList(List<String> values) {
+        return sanitizeStringList(values);
+    }
+
+    private List<String> sanitizeQuestionList(List<String> values) {
+        return sanitizeStringList(values);
+    }
+
+    private List<String> sanitizeStringList(List<String> values) {
         if (values == null || values.isEmpty()) {
             return List.of();
         }
@@ -787,16 +619,60 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .toList();
     }
 
-    private List<String> sanitizeQuestionList(List<String> values) {
-        if (values == null || values.isEmpty()) {
-            return List.of();
-        }
-        return values.stream()
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(value -> !value.isEmpty())
-                .distinct()
-                .toList();
+    private JsonSchemaOperation studyPackOperation() {
+        return new JsonSchemaOperation(
+                "note_lib_study_pack",
+                "openai_request_failed",
+                "openai_unavailable",
+                "The study pack service returned an empty response. Please try again.",
+                "The study pack service returned an unexpected format. Please try again.",
+                "Study pack generation failed. Please try again in a moment.",
+                "Study pack generation is temporarily unavailable. Please try again."
+        );
+    }
+
+    private JsonSchemaOperation studyTipOperation() {
+        return new JsonSchemaOperation(
+                "note_lib_study_tip",
+                "openai_study_tip_request_failed",
+                "openai_study_tip_unavailable",
+                "The study tip service returned an empty response. Please try again.",
+                "The study tip service returned an unexpected format. Please try again.",
+                "Study tip generation failed. Please try again in a moment.",
+                "Study tip generation is temporarily unavailable. Please try again."
+        );
+    }
+
+    private JsonSchemaOperation quizOperation(String schemaName, String operationLabel) {
+        return new JsonSchemaOperation(
+                schemaName,
+                "openai_quiz_request_failed",
+                "openai_quiz_unavailable",
+                operationLabel + " returned an empty response. Please try again.",
+                operationLabel + " returned an unexpected format. Please try again.",
+                operationLabel + " failed. Please try again in a moment.",
+                operationLabel + " is temporarily unavailable. Please try again."
+        );
+    }
+
+    private AppException configurationError(String message) {
+        return new AppException("LLM_CONFIGURATION_ERROR", message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    private AppException emptyResponse(String message) {
+        return new AppException("LLM_EMPTY_RESPONSE", message, HttpStatus.BAD_GATEWAY);
+    }
+
+    private AppException invalidOutput(String message) {
+        return new AppException("LLM_INVALID_OUTPUT", message, HttpStatus.BAD_GATEWAY);
+    }
+
+    private AppException requestFailed(String message) {
+        return new AppException("LLM_REQUEST_FAILED", message, HttpStatus.BAD_GATEWAY);
+    }
+
+    private AppException unavailable(String message) {
+        return new AppException("LLM_UNAVAILABLE", message, HttpStatus.BAD_GATEWAY);
     }
 
     private record PromptStudyPack(
@@ -839,5 +715,30 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private record PromptStudyTip(String tip) {
+    }
+
+    private record JsonSchemaOperation(
+            String schemaName,
+            String requestFailedLogKey,
+            String unavailableLogKey,
+            String emptyResponseMessage,
+            String invalidFormatMessage,
+            String requestFailedMessage,
+            String unavailableMessage
+    ) {
+    }
+
+    private record JsonSchemaResponse<T>(
+            T payload,
+            JsonNode responseJson
+    ) {
+    }
+
+    private record UsageMetadata(
+            String modelUsed,
+            Integer inputTokens,
+            Integer outputTokens,
+            Integer cachedInputTokens
+    ) {
     }
 }
