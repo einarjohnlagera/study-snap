@@ -187,4 +187,17 @@ describe("AppShell", () => {
       expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ mobileHidden: true }));
     });
   });
+
+  it("shows Edit Note as the page title on note edit routes", async () => {
+    currentPathname = "/notes/note-1/edit";
+    window.history.replaceState({}, "", currentPathname);
+
+    render(
+      <AppShell>
+        <div>Edit note content</div>
+      </AppShell>,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Edit Note" })).toBeInTheDocument();
+  });
 });

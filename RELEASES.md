@@ -20,6 +20,10 @@
 - Backend Study Pack generation now prepares learner-level and course/program metadata in generation context for future prompt tuning, alongside note subject and tags.
 - Refactored the OpenAI Study Pack service to share request/response/error handling across Study Pack, study-tip, and quiz generation flows, and added direct unit coverage for the refactored service.
 
+### Fixes
+
+- Restored distinct Note Editor create vs edit behavior so existing notes now render `Edit Note` copy, correct edit-mode actions, and the generated-note content lock without falling back to create-note messaging.
+
 ## v0.6.0 - Landing Revamp & Positioning (In Progress)
 
 ### New Features

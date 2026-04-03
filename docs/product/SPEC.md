@@ -253,6 +253,13 @@ Favicon requirements:
   - desktop: sticky top actions plus repeated bottom actions
   - mobile: fixed floating primary generate CTA
   - `Save` stays secondary
+- Note Editor route modes must stay distinct:
+  - `/notes/new` -> create mode with `Save` plus `Generate`
+  - `/notes/{id}/edit` for Draft notes -> edit mode with `Save Changes`, `Cancel`, and `Generate`
+  - `/notes/{id}/edit` for Study Pack Ready notes -> metadata edit mode with `Save Changes`, `Cancel`, and `Make a Copy`
+- Existing notes on `/notes/{id}/edit` must render `Edit Note` copy, not the create-note title/description.
+- When a note already has a Study Pack, Note Editor keeps `title`, `subject`, and `tags` editable but locks `content` with the helper:
+  - `Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.`
 - Generate button copy should stay short and may vary by `profileType` without changing backend generation:
   - `STUDENT` -> `Generate`
   - `BOARD_EXAM` -> `Practice`

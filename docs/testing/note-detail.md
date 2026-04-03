@@ -8,3 +8,6 @@ Verify these cases for private Note Detail:
 - switching tabs does not jump the page to the top
 - switching tabs does not refetch the note or flash the loading state
 - tab switching keeps the user near the Study Pack content area on mobile and desktop
+- opening `/notes/{id}/edit` for a Draft note shows `Edit Note` plus `Save Changes`, `Cancel`, and `Generate Study Pack`
+- opening `/notes/{id}/edit` for a Study Pack Ready note keeps `title`, `subject`, and `tags` editable while locking `content`
+- Study Pack Ready edit mode shows `Save Changes`, `Cancel`, and `Make a Copy` instead of create-note buttons

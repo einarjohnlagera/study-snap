@@ -502,6 +502,10 @@ Keep app shell grouping:
   - keep `Generate` as the primary CTA and `Save` as the secondary CTA
   - desktop should show actions at the top and bottom of long note forms
   - mobile should keep a floating primary generate button visible while scrolling
+  - `/notes/new` stays in create mode with `Save` + `Generate`
+  - `/notes/{id}/edit` for Draft notes stays in edit mode with `Save Changes`, `Cancel`, and `Generate`
+  - `/notes/{id}/edit` for Study Pack Ready notes keeps metadata editing only and shows `Save Changes`, `Cancel`, and `Make a Copy`
+  - edit routes must render `Edit Note` copy, not create-note copy
 - Generate button wording may vary by `profileType` (`Generate`, `Practice`, `Create Quiz`) but must still hit the same Study Pack generation flow.
 - Keep primary button labels short; longer outcome explanations belong in helper text below the generate button.
 - After generation, default tab should vary by `profileType`:

@@ -105,6 +105,9 @@ function getPageTitle(pathname: string): string {
   if (pathname === "/notes/new") {
     return "New Note";
   }
+  if (/^\/notes\/[^/]+\/edit$/.test(pathname)) {
+    return "Edit Note";
+  }
   if (pathname.startsWith("/notes/")) {
     return "Note";
   }
