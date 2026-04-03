@@ -17,6 +17,7 @@ import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.RefreshTokenEntity;
 import com.studysnap.backend.entity.ThemePreference;
@@ -196,6 +197,9 @@ public class AuthService {
 
         OffsetDateTime now = OffsetDateTime.now();
         user.setProfileType(request.profileType());
+        user.setLearnerLevel(request.learnerLevel());
+        user.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
+        user.setBio(normalizeOptionalText(request.bio()));
         user.setExamDate(resolveExamDate(request));
         user.setEngagementMode(request.engagementMode());
         user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
@@ -269,12 +273,16 @@ public class AuthService {
         String normalizedLastName = normalizeOptionalText(request.lastName());
         String normalizedDisplayName = normalizeOptionalText(request.displayName());
         String normalizedBio = normalizeOptionalText(request.bio());
+        LearnerLevel normalizedLearnerLevel = request.learnerLevel();
+        String normalizedCourseProgram = normalizeOptionalCourseProgram(request.courseProgram());
         String normalizedEmail = normalizeEmail(request.email());
 
         user.setFirstName(normalizedFirstName);
         user.setLastName(normalizedLastName);
         user.setDisplayName(resolveDisplayName(normalizedDisplayName));
         user.setBio(normalizedBio);
+        user.setLearnerLevel(normalizedLearnerLevel);
+        user.setCourseProgram(normalizedCourseProgram);
 
         if (normalizedEmail.equalsIgnoreCase(user.getEmail())) {
             user.setPendingEmail(null);
@@ -306,6 +314,8 @@ public class AuthService {
                 user.getLastName(),
                 user.getDisplayName(),
                 user.getBio(),
+                user.getLearnerLevel(),
+                user.getCourseProgram(),
                 Boolean.TRUE.equals(user.getPublicProfileVisible()),
                 user.getCountryCode(),
                 user.getProfileType(),
@@ -351,6 +361,21 @@ public class AuthService {
             );
         }
         return request.examDate();
+    }
+
+    private String normalizeOptionalCourseProgram(String value) {
+        String normalized = normalizeOptionalText(value);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.length() > 120) {
+            throw new AppException(
+                    "INVALID_COURSE_PROGRAM",
+                    "Course / Program must be 120 characters or less.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return normalized;
     }
 
     private AuthResponse buildAuthResponse(

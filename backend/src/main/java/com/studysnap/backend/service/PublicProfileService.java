@@ -60,6 +60,8 @@ public class PublicProfileService {
         return new PublicProfileResponse(
                 resolvePublicDisplayName(user),
                 normalizeOptionalText(user.getBio()),
+                user.getLearnerLevel() == null ? null : user.getLearnerLevel().name(),
+                normalizeOptionalText(user.getCourseProgram()),
                 user.getProfileType() == null ? null : user.getProfileType().name(),
                 isOfficialAuthor(user),
                 publicProfileVisible,

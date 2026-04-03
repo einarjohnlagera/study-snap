@@ -5,6 +5,8 @@ import java.util.List;
 public record PublicProfileResponse(
         String displayName,
         String bio,
+        String learnerLevel,
+        String courseProgram,
         String profileType,
         boolean isOfficial,
         boolean publicProfileVisible,

@@ -5,18 +5,22 @@ import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +53,8 @@ class StudyPackServiceTest {
     @Mock
     private NoteRepository noteRepository;
     @Mock
+    private UserRepository userRepository;
+    @Mock
     private OcrService ocrService;
     @Mock
     private LlmStudyPackService llmStudyPackService;
@@ -77,6 +83,7 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
+                userRepository,
                 ocrService,
                 llmStudyPackService,
                 new StudySnapProperties(),
@@ -91,6 +98,7 @@ class StudyPackServiceTest {
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
     }
 
     @Test
@@ -119,6 +127,11 @@ class StudyPackServiceTest {
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        UserEntity owner = new UserEntity();
+        owner.setId(userId);
+        owner.setLearnerLevel(LearnerLevel.COLLEGE);
+        owner.setCourseProgram("Biology");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(owner));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
@@ -127,7 +140,8 @@ class StudyPackServiceTest {
                         OffsetDateTime.now().plusDays(20),
                         0
                 ));
-        when(llmStudyPackService.generateStudyPack("draft note content")).thenReturn(generated);
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
 
         StudyPackResponse response = studyPackService.createFromText(
                 new CreateStudyPackRequest(null, noteId.toString()),
@@ -144,6 +158,13 @@ class StudyPackServiceTest {
 
         verify(noteRepository).save(draftNote);
         assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATED);
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateStudyPack(eq("draft note content"), contextCaptor.capture());
+        assertThat(contextCaptor.getValue().learnerLevel()).isEqualTo(LearnerLevel.COLLEGE);
+        assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Biology");
+        assertThat(contextCaptor.getValue().subject()).isEqualTo("Subject");
+        assertThat(contextCaptor.getValue().tags()).containsExactly("draft");
 
         verify(userUsageService).incrementStudyPackGeneration(eq(userId), any(OffsetDateTime.class));
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.STUDY_PACK_GENERATED), eq(savedStudyPack.getId()), any());
@@ -204,7 +225,7 @@ class StudyPackServiceTest {
                 .extracting(error -> ((AppException) error).getCode())
                 .isEqualTo("TOO_MANY_REQUESTS");
 
-        verify(llmStudyPackService, never()).generateStudyPack(any());
+        verify(llmStudyPackService, never()).generateStudyPack(any(), any());
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
@@ -223,6 +244,7 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
+                userRepository,
                 ocrService,
                 llmStudyPackService,
                 properties,
@@ -251,7 +273,7 @@ class StudyPackServiceTest {
                 .extracting(error -> ((AppException) error).getCode())
                 .isEqualTo("MONTHLY_STUDY_PACK_LIMIT_REACHED");
 
-        verify(llmStudyPackService, never()).generateStudyPack(any());
+        verify(llmStudyPackService, never()).generateStudyPack(any(), any());
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
@@ -269,7 +291,7 @@ class StudyPackServiceTest {
                         OffsetDateTime.now().plusDays(20),
                         4
                 ));
-        when(llmStudyPackService.generateStudyPack("draft note content"))
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
                 .thenThrow(new RuntimeException("LLM unavailable"));
 
         CreateStudyPackRequest request = new CreateStudyPackRequest(null, noteId.toString());

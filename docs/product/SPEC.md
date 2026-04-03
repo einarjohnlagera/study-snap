@@ -253,6 +253,13 @@ Favicon requirements:
   - desktop: sticky top actions plus repeated bottom actions
   - mobile: fixed floating primary generate CTA
   - `Save` stays secondary
+- Note Editor route modes must stay distinct:
+  - `/notes/new` -> create mode with `Save` plus `Generate`
+  - `/notes/{id}/edit` for Draft notes -> edit mode with `Save Changes`, `Cancel`, and `Generate`
+  - `/notes/{id}/edit` for Study Pack Ready notes -> metadata edit mode with `Save Changes`, `Cancel`, and `Make a Copy`
+- Existing notes on `/notes/{id}/edit` must render `Edit Note` copy, not the create-note title/description.
+- When a note already has a Study Pack, Note Editor keeps `title`, `subject`, and `tags` editable but locks `content` with the helper:
+  - `Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.`
 - Generate button copy should stay short and may vary by `profileType` without changing backend generation:
   - `STUDENT` -> `Generate`
   - `BOARD_EXAM` -> `Practice`
@@ -340,6 +347,8 @@ Users can:
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name
   - Bio (or `This user hasn't added a bio yet.` when blank)
+  - optional Learner Level
+  - optional Course / Program
   - avatar/initials
   - Profile Type
   - Official badge when the account is official/admin
@@ -438,14 +447,20 @@ Users can:
   - `firstName`
   - `lastName`
   - `displayName`
-  - `bio`
   - `email`
+- `Profile -> Learning Profile` owns:
+  - `learnerLevel`
+  - `courseProgram`
+  - `bio`
+- `Learning Profile` combobox-style fields should reuse the same input-plus-suggestions pattern as the Note Editor `Subject` field.
 - `Profile` should include:
   - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page` navigation
-  - an `Identity` card with `firstName`, `lastName`, `displayName`, `bio`, and `email`
+  - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
+  - a `Learning Profile` card with `learnerLevel`, optional `courseProgram`, and optional `bio`
   - a `Profile Type` card with the profile-type selector
 - `Profile` save actions should be section-specific:
   - `Save Identity` only saves identity fields
+  - `Save Learning Profile` only saves learner-level, course/program, and bio fields
   - `Save Profile Type` only saves the profile type field
 - `View Public Page` on `/profile` is navigation only and should live in the top Display Name card.
 - `Profile` should not own Public Profile sharing or visibility controls.
@@ -652,6 +667,7 @@ Page responsibilities:
 - Both generation entry points must use the same metadata-suggestion behavior for AI-generated `title`, `subject`, and `tags`.
 - If the note has no existing metadata, generated metadata may be applied automatically.
 - If the note already has metadata, users should see the shared suggestion review modal before replacing their values.
+- Backend generation context may also carry `learnerLevel`, `courseProgram`, note `subject`, and note `tags` for future prompt personalization without changing current Study Pack UI yet.
 
 ### Authentication Session Handling
 
@@ -716,10 +732,11 @@ Preferences onboarding is reused and extended rather than duplicated.
 Current onboarding order:
 
 1. `Profile Type`
-2. `Learning Style`
-3. `Study Reminder Frequency`
-4. `Exam Date` only when `profileType = BOARD_EXAM`
-5. finish and redirect to `Dashboard`
+2. `Learning Profile`
+3. `Learning Style`
+4. `Study Reminder Frequency`
+5. `Exam Date` only when `profileType = BOARD_EXAM`
+6. finish and redirect to `Dashboard`
 
 Profile Type options:
 
@@ -729,6 +746,11 @@ Profile Type options:
 
 Rules:
 
+- `Learning Profile` collects:
+  - required `learnerLevel`
+  - optional `courseProgram`
+  - optional `bio`
+- learner metadata inputs should reuse the same combobox pattern as the Note Editor `Subject` field instead of plain browser datalists
 - `Learning Style` and `Study Reminder Frequency` remain the existing onboarding steps
 - `Exam Date` is conditional and must be skipped for `STUDENT` and `TEACHER`
 - onboarding state is loaded from `GET /auth/me`
@@ -739,16 +761,24 @@ Rules:
 
 Route: `/profile`
 
-`Profile` owns identity and account-oriented fields only.
+`Profile` owns identity and learner-account fields only.
 
 Identity section:
 
 - `firstName`
 - `lastName`
+- `displayName`
 - `email`
 - `Save Identity`
 
-Profile section:
+Learning Profile section:
+
+- `learnerLevel`
+- optional `courseProgram`
+- optional `bio`
+- separate `Save Learning Profile` action
+
+Profile Type section:
 
 - `profileType`
 - separate `Save Profile Type` action

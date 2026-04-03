@@ -9,6 +9,12 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 - Notes are saved first and remain the primary entity.
 - Study Pack output is the generated enhancement state of a Note.
 - New versions are created via `Make a Copy`, not overwrite on the same Note.
+- Backend generation context may also carry:
+  - `learnerLevel`
+  - `courseProgram`
+  - note `subject`
+  - note `tags`
+- This metadata is preparation for smarter prompt personalization in later releases; current Study Pack UI and workflow do not change yet.
 
 ## Output structure
 
@@ -82,6 +88,25 @@ All imported content should populate the main note `content` field for manual re
 Imports must not auto-save and must not auto-generate.
 Create/Edit Note should use one unified upload entry point for images and supported files.
 Backend extraction is the source of truth for OCR and document text extraction.
+
+## Create vs Edit mode
+
+Note Editor must keep create and edit behavior distinct.
+
+- Create mode (`/notes/new`)
+  - title: `New Note`
+  - actions: `Save`, `Generate Study Pack`
+- Edit mode for Draft notes (`/notes/{id}/edit`)
+  - title: `Edit Note`
+  - actions: `Save Changes`, `Cancel`, `Generate Study Pack`
+- Edit mode for Study Pack Ready notes (`/notes/{id}/edit`)
+  - title: `Edit Note`
+  - metadata remains editable: `title`, `subject`, `tags`
+  - note `content` is read-only
+  - helper text: `Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.`
+  - actions: `Save Changes`, `Cancel`, `Make a Copy`
+
+These route-mode labels and actions should not fall back to create-note copy when an existing note is being edited.
 
 ## OCR input flow (image notes)
 

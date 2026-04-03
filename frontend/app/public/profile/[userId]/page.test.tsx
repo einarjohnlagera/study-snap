@@ -47,6 +47,8 @@ describe("PublicProfilePage", () => {
       profile: {
         displayName: "Study Buddy",
         bio: "Biology notes and board-review practice.",
+        learnerLevel: "BOARD_EXAM_REVIEW",
+        courseProgram: "Biology",
         profileType: "TEACHER",
         isOfficial: true,
         publicProfileVisible: true,
@@ -81,6 +83,8 @@ describe("PublicProfilePage", () => {
 
     expect(screen.getByRole("heading", { name: "Study Buddy" })).toBeInTheDocument();
     expect(screen.getByText("Biology notes and board-review practice.")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Review")).toBeInTheDocument();
+    expect(screen.getAllByText("Biology")).not.toHaveLength(0);
     expect(screen.getAllByText("Teacher")).not.toHaveLength(0);
     expect(screen.getByText("Official")).toBeInTheDocument();
     expect(screen.getByText("Public notes")).toBeInTheDocument();
@@ -102,6 +106,8 @@ describe("PublicProfilePage", () => {
       profile: {
         displayName: "Quiet Creator",
         bio: null,
+        learnerLevel: null,
+        courseProgram: null,
         profileType: "STUDENT",
         isOfficial: false,
         publicProfileVisible: true,
@@ -132,6 +138,8 @@ describe("PublicProfilePage", () => {
       profile: {
         displayName: "Study Buddy",
         bio: "Biology notes and board-review practice.",
+        learnerLevel: "BOARD_EXAM_REVIEW",
+        courseProgram: "Biology",
         profileType: "TEACHER",
         isOfficial: false,
         publicProfileVisible: true,

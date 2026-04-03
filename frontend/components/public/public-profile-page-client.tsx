@@ -8,6 +8,7 @@ import { SubjectBadge } from "@/components/notes/subject-badge";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
+import { formatLearnerLevel } from "@/lib/learning-profile";
 import {
   ApiRequestError,
   getPublicProfile,
@@ -155,6 +156,16 @@ export function PublicProfilePageClient({
       ? normalized
       : "This user hasn't added a bio yet.";
   }, [profile?.bio]);
+
+  const learnerLevelLabel = useMemo(
+    () => formatLearnerLevel(profile?.learnerLevel),
+    [profile?.learnerLevel],
+  );
+
+  const courseProgramLabel = useMemo(() => {
+    const normalized = profile?.courseProgram?.trim();
+    return normalized && normalized.length > 0 ? normalized : null;
+  }, [profile?.courseProgram]);
 
   const subjects = useMemo(() => {
     const values = new Set<string>();
@@ -329,6 +340,20 @@ export function PublicProfilePageClient({
               <div className="space-y-2">
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{profile.displayName}</h1>
                 <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">{bioText}</p>
+                {learnerLevelLabel || courseProgramLabel ? (
+                  <div className="flex flex-wrap gap-2">
+                    {learnerLevelLabel ? (
+                      <span className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium text-foreground/75">
+                        {learnerLevelLabel}
+                      </span>
+                    ) : null}
+                    {courseProgramLabel ? (
+                      <span className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium text-foreground/75">
+                        {courseProgramLabel}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap gap-3 text-sm text-foreground/70">

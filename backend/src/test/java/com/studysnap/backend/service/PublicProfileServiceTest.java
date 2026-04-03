@@ -7,6 +7,7 @@ import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
@@ -57,6 +58,8 @@ class PublicProfileServiceTest {
         user.setDisplayName("Study Buddy");
         user.setBio("Biology teacher sharing board-style review notes.");
         user.setFirstName("Study");
+        user.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
+        user.setCourseProgram("Biology");
         user.setProfileType(ProfileType.TEACHER);
         user.setRole(UserRole.USER);
         user.setPublicProfileVisible(true);
@@ -81,6 +84,8 @@ class PublicProfileServiceTest {
 
         assertThat(response.displayName()).isEqualTo("Study Buddy");
         assertThat(response.bio()).isEqualTo("Biology teacher sharing board-style review notes.");
+        assertThat(response.learnerLevel()).isEqualTo("BOARD_EXAM_REVIEW");
+        assertThat(response.courseProgram()).isEqualTo("Biology");
         assertThat(response.profileType()).isEqualTo("TEACHER");
         assertThat(response.isOfficial()).isFalse();
         assertThat(response.publicProfileVisible()).isTrue();
@@ -120,6 +125,8 @@ class PublicProfileServiceTest {
         user.setEmail("creator@example.com");
         user.setFirstName("Creator");
         user.setBio(null);
+        user.setLearnerLevel(null);
+        user.setCourseProgram(null);
         user.setRole(UserRole.USER);
         user.setPublicProfileVisible(true);
 
@@ -131,6 +138,8 @@ class PublicProfileServiceTest {
 
         assertThat(response.displayName()).isEqualTo("Creator");
         assertThat(response.bio()).isNull();
+        assertThat(response.learnerLevel()).isNull();
+        assertThat(response.courseProgram()).isNull();
         assertThat(response.publicNotesCount()).isZero();
         assertThat(response.totalCopies()).isZero();
         assertThat(response.publicNotes()).isEmpty();

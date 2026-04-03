@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
@@ -190,6 +191,8 @@ class BillingControllerTest {
                 null,
                 "Note",
                 null,
+                LearnerLevel.COLLEGE,
+                "Nursing",
                 true,
                 null,
                 ProfileType.STUDENT,

@@ -7,6 +7,7 @@ import { PaywallModal } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import {
   completeProductOnboarding,
+  copyNote,
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
@@ -103,7 +104,7 @@ export function NoteEditorPageClient({
 }: Readonly<NoteEditorPageClientProps>) {
   const router = useRouter();
   const pathname = usePathname();
-  const isDetailPage = Boolean(noteId);
+  const isEditMode = Boolean(noteId);
   const [studyPackStatus, setStudyPackStatus] = useState<NoteResponse["studyPackStatus"] | null>(null);
   const [draft, setDraft] = useState<NoteEditorDraft>({
     title: "",
@@ -112,10 +113,11 @@ export function NoteEditorPageClient({
     tags: [],
   });
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(noteId ?? null);
-  const [loadingNote, setLoadingNote] = useState(isDetailPage);
+  const [loadingNote, setLoadingNote] = useState(isEditMode);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
   const [saveStateLabel, setSaveStateLabel] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
@@ -213,7 +215,8 @@ export function NoteEditorPageClient({
   }, []);
 
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
-  const contentLocked = isDetailPage && studyPackStatus === "STUDY_PACK_READY";
+  const contentLocked = isEditMode && studyPackStatus === "STUDY_PACK_READY";
+  const hasGeneratedStudyPack = studyPackStatus === "STUDY_PACK_READY";
   const openLockedFeaturePaywall = useCallback((variant: "study-pack-limit" | "ocr-limit", source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -415,7 +418,7 @@ export function NoteEditorPageClient({
         setFirstStudyStep("saved-note");
       }
       setSaveStateLabel("Saved");
-      if (isDetailPage) {
+      if (isEditMode) {
         router.push(`/notes/${saved.id}?saved=1`);
         return;
       }
@@ -427,7 +430,16 @@ export function NoteEditorPageClient({
     } finally {
       setIsSaving(false);
     }
-  }, [contentEmpty, firstStudyStep, isDetailPage, isGenerating, isSaving, router, showToast, upsertNote]);
+  }, [contentEmpty, firstStudyStep, isEditMode, isGenerating, isSaving, router, showToast, upsertNote]);
+
+  const handleCancel = useCallback(() => {
+    const destinationNoteId = currentNoteId ?? noteId;
+    if (!destinationNoteId) {
+      router.push("/notes/new");
+      return;
+    }
+    router.push(`/notes/${destinationNoteId}`);
+  }, [currentNoteId, noteId, router]);
 
   const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
     const tab = resolveGeneratedNoteTab(currentProfileType, initialMode, initialSource);
@@ -540,27 +552,54 @@ export function NoteEditorPageClient({
     finalizeGenerationRedirect(noteIdToOpen);
   }, [finalizeGenerationRedirect, pendingSuggestion]);
 
-  const pageTitle = isDetailPage ? "Note" : "New Note";
-  const pageTitleLabel = !isDetailPage && initialMode === "quiz"
+  const handleMakeCopy = useCallback(async () => {
+    const sourceNoteId = currentNoteId ?? noteId;
+    if (!sourceNoteId || isCopying) {
+      return;
+    }
+
+    setIsCopying(true);
+    try {
+      const copied = await copyNote(sourceNoteId);
+      router.push(`/notes/${copied.id}?copied=1`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not copy note.";
+      showToast(message, "error");
+    } finally {
+      setIsCopying(false);
+    }
+  }, [currentNoteId, isCopying, noteId, router, showToast]);
+
+  const pageTitle = isEditMode ? "Edit Note" : "New Note";
+  const pageTitleLabel = !isEditMode && initialMode === "quiz"
     ? "Create Quiz"
-    : !isDetailPage && initialSource === "paste"
+    : !isEditMode && initialSource === "paste"
       ? "Paste Material"
-      : !isDetailPage && initialSource === "upload"
+      : !isEditMode && initialSource === "upload"
         ? "Upload Material"
         : pageTitle;
-  const helperText = !isDetailPage && initialMode === "quiz"
+  const helperText = isEditMode
+    ? "Update your note details and content."
+    : initialMode === "quiz"
     ? "Start with your material, then generate a Study Pack to open quiz practice first."
-    : !isDetailPage && initialSource === "paste"
+    : initialSource === "paste"
       ? "Paste your material into Content, then generate a Study Pack to open quiz practice first."
-      : !isDetailPage && initialSource === "upload"
+      : initialSource === "upload"
         ? "Upload your material first, then generate a Study Pack to open quiz practice first."
-        : "Create or import your notes first, then generate a Study Pack when you are ready.";
-  const studyPackMessage = isDetailPage
-    ? "Generate a Study Pack from this note when you are ready."
-    : "Save your note for later, or generate immediately when the content is ready.";
-  const showFirstStudyHint = !isDetailPage && firstStudyStep === "create-note";
-  const autoFocusContent = !isDetailPage && (initialMode === "quiz" || initialSource === "paste");
-  const autoFocusImport = !isDetailPage && initialSource === "upload";
+        : "Create your note first, then generate a Study Pack when you're ready.";
+  const studyPackMessage = hasGeneratedStudyPack
+    ? "This note already has a Study Pack. Save metadata changes here, or make a copy to create a new editable version."
+    : isEditMode
+      ? "Generate a Study Pack from this note when you are ready."
+      : "Save your note for later, or generate immediately when the content is ready.";
+  const actionLabel = hasGeneratedStudyPack ? "Make a Copy" : generateLabel;
+  const actionHelperText = hasGeneratedStudyPack
+    ? "Make a copy to create a new editable version while keeping this Study Pack intact."
+    : generateHelperText;
+  const actionLoadingLabel = hasGeneratedStudyPack ? "Copying..." : generatingLabel;
+  const showFirstStudyHint = !isEditMode && firstStudyStep === "create-note";
+  const autoFocusContent = !isEditMode && (initialMode === "quiz" || initialSource === "paste");
+  const autoFocusImport = !isEditMode && initialSource === "upload";
 
   const dismissFirstStudyHint = useCallback(async () => {
     const authUser = getAuthUser();
@@ -630,21 +669,27 @@ export function NoteEditorPageClient({
         onSubjectChange={(value) => setDraft((previous) => ({ ...previous, subject: value }))}
         onContentChange={(value) => setDraft((previous) => ({ ...previous, content: value }))}
         onTagsChange={
-          isDetailPage
+          isEditMode
             ? (nextTags) => setDraft((previous) => ({ ...previous, tags: nextTags }))
             : undefined
         }
         onSave={() => {
           void handleSave();
         }}
-        onGenerate={() => {
-          void handleGenerate();
-        }}
+        onGenerate={hasGeneratedStudyPack
+          ? () => {
+            void handleMakeCopy();
+          }
+          : () => {
+            void handleGenerate();
+          }}
+        onCancel={isEditMode ? handleCancel : undefined}
         isSaving={isSaving}
         isGenerating={isGenerating}
+        isCopying={isCopying}
         saveStateLabel={saveStateLabel}
         helperText={helperText}
-        showTagsSection={isDetailPage}
+        showTagsSection={isEditMode}
         studyPackMessage={studyPackMessage}
         importFile={importFile}
         importFileInputKey={importFileInputKey}
@@ -655,16 +700,18 @@ export function NoteEditorPageClient({
           void handleImportFileChange(file);
         }}
         disableContentEditing={contentLocked}
-        contentLockHint="Note content is locked after generating a Study Pack. Make a copy to change the note itself."
-        disableGenerateAction={!isEmailVerified}
+        contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags."
+        disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}
         firstStudyHintVisible={showFirstStudyHint}
         autoFocusContent={autoFocusContent}
         autoFocusImport={autoFocusImport}
         importPanelHighlighted={autoFocusImport}
-        saveLabel="Save"
-        generateLabel={generateLabel}
-        generateHelperText={generateHelperText}
-        generatingLabel={generatingLabel}
+        saveLabel={isEditMode ? "Save Changes" : "Save"}
+        actionLabel={actionLabel}
+        actionHelperText={actionHelperText}
+        actionLoadingLabel={actionLoadingLabel}
+        actionIcon={hasGeneratedStudyPack ? "copy" : "generate"}
+        actionVariant={hasGeneratedStudyPack ? "outline" : "default"}
         subjectSuggestions={subjectSuggestions}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();

@@ -4,13 +4,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { completeOnboarding, getMe, type EngagementMode, type ProfileType } from "@/lib/api";
+import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
+import { completeOnboarding, getMe, type EngagementMode, type LearnerLevel, type ProfileType } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
+import { COURSE_PROGRAM_SUGGESTIONS, LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type OnboardingProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
 type ReminderPreset = "OFF" | "LIGHT" | "GUIDED";
-type OnboardingStep = "profile" | "learning" | "reminders" | "exam-date";
+type OnboardingStep = "profile" | "learning-profile" | "learning" | "reminders" | "exam-date";
 
 const PROFILE_TYPE_OPTIONS: Array<{
   value: OnboardingProfileType;
@@ -117,6 +119,9 @@ function isOnboardingProfileType(value: ProfileType | null): value is Onboarding
 export default function OnboardingPage() {
   const router = useRouter();
   const [profileType, setProfileType] = useState<OnboardingProfileType | null>(null);
+  const [learnerLevel, setLearnerLevel] = useState<LearnerLevel | "">("");
+  const [courseProgram, setCourseProgram] = useState("");
+  const [bio, setBio] = useState("");
   const [engagementMode, setEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [reminderPreset, setReminderPreset] = useState<ReminderPreset>("LIGHT");
   const [examDate, setExamDate] = useState("");
@@ -127,8 +132,8 @@ export default function OnboardingPage() {
 
   const steps = useMemo<OnboardingStep[]>(() => {
     return profileType === "BOARD_EXAM"
-      ? ["profile", "learning", "reminders", "exam-date"]
-      : ["profile", "learning", "reminders"];
+      ? ["profile", "learning-profile", "learning", "reminders", "exam-date"]
+      : ["profile", "learning-profile", "learning", "reminders"];
   }, [profileType]);
 
   useEffect(() => {
@@ -163,6 +168,9 @@ export default function OnboardingPage() {
           return;
         }
         setProfileType(isOnboardingProfileType(me.profileType) ? me.profileType : null);
+        setLearnerLevel(me.learnerLevel ?? "");
+        setCourseProgram(me.courseProgram ?? "");
+        setBio(me.bio ?? "");
         setEngagementMode(me.engagementMode);
         setReminderPreset(getReminderPreset(me.inactivityRemindersEnabled, me.weakConceptRemindersEnabled));
         setExamDate(me.examDate ?? "");
@@ -190,11 +198,14 @@ export default function OnboardingPage() {
     if (currentStep === "profile") {
       return profileType !== null;
     }
+    if (currentStep === "learning-profile") {
+      return learnerLevel !== "";
+    }
     if (currentStep === "exam-date") {
       return examDate.trim().length > 0;
     }
     return true;
-  }, [currentStep, examDate, profileType]);
+  }, [currentStep, examDate, learnerLevel, profileType]);
 
   const handleNext = async () => {
     if (loading || saving || !isCurrentStepValid) {
@@ -208,6 +219,9 @@ export default function OnboardingPage() {
     if (!profileType) {
       return;
     }
+    if (!learnerLevel) {
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -215,6 +229,9 @@ export default function OnboardingPage() {
       const reminderValues = getReminderValues(reminderPreset);
       const me = await completeOnboarding({
         profileType,
+        learnerLevel,
+        courseProgram: courseProgram.trim() || null,
+        bio: bio.trim() || null,
         engagementMode,
         inactivityRemindersEnabled: reminderValues.inactivityRemindersEnabled,
         weakConceptRemindersEnabled: reminderValues.weakConceptRemindersEnabled,
@@ -303,6 +320,58 @@ export default function OnboardingPage() {
                       </span>
                     </label>
                   ))}
+                </div>
+              </section>
+            ) : null}
+
+            {currentStep === "learning-profile" ? (
+              <section className="space-y-3">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">Learning Profile</h2>
+                  <p className="text-sm text-foreground/70">
+                    Learner level helps NoteLib adjust quiz difficulty and recommendations.
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium">Learner Level</span>
+                    <SuggestionCombobox
+                      id="onboarding-learner-level"
+                      value={learnerLevel}
+                      options={LEARNER_LEVEL_OPTIONS}
+                      ariaLabel="Learner Level"
+                      onChange={(value) => setLearnerLevel(value as LearnerLevel | "")}
+                      placeholder="Choose learner level"
+                      helperText="Choose the option that best matches your current study stage."
+                      allowCustom={false}
+                      toggleLabel="Toggle learner level suggestions"
+                    />
+                  </label>
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium">Course / Program</span>
+                    <SuggestionCombobox
+                      id="onboarding-course-program"
+                      value={courseProgram}
+                      options={COURSE_PROGRAM_SUGGESTIONS.map((option) => ({ value: option, label: option }))}
+                      ariaLabel="Course / Program"
+                      onChange={(value) => setCourseProgram(value.slice(0, 120))}
+                      placeholder="Choose or type your course/program"
+                      helperText="Pick a suggestion or type your own course/program."
+                      allowCustom
+                      toggleLabel="Toggle course program suggestions"
+                    />
+                  </label>
+                  <label className="block space-y-2 sm:col-span-2">
+                    <span className="text-sm font-medium">Bio (optional)</span>
+                    <textarea
+                      aria-label="Bio (optional)"
+                      value={bio}
+                      onChange={(event) => setBio(event.target.value.slice(0, 200))}
+                      maxLength={200}
+                      className="min-h-24 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <p className="text-xs text-foreground/60">{bio.length}/200 characters</p>
+                  </label>
                 </div>
               </section>
             ) : null}

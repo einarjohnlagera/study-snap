@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,8 +22,10 @@ type NoteEditorFormProps = {
   onTagsChange?: (nextTags: string[]) => void;
   onSave: () => void;
   onGenerate: () => void;
+  onCancel?: () => void;
   isSaving: boolean;
   isGenerating: boolean;
+  isCopying?: boolean;
   saveStateLabel?: string | null;
   helperText: string;
   showTagsSection: boolean;
@@ -43,9 +45,13 @@ type NoteEditorFormProps = {
   autoFocusImport?: boolean;
   importPanelHighlighted?: boolean;
   saveLabel?: string;
-  generateLabel: string;
-  generateHelperText: string;
-  generatingLabel: string;
+  cancelLabel?: string;
+  actionLabel: string;
+  actionHelperText: string;
+  actionLoadingLabel: string;
+  actionIcon?: "generate" | "copy";
+  actionVariant?: "default" | "outline";
+  disableAction?: boolean;
   subjectSuggestions?: string[];
 };
 
@@ -63,8 +69,10 @@ export function NoteEditorForm({
   onTagsChange,
   onSave,
   onGenerate,
+  onCancel,
   isSaving,
   isGenerating,
+  isCopying = false,
   saveStateLabel,
   helperText,
   showTagsSection,
@@ -84,9 +92,13 @@ export function NoteEditorForm({
   autoFocusImport = false,
   importPanelHighlighted = false,
   saveLabel = "Save",
-  generateLabel,
-  generateHelperText,
-  generatingLabel,
+  cancelLabel = "Cancel",
+  actionLabel,
+  actionHelperText,
+  actionLoadingLabel,
+  actionIcon = "generate",
+  actionVariant = "default",
+  disableAction = false,
   subjectSuggestions = [],
 }: Readonly<NoteEditorFormProps>) {
   const [tagDraft, setTagDraft] = useState("");
@@ -94,7 +106,8 @@ export function NoteEditorForm({
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const contentEmpty = note.content.trim().length === 0;
-  const actionsDisabled = contentEmpty || isSaving || isGenerating;
+  const actionsDisabled = contentEmpty || isSaving || isGenerating || isCopying;
+  const actionInFlight = isGenerating || isCopying;
   const importInFlight = importFlowState === "uploading" || importFlowState === "extracting";
   const ImportStatusIcon = importFlowState === "failure"
     ? AlertCircle
@@ -159,7 +172,21 @@ export function NoteEditorForm({
     </Button>
   );
 
-  const renderGenerateAction = (
+  const renderCancelButton = (className: string) => (
+    onCancel ? (
+      <Button
+        type="button"
+        onClick={onCancel}
+        disabled={isSaving || isGenerating || isCopying}
+        variant="outline"
+        className={className}
+      >
+        {cancelLabel}
+      </Button>
+    ) : null
+  );
+
+  const renderPrimaryAction = (
     buttonClassName: string,
     containerClassName: string,
     options: { showHelperText?: boolean } = {},
@@ -168,24 +195,25 @@ export function NoteEditorForm({
       <Button
         type="button"
         onClick={onGenerate}
-        disabled={actionsDisabled || disableGenerateAction}
+        disabled={(actionIcon === "generate" ? actionsDisabled : isSaving || isGenerating || isCopying) || disableGenerateAction || disableAction}
+        variant={actionVariant}
         className={buttonClassName}
       >
-        {isGenerating ? (
+        {actionInFlight ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {generatingLabel}
+            {actionLoadingLabel}
           </>
         ) : (
           <>
-            <Sparkles className="mr-2 h-4 w-4" />
-            {generateLabel}
+            {actionIcon === "copy" ? <Copy className="mr-2 h-4 w-4" /> : <Sparkles className="mr-2 h-4 w-4" />}
+            {actionLabel}
           </>
         )}
       </Button>
-      {options.showHelperText !== false && !isGenerating ? (
+      {options.showHelperText !== false && !actionInFlight ? (
         <p className="text-center text-[11px] text-foreground/60 sm:text-right">
-          {generateHelperText}
+          {actionHelperText}
         </p>
       ) : null}
     </div>
@@ -200,10 +228,11 @@ export function NoteEditorForm({
               <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{pageTitle}</h1>
               <p className="max-w-xl text-xs text-foreground/70">{helperText}</p>
             </div>
-            <div className="flex items-start gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start">
+              {renderCancelButton("w-full sm:w-auto")}
               {renderSaveButton("w-full sm:w-auto")}
               <div className="hidden sm:block">
-                {renderGenerateAction("w-full sm:w-auto", "space-y-1")}
+                {renderPrimaryAction("w-full sm:w-auto", "space-y-1")}
               </div>
             </div>
           </div>
@@ -223,6 +252,7 @@ export function NoteEditorForm({
               value={note.title}
               onChange={(event) => onTitleChange(event.target.value)}
               placeholder="Untitled note"
+              disabled={isCopying}
               className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
             />
           </div>
@@ -235,13 +265,14 @@ export function NoteEditorForm({
                 value={note.subject}
                 suggestions={subjectSuggestions}
                 onChange={onSubjectChange}
+                disabled={isCopying}
               />
             </div>
             {showTagsSection ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-foreground">Tags</p>
-                  {!addingTag ? (
+                  {!addingTag && !isCopying ? (
                     <button
                       type="button"
                       onClick={() => setAddingTag(true)}
@@ -270,7 +301,7 @@ export function NoteEditorForm({
                       placeholder="Add a tag"
                       className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
                     />
-                    <Button type="button" size="sm" variant="outline" onClick={handleAddTag}>
+                    <Button type="button" size="sm" variant="outline" onClick={handleAddTag} disabled={isCopying}>
                       Add
                     </Button>
                   </div>
@@ -288,6 +319,7 @@ export function NoteEditorForm({
                           type="button"
                           aria-label={`Remove ${tag}`}
                           className="text-foreground/60 hover:text-foreground"
+                          disabled={isCopying}
                           onClick={() => {
                             if (!onTagsChange) {
                               return;
@@ -416,17 +448,20 @@ export function NoteEditorForm({
           {studyPackMessage ?? "This note doesn't have a Study Pack yet."}
         </p>
         <p className="text-xs text-foreground/60">
-          Generate when you&apos;re ready. To create a new version later, make a copy first.
+          {actionIcon === "copy"
+            ? actionHelperText
+            : "Generate when you&apos;re ready. To create a new version later, make a copy first."}
         </p>
         <div className="hidden justify-end gap-2 pt-2 sm:flex">
+          {renderCancelButton("w-auto")}
           {renderSaveButton("w-auto")}
-          {renderGenerateAction("w-auto", "space-y-1")}
+          {renderPrimaryAction("w-auto", "space-y-1")}
         </div>
       </Card>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
         <div className="mx-auto flex w-full max-w-sm justify-center">
-          {renderGenerateAction("w-full rounded-full shadow-lg", "w-full", { showHelperText: false })}
+          {renderPrimaryAction("w-full rounded-full shadow-lg", "w-full", { showHelperText: false })}
         </div>
       </div>
     </main>

@@ -33,6 +33,8 @@ const profileResponse = {
   lastName: "User",
   displayName: "Note User",
   bio: "Reviewing pathology one note at a time.",
+  learnerLevel: "COLLEGE",
+  courseProgram: "Nursing",
   publicProfileVisible: true,
   countryCode: null,
   profileType: "STUDENT",
@@ -95,6 +97,8 @@ describe("Profile page", () => {
         lastName: "Person",
         displayName: "Study Buddy",
         bio: "Reviewing pathology one note at a time.",
+        learnerLevel: "COLLEGE",
+        courseProgram: "Nursing",
         email: "[email protected]",
       });
     });
@@ -162,7 +166,7 @@ describe("Profile page", () => {
     expect(screen.queryByText("Public Profile On")).not.toBeInTheDocument();
   });
 
-  it("shows and saves the bio field with identity settings", async () => {
+  it("saves the bio field with learning profile settings", async () => {
     (updateUserProfile as jest.Mock).mockResolvedValue({
       ...profileResponse,
       bio: "Focused on endocrine board review.",
@@ -173,7 +177,7 @@ describe("Profile page", () => {
     fireEvent.change(await screen.findByLabelText("Bio"), {
       target: { value: "Focused on endocrine board review." },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save Identity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Learning Profile" }));
 
     await waitFor(() => {
       expect(updateUserProfile).toHaveBeenCalledWith({
@@ -181,8 +185,45 @@ describe("Profile page", () => {
         lastName: "User",
         displayName: "Note User",
         bio: "Focused on endocrine board review.",
+        learnerLevel: "COLLEGE",
+        courseProgram: "Nursing",
         email: "[email protected]",
       });
     });
+  });
+
+  it("saves learner level and course/program from the learning profile card", async () => {
+    (updateUserProfile as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      learnerLevel: "BOARD_EXAM_REVIEW",
+      courseProgram: "Pharmacy",
+      bio: "Board review focus with pharmacology notes.",
+    });
+
+    render(<ProfilePage />);
+
+    fireEvent.change(await screen.findByDisplayValue("College"), {
+      target: { value: "BOARD_EXAM_REVIEW" },
+    });
+    fireEvent.change(screen.getByDisplayValue("Nursing"), {
+      target: { value: "Pharmacy" },
+    });
+    fireEvent.change(screen.getByLabelText("Bio"), {
+      target: { value: "Board review focus with pharmacology notes." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Learning Profile" }));
+
+    await waitFor(() => {
+      expect(updateUserProfile).toHaveBeenCalledWith({
+        firstName: "Note",
+        lastName: "User",
+        displayName: "Note User",
+        bio: "Board review focus with pharmacology notes.",
+        learnerLevel: "BOARD_EXAM_REVIEW",
+        courseProgram: "Pharmacy",
+        email: "[email protected]",
+      });
+    });
+    expect(await screen.findByText("Learning profile updated successfully.")).toBeInTheDocument();
   });
 });

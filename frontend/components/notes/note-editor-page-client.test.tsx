@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { NoteEditorPageClient } from "./note-editor-page-client";
 import {
   completeProductOnboarding,
+  copyNote,
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
@@ -35,6 +36,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
+  copyNote: jest.fn(),
   createNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   extractNoteTextFromFile: jest.fn(),
@@ -82,6 +84,7 @@ describe("NoteEditorPageClient", () => {
     window.sessionStorage.clear();
     (createStudyPackFromNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
+    (copyNote as jest.Mock).mockReset();
     (createNote as jest.Mock).mockReset();
     (extractNoteTextFromFile as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
@@ -144,6 +147,11 @@ describe("NoteEditorPageClient", () => {
       subject: "Biology",
       tags: ["cells"],
     });
+    (copyNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      id: "note-copy",
+      studyPackStatus: "DRAFT",
+    });
     (updateNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       id: "note-created",
@@ -181,6 +189,55 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Toggle subject suggestions" }));
     expect(await screen.findByRole("option", { name: "Anatomy" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Biology" })).toBeInTheDocument();
+  });
+
+  it("shows edit-note labels and actions for existing draft notes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    expect(await screen.findByRole("heading", { name: "Edit Note" })).toBeInTheDocument();
+    expect(screen.getByText("Update your note details and content.")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Save Changes" })).not.toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: /^Generate$/i })).not.toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Cancel" })).not.toHaveLength(0);
+    expect(screen.queryByText("Create or import your notes first, then generate a Study Pack when you are ready.")).not.toBeInTheDocument();
+  });
+
+  it("returns to note detail after saving changes in edit mode", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (updateNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      id: "note-1",
+      title: "Updated title",
+      studyPackStatus: "DRAFT",
+    });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    const titleInput = await screen.findByLabelText("Title (optional)");
+    fireEvent.change(titleInput, { target: { value: "Updated title" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save Changes" })[0]);
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        title: "Updated title",
+      }));
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-1?saved=1");
+    });
+  });
+
+  it("returns to note detail when cancel is clicked in edit mode", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<NoteEditorPageClient noteId="note-1" />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Cancel" }))[0]);
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
   });
 
   it("saves a custom subject even when it is not in backend suggestions", async () => {
@@ -271,8 +328,31 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
     expect(contentInput).toHaveAttribute("readonly");
     expect(
-      screen.getByText("Note content is locked after generating a Study Pack. Make a copy to change the note itself."),
+      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags."),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Save Changes" })).not.toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Cancel" })).not.toHaveLength(0);
+    expect(screen.getAllByRole("button", { name: "Make a Copy" })).not.toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /^Generate$/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps make-a-copy available from generated-note edit mode", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      id: "note-generated",
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+    });
+
+    render(<NoteEditorPageClient noteId="note-generated" />);
+
+    fireEvent.click((await screen.findAllByRole("button", { name: "Make a Copy" }))[0]);
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-generated");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-copy?copied=1");
+    });
   });
 
   it("keeps import available for unverified users while Generate stays disabled", async () => {

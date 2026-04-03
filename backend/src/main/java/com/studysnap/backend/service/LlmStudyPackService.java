@@ -1,12 +1,13 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.dto.QuizItem;
 
 import java.util.List;
 
 public interface LlmStudyPackService {
-	GeneratedStudyPackContent generateStudyPack(String normalizedNotesText);
+	GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context);
 
 	String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries);
 
@@ -28,4 +29,3 @@ public interface LlmStudyPackService {
 			String difficulty
 	);
 }
-

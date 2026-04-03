@@ -1,6 +1,7 @@
 package com.studysnap.backend.dto;
 
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.ThemePreference;
@@ -18,6 +19,8 @@ public record MeResponse(
         String lastName,
         String displayName,
         String bio,
+        LearnerLevel learnerLevel,
+        String courseProgram,
         boolean publicProfileVisible,
         String countryCode,
         ProfileType profileType,
