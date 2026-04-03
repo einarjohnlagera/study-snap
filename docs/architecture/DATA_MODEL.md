@@ -90,6 +90,9 @@ Recommended fields:
 - `first_name`
 - `last_name` (optional)
 - `display_name` (optional)
+- `bio` (optional, up to 200 chars)
+- `learner_level` (nullable enum: `GRADE_SCHOOL`, `JUNIOR_HIGH`, `SENIOR_HIGH`, `COLLEGE`, `BOARD_EXAM_REVIEW`, `PROFESSIONAL`, `PERSONAL_LEARNING`)
+- `course_program` (nullable, up to 120 chars)
 - `public_profile_visible` (boolean, default true)
 - `country_code` (optional)
 - `profile_type` (nullable enum)
@@ -175,6 +178,9 @@ Recommended additional note/profile fields and derived values:
 - `notes.copied_from_note_id`
 - `notes.copied_from_user_id`
 - `users.display_name` is the public identity field
+- `users.bio` is optional public learning-profile copy
+- `users.learner_level` may be exposed publicly when present
+- `users.course_program` may be exposed publicly when present
 - `users.public_profile_visible` gates non-owner access to `/public/profile/{userId}`
 
 Derived public-profile response fields:

@@ -45,6 +45,13 @@ public class UserEntity {
     @Column(name = "bio", length = 200)
     private String bio;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "learner_level", length = 32)
+    private LearnerLevel learnerLevel;
+
+    @Column(name = "course_program", length = 120)
+    private String courseProgram;
+
     @Column(name = "public_profile_visible", nullable = false)
     private Boolean publicProfileVisible;
 

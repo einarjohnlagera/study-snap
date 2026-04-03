@@ -7,11 +7,13 @@ import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/ac
 import {
   completeOnboardingProfileType,
   getMe,
+  type LearnerLevel,
   type MeResponse,
   type ProfileType,
   updateUserProfile,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { COURSE_PROGRAM_SUGGESTIONS, LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
@@ -19,8 +21,13 @@ type IdentityForm = {
   firstName: string;
   lastName: string;
   displayName: string;
-  bio: string;
   email: string;
+};
+
+type LearningProfileForm = {
+  learnerLevel: LearnerLevel | "";
+  courseProgram: string;
+  bio: string;
 };
 
 const PROFILE_TYPE_OPTIONS: Array<{ value: ProfileType; label: string }> = [
@@ -50,14 +57,20 @@ export default function ProfilePage() {
     firstName: "",
     lastName: "",
     displayName: "",
-    bio: "",
     email: "",
+  });
+  const [learningProfileForm, setLearningProfileForm] = useState<LearningProfileForm>({
+    learnerLevel: "",
+    courseProgram: "",
+    bio: "",
   });
   const [savingIdentity, setSavingIdentity] = useState(false);
   const [identityMessage, setIdentityMessage] = useState<string | null>(null);
   const [savingProfileType, setSavingProfileType] = useState(false);
   const [profileTypeMessage, setProfileTypeMessage] = useState<string | null>(null);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
+  const [savingLearningProfile, setSavingLearningProfile] = useState(false);
+  const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -70,6 +83,7 @@ export default function ProfilePage() {
     setError(null);
     setIdentityMessage(null);
     setProfileTypeMessage(null);
+    setLearningProfileMessage(null);
     try {
       const me = await getMe();
       setProfile(me);
@@ -77,8 +91,12 @@ export default function ProfilePage() {
         firstName: me.firstName ?? "",
         lastName: me.lastName ?? "",
         displayName: me.displayName ?? "",
-        bio: me.bio ?? "",
         email: me.pendingEmail ?? me.email ?? "",
+      });
+      setLearningProfileForm({
+        learnerLevel: me.learnerLevel ?? "",
+        courseProgram: me.courseProgram ?? "",
+        bio: me.bio ?? "",
       });
       setSelectedProfileType(me.profileType ?? "");
     } catch (err) {
@@ -121,6 +139,27 @@ export default function ProfilePage() {
     }));
   };
 
+  const handleLearningProfileFieldChange = (
+    field: keyof LearningProfileForm,
+    value: string,
+  ) => {
+    setLearningProfileMessage(null);
+    setLearningProfileForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const buildProfileUpdateRequest = () => ({
+    firstName: identityForm.firstName.trim(),
+    lastName: identityForm.lastName.trim(),
+    displayName: identityForm.displayName.trim(),
+    bio: learningProfileForm.bio.trim(),
+    learnerLevel: learningProfileForm.learnerLevel || null,
+    courseProgram: learningProfileForm.courseProgram.trim(),
+    email: identityForm.email.trim(),
+  });
+
   const handleSaveIdentity = async () => {
     if (savingIdentity) {
       return;
@@ -128,21 +167,19 @@ export default function ProfilePage() {
     setSavingIdentity(true);
     setIdentityMessage(null);
     try {
-      const updatedIdentity = await updateUserProfile({
-        firstName: identityForm.firstName.trim(),
-        lastName: identityForm.lastName.trim(),
-        displayName: identityForm.displayName.trim(),
-        bio: identityForm.bio.trim(),
-        email: identityForm.email.trim(),
-      });
+      const updatedIdentity = await updateUserProfile(buildProfileUpdateRequest());
 
       setProfile(updatedIdentity);
       setIdentityForm({
         firstName: updatedIdentity.firstName ?? "",
         lastName: updatedIdentity.lastName ?? "",
         displayName: updatedIdentity.displayName ?? "",
-        bio: updatedIdentity.bio ?? "",
         email: updatedIdentity.pendingEmail ?? updatedIdentity.email,
+      });
+      setLearningProfileForm({
+        learnerLevel: updatedIdentity.learnerLevel ?? "",
+        courseProgram: updatedIdentity.courseProgram ?? "",
+        bio: updatedIdentity.bio ?? "",
       });
       setSelectedProfileType(updatedIdentity.profileType ?? selectedProfileType);
       setIdentityMessage(
@@ -155,6 +192,36 @@ export default function ProfilePage() {
       setIdentityMessage(message);
     } finally {
       setSavingIdentity(false);
+    }
+  };
+
+  const handleSaveLearningProfile = async () => {
+    if (savingLearningProfile) {
+      return;
+    }
+    setSavingLearningProfile(true);
+    setLearningProfileMessage(null);
+    try {
+      const updatedProfile = await updateUserProfile(buildProfileUpdateRequest());
+      setProfile(updatedProfile);
+      setIdentityForm({
+        firstName: updatedProfile.firstName ?? "",
+        lastName: updatedProfile.lastName ?? "",
+        displayName: updatedProfile.displayName ?? "",
+        email: updatedProfile.pendingEmail ?? updatedProfile.email,
+      });
+      setLearningProfileForm({
+        learnerLevel: updatedProfile.learnerLevel ?? "",
+        courseProgram: updatedProfile.courseProgram ?? "",
+        bio: updatedProfile.bio ?? "",
+      });
+      setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
+      setLearningProfileMessage("Learning profile updated successfully.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not update learning profile.";
+      setLearningProfileMessage(message);
+    } finally {
+      setSavingLearningProfile(false);
     }
   };
 
@@ -254,17 +321,6 @@ export default function ProfilePage() {
                 />
               </label>
               <label className="block space-y-2 sm:col-span-2">
-                <span className="text-sm font-medium">Bio</span>
-                <textarea
-                  className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                  aria-label="Bio"
-                  value={identityForm.bio}
-                  onChange={(event) => handleIdentityFieldChange("bio", event.target.value.slice(0, 200))}
-                  maxLength={200}
-                />
-                <p className="text-xs text-foreground/60">{identityForm.bio.length}/200 characters</p>
-              </label>
-              <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Email</span>
                 <input
                   type="email"
@@ -323,6 +379,69 @@ export default function ProfilePage() {
                 disabled={savingProfileType || !selectedProfileType}
                 action="save"
                 label={savingProfileType ? "Saving..." : "Save Profile Type"}
+              />
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-4 sm:p-6">
+            <h2 className="text-lg font-semibold sm:text-xl">Learning Profile</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">Learner Level</span>
+                <select
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={learningProfileForm.learnerLevel}
+                  onChange={(event) => handleLearningProfileFieldChange("learnerLevel", event.target.value)}
+                >
+                  <option value="">Select learner level</option>
+                  {LEARNER_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">Course / Program</span>
+                <input
+                  list="course-program-suggestions"
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={learningProfileForm.courseProgram}
+                  onChange={(event) => handleLearningProfileFieldChange("courseProgram", event.target.value.slice(0, 120))}
+                />
+                <datalist id="course-program-suggestions">
+                  {COURSE_PROGRAM_SUGGESTIONS.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="block space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium">Bio</span>
+                <textarea
+                  className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  aria-label="Bio"
+                  value={learningProfileForm.bio}
+                  onChange={(event) => handleLearningProfileFieldChange("bio", event.target.value.slice(0, 200))}
+                  maxLength={200}
+                />
+                <p className="text-xs text-foreground/60">{learningProfileForm.bio.length}/200 characters</p>
+              </label>
+            </div>
+            <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+              {learningProfileMessage ? (
+                <p className="text-xs text-foreground/60">{learningProfileMessage}</p>
+              ) : (
+                <p className="text-xs text-foreground/60">
+                  Learner level helps NoteLib adjust quiz difficulty and recommendations.
+                </p>
+              )}
+              <ResponsiveActionButton
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSaveLearningProfile()}
+                disabled={savingLearningProfile}
+                action="save"
+                label={savingLearningProfile ? "Saving..." : "Save Learning Profile"}
               />
             </div>
           </Card>

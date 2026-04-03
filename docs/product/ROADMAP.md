@@ -38,7 +38,24 @@ Implementation stance:
 - keep public marketing pages accessible without login
 - align landing, SEO, and README messaging around the same product identity before `v0.6.0` is tagged
 
-### v0.7.0 - Board Exam Mode
+### v0.7.0 - Learning & Metadata Foundation
+
+Primary focus:
+
+- Learner Level on the user profile and onboarding
+- optional Course / Program metadata for learner context
+- a dedicated `Learning Profile` card on private Profile
+- richer Public Profile identity with learner-level/course context when provided
+- generation-context plumbing so future quiz prompts can use learner metadata safely
+
+Implementation stance:
+
+- keep learner metadata on the existing `users` aggregate instead of creating profile-type-specific tables
+- keep `Course / Program` optional so existing users and non-academic learners continue to fit the model
+- prepare smarter quiz generation by passing learner metadata through backend generation context before prompt behavior changes
+- improve library/public-profile structure over time without changing note ownership or page responsibilities
+
+### v0.8.0 - Board Exam Mode
 
 Primary focus:
 
@@ -80,7 +97,7 @@ Core routes:
 
 ## Future Directions
 
-Potential expansion areas after `v0.7.0`:
+Potential expansion areas after `v0.8.0`:
 
 - richer note workspace
 - deeper progress insights from quiz history

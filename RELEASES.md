@@ -1,5 +1,22 @@
 # RELEASES.md - NoteLib
 
+## v0.7.0 - Learning & Metadata Foundation (In Progress)
+
+### New Features
+
+- User profiles now support `Learner Level` plus optional `Course / Program` as part of the learning-profile foundation.
+- Onboarding now includes a dedicated `Learning Profile` step that collects learner level, optional course/program, and optional bio.
+
+### Improvements
+
+- Private Profile now separates `Identity`, `Learning Profile`, and `Profile Type` into distinct saveable cards.
+- Public Profile can now show learner level and course/program when the owner chooses to provide them.
+
+### Technical Changes
+
+- Added `users.learner_level` and `users.course_program` with backward-compatible nullable storage for existing users.
+- Backend Study Pack generation now prepares learner-level and course/program metadata in generation context for future prompt tuning, alongside note subject and tags.
+
 ## v0.6.0 - Landing Revamp & Positioning (In Progress)
 
 ### New Features

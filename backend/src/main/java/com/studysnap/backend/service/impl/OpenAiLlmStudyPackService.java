@@ -10,6 +10,7 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.LlmResponseUtils;
 import com.studysnap.backend.util.QuizValidationUtils;
 import com.studysnap.backend.util.StringNormalizationUtils;
@@ -46,7 +47,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private final OpenAiPromptResources promptResources;
 
     @Override
-    public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText) {
+    public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
         if (properties.getLlm().getApi().getApiKey() == null || properties.getLlm().getApi().getApiKey().isBlank()) {
             throw new AppException(
                     "LLM_CONFIGURATION_ERROR",

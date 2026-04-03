@@ -17,6 +17,8 @@ Related APIs:
 
 - `displayName`
 - `bio` or `This user hasn't added a bio yet.`
+- optional `learnerLevel`
+- optional `courseProgram`
 - avatar/initials
 - `profileType`
 - `Official` badge when the backend marks the creator as official
@@ -70,6 +72,7 @@ Navigation:
 - always use `displayName` as the public identity
 - never show email on public profile or public note surfaces
 - official badge is backend-derived only
+- hide learner-level and course/program rows entirely when those values are empty
 
 ## Notes
 

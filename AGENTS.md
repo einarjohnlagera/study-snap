@@ -129,9 +129,14 @@ Core loop:
 - Onboarding must stay short and reuse the existing step flow.
 - Preferences onboarding order is:
   - `Profile Type`
+  - `Learning Profile`
   - `Learning Style` (`engagementMode`)
   - `Study Reminder Frequency`
   - `Exam Date` only for `BOARD_EXAM`
+- `Learning Profile` onboarding collects:
+  - required `learnerLevel`
+  - optional `courseProgram`
+  - optional `bio`
 - Profile Type can be edited later in `Profile`.
 - Learning Style can be edited later in `Settings > Preferences`.
 - Study Reminder Frequency can be edited later in `Settings > Preferences`.
@@ -155,20 +160,25 @@ Core loop:
 - `Profile` owns identity and account-related information only.
 - `Profile` sections are:
   - `Identity`
+  - `Learning Profile`
   - `Profile Type`
   - `Public Profile Link`
 - Identity uses:
   - `firstName`
   - `lastName`
   - `displayName`
-  - `bio`
   - `email`
+- Learning Profile uses:
+  - `learnerLevel`
+  - `courseProgram`
+  - `bio`
 - Do not collapse `firstName` and `lastName` into one `name` field in product UI or API contracts unless explicitly requested.
 - `Profile Type` remains editable in `Profile` as a separate save action.
 - `Profile` may link to `View Public Profile`, but Public Profile sharing and visibility controls do not belong on `/profile`.
 - `/profile` layout should stay split into:
   - a top Display Name card with avatar, display name, email, and `View Public Page`
   - an `Identity` card with its own `Save Identity` action
+  - a `Learning Profile` card with its own `Save Learning Profile` action
   - a `Profile Type` card with its own `Save Profile Type` action
 - Profile save buttons must remain section-specific rather than global.
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
@@ -259,7 +269,7 @@ Core loop:
 - Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Profile is a public showcase of one creator's public notes and contribution stats.
-- Public Profile may show `bio` and derived subject chips, but it remains a learning profile rather than a social-media profile.
+- Public Profile may show `bio`, optional `learnerLevel`, optional `courseProgram`, and derived subject chips, but it remains a learning profile rather than a social-media profile.
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes
@@ -445,6 +455,12 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - `STUDENT` emphasizes review continuity.
 - `BOARD_EXAM` emphasizes quiz practice and weak-area drilling.
 - `TEACHER` emphasizes quiz creation from the same note pipeline.
+
+### Learning Profile Metadata Rule
+
+- `learnerLevel` and optional `courseProgram` live on `User`, not on Note or a separate learner-profile table.
+- `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
+- backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags` for future prompt tuning without changing current UI behavior.
 
 ## UI Terminology (Use Consistently)
 

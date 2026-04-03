@@ -25,6 +25,9 @@ Required behavior:
 Onboarding collects:
 
 - `profileType`
+- required `learnerLevel`
+- optional `courseProgram`
+- optional `bio`
 - `learningStyle` (stored as `engagementMode`)
 - reminder preferences
 - `examDate` for board exam users
@@ -34,6 +37,13 @@ Profile Type options:
 - `Student`
 - `Board Exam`
 - `Teacher`
+
+Learning Profile step:
+
+- `Learner Level` is required
+- `Course / Program` is optional and supports suggestions plus custom values
+- `Bio` is optional
+- helper copy: `Learner level helps NoteLib adjust quiz difficulty and recommendations.`
 
 Learning Style options:
 
@@ -49,11 +59,22 @@ Reminder step:
 
 Board exam users also select an `Exam Date` before finishing onboarding.
 
+Current onboarding order:
+
+1. `Profile Type`
+2. `Learning Profile`
+3. `Learning Style`
+4. `Study Reminder Frequency`
+5. `Exam Date` for board exam users only
+
 ## Persistence
 
 Backend should store:
 
 - `profileType`
+- `learnerLevel`
+- `courseProgram`
+- `bio`
 - `examDate`
 - `engagementMode`
 - `inactivityRemindersEnabled`
@@ -69,6 +90,7 @@ On submit:
 ## Later Editing
 
 - Profile Type can be edited later in `Profile`
+- Learner Level, Course / Program, and Bio can be edited later in `Profile -> Learning Profile`
 - Learning Style can be edited later in `Settings > Preferences`
 
 Onboarding is only the first-time setup surface.

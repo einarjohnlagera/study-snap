@@ -9,6 +9,12 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
 - Notes are saved first and remain the primary entity.
 - Study Pack output is the generated enhancement state of a Note.
 - New versions are created via `Make a Copy`, not overwrite on the same Note.
+- Backend generation context may also carry:
+  - `learnerLevel`
+  - `courseProgram`
+  - note `subject`
+  - note `tags`
+- This metadata is preparation for smarter prompt personalization in later releases; current Study Pack UI and workflow do not change yet.
 
 ## Output structure
 

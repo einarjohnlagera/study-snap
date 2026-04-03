@@ -134,6 +134,14 @@ export type DashboardOverviewResponse = {
 };
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";
+export type LearnerLevel =
+  | "GRADE_SCHOOL"
+  | "JUNIOR_HIGH"
+  | "SENIOR_HIGH"
+  | "COLLEGE"
+  | "BOARD_EXAM_REVIEW"
+  | "PROFESSIONAL"
+  | "PERSONAL_LEARNING";
 export type PlanType = "FREE" | "PREMIUM";
 export type BillingCycle = "MONTHLY" | "YEARLY";
 export type UserRole = "USER" | "ADMIN";
@@ -337,6 +345,8 @@ export type MeResponse = {
   lastName: string | null;
   displayName: string | null;
   bio: string | null;
+  learnerLevel: LearnerLevel | null;
+  courseProgram: string | null;
   publicProfileVisible: boolean;
   countryCode: string | null;
   profileType: ProfileType | null;
@@ -373,6 +383,8 @@ export type UpdateUserProfileRequest = {
   lastName: string;
   displayName: string;
   bio: string;
+  learnerLevel: LearnerLevel | null;
+  courseProgram: string;
   email: string;
 };
 
@@ -404,6 +416,9 @@ export type OnboardingProfileTypeRequest = {
 
 export type CompleteOnboardingRequest = {
   profileType: ProfileType;
+  learnerLevel: LearnerLevel;
+  courseProgram: string | null;
+  bio: string | null;
   engagementMode: EngagementMode;
   inactivityRemindersEnabled: boolean;
   weakConceptRemindersEnabled: boolean;
@@ -739,6 +754,8 @@ export type PublicProfileNoteResponse = {
 export type PublicProfileResponse = {
   displayName: string;
   bio: string | null;
+  learnerLevel: LearnerLevel | null;
+  courseProgram: string | null;
   profileType: ProfileType | null;
   isOfficial: boolean;
   publicProfileVisible: boolean;

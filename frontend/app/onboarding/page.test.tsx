@@ -48,6 +48,9 @@ describe("OnboardingPage", () => {
     });
     (getMe as jest.Mock).mockResolvedValue({
       profileType: null,
+      learnerLevel: null,
+      courseProgram: null,
+      bio: null,
       examDate: null,
       engagementMode: "FOCUSED",
       inactivityRemindersEnabled: false,
@@ -57,6 +60,9 @@ describe("OnboardingPage", () => {
     (completeOnboarding as jest.Mock).mockResolvedValue({
       displayName: "Note",
       profileType: "BOARD_EXAM",
+      learnerLevel: "BOARD_EXAM_REVIEW",
+      courseProgram: "Nursing",
+      bio: "Focused on board review.",
       examDate: "2026-10-18",
       engagementMode: "STREAK",
       inactivityRemindersEnabled: true,
@@ -71,6 +77,18 @@ describe("OnboardingPage", () => {
     expect(await screen.findByText("Let's set up NoteLib for you.")).toBeInTheDocument();
     expect(await screen.findByText("What will you use NoteLib for?")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Board Exam"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Learning Profile")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Learner Level"), {
+      target: { value: "BOARD_EXAM_REVIEW" },
+    });
+    fireEvent.change(screen.getByLabelText("Course / Program"), {
+      target: { value: "Nursing" },
+    });
+    fireEvent.change(screen.getByLabelText("Bio (optional)"), {
+      target: { value: "Focused on board review." },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("Learning Style")).toBeInTheDocument();
@@ -90,6 +108,9 @@ describe("OnboardingPage", () => {
     await waitFor(() => {
       expect(completeOnboarding).toHaveBeenCalledWith({
         profileType: "BOARD_EXAM",
+        learnerLevel: "BOARD_EXAM_REVIEW",
+        courseProgram: "Nursing",
+        bio: "Focused on board review.",
         engagementMode: "STREAK",
         inactivityRemindersEnabled: true,
         weakConceptRemindersEnabled: true,
@@ -131,6 +152,9 @@ describe("OnboardingPage", () => {
     });
     (getMe as jest.Mock).mockResolvedValue({
       profileType: null,
+      learnerLevel: null,
+      courseProgram: null,
+      bio: null,
       examDate: null,
       engagementMode: "FOCUSED",
       inactivityRemindersEnabled: true,
@@ -140,6 +164,9 @@ describe("OnboardingPage", () => {
     (completeOnboarding as jest.Mock).mockResolvedValue({
       displayName: "Note",
       profileType: "STUDENT",
+      learnerLevel: "COLLEGE",
+      courseProgram: "Engineering",
+      bio: "Engineering review notes.",
       examDate: null,
       engagementMode: "CONSISTENCY",
       inactivityRemindersEnabled: true,
@@ -155,6 +182,18 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByLabelText("Student"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    expect(await screen.findByText("Learning Profile")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Learner Level"), {
+      target: { value: "COLLEGE" },
+    });
+    fireEvent.change(screen.getByLabelText("Course / Program"), {
+      target: { value: "Engineering" },
+    });
+    fireEvent.change(screen.getByLabelText("Bio (optional)"), {
+      target: { value: "Engineering review notes." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
     expect(await screen.findByText("Learning Style")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Consistency"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -166,6 +205,9 @@ describe("OnboardingPage", () => {
     await waitFor(() => {
       expect(completeOnboarding).toHaveBeenCalledWith({
         profileType: "STUDENT",
+        learnerLevel: "COLLEGE",
+        courseProgram: "Engineering",
+        bio: "Engineering review notes.",
         engagementMode: "CONSISTENCY",
         inactivityRemindersEnabled: true,
         weakConceptRemindersEnabled: false,

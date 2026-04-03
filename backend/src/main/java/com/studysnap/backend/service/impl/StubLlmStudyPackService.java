@@ -3,6 +3,7 @@ package com.studysnap.backend.service.impl;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +15,7 @@ import java.util.stream.IntStream;
 public class StubLlmStudyPackService implements LlmStudyPackService {
 
     @Override
-    public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText) {
+    public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
         String preview = normalizedNotesText.length() > 80
                 ? normalizedNotesText.substring(0, 80) + "..."
                 : normalizedNotesText;
@@ -128,4 +129,3 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 .toList();
     }
 }
-

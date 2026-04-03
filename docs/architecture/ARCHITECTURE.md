@@ -361,18 +361,30 @@ Onboarding architecture:
 - frontend onboarding state is initialized from `GET /api/auth/me`
 - `POST /api/auth/onboarding` persists:
   - `profileType`
+  - `learnerLevel`
+  - optional `courseProgram`
+  - optional `bio`
   - `engagementMode`
   - reminder preferences
   - conditional `examDate`
 - `examDate` is required only when `profileType = BOARD_EXAM`
-- existing learning-style and reminder onboarding steps are reused; Profile Type is inserted before them
+- onboarding flow order is:
+  - `Profile Type`
+  - `Learning Profile`
+  - `Learning Style`
+  - `Study Reminder Frequency`
+  - conditional `Exam Date`
 - completion writes `users.onboarding_completed_at`
 
 Profile update architecture:
 
-- `PUT /api/users/profile` updates identity fields only:
+- `PUT /api/users/profile` updates profile-owned identity and learning-profile fields:
   - `firstName`
   - `lastName`
+  - `displayName`
+  - `bio`
+  - `learnerLevel`
+  - `courseProgram`
   - `email`
 - `profileType` remains a separate write action from the existing profile-type endpoint
 - preference writes such as `engagementMode` and study reminders remain under settings/preferences APIs
@@ -382,6 +394,10 @@ Profile update architecture:
   - `emailVerifiedAt`
   - `firstName`
   - `lastName`
+  - `displayName`
+  - `bio`
+  - `learnerLevel`
+  - `courseProgram`
   - `profileType`
   - `engagementMode`
   - reminder-toggle fields
@@ -437,7 +453,7 @@ Dashboard personalization architecture:
 
 Library is the owner workspace for Draft and Study Pack Ready notes.
 Public Library is the discovery surface for notes where `visibility=PUBLIC`.
-Profile is the identity surface for first name, last name, display name, email, and profile type.
+Profile is the identity surface for first name, last name, display name, email, learning profile, and profile type.
 Settings is the preferences surface for theme, notifications, study preferences, account settings, and subscription/billing.
 Public Profile is the public showcase surface and owns share/edit-profile entry plus owner-only public-visibility controls.
 
@@ -449,12 +465,26 @@ Required backend behavior:
 - support `/public/profile/{userId}` creator pages from persisted `users` plus public-note aggregates
 - include metadata for scanning/filtering (`title`, `subject`, `tags`, content preview, timestamps, state)
 - include author-source metadata for Public Library card labeling (`By You`, `By NoteLib`, `By {displayName}`) plus `Official` badge state
+- include optional learner-profile metadata on public profile payloads:
+  - `bio`
+  - `learnerLevel`
+  - `courseProgram`
 - support public read-only note detail payload for copy flow
 - persist `users.public_profile_visible` as the owner-controlled switch for public-profile access
 - expose `GET /api/public/profile/{userId}` for public profile header stats and public-note listings
 - allow the owner to read `/api/public/profile/{userId}` even when `users.public_profile_visible = false`
 - return `403` / `PUBLIC_PROFILE_PRIVATE` for non-owners when `users.public_profile_visible = false`
 - expose `PUT /api/users/profile/public-visibility` so the owner can toggle public-profile visibility from the Public Profile page
+
+Study Pack generation architecture:
+
+- generation remains note-first and uses the same persisted note content
+- backend generation context may carry:
+  - `learnerLevel`
+  - `courseProgram`
+  - note `subject`
+  - note `tags`
+- current UI and prompt behavior remain unchanged; this context is preparation for smarter quiz generation in later releases
 
 Filtering model:
 

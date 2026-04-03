@@ -340,6 +340,8 @@ Users can:
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name
   - Bio (or `This user hasn't added a bio yet.` when blank)
+  - optional Learner Level
+  - optional Course / Program
   - avatar/initials
   - Profile Type
   - Official badge when the account is official/admin
@@ -438,14 +440,19 @@ Users can:
   - `firstName`
   - `lastName`
   - `displayName`
-  - `bio`
   - `email`
+- `Profile -> Learning Profile` owns:
+  - `learnerLevel`
+  - `courseProgram`
+  - `bio`
 - `Profile` should include:
   - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page` navigation
-  - an `Identity` card with `firstName`, `lastName`, `displayName`, `bio`, and `email`
+  - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
+  - a `Learning Profile` card with `learnerLevel`, optional `courseProgram`, and optional `bio`
   - a `Profile Type` card with the profile-type selector
 - `Profile` save actions should be section-specific:
   - `Save Identity` only saves identity fields
+  - `Save Learning Profile` only saves learner-level, course/program, and bio fields
   - `Save Profile Type` only saves the profile type field
 - `View Public Page` on `/profile` is navigation only and should live in the top Display Name card.
 - `Profile` should not own Public Profile sharing or visibility controls.
@@ -652,6 +659,7 @@ Page responsibilities:
 - Both generation entry points must use the same metadata-suggestion behavior for AI-generated `title`, `subject`, and `tags`.
 - If the note has no existing metadata, generated metadata may be applied automatically.
 - If the note already has metadata, users should see the shared suggestion review modal before replacing their values.
+- Backend generation context may also carry `learnerLevel`, `courseProgram`, note `subject`, and note `tags` for future prompt personalization without changing current Study Pack UI yet.
 
 ### Authentication Session Handling
 
@@ -716,10 +724,11 @@ Preferences onboarding is reused and extended rather than duplicated.
 Current onboarding order:
 
 1. `Profile Type`
-2. `Learning Style`
-3. `Study Reminder Frequency`
-4. `Exam Date` only when `profileType = BOARD_EXAM`
-5. finish and redirect to `Dashboard`
+2. `Learning Profile`
+3. `Learning Style`
+4. `Study Reminder Frequency`
+5. `Exam Date` only when `profileType = BOARD_EXAM`
+6. finish and redirect to `Dashboard`
 
 Profile Type options:
 
@@ -729,6 +738,10 @@ Profile Type options:
 
 Rules:
 
+- `Learning Profile` collects:
+  - required `learnerLevel`
+  - optional `courseProgram`
+  - optional `bio`
 - `Learning Style` and `Study Reminder Frequency` remain the existing onboarding steps
 - `Exam Date` is conditional and must be skipped for `STUDENT` and `TEACHER`
 - onboarding state is loaded from `GET /auth/me`
@@ -739,16 +752,24 @@ Rules:
 
 Route: `/profile`
 
-`Profile` owns identity and account-oriented fields only.
+`Profile` owns identity and learner-account fields only.
 
 Identity section:
 
 - `firstName`
 - `lastName`
+- `displayName`
 - `email`
 - `Save Identity`
 
-Profile section:
+Learning Profile section:
+
+- `learnerLevel`
+- optional `courseProgram`
+- optional `bio`
+- separate `Save Learning Profile` action
+
+Profile Type section:
 
 - `profileType`
 - separate `Save Profile Type` action

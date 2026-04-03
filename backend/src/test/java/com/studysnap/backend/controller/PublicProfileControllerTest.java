@@ -35,6 +35,8 @@ class PublicProfileControllerTest {
         PublicProfileResponse expected = new PublicProfileResponse(
                 "Study Buddy",
                 "Biology notes and board-review practice.",
+                "BOARD_EXAM_REVIEW",
+                "Biology",
                 "STUDENT",
                 false,
                 true,

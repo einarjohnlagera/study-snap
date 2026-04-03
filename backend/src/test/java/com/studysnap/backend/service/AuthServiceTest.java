@@ -13,6 +13,7 @@ import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.ThemePreference;
@@ -208,10 +209,22 @@ class AuthServiceTest {
 
         MeResponse response = authService.completeOnboarding(
                 userId,
-                new CompleteOnboardingRequest(ProfileType.TEACHER, EngagementMode.STREAK, true, false, null)
+                new CompleteOnboardingRequest(
+                        ProfileType.TEACHER,
+                        LearnerLevel.PROFESSIONAL,
+                        "Education",
+                        "Sharing classroom review materials.",
+                        EngagementMode.STREAK,
+                        true,
+                        false,
+                        null
+                )
         );
 
         assertThat(response.profileType()).isEqualTo(ProfileType.TEACHER);
+        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.PROFESSIONAL);
+        assertThat(response.courseProgram()).isEqualTo("Education");
+        assertThat(response.bio()).isEqualTo("Sharing classroom review materials.");
         assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
         assertThat(response.inactivityRemindersEnabled()).isTrue();
         assertThat(response.weakConceptRemindersEnabled()).isFalse();
@@ -246,10 +259,21 @@ class AuthServiceTest {
         LocalDate examDate = LocalDate.of(2026, 10, 18);
         MeResponse response = authService.completeOnboarding(
                 userId,
-                new CompleteOnboardingRequest(ProfileType.BOARD_EXAM, EngagementMode.CONSISTENCY, true, true, examDate)
+                new CompleteOnboardingRequest(
+                        ProfileType.BOARD_EXAM,
+                        LearnerLevel.BOARD_EXAM_REVIEW,
+                        "Nursing",
+                        "Focused on board exam preparation.",
+                        EngagementMode.CONSISTENCY,
+                        true,
+                        true,
+                        examDate
+                )
         );
 
         assertThat(response.profileType()).isEqualTo(ProfileType.BOARD_EXAM);
+        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
+        assertThat(response.courseProgram()).isEqualTo("Nursing");
         assertThat(response.examDate()).isEqualTo(examDate);
         assertThat(user.getExamDate()).isEqualTo(examDate);
     }
@@ -365,6 +389,8 @@ class AuthServiceTest {
         user.setLastName("Name");
         user.setDisplayName("Old Name");
         user.setBio("Old bio");
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Biology");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
         user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
         user.setTokenVersion(0);
@@ -381,7 +407,15 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateUserProfile(
                 userId,
-                new UpdateUserProfileRequest("New", "Person", "Study Buddy", "Focused on anatomy review.", "current@example.com")
+                new UpdateUserProfileRequest(
+                        "New",
+                        "Person",
+                        "Study Buddy",
+                        "Focused on anatomy review.",
+                        LearnerLevel.BOARD_EXAM_REVIEW,
+                        "Pharmacy",
+                        "current@example.com"
+                )
         );
 
         assertThat(response.firstName()).isEqualTo("New");
@@ -389,9 +423,13 @@ class AuthServiceTest {
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isNull();
         assertThat(response.bio()).isEqualTo("Focused on anatomy review.");
+        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
+        assertThat(response.courseProgram()).isEqualTo("Pharmacy");
         assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getDisplayName()).isEqualTo("Study Buddy");
         assertThat(user.getBio()).isEqualTo("Focused on anatomy review.");
+        assertThat(user.getLearnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
+        assertThat(user.getCourseProgram()).isEqualTo("Pharmacy");
         verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), eq(false));
     }
 
@@ -405,6 +443,8 @@ class AuthServiceTest {
         user.setLastName("User");
         user.setDisplayName("Note User");
         user.setBio(null);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Biology");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
         user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
         user.setTokenVersion(0);
@@ -424,16 +464,28 @@ class AuthServiceTest {
 
         MeResponse response = authService.updateUserProfile(
                 userId,
-                new UpdateUserProfileRequest("Note", "User", "Note Hero", "Weak areas: physiology and pharma.", "updated@example.com")
+                new UpdateUserProfileRequest(
+                        "Note",
+                        "User",
+                        "Note Hero",
+                        "Weak areas: physiology and pharma.",
+                        LearnerLevel.PROFESSIONAL,
+                        "Medicine",
+                        "updated@example.com"
+                )
         );
 
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.pendingEmail()).isEqualTo("updated@example.com");
         assertThat(response.bio()).isEqualTo("Weak areas: physiology and pharma.");
+        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.PROFESSIONAL);
+        assertThat(response.courseProgram()).isEqualTo("Medicine");
         assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getPendingEmail()).isEqualTo("updated@example.com");
         assertThat(user.getDisplayName()).isEqualTo("Note Hero");
         assertThat(user.getBio()).isEqualTo("Weak areas: physiology and pharma.");
+        assertThat(user.getLearnerLevel()).isEqualTo(LearnerLevel.PROFESSIONAL);
+        assertThat(user.getCourseProgram()).isEqualTo("Medicine");
         verify(emailVerificationService).sendVerificationEmail(user, false);
     }
 
@@ -484,7 +536,15 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "NoteLib Support", null, "current@example.com");
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Note",
+                "User",
+                "NoteLib Support",
+                null,
+                LearnerLevel.COLLEGE,
+                "Biology",
+                "current@example.com"
+        );
         assertThatThrownBy(() -> authService.updateUserProfile(
                 userId,
                 request

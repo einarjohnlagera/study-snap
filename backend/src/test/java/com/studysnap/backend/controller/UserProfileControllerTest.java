@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.SubscriptionPlanStatusResponse;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.EngagementMode;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.ThemePreference;
@@ -42,7 +43,15 @@ class UserProfileControllerTest {
     void updateProfile_delegatesIdentitySaveToAuthService() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "Study Note", "Reviewing pathology one note at a time.", "[email protected]");
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+                "Note",
+                "User",
+                "Study Note",
+                "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Nursing",
+                "[email protected]"
+        );
         MeResponse expected = new MeResponse(
                 userId.toString(),
                 "[email protected]",
@@ -51,6 +60,8 @@ class UserProfileControllerTest {
                 "User",
                 "Study Note",
                 "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Nursing",
                 true,
                 null,
                 ProfileType.STUDENT,
@@ -89,6 +100,8 @@ class UserProfileControllerTest {
                 "User",
                 "Study Note",
                 "Reviewing pathology one note at a time.",
+                LearnerLevel.COLLEGE,
+                "Nursing",
                 false,
                 null,
                 ProfileType.STUDENT,
