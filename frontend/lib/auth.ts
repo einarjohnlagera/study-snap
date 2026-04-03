@@ -34,6 +34,7 @@ export type LoginReason =
   | typeof LOGIN_REASON_AUTH_REQUIRED;
 
 let hasTriggeredSessionExpiryRedirect = false;
+let hasManualLogoutRedirectIntent = false;
 
 function emitAuthChangeEvent(): void {
   if (globalThis.window === undefined) {
@@ -100,6 +101,7 @@ export function setAuthUser(user: AuthUser): void {
     return;
   }
   hasTriggeredSessionExpiryRedirect = false;
+  hasManualLogoutRedirectIntent = false;
   globalThis.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   emitAuthChangeEvent();
 }
@@ -124,6 +126,14 @@ export function clearAuthUser(options?: { preserveSessionExpiryGuard?: boolean }
   }
   globalThis.localStorage.removeItem(AUTH_USER_KEY);
   emitAuthChangeEvent();
+}
+
+export function beginManualLogoutRedirect(): void {
+  if (globalThis.window === undefined) {
+    return;
+  }
+  hasTriggeredSessionExpiryRedirect = false;
+  hasManualLogoutRedirectIntent = true;
 }
 
 export function getCurrentUserId(): string | null {
@@ -178,6 +188,9 @@ export function getRefreshToken(): string | null {
 }
 export function handleUnauthorizedSession(): void {
   if (globalThis.window === undefined) {
+    return;
+  }
+  if (hasManualLogoutRedirectIntent) {
     return;
   }
   if (hasTriggeredSessionExpiryRedirect) {

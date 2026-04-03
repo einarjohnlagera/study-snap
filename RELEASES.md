@@ -34,6 +34,7 @@
 
 - Auth redirect logic now returns users to interrupted protected pages through explicit redirect intent while sending manual public-page logins to `Dashboard`.
 - Login-page auth messaging now distinguishes `session_expired`, `logged_out`, and `auth_required` so manual logout no longer shows the expired-session warning.
+- Manual logout now suppresses late expired-session redirects from in-flight protected requests so logout messaging stays neutral.
 - Study Pack limit enforcement and usage warnings now use the same effective usage calculation so users are no longer told they have credit left while generation is already blocked.
 - Free-plan near-limit messaging now shows the actual remaining Study Pack count instead of a generic warning.
 - Note Detail generation now applies the same title/subject/tag suggestion flow as Create Note.

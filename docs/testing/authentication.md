@@ -26,5 +26,6 @@ Verify these cases whenever auth/session logic changes:
 - auth pages should not remain visible after successful login
 - authenticated visitors who hit `/auth` or `/login` should be redirected away immediately
 - manual logout must not show `Your session has expired. Please log in again.`
+- manual logout must still stay neutral even if a protected request returns `401` while sign-out is in progress
 - expired-session recovery must show `Your session has expired. Please log in again.`
 - protected-route access while logged out should use neutral login messaging such as `Please log in to continue.`

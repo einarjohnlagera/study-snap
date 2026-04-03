@@ -343,6 +343,7 @@ Session and auth-route recovery:
 - protected-route redirects should encode the interrupted destination in `?redirect=...`
 - protected-route redirects while logged out may also include a neutral `reason=auth_required`
 - manual logout should redirect to `/login` with a neutral logout reason rather than reusing the session-expired reason
+- explicit logout should set a logout-intent guard before network requests so late `401` responses from in-flight protected calls cannot overwrite the logout reason with `session_expired`
 - successful login should explicitly navigate with this precedence:
   - verification / onboarding route when required
   - `redirect` query destination for protected-route access and session-expired recovery

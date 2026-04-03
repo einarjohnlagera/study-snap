@@ -41,6 +41,7 @@ Required endpoints:
 - For expired sessions, include `reason=session_expired`.
 - For logged-out protected-route access, a neutral `reason=auth_required` may be included.
 - Manual logout should redirect with a neutral logout reason rather than the session-expired reason.
+- Manual logout intent must win over any late `401` responses from in-flight protected requests.
 - After successful login, redirect using this order:
   - `/verify-email` or `/onboarding` when required by the authenticated user state
   - explicit `redirect` query destination for protected-route access and session-expired recovery

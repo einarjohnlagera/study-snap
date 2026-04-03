@@ -1,9 +1,13 @@
 import {
+  beginManualLogoutRedirect,
   buildLoginPath,
+  getAuthUser,
+  handleUnauthorizedSession,
   LOGIN_REASON_AUTH_REQUIRED,
   LOGIN_REASON_LOGGED_OUT,
   LOGIN_REASON_SESSION_EXPIRED,
   resolvePostLoginDestination,
+  setAuthUser,
   type AuthUser,
 } from "./auth";
 
@@ -69,6 +73,15 @@ describe("auth redirect helpers", () => {
     expect(buildLoginPath({
       reason: LOGIN_REASON_LOGGED_OUT,
     })).toBe("/login?reason=logged_out");
+  });
+
+  it("does not let manual logout intent be overwritten by session-expired handling", () => {
+    setAuthUser(verifiedUser);
+
+    beginManualLogoutRedirect();
+    handleUnauthorizedSession();
+
+    expect(getAuthUser()).toEqual(verifiedUser);
   });
 
   it("keeps verification and onboarding gating ahead of redirect restoration", () => {
