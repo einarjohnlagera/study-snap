@@ -32,12 +32,31 @@ Shared note-card layout:
 Interaction:
 
 - whole card opens Note Detail
-- tertiary actions stay in the card menu
-- Library card menu options are:
-  - `Edit`
-  - `Delete`
-  - `Make a Copy`
-  - `Share`
+- note cards stay preview/navigation only
+- note actions belong in Note Detail
+
+Shared list controls:
+
+- order is always `Search`, `Filter`, `Sort`, then notes list
+- on mobile, `Filter` and `Sort` open shared bottom-sheet/modal controls instead of staying always visible
+
+Private Library filters:
+
+- `Subject`
+- `Tags`
+- `Study Pack Ready`
+- `Draft`
+- `Public`
+- `Private`
+
+Private Library sorting:
+
+- `Recently Updated`
+- `Recently Reviewed`
+- `Recently Generated`
+- `Title (A-Z)`
+- `Title (Z-A)`
+- `Oldest`
 
 ## Public Library
 
@@ -52,6 +71,18 @@ Responsibility:
 
 Public Library cards use the same shared preview layout and whole-card interaction as Library.
 
+Public Library controls:
+
+- keep the same `Search`, `Filter`, `Sort`, notes-list structure as Library
+- use the same mobile filter/sort sheet behavior as Library
+
+Public Library filters:
+
+- `Subject`
+- `Tags`
+- `By You`
+- `Official`
+
 Growth behavior:
 
 - Public Library should encourage copying and studying, not only browsing.
@@ -59,7 +90,7 @@ Growth behavior:
   - `Newest`
   - `Most Copied`
   - `Most Shared`
-  - `Most Viewed`
+  - `Title (A-Z)`
 
 ## Public Profile
 
@@ -68,8 +99,4 @@ Public Profile is not a private library surface.
 - route: `/public/profile/{userId}`
 - purpose: public showcase only
 - note cards reuse the same shared layout
-- owner-view Public Profile may show an owned-note card menu with:
-  - `Delete`
-  - `Make Private`
-  - `Make a Copy`
-- other viewers must not see a note-card menu on Public Profile
+- note cards stay action-free and open the canonical public note route

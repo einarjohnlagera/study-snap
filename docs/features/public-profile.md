@@ -35,16 +35,7 @@ Public profile note cards reuse the shared note-card layout:
 - tags
 
 Cards are whole-card links to the canonical public note route.
-
-Owner-only note-card menu:
-
-- shown only when the profile owner is viewing their own Public Profile
-- options:
-  - `Delete`
-  - `Make Private`
-  - `Make a Copy`
-
-Non-owner Public Profile views must not show a note-card context menu.
+Cards stay action-free for both owners and non-owners; note management happens in Note Detail instead.
 
 ## Visibility
 
@@ -83,4 +74,4 @@ Navigation:
 ## Notes
 
 - Public Profile remains a learning profile, not a social-media profile.
-- Note cards stay preview/navigation-focused; management actions live in the owner-only context menu or Note Detail.
+- Note cards stay preview/navigation-focused; note actions live in Note Detail.

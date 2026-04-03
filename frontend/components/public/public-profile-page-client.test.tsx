@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PublicProfilePageClient } from "./public-profile-page-client";
 import { getAuthUser } from "@/lib/auth";
-import { copyNote, deleteNote, getPublicProfile, updateNoteVisibility, updatePublicProfileVisibility } from "@/lib/api";
+import { getPublicProfile, updatePublicProfileVisibility } from "@/lib/api";
+import { buildPublicLibraryNotePathFromSlug } from "@/lib/public-note-path";
 
 const backMock = jest.fn();
 const pushMock = jest.fn();
@@ -21,10 +22,7 @@ jest.mock("@/lib/api", () => {
   const actual = jest.requireActual("@/lib/api");
   return {
     ...actual,
-    copyNote: jest.fn(),
-    deleteNote: jest.fn(),
     getPublicProfile: jest.fn(),
-    updateNoteVisibility: jest.fn(),
     updatePublicProfileVisibility: jest.fn(),
   };
 });
@@ -56,10 +54,7 @@ describe("PublicProfilePageClient", () => {
 
   beforeEach(() => {
     (getAuthUser as jest.Mock).mockReset();
-    (copyNote as jest.Mock).mockReset();
-    (deleteNote as jest.Mock).mockReset();
     (getPublicProfile as jest.Mock).mockReset();
-    (updateNoteVisibility as jest.Mock).mockReset();
     (updatePublicProfileVisibility as jest.Mock).mockReset();
     backMock.mockReset();
     pushMock.mockReset();
@@ -70,7 +65,7 @@ describe("PublicProfilePageClient", () => {
     });
   });
 
-  it("shows owner-only controls and toggles visibility on the public profile page", async () => {
+  it("shows owner-only profile controls while keeping note cards action-free", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
     (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
     (updatePublicProfileVisibility as jest.Mock).mockResolvedValue({
@@ -87,7 +82,7 @@ describe("PublicProfilePageClient", () => {
     expect(await screen.findByRole("link", { name: "Edit Profile" })).toHaveAttribute("href", "/profile");
     expect(screen.getByRole("button", { name: "Public" })).toBeInTheDocument();
     expect(screen.getByText("Biology notes and board-review practice.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open note actions" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
     await waitFor(() => {
@@ -103,8 +98,6 @@ describe("PublicProfilePageClient", () => {
     });
     expect(await screen.findByText("Public profile is now private.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
-    expect(screen.getByText("Plant cells contain chloroplasts and cell walls.")).toBeInTheDocument();
-    expect(screen.getByText("Plant cells use chloroplasts for photosynthesis.")).toBeInTheDocument();
   });
 
   it("does not show owner controls for other viewers", async () => {
@@ -143,11 +136,9 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
   });
 
-  it("uses a back button and owner note actions on the public profile page", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" });
+  it("uses a page-level back button and opens notes from whole-card clicks", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
     (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
-    (deleteNote as jest.Mock).mockResolvedValue(undefined);
-    (updateNoteVisibility as jest.Mock).mockResolvedValue({ visibility: "PRIVATE" });
 
     render(
       <PublicProfilePageClient
@@ -162,29 +153,11 @@ describe("PublicProfilePageClient", () => {
     fireEvent.click(backButton);
     expect(backMock).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
-    const deleteButton = screen.getByRole("button", { name: "Delete" });
-    expect(deleteButton.className).toContain("text-red-700");
-    expect(screen.getByRole("button", { name: "Make Private" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
-  });
+    const title = screen.getByText("Plant Cells");
+    fireEvent.click(title.closest("[role='link']") as HTMLElement);
 
-  it("does not navigate when the owner cancels delete from the public profile card menu", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
-    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
-
-    render(
-      <PublicProfilePageClient
-        userId="user-1"
-        initialResult={{ status: "ok", profile: baseProfile }}
-      />,
+    expect(pushMock).toHaveBeenCalledWith(
+      buildPublicLibraryNotePathFromSlug({ subject: "Biology", slug: "plant-cells" }),
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(pushMock).not.toHaveBeenCalled();
-    expect(screen.queryByText("Delete this note?")).not.toBeInTheDocument();
   });
 });
