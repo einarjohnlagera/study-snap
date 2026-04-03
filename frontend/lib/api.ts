@@ -1,4 +1,5 @@
 import {
+  beginManualLogoutRedirect,
   clearAuthUser,
   getAccessToken,
   getAuthUser,
@@ -931,18 +932,21 @@ export async function login(request: LoginRequest): Promise<AuthUser> {
 
 export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) {
+  beginManualLogoutRedirect();
+  try {
+    if (!refreshToken) {
+      return;
+    }
+    await fetch(buildUrl("/auth/logout"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } finally {
     clearAuthUser();
-    return;
   }
-  await fetch(buildUrl("/auth/logout"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
-  clearAuthUser();
 }
 
 export async function getMe(): Promise<MeResponse> {

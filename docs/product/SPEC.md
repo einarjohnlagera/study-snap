@@ -645,6 +645,7 @@ Page responsibilities:
 - Preserve destination with `redirect` query param
 - Session-expired redirects include `reason=session_expired`
 - Manual logout should use neutral login messaging and must not show the session-expired warning
+- Manual logout intent must suppress late `401` / expired-session redirects from in-flight requests so the login page reason stays neutral
 - Logged-out protected-route access may use a neutral auth-required reason and must not show the session-expired warning
 - After a successful login, the frontend must route with `router.replace(...)` instead of relying on shell visibility alone.
 - Post-login destination order is:
