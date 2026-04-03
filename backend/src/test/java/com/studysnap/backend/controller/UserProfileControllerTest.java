@@ -42,7 +42,7 @@ class UserProfileControllerTest {
     void updateProfile_delegatesIdentitySaveToAuthService() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "Study Note", "[email protected]");
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest("Note", "User", "Study Note", "Reviewing pathology one note at a time.", "[email protected]");
         MeResponse expected = new MeResponse(
                 userId.toString(),
                 "[email protected]",
@@ -50,6 +50,7 @@ class UserProfileControllerTest {
                 "Note",
                 "User",
                 "Study Note",
+                "Reviewing pathology one note at a time.",
                 true,
                 null,
                 ProfileType.STUDENT,
@@ -87,6 +88,7 @@ class UserProfileControllerTest {
                 "Note",
                 "User",
                 "Study Note",
+                "Reviewing pathology one note at a time.",
                 false,
                 null,
                 ProfileType.STUDENT,

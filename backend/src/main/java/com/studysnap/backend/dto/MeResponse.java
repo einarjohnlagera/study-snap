@@ -17,6 +17,7 @@ public record MeResponse(
         String firstName,
         String lastName,
         String displayName,
+        String bio,
         boolean publicProfileVisible,
         String countryCode,
         ProfileType profileType,

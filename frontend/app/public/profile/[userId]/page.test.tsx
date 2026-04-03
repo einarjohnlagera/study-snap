@@ -1,13 +1,19 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PublicProfilePage, { generateMetadata } from "./page";
 import { getServerPublicProfile } from "@/lib/server-public-profiles";
 
 const notFoundMock = jest.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
 });
+const backMock = jest.fn();
+const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   notFound: () => notFoundMock(),
+  useRouter: () => ({
+    back: backMock,
+    push: pushMock,
+  }),
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -30,6 +36,8 @@ jest.mock("@/lib/server-public-profiles", () => ({
 describe("PublicProfilePage", () => {
   beforeEach(() => {
     notFoundMock.mockClear();
+    backMock.mockClear();
+    pushMock.mockClear();
     (getServerPublicProfile as jest.Mock).mockReset();
   });
 
@@ -38,6 +46,7 @@ describe("PublicProfilePage", () => {
       status: "ok",
       profile: {
         displayName: "Study Buddy",
+        bio: "Biology notes and board-review practice.",
         profileType: "TEACHER",
         isOfficial: true,
         publicProfileVisible: true,
@@ -71,6 +80,7 @@ describe("PublicProfilePage", () => {
     render(await PublicProfilePage({ params: Promise.resolve({ userId: "user-1" }) }));
 
     expect(screen.getByRole("heading", { name: "Study Buddy" })).toBeInTheDocument();
+    expect(screen.getByText("Biology notes and board-review practice.")).toBeInTheDocument();
     expect(screen.getAllByText("Teacher")).not.toHaveLength(0);
     expect(screen.getByText("Official")).toBeInTheDocument();
     expect(screen.getByText("Public notes")).toBeInTheDocument();
@@ -79,7 +89,10 @@ describe("PublicProfilePage", () => {
     expect(screen.getByText("Plant cells contain chloroplasts and cell walls.")).toBeInTheDocument();
     expect(screen.getByText("Plant cells use chloroplasts for photosynthesis.")).toBeInTheDocument();
     expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Plant Cells/i })).toHaveAttribute("href", "/public/library/biology/plant-cells");
+    fireEvent.click(screen.getByRole("link", { name: /Plant Cells/i }));
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/public/library/biology/plant-cells");
+    });
     expect(screen.queryByRole("button", { name: "Edit Profile" })).not.toBeInTheDocument();
   });
 
@@ -88,6 +101,7 @@ describe("PublicProfilePage", () => {
       status: "ok",
       profile: {
         displayName: "Quiet Creator",
+        bio: null,
         profileType: "STUDENT",
         isOfficial: false,
         publicProfileVisible: true,
@@ -117,6 +131,7 @@ describe("PublicProfilePage", () => {
       status: "ok",
       profile: {
         displayName: "Study Buddy",
+        bio: "Biology notes and board-review practice.",
         profileType: "TEACHER",
         isOfficial: false,
         publicProfileVisible: true,

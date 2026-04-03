@@ -4,6 +4,7 @@ import java.util.List;
 
 public record PublicProfileResponse(
         String displayName,
+        String bio,
         String profileType,
         boolean isOfficial,
         boolean publicProfileVisible,

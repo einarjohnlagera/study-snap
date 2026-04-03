@@ -34,6 +34,7 @@ class PublicProfileControllerTest {
     void getByUserId_delegatesToService() {
         PublicProfileResponse expected = new PublicProfileResponse(
                 "Study Buddy",
+                "Biology notes and board-review practice.",
                 "STUDENT",
                 false,
                 true,

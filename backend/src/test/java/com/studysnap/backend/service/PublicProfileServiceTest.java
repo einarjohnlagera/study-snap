@@ -55,6 +55,7 @@ class PublicProfileServiceTest {
         user.setId(userId);
         user.setEmail("creator@example.com");
         user.setDisplayName("Study Buddy");
+        user.setBio("Biology teacher sharing board-style review notes.");
         user.setFirstName("Study");
         user.setProfileType(ProfileType.TEACHER);
         user.setRole(UserRole.USER);
@@ -79,6 +80,7 @@ class PublicProfileServiceTest {
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
         assertThat(response.displayName()).isEqualTo("Study Buddy");
+        assertThat(response.bio()).isEqualTo("Biology teacher sharing board-style review notes.");
         assertThat(response.profileType()).isEqualTo("TEACHER");
         assertThat(response.isOfficial()).isFalse();
         assertThat(response.publicProfileVisible()).isTrue();
@@ -117,6 +119,7 @@ class PublicProfileServiceTest {
         user.setId(userId);
         user.setEmail("creator@example.com");
         user.setFirstName("Creator");
+        user.setBio(null);
         user.setRole(UserRole.USER);
         user.setPublicProfileVisible(true);
 
@@ -127,6 +130,7 @@ class PublicProfileServiceTest {
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
         assertThat(response.displayName()).isEqualTo("Creator");
+        assertThat(response.bio()).isNull();
         assertThat(response.publicNotesCount()).isZero();
         assertThat(response.totalCopies()).isZero();
         assertThat(response.publicNotes()).isEmpty();

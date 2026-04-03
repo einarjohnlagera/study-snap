@@ -339,8 +339,11 @@ Users can:
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name
+  - Bio (or `This user hasn't added a bio yet.` when blank)
+  - avatar/initials
   - Profile Type
   - Official badge when the account is official/admin
+  - derived public-note subjects
   - Total public notes
   - Total copies across that user's public notes
   - list of that user's public notes with Title, Subject badge, Tags, and Copy count
@@ -355,14 +358,31 @@ Users can:
   - visibility is shown as a badge/dropdown near the title cluster
   - stats remain in their own section below the identity summary
   - `Share Profile` sits in the lower-right action row of the header card
+- Public Profile should use a page-level `Back` button above the header card.
+- Do not place the `Back` button inside the Public Profile header card.
 - Non-owners must not see `Edit Profile` or the visibility toggle on Public Profile.
 - If `publicProfileVisible = false`, non-owners should see `This profile is private.`
 - If the user has no public notes, show `This user has no public notes yet.`
 - Public Profile note cards should use the same interaction model as Library and Public Library:
   - whole card click opens the public note detail page
-  - do not add a redundant `Open Note` button inside the card
+  - do not add redundant inline action buttons inside the card body
 - Public Profile note cards should use the shared note-card preview layout, including both `Note Preview` and `Summary Preview`.
-- Public Profile remains a public showcase page and should not mix in private workspace actions, even for the owner.
+- Note cards remain preview/navigation surfaces; note actions belong in:
+  - an owned-note context menu on owned note-card surfaces
+  - Note Detail
+- Owned note-card menus should appear only on:
+  - `Library`
+  - owner-view `Public Profile`
+- Public Library and other users' Public Profiles must not show note-card context menus.
+- Library card menu options:
+  - `Edit`
+  - `Delete`
+  - `Make a Copy`
+  - `Share`
+- Owner-view Public Profile card menu options:
+  - `Delete`
+  - `Make Private`
+  - `Make a Copy`
 - Owner actions on public note detail may include:
   - `Open Note`
   - `Share`
@@ -432,16 +452,22 @@ Users can:
   - `firstName`
   - `lastName`
   - `displayName`
+  - `bio`
   - `email`
 - `Profile` should include:
-  - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page ->` navigation
-  - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
+  - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page` navigation
+  - an `Identity` card with `firstName`, `lastName`, `displayName`, `bio`, and `email`
   - a `Profile Type` card with the profile-type selector
 - `Profile` save actions should be section-specific:
   - `Save Identity` only saves identity fields
   - `Save Profile Type` only saves the profile type field
-- `View Public Page ->` on `/profile` is navigation only and should live in the top Display Name card.
+- `View Public Page` on `/profile` is navigation only and should live in the top Display Name card.
 - `Profile` should not own Public Profile sharing or visibility controls.
+
+### Navigation Behavior
+
+- Public Profile should use a `Back` button driven by navigation history (`router.back()`), not a hardcoded return path.
+- Arrow glyphs should not be appended to in-app button labels when the action icon already communicates navigation.
 - If `displayName` is blank, public author fallback is `firstName`.
 - Public pages must never show the user's email address.
 - Reserved display names are rejected server-side. The following are reserved case-insensitively:

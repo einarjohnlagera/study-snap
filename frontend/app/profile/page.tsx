@@ -19,6 +19,7 @@ type IdentityForm = {
   firstName: string;
   lastName: string;
   displayName: string;
+  bio: string;
   email: string;
 };
 
@@ -49,6 +50,7 @@ export default function ProfilePage() {
     firstName: "",
     lastName: "",
     displayName: "",
+    bio: "",
     email: "",
   });
   const [savingIdentity, setSavingIdentity] = useState(false);
@@ -75,6 +77,7 @@ export default function ProfilePage() {
         firstName: me.firstName ?? "",
         lastName: me.lastName ?? "",
         displayName: me.displayName ?? "",
+        bio: me.bio ?? "",
         email: me.pendingEmail ?? me.email ?? "",
       });
       setSelectedProfileType(me.profileType ?? "");
@@ -129,6 +132,7 @@ export default function ProfilePage() {
         firstName: identityForm.firstName.trim(),
         lastName: identityForm.lastName.trim(),
         displayName: identityForm.displayName.trim(),
+        bio: identityForm.bio.trim(),
         email: identityForm.email.trim(),
       });
 
@@ -137,6 +141,7 @@ export default function ProfilePage() {
         firstName: updatedIdentity.firstName ?? "",
         lastName: updatedIdentity.lastName ?? "",
         displayName: updatedIdentity.displayName ?? "",
+        bio: updatedIdentity.bio ?? "",
         email: updatedIdentity.pendingEmail ?? updatedIdentity.email,
       });
       setSelectedProfileType(updatedIdentity.profileType ?? selectedProfileType);
@@ -214,7 +219,7 @@ export default function ProfilePage() {
               <ResponsiveActionLink
                 href={buildPublicProfilePath(profile.id)}
                 action="open"
-                label="View Public Page →"
+                label="View Public Page"
                 variant="outline"
                 className="w-full sm:w-auto"
               />
@@ -247,6 +252,17 @@ export default function ProfilePage() {
                   value={identityForm.displayName}
                   onChange={(event) => handleIdentityFieldChange("displayName", event.target.value)}
                 />
+              </label>
+              <label className="block space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium">Bio</span>
+                <textarea
+                  className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  aria-label="Bio"
+                  value={identityForm.bio}
+                  onChange={(event) => handleIdentityFieldChange("bio", event.target.value.slice(0, 200))}
+                  maxLength={200}
+                />
+                <p className="text-xs text-foreground/60">{identityForm.bio.length}/200 characters</p>
               </label>
               <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Email</span>

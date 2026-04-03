@@ -163,6 +163,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const searchParams = useSearchParams();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const autoGenerateHandledRef = useRef(false);
+  const autoEditHandledRef = useRef(false);
 
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
@@ -564,6 +565,26 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
     void handleGenerate();
   }, [handleGenerate, isDraft, note, pathname, router, searchParams]);
+
+  useEffect(() => {
+    const shouldAutoEdit = searchParams.get("edit") === "1";
+    if (!shouldAutoEdit || autoEditHandledRef.current || !note || isDraft) {
+      return;
+    }
+
+    autoEditHandledRef.current = true;
+    setMetadataDraft({
+      title: note.title ?? "",
+      subject: note.subject ?? "",
+      tags: [...(note.tags ?? [])],
+    });
+    setMetadataTagDraft("");
+    setIsInlineMetadataEditMode(true);
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("edit");
+    router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+  }, [isDraft, note, pathname, router, searchParams]);
 
   const applySuggestions = useCallback(async () => {
     if (!note || !pendingSuggestion || applyingSuggestion) {
