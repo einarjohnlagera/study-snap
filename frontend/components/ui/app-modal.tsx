@@ -83,7 +83,7 @@ export function AppModal({
       }
 
       const first = focusable[0];
-      const last = focusable.at(-1);
+      const last = focusable[focusable.length - 1]!;
       const active = document.activeElement as HTMLElement | null;
       const isInside = Boolean(active && panelRef.current?.contains(active));
 
