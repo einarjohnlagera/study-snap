@@ -49,6 +49,7 @@ Rules:
 - preserve query-string state such as `?tab=quiz`
 - switching tabs must not jump the page back to the top
 - keep the user anchored in the same content area when moving between `Summary` and `Quiz`
+- switching `?tab=` state must not refetch the note or remount Note Detail into a loading state
 
 ## Public Note Detail
 

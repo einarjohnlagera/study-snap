@@ -37,6 +37,7 @@
 - Study Pack limit enforcement and usage warnings now use the same effective usage calculation so users are no longer told they have credit left while generation is already blocked.
 - Free-plan near-limit messaging now shows the actual remaining Study Pack count instead of a generic warning.
 - Note Detail generation now applies the same title/subject/tag suggestion flow as Create Note.
+- Note Detail tab switching no longer refetches the note or snaps long pages back to the top when `?tab=` changes.
 - Mobile Note Editor no longer lets the global `Send Feedback` launcher overlap the primary Generate CTA.
 - Canceling note deletion from owned note-card menus no longer falls through to the card and opens Note Detail.
 - Destructive note-card actions now use consistent red warning styling across Library and owner-view Public Profile menus.

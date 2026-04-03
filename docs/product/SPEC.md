@@ -444,6 +444,7 @@ Users can:
   - tab switches should stay on the same note view and update content without a full page reload
   - tab switches must not reset the page scroll to the top
   - preserve the user's position around the tab content area when switching views
+  - changing `?tab=` must not trigger a note-detail refetch or loading-state remount
 
 ### Display Name And Official Badge
 

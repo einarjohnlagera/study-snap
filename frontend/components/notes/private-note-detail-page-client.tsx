@@ -162,6 +162,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
+  const latestSearchQueryRef = useRef(searchParams.toString());
   const autoGenerateHandledRef = useRef(false);
   const autoEditHandledRef = useRef(false);
 
@@ -216,6 +217,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
 
+  useEffect(() => {
+    latestSearchQueryRef.current = searchParams.toString();
+  }, [searchParams]);
+
   const loadDetail = useCallback(async () => {
     if (!normalizedRouteId) {
       setError("Note not found.");
@@ -248,7 +253,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(normalizedRouteId).catch(() => null);
         if (byStudyPack?.noteId) {
-          const nextQuery = searchParams.toString();
+          const nextQuery = latestSearchQueryRef.current;
           router.replace(nextQuery ? `/notes/${byStudyPack.noteId}?${nextQuery}` : `/notes/${byStudyPack.noteId}`);
           return;
         }
@@ -261,7 +266,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setLoading(false);
     }
-  }, [normalizedRouteId, pathname, router, searchParams]);
+  }, [normalizedRouteId, pathname, router]);
 
   useEffect(() => {
     void loadDetail();
