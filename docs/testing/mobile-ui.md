@@ -8,6 +8,7 @@ Verify these cases on mobile-sized viewports:
 - Note Detail `Summary` and `Quiz` tabs show text labels on mobile
 - switching Note Detail tabs does not jump the page to the top
 - switching Note Detail tabs keeps the user near the tab content area
+- switching Note Detail tabs does not flash a loading state or refetch the note on mobile
 - Note Editor mobile Generate CTA stays centered and readable
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA
 - mobile sticky CTA area stays compact and does not consume excessive vertical space

@@ -1,0 +1,10 @@
+# note-detail.md - Testing Notes
+
+Verify these cases for private Note Detail:
+
+- `Summary` / `Quiz` render as tabs, not action buttons
+- `?tab=quiz` opens the quiz view directly
+- switching tabs updates the query state without a full page reload
+- switching tabs does not jump the page to the top
+- switching tabs does not refetch the note or flash the loading state
+- tab switching keeps the user near the Study Pack content area on mobile and desktop

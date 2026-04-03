@@ -23,10 +23,14 @@ const routerMock = {
   replace: replaceMock,
 };
 let searchParamValues: Record<string, string> = {};
-const searchParamsMock = {
-  get: (key: string) => searchParamValues[key] ?? null,
-  toString: () => new URLSearchParams(searchParamValues).toString(),
-};
+function createSearchParamsMock() {
+  return {
+    get: (key: string) => searchParamValues[key] ?? null,
+    toString: () => new URLSearchParams(searchParamValues).toString(),
+  };
+}
+
+let searchParamsMock = createSearchParamsMock();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
@@ -94,6 +98,7 @@ describe("PrivateNoteDetailPageClient", () => {
     pushMock.mockReset();
     replaceMock.mockReset();
     searchParamValues = {};
+    searchParamsMock = createSearchParamsMock();
     window.localStorage.clear();
     window.sessionStorage.clear();
     (getNote as jest.Mock).mockReset();
@@ -484,16 +489,23 @@ describe("PrivateNoteDetailPageClient", () => {
       ],
     });
 
-    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     const summaryTab = await screen.findByRole("tab", { name: "Summary" });
     const quizTab = screen.getByRole("tab", { name: "Quiz" });
 
     expect(summaryTab).toHaveAttribute("aria-selected", "true");
+    expect(getNote).toHaveBeenCalledTimes(1);
 
     fireEvent.click(quizTab);
+    searchParamValues = { tab: "quiz" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?tab=quiz", { scroll: false });
+    expect(getNote).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Loading note...")).not.toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Quiz" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {
