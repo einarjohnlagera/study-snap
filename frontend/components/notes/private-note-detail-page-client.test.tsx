@@ -366,7 +366,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=quiz");
@@ -414,9 +414,9 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
 
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Use AI Subject" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Merge Tags/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
+    fireEvent.click(screen.getByLabelText("Use AI Subject"));
+    fireEvent.click(screen.getByLabelText("Merge My Tags + AI Tags"));
+    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {
       expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({

@@ -723,6 +723,17 @@ Page responsibilities:
   - `Title` -> `Keep My Title` or `Use AI Title`
   - `Subject` -> `Keep My Subject` or `Use AI Subject`
   - `Tags` -> `Keep My Tags`, `Merge Tags`, or `Use AI Tags`
+- The AI Suggestions modal should behave like a review-and-decision screen:
+  - compact sections for `Title`, `Subject`, and `Tags`
+  - comparison of `Yours` vs `AI`
+  - radio-button decisions rather than long stacked action buttons
+  - tag chips for tag display instead of long button labels
+  - live `Preview` of the final metadata outcome
+  - primary footer action = `Apply Changes`
+  - secondary footer action = `Skip`
+- Modal layout requirements:
+  - desktop: max width around `640px`, max height `80vh`, internal scroll when needed
+  - mobile: full-screen modal with scrollable content and sticky footer
 - Default AI suggestion choices should stay user-safe:
   - existing `title` -> default `Keep My Title`
   - existing `subject` -> default `Keep My Subject`

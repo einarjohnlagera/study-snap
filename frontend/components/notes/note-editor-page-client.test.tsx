@@ -309,9 +309,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
 
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Use AI Subject" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Merge Tags/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
+    fireEvent.click(screen.getByLabelText("Use AI Subject"));
+    fireEvent.click(screen.getByLabelText("Merge My Tags + AI Tags"));
+    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {
       expect(updateNote).toHaveBeenCalledWith("note-created", expect.objectContaining({
@@ -775,7 +775,7 @@ describe("NoteEditorPageClient", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=quiz");
@@ -792,7 +792,7 @@ describe("NoteEditorPageClient", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=summary");

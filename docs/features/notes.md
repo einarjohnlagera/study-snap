@@ -56,3 +56,7 @@ Rules:
 - default to `Merge Tags` when the note already has tags
 - default to `Use AI Tags` when the note has no tags yet
 - use the same suggestion flow from both `Create Note` and `Note Detail`
+- present the choices in a compact review modal, not a wall of buttons
+- compare `Your` value versus `AI` value for each field
+- show tags as chips, not inside long action labels
+- include a live preview of the final metadata before applying changes
