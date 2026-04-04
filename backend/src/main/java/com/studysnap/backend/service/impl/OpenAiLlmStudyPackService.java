@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.OpenAiPromptResources;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
@@ -40,6 +41,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int STUDY_PACK_QUIZ_QUESTION_COUNT = 5;
     private static final int MAX_SUMMARY_WORDS = 120;
     private static final int MAX_STUDY_TIP_WORDS = 20;
+    private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
+    private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
+            "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
+            "balance", "calculus", "cash flow", "chemistry", "circuit", "circuits", "computation",
+            "compute", "current", "derivative", "derivatives", "differential", "electric", "electrical",
+            "engineering", "equation", "equations", "finance", "formula", "formulas", "geometry",
+            "interest", "integral", "kinematics", "laws of motion", "math", "mathematics", "mechanics",
+            "numerical", "ohm", "physics", "probability", "ratio", "resistance", "solve", "statistics",
+            "stoichiometry", "thermodynamics", "unit conversion", "units", "variance", "voltage"
+    );
 
     private final StudySnapProperties properties;
     private final ObjectMapper objectMapper;
@@ -52,7 +63,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         String model = requireConfiguredModel();
         JsonSchemaResponse<PromptStudyPack> response = executeJsonSchemaOperation(
                 model,
-                buildInputMessages(normalizedNotesText),
+                buildInputMessages(normalizedNotesText, context),
                 studyPackOperation(),
                 promptResources.responseSchema(),
                 PromptStudyPack.class
@@ -60,16 +71,31 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model);
     }
 
-    private ArrayNode buildInputMessages(String normalizedNotesText) {
+    private ArrayNode buildInputMessages(String normalizedNotesText, StudyPackGenerationContext context) {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.systemPrompt()));
 
-        String developerPrompt = promptResources.developerPromptTemplate()
-                .replace("{QUIZ_COUNT}", String.valueOf(STUDY_PACK_QUIZ_QUESTION_COUNT));
+        String developerPrompt = buildStudyPackDeveloperPrompt(context);
         input.add(buildTextMessage("developer", developerPrompt));
-        input.add(buildTextMessage("user", "Study notes:\n" + normalizedNotesText));
+        input.add(buildTextMessage(
+                "user",
+                buildStudyPackUserPrompt(normalizedNotesText, context)
+        ));
 
         return input;
+    }
+
+    private String buildStudyPackDeveloperPrompt(StudyPackGenerationContext context) {
+        return promptResources.developerPromptTemplate()
+                .replace("{QUIZ_COUNT}", String.valueOf(STUDY_PACK_QUIZ_QUESTION_COUNT))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.QUICK_REVIEW))
+                .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(isQuantitativeContext(context, List.of(), null), QuizMode.QUICK_REVIEW))
+                .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.QUICK_REVIEW));
+    }
+
+    private String buildStudyPackUserPrompt(String normalizedNotesText, StudyPackGenerationContext context) {
+        return buildLearnerContextBlock(context) + "\nStudy notes:\n" + normalizedNotesText;
     }
 
     private String requireConfiguredModel() {
@@ -217,14 +243,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 throw invalidOutput("The study pack service returned repetitive quiz concepts. Please try again.");
             }
 
+            int answerIndex = resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
             List<String> randomizedChoices = QuizValidationUtils.randomizeChoices(item.choices(), item.question());
-            String correctAnswer = item.choices().get(item.answerIndex());
+            String correctAnswer = item.choices().get(answerIndex);
             quizItems.add(new QuizItem(
                     item.question(),
                     randomizedChoices,
                     correctAnswer,
                     normalizedConcept,
-                    QuizValidationUtils.buildFallbackExplanation(normalizedConcept)
+                    normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.")
             ));
         }
         return quizItems;
@@ -238,16 +265,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (item.choices() == null || item.choices().size() != 4) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
-        if (item.answerIndex() < 0 || item.answerIndex() >= item.choices().size()) {
-            throw invalidOutput("The study pack service returned an invalid quiz answer. Please try again.");
-        }
         if (StringNormalizationUtils.isBlank(item.question())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
         normalizeAndValidateConcept(item.concept());
+        normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.");
         if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
+        resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
         String normalizedQuestionKey = StringNormalizationUtils.normalizeForDuplicateCheck(item.question());
         if (normalizedQuestions.contains(normalizedQuestionKey)) {
             throw invalidOutput("The study pack service returned repetitive quiz questions. Please try again.");
@@ -295,16 +321,23 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConcepts,
             List<String> weakConcepts,
             List<String> disallowedQuestions,
-            int questionCount
+            int questionCount,
+            StudyPackGenerationContext context
     ) {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.adaptivePracticeSystemPrompt()));
+        boolean quantitativeContext = isQuantitativeContext(context, combineLists(keyConcepts, weakConcepts), studyPackSummary);
         String adaptivePracticeDeveloperPrompt = promptResources.adaptivePracticeDeveloperPromptTemplate()
-                .replace("{QUESTION_COUNT}", String.valueOf(questionCount));
+                .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.ADAPTIVE_PRACTICE))
+                .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.ADAPTIVE_PRACTICE))
+                .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.ADAPTIVE_PRACTICE));
         input.add(buildTextMessage("developer", adaptivePracticeDeveloperPrompt));
         input.add(buildTextMessage(
                 "user",
-                "Summary: " + studyPackSummary + "\n" +
+                buildLearnerContextBlock(context) + "\n" +
+                        "Summary: " + studyPackSummary + "\n" +
                         "Key concepts: " + String.join(", ", keyConcepts) + "\n" +
                         "Weak concepts to target: " + String.join(", ", weakConcepts) + "\n" +
                         "Excluded questions (must not be repeated): " + String.join(" || ", disallowedQuestions)
@@ -317,17 +350,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConcepts,
             List<String> disallowedQuestions,
             int questionCount,
-            String difficulty
+            String difficulty,
+            StudyPackGenerationContext context
     ) {
         ArrayNode input = objectMapper.createArrayNode();
         input.add(buildTextMessage("system", promptResources.challengeQuizSystemPrompt()));
+        boolean quantitativeContext = isQuantitativeContext(context, keyConcepts, studyPackSummary);
         String challengeQuizDeveloperPrompt = promptResources.challengeQuizDeveloperPromptTemplate()
                 .replace("{QUESTION_COUNT}", String.valueOf(questionCount))
-                .replace("{DIFFICULTY}", difficulty);
+                .replace("{DIFFICULTY}", difficulty)
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(resolveLearnerLevel(context)))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(resolveLearnerLevel(context), QuizMode.CHALLENGE))
+                .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.CHALLENGE))
+                .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.CHALLENGE));
         input.add(buildTextMessage("developer", challengeQuizDeveloperPrompt));
         input.add(buildTextMessage(
                 "user",
-                "Summary: " + studyPackSummary + "\n" +
+                buildLearnerContextBlock(context) + "\n" +
+                        "Summary: " + studyPackSummary + "\n" +
                         "Key concepts: " + String.join(", ", keyConcepts) + "\n" +
                         "Excluded questions (must not be repeated): " + String.join(" || ", disallowedQuestions)
         ));
@@ -353,10 +393,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         required.add("question");
         required.add("choices");
         required.add("answer");
+        required.add("explanation");
+        required.add("concept");
 
         ObjectNode itemProps = item.putObject("properties");
         itemProps.putObject("question").put("type", "string");
-        itemProps.putObject("answer").put("type", "string");
+        ObjectNode answer = itemProps.putObject("answer");
+        answer.put("type", "string");
+        ArrayNode answerEnum = answer.putArray("enum");
+        answerEnum.add("A");
+        answerEnum.add("B");
+        answerEnum.add("C");
+        answerEnum.add("D");
+        itemProps.putObject("explanation").put("type", "string").put("minLength", 1);
+        itemProps.putObject("concept").put("type", "string").put("minLength", 1);
 
         ObjectNode choices = itemProps.putObject("choices");
         choices.put("type", "array");
@@ -456,6 +506,147 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return normalized;
     }
 
+    private String normalizeAndValidateConceptOrFallback(String concept, String fallbackConcept) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(concept);
+        if (normalized != null && StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
+            return normalized;
+        }
+        if (fallbackConcept != null && !fallbackConcept.isBlank()) {
+            return fallbackConcept;
+        }
+        throw invalidOutput("The quiz service returned an invalid concept. Please try again.");
+    }
+
+    private String normalizeAndValidateExplanation(String explanation, String invalidMessage) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(explanation);
+        if (!StringNormalizationUtils.containsAlphaNumeric(normalized)) {
+            throw invalidOutput(invalidMessage);
+        }
+        return normalized;
+    }
+
+    private int resolveAnswerIndex(String answer, int choiceCount, String invalidMessage) {
+        if (choiceCount != 4) {
+            throw invalidOutput(invalidMessage);
+        }
+        String normalizedAnswer = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(answer);
+        if (normalizedAnswer == null) {
+            throw invalidOutput(invalidMessage);
+        }
+        return switch (normalizedAnswer.toUpperCase()) {
+            case "A" -> 0;
+            case "B" -> 1;
+            case "C" -> 2;
+            case "D" -> 3;
+            default -> throw invalidOutput(invalidMessage);
+        };
+    }
+
+    private LearnerLevel resolveLearnerLevel(StudyPackGenerationContext context) {
+        if (context == null || context.learnerLevel() == null) {
+            return DEFAULT_LEARNER_LEVEL;
+        }
+        return context.learnerLevel();
+    }
+
+    private String toLearnerLevelLabel(LearnerLevel learnerLevel) {
+        return switch (learnerLevel) {
+            case GRADE_SCHOOL -> "Grade School";
+            case JUNIOR_HIGH -> "Junior High School";
+            case SENIOR_HIGH -> "Senior High School";
+            case COLLEGE -> "College";
+            case BOARD_EXAM_REVIEW -> "Board Exam Review";
+            case PROFESSIONAL -> "Professional";
+            case PERSONAL_LEARNING -> "Personal Learning";
+        };
+    }
+
+    private String buildLearnerLevelGuidance(LearnerLevel learnerLevel, QuizMode quizMode) {
+        return switch (learnerLevel) {
+            case GRADE_SCHOOL -> "Keep questions very simple. Focus on basic identification, clear definitions, and direct understanding. Avoid trick questions, subtle distractors, and complex computations.";
+            case JUNIOR_HIGH -> "Focus on concept understanding, direct application, and simple problem solving. Basic computations are allowed only when they are straightforward.";
+            case SENIOR_HIGH -> "Use concept understanding, moderate application, and simple to moderate computations when appropriate. Keep wording clear and fair.";
+            case COLLEGE -> quizMode == QuizMode.QUICK_REVIEW
+                    ? "Target college-level understanding with concise concept checks, moderate application, and occasional straightforward computations when clearly supported by the notes."
+                    : "Target college-level depth with analysis, situational reasoning, and moderate computations when appropriate.";
+            case BOARD_EXAM_REVIEW -> quizMode == QuizMode.ADAPTIVE_PRACTICE
+                    ? "Focus on board-exam weak areas using reinforcement questions that still feel exam-relevant, with focused scenarios, selective trick-resistant distractors, and computations when the topic requires them."
+                    : "Use board-exam style questions with situational framing, plausible distractors, multi-step thinking, and computations when the topic requires them.";
+            case PROFESSIONAL -> "Use applied knowledge, case-based framing, and real-world scenarios. Computations are appropriate when the topic is quantitative or formula-based.";
+            case PERSONAL_LEARNING -> "Use practical, accessible explanations with clear wording and real-world relevance. Keep difficulty around a solid college foundation unless the notes clearly suggest otherwise.";
+        };
+    }
+
+    private String buildComputationGuidance(boolean quantitativeContext, QuizMode quizMode) {
+        if (!quantitativeContext) {
+            return "Prefer concept understanding, interpretation, and scenario reasoning over forced numerical questions unless the notes clearly support a computation.";
+        }
+        return switch (quizMode) {
+            case QUICK_REVIEW -> "The material appears quantitative. Include at most one simple numerical or formula-based question if it is clearly supported by the notes, and keep the rest fast concept checks.";
+            case CHALLENGE -> "The material appears quantitative. Include computation, formula-based, or problem-solving multiple-choice questions when appropriate. Use numbers, word problems, or applied calculations when the notes support them. Explanations for computation questions must show clear step-by-step solution flow.";
+            case ADAPTIVE_PRACTICE -> "The material appears quantitative. Focus weak-concept reinforcement on targeted numerical or formula-based questions when appropriate. Explanations for computation questions must show clear step-by-step solution flow.";
+        };
+    }
+
+    private String buildTimeExpectation(QuizMode quizMode) {
+        return switch (quizMode) {
+            case QUICK_REVIEW -> "Each question should feel answerable in about 30 to 60 seconds.";
+            case CHALLENGE -> "Each question should feel answerable in about 1 to 2 minutes.";
+            case ADAPTIVE_PRACTICE -> "Each question should feel answerable in about 45 to 90 seconds.";
+        };
+    }
+
+    private String buildLearnerContextBlock(StudyPackGenerationContext context) {
+        List<String> lines = new ArrayList<>();
+        lines.add("Learner level: " + toLearnerLevelLabel(resolveLearnerLevel(context)));
+        if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
+            lines.add("Course / Program: " + context.courseProgram().trim());
+        }
+        if (context != null && context.subject() != null && !context.subject().isBlank()) {
+            lines.add("Subject: " + context.subject().trim());
+        }
+        if (context != null && context.tags() != null && !context.tags().isEmpty()) {
+            lines.add("Tags: " + String.join(", ", sanitizeStringList(context.tags())));
+        }
+        return String.join("\n", lines);
+    }
+
+    private boolean isQuantitativeContext(StudyPackGenerationContext context, List<String> conceptHints, String summary) {
+        StringBuilder haystack = new StringBuilder();
+        if (context != null) {
+            if (context.courseProgram() != null) {
+                haystack.append(context.courseProgram()).append(' ');
+            }
+            if (context.subject() != null) {
+                haystack.append(context.subject()).append(' ');
+            }
+            if (context.tags() != null) {
+                context.tags().forEach(tag -> haystack.append(tag).append(' '));
+            }
+        }
+        if (conceptHints != null) {
+            conceptHints.forEach(concept -> haystack.append(concept).append(' '));
+        }
+        if (summary != null) {
+            haystack.append(summary);
+        }
+
+        String normalized = haystack.toString().toLowerCase();
+        for (String keyword : QUANTITATIVE_KEYWORDS) {
+            if (normalized.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> combineLists(List<String> primary, List<String> secondary) {
+        List<String> combined = new ArrayList<>();
+        combined.addAll(sanitizeStringList(primary));
+        combined.addAll(sanitizeStringList(secondary));
+        return combined;
+    }
+
     @Override
     public String generateQuickReviewStudyTip(List<String> incorrectQuestionSummaries) {
         if (incorrectQuestionSummaries == null || incorrectQuestionSummaries.isEmpty()) {
@@ -491,7 +682,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConcepts,
             List<String> weakConcepts,
             List<String> disallowedQuestions,
-            int questionCount
+            int questionCount,
+            StudyPackGenerationContext context
     ) {
         List<String> normalizedWeakConcepts = sanitizeConceptList(weakConcepts);
         if (normalizedWeakConcepts.isEmpty()) {
@@ -505,7 +697,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         normalizedKeyConcepts,
                         normalizedWeakConcepts,
                         normalizedDisallowedQuestions,
-                        questionCount
+                        questionCount,
+                        context
                 ),
                 questionCount,
                 "note_lib_adaptive_quiz",
@@ -521,7 +714,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> keyConcepts,
             List<String> disallowedQuestions,
             int questionCount,
-            String difficulty
+            String difficulty,
+            StudyPackGenerationContext context
     ) {
         List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
         List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
@@ -531,7 +725,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         normalizedKeyConcepts,
                         normalizedDisallowedQuestions,
                         questionCount,
-                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty
+                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
+                        context
                 ),
                 questionCount,
                 "note_lib_challenge_quiz",
@@ -565,7 +760,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         int conceptIndex = 0;
         for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
             validateGeneratedQuizItem(item, operationLabel);
-            String answer = item.answer().trim();
+            int answerIndex = resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
+            String answer = item.choices().get(answerIndex).trim();
             String conceptFallback = conceptFallbackPool.isEmpty()
                     ? null
                     : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
@@ -574,8 +770,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     item.question().trim(),
                     item.choices().stream().map(String::trim).toList(),
                     answer,
-                    conceptFallback,
-                    QuizValidationUtils.buildFallbackExplanation(conceptFallback)
+                    normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
+                    normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again.")
             ));
         }
         return quizItems;
@@ -588,15 +784,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.answer())) {
             throw invalidOutput(operationLabel + " returned an invalid question. Please try again.");
         }
+        if (StringNormalizationUtils.isBlank(item.explanation())) {
+            throw invalidOutput(operationLabel + " returned an invalid explanation. Please try again.");
+        }
+        if (StringNormalizationUtils.isBlank(item.concept())) {
+            throw invalidOutput(operationLabel + " returned an invalid concept. Please try again.");
+        }
         if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
             throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
         }
-
-        String answer = item.answer().trim();
-        boolean answerInChoices = item.choices().stream().anyMatch(choice -> choice.trim().equals(answer));
-        if (!answerInChoices) {
-            throw invalidOutput(operationLabel + " returned an invalid answer mapping. Please try again.");
-        }
+        resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
     }
 
     private List<String> sanitizeConceptList(List<String> values) {
@@ -696,7 +893,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private record PromptQuizItem(
             String question,
             List<String> choices,
-            int answerIndex,
+            String answer,
             String concept,
             String explanation
     ) {
@@ -710,7 +907,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private record PromptGeneratedQuizItem(
             String question,
             List<String> choices,
-            String answer
+            String answer,
+            String explanation,
+            String concept
     ) {
     }
 
@@ -740,5 +939,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             Integer outputTokens,
             Integer cachedInputTokens
     ) {
+    }
+
+    private enum QuizMode {
+        QUICK_REVIEW,
+        CHALLENGE,
+        ADAPTIVE_PRACTICE
     }
 }

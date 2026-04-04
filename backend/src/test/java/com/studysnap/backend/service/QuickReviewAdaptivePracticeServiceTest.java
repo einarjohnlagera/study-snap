@@ -1,10 +1,12 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -12,10 +14,14 @@ import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ThemePreference;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -113,7 +119,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         verify(authService).requireEmailVerified(userId);
         verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt());
+        verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
@@ -167,13 +173,20 @@ class QuickReviewAdaptivePracticeServiceTest {
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
         when(llmStudyPackService.generateAdaptivePracticeQuiz(
                 any(),
                 any(),
                 any(),
                 any(),
                 any(),
-                anyInt()
+                anyInt(),
+                eq(new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Engineering",
+                        null,
+                        List.of()
+                ))
         )).thenReturn(List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), "B", "Concept", "Explanation"),
@@ -192,6 +205,36 @@ class QuickReviewAdaptivePracticeServiceTest {
         verify(aiRateLimitService).assertAllowed(userId, PlanType.PREMIUM, "adaptive-practice");
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
+    }
+
+    private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {
+        return new MeResponse(
+                userId.toString(),
+                "user@example.com",
+                null,
+                "Test",
+                "User",
+                "Test User",
+                null,
+                learnerLevel,
+                courseProgram,
+                true,
+                null,
+                null,
+                null,
+                null,
+                true,
+                true,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                0L,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.PREMIUM,
+                null
+        );
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID noteId, UUID ownerUserId) {

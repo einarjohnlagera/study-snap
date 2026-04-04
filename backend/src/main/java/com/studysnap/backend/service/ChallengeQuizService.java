@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
@@ -30,6 +31,7 @@ import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
@@ -132,13 +134,15 @@ public class ChallengeQuizService {
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty);
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
+        StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         List<QuizItem> generatedQuiz = llmStudyPackService.generateChallengeQuiz(
                 studyPack.getTitle(),
                 studyPack.getSummary(),
                 getKeyConcepts(studyPack),
                 disallowedQuestions,
                 profile.questionCount(),
-                profile.difficulty()
+                profile.difficulty(),
+                generationContext
         );
         List<QuizItem> challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
                 generatedQuiz,
@@ -462,7 +466,7 @@ public class ChallengeQuizService {
 
     private Map<String, Object> sanitizeSessionStateForClient(Map<String, Object> sessionState) {
         if (sessionState == null || sessionState.isEmpty()) {
-            return null;
+            return Map.of();
         }
         Map<String, Object> sanitized = new LinkedHashMap<>(sessionState);
         sanitized.remove(SESSION_STATE_QUIZ);
@@ -766,6 +770,16 @@ public class ChallengeQuizService {
     private StudyPackEntity findOwnedStudyPackOrThrow(UUID studyPackId, UUID userId) {
         return studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
                 .orElseThrow(StudyPackNotFoundException::new);
+    }
+
+    private StudyPackGenerationContext buildQuizGenerationContext(UUID userId, StudyPackEntity studyPack) {
+        MeResponse me = authService.getMe(userId);
+        return new StudyPackGenerationContext(
+                me.learnerLevel(),
+                me.courseProgram(),
+                studyPack.getSubject(),
+                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
+        );
     }
 
     private QuickReviewSessionEntity findChallengeSessionOrThrow(UUID sessionId, UUID userId) {

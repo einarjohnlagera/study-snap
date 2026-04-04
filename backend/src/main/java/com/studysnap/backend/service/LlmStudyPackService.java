@@ -17,7 +17,8 @@ public interface LlmStudyPackService {
 			List<String> keyConcepts,
 			List<String> weakConcepts,
 			List<String> disallowedQuestions,
-			int questionCount
+			int questionCount,
+			StudyPackGenerationContext context
 	);
 
 	List<QuizItem> generateChallengeQuiz(
@@ -26,6 +27,7 @@ public interface LlmStudyPackService {
 			List<String> keyConcepts,
 			List<String> disallowedQuestions,
 			int questionCount,
-			String difficulty
+			String difficulty,
+			StudyPackGenerationContext context
 	);
 }

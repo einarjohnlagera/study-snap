@@ -12,7 +12,8 @@ Output JSON schema:
     {
       "question": string,
       "choices": string[4],
-      "answerIndex": integer (0..3),
+      "answer": "A" | "B" | "C" | "D",
+      "explanation": string,
       "concept": string
     }
   ]
@@ -45,17 +46,26 @@ Key Concepts
 
 Quiz
 - exactly {QUIZ_COUNT} questions
+- these questions are for Quick Review, so they should be fast to answer and focused on core understanding
 - each question must have 4 choices
-- answerIndex must be between 0 and 3
+- answer must be exactly one of: A, B, C, D
 - exactly one choice must be correct
 - each question should target a distinct concept when possible
 - concept should be a short topic label for the key idea being tested (1 to 4 words, never null)
+- explanation is required and should sound like a tutor
+- for computation questions, explanation must show a short step-by-step solution
+- learner level target: {LEARNER_LEVEL}
+- {LEARNER_LEVEL_GUIDANCE}
+- {COMPUTATION_GUIDANCE}
+- {TIME_EXPECTATION}
 
 Quiz quality
 - all questions must remain answerable from the notes
 - do not use "all of the above" or "none of the above"
 - keep wording clear and exam-style
 - keep distractors plausible and same-topic
+- return ONLY valid JSON
+- do not include markdown, comments, or extra text before or after the JSON
 
 Content guidelines
 - Questions must be answerable from the notes

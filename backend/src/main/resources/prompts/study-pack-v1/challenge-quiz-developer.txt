@@ -4,12 +4,30 @@ Generate exactly {QUESTION_COUNT} NEW multiple-choice questions.
 RULES:
 - Base ONLY on the provided summary and key concepts.
 - Difficulty target: {DIFFICULTY}.
+- Learner level target: {LEARNER_LEVEL}.
+- {LEARNER_LEVEL_GUIDANCE}
+- {COMPUTATION_GUIDANCE}
+- {TIME_EXPECTATION}
 - Questions must test understanding, not memorization.
 - Questions must be unique.
 - Do NOT repeat or rephrase existing questions.
 - Avoid similar wording.
 - Each question must have 4 choices.
+- Answer must be exactly one of: A, B, C, D.
 - Exactly 1 choice must be correct.
+- Explanation is required for every question.
+- Concept is required for every question.
 - Use the provided excluded question list as hard constraints.
-- No explanations.
-- JSON only.
+- Return ONLY valid JSON with this structure:
+  {
+    "questions": [
+      {
+        "question": "...",
+        "choices": ["...", "...", "...", "..."],
+        "answer": "A",
+        "explanation": "...",
+        "concept": "..."
+      }
+    ]
+  }
+- Do not include markdown, comments, or text before or after JSON.
