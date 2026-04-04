@@ -27,6 +27,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -209,6 +211,212 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(quizItems.getFirst().answer()).isEqualTo("Electron transport chain");
         assertThat(quizItems.getFirst().concept()).isEqualTo("ATP production");
         assertThat(quizItems.getFirst().explanation()).isEqualTo("The electron transport chain produces most ATP during aerobic respiration.");
+    }
+
+    @Test
+    void generateChallengeQuiz_allowsDistinctMathExpressionChoices() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildGeneratedQuizPayload();
+        ArrayNode questions = (ArrayNode) payload.get("questions");
+        questions.set(0, generatedQuizItem(
+                "What is the derivative of uv?",
+                List.of("u'v + uv'", "u'v - uv'", "(u/v)^2", "uv' - u'v"),
+                "A",
+                "Use the product rule: d(uv)/dx = u'v + uv'.",
+                "Product rule"
+        ));
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        List<QuizItem> quizItems = service.generateChallengeQuiz(
+                "Calculus Review",
+                "Derivative rules",
+                List.of("Product rule"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Engineering",
+                        "Calculus",
+                        List.of("derivatives")
+                )
+        );
+
+        assertThat(quizItems).hasSize(2);
+        assertThat(quizItems.getFirst().choices())
+                .containsExactly("u'v + uv'", "u'v - uv'", "(u/v)^2", "uv' - u'v");
+    }
+
+    @Test
+    void generateChallengeQuiz_retriesOnceWhenFirstPayloadHasInvalidChoices() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode invalidPayload = buildGeneratedQuizPayload();
+        ArrayNode invalidQuestions = (ArrayNode) invalidPayload.get("questions");
+        invalidQuestions.set(0, generatedQuizItem(
+                "What is the derivative of uv?",
+                List.of("Derivative", "Derivative ", "Integral", "Limit"),
+                "A",
+                "Use the product rule.",
+                "Product rule"
+        ));
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(invalidPayload),
+                generatedQuizResponseJson(buildGeneratedQuizPayload())
+        );
+
+        List<QuizItem> quizItems = service.generateChallengeQuiz(
+                "Calculus Review",
+                "Derivative rules",
+                List.of("Product rule"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
+        );
+
+        assertThat(quizItems).hasSize(2);
+        verify(responseSpec, times(2)).body(String.class);
+    }
+
+    @Test
+    void generateChallengeQuiz_failsAfterSecondInvalidPayload() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode invalidPayload = buildGeneratedQuizPayload();
+        ArrayNode invalidQuestions = (ArrayNode) invalidPayload.get("questions");
+        invalidQuestions.set(0, generatedQuizItem(
+                "What is the derivative of uv?",
+                List.of("Derivative", "Derivative ", "Integral", "Limit"),
+                "A",
+                "Use the product rule.",
+                "Product rule"
+        ));
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(invalidPayload),
+                generatedQuizResponseJson(invalidPayload)
+        );
+
+        assertThatThrownBy(() -> service.generateChallengeQuiz(
+                "Calculus Review",
+                "Derivative rules",
+                List.of("Product rule"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
+        ))
+                .isInstanceOf(AppException.class)
+                .satisfies(error -> {
+                    AppException appException = (AppException) error;
+                    assertThat(appException.getCode()).isEqualTo("LLM_INVALID_OUTPUT");
+                    assertThat(appException.getMessage()).isEqualTo("Challenge quiz generation returned invalid choices. Please try again.");
+                });
+        verify(responseSpec, times(2)).body(String.class);
+    }
+
+    @Test
+    void generateChallengeQuiz_rejectsThreeChoices() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildGeneratedQuizPayload();
+        ArrayNode questions = (ArrayNode) payload.get("questions");
+        questions.set(0, generatedQuizItem(
+                "What is the derivative of uv?",
+                List.of("u'v + uv'", "u'v - uv'", "(u/v)^2"),
+                "A",
+                "Use the product rule.",
+                "Product rule"
+        ));
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(payload),
+                generatedQuizResponseJson(payload)
+        );
+
+        assertThatThrownBy(() -> service.generateChallengeQuiz(
+                "Calculus Review",
+                "Derivative rules",
+                List.of("Product rule"),
+                List.of(),
+                2,
+                "medium",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("LLM_INVALID_OUTPUT");
+    }
+
+    @Test
+    void generateChallengeQuiz_rejectsInvalidAnswerLetter() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildGeneratedQuizPayload();
+        ArrayNode questions = (ArrayNode) payload.get("questions");
+        ((ObjectNode) questions.get(0)).put("answer", "E");
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(payload),
+                generatedQuizResponseJson(payload)
+        );
+
+        assertThatThrownBy(() -> service.generateChallengeQuiz(
+                "Cell Respiration Review",
+                "Cell respiration summary",
+                List.of("ATP production"),
+                List.of(),
+                2,
+                "hard",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("LLM_INVALID_OUTPUT");
+    }
+
+    @Test
+    void generateChallengeQuiz_rejectsEmptyExplanation() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildGeneratedQuizPayload();
+        ArrayNode questions = (ArrayNode) payload.get("questions");
+        ((ObjectNode) questions.get(0)).put("explanation", " ");
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(payload),
+                generatedQuizResponseJson(payload)
+        );
+
+        assertThatThrownBy(() -> service.generateChallengeQuiz(
+                "Cell Respiration Review",
+                "Cell respiration summary",
+                List.of("ATP production"),
+                List.of(),
+                2,
+                "hard",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("LLM_INVALID_OUTPUT");
+    }
+
+    @Test
+    void generateChallengeQuiz_rejectsEmptyConcept() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildGeneratedQuizPayload();
+        ArrayNode questions = (ArrayNode) payload.get("questions");
+        ((ObjectNode) questions.get(0)).put("concept", " ");
+        when(responseSpec.body(String.class)).thenReturn(
+                generatedQuizResponseJson(payload),
+                generatedQuizResponseJson(payload)
+        );
+
+        assertThatThrownBy(() -> service.generateChallengeQuiz(
+                "Cell Respiration Review",
+                "Cell respiration summary",
+                List.of("ATP production"),
+                List.of(),
+                2,
+                "hard",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     private String studyPackResponseJson(ObjectNode payload) throws JsonProcessingException {

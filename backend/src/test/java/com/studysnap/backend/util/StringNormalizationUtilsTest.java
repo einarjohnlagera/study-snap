@@ -29,8 +29,8 @@ class StringNormalizationUtilsTest {
 
     @Test
     void normalizeForDuplicateCheck_returnsEmptyStringForNullOrNonAlphanumericValues() {
-        assertThat(StringNormalizationUtils.normalizeForDuplicateCheck(null)).isEqualTo("");
-        assertThat(StringNormalizationUtils.normalizeForDuplicateCheck("!!!")).isEqualTo("");
+        assertThat(StringNormalizationUtils.normalizeForDuplicateCheck(null)).isEmpty();
+        assertThat(StringNormalizationUtils.normalizeForDuplicateCheck("!!!")).isEmpty();
     }
 
     @Test
@@ -39,6 +39,14 @@ class StringNormalizationUtilsTest {
                 .isEqualTo("photosynthesis basics");
         assertThat(StringNormalizationUtils.normalizeForDuplicateCheck("Cell-cycle   101"))
                 .isEqualTo("cellcycle 101");
+    }
+
+    @Test
+    void normalizeForChoiceDuplicateCheck_preservesMathSymbolsWhileNormalizingWhitespaceAndCase() {
+        assertThat(StringNormalizationUtils.normalizeForChoiceDuplicateCheck("  U'V + uv'  "))
+                .isEqualTo("u'v + uv'");
+        assertThat(StringNormalizationUtils.normalizeForChoiceDuplicateCheck(" (u/v)^2 "))
+                .isEqualTo("(u/v)^2");
     }
 
     @Test
@@ -53,8 +61,8 @@ class StringNormalizationUtilsTest {
 
     @Test
     void countWords_and_hasWordCountBetween_workWithNormalizedWhitespace() {
-        assertThat(StringNormalizationUtils.countWords(null)).isEqualTo(0);
-        assertThat(StringNormalizationUtils.countWords("   ")).isEqualTo(0);
+        assertThat(StringNormalizationUtils.countWords(null)).isZero();
+        assertThat(StringNormalizationUtils.countWords("   ")).isZero();
         assertThat(StringNormalizationUtils.countWords("cell respiration and atp")).isEqualTo(4);
 
         assertThat(StringNormalizationUtils.hasWordCountBetween("cell respiration and atp", 1, 4)).isTrue();

@@ -12,13 +12,16 @@ import java.util.Set;
 @UtilityClass
 public class QuizValidationUtils {
 
-    public boolean hasBlankOrDuplicateChoices(List<String> choices) {
+    public boolean hasInvalidChoices(List<String> choices) {
+        if (choices == null || choices.size() != 4) {
+            return true;
+        }
         Set<String> normalizedChoices = new HashSet<>();
         for (String choice : choices) {
             if (StringNormalizationUtils.isBlank(choice)) {
                 return true;
             }
-            if (!normalizedChoices.add(StringNormalizationUtils.normalizeForDuplicateCheck(choice))) {
+            if (!normalizedChoices.add(StringNormalizationUtils.normalizeForChoiceDuplicateCheck(choice))) {
                 return true;
             }
         }
