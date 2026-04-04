@@ -69,7 +69,8 @@ export function SendFeedbackWidget({ mobileHidden = false }: Readonly<SendFeedba
         isOpen={open}
         onClose={closeModal}
         title="Send Feedback"
-        description="Share bugs, confusing UI, feature requests, or anything else that would make NoteLib better."
+        description="Found a bug? Something confusing? Have a feature idea? Tell us what happened or what you'd like to see in NoteLib. We read every message and use it to improve the app."
+        descriptionClassName="whitespace-pre-line"
         actions={successMessage ? (
           <div className="flex justify-end">
             <Button type="button" onClick={closeModal}>
@@ -107,14 +108,14 @@ export function SendFeedbackWidget({ mobileHidden = false }: Readonly<SendFeedba
               onChange={(event) => setMessage(event.target.value)}
               rows={6}
               maxLength={4000}
-              placeholder="Tell us what happened or what you’d like to see improved."
+              placeholder="Describe the bug, issue, or feature you'd like to suggest..."
               className="w-full rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
             />
             {error ? (
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
             ) : (
               <p className="text-xs text-foreground/60">
-                Include what felt broken, confusing, or missing. This goes straight to the internal launch review queue.
+                You can report bugs, confusing parts, or request features. This goes directly to our improvement list.
               </p>
             )}
           </div>
