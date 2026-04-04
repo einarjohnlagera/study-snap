@@ -71,6 +71,7 @@ const baseNote = {
   id: "note-1",
   title: "Test Note",
   subject: "Biology",
+  courseProgram: "Nursing",
   tags: ["cells"],
   content: "Cell content",
   visibility: "PRIVATE" as const,
@@ -221,7 +222,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.",
+        "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
@@ -364,6 +365,8 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
 
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=quiz");
@@ -384,9 +387,44 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
 
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Keep mine" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
 
     await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
+    });
+  });
+
+  it("applies selected AI metadata choices from note detail without clearing course/program", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      title: "My Note",
+      subject: "General Science",
+      tags: ["review"],
+      studyPackStatus: "DRAFT",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+
+    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use AI Subject" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Merge Tags/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
+        title: "My Note",
+        subject: "Biology",
+        courseProgram: "Nursing",
+        tags: ["review", "cells"],
+      }));
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
     });
   });

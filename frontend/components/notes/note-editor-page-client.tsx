@@ -11,6 +11,7 @@ import {
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
+  getMe,
   getNote,
   isEmailNotVerifiedError,
   isOcrLimitReachedError,
@@ -48,7 +49,7 @@ import {
   type NoteEntryMode,
   type NoteEntrySource,
 } from "@/lib/note-entry";
-import { hasExistingNoteMetadata } from "@/lib/note-metadata";
+import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
@@ -72,6 +73,7 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
   return {
     title: note.title ?? "",
     subject: note.subject ?? "",
+    courseProgram: note.courseProgram ?? "",
     content: note.content,
     tags: note.tags ?? [],
   };
@@ -109,6 +111,7 @@ export function NoteEditorPageClient({
   const [draft, setDraft] = useState<NoteEditorDraft>({
     title: "",
     subject: "",
+    courseProgram: "",
     content: "",
     tags: [],
   });
@@ -190,6 +193,32 @@ export function NoteEditorPageClient({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (isEditMode) {
+      return;
+    }
+
+    let active = true;
+    void getMe()
+      .then((me) => {
+        if (!active) {
+          return;
+        }
+        setDraft((previous) => (
+          previous.courseProgram.trim().length > 0
+            ? previous
+            : { ...previous, courseProgram: me.courseProgram ?? "" }
+        ));
+      })
+      .catch(() => {
+        // Best-effort default. Create Note still works without profile metadata.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isEditMode]);
 
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     setToastTone(tone);
@@ -379,9 +408,10 @@ export function NoteEditorPageClient({
   const buildRequest = useCallback(() => ({
     title: normalizeOptional(draft.title),
     subject: normalizeOptional(draft.subject),
+    courseProgram: normalizeOptional(draft.courseProgram),
     tags: draft.tags,
     content: draft.content,
-  }), [draft.content, draft.subject, draft.tags, draft.title]);
+  }), [draft.content, draft.courseProgram, draft.subject, draft.tags, draft.title]);
 
   const upsertNote = useCallback(async (): Promise<NoteResponse | null> => {
     if (contentEmpty) {
@@ -468,21 +498,6 @@ export function NoteEditorPageClient({
 
       const generated = await createStudyPackFromNote(saved.id);
       await refreshUsageSummary();
-      const hasUserMetadata = hasExistingNoteMetadata(saved);
-
-      if (!hasUserMetadata) {
-        const autoFillPayload = {
-          title: generated.title,
-          subject: generated.subject ?? null,
-          tags: generated.tags ?? [],
-          content: saved.content,
-        };
-        const updated = await updateNote(saved.id, autoFillPayload);
-        setDraft(toDraft(updated));
-        setCurrentNoteId(updated.id);
-        finalizeGenerationRedirect(saved.id);
-        return;
-      }
 
       setPendingSuggestion({
         noteId: saved.id,
@@ -518,17 +533,31 @@ export function NoteEditorPageClient({
     refreshUsageSummary,
   ]);
 
-  const applySuggestions = useCallback(async () => {
+  const applySuggestions = useCallback(async (selection: AiSuggestionSelection) => {
     if (!pendingSuggestion || applyingSuggestion) {
       return;
     }
 
     setApplyingSuggestion(true);
     try {
+      const nextMetadata = applyAiSuggestionSelection(
+        {
+          title: draft.title,
+          subject: draft.subject,
+          tags: draft.tags,
+        },
+        {
+          title: pendingSuggestion.title,
+          subject: pendingSuggestion.subject,
+          tags: pendingSuggestion.tags,
+        },
+        selection,
+      );
       const updated = await updateNote(pendingSuggestion.noteId, {
-        title: pendingSuggestion.title,
-        subject: pendingSuggestion.subject,
-        tags: pendingSuggestion.tags,
+        title: nextMetadata.title,
+        subject: nextMetadata.subject,
+        courseProgram: normalizeOptional(draft.courseProgram),
+        tags: nextMetadata.tags,
         content: draft.content,
       });
       setDraft(toDraft(updated));
@@ -541,7 +570,17 @@ export function NoteEditorPageClient({
     } finally {
       setApplyingSuggestion(false);
     }
-  }, [applyingSuggestion, draft.content, finalizeGenerationRedirect, pendingSuggestion, showToast]);
+  }, [
+    applyingSuggestion,
+    draft.content,
+    draft.courseProgram,
+    draft.subject,
+    draft.tags,
+    draft.title,
+    finalizeGenerationRedirect,
+    pendingSuggestion,
+    showToast,
+  ]);
 
   const keepMineAndContinue = useCallback(() => {
     if (!pendingSuggestion) {
@@ -667,12 +706,9 @@ export function NoteEditorPageClient({
         note={draft}
         onTitleChange={(value) => setDraft((previous) => ({ ...previous, title: value }))}
         onSubjectChange={(value) => setDraft((previous) => ({ ...previous, subject: value }))}
+        onCourseProgramChange={(value) => setDraft((previous) => ({ ...previous, courseProgram: value }))}
         onContentChange={(value) => setDraft((previous) => ({ ...previous, content: value }))}
-        onTagsChange={
-          isEditMode
-            ? (nextTags) => setDraft((previous) => ({ ...previous, tags: nextTags }))
-            : undefined
-        }
+        onTagsChange={(nextTags) => setDraft((previous) => ({ ...previous, tags: nextTags }))}
         onSave={() => {
           void handleSave();
         }}
@@ -689,7 +725,7 @@ export function NoteEditorPageClient({
         isCopying={isCopying}
         saveStateLabel={saveStateLabel}
         helperText={helperText}
-        showTagsSection={isEditMode}
+        showTagsSection
         studyPackMessage={studyPackMessage}
         importFile={importFile}
         importFileInputKey={importFileInputKey}
@@ -700,7 +736,7 @@ export function NoteEditorPageClient({
           void handleImportFileChange(file);
         }}
         disableContentEditing={contentLocked}
-        contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags."
+        contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."
         disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}
         firstStudyHintVisible={showFirstStudyHint}
         autoFocusContent={autoFocusContent}
@@ -720,14 +756,17 @@ export function NoteEditorPageClient({
 
       <AiSuggestionModal
         open={Boolean(pendingSuggestion)}
-        title={pendingSuggestion?.title ?? ""}
-        subject={pendingSuggestion?.subject ?? null}
-        tags={pendingSuggestion?.tags ?? []}
+        currentTitle={draft.title}
+        currentSubject={normalizeOptional(draft.subject)}
+        currentTags={draft.tags}
+        suggestedTitle={pendingSuggestion?.title ?? ""}
+        suggestedSubject={pendingSuggestion?.subject ?? null}
+        suggestedTags={pendingSuggestion?.tags ?? []}
         applying={applyingSuggestion}
-        onApply={() => {
-          void applySuggestions();
+        onApply={(selection) => {
+          void applySuggestions(selection);
         }}
-        onKeepMine={keepMineAndContinue}
+        onSkip={keepMineAndContinue}
       />
 
       <StudyPackLimitModal

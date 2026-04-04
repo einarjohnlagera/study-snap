@@ -26,7 +26,9 @@ Summary
 
 Subject
 - exactly 1 value
-- broad academic category only (for example: History, Biology, Chemistry, Physics, Mathematics, Literature, Computer Science, Geography, Economics)
+- choose the most specific academic subject that best organizes the note in a study library
+- avoid overly broad labels such as Medicine, Education, Law, or Engineering when a more specific subject is available
+- prefer labels such as Pharmacology, Anatomy and Physiology, Criminal Law, Calculus, Thermodynamics, Data Structures, or English Grammar
 - concise and human-readable
 - do not return a sentence
 
@@ -59,4 +61,3 @@ Content guidelines
 - Questions must be answerable from the notes
 - Avoid hallucinating specific details not present in the notes
 - Ignore OCR noise or gibberish lines if present
-

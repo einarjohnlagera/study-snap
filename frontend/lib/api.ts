@@ -668,6 +668,7 @@ export type UpdateStudyPackMetadataRequest = {
 export type UpsertNoteRequest = {
   title?: string | null;
   subject?: string | null;
+  courseProgram?: string | null;
   tags?: string[];
   content: string;
 };
@@ -676,6 +677,7 @@ export type NoteResponse = {
   id: string;
   title: string | null;
   subject: string | null;
+  courseProgram?: string | null;
   tags: string[];
   content: string;
   visibility: NoteVisibility;

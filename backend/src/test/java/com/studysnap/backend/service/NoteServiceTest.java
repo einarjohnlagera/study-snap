@@ -79,7 +79,18 @@ class NoteServiceTest {
     @Test
     void create_createsDraftPrivateNote() {
         UUID ownerUserId = UUID.randomUUID();
-        UpsertNoteRequest request = new UpsertNoteRequest("  Intro to React  ", "  Web Dev  ", List.of("react", "frontend"), "  hooks and state  ");
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        owner.setCourseProgram("Computer Science");
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "  Intro to React  ",
+                "  Web Dev  ",
+                null,
+                List.of("react", "frontend"),
+                "  hooks and state  "
+        );
 
         NoteResponse created = noteService.create(request, ownerUserId);
 
@@ -89,11 +100,13 @@ class NoteServiceTest {
         assertThat(saved.getOwnerUserId()).isEqualTo(ownerUserId);
         assertThat(saved.getStatus()).isEqualTo(NoteStatus.DRAFT);
         assertThat(saved.getVisibility()).isEqualTo(NoteVisibility.PRIVATE);
+        assertThat(saved.getCourseProgram()).isEqualTo("Computer Science");
         assertThat(saved.getContent()).isEqualTo("hooks and state");
         assertThat(saved.getCopiedFromUserId()).isNull();
         assertThat(saved.getCopiedFromPublic()).isFalse();
 
         assertThat(created.studyPackStatus()).isEqualTo("DRAFT");
+        assertThat(created.courseProgram()).isEqualTo("Computer Science");
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
@@ -107,13 +120,15 @@ class NoteServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(draftNote));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
 
-        UpsertNoteRequest request = new UpsertNoteRequest("New title", "Biology", List.of("cells"), "new content");
+        UpsertNoteRequest request = new UpsertNoteRequest("New title", "Biology", "Pre-Med", List.of("cells"), "new content");
         NoteResponse updated = noteService.update(noteId.toString(), request, ownerUserId);
 
         assertThat(draftNote.getTitle()).isEqualTo("New title");
         assertThat(draftNote.getSubject()).isEqualTo("Biology");
+        assertThat(draftNote.getCourseProgram()).isEqualTo("Pre-Med");
         assertThat(draftNote.getContent()).isEqualTo("new content");
         assertThat(updated.title()).isEqualTo("New title");
+        assertThat(updated.courseProgram()).isEqualTo("Pre-Med");
         assertThat(updated.content()).isEqualTo("new content");
     }
 
@@ -124,7 +139,7 @@ class NoteServiceTest {
         NoteEntity generatedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "locked content");
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(generatedNote));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", List.of("tag"), "edited content");
+        UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", "Nursing", List.of("tag"), "edited content");
 
 
         String id = noteId.toString();
@@ -143,6 +158,7 @@ class NoteServiceTest {
         NoteEntity source = buildNote(sourceNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "source content");
         source.setTitle("Source title");
         source.setSubject("Math");
+        source.setCourseProgram("Engineering");
         source.setTags(new String[]{"algebra"});
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
 
@@ -153,6 +169,7 @@ class NoteServiceTest {
         NoteEntity saved = captor.getValue();
         assertThat(saved.getStatus()).isEqualTo(NoteStatus.DRAFT);
         assertThat(saved.getSourceNoteId()).isEqualTo(sourceNoteId);
+        assertThat(saved.getCourseProgram()).isEqualTo("Engineering");
         assertThat(saved.getCopiedFromUserId()).isNull();
         assertThat(saved.getCopiedFromPublic()).isFalse();
         assertThat(copied.copiedFromUserId()).isNull();
@@ -167,6 +184,7 @@ class NoteServiceTest {
         NoteEntity source = buildNote(sourceNoteId, sourceOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "source content");
         source.setTitle("Public source");
         source.setSubject("History");
+        source.setCourseProgram("Humanities");
         source.setTags(new String[]{"ww2"});
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
 
@@ -178,6 +196,7 @@ class NoteServiceTest {
         assertThat(saved.getCopiedFromNoteId()).isEqualTo(sourceNoteId);
         assertThat(saved.getCopiedFromUserId()).isEqualTo(sourceOwnerUserId);
         assertThat(saved.getCopiedFromTitle()).isEqualTo("Public source");
+        assertThat(saved.getCourseProgram()).isEqualTo("Humanities");
         assertThat(saved.getCopiedFromPublic()).isTrue();
         assertThat(saved.getCopiedAt()).isNotNull();
 
@@ -345,6 +364,7 @@ class NoteServiceTest {
         note.setOwnerUserId(ownerUserId);
         note.setTitle("Title");
         note.setSubject("Subject");
+        note.setCourseProgram("Course");
         note.setTags(new String[]{"tag"});
         note.setContent(content);
         note.setStatus(status);

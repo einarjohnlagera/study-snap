@@ -102,12 +102,12 @@ Versioning model:
 - Generation does not overwrite existing generated content.
 - Users create a new version by copying a Note and generating from the copy.
 - Copy creates a new Note row with copied user-authored fields only:
-  - copied: `title`, `subject`, `tags`, `content`
+  - copied: `title`, `courseProgram`, `subject`, `tags`, `content`
   - not copied: `summary`, `key concepts`, `quizzes`, performance history, quiz sessions
 
 ## High-Level Data Ownership
 
-- `notes` stores user-authored fields (`title`, `subject`, `content`, `tags`, ownership metadata, state, visibility)
+- `notes` stores user-authored fields (`title`, `courseProgram`, `subject`, `content`, `tags`, ownership metadata, state, visibility)
 - `notes.subject` remains the persisted source of truth for subject values in v0.4.0
 - generated fields (`summary`, `key_concepts`, `quiz`) are linked to the same Note
 - review sessions (Quick Review, Challenge, Adaptive) link to Note-owned generated quiz context via `noteId`
@@ -481,7 +481,7 @@ Study Pack generation architecture:
 - generation remains note-first and uses the same persisted note content
 - backend generation context may carry:
   - `learnerLevel`
-  - `courseProgram`
+  - note `courseProgram` with user-profile fallback
   - note `subject`
   - note `tags`
 - current UI and prompt behavior remain unchanged; this context is preparation for smarter quiz generation in later releases
@@ -492,6 +492,8 @@ Filtering model:
 - distinct subject suggestions are backend-driven from persisted `notes.subject` values
 - `GET /api/subjects?scope=mine` returns distinct subjects from the authenticated user's notes
 - `GET /api/subjects?scope=public` returns distinct subjects from public notes only
+- custom subjects join future autocomplete suggestions after the note is saved
+- note-level `courseProgram` is stored now so later library filters can use persisted note metadata instead of only the profile default
 - the current system intentionally does not use a normalized `subjects` table yet
 
 ## Share and Public-Copy Architecture

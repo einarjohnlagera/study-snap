@@ -7,6 +7,7 @@ public record NoteResponse(
         String id,
         String title,
         String subject,
+        String courseProgram,
         List<String> tags,
         String content,
         String visibility,

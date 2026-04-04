@@ -47,6 +47,7 @@ Copy behavior:
 
 - Copy includes user-authored fields:
   - title
+  - courseProgram
   - subject
   - tags
   - note content
@@ -74,7 +75,7 @@ This supports iterative learning and avoids accidental overwrites.
 
 High-level model:
 
-- `notes` table stores user-authored fields (`title`, `subject`, `content`, `tags`).
+- `notes` table stores user-authored fields (`title`, `courseProgram`, `subject`, `content`, `tags`).
 - `notes.visibility` controls whether notes are private or listed in Public Library.
 - Generated fields are stored and linked to the same Note (`summary`, `key concepts`, `quizzes`).
 - Quiz sessions and performance are linked by `noteId`.
@@ -258,8 +259,10 @@ Favicon requirements:
   - `/notes/{id}/edit` for Draft notes -> edit mode with `Save Changes`, `Cancel`, and `Generate`
   - `/notes/{id}/edit` for Study Pack Ready notes -> metadata edit mode with `Save Changes`, `Cancel`, and `Make a Copy`
 - Existing notes on `/notes/{id}/edit` must render `Edit Note` copy, not the create-note title/description.
-- When a note already has a Study Pack, Note Editor keeps `title`, `subject`, and `tags` editable but locks `content` with the helper:
-  - `Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.`
+- Note Editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, and `content`.
+- New notes default `courseProgram` from the user's profile, but it remains editable per note.
+- When a note already has a Study Pack, Note Editor keeps `title`, `courseProgram`, `subject`, and `tags` editable but locks `content` with the helper:
+  - `Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.`
 - Generate button copy should stay short and may vary by `profileType` without changing backend generation:
   - `STUDENT` -> `Generate`
   - `BOARD_EXAM` -> `Practice`
@@ -494,6 +497,7 @@ Users can:
   - Library and Note Editor use the authenticated `mine` subject scope
   - Public Library uses the `public` subject scope
   - users can still type a custom subject and save it directly into `notes.subject`
+  - saved custom subjects become future suggestions once the note is persisted
   - no normalized `subjects` table is required for the current version
 - Library and Public Library should share the same control order:
   - `Search`
@@ -665,8 +669,17 @@ Page responsibilities:
 
 - `Create Note` and `Note Detail` are both valid Study Pack generation entry points for draft notes.
 - Both generation entry points must use the same metadata-suggestion behavior for AI-generated `title`, `subject`, and `tags`.
-- If the note has no existing metadata, generated metadata may be applied automatically.
-- If the note already has metadata, users should see the shared suggestion review modal before replacing their values.
+- Generated metadata must never silently overwrite user-entered `title` or `subject`.
+- After generation, users should see the shared suggestion review modal with per-field choices:
+  - `Title` -> `Keep My Title` or `Use AI Title`
+  - `Subject` -> `Keep My Subject` or `Use AI Subject`
+  - `Tags` -> `Keep My Tags`, `Merge Tags`, or `Use AI Tags`
+- Default AI suggestion choices should stay user-safe:
+  - existing `title` -> default `Keep My Title`
+  - existing `subject` -> default `Keep My Subject`
+  - existing `tags` -> default `Merge Tags`
+  - no existing `tags` -> default `Use AI Tags`
+- AI subject suggestions should prefer specific academic library-friendly subjects instead of broad catch-all categories when the notes support that specificity.
 - Backend generation context may also carry `learnerLevel`, `courseProgram`, note `subject`, and note `tags` for future prompt personalization without changing current Study Pack UI yet.
 
 ### Authentication Session Handling

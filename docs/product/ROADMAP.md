@@ -44,6 +44,9 @@ Primary focus:
 
 - Learner Level on the user profile and onboarding
 - optional Course / Program metadata for learner context
+- note-level `courseProgram` metadata with profile-defaulted note creation
+- stronger note metadata quality through subject autocomplete, saved custom subjects, and tag guidance
+- field-level AI metadata suggestions so users keep final control of title, subject, and tags
 - a dedicated `Learning Profile` card on private Profile
 - richer Public Profile identity with learner-level/course context when provided
 - generation-context plumbing so future quiz prompts can use learner metadata safely
