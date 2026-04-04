@@ -40,47 +40,59 @@ export function Navbar() {
           <span className="truncate whitespace-nowrap text-sm font-semibold sm:text-base">NoteLib</span>
         </Link>
 
-        <nav className="hidden items-center gap-2 md:flex">
-          {PUBLIC_NAV.map((item) => (
+        <div className="hidden items-center gap-4 md:flex">
+          <nav className="flex items-center gap-2">
+            {PUBLIC_NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActivePublicRoute(pathname, item.href) ? "page" : undefined}
+                className={`inline-flex h-16 items-center border-b-2 px-2 text-sm font-medium transition-colors ${
+                  isActivePublicRoute(pathname, item.href)
+                    ? "border-blue-600 text-foreground dark:border-blue-400"
+                    : "border-transparent text-foreground/80 hover:border-border hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3 border-l border-border pl-4">
+            <ThemeToggle />
+          </div>
+
+          <div className="flex items-center gap-2">
             <Link
-              key={item.href}
-              href={item.href}
-              aria-current={isActivePublicRoute(pathname, item.href) ? "page" : undefined}
-              className={`inline-flex h-16 items-center border-b-2 px-2 text-sm font-medium transition-colors ${
-                isActivePublicRoute(pathname, item.href)
-                  ? "border-blue-600 text-foreground dark:border-blue-400"
-                  : "border-transparent text-foreground/80 hover:border-border hover:text-foreground"
-              }`}
+              href="/login"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
             >
-              {item.label}
+              Login
             </Link>
-          ))}
-          <ThemeToggle />
-          <Link
-            href="/login"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Login
-          </Link>
-          <Link href="/signup" className={buttonVariants({ size: "sm" })}>
-            Get Started
-          </Link>
-        </nav>
+            <Link href="/signup" className={buttonVariants({ size: "sm" })}>
+              Get Started
+            </Link>
+          </div>
+        </div>
 
         <div className="flex shrink-0 items-center gap-2 md:hidden">
-          <ThemeToggle />
-          <Link href="/signup" className={buttonVariants({ size: "sm", className: "px-3" })}>
-            Get Started
-          </Link>
-          <button
-            type="button"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted/50"
-            aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-            aria-expanded={mobileMenuOpen}
-            onClick={() => setMobileMenuOpen((open) => !open)}
-          >
-            {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-          </button>
+          {!mobileMenuOpen ? (
+            <Link href="/signup" className={buttonVariants({ size: "sm", className: "px-3" })}>
+              Get Started
+            </Link>
+          ) : null}
+          <div className={`flex items-center gap-2 ${mobileMenuOpen ? "" : "border-l border-border pl-2"}`}>
+            <ThemeToggle />
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted/50"
+              aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={mobileMenuOpen}
+              onClick={() => setMobileMenuOpen((open) => !open)}
+            >
+              {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -93,7 +105,7 @@ export function Navbar() {
             onClick={() => setMobileMenuOpen(false)}
           />
           <div className="absolute inset-x-4 top-full z-40 mt-3 rounded-2xl border border-border bg-background p-3 shadow-lg md:hidden">
-            <nav className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1">
               {PUBLIC_NAV.map((item) => (
                 <Link
                   key={item.href}
@@ -109,24 +121,26 @@ export function Navbar() {
                   {item.label}
                 </Link>
               ))}
+            </div>
+
+            <div className="my-3 border-t border-border" aria-hidden="true" />
+
+            <div className="flex flex-col gap-2">
               <Link
                 href="/login"
-                className={buttonVariants({ variant: "outline", className: "mt-2 w-full justify-center" })}
+                className={buttonVariants({ variant: "outline", className: "w-full justify-center" })}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Login
               </Link>
-              <div className="mt-2 flex justify-center">
-                <ThemeToggle />
-              </div>
               <Link
                 href="/signup"
-                className={buttonVariants({ className: "mt-2 w-full justify-center" })}
+                className={buttonVariants({ className: "w-full justify-center" })}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Get Started
               </Link>
-            </nav>
+            </div>
           </div>
         </>
       ) : null}

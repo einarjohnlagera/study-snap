@@ -81,6 +81,13 @@ Core loop:
   - `Pricing`
   - `Login`
   - `Get Started`
+- Public navbar hierarchy must stay clear:
+  - navigation links grouped together
+  - theme toggle treated as a utility control, not a CTA
+  - `Login` as the secondary action
+  - `Get Started` as the primary action
+- On mobile public nav, keep the theme toggle in the top-header utility cluster and keep the opened menu focused on navigation links plus `Login` and `Get Started`.
+- Do not duplicate the theme toggle or primary CTA between the public header and the opened mobile menu.
 - Keep the home page focused on hero, how-it-works, features, Free vs Premium pricing, demo access, and signup CTA.
 - Demo access must be available without signup.
 - Public Library should be treated as a public discovery feature and must remain accessible without login.

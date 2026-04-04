@@ -4,6 +4,21 @@
 
 Keep in-app navigation predictable across private workspace, discovery, and public showcase routes.
 
+## Public Navbar Hierarchy
+
+- Shared public pages should reuse one navbar hierarchy across landing, learn, pricing, auth, and anonymous public-library flows.
+- Public nav links should stay visually grouped as navigation.
+- Theme toggle should stay in the utility cluster, not between `Login` and `Get Started`.
+- `Login` is the secondary public action.
+- `Get Started` is the primary public CTA.
+- On mobile, the opened menu should show:
+  - nav links
+  - a divider
+  - `Login`
+  - `Get Started`
+- Keep the theme toggle in the mobile header utility cluster instead of duplicating it inside the opened menu.
+- Do not duplicate the visible primary CTA between the public header and the opened mobile menu.
+
 ## Public Profile Back Behavior
 
 - Public Profile can be opened from Public Library, Public Note, or other entry points.
