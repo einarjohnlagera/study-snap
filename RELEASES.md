@@ -18,6 +18,9 @@
 - Note Editor now includes `Course / Program`, subject autocomplete, optional tags guidance, and the same metadata shape in both create and edit modes.
 - Saved custom subjects now feed future autocomplete suggestions through the existing distinct-subject backend source.
 - AI-generated subjects now bias toward more specific academic library labels instead of broad catch-all categories.
+- Quiz generation now uses learner-level-aware prompt guidance across Quick Review, Challenge Quiz, and Adaptive Practice, defaulting to college-level when the user has no saved learner level.
+- Quantitative notes can now produce computation and problem-solving questions with step-based explanations when the note context supports it.
+- Challenge Quiz and Adaptive Practice now require richer explanations and concept labels in their generated quiz payloads.
 
 ### Technical Changes
 
@@ -25,6 +28,7 @@
 - Backend Study Pack generation now prepares learner-level and course/program metadata in generation context for future prompt tuning, alongside note subject and tags.
 - Refactored the OpenAI Study Pack service to share request/response/error handling across Study Pack, study-tip, and quiz generation flows, and added direct unit coverage for the refactored service.
 - Added `notes.course_program` plus note-service create/update/copy handling so note metadata can diverge from the profile default when needed.
+- Unified backend quiz-generation contracts onto strict JSON with required `answer`, `explanation`, and `concept` fields for more reliable parsing.
 
 ### Fixes
 

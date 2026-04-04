@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
@@ -13,8 +14,13 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.BillingCycle;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ThemePreference;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
@@ -154,7 +160,7 @@ class ChallengeQuizServiceTest {
 
         verify(authService).requireEmailVerified(userId);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any());
+        verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
@@ -214,13 +220,20 @@ class ChallengeQuizServiceTest {
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any()
         )).thenReturn(List.of(previousQuickReview));
+        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.BOARD_EXAM_REVIEW, "Nursing"));
         when(llmStudyPackService.generateChallengeQuiz(
                 "Pack title",
                 "Summary",
                 List.of("Concept"),
                 List.of("Practice?"),
                 10,
-                "easy"
+                "easy",
+                new StudyPackGenerationContext(
+                        LearnerLevel.BOARD_EXAM_REVIEW,
+                        "Nursing",
+                        null,
+                        List.of()
+                )
         )).thenReturn(List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
@@ -241,6 +254,36 @@ class ChallengeQuizServiceTest {
         assertThat(response.sessionId()).isNotNull();
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
+    }
+
+    private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {
+        return new MeResponse(
+                userId.toString(),
+                "user@example.com",
+                null,
+                "Test",
+                "User",
+                "Test User",
+                null,
+                learnerLevel,
+                courseProgram,
+                true,
+                null,
+                null,
+                null,
+                null,
+                true,
+                true,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                0L,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.FREE,
+                null
+        );
     }
 
     @Test

@@ -6,8 +6,26 @@ RULES:
 - Do NOT include unrelated topics.
 - Do NOT repeat or rephrase questions.
 - Questions must reinforce understanding.
+- Learner level target: {LEARNER_LEVEL}.
+- {LEARNER_LEVEL_GUIDANCE}
+- {COMPUTATION_GUIDANCE}
+- {TIME_EXPECTATION}
 - Each question must have 4 choices.
+- Answer must be exactly one of: A, B, C, D.
 - Exactly 1 choice must be correct.
+- Explanation is required for every question.
+- Concept is required for every question.
 - Use the provided excluded question list as hard constraints.
-- No explanations.
-- JSON only.
+- Return ONLY valid JSON with this structure:
+  {
+    "questions": [
+      {
+        "question": "...",
+        "choices": ["...", "...", "...", "..."],
+        "answer": "A",
+        "explanation": "...",
+        "concept": "..."
+      }
+    ]
+  }
+- Do not include markdown, comments, or text before or after JSON.

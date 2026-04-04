@@ -59,12 +59,12 @@ class OpenAiLlmStudyPackServiceTest {
                 restClient,
                 new OpenAiPromptResources(
                         "System prompt",
-                        "Developer prompt with {QUIZ_COUNT} questions",
+                        "Developer prompt with {QUIZ_COUNT} questions for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                         objectMapper.createObjectNode(),
                         "Challenge quiz system prompt",
-                        "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY}",
+                        "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                         "Adaptive practice system prompt",
-                        "Adaptive practice developer prompt for {QUESTION_COUNT}"
+                        "Adaptive practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
                 )
         );
 
@@ -99,6 +99,8 @@ class OpenAiLlmStudyPackServiceTest {
                         "What molecule carries electrons to the ETC?",
                         "What final molecule accepts electrons in aerobic respiration?"
                 );
+        assertThat(content.quiz().getFirst().answer()).isEqualTo("Produce ATP");
+        assertThat(content.quiz().getFirst().explanation()).isEqualTo("ATP is the usable energy output of cell respiration.");
         assertThat(content.modelUsed()).isEqualTo("gpt-4.1-mini");
         assertThat(content.inputTokens()).isEqualTo(42);
         assertThat(content.outputTokens()).isEqualTo(84);
@@ -183,6 +185,32 @@ class OpenAiLlmStudyPackServiceTest {
                 });
     }
 
+    @Test
+    void generateChallengeQuiz_mapsAnswerLetterAndExplanation() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
+
+        List<QuizItem> quizItems = service.generateChallengeQuiz(
+                "Cell Respiration Review",
+                "Cell respiration summary",
+                List.of("ATP production"),
+                List.of("What is the main goal of cell respiration?"),
+                2,
+                "hard",
+                new StudyPackGenerationContext(
+                        LearnerLevel.BOARD_EXAM_REVIEW,
+                        "Biology",
+                        "Biology",
+                        List.of("cells", "respiration")
+                )
+        );
+
+        assertThat(quizItems).hasSize(2);
+        assertThat(quizItems.getFirst().answer()).isEqualTo("Electron transport chain");
+        assertThat(quizItems.getFirst().concept()).isEqualTo("ATP production");
+        assertThat(quizItems.getFirst().explanation()).isEqualTo("The electron transport chain produces most ATP during aerobic respiration.");
+    }
+
     private String studyPackResponseJson(ObjectNode payload) throws JsonProcessingException {
         ObjectNode responseJson = objectMapper.createObjectNode();
         responseJson.put("model", "gpt-4.1-mini");
@@ -191,6 +219,13 @@ class OpenAiLlmStudyPackServiceTest {
         usage.put("input_tokens", 42);
         usage.put("output_tokens", 84);
         usage.putObject("input_tokens_details").put("cached_tokens", 7);
+        return objectMapper.writeValueAsString(responseJson);
+    }
+
+    private String generatedQuizResponseJson(ObjectNode payload) throws JsonProcessingException {
+        ObjectNode responseJson = objectMapper.createObjectNode();
+        responseJson.put("model", "gpt-4.1-mini");
+        responseJson.put("output_text", objectMapper.writeValueAsString(payload));
         return objectMapper.writeValueAsString(responseJson);
     }
 
@@ -226,44 +261,77 @@ class OpenAiLlmStudyPackServiceTest {
         quiz.add(promptQuizItem(
                 "What is the main goal of cell respiration?",
                 List.of("Store oxygen", "Produce ATP", "Build proteins", "Copy DNA"),
-                1,
+                "B",
                 "ATP production"
         ));
         quiz.add(promptQuizItem(
                 "Which stage produces the most ATP?",
                 List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
-                2,
+                "C",
                 "Electron transport chain"
         ));
         quiz.add(promptQuizItem(
                 "Where does glycolysis happen?",
                 List.of("Nucleus", "Cytoplasm", "Mitochondria", "Ribosome"),
-                1,
+                "B",
                 "Glycolysis"
         ));
         quiz.add(promptQuizItem(
                 "What molecule carries electrons to the ETC?",
                 List.of("ATP", "DNA", "NADH", "Water"),
-                2,
+                "C",
                 "NADH"
         ));
         quiz.add(promptQuizItem(
                 "What final molecule accepts electrons in aerobic respiration?",
                 List.of("Carbon dioxide", "Glucose", "Oxygen", "Pyruvate"),
-                2,
+                "C",
                 "Oxygen"
         ));
         return payload;
     }
 
-    private ObjectNode promptQuizItem(String question, List<String> choices, int answerIndex, String concept) {
+    private ObjectNode buildGeneratedQuizPayload() {
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode questions = payload.putArray("questions");
+        questions.add(generatedQuizItem(
+                "Which stage generates the most ATP in aerobic respiration?",
+                List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
+                "C",
+                "The electron transport chain produces most ATP during aerobic respiration.",
+                "ATP production"
+        ));
+        questions.add(generatedQuizItem(
+                "What is the immediate product of glycolysis before aerobic processing continues?",
+                List.of("Acetyl-CoA", "Pyruvate", "Carbon dioxide", "Water"),
+                "B",
+                "Glycolysis ends with pyruvate, which is then processed further when oxygen is available.",
+                "Glycolysis"
+        ));
+        return payload;
+    }
+
+    private ObjectNode promptQuizItem(String question, List<String> choices, String answer, String concept) {
         ObjectNode item = objectMapper.createObjectNode();
         item.put("question", question);
         ArrayNode choiceArray = item.putArray("choices");
         choices.forEach(choiceArray::add);
-        item.put("answerIndex", answerIndex);
+        item.put("answer", answer);
         item.put("concept", concept);
-        item.put("explanation", "Fallback explanation");
+        item.put("explanation", question.equals("What is the main goal of cell respiration?")
+                ? "ATP is the usable energy output of cell respiration."
+                : "This question checks the " + concept + " concept.");
+        return item;
+    }
+
+    private ObjectNode generatedQuizItem(String question, List<String> choices, String answer, String explanation, String concept) {
+        ObjectNode item = objectMapper.createObjectNode();
+        item.put("question", question);
+        ArrayNode choiceArray = item.putArray("choices");
+        choices.forEach(choiceArray::add);
+        item.put("answer", answer);
+        item.put("explanation", explanation);
+        item.put("concept", concept);
         return item;
     }
 }

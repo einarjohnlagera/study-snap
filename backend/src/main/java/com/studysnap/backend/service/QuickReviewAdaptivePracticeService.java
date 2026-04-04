@@ -1,6 +1,7 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
@@ -20,6 +21,7 @@ import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -126,13 +128,15 @@ public class QuickReviewAdaptivePracticeService {
         aiRateLimitService.assertAllowed(userId, planType, "adaptive-practice");
         int questionCount = resolveAdaptiveQuestionCount(weakConcepts.size());
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
+        StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         List<QuizItem> generatedQuiz = llmStudyPackService.generateAdaptivePracticeQuiz(
             studyPack.getTitle(),
             studyPack.getSummary(),
             studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
             weakConcepts,
             disallowedQuestions,
-            questionCount
+            questionCount,
+            generationContext
         );
         List<QuizItem> adaptiveQuiz = QuizDeduplicationUtils.uniqueQuestions(
             generatedQuiz,
@@ -287,6 +291,16 @@ public class QuickReviewAdaptivePracticeService {
             return MID_QUESTION_COUNT;
         }
         return HIGH_QUESTION_COUNT;
+    }
+
+    private StudyPackGenerationContext buildQuizGenerationContext(UUID userId, StudyPackEntity studyPack) {
+        MeResponse me = authService.getMe(userId);
+        return new StudyPackGenerationContext(
+            me.learnerLevel(),
+            me.courseProgram(),
+            studyPack.getSubject(),
+            studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
+        );
     }
 
     private List<String> extractQuestionTexts(List<QuizItem> quiz) {

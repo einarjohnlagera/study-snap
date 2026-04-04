@@ -45,7 +45,8 @@
         "required": [
           "question",
           "choices",
-          "answerIndex",
+          "answer",
+          "explanation",
           "concept"
         ],
         "properties": {
@@ -60,10 +61,13 @@
               "type": "string"
             }
           },
-          "answerIndex": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 3
+          "answer": {
+            "type": "string",
+            "enum": ["A", "B", "C", "D"]
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 1
           },
           "concept": {
             "type": "string",

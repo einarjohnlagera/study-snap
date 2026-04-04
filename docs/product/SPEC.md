@@ -625,15 +625,23 @@ Page responsibilities:
 ### Quick Review
 
 - Primary quiz mode for a Study Pack-ready Note
+- Generated during Study Pack generation and stored on the Note-owned Study Pack payload
 - Immediate correctness feedback (`green = correct`, `red = incorrect`)
 - Retry incorrect questions once
 - Optional confidence feedback (`HIGH`, `MEDIUM`, `LOW`)
 - Session history persists for progress tracking
+- Quick Review quiz generation rules:
+  - exactly 5 questions
+  - learner-level aware, defaulting to `College` when the user has no saved learner level
+  - optimized for fast concept checks (~30 to 60 seconds per question)
+  - focused on definitions, key ideas, and direct understanding rather than exam-style traps
+  - quantitative topics may include a simple computation only when clearly supported by the notes
+  - each question must include 4 choices, an `A`/`B`/`C`/`D` answer mapping, explanation, and concept metadata
 
 ### Challenge Quiz (Premium)
 
 - Timed exam-style mode (10 minutes)
-- Generated from Study Pack summary + key concepts only
+- Generated from Study Pack summary + key concepts, plus learner-level and note-context metadata
 - Difficulty and question count adapt by latest Quick Review score:
   - `<50`: 10 questions, easy-medium
   - `<80`: 12 questions, medium
@@ -641,16 +649,48 @@ Page responsibilities:
 - Reuse existing in-progress session to avoid duplicate LLM calls
 - Persist in-progress state (answers, index, timer basis)
 - Usage limit: 50/month (separate from Study Pack generation quota)
+- Challenge Quiz generation rules:
+  - learner-level aware, defaulting to `College` when the user has no saved learner level
+  - exam-style and analysis-oriented
+  - should not repeat Quick Review questions for the same Study Pack
+  - quantitative subjects may include computation, formula-based, and multi-step problem-solving questions
+  - explanations should teach like a tutor; computation explanations should show short step-by-step solution flow
+  - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
 
 ### Adaptive Practice (Premium)
 
-- Generated from Study Pack summary + key concepts + weak concepts only
+- Generated from Study Pack summary + key concepts + weak concepts, plus learner-level and note-context metadata
 - Question count by weak-concept volume:
   - `<=2`: 5
   - `<=4`: 7
   - `>=5`: 10
 - Reuse existing in-progress session to avoid duplicate LLM calls
 - Usage limit: 50/month (separate from Study Pack generation quota)
+- Adaptive Practice generation rules:
+  - weak-concept reinforcement only; do not drift into unrelated topics
+  - learner-level aware, defaulting to `College` when the user has no saved learner level
+  - slightly simpler and more targeted than Challenge Quiz
+  - quantitative weak concepts may use focused numerical questions when appropriate
+  - explanations should reinforce the concept clearly and step through computations when applicable
+  - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
+
+### Quiz Generation Reliability
+
+- Quiz-generation prompts must return valid JSON only, with no markdown or extra prose outside the JSON object.
+- Generated quiz items must always include:
+  - `question`
+  - `choices` (exactly 4)
+  - `answer` (`A`, `B`, `C`, or `D`)
+  - `explanation`
+  - `concept`
+- Learner level should influence complexity:
+  - `Grade School` -> very simple, direct questions
+  - `Junior High` / `Senior High` -> concept understanding plus simple problem solving
+  - `College` -> deeper understanding and moderate analysis
+  - `Board Exam Review` -> exam-style, situational, multi-step reasoning
+  - `Professional` -> applied, real-world, case-based
+  - `Personal Learning` -> practical and accessible, around a college-foundation baseline
+- If learner level is missing, backend prompt construction should default quiz difficulty to `College`.
 
 ## Plan Usage Display
 

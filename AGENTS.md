@@ -472,6 +472,18 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
 - backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags` for future prompt tuning without changing current UI behavior.
 
+### Quiz Generation Rule
+
+- Quick Review comes from the Study Pack quiz generated during note generation and should stay lightweight, fast, and learner-level aware.
+- Challenge Quiz and Adaptive Practice use separate LLM generation flows and must receive learner-level context, defaulting to `COLLEGE` when the user has no saved learner level.
+- Generated quiz JSON contracts must stay strict:
+  - exactly 4 choices
+  - `answer` must be `A` / `B` / `C` / `D`
+  - `explanation` is required
+  - `concept` is required
+- Quantitative subjects should allow computation and problem-solving questions when the note context supports them.
+- Computation explanations should show short step-by-step solution flow rather than a one-line answer.
+
 ## UI Terminology (Use Consistently)
 
 - `Dashboard`
