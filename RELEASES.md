@@ -18,6 +18,7 @@
 - Note Editor now includes `Course / Program`, subject autocomplete, optional tags guidance, and the same metadata shape in both create and edit modes.
 - Saved custom subjects now feed future autocomplete suggestions through the existing distinct-subject backend source.
 - AI-generated subjects now bias toward more specific academic library labels instead of broad catch-all categories.
+- The AI Suggestions modal now uses a compact review layout with field-by-field comparisons, tag chips, a live preview, and a sticky mobile footer.
 - Quiz generation now uses learner-level-aware prompt guidance across Quick Review, Challenge Quiz, and Adaptive Practice, defaulting to college-level when the user has no saved learner level.
 - Quantitative notes can now produce computation and problem-solving questions with step-based explanations when the note context supports it.
 - Challenge Quiz and Adaptive Practice now require richer explanations and concept labels in their generated quiz payloads.

@@ -10,6 +10,9 @@ type AppModalProps = {
   children?: ReactNode;
   actions?: ReactNode;
   panelClassName?: string;
+  headerClassName?: string;
+  contentClassName?: string;
+  actionsClassName?: string;
   descriptionClassName?: string;
 };
 
@@ -38,6 +41,9 @@ export function AppModal({
   children,
   actions,
   panelClassName,
+  headerClassName,
+  contentClassName,
+  actionsClassName,
   descriptionClassName,
 }: Readonly<AppModalProps>) {
   const titleId = useId();
@@ -143,7 +149,7 @@ export function AppModal({
           event.stopPropagation();
         }}
       >
-        <div className="space-y-2">
+        <div className={`space-y-2 ${headerClassName ?? ""}`}>
           <h2 id={titleId} className="text-lg font-semibold text-foreground">
             {title}
           </h2>
@@ -156,8 +162,8 @@ export function AppModal({
             </p>
           ) : null}
         </div>
-        {children ? <div className="mt-4">{children}</div> : null}
-        {actions ? <div className="mt-5">{actions}</div> : null}
+        {children ? <div className={`mt-4 ${contentClassName ?? ""}`}>{children}</div> : null}
+        {actions ? <div className={`mt-5 ${actionsClassName ?? ""}`}>{actions}</div> : null}
       </div>
     </div>
   );
