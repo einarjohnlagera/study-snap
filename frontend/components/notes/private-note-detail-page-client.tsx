@@ -16,6 +16,7 @@ import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
@@ -59,7 +60,8 @@ import {
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
-import { hasExistingNoteMetadata } from "@/lib/note-metadata";
+import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
+import { COURSE_PROGRAM_SUGGESTIONS } from "@/lib/learning-profile";
 import { cn } from "@/lib/utils";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
@@ -207,10 +209,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [metadataDraft, setMetadataDraft] = useState<{
     title: string;
     subject: string;
+    courseProgram: string;
     tags: string[];
   }>({
     title: "",
     subject: "",
+    courseProgram: "",
     tags: [],
   });
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
@@ -398,6 +402,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setMetadataDraft({
       title: note.title ?? "",
       subject: note.subject ?? "",
+      courseProgram: note.courseProgram ?? "",
       tags: [...(note.tags ?? [])],
     });
   }, [isInlineMetadataEditMode, note]);
@@ -524,17 +529,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         setFirstStudyOnboardingStep(authUser.id, "study-pack-ready");
         setFirstStudyStep("study-pack-ready");
       }
-      if (!hasExistingNoteMetadata(note)) {
-        const updated = await updateNote(note.id, {
-          title: generated.title,
-          subject: generated.subject ?? null,
-          tags: generated.tags ?? [],
-          content: note.content,
-        });
-        setNote(updated);
-        finalizeGeneratedRedirect(note.id);
-        return;
-      }
       setPendingSuggestion({
         noteId: note.id,
         title: generated.title,
@@ -581,6 +575,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setMetadataDraft({
       title: note.title ?? "",
       subject: note.subject ?? "",
+      courseProgram: note.courseProgram ?? "",
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -591,16 +586,30 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
   }, [isDraft, note, pathname, router, searchParams]);
 
-  const applySuggestions = useCallback(async () => {
+  const applySuggestions = useCallback(async (selection: AiSuggestionSelection) => {
     if (!note || !pendingSuggestion || applyingSuggestion) {
       return;
     }
     setApplyingSuggestion(true);
     try {
+      const nextMetadata = applyAiSuggestionSelection(
+        {
+          title: note.title,
+          subject: note.subject,
+          tags: note.tags,
+        },
+        {
+          title: pendingSuggestion.title,
+          subject: pendingSuggestion.subject,
+          tags: pendingSuggestion.tags,
+        },
+        selection,
+      );
       const updated = await updateNote(pendingSuggestion.noteId, {
-        title: pendingSuggestion.title,
-        subject: pendingSuggestion.subject,
-        tags: pendingSuggestion.tags,
+        title: nextMetadata.title,
+        subject: nextMetadata.subject,
+        courseProgram: note.courseProgram ?? null,
+        tags: nextMetadata.tags,
         content: note.content,
       });
       setNote(updated);
@@ -665,6 +674,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setMetadataDraft({
         title: note.title ?? "",
         subject: note.subject ?? "",
+        courseProgram: note.courseProgram ?? "",
         tags: [...(note.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -681,6 +691,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setMetadataDraft({
       title: note.title ?? "",
       subject: note.subject ?? "",
+      courseProgram: note.courseProgram ?? "",
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -713,6 +724,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       const updated = await updateNote(note.id, {
         title: normalizeMetadataInput(metadataDraft.title),
         subject: normalizeMetadataInput(metadataDraft.subject),
+        courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
         tags: metadataDraft.tags,
         content: note.content,
       });
@@ -720,6 +732,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setMetadataDraft({
         title: updated.title ?? "",
         subject: updated.subject ?? "",
+        courseProgram: updated.courseProgram ?? "",
         tags: [...(updated.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -1044,6 +1057,22 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   />
                 </div>
                 <div className="space-y-2">
+                  <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                    Course / Program
+                  </label>
+                  <SuggestionCombobox
+                    id="note-course-program-inline"
+                    value={metadataDraft.courseProgram}
+                    options={COURSE_PROGRAM_SUGGESTIONS.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
+                    onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
+                    placeholder="Choose or type a course/program"
+                    helperText="Keep your course/program aligned to this note, or customize it when the note belongs somewhere else."
+                    allowCustom
+                    toggleLabel="Toggle course suggestions"
+                    customOptionLabel="Custom"
+                  />
+                </div>
+                <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Tags</p>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input
@@ -1064,6 +1093,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       Add tag
                     </Button>
                   </div>
+                  <p className="text-xs text-foreground/60">
+                    Tags help you organize and find your notes later. Add 3-5 keywords like: formulas, anatomy, derivatives, grammar.
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {metadataDraft.tags.length > 0 ? metadataDraft.tags.map((tag) => (
                       <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75">
@@ -1108,7 +1140,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             )}
             {isInlineMetadataEditMode ? (
               <p className="text-xs text-foreground/70">
-                Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.
+                Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.
               </p>
             ) : isDraft ? (
               <p className="text-xs text-foreground/70">
@@ -1333,14 +1365,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
       <AiSuggestionModal
         open={Boolean(pendingSuggestion)}
-        title={pendingSuggestion?.title ?? ""}
-        subject={pendingSuggestion?.subject ?? null}
-        tags={pendingSuggestion?.tags ?? []}
+        currentTitle={note?.title ?? ""}
+        currentSubject={note?.subject ?? null}
+        currentTags={note?.tags ?? []}
+        suggestedTitle={pendingSuggestion?.title ?? ""}
+        suggestedSubject={pendingSuggestion?.subject ?? null}
+        suggestedTags={pendingSuggestion?.tags ?? []}
         applying={applyingSuggestion}
-        onApply={() => {
-          void applySuggestions();
+        onApply={(selection) => {
+          void applySuggestions(selection);
         }}
-        onKeepMine={keepMineAndContinue}
+        onSkip={keepMineAndContinue}
       />
 
       <AppModal

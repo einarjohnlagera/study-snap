@@ -68,6 +68,7 @@ public class NoteService {
         entity.setOwnerUserId(ownerUserId);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(normalizeOptionalText(request.subject()));
+        entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), ownerUserId));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
         entity.setStatus(NoteStatus.DRAFT);
@@ -110,6 +111,7 @@ public class NoteService {
 
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(normalizeOptionalText(request.subject()));
+        entity.setCourseProgram(normalizeOptionalText(request.courseProgram()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setUpdatedAt(OffsetDateTime.now());
 
@@ -154,6 +156,7 @@ public class NoteService {
         copy.setOwnerUserId(ownerUserId);
         copy.setTitle(source.getTitle());
         copy.setSubject(source.getSubject());
+        copy.setCourseProgram(source.getCourseProgram());
         copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
         copy.setContent(source.getContent());
         copy.setStatus(NoteStatus.DRAFT);
@@ -362,6 +365,17 @@ public class NoteService {
         return List.copyOf(normalizedByKey.values());
     }
 
+    private String resolveRequestedCourseProgram(String requestedCourseProgram, UUID ownerUserId) {
+        String normalizedRequested = normalizeOptionalText(requestedCourseProgram);
+        if (normalizedRequested != null) {
+            return normalizedRequested;
+        }
+        return userRepository.findById(ownerUserId)
+                .map(UserEntity::getCourseProgram)
+                .map(this::normalizeOptionalText)
+                .orElse(null);
+    }
+
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
         List<String> keyConcepts = studyPack == null || studyPack.getKeyConcepts() == null
                 ? List.of()
@@ -376,6 +390,7 @@ public class NoteService {
                 entity.getId().toString(),
                 entity.getTitle(),
                 entity.getSubject(),
+                entity.getCourseProgram(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getContent(),
                 resolveVisibility(entity).name(),

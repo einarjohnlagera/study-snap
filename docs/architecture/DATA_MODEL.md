@@ -23,6 +23,7 @@ Recommended fields:
 - `id`
 - `owner_user_id`
 - `title` (nullable)
+- `course_program` (nullable, defaults from `users.course_program` for new notes)
 - `subject` (nullable)
 - `content` (text, required)
 - `tags` (text[] or json array, default empty)
@@ -63,6 +64,7 @@ Copy creates a new Note row.
 Copy includes:
 
 - `title`
+- `course_program`
 - `subject`
 - `tags`
 - `content`

@@ -36,7 +36,7 @@ Core loop:
 
 - Do not regenerate/overwrite generated content on the same Note.
 - Use `Make a Copy` only.
-- Copy includes: `title`, `subject`, `tags`, `content`.
+- Copy includes: `title`, `courseProgram`, `subject`, `tags`, `content`.
 - Copy does not include: generated `summary`, `key concepts`, `quiz`, session history, or performance history.
 - Copy result is a new `DRAFT` note.
 
@@ -459,7 +459,9 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 
 ### Learning Profile Metadata Rule
 
-- `learnerLevel` and optional `courseProgram` live on `User`, not on Note or a separate learner-profile table.
+- `learnerLevel` lives on `User`, not on Note or a separate learner-profile table.
+- `User.courseProgram` remains the profile-level default for new notes.
+- Notes may also store an optional note-level `courseProgram`, defaulted from the user's profile and editable per note.
 - `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
 - backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags` for future prompt tuning without changing current UI behavior.
 
@@ -506,6 +508,9 @@ Keep app shell grouping:
   - `/notes/{id}/edit` for Draft notes stays in edit mode with `Save Changes`, `Cancel`, and `Generate`
   - `/notes/{id}/edit` for Study Pack Ready notes keeps metadata editing only and shows `Save Changes`, `Cancel`, and `Make a Copy`
   - edit routes must render `Edit Note` copy, not create-note copy
+  - note editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, and `content`
+  - subject suggestions must come from persisted note subjects and still allow custom typed values
+  - tags remain optional and should include helper guidance rather than hard validation pressure
 - Generate button wording may vary by `profileType` (`Generate`, `Practice`, `Create Quiz`) but must still hit the same Study Pack generation flow.
 - Keep primary button labels short; longer outcome explanations belong in helper text below the generate button.
 - After generation, default tab should vary by `profileType`:
@@ -517,7 +522,7 @@ Keep app shell grouping:
 - Do not use browser-native `window.confirm` or `alert` for product dialogs.
 - Note Detail edit rules:
   - `DRAFT`: Edit routes to full editor (content + OCR)
-  - `STUDY_PACK_READY`: Edit stays on Note Detail and allows only title/subject/tags
+  - `STUDY_PACK_READY`: Edit stays on Note Detail and allows only title/courseProgram/subject/tags
   - While inline metadata edit is active, hide/disable share/visibility/learning actions.
 - Share flow for private notes:
   - click Share -> show private-note modal

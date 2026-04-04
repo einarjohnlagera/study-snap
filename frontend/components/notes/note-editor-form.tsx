@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
+import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { COURSE_PROGRAM_SUGGESTIONS } from "@/lib/learning-profile";
 
 export type NoteEditorDraft = {
   title: string;
   subject: string;
+  courseProgram: string;
   content: string;
   tags: string[];
 };
@@ -18,6 +21,7 @@ type NoteEditorFormProps = {
   note: NoteEditorDraft;
   onTitleChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
+  onCourseProgramChange: (value: string) => void;
   onContentChange: (value: string) => void;
   onTagsChange?: (nextTags: string[]) => void;
   onSave: () => void;
@@ -65,6 +69,7 @@ export function NoteEditorForm({
   note,
   onTitleChange,
   onSubjectChange,
+  onCourseProgramChange,
   onContentChange,
   onTagsChange,
   onSave,
@@ -268,76 +273,95 @@ export function NoteEditorForm({
                 disabled={isCopying}
               />
             </div>
-            {showTagsSection ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-foreground">Tags</p>
-                  {!addingTag && !isCopying ? (
-                    <button
-                      type="button"
-                      onClick={() => setAddingTag(true)}
-                      className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-                    >
-                      + Add Tag
-                    </button>
-                  ) : null}
-                </div>
-                {addingTag ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={tagDraft}
-                      onChange={(event) => setTagDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          handleAddTag();
-                        }
-                        if (event.key === "Escape") {
-                          setAddingTag(false);
-                          setTagDraft("");
-                        }
-                      }}
-                      placeholder="Add a tag"
-                      className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
-                    />
-                    <Button type="button" size="sm" variant="outline" onClick={handleAddTag} disabled={isCopying}>
-                      Add
-                    </Button>
-                  </div>
-                ) : null}
-                <div className="flex min-h-9 flex-wrap gap-2">
-                  {note.tags.length > 0 ? (
-                    note.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80"
-                      >
-                        <Tag className="h-3 w-3" />
-                        {tag}
-                        <button
-                          type="button"
-                          aria-label={`Remove ${tag}`}
-                          className="text-foreground/60 hover:text-foreground"
-                          disabled={isCopying}
-                          onClick={() => {
-                            if (!onTagsChange) {
-                              return;
-                            }
-                            onTagsChange(note.tags.filter((value) => value !== tag));
-                          }}
-                        >
-                          x
-                        </button>
-                      </span>
-                    ))
-                  ) : (
-                    <p className="text-xs text-foreground/55">No tags yet.</p>
-                  )}
-                </div>
-              </div>
-            ) : null}
+            <div className="space-y-2">
+              <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program (optional)</label>
+              <SuggestionCombobox
+                id="note-course-program"
+                value={note.courseProgram}
+                options={COURSE_PROGRAM_SUGGESTIONS.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
+                onChange={onCourseProgramChange}
+                placeholder="Choose or type a course/program"
+                disabled={isCopying}
+                helperText="Defaults from your profile, but you can adjust it for this note."
+                allowCustom
+                toggleLabel="Toggle course suggestions"
+                customOptionLabel="Custom"
+              />
+            </div>
           </div>
+
+          {showTagsSection ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground">Tags</p>
+                {!addingTag && !isCopying ? (
+                  <button
+                    type="button"
+                    onClick={() => setAddingTag(true)}
+                    className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    + Add Tag
+                  </button>
+                ) : null}
+              </div>
+              {addingTag ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={tagDraft}
+                    onChange={(event) => setTagDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleAddTag();
+                      }
+                      if (event.key === "Escape") {
+                        setAddingTag(false);
+                        setTagDraft("");
+                      }
+                    }}
+                    placeholder="Add a tag"
+                    className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={handleAddTag} disabled={isCopying}>
+                    Add
+                  </Button>
+                </div>
+              ) : null}
+              <p className="text-xs text-foreground/60">
+                Tags help you organize and find your notes later. Add 3-5 keywords like: formulas, anatomy, derivatives, grammar.
+              </p>
+              <div className="flex min-h-9 flex-wrap gap-2">
+                {note.tags.length > 0 ? (
+                  note.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80"
+                    >
+                      <Tag className="h-3 w-3" />
+                      {tag}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${tag}`}
+                        className="text-foreground/60 hover:text-foreground"
+                        disabled={isCopying}
+                        onClick={() => {
+                          if (!onTagsChange) {
+                            return;
+                          }
+                          onTagsChange(note.tags.filter((value) => value !== tag));
+                        }}
+                      >
+                        x
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-xs text-foreground/55">No tags yet.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {firstStudyHintVisible ? (

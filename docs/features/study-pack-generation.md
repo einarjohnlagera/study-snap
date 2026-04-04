@@ -101,9 +101,9 @@ Note Editor must keep create and edit behavior distinct.
   - actions: `Save Changes`, `Cancel`, `Generate Study Pack`
 - Edit mode for Study Pack Ready notes (`/notes/{id}/edit`)
   - title: `Edit Note`
-  - metadata remains editable: `title`, `subject`, `tags`
+  - metadata remains editable: `title`, `courseProgram`, `subject`, `tags`
   - note `content` is read-only
-  - helper text: `Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags.`
+  - helper text: `Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.`
   - actions: `Save Changes`, `Cancel`, `Make a Copy`
 
 These route-mode labels and actions should not fall back to create-note copy when an existing note is being edited.
@@ -175,8 +175,17 @@ Errors should remain supportive and actionable.
 
 - Create Note and Note Detail must use the same metadata suggestion behavior after successful generation.
 - Generated `title`, `subject`, and `tags` should be suggested from both entry points.
-- If the note has no existing metadata, NoteLib may apply the generated metadata automatically.
-- If the note already has metadata, users should be able to keep their values or apply the AI suggestions before continuing.
+- Generated metadata must not silently overwrite user-entered `title` or `subject`.
+- The shared AI suggestion modal should support:
+  - `Title` -> `Keep My Title` or `Use AI Title`
+  - `Subject` -> `Keep My Subject` or `Use AI Subject`
+  - `Tags` -> `Keep My Tags`, `Merge Tags`, or `Use AI Tags`
+- Default selection should stay conservative:
+  - existing `title` -> default `Keep My Title`
+  - existing `subject` -> default `Keep My Subject`
+  - existing `tags` -> default `Merge Tags`
+  - no existing `tags` -> default `Use AI Tags`
+- AI subject output should prefer the most specific academic subject that meaningfully organizes the note in a study library.
 
 ## Validation and retry
 

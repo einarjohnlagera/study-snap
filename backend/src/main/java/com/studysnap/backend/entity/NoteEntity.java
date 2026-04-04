@@ -34,6 +34,9 @@ public class NoteEntity {
     @Column(length = 64)
     private String subject;
 
+    @Column(name = "course_program", length = 120)
+    private String courseProgram;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(columnDefinition = "text[]", nullable = false)
     private String[] tags;

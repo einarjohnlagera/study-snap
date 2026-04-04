@@ -7,6 +7,7 @@ import java.util.List;
 public record UpsertNoteRequest(
         String title,
         String subject,
+        String courseProgram,
         List<String> tags,
         @NotBlank(message = "Please provide note content before saving.")
         String content

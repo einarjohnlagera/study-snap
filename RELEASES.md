@@ -6,6 +6,8 @@
 
 - User profiles now support `Learner Level` plus optional `Course / Program` as part of the learning-profile foundation.
 - Onboarding now includes a dedicated `Learning Profile` step that collects learner level, optional course/program, and optional bio.
+- Notes now support optional per-note `Course / Program`, defaulted from the user's profile and editable per note.
+- Note metadata suggestions now use a shared field-level AI review modal for `title`, `subject`, and `tags`.
 
 ### Improvements
 
@@ -13,12 +15,16 @@
 - Public Profile can now show learner level and course/program when the owner chooses to provide them.
 - Learner-level and course/program inputs now reuse the same subject-style combobox UX as the Note Editor `Subject` field.
 - Fixed-option learner-level comboboxes now snap back to the last valid saved value if a user types an unsupported option and closes the field.
+- Note Editor now includes `Course / Program`, subject autocomplete, optional tags guidance, and the same metadata shape in both create and edit modes.
+- Saved custom subjects now feed future autocomplete suggestions through the existing distinct-subject backend source.
+- AI-generated subjects now bias toward more specific academic library labels instead of broad catch-all categories.
 
 ### Technical Changes
 
 - Added `users.learner_level` and `users.course_program` with backward-compatible nullable storage for existing users.
 - Backend Study Pack generation now prepares learner-level and course/program metadata in generation context for future prompt tuning, alongside note subject and tags.
 - Refactored the OpenAI Study Pack service to share request/response/error handling across Study Pack, study-tip, and quiz generation flows, and added direct unit coverage for the refactored service.
+- Added `notes.course_program` plus note-service create/update/copy handling so note metadata can diverge from the profile default when needed.
 
 ### Fixes
 

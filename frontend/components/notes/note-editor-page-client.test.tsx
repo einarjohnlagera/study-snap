@@ -7,6 +7,7 @@ import {
   createStudyPackFromNote,
   extractNoteTextFromFile,
   getBillingPricing,
+  getMe,
   getMyPlan,
   getNote,
   listSubjects,
@@ -41,6 +42,7 @@ jest.mock("@/lib/api", () => ({
   createStudyPackFromNote: jest.fn(),
   extractNoteTextFromFile: jest.fn(),
   getBillingPricing: jest.fn(),
+  getMe: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
   listSubjects: jest.fn(),
@@ -55,6 +57,7 @@ const baseNote = {
   id: "note-1",
   title: "Draft Note",
   subject: "Biology",
+  courseProgram: "Nursing",
   tags: ["cells"],
   content: "Cell content",
   visibility: "PRIVATE" as const,
@@ -88,6 +91,7 @@ describe("NoteEditorPageClient", () => {
     (createNote as jest.Mock).mockReset();
     (extractNoteTextFromFile as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
@@ -134,6 +138,9 @@ describe("NoteEditorPageClient", () => {
     (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
       message: "You're on the list! We'll notify you when Premium launches.",
     });
+    (getMe as jest.Mock).mockResolvedValue({
+      courseProgram: "Nursing",
+    });
     (createNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       id: "note-created",
@@ -171,14 +178,17 @@ describe("NoteEditorPageClient", () => {
 
     const titleInput = await screen.findByLabelText("Title (optional)");
     const subjectInput = screen.getByLabelText("Subject (optional)");
+    const courseProgramInput = screen.getByLabelText("Course / Program (optional)");
     const contentInput = screen.getByLabelText("Content");
     await waitFor(() => {
       expect(titleInput).toHaveValue("Draft Note");
       expect(subjectInput).toHaveValue("Biology");
+      expect(courseProgramInput).toHaveValue("Nursing");
     });
 
     expect(titleInput).not.toBeDisabled();
     expect(subjectInput).not.toBeDisabled();
+    expect(courseProgramInput).not.toBeDisabled();
     expect(contentInput).not.toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
     expect(screen.getByText("Select an existing subject or type your own.")).toBeInTheDocument();
@@ -203,6 +213,18 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getAllByRole("button", { name: /^Generate$/i })).not.toHaveLength(0);
     expect(screen.getAllByRole("button", { name: "Cancel" })).not.toHaveLength(0);
     expect(screen.queryByText("Create or import your notes first, then generate a Study Pack when you are ready.")).not.toBeInTheDocument();
+  });
+
+  it("defaults create-note course/program from the user profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    await waitFor(() => {
+      expect(courseProgramInput).toHaveValue("Nursing");
+    });
+    expect(getMe).toHaveBeenCalled();
   });
 
   it("returns to note detail after saving changes in edit mode", async () => {
@@ -259,7 +281,47 @@ describe("NoteEditorPageClient", () => {
     });
     expect((createNote as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
       subject: "Microbiology Lab",
+      courseProgram: "Nursing",
     }));
+  });
+
+  it("lets the user apply AI suggestions per field after generation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (createNote as jest.Mock).mockResolvedValueOnce({
+      ...baseNote,
+      id: "note-created",
+      title: "My Notes",
+      subject: "General Science",
+      courseProgram: "Nursing",
+      tags: ["review"],
+      content: "Cell structure content",
+    });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.change(await screen.findByLabelText("Title (optional)"), { target: { value: "My Notes" } });
+    fireEvent.change(screen.getByLabelText("Subject (optional)"), { target: { value: "General Science" } });
+    fireEvent.change(screen.getByLabelText("Content"), { target: { value: "Cell structure content" } });
+    fireEvent.click(screen.getByRole("button", { name: /\+ Add Tag/i }));
+    fireEvent.change(screen.getByPlaceholderText("Add a tag"), { target: { value: "review" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
+
+    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use AI Subject" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Merge Tags/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalledWith("note-created", expect.objectContaining({
+        title: "My Notes",
+        subject: "Biology",
+        courseProgram: "Nursing",
+        tags: ["review", "cells"],
+      }));
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=summary");
+    });
   });
 
   it("shows the first-study hint on the create note page when onboarding is in progress", async () => {
@@ -328,7 +390,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
     expect(contentInput).toHaveAttribute("readonly");
     expect(
-      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, subject, and tags."),
+      screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."),
     ).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Save Changes" })).not.toHaveLength(0);
     expect(screen.getAllByRole("button", { name: "Cancel" })).not.toHaveLength(0);
@@ -712,6 +774,8 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
+    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=quiz");
@@ -727,6 +791,8 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Student note content" } });
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
+    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply Selected Changes" }));
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=summary");
