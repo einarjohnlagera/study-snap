@@ -2,6 +2,8 @@ package com.studysnap.backend.util;
 
 import lombok.experimental.UtilityClass;
 
+import java.util.Locale;
+
 @UtilityClass
 public class StringNormalizationUtils {
 
@@ -15,6 +17,13 @@ public class StringNormalizationUtils {
 
     public String normalizeForDuplicateCheck(String value) {
         return value == null ? "" : value.toLowerCase().replaceAll("[^a-z0-9 ]", "").replaceAll("\\s+", " ").trim();
+    }
+
+    public String normalizeForChoiceDuplicateCheck(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     public String normalizeWhitespaceToSingleSpaceOrNull(String value) {

@@ -34,6 +34,7 @@
 ### Fixes
 
 - Restored distinct Note Editor create vs edit behavior so existing notes now render `Edit Note` copy, correct edit-mode actions, and the generated-note content lock without falling back to create-note messaging.
+- Quiz validation now uses math-safe choice normalization, catches real blank/duplicate/invalid-choice payloads more accurately, and retries LLM invalid quiz output only once before failing.
 
 ## v0.6.0 - Landing Revamp & Positioning (In Progress)
 

@@ -9,10 +9,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class QuizValidationUtilsTest {
 
     @Test
-    void hasBlankOrDuplicateChoices_detectsBlankAndDuplicatesAfterNormalization() {
-        assertThat(QuizValidationUtils.hasBlankOrDuplicateChoices(List.of("A", " ", "C", "D"))).isTrue();
-        assertThat(QuizValidationUtils.hasBlankOrDuplicateChoices(List.of("Cell Cycle!", "cell cycle", "Mitosis", "Meiosis"))).isTrue();
-        assertThat(QuizValidationUtils.hasBlankOrDuplicateChoices(List.of("A", "B", "C", "D"))).isFalse();
+    void hasInvalidChoices_detectsExactDuplicatesAndExtraWhitespace() {
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "A", "B", "C"))).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("Derivative", "Derivative ", "Integral", "Limit"))).isTrue();
+    }
+
+    @Test
+    void hasInvalidChoices_treatsDistinctMathExpressionsAsUnique() {
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of(
+                "u'v + uv'",
+                "u'v - uv'",
+                "(u/v)^2",
+                "uv' - u'v"
+        ))).isFalse();
+    }
+
+    @Test
+    void hasInvalidChoices_detectsBlankChoicesAndWrongChoiceCount() {
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "", "C", "D"))).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "B", "C"))).isTrue();
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of("A", "B", "C", "D"))).isFalse();
     }
 
     @Test

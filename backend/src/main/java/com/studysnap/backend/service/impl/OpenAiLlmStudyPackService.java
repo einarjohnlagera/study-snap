@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 @Service
 @ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "openai", matchIfMissing = true)
@@ -41,7 +42,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int STUDY_PACK_QUIZ_QUESTION_COUNT = 5;
     private static final int MAX_SUMMARY_WORDS = 120;
     private static final int MAX_STUDY_TIP_WORDS = 20;
+    private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
+    private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
     private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
             "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
             "balance", "calculus", "cash flow", "chemistry", "circuit", "circuits", "computation",
@@ -60,6 +63,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     @Override
     public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
         Objects.requireNonNull(context, "context");
+        return retryOnceOnInvalidOutput(() -> generateStudyPackOnce(normalizedNotesText, context));
+    }
+
+    private GeneratedStudyPackContent generateStudyPackOnce(
+            String normalizedNotesText,
+            StudyPackGenerationContext context
+    ) {
         String model = requireConfiguredModel();
         JsonSchemaResponse<PromptStudyPack> response = executeJsonSchemaOperation(
                 model,
@@ -262,15 +272,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             Set<String> normalizedQuestions,
             Set<String> normalizedConcepts
     ) {
-        if (item.choices() == null || item.choices().size() != 4) {
-            throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
-        }
         if (StringNormalizationUtils.isBlank(item.question())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
         normalizeAndValidateConcept(item.concept());
         normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.");
-        if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
+        if (QuizValidationUtils.hasInvalidChoices(item.choices())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
         resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
@@ -743,6 +750,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             List<String> conceptFallbackPool
     ) {
         String model = requireConfiguredModel();
+        return retryOnceOnInvalidOutput(() -> generateQuizWithSchemaOnce(
+                model,
+                inputMessages,
+                questionCount,
+                schemaName,
+                operationLabel,
+                conceptFallbackPool
+        ));
+    }
+
+    private List<QuizItem> generateQuizWithSchemaOnce(
+            String model,
+            ArrayNode inputMessages,
+            int questionCount,
+            String schemaName,
+            String operationLabel,
+            List<String> conceptFallbackPool
+    ) {
         JsonSchemaResponse<PromptGeneratedQuiz> response = executeJsonSchemaOperation(
                 model,
                 inputMessages,
@@ -778,9 +803,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private void validateGeneratedQuizItem(PromptGeneratedQuizItem item, String operationLabel) {
-        if (item.choices() == null || item.choices().size() != 4) {
-            throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
-        }
         if (StringNormalizationUtils.isBlank(item.question()) || StringNormalizationUtils.isBlank(item.answer())) {
             throw invalidOutput(operationLabel + " returned an invalid question. Please try again.");
         }
@@ -790,10 +812,29 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         if (StringNormalizationUtils.isBlank(item.concept())) {
             throw invalidOutput(operationLabel + " returned an invalid concept. Please try again.");
         }
-        if (QuizValidationUtils.hasBlankOrDuplicateChoices(item.choices())) {
+        if (QuizValidationUtils.hasInvalidChoices(item.choices())) {
             throw invalidOutput(operationLabel + " returned invalid choices. Please try again.");
         }
         resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
+    }
+
+    private <T> T retryOnceOnInvalidOutput(Supplier<T> operation) {
+        AppException lastInvalidOutput = null;
+        for (int attempt = 1; attempt <= MAX_INVALID_OUTPUT_ATTEMPTS; attempt++) {
+            try {
+                return operation.get();
+            } catch (AppException ex) {
+                if (!INVALID_OUTPUT_CODE.equals(ex.getCode())) {
+                    throw ex;
+                }
+                lastInvalidOutput = ex;
+                if (attempt == MAX_INVALID_OUTPUT_ATTEMPTS) {
+                    throw ex;
+                }
+                log.info("Retrying OpenAI quiz validation after invalid output on attempt {}", attempt);
+            }
+        }
+        throw Objects.requireNonNull(lastInvalidOutput, "lastInvalidOutput");
     }
 
     private List<String> sanitizeConceptList(List<String> values) {
