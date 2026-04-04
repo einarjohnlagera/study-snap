@@ -37,6 +37,15 @@ Shared public navbar items:
 - `Get Started`
 - theme toggle
 
+Public navbar hierarchy:
+
+- navigation links should read as navigation, not buttons
+- `Get Started` is the primary CTA
+- `Login` is the secondary action
+- theme toggle is a utility control and should not sit inside the CTA stack
+- on mobile, keep the theme toggle in the header utility cluster and keep the opened menu panel focused on nav links plus `Login` and `Get Started`
+- do not duplicate the theme toggle or visible primary CTA between the header and the opened mobile menu
+
 Public Library must stay accessible without login.
 
 ## Required Sections

@@ -56,10 +56,15 @@ describe("Navbar", () => {
   it("shows the same navigation in the mobile menu", () => {
     render(<Navbar />);
 
+    expect(screen.getAllByRole("button", { name: "Toggle theme" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Get Started" })).toHaveLength(2);
+
     fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
 
     expect(screen.getAllByRole("link", { name: "Public Library" })[1]).toHaveAttribute("href", "/public/library");
     expect(screen.getAllByRole("link", { name: "Login" })[1]).toHaveAttribute("href", "/login");
     expect(screen.getAllByRole("link", { name: "Get Started" })[1]).toHaveAttribute("href", "/signup");
+    expect(screen.getAllByRole("button", { name: "Toggle theme" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Get Started" })).toHaveLength(2);
   });
 });

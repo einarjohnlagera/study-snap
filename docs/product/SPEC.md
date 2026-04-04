@@ -159,6 +159,15 @@ Public navbar:
 - `Login`
 - `Get Started`
 - theme toggle on shared public surfaces
+- desktop grouping should keep:
+  - navigation links together
+  - theme toggle in a utility cluster
+  - `Login` as the secondary action
+  - `Get Started` as the primary CTA
+- mobile grouping should keep:
+  - theme toggle in the top-header utility cluster beside the menu trigger
+  - the opened menu panel focused on nav links, then a divider, then `Login` and `Get Started`
+  - no duplicated theme toggle or duplicated visible primary CTA between the header and opened menu
 
 CTA behavior:
 
