@@ -495,6 +495,7 @@ Filtering model:
 - `GET /api/subjects?scope=mine` returns distinct subjects from the authenticated user's notes
 - `GET /api/subjects?scope=public` returns distinct subjects from public notes only
 - custom subjects join future autocomplete suggestions after the note is saved
+- subject reuse normalizes whitespace and dash formatting, then matches case-insensitively so equivalent saved subjects collapse into one suggestion/filter key when possible
 - note-level `courseProgram` is stored now so later library filters can use persisted note metadata instead of only the profile default
 - library note-list payloads should expose `courseProgram`, `createdAt`, `updatedAt`, and public-owner `learnerLevel` so frontend sorting/filtering does not need separate metadata fetches
 - the current system intentionally does not use a normalized `subjects` table yet

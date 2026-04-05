@@ -22,6 +22,7 @@ import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.ContentPreviewUtils;
+import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
@@ -35,10 +36,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Comparator;
 
 @Service
 @Transactional
@@ -53,6 +54,10 @@ public class NoteService {
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
     private static final String OFFICIAL_AUTHOR_DISPLAY_NAME = "NoteLib";
     private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
+    private static final Comparator<String> SUBJECT_DISPLAY_COMPARATOR = (left, right) -> {
+        int caseInsensitive = left.compareToIgnoreCase(right);
+        return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
+    };
 
     private final NoteRepository noteRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
@@ -67,7 +72,7 @@ public class NoteService {
         entity.setId(UUID.randomUUID());
         entity.setOwnerUserId(ownerUserId);
         entity.setTitle(normalizeOptionalText(request.title()));
-        entity.setSubject(normalizeOptionalText(request.subject()));
+        entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), ownerUserId));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
@@ -110,7 +115,7 @@ public class NoteService {
         }
 
         entity.setTitle(normalizeOptionalText(request.title()));
-        entity.setSubject(normalizeOptionalText(request.subject()));
+        entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(normalizeOptionalText(request.courseProgram()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setUpdatedAt(OffsetDateTime.now());
@@ -155,7 +160,7 @@ public class NoteService {
         copy.setId(UUID.randomUUID());
         copy.setOwnerUserId(ownerUserId);
         copy.setTitle(source.getTitle());
-        copy.setSubject(source.getSubject());
+        copy.setSubject(resolveCanonicalSubject(source.getSubject()));
         copy.setCourseProgram(source.getCourseProgram());
         copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
         copy.setContent(source.getContent());
@@ -252,10 +257,7 @@ public class NoteService {
         String normalizedTitleSlug = normalizeSlug(titleSlug);
         List<NoteEntity> candidates = DEFAULT_PUBLIC_SUBJECT_SLUG.equals(normalizedSubjectSlug)
                 ? noteRepository.findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
-                : noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(
-                        NoteVisibility.PUBLIC,
-                        unslugify(normalizedSubjectSlug)
-                );
+                : noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
 
         NoteEntity matched = candidates.stream()
                 .filter(note -> slugify(note.getSubject(), DEFAULT_PUBLIC_SUBJECT_SLUG).equals(normalizedSubjectSlug))
@@ -519,11 +521,27 @@ public class NoteService {
     private List<String> normalizeSubjects(List<String> rawSubjects) {
         Map<String, String> normalized = new LinkedHashMap<>();
         rawSubjects.stream()
-                .map(this::normalizeOptionalText)
+                .map(SubjectNormalizationUtils::normalizeForStorage)
                 .filter(Objects::nonNull)
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .forEach(subject -> normalized.putIfAbsent(subject.toLowerCase(Locale.ROOT), subject));
+                .sorted(SUBJECT_DISPLAY_COMPARATOR)
+                .forEach(subject -> normalized.putIfAbsent(SubjectNormalizationUtils.normalizeForLookup(subject), subject));
         return List.copyOf(normalized.values());
+    }
+
+    private String resolveCanonicalSubject(String requestedSubject) {
+        String normalizedRequested = SubjectNormalizationUtils.normalizeForStorage(requestedSubject);
+        if (normalizedRequested == null) {
+            return null;
+        }
+
+        String lookup = SubjectNormalizationUtils.normalizeForLookup(normalizedRequested);
+        return noteRepository.findAllSubjectValues().stream()
+                .map(SubjectNormalizationUtils::normalizeForStorage)
+                .filter(Objects::nonNull)
+                .sorted(SUBJECT_DISPLAY_COMPARATOR)
+                .filter(existing -> SubjectNormalizationUtils.normalizeForLookup(existing).equals(lookup))
+                .findFirst()
+                .orElse(normalizedRequested);
     }
 
     private NoteVisibility parseVisibility(String visibilityRaw) {
@@ -553,10 +571,6 @@ public class NoteService {
 
     private String normalizeSlug(String slug) {
         return slug == null ? "" : slug.trim().toLowerCase();
-    }
-
-    private String unslugify(String slug) {
-        return slug.replace('-', ' ').trim();
     }
 
     private Map<String, Object> buildMetadata(String key1, Object value1, String key2, Object value2) {

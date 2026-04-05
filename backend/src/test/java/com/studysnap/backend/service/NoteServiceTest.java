@@ -70,6 +70,7 @@ class NoteServiceTest {
                 analyticsService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
         lenient().when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any())).thenReturn(List.of());
         lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(), any())).thenReturn(List.of());
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
@@ -114,18 +115,39 @@ class NoteServiceTest {
     }
 
     @Test
+    void create_reusesCanonicalSubjectFormattingWhenEquivalentSubjectAlreadyExists() {
+        UUID ownerUserId = UUID.randomUUID();
+        when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Cell note",
+                " biology-cell division ",
+                null,
+                List.of(),
+                "cell notes"
+        );
+
+        noteService.create(request, ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getSubject()).isEqualTo("Biology – Cell Division");
+    }
+
+    @Test
     void update_draftNote_updatesContentAndMetadata() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity draftNote = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "old content");
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(draftNote));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
+        when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("New title", "Biology", "Pre-Med", List.of("cells"), "new content");
+        UpsertNoteRequest request = new UpsertNoteRequest("New title", "biology- cell division", "Pre-Med", List.of("cells"), "new content");
         NoteResponse updated = noteService.update(noteId.toString(), request, ownerUserId);
 
         assertThat(draftNote.getTitle()).isEqualTo("New title");
-        assertThat(draftNote.getSubject()).isEqualTo("Biology");
+        assertThat(draftNote.getSubject()).isEqualTo("Biology – Cell Division");
         assertThat(draftNote.getCourseProgram()).isEqualTo("Pre-Med");
         assertThat(draftNote.getContent()).isEqualTo("new content");
         assertThat(updated.title()).isEqualTo("New title");
@@ -247,7 +269,7 @@ class NoteServiceTest {
         owner.setFirstName("History");
         owner.setEmail("history@example.com");
 
-        when(noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, "history"))
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(publicNote));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.of(studyPack));
         when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
@@ -264,8 +286,27 @@ class NoteServiceTest {
     }
 
     @Test
+    void getPublicBySeoPath_matchesStructuredSubjectsBySlug() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity publicNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        publicNote.setTitle("Mitosis Overview");
+        publicNote.setSubject("Biology – Cell Division");
+
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(publicNote));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.empty());
+
+        var response = noteService.getPublicBySeoPath("biology-cell-division", "mitosis-overview", null);
+
+        assertThat(response.id()).isEqualTo(noteId.toString());
+        assertThat(response.subject()).isEqualTo("Biology – Cell Division");
+    }
+
+    @Test
     void getPublicBySeoPath_rejectsMissingOrPrivateMatch() {
-        when(noteRepository.findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, "science"))
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of());
 
         assertThatThrownBy(() -> noteService.getPublicBySeoPath("science", "cell-structure", null))
@@ -344,21 +385,21 @@ class NoteServiceTest {
     void listMineSubjects_returnsDistinctNormalizedSubjectsSortedAlphabetically() {
         UUID ownerUserId = UUID.randomUUID();
         when(noteRepository.findSubjectValuesByOwnerUserId(ownerUserId))
-                .thenReturn(List.of(" Biology ", "anatomy", "biology", "", "  ", "Chemistry"));
+                .thenReturn(List.of(" Biology – Cell Division ", "biology-cell division", "anatomy", "", "  ", "Chemistry"));
 
         List<String> subjects = noteService.listMineSubjects(ownerUserId);
 
-        assertThat(subjects).containsExactly("anatomy", "Biology", "Chemistry");
+        assertThat(subjects).containsExactly("anatomy", "Biology – Cell Division", "Chemistry");
     }
 
     @Test
     void listPublicSubjects_returnsDistinctNormalizedSubjectsSortedAlphabetically() {
         when(noteRepository.findSubjectValuesByVisibility(NoteVisibility.PUBLIC))
-                .thenReturn(List.of("Physics", "biology", "Biology", "History"));
+                .thenReturn(List.of("Physics", "biology - cell division", "Biology – Cell Division", "History"));
 
         List<String> subjects = noteService.listPublicSubjects();
 
-        assertThat(subjects).containsExactly("biology", "History", "Physics");
+        assertThat(subjects).containsExactly("Biology – Cell Division", "History", "Physics");
     }
 
     private NoteEntity buildNote(

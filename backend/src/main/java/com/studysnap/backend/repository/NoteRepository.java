@@ -15,11 +15,18 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     List<NoteEntity> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
     List<NoteEntity> findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(UUID ownerUserId, NoteVisibility visibility);
     Optional<NoteEntity> findByIdAndVisibility(UUID id, NoteVisibility visibility);
-    List<NoteEntity> findByVisibilityAndSubjectIgnoreCaseOrderByUpdatedAtDesc(NoteVisibility visibility, String subject);
     List<NoteEntity> findByVisibilityAndSubjectIsNullOrderByUpdatedAtDesc(NoteVisibility visibility);
     long countByVisibility(NoteVisibility visibility);
 
     List<NoteEntity> findByVisibilityOrderByUpdatedAtDesc(NoteVisibility visibility);
+
+    @Query("""
+            select n.subject
+            from NoteEntity n
+            where n.subject is not null
+              and trim(n.subject) <> ''
+            """)
+    List<String> findAllSubjectValues();
 
     @Query("""
             select n.subject

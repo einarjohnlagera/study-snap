@@ -1,6 +1,11 @@
 export function normalizeSubject(subject: string | null | undefined): string | null {
   const value = subject?.trim();
-  return value && value.length > 0 ? value : null;
+  if (!value || value.length === 0) {
+    return null;
+  }
+
+  const normalized = value.replace(/\s*[-–—]\s*/g, " – ").replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 export function getSubjectDisplayLabel(subject: string | null | undefined): string {

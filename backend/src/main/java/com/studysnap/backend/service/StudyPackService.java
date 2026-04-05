@@ -33,6 +33,7 @@ import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.CreatedAtIdCursorUtils;
+import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -67,6 +69,10 @@ public class StudyPackService {
     private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_TAGS_PER_STUDY_PACK = 30;
     private static final String STUDY_PACK = "study-pack";
+    private static final Comparator<String> SUBJECT_DISPLAY_COMPARATOR = (left, right) -> {
+        int caseInsensitive = left.compareToIgnoreCase(right);
+        return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
+    };
 
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
@@ -625,11 +631,18 @@ public class StudyPackService {
     }
 
     private String normalizeSubject(String subject) {
-        if (subject == null) {
+        String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
+        if (normalized == null) {
             return null;
         }
-        String normalized = subject.trim();
-        return normalized.isBlank() ? null : normalized;
+        String lookup = SubjectNormalizationUtils.normalizeForLookup(normalized);
+        return noteRepository.findAllSubjectValues().stream()
+                .map(SubjectNormalizationUtils::normalizeForStorage)
+                .filter(Objects::nonNull)
+                .sorted(SUBJECT_DISPLAY_COMPARATOR)
+                .filter(existing -> SubjectNormalizationUtils.normalizeForLookup(existing).equals(lookup))
+                .findFirst()
+                .orElse(normalized);
     }
 
     private String normalizeEditableTitle(String title) {
