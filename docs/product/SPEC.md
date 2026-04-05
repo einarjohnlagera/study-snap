@@ -510,10 +510,13 @@ Users can:
 - Subject persistence and suggestions:
   - `notes.subject` remains the persisted source of truth
   - subject suggestions come from `GET /api/subjects` using distinct existing note subject values
+  - the current subject catalog is derived from saved notes, not from a separate `subjects` table
   - Library and Note Editor use the authenticated `mine` subject scope
   - Public Library uses the `public` subject scope
   - users can still type a custom subject and save it directly into `notes.subject`
   - saved custom subjects become future suggestions once the note is persisted
+  - subject saves should normalize whitespace and dash formatting so values such as `Biology-Cell Division` and `Biology – Cell Division` collapse into one reusable subject key
+  - subject reuse checks should be case-insensitive so equivalent saved subjects resolve to the same autocomplete/filter label when possible
   - AI-generated subjects should be library-friendly academic labels, usually `Primary field – subtopic` when that helps group similar notes
   - avoid broad catch-all labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the notes support a narrower academic subject
   - example targets: `Nursing – Pharmacology`, `Biology – Cell Division`, `Criminal Law – Crimes Against Persons`, `Software Engineering – Data Structures`

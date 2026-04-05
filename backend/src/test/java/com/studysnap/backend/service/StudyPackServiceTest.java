@@ -98,6 +98,7 @@ class StudyPackServiceTest {
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
         lenient().when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
     }
 
@@ -172,6 +173,51 @@ class StudyPackServiceTest {
         assertThat(response.summary()).isEqualTo("Generated summary");
         assertThat(response.keyConcepts()).containsExactly("Cell membrane", "Mitochondria");
         assertThat(response.quiz()).hasSize(1);
+    }
+
+    @Test
+    void createFromText_reusesCanonicalSubjectWhenGeneratedSubjectMatchesExistingVariant() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "Generated title",
+                "Generated summary",
+                "biology-cell division",
+                List.of("cells", "review"),
+                List.of("Cell membrane", "Mitosis"),
+                List.of(new QuizItem(
+                        "Which process divides the nucleus?",
+                        List.of("Mitosis", "Meiosis", "Translation", "Respiration"),
+                        "Mitosis",
+                        "Cell division",
+                        "Mitosis divides the nucleus."
+                )),
+                "gpt-4.1-mini",
+                100,
+                220,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
+
+        studyPackService.createFromText(new CreateStudyPackRequest(null, noteId.toString()), userId);
+
+        ArgumentCaptor<StudyPackEntity> studyPackCaptor = ArgumentCaptor.forClass(StudyPackEntity.class);
+        verify(studyPackRepository).save(studyPackCaptor.capture());
+        assertThat(studyPackCaptor.getValue().getSubject()).isEqualTo("Biology – Cell Division");
     }
 
     @Test

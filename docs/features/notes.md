@@ -20,6 +20,8 @@ Rules:
 - `subject` uses autocomplete from persisted note subjects.
 - users can still type a custom subject directly.
 - a saved custom subject becomes available in future subject suggestions after the note is persisted.
+- subject saves normalize whitespace plus dash formatting so equivalent values like `Biology-Cell Division` and `Biology – Cell Division` reuse the same subject suggestion when possible.
+- subject reuse checks are case-insensitive, but the saved/displayed subject should keep a readable academic label format.
 - AI subject suggestions should stay specific and library-friendly:
   - prefer reusable academic labels such as `Biology – Cell Division` or `Software Engineering – Data Structures`
   - avoid broad umbrella labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the note supports a narrower subject

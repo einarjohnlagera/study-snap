@@ -17,6 +17,7 @@
 - Fixed-option learner-level comboboxes now snap back to the last valid saved value if a user types an unsupported option and closes the field.
 - Note Editor now includes `Course / Program`, subject autocomplete, optional tags guidance, and the same metadata shape in both create and edit modes.
 - Saved custom subjects now feed future autocomplete suggestions through the existing distinct-subject backend source.
+- Subject reuse now normalizes whitespace, dash formatting, and case-insensitive matches so equivalent custom subjects collapse into a cleaner autocomplete/filter catalog without adding a new subjects table.
 - AI-generated subjects now use stronger library-specific guidance plus backend validation so overly broad labels like `Engineering` or `Business` are retried before being accepted.
 - The AI Suggestions modal now uses a compact review layout with field-by-field comparisons, tag chips, a live preview, and a sticky mobile footer.
 - Quiz generation now uses learner-level-aware prompt guidance across Quick Review, Challenge Quiz, and Adaptive Practice, defaulting to college-level when the user has no saved learner level.

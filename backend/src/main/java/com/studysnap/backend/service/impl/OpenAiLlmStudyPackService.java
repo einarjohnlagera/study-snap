@@ -15,6 +15,7 @@ import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.LlmResponseUtils;
 import com.studysnap.backend.util.QuizValidationUtils;
 import com.studysnap.backend.util.StringNormalizationUtils;
+import com.studysnap.backend.util.SubjectNormalizationUtils;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -460,7 +461,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private String normalizeAndValidateSubject(String subject, StudyPackGenerationContext context) {
-        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(subject);
+        String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
         if (!StringNormalizationUtils.containsAlphaNumeric(normalized)
                 || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, MAX_SUBJECT_WORDS)) {
             throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");

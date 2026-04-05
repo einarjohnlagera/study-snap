@@ -37,6 +37,8 @@ Subject storage rule:
 - `notes.subject` stays as free text on the note record.
 - There is no normalized `subjects` table in the current architecture.
 - Distinct subject suggestions and library filters are derived from persisted note subject values.
+- Subject reuse is built by normalizing saved note subjects rather than by writing to a second subject catalog table.
+- Normalization should trim whitespace, standardize dash formatting, and compare equivalent subjects case-insensitively.
 - AI-generated subjects should prefer reusable academic library labels such as `Primary field – subtopic`, not broad umbrella categories.
 
 Library/discovery payload usage:
