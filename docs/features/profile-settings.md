@@ -22,3 +22,7 @@
 - `Course / Program` uses the same suggestion-combobox pattern as Note Editor.
 - Suggestions should come from curated defaults plus normalized saved values from the user's notes/profile.
 - Users may still type a custom value.
+- Typing filters suggestions in real time with case-insensitive prefix-first, then contains matching.
+- Existing suggestions should appear before the custom `Use "..."` action so reuse is encouraged.
+- Helper text changes with `Learner Level` so the field examples stay meaningful for grade school, high school, college, board-exam, professional, and personal-learning users.
+- `Save Learning Profile` requires both `Learner Level` and `Course / Program` and shows inline validation when either is missing.

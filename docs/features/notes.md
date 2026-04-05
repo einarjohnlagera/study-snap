@@ -19,10 +19,15 @@ Rules:
 - `courseProgram` belongs to the note once saved and can differ from the profile default.
 - `courseProgram` is the top-level shelf for the note, while `subject` is the more specific academic topic and `tags` are the finer keywords.
 - `courseProgram` uses autocomplete from curated defaults plus normalized saved values from the user's notes/profile.
+- typing in `courseProgram` filters suggestions in real time instead of keeping the full list visible
+- course/program matching is case-insensitive, trims outer spaces before matching, allows partial matches, and ranks prefix matches ahead of contains matches
+- existing matching suggestions stay above the custom `Use "..."` action so reuse is easier than creating a variant
 - users can still type a custom course/program directly.
 - a saved custom course/program becomes available in future course/program suggestions after the note or profile value is persisted.
 - course/program saves normalize whitespace plus dash formatting so equivalent values like `Senior High-STEM` and `Senior High – STEM` reuse the same suggestion when possible.
 - course/program reuse checks are case-insensitive, but the saved/displayed course/program should keep a readable label format.
+- when the typed value exactly matches an existing saved course/program case-insensitively, the field should reuse the existing saved label instead of preserving a duplicate case variant.
+- note-level Course / Program helper text should adapt to the user's `learnerLevel` so note metadata examples match their study stage.
 - `subject` uses autocomplete from persisted note subjects.
 - users can still type a custom subject directly.
 - a saved custom subject becomes available in future subject suggestions after the note is persisted.

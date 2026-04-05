@@ -7,6 +7,7 @@ import { ChevronDown } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
+import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
 import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
@@ -18,7 +19,6 @@ import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
-import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
@@ -36,6 +36,7 @@ import {
   createStudyPackFromNote,
   deleteNote,
   getChallengeQuizPerformanceSummary,
+  getMe,
   getMyStudyPack,
   getNote,
   getQuickReviewPerformanceSummary,
@@ -47,6 +48,7 @@ import {
   updateNote,
   updateNoteVisibility,
   type ChallengeQuizPerformanceSummaryResponse,
+  type LearnerLevel,
   type NoteResponse,
   type NoteVisibility,
   type QuickReviewPerformanceSummaryResponse,
@@ -161,6 +163,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">("STUDENT");
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
 
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
@@ -259,12 +262,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     void Promise.allSettled([
       listSubjects("mine"),
       listCoursePrograms("mine"),
-    ]).then(([subjectsResult, courseProgramsResult]) => {
+      getMe(),
+    ]).then(([subjectsResult, courseProgramsResult, meResult]) => {
       if (!active) {
         return;
       }
       setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
       setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
+      setProfileLearnerLevel(meResult.status === "fulfilled" ? meResult.value.learnerLevel ?? "" : "");
     });
 
     return () => {
@@ -474,7 +479,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   }, [isEmailVerified, note, togglingVisibility, visibility]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = useCallback(async () => {
     if (!note || generating || !isDraft) {
       return;
     }
@@ -517,7 +522,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setGenerating(false);
     }
-  };
+  }, [
+    firstStudyStep,
+    generating,
+    hasReachedStudyPackLimit,
+    isDraft,
+    isEmailVerified,
+    note,
+    openStudyPackLimitModal,
+    refreshUsageSummary,
+  ]);
 
   useEffect(() => {
     const shouldAutoGenerate = searchParams.get("generate") === "1";
@@ -1033,16 +1047,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <label htmlFor="note-course-program-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
                     Course / Program
                   </label>
-                  <SuggestionCombobox
+                  <CourseProgramCombobox
                     id="note-course-program-inline"
                     value={metadataDraft.courseProgram}
-                    options={availableCourseProgramSuggestions.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
+                    suggestions={availableCourseProgramSuggestions}
+                    learnerLevel={profileLearnerLevel}
                     onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
-                    placeholder="Choose or type a course/program"
-                    helperText="Keep your course/program aligned to this note, or customize it when the note belongs somewhere else."
-                    allowCustom
-                    toggleLabel="Toggle course suggestions"
-                    customOptionLabel="Custom"
+                    context="note"
                   />
                 </div>
                 <div className="space-y-2">

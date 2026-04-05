@@ -6,6 +6,7 @@ import {
   getBillingPricing,
   getMyPlan,
   getChallengeQuizPerformanceSummary,
+  getMe,
   getNote,
   getQuickReviewPerformanceSummary,
   listCoursePrograms,
@@ -56,6 +57,7 @@ jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn(),
   getMyPlan: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
+  getMe: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   listCoursePrograms: jest.fn(),
@@ -111,6 +113,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
+    (getMe as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
@@ -160,6 +163,10 @@ describe("PrivateNoteDetailPageClient", () => {
       lastCompletedAt: "2026-03-21T10:30:00Z",
       latestPerformanceLevel: "Good",
       latestWeakConcepts: ["Cells"],
+    });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      courseProgram: "Nursing",
     });
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",

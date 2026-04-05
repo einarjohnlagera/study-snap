@@ -26,7 +26,7 @@ Onboarding collects:
 
 - `profileType`
 - required `learnerLevel`
-- optional `courseProgram`
+- required `courseProgram`
 - optional `bio`
 - `learningStyle` (stored as `engagementMode`)
 - reminder preferences
@@ -41,7 +41,9 @@ Profile Type options:
 Learning Profile step:
 
 - `Learner Level` is required
-- `Course / Program` is optional and supports suggestions plus custom values
+- `Course / Program` is required and supports suggestions plus custom values
+- typing in `Course / Program` filters suggestions in real time and ranks exact/prefix matches ahead of contains matches
+- helper text changes with `Learner Level` so the examples match the user's study stage
 - `Bio` is optional
 - helper copy: `Learner level helps NoteLib adjust quiz difficulty and recommendations.`
 - learner-profile comboboxes should reuse the same interaction pattern as the Note Editor `Subject` field

@@ -220,4 +220,40 @@ describe("OnboardingPage", () => {
     expect(screen.queryByText("When is your exam?")).not.toBeInTheDocument();
     expect(routerMock.push).toHaveBeenCalledWith("/dashboard");
   });
+
+  it("requires course/program before continuing past the learning-profile step", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      email: "[email protected]",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      onboardingCompletedAt: null,
+    });
+    (getMe as jest.Mock).mockResolvedValue({
+      profileType: null,
+      learnerLevel: null,
+      courseProgram: null,
+      bio: null,
+      examDate: null,
+      engagementMode: "FOCUSED",
+      inactivityRemindersEnabled: false,
+      weakConceptRemindersEnabled: false,
+      onboardingCompletedAt: null,
+    });
+
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByText("Learning Profile")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Learner Level"), {
+      target: { value: "COLLEGE" },
+    });
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(
+      screen.getByText("Enter your degree like Engineering, Nursing, Accountancy, etc."),
+    ).toBeInTheDocument();
+  });
 });

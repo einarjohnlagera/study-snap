@@ -43,7 +43,7 @@ Implementation stance:
 Primary focus:
 
 - Learner Level on the user profile and onboarding
-- optional Course / Program metadata for learner context
+- required Learning Profile `Course / Program` plus optional per-note `Course / Program` metadata
 - note-level `courseProgram` metadata with profile-defaulted note creation
 - stronger note metadata quality through subject autocomplete, saved custom subjects, and tag guidance
 - field-level AI metadata suggestions so users keep final control of title, subject, and tags
@@ -54,7 +54,7 @@ Primary focus:
 Implementation stance:
 
 - keep learner metadata on the existing `users` aggregate instead of creating profile-type-specific tables
-- keep `Course / Program` optional so existing users and non-academic learners continue to fit the model
+- keep note-level `Course / Program` optional while requiring it for onboarding and later Learning Profile saves
 - prepare smarter quiz generation by passing learner metadata through backend generation context before prompt behavior changes
 - improve library/public-profile structure over time without changing note ownership or page responsibilities
 

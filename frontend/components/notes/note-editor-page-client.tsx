@@ -18,6 +18,7 @@ import {
   listCoursePrograms,
   listSubjects,
   trackAnalyticsEvent,
+  type LearnerLevel,
   type NoteResponse,
   updateNote,
 } from "@/lib/api";
@@ -142,6 +143,7 @@ export function NoteEditorPageClient({
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
   const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
@@ -200,24 +202,26 @@ export function NoteEditorPageClient({
   }, []);
 
   useEffect(() => {
-    if (isEditMode) {
-      return;
-    }
-
     let active = true;
     void getMe()
       .then((me) => {
         if (!active) {
           return;
         }
-        setDraft((previous) => (
-          previous.courseProgram.trim().length > 0
-            ? previous
-            : { ...previous, courseProgram: me.courseProgram ?? "" }
-        ));
+        setProfileLearnerLevel(me.learnerLevel ?? "");
+        if (!isEditMode) {
+          setDraft((previous) => (
+            previous.courseProgram.trim().length > 0
+              ? previous
+              : { ...previous, courseProgram: me.courseProgram ?? "" }
+          ));
+        }
       })
       .catch(() => {
-        // Best-effort default. Create Note still works without profile metadata.
+        // Best-effort defaults. Note creation and editing still work without profile metadata.
+        if (active) {
+          setProfileLearnerLevel("");
+        }
       });
 
     return () => {
@@ -404,6 +408,8 @@ export function NoteEditorPageClient({
     return () => {
       active = false;
     };
+    // `router` identity is not stable in tests, and the effect only needs the current note id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
   const studyPacksRemaining = usageSummary
     ? resolveRemainingUsageCredits(
@@ -535,7 +541,6 @@ export function NoteEditorPageClient({
     }
   }, [
     contentEmpty,
-    finalizeGenerationRedirect,
     hasReachedStudyPackLimit,
     isEmailVerified,
     isGenerating,
@@ -763,6 +768,7 @@ export function NoteEditorPageClient({
         actionVariant={hasGeneratedStudyPack ? "outline" : "default"}
         subjectSuggestions={subjectSuggestions}
         courseProgramSuggestions={availableCourseProgramSuggestions}
+        learnerLevel={profileLearnerLevel}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
         } : undefined}

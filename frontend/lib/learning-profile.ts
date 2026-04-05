@@ -44,6 +44,18 @@ export const COURSE_PROGRAM_SUGGESTIONS = [
   "PMP Certification",
 ];
 
+const COURSE_PROGRAM_HELPER_BY_LEVEL: Record<LearnerLevel, string> = {
+  GRADE_SCHOOL: "Enter something like General Education, Elementary Math, Reading, etc.",
+  JUNIOR_HIGH: "Enter something like General Education, Math, Science, English, etc.",
+  SENIOR_HIGH: "Enter your strand like STEM, ABM, HUMSS, GAS, etc.",
+  COLLEGE: "Enter your degree like Engineering, Nursing, Accountancy, etc.",
+  BOARD_EXAM_REVIEW: "Enter the program or board exam track like Nursing, Pharmacy, Civil Engineering, etc.",
+  PROFESSIONAL: "Enter your field like Law, Medicine, IT, Education, etc.",
+  PERSONAL_LEARNING: "Enter the topic you're focusing on like Programming, Finance, History, etc.",
+};
+
+export type CourseProgramFieldContext = "profile" | "note" | "onboarding";
+
 function courseProgramReadabilityScore(value: string): number {
   const words = value.split(/[\s/–-]+/).filter((word) => word.length > 0);
   const titleCaseWords = words.filter((word) => /^[A-Z]/.test(word)).length;
@@ -103,4 +115,19 @@ export function formatLearnerLevel(learnerLevel: LearnerLevel | string | null | 
     return match.label;
   }
   return learnerLevel.replaceAll("_", " ");
+}
+
+export function getCourseProgramHelperText(
+  learnerLevel: LearnerLevel | "" | null | undefined,
+  context: CourseProgramFieldContext = "profile",
+): string {
+  const baseHelperText = learnerLevel
+    ? COURSE_PROGRAM_HELPER_BY_LEVEL[learnerLevel]
+    : "Choose or type the course, strand, field, or topic that fits best.";
+
+  if (context === "note") {
+    return `${baseHelperText} This note can use a different value from your profile.`;
+  }
+
+  return baseHelperText;
 }

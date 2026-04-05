@@ -34,7 +34,7 @@ Save behavior:
 Learning Profile owns:
 
 - required `learnerLevel` during onboarding
-- optional `courseProgram`
+- required `courseProgram` when completing onboarding or saving the Learning Profile card
 - optional `bio`
 
 Current learner-level options:
@@ -50,7 +50,9 @@ Current learner-level options:
 Rules:
 
 - existing users may still have `null` learner metadata until they update it
-- `courseProgram` stays optional and accepts typed custom values
+- `courseProgram` accepts typed custom values but must be present when the Learning Profile card is saved
+- helper text for `courseProgram` changes with `learnerLevel`
+- autocomplete filters in real time and prioritizes existing prefix matches before contains matches and before the custom action
 - combobox-style fields should reuse the Note Editor `Subject` input-plus-suggestions pattern
 - `Save Learning Profile` should not change identity or profile type
 

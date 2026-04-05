@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { completeOnboarding, getMe, listCoursePrograms, type EngagementMode, type LearnerLevel, type ProfileType } from "@/lib/api";
@@ -221,13 +222,13 @@ export default function OnboardingPage() {
       return profileType !== null;
     }
     if (currentStep === "learning-profile") {
-      return learnerLevel !== "";
+      return learnerLevel !== "" && courseProgram.trim().length > 0;
     }
     if (currentStep === "exam-date") {
       return examDate.trim().length > 0;
     }
     return true;
-  }, [currentStep, examDate, learnerLevel, profileType]);
+  }, [courseProgram, currentStep, examDate, learnerLevel, profileType]);
 
   const handleNext = async () => {
     if (loading || saving || !isCurrentStepValid) {
@@ -252,7 +253,7 @@ export default function OnboardingPage() {
       const me = await completeOnboarding({
         profileType,
         learnerLevel,
-        courseProgram: courseProgram.trim() || null,
+        courseProgram: courseProgram.trim(),
         bio: bio.trim() || null,
         engagementMode,
         inactivityRemindersEnabled: reminderValues.inactivityRemindersEnabled,
@@ -371,16 +372,14 @@ export default function OnboardingPage() {
                   </label>
                   <label className="block space-y-2">
                     <span className="text-sm font-medium">Course / Program</span>
-                    <SuggestionCombobox
+                    <CourseProgramCombobox
                       id="onboarding-course-program"
                       value={courseProgram}
-                      options={availableCourseProgramSuggestions.map((option) => ({ value: option, label: option }))}
+                      suggestions={availableCourseProgramSuggestions}
+                      learnerLevel={learnerLevel}
                       ariaLabel="Course / Program"
-                      onChange={(value) => setCourseProgram(value.slice(0, 120))}
-                      placeholder="Choose or type your course/program"
-                      helperText="Pick a suggestion or type your own course/program."
-                      allowCustom
-                      toggleLabel="Toggle course program suggestions"
+                      onChange={setCourseProgram}
+                      context="onboarding"
                     />
                   </label>
                   <label className="block space-y-2 sm:col-span-2">

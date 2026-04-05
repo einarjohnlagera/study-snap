@@ -364,7 +364,7 @@ Onboarding architecture:
 - `POST /api/auth/onboarding` persists:
   - `profileType`
   - `learnerLevel`
-  - optional `courseProgram`
+  - required `courseProgram`
   - optional `bio`
   - `engagementMode`
   - reminder preferences
@@ -390,6 +390,7 @@ Profile update architecture:
   - `email`
 - `profileType` remains a separate write action from the existing profile-type endpoint
 - preference writes such as `engagementMode` and study reminders remain under settings/preferences APIs
+- frontend `Save Learning Profile` validation requires both `learnerLevel` and `courseProgram`, while note-level `courseProgram` remains optional
 - the user aggregate stores:
   - `email`
   - `pendingEmail`

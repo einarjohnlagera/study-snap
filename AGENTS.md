@@ -161,7 +161,7 @@ Core loop:
   - `Exam Date` only for `BOARD_EXAM`
 - `Learning Profile` onboarding collects:
   - required `learnerLevel`
-  - optional `courseProgram`
+  - required `courseProgram`
   - optional `bio`
 - Profile Type can be edited later in `Profile`.
 - Learning Style can be edited later in `Settings > Preferences`.
@@ -207,6 +207,10 @@ Core loop:
   - a `Learning Profile` card with its own `Save Learning Profile` action
   - a `Profile Type` card with its own `Save Profile Type` action
 - Learning Profile combobox-style inputs should reuse the same input-plus-suggestions pattern as the Note Editor `Subject` field.
+- Learning Profile `Course / Program` helper text should adapt to `learnerLevel` so examples match the learner's current study stage.
+- Saving `Learning Profile` requires both fields and should show:
+  - `Please select your learner level.`
+  - `Please select or enter your course / program.`
 - Profile save buttons must remain section-specific rather than global.
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.
@@ -370,10 +374,14 @@ Core loop:
 - Course / Program UI rules:
   - `courseProgram` is the top-level note-classification shelf above `subject` and `tags`
   - `users.courseProgram` and `notes.courseProgram` remain persisted string fields; do not add a `course_programs` table unless explicitly requested
-  - note editor, onboarding, and profile course/program inputs should use backend-driven saved-value suggestions plus curated defaults
+  - note editor, onboarding, profile, and note-detail metadata course/program inputs should use one shared autocomplete behavior backed by saved-value suggestions plus curated defaults
   - authenticated course/program suggestions come from `GET /api/course-programs?scope=mine`
   - public/discovery course/program values may come from public note payloads or `GET /api/course-programs?scope=public`
   - course/program inputs must still allow custom typed values
+  - typing should filter suggestions in real time, case-insensitively, with prefix matches ahead of contains matches
+  - typing must not keep the full unfiltered list visible
+  - existing matching suggestions should appear before the custom `Use "..."` action
+  - exact case-insensitive matches should reuse the existing saved display label instead of creating a casing variant
   - saved course/program values should normalize whitespace and dash formatting so equivalent values reuse the same suggestion/filter label when possible
   - course/program reuse checks should be case-insensitive while keeping a readable display label
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
@@ -545,6 +553,7 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
   - `subject` -> reusable academic topic
   - `tags` -> fine-grained keywords
 - `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
+- `courseProgram` is required during onboarding and later Learning Profile saves, but remains nullable in storage for pre-existing users until they update it.
 - backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags` for future prompt tuning without changing current UI behavior.
 
 ### Quiz Generation Rule
