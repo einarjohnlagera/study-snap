@@ -25,6 +25,7 @@ const subjectNotes = [
   {
     id: "note-1",
     title: "Cell Structure",
+    courseProgram: "Biology",
     subject: "Science",
     tags: ["biology", "cells"],
     contentPreview: "Cells are the basic unit of life.",
@@ -33,6 +34,8 @@ const subjectNotes = [
     studyPackId: "pack-1",
     studyPackStatus: "STUDY_PACK_READY",
     quizCount: 5,
+    copyCount: 3,
+    viewCount: 7,
     updatedAt: "2026-03-24T08:30:00Z",
   },
 ];
@@ -60,6 +63,8 @@ describe("PublicLibrarySubjectPage", () => {
     expect(screen.getAllByText("Science").length).toBeGreaterThan(0);
     expect(screen.getByText("Cells are the basic unit of life.")).toBeInTheDocument();
     expect(screen.getByText("Cells contain organelles that support life functions.")).toBeInTheDocument();
+    expect(screen.getByText("7 views")).toBeInTheDocument();
+    expect(screen.getByText("3 copies")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Cell Structure/i })).toHaveAttribute(
       "href",
       "/public/library/science/cell-structure",

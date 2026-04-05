@@ -34,7 +34,7 @@ const ALL_LEARNER_LEVELS = "__ALL_LEARNER_LEVELS__";
 type PublicLibrarySortOption =
   | "NEWEST"
   | "MOST_COPIED"
-  | "MOST_SHARED"
+  | "MOST_VIEWED"
   | "TITLE_ASC";
 
 type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
@@ -42,8 +42,8 @@ type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
 const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
   NEWEST: "Newest",
   MOST_COPIED: "Most Copied",
-  MOST_SHARED: "Most Shared",
-  TITLE_ASC: "Title (A-Z)",
+  MOST_VIEWED: "Most Viewed",
+  TITLE_ASC: "Title A-Z",
 };
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
@@ -319,7 +319,7 @@ export function PublicLibraryPageClient() {
     );
     const metricValue = (
       item: NoteListItemResponse,
-      key: "copyCount" | "shareCount",
+      key: "copyCount" | "viewCount",
     ) => item[key] ?? 0;
 
     return [...filteredItems].sort((left, right) => {
@@ -333,8 +333,8 @@ export function PublicLibraryPageClient() {
           }
           return byNewest(left, right);
         }
-        case "MOST_SHARED": {
-          const primaryDelta = metricValue(right, "shareCount") - metricValue(left, "shareCount");
+        case "MOST_VIEWED": {
+          const primaryDelta = metricValue(right, "viewCount") - metricValue(left, "viewCount");
           if (primaryDelta !== 0) {
             return primaryDelta;
           }
@@ -500,6 +500,7 @@ export function PublicLibraryPageClient() {
                       contentPreview={item.contentPreview}
                       summaryPreview={item.summaryPreview}
                       copyCount={typeof item.copyCount === "number" && item.copyCount > 0 ? item.copyCount : null}
+                      viewCount={typeof item.viewCount === "number" && item.viewCount > 0 ? item.viewCount : null}
                       metadataBadges={<NoteStateBadge status={item.studyPackStatus} />}
                       footer={(
                         <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">

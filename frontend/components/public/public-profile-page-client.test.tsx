@@ -97,6 +97,7 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getByRole("heading", { name: "Featured note" })).toBeInTheDocument();
     expect(screen.getByText("Featured Note")).toBeInTheDocument();
     expect(screen.getAllByText("5 copies")).not.toHaveLength(0);
+    expect(screen.getAllByText("9 views")).not.toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));

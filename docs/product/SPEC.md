@@ -362,12 +362,13 @@ Users can:
   - Title
   - private-library visibility icon when relevant
   - Subject badge
-  - Copy count when available
   - Study Pack status badge when relevant
   - `Note Preview` from note content
   - `Summary Preview` from generated Study Pack summary
   - Tags
+  - subtle discovery metrics row (`views`, `copies`) when that surface exposes them
 - Note-card previews should clamp to 2-3 lines so cards stay visually consistent in a grid.
+- `Note Preview` is the primary card preview; `Summary Preview` is secondary supporting context.
 - If a note has no generated summary yet, cards should show `No summary available yet.`
 - Public/Private card state should use a subtle globe/lock icon when needed instead of another large badge.
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
@@ -579,8 +580,8 @@ Users can:
 - Public Library sort options:
   - `Newest`
   - `Most Copied`
-  - `Most Shared`
-  - `Title (A-Z)`
+  - `Most Viewed`
+  - `Title A-Z`
 
 Dashboard guidance rules:
 

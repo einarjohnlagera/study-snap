@@ -38,8 +38,8 @@ Public Library sort options:
 
 - `Newest`
 - `Most Copied`
-- `Most Shared`
-- `Title (A-Z)`
+- `Most Viewed`
+- `Title A-Z`
 
 ## Note Cards
 
@@ -48,11 +48,11 @@ Public Library note cards reuse the shared note-card layout:
 - subtle `courseProgram` line when available
 - title
 - subject badge
-- copy count when available
 - Study Pack status badge when relevant
 - `Note Preview`
 - `Summary Preview`
 - tags
+- subtle metrics row for `views` and `copies` when available
 
 Interaction rules:
 
@@ -60,6 +60,12 @@ Interaction rules:
 - cards are preview/navigation only
 - do not place copy/share/generate/delete/edit actions inside the card
 - use public note detail for actions instead
+
+Discovery guidance:
+
+- prioritize original note preview over generated summary when scanning cards
+- keep `views` and `copies` subtle so they help note selection without turning into badge clutter
+- use `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` as student-friendly discovery labels
 
 ## Public Note Detail
 

@@ -27,6 +27,7 @@
 - Quantitative notes can now produce computation and problem-solving questions with step-based explanations when the note context supports it.
 - Challenge Quiz and Adaptive Practice now require richer explanations and concept labels in their generated quiz payloads.
 - Library and Public Library now use richer metadata-driven filtering with course/program support, Public Library learner-level/source filters, and subtler note-card metadata hierarchy with visibility icons instead of extra badges.
+- Public Library cards now emphasize the original note preview first and use subtle `views` / `copies` metrics plus `Most Viewed` sorting to help users spot strong notes faster.
 - Private and public note detail now include a `Full Notes` tab so users can inspect the complete original note alongside `Summary`, `Key Concepts`, and `Quiz`.
 - The `Summary` view on private and public note detail now includes a subtle `View Full Notes →` CTA so users can jump from AI preview to the original note without losing context.
 
