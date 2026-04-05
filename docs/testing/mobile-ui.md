@@ -20,4 +20,5 @@ Verify these cases on mobile-sized viewports:
 - Profile and Settings save/navigation actions show text labels
 - icon-only exceptions are limited to small utility controls such as edit/delete/back/menu/theme/avatar
 - Library and Public Library keep `Filter` and `Sort` inside a mobile sheet/modal instead of always-visible controls.
+- Library and Public Library mobile filter sheets include the newer metadata filters (`Course / Program`, and Public Library `Learner Level` when available) without overcrowding the base layout.
 - Library, Public Library, and Public Profile note cards remain action-free on mobile and open note detail from the whole card.

@@ -7,6 +7,8 @@ public record NoteListItemResponse(
         String id,
         String ownerUserId,
         String title,
+        String courseProgram,
+        String learnerLevel,
         String subject,
         List<String> tags,
         String contentPreview,
@@ -21,6 +23,7 @@ public record NoteListItemResponse(
         String authorDisplayName,
         boolean isOfficialAuthor,
         boolean isCurrentUser,
+        OffsetDateTime createdAt,
         OffsetDateTime updatedAt
 ) {
 }

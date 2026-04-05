@@ -278,6 +278,29 @@ Core loop:
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Profile is a public showcase of one creator's public notes and contribution stats.
 - Public Profile may show `bio`, optional `learnerLevel`, optional `courseProgram`, and derived subject chips, but it remains a learning profile rather than a social-media profile.
+- Private Library and Public Library should keep the same top-level list structure:
+  - `Search`
+  - `Filter`
+  - `Sort`
+  - notes list
+- Current library filtering and sorting stay frontend-side over loaded note-list payloads.
+- Backend note-list payloads must expose the metadata needed for library filtering/sorting, including note `courseProgram`, `createdAt`, `updatedAt`, and public-note owner `learnerLevel` when applicable.
+- Private Library filters should support:
+  - `Course / Program`
+  - `Subject`
+  - `Tags`
+  - `Study Pack Ready`
+  - `Draft`
+  - `Public`
+  - `Private`
+- Public Library filters should support:
+  - `Course / Program`
+  - `Learner Level` when public note results expose it
+  - `Subject`
+  - `Tags`
+  - `By You`
+  - `Official`
+  - `Community`
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes
@@ -392,15 +415,19 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
 - Shared note-card content order is:
+  - subtle `courseProgram` line when available
+  - Title
+  - private-library visibility icon (`Globe` / `Lock`) near the title when relevant
   - Subject badge
   - Copy count when available
-  - Title
+  - Study Pack status badge when relevant
   - `Note Preview`
   - `Summary Preview`
   - Tags
 - `Note Preview` comes from note content and `Summary Preview` comes from generated Study Pack summary.
 - If no generated summary exists, show `No summary available yet.`
 - Use clamped preview text so card heights stay consistent across listing grids.
+- Do not render `Public` / `Private` as a large badge on note cards; use a subtle icon instead when the visibility distinction matters.
 
 ### Page Responsibility Rule
 

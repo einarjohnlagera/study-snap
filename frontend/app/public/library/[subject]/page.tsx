@@ -117,6 +117,7 @@ export default async function PublicLibrarySubjectPage({ params }: Readonly<Publ
                 <Card className="flex h-full flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
                   <SharedNoteCard
                     title={note.title}
+                    metaLine={note.courseProgram?.trim() || null}
                     subject={note.subject}
                     tags={note.tags}
                     contentPreview={note.contentPreview}
