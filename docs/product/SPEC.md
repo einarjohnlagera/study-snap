@@ -464,14 +464,17 @@ Users can:
 - Use outline-style icons only and do not mix filled and outline icon sets on the same product surface.
 - Do not use emoji as icons in product UI.
 - Quiz entry buttons on Note Detail and other quiz launch surfaces should use distinct icons so users can distinguish fast review, exam challenge, and weak-area practice at a glance.
-- `Summary` and `Quiz` on Private Note Detail are view tabs, not action buttons:
-  - place the tab row below `Note Content` and above Study Pack content
+- Note Detail uses view tabs, not action buttons, for `Summary`, `Key Concepts`, `Quiz`, and `Full Notes`:
+  - keep `Summary` as the default tab on private and public note detail
+  - use the tab order `Summary` -> `Key Concepts` -> `Quiz` -> `Full Notes`
+  - place the tab row below the header/actions and above the selected note/study content
   - use underline-style navigation with muted inactive labels and an active bottom border
   - desktop and mobile tabs show icon + text for major note-view switching
   - tab switches should stay on the same note view and update content without a full page reload
   - tab switches must not reset the page scroll to the top
   - preserve the user's position around the tab content area when switching views
   - changing `?tab=` must not trigger a note-detail refetch or loading-state remount
+  - `Full Notes` should render the complete original note body so users can evaluate the source note without entering edit mode
 
 ### Display Name And Official Badge
 

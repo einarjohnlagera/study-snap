@@ -738,6 +738,7 @@ export type PublicNoteDetailResponse = {
   title: string | null;
   subject: string | null;
   tags: string[];
+  content: string;
   contentPreview: string;
   studyPackStatus: NoteStudyPackStatus;
   summary: string | null;

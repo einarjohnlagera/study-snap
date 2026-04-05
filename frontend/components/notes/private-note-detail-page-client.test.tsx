@@ -506,6 +506,8 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByRole("tab", { name: "Quiz" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Key Concepts" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Full Notes" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Summary" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Practice Quiz" })).toBeInTheDocument();
   });
@@ -548,6 +550,43 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(getNote).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Loading note...")).not.toBeInTheDocument();
     expect(await screen.findByRole("tab", { name: "Quiz" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows the full original note content in the Full Notes tab without refetching", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      content: "Line one of the original note.\n\nLine two stays visible.",
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: true,
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
+      quiz: [
+        {
+          question: "What is a cell?",
+          choices: ["Basic unit of life", "A tissue", "An organ", "A molecule"],
+          correctAnswerIndex: 0,
+          explanation: "Cells are the basic unit of life.",
+        },
+      ],
+    });
+
+    const { rerender } = render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Full Notes" }));
+    searchParamValues = { tab: "full-notes" };
+    searchParamsMock = createSearchParamsMock();
+    rerender(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?tab=full-notes", { scroll: false });
+    expect(getNote).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole("tab", { name: "Full Notes" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Full Notes" })).toBeInTheDocument();
+    expect(screen.getByText(/Line one of the original note\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Line two stays visible\./i)).toBeInTheDocument();
   });
 
   it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {

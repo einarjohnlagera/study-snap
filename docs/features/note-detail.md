@@ -35,27 +35,35 @@ Study Pack Ready actions:
 - `Make a Copy`
 - `Share`
 
-## Summary / Quiz Tabs
+## Note Detail Tabs
 
-`Summary` and `Quiz` are view tabs, not action buttons.
+`Summary`, `Key Concepts`, `Quiz`, and `Full Notes` are view tabs, not action buttons.
 
 Rules:
 
-- place tabs below `Note Content`
+- keep `Summary` as the default tab
+- use the order:
+  - `Summary`
+  - `Key Concepts`
+  - `Quiz`
+  - `Full Notes`
+- place tabs below the header/actions and above the selected content
 - active tab uses underline-style navigation
 - desktop shows icon + text
 - mobile shows icon + text
 - switching tabs updates the note view without a full page reload
-- preserve query-string state such as `?tab=quiz`
+- private Note Detail preserves query-string state such as `?tab=quiz` and `?tab=full-notes`
 - switching tabs must not jump the page back to the top
-- keep the user anchored in the same content area when moving between `Summary` and `Quiz`
+- keep the user anchored in the same content area when moving between tabs
 - switching `?tab=` state must not refetch the note or remount Note Detail into a loading state
+- `Full Notes` should render the complete original note content so users can review the source note without leaving Note Detail
 
 ## Public Note Detail
 
 Public note detail is a separate public/read-only surface.
 
 - canonical route: `/public/library/{subject}/{slug}`
+- public note detail should use the same `Summary` / `Key Concepts` / `Quiz` / `Full Notes` reading flow, but it keeps tab state local instead of query-driven routing
 - owner sees `Open Note` and `Share`
 - non-owner sees `Copy to My Library`, `Generate Study Pack`, and `Share`
 - do not expose private editing or study actions there
