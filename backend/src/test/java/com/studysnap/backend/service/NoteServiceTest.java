@@ -336,6 +336,7 @@ class NoteServiceTest {
         assertThat(response.authorDisplayName()).isEqualTo("historyhero");
         assertThat(response.isOfficialAuthor()).isFalse();
         assertThat(response.isCurrentUser()).isFalse();
+        assertThat(response.content()).isEqualTo("content");
         assertThat(response.summary()).isEqualTo("Summary");
         assertThat(response.keyConcepts()).containsExactly("Alliance systems");
     }

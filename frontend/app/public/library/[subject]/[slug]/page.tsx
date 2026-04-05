@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { PublicNoteDetailTabbedContent } from "@/components/notes/public-note-detail-tabbed-content";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions} from "@/components/notes/public-note-ownership-actions";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
-import { getDisplayedQuizChoices, resolveQuizCorrectIndex } from "@/lib/quiz";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData } from "@/lib/structured-data";
@@ -63,8 +63,6 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
   }
 
   const title = note.title?.trim() || "Untitled note";
-  const hasGeneratedStudyPack = note.studyPackStatus === "STUDY_PACK_READY";
-  const quizPreview = note.quiz.slice(0, 3);
   const description = buildDescription(title, note.summary);
   const canonicalUrl = absoluteUrl(buildPublicLibraryNotePathFromDetail(note));
 
@@ -125,35 +123,14 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           </div>
         </header>
 
-        <section aria-labelledby="public-note-summary">
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 id="public-note-summary" className="text-xl font-semibold">
-              Summary
-            </h2>
-            <p className="text-sm leading-relaxed text-foreground/80">
-              {hasGeneratedStudyPack && note.summary
-                ? note.summary
-                : "This public note does not have a generated summary yet."}
-            </p>
-          </Card>
-        </section>
-
-        <section aria-labelledby="public-note-concepts">
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 id="public-note-concepts" className="text-xl font-semibold">
-              Key Concepts
-            </h2>
-            {hasGeneratedStudyPack && note.keyConcepts.length > 0 ? (
-              <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
-                {note.keyConcepts.map((concept) => (
-                  <li key={concept}>{concept}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-foreground/75">No generated key concepts yet.</p>
-            )}
-          </Card>
-        </section>
+        <PublicNoteDetailTabbedContent
+          studyPackStatus={note.studyPackStatus}
+          summary={note.summary}
+          keyConcepts={note.keyConcepts}
+          quiz={note.quiz}
+          content={note.content}
+          quizMode="preview"
+        />
 
         <section aria-labelledby="public-note-whats-inside">
           <Card className="space-y-3 border-blue-500/20 bg-blue-500/5 p-4 sm:p-6">
@@ -170,44 +147,6 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           </Card>
         </section>
 
-        <section aria-labelledby="public-note-quiz">
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 id="public-note-quiz" className="text-xl font-semibold">
-              Practice Questions Preview
-            </h2>
-            <p className="text-sm text-foreground/70">
-              Copy this note or open your own version to try the interactive quiz, see answers, and track your score.
-            </p>
-            {hasGeneratedStudyPack && quizPreview.length > 0 ? (
-              <ol className="space-y-4">
-                {quizPreview.map((item, index) => (
-                  <li key={`${note.id}-quiz-${index}`} className="space-y-2 text-sm text-foreground/85">
-                    <p className="font-medium text-foreground">
-                      {index + 1}. {item.question}
-                    </p>
-                    <ul className="space-y-1">
-                      {getDisplayedQuizChoices({
-                        ...item,
-                        correctIndex: resolveQuizCorrectIndex(item),
-                      }).map((choice) => (
-                        <li key={`${item.question}-${choice.label}-${choice.text}`}>
-                          <span className="mr-2 font-semibold text-foreground">{choice.label}.</span>
-                          <span>{choice.text}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="text-sm text-foreground/75">No quiz preview available yet.</p>
-            )}
-            <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-3 text-sm text-foreground/70">
-              Preview only. The full quiz experience, answer reveal, and score tracking are available from your own
-              note in the app workspace.
-            </div>
-          </Card>
-        </section>
       </article>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

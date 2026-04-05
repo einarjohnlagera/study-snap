@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Brain, ChevronDown, FileText } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
+import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
+import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -63,11 +65,11 @@ import {
 } from "@/lib/learning-profile";
 import {
   buildNoteDetailPathWithTab,
+  normalizeNoteDetailTab,
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
-import { cn } from "@/lib/utils";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
   if (status === "STUDY_PACK_READY") {
@@ -88,56 +90,6 @@ function truncateShareUrl(url: string, maxLength = 58) {
     return url;
   }
   return `${url.slice(0, maxLength - 3)}...`;
-}
-
-function StudyPackTabs({
-  activeTab,
-  onChange,
-}: Readonly<{
-  activeTab: NoteDetailTab;
-  onChange: (tab: NoteDetailTab) => void;
-}>) {
-  const tabs: Array<{
-    label: string;
-    tab: NoteDetailTab;
-    icon: typeof FileText;
-  }> = [
-    { label: "Summary", tab: "summary", icon: FileText },
-    { label: "Quiz", tab: "quiz", icon: Brain },
-  ];
-
-  return (
-    <div className="border-b border-border" role="tablist" aria-label="Study Pack view">
-      <div className="flex items-center gap-5 sm:gap-6">
-        {tabs.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.tab;
-          return (
-            <button
-              key={item.tab}
-              type="button"
-              role="tab"
-              aria-label={item.label}
-              aria-selected={isActive}
-              onClick={() => {
-                onChange(item.tab);
-              }}
-              className={cn(
-                "inline-flex min-h-10 items-center justify-center gap-2 border-b-2 border-transparent px-1 pb-3 pt-1 text-sm font-medium transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                isActive
-                  ? "border-blue-600 text-foreground dark:border-blue-400"
-                  : "text-foreground/55 hover:text-foreground/80",
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function buildShareUrl(subject: string | null, title: string | null) {
@@ -436,7 +388,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     : false;
   const showFirstStudyPackSuccessBanner = firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
-  const activeStudyPackTab: NoteDetailTab = searchParams.get("tab") === "quiz" ? "quiz" : "summary";
+  const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
   const availableCourseProgramSuggestions = useMemo(
     () => mergeCourseProgramSuggestions(
       COURSE_PROGRAM_SUGGESTIONS,
@@ -473,12 +425,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [note?.id, pathname]);
 
   const handleChangeStudyPackTab = useCallback((nextTab: NoteDetailTab) => {
-    if (!note || isDraft || activeStudyPackTab === nextTab) {
+    if (!note || activeStudyPackTab === nextTab) {
       return;
     }
     const next = new URLSearchParams(searchParams.toString());
     router.replace(buildNoteDetailPathWithTab(note.id, nextTab, next), { scroll: false });
-  }, [activeStudyPackTab, isDraft, note, router, searchParams]);
+  }, [activeStudyPackTab, note, router, searchParams]);
 
   const finalizeGeneratedRedirect = useCallback((noteId: string) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -901,6 +853,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   };
 
+  const fullNoteContent = note?.content.trim().length ? note.content : "No content yet.";
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
@@ -1190,77 +1144,81 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           </Card>
 
           <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Note Content</h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">
-              {note.content.trim().length > 0 ? note.content : "No content yet."}
+            <NoteDetailTabs
+              activeTab={activeStudyPackTab}
+              onChange={handleChangeStudyPackTab}
+              ariaLabel="Private note detail views"
+            />
+            <p className="text-xs text-foreground/60">
+              Switch between the summary, key concepts, quiz, and full note without leaving this page.
             </p>
           </Card>
 
-      {!isDraft ? (
-        <Card className="space-y-3 p-4 sm:p-6">
-          <StudyPackTabs activeTab={activeStudyPackTab} onChange={handleChangeStudyPackTab} />
-          <p className="text-xs text-foreground/60">
-            Switch between summary review and quiz-first practice without leaving this note.
-          </p>
-        </Card>
-      ) : null}
+          {activeStudyPackTab === "summary" ? (
+            <NoteDetailSummaryCard
+              summary={isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : (note.summary ?? "No summary available.")}
+              onViewFullNotes={() => handleChangeStudyPackTab("full-notes")}
+            />
+          ) : null}
 
-      {isDraft || activeStudyPackTab === "summary" ? (
-        <>
-          <Card id="study-pack-summary" className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
-            <p className="text-sm text-foreground/75">
-              {isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : (note.summary ?? "No summary available.")}
-            </p>
-          </Card>
+          {activeStudyPackTab === "key-concepts" ? (
+            <Card className="space-y-3 p-4 sm:p-6">
+              <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
+              {isDraft || note.keyConcepts.length === 0 ? (
+                <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
+              ) : (
+                <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
+                  {note.keyConcepts.map((concept, index) => (
+                    <li key={`${note.id}-concept-${index}`}>{concept}</li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          ) : null}
+
+          {activeStudyPackTab === "quiz" ? (
+            isDraft ? (
+              <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
+                <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
+                <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
+              </Card>
+            ) : (
+              <div id="practice-quiz">
+                <PracticeQuizCard quiz={note.quiz} />
+              </div>
+            )
+          ) : null}
+
+          {activeStudyPackTab === "full-notes" ? (
+            <Card className="space-y-3 p-4 sm:p-6">
+              <h2 className="text-lg font-semibold sm:text-xl">Full Notes</h2>
+              <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
+                  {fullNoteContent}
+                </p>
+              </div>
+            </Card>
+          ) : null}
 
           <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
+            <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
             {isDraft ? (
-              <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
+              <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
             ) : (
-              <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
-                {note.keyConcepts.map((concept, index) => (
-                  <li key={`${note.id}-concept-${index}`}>{concept}</li>
-                ))}
-              </ul>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
+                  <p className="mt-1 text-sm text-foreground/80">Attempts: {quickSummary?.attempts ?? 0}</p>
+                  <p className="text-sm text-foreground/80">Last score: {quickSummary?.lastScorePercentage ?? "-"}</p>
+                </div>
+                <div className="rounded-md border border-border bg-background p-3">
+                  <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
+                  <p className="mt-1 text-sm text-foreground/80">Attempts: {challengeSummary?.attempts ?? 0}</p>
+                  <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
+                </div>
+              </div>
             )}
           </Card>
-        </>
-      ) : null}
-
-      <Card className="space-y-3 p-4 sm:p-6">
-        <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
-        {isDraft ? (
-          <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-border bg-background p-3">
-              <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
-              <p className="mt-1 text-sm text-foreground/80">Attempts: {quickSummary?.attempts ?? 0}</p>
-              <p className="text-sm text-foreground/80">Last score: {quickSummary?.lastScorePercentage ?? "-"}</p>
-            </div>
-            <div className="rounded-md border border-border bg-background p-3">
-              <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
-              <p className="mt-1 text-sm text-foreground/80">Attempts: {challengeSummary?.attempts ?? 0}</p>
-              <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {isDraft || activeStudyPackTab === "quiz" ? (
-        isDraft ? (
-          <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
-            <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
-          </Card>
-        ) : (
-          <div id="practice-quiz">
-            <PracticeQuizCard quiz={note.quiz} />
-          </div>
-        )
-      ) : null}
         </div>
       ) : null}
 

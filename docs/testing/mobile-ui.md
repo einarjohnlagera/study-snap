@@ -8,10 +8,13 @@ Verify these cases on mobile-sized viewports:
 - public mobile navbar keeps theme toggle in the header utility group instead of inside the CTA stack
 - public mobile menu keeps nav links separate from `Login` and `Get Started`
 - public mobile menu does not duplicate the theme toggle or visible `Get Started` CTA while the menu is open
-- Note Detail `Summary` and `Quiz` tabs show text labels on mobile
+- Note Detail `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` tabs show text labels on mobile
+- the `View Full Notes →` CTA is visible inside the `Summary` view on mobile
 - switching Note Detail tabs does not jump the page to the top
 - switching Note Detail tabs keeps the user near the tab content area
 - switching Note Detail tabs does not flash a loading state or refetch the note on mobile
+- the four-tab row remains scrollable/readable on mobile instead of becoming cramped
+- `Full Notes` remains readable on mobile for long note bodies
 - Note Editor mobile Generate CTA stays centered and readable
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA
 - mobile sticky CTA area stays compact and does not consume excessive vertical space

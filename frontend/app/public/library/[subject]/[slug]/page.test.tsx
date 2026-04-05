@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
 
@@ -51,6 +51,7 @@ const baseNote = {
   title: "Cell Structure",
   subject: "Science",
   tags: ["biology", "cells"],
+  content: "Cells are the basic unit of life.\n\nThey contain organelles that support cell function.",
   contentPreview: "Cells are the basic unit of life.",
   studyPackStatus: "STUDY_PACK_READY",
   summary: "Cell structure summary",
@@ -90,17 +91,32 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
     expect(screen.getByText("Author line for user-2 / studybuddy / regular / other / Science")).toBeInTheDocument();
     expect(screen.getByText("Ownership actions for note-1 / user-2")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Key Concepts" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Full Notes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View Full Notes →" })).toBeInTheDocument();
     expect(screen.getByText("Cell structure summary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "What you can do with this note in NoteLib" })).toBeInTheDocument();
+    expect(screen.getByText("Take Quick Review quiz")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "View Full Notes →" }));
+    expect(screen.getByRole("heading", { name: "Full Notes" })).toBeInTheDocument();
+    expect(screen.getByText(/Cells are the basic unit of life\./i)).toBeInTheDocument();
+    expect(screen.getByText(/They contain organelles that support cell function\./i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
     expect(screen.getByRole("heading", { name: "Key Concepts" })).toBeInTheDocument();
     expect(screen.getByText("Cell membrane")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Quiz" }));
     expect(screen.getByRole("heading", { name: "Practice Questions Preview" })).toBeInTheDocument();
     expect(
       screen.getByText("Copy this note or open your own version to try the interactive quiz, see answers, and track your score."),
     ).toBeInTheDocument();
     expect(screen.getByText(/What controls the cell\?/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "What you can do with this note in NoteLib" })).toBeInTheDocument();
-    expect(screen.getByText("Take Quick Review quiz")).toBeInTheDocument();
     expect(
       screen.getByText(/Preview only\. The full quiz experience, answer reveal, and score tracking are available/i),
     ).toBeInTheDocument();

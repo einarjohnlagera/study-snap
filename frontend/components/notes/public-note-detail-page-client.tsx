@@ -1,10 +1,10 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PublicNoteDetailTabbedContent } from "@/components/notes/public-note-detail-tabbed-content";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
-import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import { copyNote, getPublicNote, type PublicNoteDetailResponse } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 
@@ -143,34 +143,14 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
             </div>
           </Card>
 
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
-            <p className="text-sm text-foreground/75">
-              {isDraft ? "This public note does not have generated summary yet." : note.summary}
-            </p>
-          </Card>
-
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
-            {isDraft ? (
-              <p className="text-sm text-foreground/75">No generated key concepts yet.</p>
-            ) : (
-              <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
-                {note.keyConcepts.map((concept, index) => (
-                  <li key={`${note.id}-concept-${index}`}>{concept}</li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          {isDraft ? (
-            <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
-              <p className="text-sm text-foreground/75">No generated quiz yet.</p>
-            </Card>
-          ) : (
-            <PracticeQuizCard quiz={note.quiz} />
-          )}
+          <PublicNoteDetailTabbedContent
+            studyPackStatus={note.studyPackStatus}
+            summary={note.summary}
+            keyConcepts={note.keyConcepts}
+            quiz={note.quiz}
+            content={note.content}
+            quizMode="full"
+          />
         </div>
       ) : null}
 

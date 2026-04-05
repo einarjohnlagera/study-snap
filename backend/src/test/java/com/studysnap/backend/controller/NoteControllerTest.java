@@ -172,6 +172,7 @@ class NoteControllerTest {
                 "Cell Structure",
                 "Science",
                 List.of("cells"),
+                "Full note content",
                 "preview",
                 "STUDY_PACK_READY",
                 "Summary",

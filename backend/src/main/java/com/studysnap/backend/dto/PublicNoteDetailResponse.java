@@ -9,6 +9,7 @@ public record PublicNoteDetailResponse(
         String title,
         String subject,
         List<String> tags,
+        String content,
         String contentPreview,
         String studyPackStatus,
         String summary,

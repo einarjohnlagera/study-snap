@@ -436,7 +436,7 @@ Dashboard personalization architecture:
   - `/notes/new?source=paste`
   - `/notes/new?source=upload`
 - mode/source query params may change editor focus and the default note-detail tab after generation, but they must not change persistence shape or create profile-specific entities
-- note detail remains a unified route and uses `tab=summary|quiz` as a presentation switch on the same note data
+- note detail remains a unified route and uses `tab=summary|key-concepts|quiz|full-notes` as a presentation switch on the same note data
 
 ## API Security Model
 

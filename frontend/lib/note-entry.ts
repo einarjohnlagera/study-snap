@@ -2,13 +2,26 @@ import type { ProfileType } from "@/lib/api";
 
 export type NoteEntryMode = "quiz" | null;
 export type NoteEntrySource = "paste" | "upload" | null;
-export type NoteDetailTab = "summary" | "quiz";
+export type NoteDetailTab = "summary" | "key-concepts" | "quiz" | "full-notes";
 
 function normalizeSingleValue(value: string | string[] | null | undefined): string | null {
   if (Array.isArray(value)) {
     return value[0] ?? null;
   }
   return value ?? null;
+}
+
+export function normalizeNoteDetailTab(value: string | string[] | null | undefined): NoteDetailTab {
+  const normalized = normalizeSingleValue(value);
+  if (
+    normalized === "summary"
+    || normalized === "key-concepts"
+    || normalized === "quiz"
+    || normalized === "full-notes"
+  ) {
+    return normalized;
+  }
+  return "summary";
 }
 
 export function normalizeNoteEntryMode(value: string | string[] | null | undefined): NoteEntryMode {

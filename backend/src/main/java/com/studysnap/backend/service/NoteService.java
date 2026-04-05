@@ -483,6 +483,7 @@ public class NoteService {
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
+                note.getContent(),
                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),
                 resolveStudyPackStatus(note, studyPack),
                 studyPack == null ? null : studyPack.getSummary(),
