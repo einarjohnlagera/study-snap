@@ -340,6 +340,15 @@ Core loop:
   - treat subject reuse checks as case-insensitive while keeping a readable display label
   - AI-generated subjects should prefer specific reusable academic labels, often `Primary field – subtopic`, rather than broad umbrella fields
   - avoid broad generated labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the notes support a more specific subject
+- Course / Program UI rules:
+  - `courseProgram` is the top-level note-classification shelf above `subject` and `tags`
+  - `users.courseProgram` and `notes.courseProgram` remain persisted string fields; do not add a `course_programs` table unless explicitly requested
+  - note editor, onboarding, and profile course/program inputs should use backend-driven saved-value suggestions plus curated defaults
+  - authenticated course/program suggestions come from `GET /api/course-programs?scope=mine`
+  - public/discovery course/program values may come from public note payloads or `GET /api/course-programs?scope=public`
+  - course/program inputs must still allow custom typed values
+  - saved course/program values should normalize whitespace and dash formatting so equivalent values reuse the same suggestion/filter label when possible
+  - course/program reuse checks should be case-insensitive while keeping a readable display label
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public subject listing pages use `/public/library/{subject}` and must reuse the existing route/data helpers rather than introducing parallel subject-page implementations.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
@@ -500,6 +509,10 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - `learnerLevel` lives on `User`, not on Note or a separate learner-profile table.
 - `User.courseProgram` remains the profile-level default for new notes.
 - Notes may also store an optional note-level `courseProgram`, defaulted from the user's profile and editable per note.
+- Metadata hierarchy should stay:
+  - `courseProgram` -> top-level track/domain
+  - `subject` -> reusable academic topic
+  - `tags` -> fine-grained keywords
 - `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
 - backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags` for future prompt tuning without changing current UI behavior.
 

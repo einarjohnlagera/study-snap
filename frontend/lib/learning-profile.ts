@@ -11,21 +11,88 @@ export const LEARNER_LEVEL_OPTIONS: Array<{ value: LearnerLevel; label: string }
 ];
 
 export const COURSE_PROGRAM_SUGGESTIONS = [
+  "Grade School",
+  "High School",
+  "Senior High – STEM",
+  "Senior High – ABM",
+  "Senior High – HUMSS",
+  "Senior High – GAS",
+  "Senior High – TVL",
   "Nursing",
-  "MedTech",
-  "Engineering",
-  "Education",
-  "Criminology",
+  "Civil Engineering",
+  "Mechanical Engineering",
+  "Electrical Engineering",
   "Accountancy",
-  "Psychology",
-  "Pharmacy",
-  "Computer Science",
+  "Business Administration",
   "Information Technology",
+  "Computer Science",
   "Software Engineering",
-  "Data Science",
-  "Programming",
-  "Business",
+  "Education",
+  "Psychology",
+  "Biology",
+  "Chemistry",
+  "Physics",
+  "Law",
+  "Medicine",
+  "Architecture",
+  "Criminology",
+  "Tourism",
+  "Hospitality Management",
+  "Self Study / Personal Learning",
+  "Professional / Board Exam Review",
+  "AWS Certification",
+  "PMP Certification",
 ];
+
+function courseProgramReadabilityScore(value: string): number {
+  const words = value.split(/[\s/–-]+/).filter((word) => word.length > 0);
+  const titleCaseWords = words.filter((word) => /^[A-Z]/.test(word)).length;
+  const hasUppercase = /[A-Z]/.test(value) ? 1 : 0;
+  return (titleCaseWords * 10) + hasUppercase;
+}
+
+function preferReadableCourseProgram(existing: string, candidate: string): string {
+  const existingScore = courseProgramReadabilityScore(existing);
+  const candidateScore = courseProgramReadabilityScore(candidate);
+  if (candidateScore !== existingScore) {
+    return candidateScore > existingScore ? candidate : existing;
+  }
+  return existing.length <= candidate.length ? existing : candidate;
+}
+
+export function normalizeCourseProgram(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = trimmed.replace(/\s*[-–—]\s*/g, " – ").replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+export function mergeCourseProgramSuggestions(...sources: Array<Array<string | null | undefined> | null | undefined>): string[] {
+  const normalized = new Map<string, string>();
+
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+    for (const value of source) {
+      const normalizedValue = normalizeCourseProgram(value);
+      if (!normalizedValue) {
+        continue;
+      }
+      const lookup = normalizedValue.toLowerCase();
+      normalized.set(lookup, normalized.has(lookup)
+        ? preferReadableCourseProgram(normalized.get(lookup) ?? normalizedValue, normalizedValue)
+        : normalizedValue);
+    }
+  }
+
+  return Array.from(normalized.values()).sort((left, right) => {
+    const caseInsensitive = left.localeCompare(right, undefined, { sensitivity: "accent" });
+    return caseInsensitive !== 0 ? caseInsensitive : left.localeCompare(right);
+  });
+}
 
 export function formatLearnerLevel(learnerLevel: LearnerLevel | string | null | undefined): string | null {
   if (!learnerLevel) {

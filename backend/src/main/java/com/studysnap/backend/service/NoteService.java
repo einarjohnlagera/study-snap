@@ -22,6 +22,7 @@ import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.ContentPreviewUtils;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -54,6 +55,10 @@ public class NoteService {
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
     private static final String OFFICIAL_AUTHOR_DISPLAY_NAME = "NoteLib";
     private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
+    private static final Comparator<String> COURSE_PROGRAM_DISPLAY_COMPARATOR = (left, right) -> {
+        int caseInsensitive = left.compareToIgnoreCase(right);
+        return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
+    };
     private static final Comparator<String> SUBJECT_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
         return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
@@ -116,7 +121,7 @@ public class NoteService {
 
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
-        entity.setCourseProgram(normalizeOptionalText(request.courseProgram()));
+        entity.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setUpdatedAt(OffsetDateTime.now());
 
@@ -161,7 +166,7 @@ public class NoteService {
         copy.setOwnerUserId(ownerUserId);
         copy.setTitle(source.getTitle());
         copy.setSubject(resolveCanonicalSubject(source.getSubject()));
-        copy.setCourseProgram(source.getCourseProgram());
+        copy.setCourseProgram(normalizeOptionalCourseProgram(source.getCourseProgram()));
         copy.setTags(source.getTags() == null ? new String[0] : Arrays.copyOf(source.getTags(), source.getTags().length));
         copy.setContent(source.getContent());
         copy.setStatus(NoteStatus.DRAFT);
@@ -234,8 +239,22 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
+    public List<String> listMineCoursePrograms(UUID ownerUserId) {
+        List<String> values = new java.util.ArrayList<>(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId));
+        userRepository.findById(ownerUserId)
+                .map(UserEntity::getCourseProgram)
+                .ifPresent(values::add);
+        return normalizeCoursePrograms(values);
+    }
+
+    @Transactional(readOnly = true)
     public List<String> listPublicSubjects() {
         return normalizeSubjects(noteRepository.findSubjectValuesByVisibility(NoteVisibility.PUBLIC));
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> listPublicCoursePrograms() {
+        return normalizeCoursePrograms(noteRepository.findCourseProgramValuesByVisibility(NoteVisibility.PUBLIC));
     }
 
     @Transactional(readOnly = true)
@@ -368,14 +387,18 @@ public class NoteService {
     }
 
     private String resolveRequestedCourseProgram(String requestedCourseProgram, UUID ownerUserId) {
-        String normalizedRequested = normalizeOptionalText(requestedCourseProgram);
+        String normalizedRequested = normalizeOptionalCourseProgram(requestedCourseProgram);
         if (normalizedRequested != null) {
             return normalizedRequested;
         }
         return userRepository.findById(ownerUserId)
                 .map(UserEntity::getCourseProgram)
-                .map(this::normalizeOptionalText)
+                .map(this::normalizeOptionalCourseProgram)
                 .orElse(null);
+    }
+
+    private String normalizeOptionalCourseProgram(String value) {
+        return CourseProgramNormalizationUtils.normalizeForStorage(value);
     }
 
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
@@ -526,6 +549,41 @@ public class NoteService {
                 .sorted(SUBJECT_DISPLAY_COMPARATOR)
                 .forEach(subject -> normalized.putIfAbsent(SubjectNormalizationUtils.normalizeForLookup(subject), subject));
         return List.copyOf(normalized.values());
+    }
+
+    private List<String> normalizeCoursePrograms(List<String> rawCoursePrograms) {
+        Map<String, String> normalized = new LinkedHashMap<>();
+        rawCoursePrograms.stream()
+                .map(CourseProgramNormalizationUtils::normalizeForStorage)
+                .filter(Objects::nonNull)
+                .sorted(COURSE_PROGRAM_DISPLAY_COMPARATOR)
+                .forEach(courseProgram -> normalized.merge(
+                        CourseProgramNormalizationUtils.normalizeForLookup(courseProgram),
+                        courseProgram,
+                        this::preferReadableCourseProgram
+                ));
+        return List.copyOf(normalized.values());
+    }
+
+    private String preferReadableCourseProgram(String existing, String candidate) {
+        int existingScore = courseProgramReadabilityScore(existing);
+        int candidateScore = courseProgramReadabilityScore(candidate);
+        if (candidateScore != existingScore) {
+            return candidateScore > existingScore ? candidate : existing;
+        }
+        return existing.length() <= candidate.length() ? existing : candidate;
+    }
+
+    private int courseProgramReadabilityScore(String value) {
+        String[] words = value.split("[\\s/–-]+");
+        int titleCaseWords = 0;
+        for (String word : words) {
+            if (!word.isEmpty() && Character.isUpperCase(word.charAt(0))) {
+                titleCaseWords++;
+            }
+        }
+        int hasUppercase = value.chars().anyMatch(Character::isUpperCase) ? 1 : 0;
+        return (titleCaseWords * 10) + hasUppercase;
     }
 
     private String resolveCanonicalSubject(String requestedSubject) {

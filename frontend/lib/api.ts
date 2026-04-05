@@ -706,6 +706,7 @@ export type NoteResponse = {
 export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
 export type NoteVisibility = "PRIVATE" | "PUBLIC";
 export type SubjectSuggestionScope = "mine" | "public";
+export type CourseProgramSuggestionScope = "mine" | "public";
 
 export type NoteListItemResponse = {
   id: string;
@@ -1995,6 +1996,24 @@ export async function listSubjects(scope: SubjectSuggestionScope = "public"): Pr
         headers: buildAuthHeaders(),
       });
   return parseApiResponse<string[]>(response, "Could not load subjects.");
+}
+
+export async function listCoursePrograms(scope: CourseProgramSuggestionScope = "public"): Promise<string[]> {
+  const path = `/course-programs?scope=${scope}`;
+  const response = scope === "mine"
+    ? await fetchWithAuth(
+        path,
+        {
+          method: "GET",
+          headers: buildAuthHeaders(),
+        },
+        true,
+      )
+    : await fetch(buildUrl(path), {
+        method: "GET",
+        headers: buildAuthHeaders(),
+      });
+  return parseApiResponse<string[]>(response, "Could not load course/program suggestions.");
 }
 
 export async function getPublicNote(noteId: string): Promise<PublicNoteDetailResponse> {

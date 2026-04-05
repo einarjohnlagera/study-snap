@@ -29,6 +29,24 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     List<String> findAllSubjectValues();
 
     @Query("""
+            select n.courseProgram
+            from NoteEntity n
+            where n.ownerUserId = :ownerUserId
+              and n.courseProgram is not null
+              and trim(n.courseProgram) <> ''
+            """)
+    List<String> findCourseProgramValuesByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+
+    @Query("""
+            select n.courseProgram
+            from NoteEntity n
+            where n.visibility = :visibility
+              and n.courseProgram is not null
+              and trim(n.courseProgram) <> ''
+            """)
+    List<String> findCourseProgramValuesByVisibility(@Param("visibility") NoteVisibility visibility);
+
+    @Query("""
             select n.subject
             from NoteEntity n
             where n.ownerUserId = :ownerUserId

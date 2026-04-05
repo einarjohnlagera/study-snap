@@ -41,6 +41,15 @@ Subject storage rule:
 - Normalization should trim whitespace, standardize dash formatting, and compare equivalent subjects case-insensitively.
 - AI-generated subjects should prefer reusable academic library labels such as `Primary field – subtopic`, not broad umbrella categories.
 
+Course / Program storage rule:
+
+- `users.course_program` is the profile-level default and `notes.course_program` is the note-level persisted source of truth.
+- There is no normalized `course_programs` table in the current architecture.
+- Distinct course/program suggestions are derived from persisted note values plus the authenticated user's saved profile value.
+- Course/program reuse is built by normalizing saved values rather than by writing to a second taxonomy table.
+- Normalization should trim whitespace, standardize dash formatting, and compare equivalent course/program values case-insensitively.
+- `course_program` is the top-level library shelf, while `subject` stays the more specific academic topic and `tags` remain the fine-grained keywords.
+
 Library/discovery payload usage:
 
 - Private and public note-list payloads should reuse note metadata directly from `notes`, especially:

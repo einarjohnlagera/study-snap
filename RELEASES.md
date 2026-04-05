@@ -16,6 +16,7 @@
 - Learner-level and course/program inputs now reuse the same subject-style combobox UX as the Note Editor `Subject` field.
 - Fixed-option learner-level comboboxes now snap back to the last valid saved value if a user types an unsupported option and closes the field.
 - Note Editor now includes `Course / Program`, subject autocomplete, optional tags guidance, and the same metadata shape in both create and edit modes.
+- Course / Program now behaves like a reusable top-level taxonomy shelf with stronger default suggestions, normalized saved-value reuse, and shared autocomplete across Note Editor, Note Detail metadata edit, Profile, and Onboarding.
 - Saved custom subjects now feed future autocomplete suggestions through the existing distinct-subject backend source.
 - Subject reuse now normalizes whitespace, dash formatting, and case-insensitive matches so equivalent custom subjects collapse into a cleaner autocomplete/filter catalog without adding a new subjects table.
 - AI-generated subjects now use stronger library-specific guidance plus backend validation so overly broad labels like `Engineering` or `Business` are retried before being accepted.
@@ -31,6 +32,7 @@
 - Backend Study Pack generation now prepares learner-level and course/program metadata in generation context for future prompt tuning, alongside note subject and tags.
 - Refactored the OpenAI Study Pack service to share request/response/error handling across Study Pack, study-tip, and quiz generation flows, and added direct unit coverage for the refactored service.
 - Added `notes.course_program` plus note-service create/update/copy handling so note metadata can diverge from the profile default when needed.
+- Added normalized `GET /api/course-programs?scope=mine|public` suggestions backed by saved note/profile course-program values without adding a separate taxonomy table.
 - Unified backend quiz-generation contracts onto strict JSON with required `answer`, `explanation`, and `concept` fields for more reliable parsing.
 
 ### Fixes

@@ -496,9 +496,14 @@ Filtering model:
 - `GET /api/subjects?scope=public` returns distinct subjects from public notes only
 - custom subjects join future autocomplete suggestions after the note is saved
 - subject reuse normalizes whitespace and dash formatting, then matches case-insensitively so equivalent saved subjects collapse into one suggestion/filter key when possible
+- distinct course/program suggestions are backend-driven from persisted `notes.course_program` values plus the authenticated user's saved `users.course_program`
+- `GET /api/course-programs?scope=mine` returns normalized distinct course/program values for the authenticated workspace
+- `GET /api/course-programs?scope=public` returns normalized distinct course/program values from public notes only
+- custom course/program values join future autocomplete suggestions after the note or profile value is saved
+- course/program reuse normalizes whitespace and dash formatting, then matches case-insensitively so equivalent saved values collapse into one suggestion/filter key when possible
 - note-level `courseProgram` is stored now so later library filters can use persisted note metadata instead of only the profile default
 - library note-list payloads should expose `courseProgram`, `createdAt`, `updatedAt`, and public-owner `learnerLevel` so frontend sorting/filtering does not need separate metadata fetches
-- the current system intentionally does not use a normalized `subjects` table yet
+- the current system intentionally does not use a normalized `subjects` or `course_programs` table yet
 
 ## Share and Public-Copy Architecture
 

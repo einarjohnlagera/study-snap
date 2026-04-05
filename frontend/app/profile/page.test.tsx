@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ProfilePage from "./page";
-import { completeOnboardingProfileType, getMe, updateUserProfile } from "@/lib/api";
+import { completeOnboardingProfileType, getMe, listCoursePrograms, updateUserProfile } from "@/lib/api";
 
 const routerMock = {
   push: jest.fn(),
@@ -22,6 +22,7 @@ jest.mock("@/lib/route-guards", () => ({
 jest.mock("@/lib/api", () => ({
   completeOnboardingProfileType: jest.fn(),
   getMe: jest.fn(),
+  listCoursePrograms: jest.fn(),
   updateUserProfile: jest.fn(),
 }));
 
@@ -61,9 +62,11 @@ describe("Profile page", () => {
     routerMock.push.mockReset();
     routerMock.refresh.mockReset();
     (getMe as jest.Mock).mockReset();
+    (listCoursePrograms as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue(profileResponse);
+    (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Computer Science"]);
     (completeOnboardingProfileType as jest.Mock).mockResolvedValue(profileResponse);
   });
 

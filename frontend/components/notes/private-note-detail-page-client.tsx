@@ -38,6 +38,7 @@ import {
   getNote,
   getQuickReviewPerformanceSummary,
   isEmailNotVerifiedError,
+  listCoursePrograms,
   listSubjects,
   trackAnalyticsEvent,
   startQuickReviewSession,
@@ -56,12 +57,16 @@ import {
   type FirstStudyOnboardingStep,
 } from "@/lib/first-study-onboarding";
 import {
+  COURSE_PROGRAM_SUGGESTIONS,
+  mergeCourseProgramSuggestions,
+  normalizeCourseProgram,
+} from "@/lib/learning-profile";
+import {
   buildNoteDetailPathWithTab,
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
-import { COURSE_PROGRAM_SUGGESTIONS } from "@/lib/learning-profile";
 import { cn } from "@/lib/utils";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
@@ -203,6 +208,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">("STUDENT");
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
+  const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
 
   const [isInlineMetadataEditMode, setIsInlineMetadataEditMode] = useState(false);
   const [metadataTagDraft, setMetadataTagDraft] = useState("");
@@ -298,17 +304,16 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   useEffect(() => {
     let active = true;
 
-    void listSubjects("mine")
-      .then((subjects) => {
-        if (active) {
-          setSubjectSuggestions(subjects);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setSubjectSuggestions([]);
-        }
-      });
+    void Promise.allSettled([
+      listSubjects("mine"),
+      listCoursePrograms("mine"),
+    ]).then(([subjectsResult, courseProgramsResult]) => {
+      if (!active) {
+        return;
+      }
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
+      setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
+    });
 
     return () => {
       active = false;
@@ -410,6 +415,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const isDraft = note?.studyPackStatus !== "STUDY_PACK_READY";
   const title = note?.title?.trim() || "Untitled note";
   const tags = note?.tags ?? [];
+  const courseProgramLabel = normalizeCourseProgram(note?.courseProgram);
   const visibility = (note?.visibility ?? "PRIVATE");
   const isPublic = visibility === "PUBLIC";
   const canManageVisibility = isEmailVerified || isPublic;
@@ -431,6 +437,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const showFirstStudyPackSuccessBanner = firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
   const activeStudyPackTab: NoteDetailTab = searchParams.get("tab") === "quiz" ? "quiz" : "summary";
+  const availableCourseProgramSuggestions = useMemo(
+    () => mergeCourseProgramSuggestions(
+      COURSE_PROGRAM_SUGGESTIONS,
+      courseProgramSuggestions,
+      [metadataDraft.courseProgram],
+      [note?.courseProgram],
+    ),
+    [courseProgramSuggestions, metadataDraft.courseProgram, note?.courseProgram],
+  );
   const openPaywallModal = useCallback((variant: PaywallModalVariant, source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -968,6 +983,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </p>
                 ) : null}
 
+                {!isInlineMetadataEditMode && courseProgramLabel ? (
+                  <p className="text-sm text-foreground/65">{courseProgramLabel}</p>
+                ) : null}
+
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(isDraft ? "DRAFT" : "STUDY_PACK_READY")}`}>
                     {isDraft ? "Draft" : "Study Pack"}
@@ -1063,7 +1082,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <SuggestionCombobox
                     id="note-course-program-inline"
                     value={metadataDraft.courseProgram}
-                    options={COURSE_PROGRAM_SUGGESTIONS.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
+                    options={availableCourseProgramSuggestions.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
                     onChange={(value) => setMetadataDraft((previous) => ({ ...previous, courseProgram: value }))}
                     placeholder="Choose or type a course/program"
                     helperText="Keep your course/program aligned to this note, or customize it when the note belongs somewhere else."
