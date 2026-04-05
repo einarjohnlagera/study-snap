@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.ContinueStudyingResumeType;
 import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
@@ -11,6 +12,7 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -19,6 +21,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -52,6 +55,8 @@ class DashboardServiceTest {
     @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
+    private NoteRepository noteRepository;
+    @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
     private ActivityEventRepository activityEventRepository;
@@ -68,6 +73,7 @@ class DashboardServiceTest {
         dashboardService = new DashboardService(
                 userRepository,
                 studyPackRepository,
+                noteRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
                 subscriptionService,
@@ -108,6 +114,8 @@ class DashboardServiceTest {
                         any(UUID.class),
                         eq(ActivityType.OPENED_STUDY_PACK)))
                 .thenReturn(Optional.empty());
+        lenient().when(noteRepository.findByIdAndOwnerUserId(any(UUID.class), any(UUID.class)))
+                .thenReturn(Optional.empty());
     }
 
     @Test
@@ -118,9 +126,9 @@ class DashboardServiceTest {
         var response = dashboardService.getStudyEngagement(userId);
 
         assertThat(response.engagementMode()).isEqualTo(EngagementMode.FOCUSED);
-        assertThat(response.currentStreak()).isEqualTo(0);
-        assertThat(response.longestStreak()).isEqualTo(0);
-        assertThat(response.studyDaysThisWeek()).isEqualTo(0);
+        assertThat(response.currentStreak()).isZero();
+        assertThat(response.longestStreak()).isZero();
+        assertThat(response.studyDaysThisWeek()).isZero();
     }
 
     @Test
@@ -147,7 +155,7 @@ class DashboardServiceTest {
         var response = dashboardService.getStudyEngagement(userId);
 
         assertThat(response.engagementMode()).isEqualTo(EngagementMode.CONSISTENCY);
-        assertThat(response.currentStreak()).isEqualTo(0);
+        assertThat(response.currentStreak()).isZero();
         assertThat(response.longestStreak()).isEqualTo(4);
         assertThat(response.studyDaysThisWeek()).isEqualTo(2);
     }
@@ -173,7 +181,7 @@ class DashboardServiceTest {
         assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
         assertThat(response.currentStreak()).isEqualTo(5);
         assertThat(response.longestStreak()).isEqualTo(8);
-        assertThat(response.studyDaysThisWeek()).isEqualTo(0);
+        assertThat(response.studyDaysThisWeek()).isZero();
     }
 
     @Test
@@ -188,7 +196,7 @@ class DashboardServiceTest {
 
         assertThat(response.averageRecentScore()).isNull();
         assertThat(response.bestRecentScore()).isNull();
-        assertThat(response.studyPacksReviewed()).isEqualTo(0);
+        assertThat(response.studyPacksReviewed()).isZero();
     }
 
     @Test
@@ -271,7 +279,7 @@ class DashboardServiceTest {
         assertThat(response.performanceSummary().strongestConcept().conceptName()).isEqualTo("Physics");
         assertThat(response.performanceSummary().weakestConcept().conceptName()).isEqualTo("Algebra");
         assertThat(response.focusAreas().concepts()).hasSize(3);
-        assertThat(response.focusAreas().concepts().get(0).conceptName()).isEqualTo("Algebra");
+        assertThat(response.focusAreas().concepts().getFirst().conceptName()).isEqualTo("Algebra");
         assertThat(response.focusAreas().practiceNoteId()).isEqualTo(noteId.toString());
         assertThat(response.focusAreas().adaptivePracticeAvailable()).isTrue();
         assertThat(response.weeklyActivity().studyPacksCreated()).isEqualTo(1);
@@ -333,6 +341,54 @@ class DashboardServiceTest {
         assertThat(response.currentRound()).isEqualTo(QuickReviewRound.RETRY);
         assertThat(response.remainingQuestions()).isEqualTo(2);
         assertThat(response.resumeState()).isEqualTo(ContinueStudyingResumeState.RETRY_IN_PROGRESS);
+        assertThat(response.resumeType()).isEqualTo(ContinueStudyingResumeType.QUICK_REVIEW);
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_includesNoteMetadataAndChallengeResumeType() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Generated Challenge Pack");
+        studyPack.setNoteId(noteId);
+        studyPack.setSubject("General Engineering");
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId,
+                studyPackId,
+                2,
+                10,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                now.minusMinutes(3)
+        );
+        inProgress.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        inProgress.setRetryCount(0);
+
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                eq(userId),
+                any(QuickReviewSessionMode.class),
+                eq(QuickReviewSessionStatus.IN_PROGRESS)
+        )).thenAnswer(invocation -> {
+            QuickReviewSessionMode sessionMode = invocation.getArgument(1);
+            return sessionMode == QuickReviewSessionMode.CHALLENGE
+                    ? Optional.of(inProgress)
+                    : Optional.empty();
+        });
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(
+                buildNote(userId, noteId, "Statics Midterm Review", "Engineering Mechanics", "Civil Engineering")
+        ));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RESUME_REVIEW);
+        assertThat(response.resumeType()).isEqualTo(ContinueStudyingResumeType.CHALLENGE);
+        assertThat(response.noteTitle()).isEqualTo("Statics Midterm Review");
+        assertThat(response.subject()).isEqualTo("Engineering Mechanics");
+        assertThat(response.courseProgram()).isEqualTo("Civil Engineering");
+        assertThat(response.currentQuestionIndex()).isEqualTo(2);
+        assertThat(response.totalQuestions()).isEqualTo(10);
     }
 
     @Test
@@ -559,7 +615,7 @@ class DashboardServiceTest {
 
         assertThat(response.reason()).isNull();
         assertThat(response.studyPackId()).isNull();
-        assertThat(response.title()).isNull();
+        assertThat(response.noteTitle()).isNull();
     }
 
     @Test
@@ -898,6 +954,17 @@ class DashboardServiceTest {
         session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
         session.setSessionMetadata(Map.of("conceptBreakdown", conceptBreakdown));
         return session;
+    }
+
+    private NoteEntity buildNote(UUID userId, UUID noteId, String title, String subject, String courseProgram) {
+        NoteEntity note = new NoteEntity();
+        note.setId(noteId);
+        note.setOwnerUserId(userId);
+        note.setTitle(title);
+        note.setSubject(subject);
+        note.setCourseProgram(courseProgram);
+        note.setContent("Note content");
+        return note;
     }
 
     private UserActivityEventEntity buildOpenedEvent(UUID userId, UUID studyPackId, OffsetDateTime createdAt) {

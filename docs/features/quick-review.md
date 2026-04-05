@@ -30,6 +30,8 @@ Users can start Quick Review from:
 - dashboard recommendation card
 - resume prompt if an unfinished session exists
 
+Dashboard resume cards should show the note title plus subject/course metadata when available so users know exactly which note they are resuming.
+
 Note Detail quiz-entry hierarchy:
 
 - primary action: `Start Quick Review`

@@ -595,6 +595,12 @@ Dashboard guidance rules:
   - `Quick Review`
   - `Usage / Progress`
   - main CTA -> `Continue Studying`
+- `Continue Studying` must identify the note being resumed, not only the quiz mode:
+  - show note title prominently
+  - show subject and course/program when available
+  - show progress such as `Question X of Y`
+  - show the backend-resolved resume label for `Quick Review`, `Challenge Quiz`, or `Adaptive Practice`
+  - keep the resume button routed from the single continue-studying payload; do not add extra frontend fetches to label the card
 - `BOARD_EXAM` dashboard should prioritize:
   - `Exam Countdown` when `examDate` exists
   - `Practice Challenge Quiz`
