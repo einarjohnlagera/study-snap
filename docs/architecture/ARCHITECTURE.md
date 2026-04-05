@@ -131,7 +131,9 @@ Versioning model:
   - public note `summaryPreview`
   - `publicNotesCount`
   - `totalCopies`
-  - `publicNotes[]` with `noteId`, `title`, `subject`, `tags`, `copyCount`, and `slug`
+  - `totalShares` when analytics data exists
+  - `totalViews` when analytics data exists
+  - `publicNotes[]` with `noteId`, `title`, `subject`, `tags`, `copyCount`, optional `shareCount`, optional `viewCount`, and `slug`
 - Author resolution rules:
   - official account email -> `NoteLib`
   - else `display_name` when present

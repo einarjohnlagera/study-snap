@@ -12,6 +12,8 @@ public record PublicProfileResponse(
         boolean publicProfileVisible,
         int publicNotesCount,
         long totalCopies,
+        long totalShares,
+        long totalViews,
         List<PublicProfileNoteResponse> publicNotes
 ) {
 }

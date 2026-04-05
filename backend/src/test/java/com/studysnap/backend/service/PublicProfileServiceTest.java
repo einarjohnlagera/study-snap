@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.ProfileType;
@@ -10,8 +11,10 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,12 +41,14 @@ class PublicProfileServiceTest {
     private NoteRepository noteRepository;
     @Mock
     private StudyPackRepository studyPackRepository;
+    @Mock
+    private AnalyticsEventRepository analyticsEventRepository;
 
     private PublicProfileService publicProfileService;
 
     @BeforeEach
     void setUp() {
-        publicProfileService = new PublicProfileService(userRepository, noteRepository, studyPackRepository);
+        publicProfileService = new PublicProfileService(userRepository, noteRepository, studyPackRepository, analyticsEventRepository);
     }
 
     @Test
@@ -79,6 +84,16 @@ class PublicProfileServiceTest {
                         projection(noteOneId, 5L),
                         projection(noteTwoId, 2L)
                 ));
+        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(AnalyticsEventType.PUBLIC_NOTE_SHARED, List.of(noteOneId, noteTwoId)))
+                .thenReturn(List.of(
+                        eventProjection(noteOneId, 3L),
+                        eventProjection(noteTwoId, 1L)
+                ));
+        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(AnalyticsEventType.PUBLIC_NOTE_VIEWED, List.of(noteOneId, noteTwoId)))
+                .thenReturn(List.of(
+                        eventProjection(noteOneId, 12L),
+                        eventProjection(noteTwoId, 8L)
+                ));
 
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
@@ -91,12 +106,16 @@ class PublicProfileServiceTest {
         assertThat(response.publicProfileVisible()).isTrue();
         assertThat(response.publicNotesCount()).isEqualTo(2);
         assertThat(response.totalCopies()).isEqualTo(7);
+        assertThat(response.totalShares()).isEqualTo(4);
+        assertThat(response.totalViews()).isEqualTo(20);
         assertThat(response.publicNotes())
                 .extracting(
                         PublicProfileNoteResponse::noteId,
                         PublicProfileNoteResponse::contentPreview,
                         PublicProfileNoteResponse::summaryPreview,
                         PublicProfileNoteResponse::copyCount,
+                        PublicProfileNoteResponse::shareCount,
+                        PublicProfileNoteResponse::viewCount,
                         PublicProfileNoteResponse::slug
                 )
                 .containsExactly(
@@ -105,6 +124,8 @@ class PublicProfileServiceTest {
                                 "Plant Cells source note content",
                                 "Cells make up plant tissue.",
                                 5L,
+                                3L,
+                                12L,
                                 "plant-cells"
                         ),
                         org.assertj.core.groups.Tuple.tuple(
@@ -112,6 +133,8 @@ class PublicProfileServiceTest {
                                 "Atomic Bonds source note content",
                                 "Bonds hold atoms together.",
                                 2L,
+                                1L,
+                                8L,
                                 "atomic-bonds"
                         )
                 );
@@ -142,6 +165,8 @@ class PublicProfileServiceTest {
         assertThat(response.courseProgram()).isNull();
         assertThat(response.publicNotesCount()).isZero();
         assertThat(response.totalCopies()).isZero();
+        assertThat(response.totalShares()).isZero();
+        assertThat(response.totalViews()).isZero();
         assertThat(response.publicNotes()).isEmpty();
     }
 
@@ -249,6 +274,20 @@ class PublicProfileServiceTest {
             @Override
             public long getCopyCount() {
                 return copyCount;
+            }
+        };
+    }
+
+    private PublicNoteEventCountProjection eventProjection(UUID noteId, long totalCount) {
+        return new PublicNoteEventCountProjection() {
+            @Override
+            public UUID getNoteId() {
+                return noteId;
+            }
+
+            @Override
+            public long getTotalCount() {
+                return totalCount;
             }
         };
     }

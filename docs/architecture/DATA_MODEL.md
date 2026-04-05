@@ -218,6 +218,8 @@ Derived public-profile response fields:
 
 - `publicNotesCount` = count of public notes owned by the user
 - `totalCopies` = sum of copy attribution from the user's public notes
+- `totalShares` = sum of public-note share analytics for that user's public notes
+- `totalViews` = sum of public-note view analytics for that user's public notes
 - `isOfficial` = backend-derived from the configured official/system account rules
 
 Public-profile pages must never expose email addresses.

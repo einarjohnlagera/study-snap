@@ -4,6 +4,9 @@ Verify these cases for Public Profile:
 
 - public profile page loads for a public profile
 - public profile shows avatar/initials, bio (or the blank-bio fallback), optional learner level/course/program, subjects, and public-note count
+- public profile metrics use real values only: `publicNotesCount`, `totalCopies`, and when available `totalShares` / `totalViews`
+- `Featured note` only appears when a real public note has copy/share/view signal
+- public profile can derive a lightweight learning-focus summary from real public-note subjects/course-programs
 - owner sees `Edit Profile`, `Share Profile`, and visibility toggle
 - non-owner does not see owner-only controls
 - profile note cards do not show note-card context menus for owners or non-owners

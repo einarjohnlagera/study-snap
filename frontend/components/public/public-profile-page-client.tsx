@@ -49,6 +49,19 @@ function visibilityChip(publicProfileVisible: boolean) {
   return "border-border bg-muted/50 text-foreground/70";
 }
 
+function formatLabelList(values: string[]): string {
+  if (values.length === 0) {
+    return "";
+  }
+  if (values.length === 1) {
+    return values[0];
+  }
+  if (values.length === 2) {
+    return `${values[0]} and ${values[1]}`;
+  }
+  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
+}
+
 export function PublicProfilePageClient({
   userId,
   initialResult,
@@ -145,6 +158,28 @@ export function PublicProfilePageClient({
     return `${profile.publicNotesCount} ${profile.publicNotesCount === 1 ? "note" : "notes"}`;
   }, [profile]);
 
+  const metricItems = useMemo(() => {
+    if (!profile) {
+      return [];
+    }
+    const items = [
+      {
+        label: "Public Notes",
+        value: profile.publicNotesCount,
+      },
+    ];
+    if (profile.totalCopies > 0) {
+      items.push({ label: "Total Copies", value: profile.totalCopies });
+    }
+    if (profile.totalShares > 0) {
+      items.push({ label: "Total Shares", value: profile.totalShares });
+    }
+    if (profile.totalViews > 0) {
+      items.push({ label: "Total Views", value: profile.totalViews });
+    }
+    return items;
+  }, [profile]);
+
   const avatarLetter = useMemo(() => {
     const fallback = profile?.displayName?.trim() || "U";
     return fallback.charAt(0).toUpperCase();
@@ -175,6 +210,75 @@ export function PublicProfilePageClient({
       }
     }
     return Array.from(values).sort((left, right) => left.localeCompare(right));
+  }, [profile?.publicNotes]);
+
+  const topCoursePrograms = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const note of profile?.publicNotes ?? []) {
+      const courseProgram = normalizeCourseProgram(note.courseProgram);
+      if (courseProgram) {
+        counts.set(courseProgram, (counts.get(courseProgram) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .slice(0, 2)
+      .map(([value]) => value);
+  }, [profile?.publicNotes]);
+
+  const topSubjects = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const note of profile?.publicNotes ?? []) {
+      const subject = note.subject?.trim();
+      if (subject) {
+        counts.set(subject, (counts.get(subject) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .slice(0, 3)
+      .map(([value]) => value);
+  }, [profile?.publicNotes]);
+
+  const learningFocusSummary = useMemo(() => {
+    const overlappingLabels = topCoursePrograms.filter((value) => topSubjects.includes(value));
+    if (overlappingLabels.length > 0) {
+      return `Mostly shares notes in ${formatLabelList(overlappingLabels)}.`;
+    }
+    if (topCoursePrograms.length > 0 && topSubjects.length > 0) {
+      return `Mostly shares notes for ${formatLabelList(topCoursePrograms)}, especially ${formatLabelList(topSubjects)}.`;
+    }
+    if (topCoursePrograms.length > 0) {
+      return `Mostly shares notes for ${formatLabelList(topCoursePrograms)}.`;
+    }
+    if (topSubjects.length > 0) {
+      return `Mostly shares notes in ${formatLabelList(topSubjects)}.`;
+    }
+    return null;
+  }, [topCoursePrograms, topSubjects]);
+
+  const featuredNote = useMemo(() => {
+    const notes = profile?.publicNotes ?? [];
+    const bestByMetric = (
+      key: "copyCount" | "viewCount" | "shareCount",
+      label: string,
+      noun: string,
+    ) => {
+      const sorted = [...notes].sort((left, right) => right[key] - left[key] || (left.title ?? "").localeCompare(right.title ?? ""));
+      const top = sorted[0];
+      if (!top || top[key] <= 0) {
+        return null;
+      }
+      return {
+        note: top,
+        label,
+        metric: `${top[key]} ${top[key] === 1 ? noun : `${noun}s`}`,
+      };
+    };
+
+    return bestByMetric("copyCount", "Featured Note", "copy")
+      ?? bestByMetric("viewCount", "Most Viewed Note", "view")
+      ?? bestByMetric("shareCount", "Most Shared Note", "share");
   }, [profile?.publicNotes]);
 
   const handleShareProfile = async () => {
@@ -355,14 +459,16 @@ export function PublicProfilePageClient({
                 ) : null}
               </div>
 
-              <div className="flex flex-wrap gap-3 text-sm text-foreground/70">
-                <span className="rounded-full border border-border bg-background/70 px-3 py-1">
-                  {profile.publicNotesCount} {profile.publicNotesCount === 1 ? "public note" : "public notes"}
-                </span>
-                <span className="rounded-full border border-border bg-background/70 px-3 py-1">
-                  {profile.totalCopies} {profile.totalCopies === 1 ? "copy" : "copies"}
-                </span>
-              </div>
+              {metricItems.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {metricItems.map((item) => (
+                    <div key={item.label} className="rounded-2xl border border-border bg-background/75 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">{item.label}</p>
+                      <p className="mt-1 text-lg font-semibold text-foreground">{item.value.toLocaleString()}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -387,19 +493,53 @@ export function PublicProfilePageClient({
         {visibilityMessage ? (
           <p className="text-xs text-foreground/60">{visibilityMessage}</p>
         ) : null}
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Subjects</p>
-          {subjects.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {subjects.map((subject) => (
-                <SubjectBadge key={subject} subject={subject} />
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-foreground/70">No public subjects yet.</p>
-          )}
-        </div>
+        {learningFocusSummary || subjects.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Learning Focus</p>
+            {learningFocusSummary ? (
+              <p className="text-sm text-foreground/75">{learningFocusSummary}</p>
+            ) : null}
+            {subjects.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {subjects.map((subject) => (
+                  <SubjectBadge key={subject} subject={subject} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </header>
+
+      {featuredNote ? (
+        <section aria-labelledby="featured-note" className="space-y-3">
+          <h2 id="featured-note" className="text-xl font-semibold">Featured note</h2>
+          <Card
+            role="link"
+            tabIndex={0}
+            onClick={() => router.push(buildPublicLibraryNotePathFromSlug({ subject: featuredNote.note.subject, slug: featuredNote.note.slug }))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                router.push(buildPublicLibraryNotePathFromSlug({ subject: featuredNote.note.subject, slug: featuredNote.note.slug }));
+              }
+            }}
+            className="cursor-pointer space-y-3 border-blue-500/20 bg-blue-500/5 p-4 transition-colors hover:bg-blue-500/10 sm:p-5"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                {featuredNote.label}
+              </span>
+              <span className="rounded-full border border-border bg-background/75 px-3 py-1 text-xs font-medium text-foreground/75">
+                {featuredNote.metric}
+              </span>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">{featuredNote.note.title?.trim() || "Untitled note"}</h3>
+              <p className="line-clamp-2 text-sm leading-relaxed text-foreground/75">{featuredNote.note.contentPreview}</p>
+            </div>
+          </Card>
+        </section>
+      ) : null}
 
       <section aria-labelledby="public-profile-notes" className="space-y-4">
         <div className="flex items-center justify-between gap-3">

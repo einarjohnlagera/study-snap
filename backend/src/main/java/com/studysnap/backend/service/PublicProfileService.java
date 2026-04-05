@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.PublicProfileNoteResponse;
 import com.studysnap.backend.dto.PublicProfileResponse;
+import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.StudyPackEntity;
@@ -9,8 +10,10 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.PublicProfileNotFoundException;
 import com.studysnap.backend.exception.PublicProfilePrivateException;
+import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.ContentPreviewUtils;
@@ -41,6 +44,7 @@ public class PublicProfileService {
     private final UserRepository userRepository;
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
+    private final AnalyticsEventRepository analyticsEventRepository;
 
     public PublicProfileResponse getByUserId(String userIdRaw, UUID viewerUserId) {
         UUID userId = UuidParsingUtils.parseUuidOrThrow(userIdRaw, PublicProfileNotFoundException::new);
@@ -54,8 +58,12 @@ public class PublicProfileService {
 
         List<NoteEntity> publicNotes = noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC);
         Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(publicNotes);
+        Map<UUID, Long> shareCountsByNoteId = loadPublicEventCounts(publicNotes, AnalyticsEventType.PUBLIC_NOTE_SHARED);
+        Map<UUID, Long> viewCountsByNoteId = loadPublicEventCounts(publicNotes, AnalyticsEventType.PUBLIC_NOTE_VIEWED);
         Map<UUID, StudyPackEntity> studyPackByNoteId = loadStudyPacks(publicNotes);
         long totalCopies = copyCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
+        long totalShares = shareCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
+        long totalViews = viewCountsByNoteId.values().stream().mapToLong(Long::longValue).sum();
 
         return new PublicProfileResponse(
                 resolvePublicDisplayName(user),
@@ -67,6 +75,8 @@ public class PublicProfileService {
                 publicProfileVisible,
                 publicNotes.size(),
                 totalCopies,
+                totalShares,
+                totalViews,
                 publicNotes.stream()
                         .map(note -> new PublicProfileNoteResponse(
                                 note.getId().toString(),
@@ -80,6 +90,8 @@ public class PublicProfileService {
                                         SUMMARY_PREVIEW_MAX_LENGTH
                                 ),
                                 copyCountsByNoteId.getOrDefault(note.getId(), 0L),
+                                shareCountsByNoteId.getOrDefault(note.getId(), 0L),
+                                viewCountsByNoteId.getOrDefault(note.getId(), 0L),
                                 slugify(note.getTitle(), DEFAULT_PUBLIC_TITLE_SLUG)
                         ))
                         .toList()
@@ -118,6 +130,23 @@ public class PublicProfileService {
             }
         }
         return studyPackByNoteId;
+    }
+
+    private Map<UUID, Long> loadPublicEventCounts(List<NoteEntity> publicNotes, AnalyticsEventType eventType) {
+        if (publicNotes.isEmpty()) {
+            return Map.of();
+        }
+
+        List<UUID> noteIds = publicNotes.stream()
+                .map(NoteEntity::getId)
+                .toList();
+        Map<UUID, Long> countsByNoteId = new HashMap<>();
+        for (PublicNoteEventCountProjection projection : analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(eventType, noteIds)) {
+            if (projection.getNoteId() != null) {
+                countsByNoteId.put(projection.getNoteId(), projection.getTotalCount());
+            }
+        }
+        return countsByNoteId;
     }
 
     private String resolvePublicDisplayName(UserEntity user) {
