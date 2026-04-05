@@ -84,4 +84,59 @@ describe("SuggestionCombobox", () => {
       expect(input).toHaveValue("College");
     });
   });
+
+  it("filters suggestions by exact, prefix, then contains matches without showing the full list", () => {
+    render(
+      <SuggestionCombobox
+        id="course-program"
+        value=""
+        options={[
+          { value: "Mechanical Engineering", label: "Mechanical Engineering" },
+          { value: "Engineering", label: "Engineering" },
+          { value: "Software Engineering", label: "Software Engineering" },
+          { value: "Civil Engineering", label: "Civil Engineering" },
+          { value: "Accountancy", label: "Accountancy" },
+        ]}
+        onChange={jest.fn()}
+        allowCustom
+      />,
+    );
+
+    const input = screen.getByRole("textbox");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "engin" } });
+
+    expect(screen.queryByRole("option", { name: "Accountancy" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Engineering",
+      "Mechanical Engineering",
+      "Software Engineering",
+      "Civil Engineering",
+    ]);
+    expect(screen.getByRole("button", { name: /Use "engin"/i })).toBeInTheDocument();
+  });
+
+  it("reuses the existing canonical option value when the user types an exact custom match with different casing", () => {
+    const onChange = jest.fn();
+
+    render(
+      <SuggestionCombobox
+        id="course-program"
+        value=""
+        options={[
+          { value: "Engineering", label: "Engineering" },
+          { value: "Nursing", label: "Nursing" },
+        ]}
+        onChange={onChange}
+        allowCustom
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: " engineering " },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith("Engineering");
+    expect(screen.queryByRole("button", { name: /Use "engineering"/i })).not.toBeInTheDocument();
+  });
 });

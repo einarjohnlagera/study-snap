@@ -74,21 +74,21 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         authService = new AuthService(
-                userRepository,
-                studyPackRepository,
-                subscriptionService,
-                passwordEncoder,
-                jwtService,
-                refreshTokenService,
-                securityProperties,
-                emailVerificationService,
-                analyticsService
+            userRepository,
+            studyPackRepository,
+            subscriptionService,
+            passwordEncoder,
+            jwtService,
+            refreshTokenService,
+            securityProperties,
+            emailVerificationService,
+            analyticsService
         );
         lenient().when(jwtService.generateAccessToken(any(UserEntity.class))).thenReturn("access-token");
         lenient().when(jwtService.resolveAccessTokenExpiry()).thenReturn(OffsetDateTime.now().plusMinutes(15));
         lenient().when(studyPackRepository.countByOwnerUserId(any(UUID.class))).thenReturn(0L);
         lenient().when(refreshTokenService.issue(any(UserEntity.class), any(Boolean.class), any(), any(), any()))
-                .thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", OffsetDateTime.now().plusDays(7)));
+            .thenReturn(new RefreshTokenService.IssuedRefreshToken("refresh-token", OffsetDateTime.now().plusDays(7)));
     }
 
     @Test
@@ -98,9 +98,9 @@ class AuthServiceTest {
         when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AuthResponse response = authService.signup(
-                new SignupRequest("[email protected]", "password123", "Note", "note"),
-                "127.0.0.1",
-                "JUnit"
+            new SignupRequest("[email protected]", "password123", "Note", "note"),
+            "127.0.0.1",
+            "JUnit"
         );
 
         assertThat(response.email()).isEqualTo("[email protected]");
@@ -110,8 +110,10 @@ class AuthServiceTest {
         verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
         verify(emailVerificationService).sendVerificationEmail(any(UserEntity.class), eq(false));
         verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
-        verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP_COMPLETED), any(UUID.class), any());
-        verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.EMAIL_VERIFICATION_SENT), any(UUID.class), any());
+        verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP_COMPLETED), any(UUID.class),
+            any());
+        verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.EMAIL_VERIFICATION_SENT),
+            any(UUID.class), any());
     }
 
     @Test
@@ -132,15 +134,15 @@ class AuthServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
 
         AuthResponse response = authService.login(
-                new LoginRequest("current@example.com", "password123", true),
-                "127.0.0.1",
-                "JUnit"
+            new LoginRequest("current@example.com", "password123", true),
+            "127.0.0.1",
+            "JUnit"
         );
 
         assertThat(response.email()).isEqualTo("current@example.com");
         assertThat(response.themePreference()).isEqualTo(ThemePreference.SYSTEM);
         verify(analyticsService).trackEvent(userId, AnalyticsEventType.LOGIN, userId, java.util.Map.of(
-                "keepSignedIn", true
+            "keepSignedIn", true
         ));
     }
 
@@ -150,11 +152,11 @@ class AuthServiceTest {
 
         LoginRequest request = new LoginRequest("[email protected]", "password123", false);
         assertThatThrownBy(() -> authService.login(
-                request,
-                "127.0.0.1",
-                "JUnit"
+            request,
+            "127.0.0.1",
+            "JUnit"
         )).isInstanceOf(InvalidCredentialsException.class)
-                .hasMessage("Invalid email or password.");
+            .hasMessage("Invalid email or password.");
     }
 
     @Test
@@ -163,24 +165,24 @@ class AuthServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.getMe(userId))
-                .isInstanceOf(UserNotFoundException.class)
-                .hasMessage("User not found.");
+            .isInstanceOf(UserNotFoundException.class)
+            .hasMessage("User not found.");
     }
 
     @Test
     void refresh_throwsInvalidRefreshTokenException_whenRefreshTokenUserDoesNotExist() {
         UUID userId = UUID.randomUUID();
         when(refreshTokenService.requireValid("refresh-token"))
-                .thenReturn(new RefreshTokenEntityBuilder().withUserId(userId).build());
+            .thenReturn(new RefreshTokenEntityBuilder().withUserId(userId).build());
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
         RefreshTokenRequest request = new RefreshTokenRequest("refresh-token");
         assertThatThrownBy(() -> authService.refresh(
-                request,
-                "127.0.0.1",
-                "JUnit"
+            request,
+            "127.0.0.1",
+            "JUnit"
         )).isInstanceOf(InvalidRefreshTokenException.class)
-                .hasMessage("Invalid refresh token.");
+            .hasMessage("Invalid refresh token.");
     }
 
     @Test
@@ -200,25 +202,25 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
 
         MeResponse response = authService.completeOnboarding(
-                userId,
-                new CompleteOnboardingRequest(
-                        ProfileType.TEACHER,
-                        LearnerLevel.PROFESSIONAL,
-                        "Education",
-                        "Sharing classroom review materials.",
-                        EngagementMode.STREAK,
-                        true,
-                        false,
-                        null
-                )
+            userId,
+            new CompleteOnboardingRequest(
+                ProfileType.TEACHER,
+                LearnerLevel.PROFESSIONAL,
+                "Education",
+                "Sharing classroom review materials.",
+                EngagementMode.STREAK,
+                true,
+                false,
+                null
+            )
         );
 
         assertThat(response.profileType()).isEqualTo(ProfileType.TEACHER);
@@ -249,26 +251,26 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
 
         LocalDate examDate = LocalDate.of(2026, 10, 18);
         MeResponse response = authService.completeOnboarding(
-                userId,
-                new CompleteOnboardingRequest(
-                        ProfileType.BOARD_EXAM,
-                        LearnerLevel.BOARD_EXAM_REVIEW,
-                        "Nursing",
-                        "Focused on board exam preparation.",
-                        EngagementMode.CONSISTENCY,
-                        true,
-                        true,
-                        examDate
-                )
+            userId,
+            new CompleteOnboardingRequest(
+                ProfileType.BOARD_EXAM,
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                "Focused on board exam preparation.",
+                EngagementMode.CONSISTENCY,
+                true,
+                true,
+                examDate
+            )
         );
 
         assertThat(response.profileType()).isEqualTo(ProfileType.BOARD_EXAM);
@@ -276,6 +278,70 @@ class AuthServiceTest {
         assertThat(response.courseProgram()).isEqualTo("Nursing");
         assertThat(response.examDate()).isEqualTo(examDate);
         assertThat(user.getExamDate()).isEqualTo(examDate);
+    }
+
+    @Test
+    void completeOnboarding_requiresLearnerLevel() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        CompleteOnboardingRequest request = new CompleteOnboardingRequest(
+            ProfileType.STUDENT,
+            null,
+            "Engineering",
+            null,
+            EngagementMode.FOCUSED,
+            false,
+            false,
+            null
+        );
+        assertThatThrownBy(() -> authService.completeOnboarding(userId, request))
+            .isInstanceOf(AppException.class)
+            .hasMessage("Please select your learner level.");
+    }
+
+    @Test
+    void completeOnboarding_requiresCourseProgram() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("note");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        CompleteOnboardingRequest request = new CompleteOnboardingRequest(
+            ProfileType.STUDENT,
+            LearnerLevel.COLLEGE,
+            "   ",
+            null,
+            EngagementMode.FOCUSED,
+            false,
+            false,
+            null
+        );
+        assertThatThrownBy(() -> authService.completeOnboarding(userId, request))
+            .isInstanceOf(AppException.class)
+            .hasMessage("Please select or enter your course / program.");
     }
 
     @Test
@@ -295,16 +361,16 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
 
         MeResponse response = authService.updateThemePreference(
-                userId,
-                new UpdateThemePreferenceRequest(ThemePreference.DARK)
+            userId,
+            new UpdateThemePreferenceRequest(ThemePreference.DARK)
         );
 
         assertThat(user.getThemePreference()).isEqualTo(ThemePreference.DARK);
@@ -326,17 +392,17 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
         when(studyPackRepository.countByOwnerUserId(userId)).thenReturn(0L);
 
         MeResponse response = authService.completeProductOnboarding(
-                userId,
-                new CompleteProductOnboardingRequest(false)
+            userId,
+            new CompleteProductOnboardingRequest(false)
         );
 
         assertThat(response.productOnboardingCompletedAt()).isNotNull();
@@ -361,16 +427,16 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
 
         MeResponse response = authService.updateStudyReminders(
-                userId,
-                new UpdateStudyRemindersRequest(true, true)
+            userId,
+            new UpdateStudyRemindersRequest(true, true)
         );
 
         assertThat(response.inactivityRemindersEnabled()).isTrue();
@@ -398,24 +464,24 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
 
         MeResponse response = authService.updateUserProfile(
-                userId,
-                new UpdateUserProfileRequest(
-                        "New",
-                        "Person",
-                        "Study Buddy",
-                        "Focused on anatomy review.",
-                        LearnerLevel.BOARD_EXAM_REVIEW,
-                        "Pharmacy",
-                        "current@example.com"
-                )
+            userId,
+            new UpdateUserProfileRequest(
+                "New",
+                "Person",
+                "Study Buddy",
+                "Focused on anatomy review.",
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Pharmacy",
+                "current@example.com"
+            )
         );
 
         assertThat(response.firstName()).isEqualTo("New");
@@ -455,24 +521,24 @@ class AuthServiceTest {
         when(userRepository.findByEmailIgnoreCase("updated@example.com")).thenReturn(Optional.empty());
         when(userRepository.findByPendingEmailIgnoreCase("updated@example.com")).thenReturn(Optional.empty());
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
 
         MeResponse response = authService.updateUserProfile(
-                userId,
-                new UpdateUserProfileRequest(
-                        "Note",
-                        "User",
-                        "Note Hero",
-                        "Weak areas: physiology and pharma.",
-                        LearnerLevel.PROFESSIONAL,
-                        "Medicine",
-                        "updated@example.com"
-                )
+            userId,
+            new UpdateUserProfileRequest(
+                "Note",
+                "User",
+                "Note Hero",
+                "Weak areas: physiology and pharma.",
+                LearnerLevel.PROFESSIONAL,
+                "Medicine",
+                "updated@example.com"
+            )
         );
 
         assertThat(response.email()).isEqualTo("current@example.com");
@@ -505,16 +571,16 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(subscriptionService.getPlanSnapshot(userId))
-                .thenReturn(new SubscriptionService.PlanSnapshot(
-                        PlanType.FREE,
-                        false,
-                        null,
-                        null
-                ));
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
 
         MeResponse response = authService.updatePublicProfileVisibility(
-                userId,
-                new UpdatePublicProfileVisibilityRequest(false)
+            userId,
+            new UpdatePublicProfileVisibilityRequest(false)
         );
 
         assertThat(response.publicProfileVisible()).isFalse();
@@ -537,21 +603,21 @@ class AuthServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         UpdateUserProfileRequest request = new UpdateUserProfileRequest(
-                "Note",
-                "User",
-                "NoteLib Support",
-                null,
-                LearnerLevel.COLLEGE,
-                "Biology",
-                "current@example.com"
+            "Note",
+            "User",
+            "NoteLib Support",
+            null,
+            LearnerLevel.COLLEGE,
+            "Biology",
+            "current@example.com"
         );
         assertThatThrownBy(() -> authService.updateUserProfile(
-                userId,
-                request
+            userId,
+            request
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(Throwable::getMessage)
-                .isEqualTo("This display name is reserved. Please choose another name.");
+            .isInstanceOf(AppException.class)
+            .extracting(Throwable::getMessage)
+            .isEqualTo("This display name is reserved. Please choose another name.");
     }
 
     @Test
@@ -572,12 +638,13 @@ class AuthServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         assertThat(authService.requestEmailVerification(userId).message())
-                .isEqualTo("Verification email sent. Please check your inbox.");
+            .isEqualTo("Verification email sent. Please check your inbox.");
 
         verify(emailVerificationService).sendVerificationEmail(user, true);
     }
 
     private static final class RefreshTokenEntityBuilder {
+
         private UUID userId;
 
         private RefreshTokenEntityBuilder withUserId(UUID value) {

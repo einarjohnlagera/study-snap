@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
+import type { LearnerLevel } from "@/lib/api";
+import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
-import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -57,6 +58,7 @@ type NoteEditorFormProps = {
   disableAction?: boolean;
   subjectSuggestions?: string[];
   courseProgramSuggestions?: string[];
+  learnerLevel?: LearnerLevel | "" | null;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -106,6 +108,7 @@ export function NoteEditorForm({
   disableAction = false,
   subjectSuggestions = [],
   courseProgramSuggestions = [],
+  learnerLevel = null,
 }: Readonly<NoteEditorFormProps>) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -276,17 +279,14 @@ export function NoteEditorForm({
             </div>
             <div className="space-y-2">
               <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program (optional)</label>
-              <SuggestionCombobox
+              <CourseProgramCombobox
                 id="note-course-program"
                 value={note.courseProgram}
-                options={courseProgramSuggestions.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
+                suggestions={courseProgramSuggestions}
+                learnerLevel={learnerLevel}
                 onChange={onCourseProgramChange}
-                placeholder="Choose or type a course/program"
                 disabled={isCopying}
-                helperText="Defaults from your profile, but you can adjust it for this note."
-                allowCustom
-                toggleLabel="Toggle course suggestions"
-                customOptionLabel="Custom"
+                context="note"
               />
             </div>
           </div>

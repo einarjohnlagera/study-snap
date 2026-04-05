@@ -48,6 +48,7 @@ Course / Program storage rule:
 - Distinct course/program suggestions are derived from persisted note values plus the authenticated user's saved profile value.
 - Course/program reuse is built by normalizing saved values rather than by writing to a second taxonomy table.
 - Normalization should trim whitespace, standardize dash formatting, and compare equivalent course/program values case-insensitively.
+- Learning Profile UI now requires both `learnerLevel` and `courseProgram` for onboarding completion and later profile saves, while storage remains nullable for pre-existing users until they update those fields.
 - `course_program` is the top-level library shelf, while `subject` stays the more specific academic topic and `tags` remain the fine-grained keywords.
 
 Library/discovery payload usage:

@@ -275,9 +275,18 @@ Favicon requirements:
   - `tags` -> fine-grained keywords
 - New notes default `courseProgram` from the user's profile, but it remains editable per note.
 - Course / Program suggestions should come from curated defaults plus normalized saved values returned by `GET /api/course-programs?scope=mine`.
+- Course / Program autocomplete must filter suggestions in real time while the user types.
+- Matching should be case-insensitive, trim leading/trailing spaces before comparison, allow partial matches, and rank results as:
+  - exact match
+  - prefix matches
+  - contains matches
+- Typing into Course / Program should not keep showing the full unfiltered list.
+- When the typed value exactly matches an existing suggestion case-insensitively, the field should reuse the existing saved label instead of preserving a duplicate case variant.
 - Users may still type a custom course/program value, and the saved value should become reusable in later autocomplete/filter flows.
+- Existing matching suggestions should appear before the custom `Use "..."` action so reuse is encouraged without blocking custom values.
 - Course / Program saves should normalize whitespace and dash formatting so equivalent values such as `Senior High-STEM` and `Senior High – STEM` collapse into one reusable suggestion/filter label when possible.
 - Course / Program reuse checks should be case-insensitive while keeping a readable display label.
+- Note metadata helper text for Course / Program should adapt to the user's saved `learnerLevel` so note authors see examples that match their study stage.
 - When a note already has a Study Pack, Note Editor keeps `title`, `courseProgram`, `subject`, and `tags` editable but locks `content` with the helper:
   - `Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.`
 - Generate button copy should stay short and may vary by `profileType` without changing backend generation:
@@ -492,15 +501,21 @@ Users can:
   - `courseProgram`
   - `bio`
 - `Learning Profile` combobox-style fields should reuse the same input-plus-suggestions pattern as the Note Editor `Subject` field.
+- `Course / Program` in `Learning Profile` must use the same shared autocomplete behavior as Note Editor, Onboarding, and Note Detail metadata edit.
+- `Course / Program` helper text should change with `learnerLevel`, with learner-stage-specific examples instead of one generic prompt.
 - `Profile` should include:
   - a top Display Name card with avatar, display name, email, and right-aligned `View Public Page` navigation
   - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
-  - a `Learning Profile` card with `learnerLevel`, optional `courseProgram`, and optional `bio`
+  - a `Learning Profile` card with required `learnerLevel`, required `courseProgram`, and optional `bio`
   - a `Profile Type` card with the profile-type selector
 - `Profile` save actions should be section-specific:
   - `Save Identity` only saves identity fields
   - `Save Learning Profile` only saves learner-level, course/program, and bio fields
   - `Save Profile Type` only saves the profile type field
+- `Save Learning Profile` validation should stay local to the Learning Profile card and must not block `Save Identity` or `Save Profile Type`.
+- `Save Learning Profile` should show inline validation messages when required fields are missing:
+  - `Please select your learner level.`
+  - `Please select or enter your course / program.`
 - `View Public Page` on `/profile` is navigation only and should live in the top Display Name card.
 - `Profile` should not own Public Profile sharing or visibility controls.
 
@@ -881,9 +896,10 @@ Rules:
 
 - `Learning Profile` collects:
   - required `learnerLevel`
-  - optional `courseProgram`
+  - required `courseProgram`
   - optional `bio`
 - learner metadata inputs should reuse the same combobox pattern as the Note Editor `Subject` field instead of plain browser datalists
+- Course / Program uses the same real-time autocomplete filtering and learner-level helper text as the Profile learning-profile card.
 - `Learning Style` and `Study Reminder Frequency` remain the existing onboarding steps
 - `Exam Date` is conditional and must be skipped for `STUDENT` and `TEACHER`
 - onboarding state is loaded from `GET /auth/me`
@@ -907,7 +923,7 @@ Identity section:
 Learning Profile section:
 
 - `learnerLevel`
-- optional `courseProgram`
+- required `courseProgram`
 - optional `bio`
 - separate `Save Learning Profile` action
 

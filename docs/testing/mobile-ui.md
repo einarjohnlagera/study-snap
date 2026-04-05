@@ -18,6 +18,9 @@ Verify these cases on mobile-sized viewports:
 - Note Editor mobile Generate CTA stays centered and readable
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA
 - mobile sticky CTA area stays compact and does not consume excessive vertical space
+- mobile `Course / Program` autocomplete sheets stay tappable and scrollable while typing
+- typing into mobile `Course / Program` fields filters suggestions in place instead of keeping the full list open
+- the custom `Use "..."` action stays below matching saved suggestions on mobile
 - Dashboard quiz and creation actions show text labels
 - Library/Public Library/Public Profile/Public Note actions show text labels
 - Profile and Settings save/navigation actions show text labels

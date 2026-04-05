@@ -198,8 +198,8 @@ public class AuthService {
 
         OffsetDateTime now = OffsetDateTime.now();
         user.setProfileType(request.profileType());
-        user.setLearnerLevel(request.learnerLevel());
-        user.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
+        user.setLearnerLevel(requireLearnerLevel(request.learnerLevel()));
+        user.setCourseProgram(normalizeRequiredCourseProgram(request.courseProgram()));
         user.setBio(normalizeOptionalText(request.bio()));
         user.setExamDate(resolveExamDate(request));
         user.setEngagementMode(request.engagementMode());
@@ -373,6 +373,29 @@ public class AuthService {
             throw new AppException(
                     "INVALID_COURSE_PROGRAM",
                     "Course / Program must be 120 characters or less.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return normalized;
+    }
+
+    private LearnerLevel requireLearnerLevel(LearnerLevel learnerLevel) {
+        if (learnerLevel == null) {
+            throw new AppException(
+                    "INVALID_LEARNER_LEVEL",
+                    "Please select your learner level.",
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return learnerLevel;
+    }
+
+    private String normalizeRequiredCourseProgram(String value) {
+        String normalized = normalizeOptionalCourseProgram(value);
+        if (normalized == null) {
+            throw new AppException(
+                    "INVALID_COURSE_PROGRAM",
+                    "Please select or enter your course / program.",
                     HttpStatus.BAD_REQUEST
             );
         }

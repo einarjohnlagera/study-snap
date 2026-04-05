@@ -4,8 +4,8 @@
 
 ### New Features
 
-- User profiles now support `Learner Level` plus optional `Course / Program` as part of the learning-profile foundation.
-- Onboarding now includes a dedicated `Learning Profile` step that collects learner level, optional course/program, and optional bio.
+- User profiles now support `Learner Level` plus required `Course / Program` on Learning Profile saves as part of the learning-profile foundation.
+- Onboarding now includes a dedicated `Learning Profile` step that collects required learner level, required course/program, and optional bio.
 - Notes now support optional per-note `Course / Program`, defaulted from the user's profile and editable per note.
 - Note metadata suggestions now use a shared field-level AI review modal for `title`, `subject`, and `tags`.
 
@@ -19,6 +19,8 @@
 - Fixed-option learner-level comboboxes now snap back to the last valid saved value if a user types an unsupported option and closes the field.
 - Note Editor now includes `Course / Program`, subject autocomplete, optional tags guidance, and the same metadata shape in both create and edit modes.
 - Course / Program now behaves like a reusable top-level taxonomy shelf with stronger default suggestions, normalized saved-value reuse, and shared autocomplete across Note Editor, Note Detail metadata edit, Profile, and Onboarding.
+- Course / Program autocomplete now filters in real time, ranks exact/prefix/contains matches more cleanly, keeps existing suggestions ahead of the custom action, and reuses existing display labels for exact case-insensitive matches.
+- Course / Program helper text now adapts to `Learner Level`, and Profile learning-profile saves now show inline validation when either required field is missing.
 - Saved custom subjects now feed future autocomplete suggestions through the existing distinct-subject backend source.
 - Subject reuse now normalizes whitespace, dash formatting, and case-insensitive matches so equivalent custom subjects collapse into a cleaner autocomplete/filter catalog without adding a new subjects table.
 - AI-generated subjects now use stronger library-specific guidance plus backend validation so overly broad labels like `Engineering` or `Business` are retried before being accepted.

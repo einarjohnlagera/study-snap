@@ -229,4 +229,37 @@ describe("Profile page", () => {
     });
     expect(await screen.findByText("Learning profile updated successfully.")).toBeInTheDocument();
   });
+
+  it("updates the course/program helper text when learner level changes", async () => {
+    render(<ProfilePage />);
+
+    expect(
+      await screen.findByText("Enter your degree like Engineering, Nursing, Accountancy, etc."),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Learner Level"), {
+      target: { value: "PROFESSIONAL" },
+    });
+
+    expect(
+      await screen.findByText("Enter your field like Law, Medicine, IT, Education, etc."),
+    ).toBeInTheDocument();
+  });
+
+  it("shows inline validation when learner level or course/program is missing", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...profileResponse,
+      learnerLevel: null,
+      courseProgram: null,
+    });
+
+    render(<ProfilePage />);
+
+    await screen.findByText("Learning Profile");
+    fireEvent.click(screen.getByRole("button", { name: "Save Learning Profile" }));
+
+    expect(updateUserProfile).not.toHaveBeenCalled();
+    expect(await screen.findByText("Please select your learner level.")).toBeInTheDocument();
+    expect(await screen.findByText("Please select or enter your course / program.")).toBeInTheDocument();
+  });
 });

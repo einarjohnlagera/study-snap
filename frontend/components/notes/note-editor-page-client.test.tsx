@@ -143,6 +143,7 @@ describe("NoteEditorPageClient", () => {
       message: "You're on the list! We'll notify you when Premium launches.",
     });
     (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
       courseProgram: "Nursing",
     });
     (createNote as jest.Mock).mockResolvedValue({
@@ -230,6 +231,9 @@ describe("NoteEditorPageClient", () => {
       expect(courseProgramInput).toHaveValue("Nursing");
     });
     expect(getMe).toHaveBeenCalled();
+    expect(
+      screen.getByText("Enter your degree like Engineering, Nursing, Accountancy, etc. This note can use a different value from your profile."),
+    ).toBeInTheDocument();
   });
 
   it("returns to note detail after saving changes in edit mode", async () => {

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
+import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import {
   completeOnboardingProfileType,
@@ -34,6 +35,11 @@ type LearningProfileForm = {
   learnerLevel: LearnerLevel | "";
   courseProgram: string;
   bio: string;
+};
+
+type LearningProfileErrors = {
+  learnerLevel?: string;
+  courseProgram?: string;
 };
 
 const PROFILE_TYPE_OPTIONS: Array<{ value: ProfileType; label: string }> = [
@@ -77,6 +83,7 @@ export default function ProfilePage() {
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
   const [savingLearningProfile, setSavingLearningProfile] = useState(false);
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
+  const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
 
   const loadProfile = useCallback(async () => {
@@ -91,6 +98,7 @@ export default function ProfilePage() {
     setIdentityMessage(null);
     setProfileTypeMessage(null);
     setLearningProfileMessage(null);
+    setLearningProfileErrors({});
     try {
       const [meResult, courseProgramsResult] = await Promise.allSettled([
         getMe(),
@@ -170,6 +178,11 @@ export default function ProfilePage() {
     value: string,
   ) => {
     setLearningProfileMessage(null);
+    setLearningProfileErrors((current) => ({
+      ...current,
+      ...(field === "learnerLevel" ? { learnerLevel: undefined } : {}),
+      ...(field === "courseProgram" ? { courseProgram: undefined } : {}),
+    }));
     setLearningProfileForm((current) => ({
       ...current,
       [field]: value,
@@ -185,6 +198,20 @@ export default function ProfilePage() {
     courseProgram: learningProfileForm.courseProgram.trim(),
     email: identityForm.email.trim(),
   });
+
+  const validateLearningProfileForm = () => {
+    const nextErrors: LearningProfileErrors = {};
+
+    if (!learningProfileForm.learnerLevel) {
+      nextErrors.learnerLevel = "Please select your learner level.";
+    }
+    if (!learningProfileForm.courseProgram.trim()) {
+      nextErrors.courseProgram = "Please select or enter your course / program.";
+    }
+
+    setLearningProfileErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleSaveIdentity = async () => {
     if (savingIdentity) {
@@ -225,6 +252,10 @@ export default function ProfilePage() {
     if (savingLearningProfile) {
       return;
     }
+    if (!validateLearningProfileForm()) {
+      setLearningProfileMessage(null);
+      return;
+    }
     setSavingLearningProfile(true);
     setLearningProfileMessage(null);
     try {
@@ -242,6 +273,7 @@ export default function ProfilePage() {
         bio: updatedProfile.bio ?? "",
       });
       setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
+      setLearningProfileErrors({});
       setLearningProfileMessage("Learning profile updated successfully.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update learning profile.";
@@ -427,21 +459,22 @@ export default function ProfilePage() {
                   allowCustom={false}
                   toggleLabel="Toggle learner level suggestions"
                 />
+                {learningProfileErrors.learnerLevel ? (
+                  <p className="text-xs text-red-600 dark:text-red-400">{learningProfileErrors.learnerLevel}</p>
+                ) : null}
               </label>
               <label className="block space-y-2">
                 <span className="text-sm font-medium">Course / Program</span>
-                <SuggestionCombobox
+                <CourseProgramCombobox
                   id="profile-course-program"
                   value={learningProfileForm.courseProgram}
-                  options={availableCourseProgramSuggestions.map((option) => ({ value: option, label: option }))}
+                  suggestions={availableCourseProgramSuggestions}
+                  learnerLevel={learningProfileForm.learnerLevel}
                   ariaLabel="Course / Program"
                   onChange={(value) =>
-                    handleLearningProfileFieldChange("courseProgram", value.slice(0, 120))
+                    handleLearningProfileFieldChange("courseProgram", value)
                   }
-                  placeholder="Choose or type your course/program"
-                  helperText="Pick a suggestion or type your own course/program."
-                  allowCustom
-                  toggleLabel="Toggle course program suggestions"
+                  errorText={learningProfileErrors.courseProgram ?? null}
                 />
               </label>
               <label className="block space-y-2 sm:col-span-2">

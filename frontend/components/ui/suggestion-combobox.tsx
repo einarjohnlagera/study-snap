@@ -31,6 +31,10 @@ function matchesOption(option: SuggestionComboboxOption, value: string): boolean
   return normalize(option.value) === normalizedValue || normalize(option.label) === normalizedValue;
 }
 
+function optionSearchText(option: SuggestionComboboxOption): string {
+  return `${normalize(option.label)} ${normalize(option.value)}`.trim();
+}
+
 export function SuggestionCombobox({
   id,
   value,
@@ -46,6 +50,7 @@ export function SuggestionCombobox({
 }: Readonly<SuggestionComboboxProps>) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [hasTypedSinceOpen, setHasTypedSinceOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const selectedOption = useMemo(
@@ -59,12 +64,6 @@ export function SuggestionCombobox({
     }
     return selectedOption?.label ?? "";
   }, [allowCustom, selectedOption?.label, value]);
-
-  useEffect(() => {
-    if (!open) {
-      setInputValue(displayValue);
-    }
-  }, [displayValue, open]);
 
   useEffect(() => {
     if (!open) {
@@ -84,32 +83,61 @@ export function SuggestionCombobox({
     };
   }, [open]);
 
-  const normalizedInput = normalize(inputValue);
-  const exactMatchExists = useMemo(
-    () => options.some((option) => matchesOption(option, inputValue)),
-    [inputValue, options],
+  const activeInputValue = open ? inputValue : displayValue;
+  const normalizedInput = normalize(activeInputValue);
+  const exactMatch = useMemo(
+    () => options.find((option) => matchesOption(option, activeInputValue)) ?? null,
+    [activeInputValue, options],
   );
 
   const filteredOptions = useMemo(() => {
-    if (normalizedInput.length === 0 || exactMatchExists) {
+    if (!hasTypedSinceOpen || normalizedInput.length === 0) {
       return options;
     }
-    return options.filter((option) => {
-      const valueLabel = `${option.label} ${option.value}`.toLowerCase();
-      return valueLabel.includes(normalizedInput);
-    });
-  }, [exactMatchExists, normalizedInput, options]);
+    return options
+      .map((option, index) => {
+        const normalizedLabel = normalize(option.label);
+        const normalizedValue = normalize(option.value);
+        const searchableText = optionSearchText(option);
 
-  const trimmedInput = inputValue.trim();
-  const showCreateOption = allowCustom && trimmedInput.length > 0 && !exactMatchExists;
+        let rank = Number.POSITIVE_INFINITY;
+        if (normalizedLabel === normalizedInput || normalizedValue === normalizedInput) {
+          rank = 0;
+        } else if (normalizedLabel.startsWith(normalizedInput) || normalizedValue.startsWith(normalizedInput)) {
+          rank = 1;
+        } else if (searchableText.includes(normalizedInput)) {
+          rank = 2;
+        }
+
+        return {
+          option,
+          index,
+          rank,
+        };
+      })
+      .filter((entry) => Number.isFinite(entry.rank))
+      .sort((left, right) => {
+        if (left.rank !== right.rank) {
+          return left.rank - right.rank;
+        }
+        return left.index - right.index;
+      })
+      .map((entry) => entry.option);
+  }, [hasTypedSinceOpen, normalizedInput, options]);
+
+  const trimmedInput = activeInputValue.trim();
+  const showCreateOption = allowCustom && trimmedInput.length > 0 && exactMatch === null;
   const showDropdown = open && !disabled && (filteredOptions.length > 0 || showCreateOption);
 
   const handleInputChange = (nextValue: string) => {
     setInputValue(nextValue);
     setOpen(true);
+    setHasTypedSinceOpen(true);
+
+    const matchedOption = options.find((option) => matchesOption(option, nextValue)) ?? null;
 
     if (allowCustom) {
-      onChange(nextValue);
+      onChange(matchedOption?.value ?? nextValue);
       return;
     }
 
@@ -118,7 +146,6 @@ export function SuggestionCombobox({
       return;
     }
 
-    const matchedOption = options.find((option) => matchesOption(option, nextValue));
     if (matchedOption) {
       onChange(matchedOption.value);
     }
@@ -130,10 +157,14 @@ export function SuggestionCombobox({
         <input
           id={id}
           type="text"
-          value={inputValue}
+          value={activeInputValue}
           aria-label={ariaLabel}
           disabled={disabled}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setInputValue(displayValue);
+            setOpen(true);
+            setHasTypedSinceOpen(false);
+          }}
           onChange={(event) => handleInputChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -143,13 +174,21 @@ export function SuggestionCombobox({
           placeholder={placeholder}
           autoComplete="off"
           aria-autocomplete="list"
-          aria-expanded={showDropdown}
           aria-controls={`${id}-options`}
           className="h-11 w-full rounded-lg border border-border bg-background px-3 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
         />
         <button
           type="button"
-          onClick={() => setOpen((previous) => !previous)}
+          onClick={() => {
+            setOpen((previous) => {
+              const nextOpen = !previous;
+              if (nextOpen) {
+                setInputValue(displayValue);
+                setHasTypedSinceOpen(false);
+              }
+              return nextOpen;
+            });
+          }}
           disabled={disabled}
           aria-label={toggleLabel}
           className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-foreground/60 transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
@@ -162,20 +201,6 @@ export function SuggestionCombobox({
             role="listbox"
             className="absolute z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg"
           >
-            {showCreateOption ? (
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
-                onClick={() => {
-                  onChange(trimmedInput);
-                  setInputValue(trimmedInput);
-                  setOpen(false);
-                }}
-              >
-                <span>{`Use "${trimmedInput}"`}</span>
-                <span className="text-xs text-foreground/55">{customOptionLabel}</span>
-              </button>
-            ) : null}
             {filteredOptions.map((option) => {
               const isSelected = selectedOption?.value === option.value;
               return (
@@ -186,16 +211,32 @@ export function SuggestionCombobox({
                   aria-selected={isSelected}
                   className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
                   onClick={() => {
-                    onChange(option.value);
-                    setInputValue(option.label);
-                    setOpen(false);
-                  }}
-                >
+                  onChange(option.value);
+                  setInputValue(option.label);
+                  setOpen(false);
+                  setHasTypedSinceOpen(false);
+                }}
+              >
                   <span>{option.label}</span>
                   {isSelected ? <Check className="h-4 w-4 text-blue-600 dark:text-blue-400" /> : null}
                 </button>
               );
             })}
+            {showCreateOption ? (
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                onClick={() => {
+                  onChange(trimmedInput);
+                  setInputValue(trimmedInput);
+                  setOpen(false);
+                  setHasTypedSinceOpen(false);
+                }}
+              >
+                <span>{`Use "${trimmedInput}"`}</span>
+                <span className="text-xs text-foreground/55">{customOptionLabel}</span>
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
