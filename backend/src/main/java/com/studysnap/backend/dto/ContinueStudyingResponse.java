@@ -8,8 +8,11 @@ import java.time.OffsetDateTime;
 public record ContinueStudyingResponse(
         String studyPackId,
         String noteId,
-        String title,
+        String noteTitle,
+        String subject,
+        String courseProgram,
         String summaryPreview,
+        ContinueStudyingResumeType resumeType,
         ContinueStudyingReason reason,
         BigDecimal lastScorePercentage,
         OffsetDateTime lastReviewedAt,

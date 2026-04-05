@@ -38,6 +38,7 @@ Behavior:
 
 - Reuses the existing continue-studying recommendation logic
 - Keeps resume and retry actions routed through `noteId`
+- Returns note metadata in the same payload so the card can show `noteTitle`, `subject`, optional `courseProgram`, and `resumeType` without an extra frontend request
 
 ## Dashboard Overview
 

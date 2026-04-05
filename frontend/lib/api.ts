@@ -71,6 +71,7 @@ export type StudyPackListPageResponse = {
 
 export type ContinueStudyingReason = "RESUME_REVIEW" | "LOW_SCORE_RECENT" | "RECENTLY_OPENED" | "RECENTLY_CREATED";
 export type ContinueStudyingResumeState = "QUESTION_IN_PROGRESS" | "RETRY_TRANSITION" | "RETRY_IN_PROGRESS";
+export type ContinueStudyingResumeType = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE";
 export type TodayFocusType =
   | "RESUME_REVIEW"
   | "RETRY_REVIEW"
@@ -81,8 +82,11 @@ export type TodayFocusType =
 export type ContinueStudyingResponse = {
   studyPackId: string | null;
   noteId: string | null;
-  title: string | null;
+  noteTitle: string | null;
+  subject: string | null;
+  courseProgram: string | null;
   summaryPreview: string | null;
+  resumeType: ContinueStudyingResumeType | null;
   reason: ContinueStudyingReason | null;
   lastScorePercentage: number | null;
   lastReviewedAt: string | null;

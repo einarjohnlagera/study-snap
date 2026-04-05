@@ -1,8 +1,10 @@
-import Link from "next/link";
 import { CheckCircle2, Sparkles, TrendingUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { ContinueStudyingResponse } from "@/lib/api";
+import { ResponsiveActionLink, type ActionIconName } from "@/components/ui/action-button";
+import type {
+  ContinueStudyingResponse,
+  ContinueStudyingResumeType,
+} from "@/lib/api";
 
 type ContinueSpotlightProps = {
   recommendation: ContinueStudyingResponse;
@@ -15,15 +17,46 @@ function formatScorePercentage(value: number) {
   return value.toFixed(2).replace(/\.?0+$/, "");
 }
 
-function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
+function formatMetadataLine(subject: string | null, courseProgram: string | null) {
+  const parts = [subject?.trim(), courseProgram?.trim()].filter(
+    (value): value is string => Boolean(value && value.length > 0),
+  );
+  return parts.join(" • ");
+}
+
+function resolveResumePresentation(resumeType: ContinueStudyingResumeType | null): {
+  action: ActionIconName;
+  hrefSuffix: "quick-review" | "challenge-quiz" | "adaptive-practice";
+  label: string;
+} {
+  if (resumeType === "CHALLENGE") {
+    return {
+      action: "challengeQuiz",
+      hrefSuffix: "challenge-quiz",
+      label: "Resume Challenge Quiz",
+    };
+  }
+  if (resumeType === "ADAPTIVE") {
+    return {
+      action: "adaptivePractice",
+      hrefSuffix: "adaptive-practice",
+      label: "Resume Adaptive Practice",
+    };
+  }
+  return {
+    action: "quickReview",
+    hrefSuffix: "quick-review",
+    label: "Resume Quick Review",
+  };
+}
+
+function getCardTone(recommendation: ContinueStudyingResponse) {
   if (recommendation.reason === "RESUME_REVIEW") {
     if (recommendation.resumeState === "RETRY_TRANSITION") {
       return {
         label: "Retry Ready",
         icon: TrendingUp,
-        heading: "Resume Quick Review",
-        body: "You finished the first pass and still have some missed questions to review.",
-        cta: "Resume Review",
+        body: "You finished the first pass and still have missed questions ready to review.",
       };
     }
 
@@ -33,9 +66,7 @@ function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
       return {
         label: "Retry Round",
         icon: TrendingUp,
-        heading: "Resume Retry Round",
-        body: `You still have ${remainingQuestions} ${questionLabel} to review.`,
-        cta: "Resume Review",
+        body: `You still have ${remainingQuestions} ${questionLabel} left in this retry round.`,
       };
     }
 
@@ -46,9 +77,7 @@ function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
     return {
       label: "In Progress",
       icon: TrendingUp,
-      heading: "Resume Quick Review",
-      body: `You left off on Question ${normalizedQuestion} of ${normalizedTotal}. Continue your Quick Review.`,
-      cta: "Resume Review",
+      body: `You left off on Question ${normalizedQuestion} of ${normalizedTotal}.`,
     };
   }
 
@@ -58,35 +87,34 @@ function getScoreAwareCopy(recommendation: ContinueStudyingResponse) {
       return {
         label: "Perfect Score",
         icon: CheckCircle2,
-        heading: "Nice work on this pack",
-        body: "You scored 100% on your latest Quick Review. Practice again anytime to keep it sharp.",
-        cta: "Practice Again",
+        body: "You scored 100% on your latest review. Go again anytime to keep it sharp.",
       };
     }
     return {
       label: "Keep Improving",
       icon: TrendingUp,
-      heading: "Continue studying",
-      body: `You recently scored ${formatScorePercentage(latestScore)}% on this Study Pack. Review it again to improve your score.`,
-      cta: "Continue Review",
+      body: `You recently scored ${formatScorePercentage(latestScore)}% on this note. Review it again to improve your score.`,
     };
   }
 
   return {
-    label: "Get Started",
+    label: "Ready to Review",
     icon: Sparkles,
-    heading: "Start studying",
-    body: "You created this Study Pack recently. Start your first Quick Review.",
-    cta: "Start Review",
+    body: "This note is ready for another round of practice whenever you are.",
   };
 }
 
-export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
-  const copy = getScoreAwareCopy(recommendation);
-  const FeedbackIcon = copy.icon;
+export function ContinueSpotlight({ recommendation }: Readonly<ContinueSpotlightProps>) {
   if (!recommendation.noteId) {
     return null;
   }
+
+  const cardTone = getCardTone(recommendation);
+  const ToneIcon = cardTone.icon;
+  const resumePresentation = resolveResumePresentation(recommendation.resumeType);
+  const noteTitle = recommendation.noteTitle?.trim() || "Untitled note";
+  const metadataLine = formatMetadataLine(recommendation.subject, recommendation.courseProgram);
+  const resumeHref = `/notes/${recommendation.noteId}/${resumePresentation.hrefSuffix}`;
 
   return (
     <Card className="space-y-4 p-4 sm:p-6">
@@ -94,43 +122,44 @@ export function ContinueSpotlight({ recommendation }: ContinueSpotlightProps) {
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
           KEEP IT SHARP
         </p>
-        <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
-          <div className="flex items-center gap-2">
+        <div className="space-y-3 rounded-md border border-border bg-muted/40 p-3">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-1 text-[11px] font-medium text-foreground/80">
-              <FeedbackIcon className="h-3.5 w-3.5" aria-hidden="true" />
-              {copy.label}
+              <ToneIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              {cardTone.label}
+            </span>
+            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+              {resumePresentation.label}
             </span>
           </div>
-          <h2 className="text-lg font-semibold sm:text-xl">{copy.heading}</h2>
-          <p className="text-sm font-medium leading-relaxed text-foreground/85">{copy.body}</p>
-        </div>
-        {recommendation.summaryPreview ? (
+
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-              About this Study Pack
-            </p>
-            <p className="text-sm leading-relaxed text-foreground/70">{recommendation.summaryPreview}</p>
+            <h2 className="line-clamp-2 text-lg font-semibold sm:text-xl">{noteTitle}</h2>
+            {metadataLine ? (
+              <p className="line-clamp-1 text-sm text-foreground/65">{metadataLine}</p>
+            ) : null}
           </div>
-        ) : null}
+
+          <p className="text-sm font-medium leading-relaxed text-foreground/85">{cardTone.body}</p>
+
+          {recommendation.lastReviewedAt ? (
+            <p className="text-xs text-foreground/65">
+              Last reviewed: {new Date(recommendation.lastReviewedAt).toLocaleString()}
+            </p>
+          ) : recommendation.lastOpenedAt ? (
+            <p className="text-xs text-foreground/65">
+              Last opened: {new Date(recommendation.lastOpenedAt).toLocaleString()}
+            </p>
+          ) : null}
+        </div>
       </div>
 
-      <div className="space-y-1 text-xs text-foreground/65">
-        {recommendation.lastReviewedAt ? (
-          <p className="break-words">Last reviewed · {new Date(recommendation.lastReviewedAt).toLocaleString()}</p>
-        ) : null}
-        {recommendation.lastOpenedAt ? (
-          <p className="break-words">Last opened · {new Date(recommendation.lastOpenedAt).toLocaleString()}</p>
-        ) : null}
-        {recommendation.createdAt ? (
-          <p className="break-words">Created · {new Date(recommendation.createdAt).toLocaleDateString()}</p>
-        ) : null}
-      </div>
-
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Link href={`/notes/${recommendation.noteId}/quick-review`} className="w-full sm:w-auto">
-          <Button type="button" className="w-full sm:w-auto">{copy.cta}</Button>
-        </Link>
-      </div>
+      <ResponsiveActionLink
+        href={resumeHref}
+        action={resumePresentation.action}
+        label={resumePresentation.label}
+        className="w-full sm:w-auto"
+      />
     </Card>
   );
 }

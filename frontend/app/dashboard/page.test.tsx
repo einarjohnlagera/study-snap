@@ -110,7 +110,11 @@ describe("DashboardPage profile variants", () => {
     (listNotes as jest.Mock).mockResolvedValue(notes);
     (getContinueStudyingRecommendation as jest.Mock).mockResolvedValue({
       noteId: "note-1",
+      noteTitle: "Biology Review",
+      subject: "Biology",
+      courseProgram: "Nursing",
       summaryPreview: "Resume this biology review.",
+      resumeType: "QUICK_REVIEW",
       reason: "RESUME_REVIEW",
       currentQuestionIndex: 1,
       totalQuestions: 8,
@@ -141,6 +145,9 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByText("Continue Studying")).toBeInTheDocument();
+    expect(screen.getAllByText("Biology Review")).not.toHaveLength(0);
+    expect(screen.getByText("Biology • Nursing")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Resume Quick Review" })).toHaveAttribute("href", "/notes/note-1/quick-review");
     expect(screen.getByText("Weak Concepts")).toBeInTheDocument();
     expect(screen.getByText("Recent Notes")).toBeInTheDocument();
     expect(screen.getByText("Quick Review")).toBeInTheDocument();

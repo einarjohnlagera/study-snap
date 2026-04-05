@@ -828,6 +828,9 @@ Rules:
 - Keep delete actions out of Dashboard.
 - Dashboard should personalize section order, CTA emphasis, and labels by `profileType` while reusing the same shared note, quiz, activity, and usage data.
 - `STUDENT` dashboard should prioritize `Continue Studying`, weak concepts, recent notes, and quick review.
+- `Continue Studying` must show the current note title prominently and include subject plus course/program when available so users can recognize what they are resuming.
+- Dashboard continue-study payloads must carry `noteId`, `noteTitle`, `subject`, optional `courseProgram`, and backend-owned `resumeType` in a single API response; do not add follow-up frontend fetches just to label the card.
+- `Continue Studying` resume labels must reflect the backend `resumeType` (`Quick Review`, `Challenge Quiz`, `Adaptive Practice`) instead of hardcoding Quick Review copy.
 - `BOARD_EXAM` dashboard should prioritize challenge-quiz practice, weak areas, adaptive practice, exam countdown, and weekly activity.
 - `TEACHER` dashboard should prioritize quiz creation, material upload, recent materials, and recently generated quizzes.
 - Dashboard variants must not introduce separate entities or profile-specific tables; personalization is presentation only.

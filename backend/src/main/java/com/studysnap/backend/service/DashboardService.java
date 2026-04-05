@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
+import com.studysnap.backend.dto.ContinueStudyingResumeType;
 import com.studysnap.backend.dto.DashboardConceptInsightResponse;
 import com.studysnap.backend.dto.DashboardFocusAreasResponse;
 import com.studysnap.backend.dto.DashboardOverviewResponse;
@@ -24,6 +25,7 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserActivityEventEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.ActivityEventRepository;
+import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -41,6 +43,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.*;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -58,13 +61,14 @@ public class DashboardService {
 
     private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
+    private final NoteRepository noteRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
 
     public ContinueStudyingResponse getContinueStudyingRecommendation(UUID userId) {
-        // Priority 1: resume an unfinished Quick Review session when available.
+        // Priority 1: resume the latest unfinished review session when available.
         Optional<ContinueStudyingResponse> inProgress = resolveInProgressRecommendation(userId);
         if (inProgress.isPresent()) {
             return inProgress.get();
@@ -97,12 +101,16 @@ public class DashboardService {
                     null,
                     null,
                     null,
-                    null
+                    null,
+                    ContinueStudyingResumeType.QUICK_REVIEW
             );
         }
 
         // No Study Packs or usable activity context -> no recommendation.
         return new ContinueStudyingResponse(
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -396,44 +404,37 @@ public class DashboardService {
     }
 
     private Optional<ContinueStudyingResponse> resolveInProgressRecommendation(UUID userId) {
-        Optional<QuickReviewSessionEntity> inProgress = quickReviewSessionRepository
-                .findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                        userId,
-                        QuickReviewSessionMode.QUICK_REVIEW,
-                        QuickReviewSessionStatus.IN_PROGRESS
-                );
-        if (inProgress.isEmpty()) {
-            return Optional.empty();
-        }
+        for (QuickReviewSessionEntity session : findInProgressSessionsByRecency(userId)) {
+            Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
+            if (studyPack.isEmpty()) {
+                continue;
+            }
 
-        QuickReviewSessionEntity session = inProgress.get();
-        Optional<StudyPackEntity> studyPack = studyPackRepository.findByIdAndOwnerUserId(session.getStudyPackId(), userId);
-        if (studyPack.isEmpty()) {
-            return Optional.empty();
+            int currentQuestionIndex = session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex();
+            int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
+            QuickReviewRound currentRound = session.getCurrentRound();
+            int remainingQuestions = calculateRemainingQuestions(session, currentQuestionIndex, totalQuestions);
+            ContinueStudyingResumeState resumeState = determineResumeState(
+                    session,
+                    currentQuestionIndex,
+                    totalQuestions
+            );
+            return Optional.of(toResponse(
+                    studyPack.get(),
+                    ContinueStudyingReason.RESUME_REVIEW,
+                    null,
+                    session.getCreatedAt(),
+                    findLastOpenedAt(userId, session.getStudyPackId()),
+                    studyPack.get().getCreatedAt(),
+                    currentQuestionIndex,
+                    totalQuestions,
+                    currentRound,
+                    remainingQuestions,
+                    resumeState,
+                    resolveResumeType(session.getSessionMode())
+            ));
         }
-
-        int currentQuestionIndex = session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex();
-        int totalQuestions = session.getTotalQuestions() == null ? 0 : session.getTotalQuestions();
-        QuickReviewRound currentRound = session.getCurrentRound();
-        int remainingQuestions = calculateRemainingQuestions(session, currentQuestionIndex, totalQuestions);
-        ContinueStudyingResumeState resumeState = determineResumeState(
-                session,
-                currentQuestionIndex,
-                totalQuestions
-        );
-        return Optional.of(toResponse(
-                studyPack.get(),
-                ContinueStudyingReason.RESUME_REVIEW,
-                null,
-                session.getCreatedAt(),
-                findLastOpenedAt(userId, session.getStudyPackId()),
-                studyPack.get().getCreatedAt(),
-                currentQuestionIndex,
-                totalQuestions,
-                currentRound,
-                remainingQuestions,
-                resumeState
-        ));
+        return Optional.empty();
     }
 
     private Optional<ContinueStudyingResponse> resolveLowScoreRecentRecommendation(UUID userId) {
@@ -483,7 +484,8 @@ public class DashboardService {
                     null,
                     null,
                     null,
-                    null
+                    null,
+                    ContinueStudyingResumeType.QUICK_REVIEW
             ));
         }
 
@@ -641,7 +643,8 @@ public class DashboardService {
                     null,
                     null,
                     null,
-                    null
+                    null,
+                    ContinueStudyingResumeType.QUICK_REVIEW
             ));
         }
 
@@ -670,13 +673,18 @@ public class DashboardService {
             Integer totalQuestions,
             QuickReviewRound currentRound,
             Integer remainingQuestions,
-            ContinueStudyingResumeState resumeState
+            ContinueStudyingResumeState resumeState,
+            ContinueStudyingResumeType resumeType
     ) {
+        ContinueStudyingNoteMetadata noteMetadata = resolveNoteMetadata(studyPack);
         return new ContinueStudyingResponse(
                 studyPack.getId().toString(),
                 studyPack.getNoteId() == null ? null : studyPack.getNoteId().toString(),
-                studyPack.getTitle(),
+                noteMetadata.noteTitle(),
+                noteMetadata.subject(),
+                noteMetadata.courseProgram(),
                 SummaryPreviewUtils.buildSummaryPreview(studyPack.getSummary(), 140),
+                resumeType,
                 reason,
                 lastScorePercentage,
                 lastReviewedAt,
@@ -688,6 +696,58 @@ public class DashboardService {
                 remainingQuestions,
                 resumeState
         );
+    }
+
+    private List<QuickReviewSessionEntity> findInProgressSessionsByRecency(UUID userId) {
+        return Stream.of(
+                        QuickReviewSessionMode.QUICK_REVIEW,
+                        QuickReviewSessionMode.CHALLENGE,
+                        QuickReviewSessionMode.ADAPTIVE
+                )
+                .map(sessionMode -> quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                        userId,
+                        sessionMode,
+                        QuickReviewSessionStatus.IN_PROGRESS
+                ).orElse(null))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(
+                        QuickReviewSessionEntity::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
+                .toList();
+    }
+
+    private ContinueStudyingResumeType resolveResumeType(QuickReviewSessionMode sessionMode) {
+        if (sessionMode == QuickReviewSessionMode.CHALLENGE) {
+            return ContinueStudyingResumeType.CHALLENGE;
+        }
+        if (sessionMode == QuickReviewSessionMode.ADAPTIVE) {
+            return ContinueStudyingResumeType.ADAPTIVE;
+        }
+        return ContinueStudyingResumeType.QUICK_REVIEW;
+    }
+
+    private ContinueStudyingNoteMetadata resolveNoteMetadata(StudyPackEntity studyPack) {
+        UUID noteId = studyPack.getNoteId();
+        if (noteId == null || studyPack.getOwnerUserId() == null) {
+            return new ContinueStudyingNoteMetadata(studyPack.getTitle(), studyPack.getSubject(), null);
+        }
+
+        return noteRepository.findByIdAndOwnerUserId(noteId, studyPack.getOwnerUserId())
+                .map(note -> new ContinueStudyingNoteMetadata(
+                        normalizeOptionalText(note.getTitle(), studyPack.getTitle()),
+                        normalizeOptionalText(note.getSubject(), studyPack.getSubject()),
+                        normalizeOptionalText(note.getCourseProgram(), null)
+                ))
+                .orElseGet(() -> new ContinueStudyingNoteMetadata(studyPack.getTitle(), studyPack.getSubject(), null));
+    }
+
+    private String normalizeOptionalText(String value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? fallback : trimmed;
     }
 
     private int calculateRemainingQuestions(
@@ -914,5 +974,12 @@ public class DashboardService {
         private DashboardConceptInsightResponse toInsight() {
             return new DashboardConceptInsightResponse(conceptName, accuracyPercentage());
         }
+    }
+
+    private record ContinueStudyingNoteMetadata(
+            String noteTitle,
+            String subject,
+            String courseProgram
+    ) {
     }
 }
