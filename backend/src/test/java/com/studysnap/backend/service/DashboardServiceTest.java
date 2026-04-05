@@ -79,35 +79,6 @@ class DashboardServiceTest {
                 subscriptionService,
                 featureGateService
         );
-        lenient().when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                        any(UUID.class),
-                        any(QuickReviewSessionMode.class),
-                        any(QuickReviewSessionStatus.class)
-                ))
-                .thenAnswer(invocation -> quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                        invocation.getArgument(0),
-                        invocation.getArgument(2)
-                ));
-        lenient().when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                        any(UUID.class),
-                        any(QuickReviewSessionMode.class),
-                        any(Pageable.class)
-                ))
-                .thenAnswer(invocation -> quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                        invocation.getArgument(0),
-                        invocation.getArgument(2)
-                ));
-        lenient().when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                        any(UUID.class),
-                        any(UUID.class),
-                        any(QuickReviewSessionMode.class),
-                        any(Pageable.class)
-                ))
-                .thenAnswer(invocation -> quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                        invocation.getArgument(0),
-                        invocation.getArgument(1),
-                        invocation.getArgument(3)
-                ));
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
         lenient().when(activityEventRepository.findTopByUserIdAndStudyPackIdAndActivityTypeOrderByCreatedAtDesc(
                         any(UUID.class),
@@ -187,8 +158,9 @@ class DashboardServiceTest {
     @Test
     void getMasterySnapshot_returnsEmptyWhenNoCompletedSessionsExist() {
         UUID userId = UUID.randomUUID();
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                 eq(userId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
         )).thenReturn(List.of());
 
@@ -210,8 +182,9 @@ class DashboardServiceTest {
         QuickReviewSessionEntity sessionB = buildCompletedSession(userId, secondPackId, bigDecimal(100), now.minusHours(8));
         QuickReviewSessionEntity sessionC = buildCompletedSession(userId, firstPackId, bigDecimal(50), now.minusHours(2));
 
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
                 eq(userId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any(Pageable.class)
         )).thenReturn(List.of(sessionC, sessionB, sessionA));
 
@@ -328,10 +301,7 @@ class DashboardServiceTest {
                 now.minusMinutes(4)
         );
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.of(inProgress));
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
 
         ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
@@ -365,16 +335,7 @@ class DashboardServiceTest {
         inProgress.setSessionMode(QuickReviewSessionMode.CHALLENGE);
         inProgress.setRetryCount(0);
 
-        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                eq(userId),
-                any(QuickReviewSessionMode.class),
-                eq(QuickReviewSessionStatus.IN_PROGRESS)
-        )).thenAnswer(invocation -> {
-            QuickReviewSessionMode sessionMode = invocation.getArgument(1);
-            return sessionMode == QuickReviewSessionMode.CHALLENGE
-                    ? Optional.of(inProgress)
-                    : Optional.empty();
-        });
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(
                 buildNote(userId, noteId, "Statics Midterm Review", "Engineering Mechanics", "Civil Engineering")
@@ -406,10 +367,7 @@ class DashboardServiceTest {
                 OffsetDateTime.now().minusMinutes(5)
         );
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.of(inProgress));
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
 
         ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
@@ -435,10 +393,7 @@ class DashboardServiceTest {
         );
         inProgress.setRetryCount(0);
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.of(inProgress));
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
 
         ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
@@ -455,14 +410,8 @@ class DashboardServiceTest {
         OffsetDateTime now = OffsetDateTime.now();
         StudyPackEntity weakPack = buildStudyPack(userId, weakPackId, "Chemistry");
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of(
                 buildCompletedSession(userId, strongerPackId, bigDecimal(75), now.minusMinutes(10)),
                 buildCompletedSession(userId, weakPackId, bigDecimal(50), now.minusMinutes(20))
         ));
@@ -483,14 +432,8 @@ class DashboardServiceTest {
         OffsetDateTime now = OffsetDateTime.now();
         StudyPackEntity mostRecentPack = buildStudyPack(userId, mostRecentPackId, "World History");
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of(
                 buildCompletedSession(userId, mostRecentPackId, bigDecimal(60), now.minusMinutes(5)),
                 buildCompletedSession(userId, olderPackId, bigDecimal(60), now.minusMinutes(30))
         ));
@@ -511,14 +454,8 @@ class DashboardServiceTest {
         OffsetDateTime now = OffsetDateTime.now();
         StudyPackEntity weakerPack = buildStudyPack(userId, weakerPackId, "Physics");
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of(
                 buildCompletedSession(userId, perfectPackId, bigDecimal(100), now.minusMinutes(10)),
                 buildCompletedSession(userId, weakerPackId, bigDecimal(60), now.minusMinutes(20))
         ));
@@ -539,25 +476,15 @@ class DashboardServiceTest {
         StudyPackEntity openedPack = buildStudyPack(userId, openedPackId, "Geometry");
         UserActivityEventEntity openedEvent = buildOpenedEvent(userId, openedPackId, now.minusMinutes(8));
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of());
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of());
         when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
                 eq(userId),
                 eq(ActivityType.OPENED_STUDY_PACK),
                 any(Pageable.class)
         )).thenReturn(List.of(openedEvent));
         when(studyPackRepository.findByIdAndOwnerUserId(openedPackId, userId)).thenReturn(Optional.of(openedPack));
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                eq(openedPackId),
-                any(Pageable.class)
-        )).thenReturn(List.of());
+        stubRecentQuickReviewSessionsForPack(userId, openedPackId, List.of());
 
         ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
 
@@ -571,14 +498,8 @@ class DashboardServiceTest {
         UUID createdPackId = UUID.randomUUID();
         StudyPackEntity createdPack = buildStudyPack(userId, createdPackId, "English Literature");
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of());
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of());
         when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
                 eq(userId),
                 eq(ActivityType.OPENED_STUDY_PACK),
@@ -596,14 +517,8 @@ class DashboardServiceTest {
     void getContinueStudyingRecommendation_returnsEmptyWhenNoStudyPacksExist() {
         UUID userId = UUID.randomUUID();
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of());
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of());
         when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
                 eq(userId),
                 eq(ActivityType.OPENED_STUDY_PACK),
@@ -626,14 +541,8 @@ class DashboardServiceTest {
         OffsetDateTime now = OffsetDateTime.now();
         StudyPackEntity selectedPack = buildStudyPack(userId, packWithOlderPerfectNewerWeakId, "Programming");
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(
+        stubNoInProgressSessions(userId);
+        stubRecentQuickReviewSessions(userId, List.of(
                 buildCompletedSession(userId, packWithOlderPerfectNewerWeakId, bigDecimal(60), now.minusMinutes(5)),
                 buildCompletedSession(userId, otherPackId, bigDecimal(70), now.minusMinutes(10)),
                 buildCompletedSession(userId, packWithOlderPerfectNewerWeakId, bigDecimal(100), now.minusDays(1))
@@ -664,10 +573,7 @@ class DashboardServiceTest {
         );
         inProgress.setRetryCount(0);
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.of(inProgress));
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
@@ -692,10 +598,7 @@ class DashboardServiceTest {
                 OffsetDateTime.now().minusMinutes(5)
         );
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.of(inProgress));
+        stubLatestQuickReviewInProgressSession(userId, inProgress);
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
@@ -719,14 +622,8 @@ class DashboardServiceTest {
         );
         latestCompleted.setSessionMetadata(Map.of("weakConcepts", List.of("Alliances", "Militarism")));
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(latestCompleted));
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of(latestCompleted));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
@@ -750,14 +647,8 @@ class DashboardServiceTest {
         reviewedSession.setSessionMetadata(Map.of("weakConcepts", List.of("Alliances", "Militarism")));
 
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(reviewedSession), List.of(reviewedSession));
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of(reviewedSession), List.of(reviewedSession));
         when(studyPackRepository.findByIdAndOwnerUserId(reviewedPackId, userId)).thenReturn(Optional.of(reviewedPack));
 
         TodayFocusResponse response = dashboardService.getTodayFocus(userId);
@@ -773,14 +664,8 @@ class DashboardServiceTest {
         StudyPackEntity openedPack = buildStudyPack(userId, openedPackId, "Opened Pack");
         UserActivityEventEntity openedEvent = buildOpenedEvent(userId, openedPackId, OffsetDateTime.now().minusMinutes(8));
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of());
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of());
         when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
                 eq(userId),
                 eq(ActivityType.OPENED_STUDY_PACK),
@@ -800,14 +685,8 @@ class DashboardServiceTest {
         UUID createdPackId = UUID.randomUUID();
         StudyPackEntity createdPack = buildStudyPack(userId, createdPackId, "Created Pack");
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of());
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of());
         when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
                 eq(userId),
                 eq(ActivityType.OPENED_STUDY_PACK),
@@ -834,14 +713,8 @@ class DashboardServiceTest {
                 OffsetDateTime.now().minusMinutes(2)
         );
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(), List.of(reviewedSession));
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of(), List.of(reviewedSession));
         when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
                 eq(userId),
                 eq(ActivityType.OPENED_STUDY_PACK),
@@ -861,14 +734,8 @@ class DashboardServiceTest {
     void getTodayFocus_returnsStudySuggestionWhenNoStudyPacksExistForFallback() {
         UUID userId = UUID.randomUUID();
 
-        when(quickReviewSessionRepository.findTopByUserIdAndStatusOrderByCreatedAtDesc(
-                userId,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.findByUserIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                any(Pageable.class)
-        )).thenReturn(List.of(), List.of());
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of(), List.of());
         when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
                 eq(userId),
                 eq(ActivityType.OPENED_STUDY_PACK),
@@ -954,6 +821,82 @@ class DashboardServiceTest {
         session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
         session.setSessionMetadata(Map.of("conceptBreakdown", conceptBreakdown));
         return session;
+    }
+
+    private void stubLatestInProgressSession(UUID userId, QuickReviewSessionEntity session) {
+        QuickReviewSessionMode sessionMode = session == null || session.getSessionMode() == null
+                ? QuickReviewSessionMode.QUICK_REVIEW
+                : session.getSessionMode();
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionMode.QUICK_REVIEW,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(sessionMode == QuickReviewSessionMode.QUICK_REVIEW && session != null
+                ? Optional.of(session)
+                : Optional.empty());
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionMode.CHALLENGE,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(sessionMode == QuickReviewSessionMode.CHALLENGE
+                ? Optional.of(session)
+                : Optional.empty());
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionMode.ADAPTIVE,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(sessionMode == QuickReviewSessionMode.ADAPTIVE
+                ? Optional.of(session)
+                : Optional.empty());
+    }
+
+    private void stubNoInProgressSessions(UUID userId) {
+        stubLatestInProgressSession(userId, null);
+    }
+
+    private void stubLatestQuickReviewInProgressSession(UUID userId, QuickReviewSessionEntity session) {
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionMode.QUICK_REVIEW,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(session == null ? Optional.empty() : Optional.of(session));
+    }
+
+    private void stubNoQuickReviewInProgressSession(UUID userId) {
+        stubLatestQuickReviewInProgressSession(userId, null);
+    }
+
+    private void stubRecentQuickReviewSessions(UUID userId, List<QuickReviewSessionEntity> sessions) {
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any(Pageable.class)
+        )).thenReturn(sessions);
+    }
+
+    private void stubRecentQuickReviewSessions(
+            UUID userId,
+            List<QuickReviewSessionEntity> firstCall,
+            List<QuickReviewSessionEntity> secondCall
+    ) {
+        when(quickReviewSessionRepository.findByUserIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any(Pageable.class)
+        )).thenReturn(firstCall, secondCall);
+    }
+
+    private void stubRecentQuickReviewSessionsForPack(
+            UUID userId,
+            UUID studyPackId,
+            List<QuickReviewSessionEntity> sessions
+    ) {
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any(Pageable.class)
+        )).thenReturn(sessions);
     }
 
     private NoteEntity buildNote(UUID userId, UUID noteId, String title, String subject, String courseProgram) {
