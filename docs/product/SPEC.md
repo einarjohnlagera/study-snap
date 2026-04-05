@@ -466,6 +466,7 @@ Users can:
 - Quiz entry buttons on Note Detail and other quiz launch surfaces should use distinct icons so users can distinguish fast review, exam challenge, and weak-area practice at a glance.
 - Note Detail uses view tabs, not action buttons, for `Summary`, `Key Concepts`, `Quiz`, and `Full Notes`:
   - keep `Summary` as the default tab on private and public note detail
+  - use the reading flow `Summary` -> `Full Notes` -> `Key Concepts` -> `Quiz`, while keeping the visual tab order stable
   - use the tab order `Summary` -> `Key Concepts` -> `Quiz` -> `Full Notes`
   - place the tab row below the header/actions and above the selected note/study content
   - use underline-style navigation with muted inactive labels and an active bottom border
@@ -475,6 +476,7 @@ Users can:
   - preserve the user's position around the tab content area when switching views
   - changing `?tab=` must not trigger a note-detail refetch or loading-state remount
   - `Full Notes` should render the complete original note body so users can evaluate the source note without entering edit mode
+  - the `Summary` view should include a subtle `View Full Notes →` CTA above the summary text to guide users to the source note without overpowering the summary preview
 
 ### Display Name And Official Badge
 

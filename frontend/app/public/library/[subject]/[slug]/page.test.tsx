@@ -96,10 +96,17 @@ describe("PublicLibrarySeoPage", () => {
     expect(screen.getByRole("tab", { name: "Quiz" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Full Notes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View Full Notes →" })).toBeInTheDocument();
     expect(screen.getByText("Cell structure summary")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "What you can do with this note in NoteLib" })).toBeInTheDocument();
     expect(screen.getByText("Take Quick Review quiz")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: "View Full Notes →" }));
+    expect(screen.getByRole("heading", { name: "Full Notes" })).toBeInTheDocument();
+    expect(screen.getByText(/Cells are the basic unit of life\./i)).toBeInTheDocument();
+    expect(screen.getByText(/They contain organelles that support cell function\./i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
     fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
     expect(screen.getByRole("heading", { name: "Key Concepts" })).toBeInTheDocument();
     expect(screen.getByText("Cell membrane")).toBeInTheDocument();
@@ -113,11 +120,6 @@ describe("PublicLibrarySeoPage", () => {
     expect(
       screen.getByText(/Preview only\. The full quiz experience, answer reveal, and score tracking are available/i),
     ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Full Notes" }));
-    expect(screen.getByRole("heading", { name: "Full Notes" })).toBeInTheDocument();
-    expect(screen.getByText(/Cells are the basic unit of life\./i)).toBeInTheDocument();
-    expect(screen.getByText(/They contain organelles that support cell function\./i)).toBeInTheDocument();
 
     const structuredData = container.querySelector("#public-note-structured-data");
     expect(structuredData).not.toBeNull();

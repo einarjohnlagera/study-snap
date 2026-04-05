@@ -9,6 +9,7 @@ Verify these cases on mobile-sized viewports:
 - public mobile menu keeps nav links separate from `Login` and `Get Started`
 - public mobile menu does not duplicate the theme toggle or visible `Get Started` CTA while the menu is open
 - Note Detail `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` tabs show text labels on mobile
+- the `View Full Notes →` CTA is visible inside the `Summary` view on mobile
 - switching Note Detail tabs does not jump the page to the top
 - switching Note Detail tabs keeps the user near the tab content area
 - switching Note Detail tabs does not flash a loading state or refetch the note on mobile

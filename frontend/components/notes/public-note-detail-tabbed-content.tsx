@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
+import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
 import type { NoteStudyPackStatus, QuizItem } from "@/lib/api";
 import { getDisplayedQuizChoices, resolveQuizCorrectIndex } from "@/lib/quiz";
@@ -45,12 +46,10 @@ export function PublicNoteDetailTabbedContent({
       </Card>
 
       {activeTab === "summary" ? (
-        <Card className="space-y-3 p-4 sm:p-6">
-          <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
-          <p className="text-sm leading-relaxed text-foreground/80">
-            {isDraft ? "This public note does not have a generated summary yet." : (summary ?? "No summary available yet.")}
-          </p>
-        </Card>
+        <NoteDetailSummaryCard
+          summary={isDraft ? "This public note does not have a generated summary yet." : (summary ?? "No summary available yet.")}
+          onViewFullNotes={() => setActiveTab("full-notes")}
+        />
       ) : null}
 
       {activeTab === "key-concepts" ? (

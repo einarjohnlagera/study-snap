@@ -9,6 +9,7 @@ import { PaywallModal, type PaywallModalVariant } from "@/components/billing/pay
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
+import { NoteDetailSummaryCard } from "@/components/notes/note-detail-summary-card";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -1154,12 +1155,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           </Card>
 
           {activeStudyPackTab === "summary" ? (
-            <Card id="study-pack-summary" className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
-              <p className="text-sm text-foreground/75">
-                {isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : (note.summary ?? "No summary available.")}
-              </p>
-            </Card>
+            <NoteDetailSummaryCard
+              summary={isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : (note.summary ?? "No summary available.")}
+              onViewFullNotes={() => handleChangeStudyPackTab("full-notes")}
+            />
           ) : null}
 
           {activeStudyPackTab === "key-concepts" ? (

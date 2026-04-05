@@ -5,6 +5,8 @@ Verify these cases for private Note Detail:
 - `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` render as tabs, not action buttons
 - `?tab=quiz` opens the quiz view directly
 - `?tab=full-notes` opens the full-note view directly
+- the `Summary` tab shows a `View Full Notes →` CTA
+- clicking `View Full Notes →` switches to the full-note view without a full page reload
 - switching tabs updates the query state without a full page reload
 - switching tabs does not jump the page to the top
 - switching tabs does not refetch the note or flash the loading state

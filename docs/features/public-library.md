@@ -69,5 +69,6 @@ Rules:
 
 - keep `Summary` as the default tab
 - use `Summary`, `Key Concepts`, `Quiz`, and `Full Notes`
+- include a subtle `View Full Notes →` CTA inside the `Summary` view so visitors can quickly inspect the original note
 - `Full Notes` should render the complete original note body so visitors can judge whether the note is worth copying
 - keep the page read-only and copy-first; tabs are for review, not management

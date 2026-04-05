@@ -28,6 +28,7 @@
 - Challenge Quiz and Adaptive Practice now require richer explanations and concept labels in their generated quiz payloads.
 - Library and Public Library now use richer metadata-driven filtering with course/program support, Public Library learner-level/source filters, and subtler note-card metadata hierarchy with visibility icons instead of extra badges.
 - Private and public note detail now include a `Full Notes` tab so users can inspect the complete original note alongside `Summary`, `Key Concepts`, and `Quiz`.
+- The `Summary` view on private and public note detail now includes a subtle `View Full Notes →` CTA so users can jump from AI preview to the original note without losing context.
 
 ### Technical Changes
 

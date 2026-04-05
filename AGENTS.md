@@ -336,6 +336,7 @@ Core loop:
 - Public note detail should not expose edit, delete, generation, or study actions; generation remains a Note Editor responsibility and quizzes remain on study surfaces.
 - Public and private note detail should both expose `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` so the original note stays easy to inspect.
 - Keep `Summary` as the default tab; `Full Notes` is for reading the complete original note body, not a collapsed preview.
+- The `Summary` view should include a subtle `View Full Notes →` CTA that switches tabs without a full page reload and without interrupting the current reading position.
 - Public Profile note cards should reuse the public-note route and must not expose private workspace actions.
 - Subject UI rules:
   - render subjects as badges across library cards and note headers
@@ -406,6 +407,7 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Desktop tabs should show icon + text.
 - Mobile tabs should also show icon + text when they switch major note views.
 - Note Detail tab order should stay `Summary` -> `Key Concepts` -> `Quiz` -> `Full Notes`.
+- Note Detail should still guide the reading flow from `Summary` into the source material through a subtle `View Full Notes →` CTA inside the summary view.
 - Switching tabs must not reset page scroll to the top; preserve the current content area when the tab state changes.
 - Query-string tab switches on Note Detail must not trigger a note refetch or loading-state remount.
 
