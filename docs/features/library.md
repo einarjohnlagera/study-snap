@@ -103,6 +103,7 @@ Metadata behavior shared with note authoring:
 
 - Library subject filters depend on the same persisted `notes.subject` values used by the Note Editor autocomplete.
 - When a user saves a custom subject on a note, that subject becomes available in later `Subject` suggestions and filters.
+- AI-generated subjects should remain specific enough to be useful filters, ideally in a reusable academic format such as `Primary field – subtopic`.
 - Notes now persist optional per-note `courseProgram` metadata so future library filters can group notes more accurately without relying only on the user's profile default.
 
 ## Public Profile

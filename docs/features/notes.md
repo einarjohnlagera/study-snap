@@ -20,6 +20,10 @@ Rules:
 - `subject` uses autocomplete from persisted note subjects.
 - users can still type a custom subject directly.
 - a saved custom subject becomes available in future subject suggestions after the note is persisted.
+- AI subject suggestions should stay specific and library-friendly:
+  - prefer reusable academic labels such as `Biology – Cell Division` or `Software Engineering – Data Structures`
+  - avoid broad umbrella labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the note supports a narrower subject
+- learner level, course/program, current subject, and tags may be passed into Study Pack generation to improve subject suggestion quality without changing the note form flow.
 - tags stay optional and should include helper guidance rather than mandatory validation pressure.
 
 ## Create and edit behavior

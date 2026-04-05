@@ -514,6 +514,9 @@ Users can:
   - Public Library uses the `public` subject scope
   - users can still type a custom subject and save it directly into `notes.subject`
   - saved custom subjects become future suggestions once the note is persisted
+  - AI-generated subjects should be library-friendly academic labels, usually `Primary field – subtopic` when that helps group similar notes
+  - avoid broad catch-all labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the notes support a narrower academic subject
+  - example targets: `Nursing – Pharmacology`, `Biology – Cell Division`, `Criminal Law – Crimes Against Persons`, `Software Engineering – Data Structures`
   - no normalized `subjects` table is required for the current version
 - Library and Public Library should share the same control order:
   - `Search`
@@ -757,7 +760,7 @@ Page responsibilities:
   - existing `tags` -> default `Merge Tags`
   - no existing `tags` -> default `Use AI Tags`
 - AI subject suggestions should prefer specific academic library-friendly subjects instead of broad catch-all categories when the notes support that specificity.
-- Backend generation context may also carry `learnerLevel`, `courseProgram`, note `subject`, and note `tags` for future prompt personalization without changing current Study Pack UI yet.
+- Backend generation context carries `learnerLevel`, `courseProgram`, note `subject`, and note `tags` into Study Pack generation so AI subject suggestions can use learner/course context without changing the existing note-storage model.
 
 ### Authentication Session Handling
 
