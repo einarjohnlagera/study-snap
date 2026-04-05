@@ -5,6 +5,7 @@ import { PublicNoteAuthorLine, PublicNoteOwnershipActions} from "@/components/no
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
+import { getDisplayedQuizChoices, resolveQuizCorrectIndex } from "@/lib/quiz";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData } from "@/lib/structured-data";
@@ -184,9 +185,15 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
                     <p className="font-medium text-foreground">
                       {index + 1}. {item.question}
                     </p>
-                    <ul className="list-disc space-y-1 pl-5">
-                      {item.choices.slice(0, 4).map((choice) => (
-                        <li key={`${item.question}-${choice}`}>{choice}</li>
+                    <ul className="space-y-1">
+                      {getDisplayedQuizChoices({
+                        ...item,
+                        correctIndex: resolveQuizCorrectIndex(item),
+                      }).map((choice) => (
+                        <li key={`${item.question}-${choice.label}-${choice.text}`}>
+                          <span className="mr-2 font-semibold text-foreground">{choice.label}.</span>
+                          <span>{choice.text}</span>
+                        </li>
                       ))}
                     </ul>
                   </li>

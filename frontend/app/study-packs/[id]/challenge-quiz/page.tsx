@@ -26,10 +26,16 @@ import {
   type ChallengeQuizSessionResponse,
   type ChallengeQuizStartResponse,
 } from "@/lib/api";
+import {
+  isQuizSelectionCorrect,
+  resolveQuizCorrectIndex,
+  serializeSelectedChoiceIndexRecord,
+  toSelectedChoiceIndexRecord,
+} from "@/lib/quiz";
 
 type ChallengePhase = "prestart" | "running" | "complete" | "limit-reached";
 type ChallengeSessionStatePayload = {
-  selectedChoices?: Record<string, string>;
+  selectedChoices?: Record<string, number> | Record<string, string>;
   timerStartedAtEpochSeconds?: number;
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
@@ -73,17 +79,6 @@ function getPerformanceBadgeClass(performanceLevel: string): string {
   return "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
 }
 
-function toChoiceRecord(value: unknown): Record<number, string> {
-  if (!value || typeof value !== "object") {
-    return {};
-  }
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, v]) => typeof v === "string")
-    .map(([k, v]) => [Number(k), v as string] as const)
-    .filter(([k]) => Number.isInteger(k) && k >= 0);
-  return Object.fromEntries(entries);
-}
-
 function resolveTimerStartedAtEpochSeconds(
   session: ChallengeQuizStartResponse,
   sessionState: ChallengeSessionStatePayload,
@@ -111,7 +106,7 @@ export default function ChallengeQuizPage() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams<{ id: string }>();
-  const progressRef = useRef<{ currentIndex: number; selectedChoices: Record<number, string> }>({
+  const progressRef = useRef<{ currentIndex: number; selectedChoices: Record<number, number> }>({
     currentIndex: 0,
     selectedChoices: {},
   });
@@ -130,7 +125,7 @@ export default function ChallengeQuizPage() {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [deadlineEpochSeconds, setDeadlineEpochSeconds] = useState<number | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
+  const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
   const [timedOut, setTimedOut] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
@@ -176,7 +171,7 @@ export default function ChallengeQuizPage() {
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
-    const restoredChoices = toChoiceRecord(state.selectedChoices);
+    const restoredChoices = toSelectedChoiceIndexRecord(state.selectedChoices, started.quiz);
     const normalizedIndex = Math.max(0, Math.min(started.currentQuestionIndex ?? 0, Math.max(0, started.quiz.length - 1)));
     const nextDeadlineEpochSeconds = resolveDeadlineEpochSeconds(started, state);
 
@@ -192,15 +187,13 @@ export default function ChallengeQuizPage() {
   }, []);
 
   const persistProgress = useCallback(
-    (nextIndex: number, nextSelectedChoices: Record<number, string>, keepalive = false) => {
+    (nextIndex: number, nextSelectedChoices: Record<number, number>, keepalive = false) => {
       if (!challengeSession?.sessionId) {
         return;
       }
 
       const sessionState = {
-        selectedChoices: Object.fromEntries(
-          Object.entries(nextSelectedChoices).map(([key, value]) => [String(key), value]),
-        ),
+        selectedChoices: serializeSelectedChoiceIndexRecord(nextSelectedChoices),
       };
 
       void updateChallengeQuizSessionProgress(
@@ -306,7 +299,7 @@ export default function ChallengeQuizPage() {
   const totalQuestions = quiz.length;
   const answeredCount = useMemo(() => Object.keys(selectedChoices).length, [selectedChoices]);
   const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
-  const selectedChoice = selectedChoices[currentIndex] ?? null;
+  const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
 
   useEffect(() => {
     progressRef.current = {
@@ -322,7 +315,7 @@ export default function ChallengeQuizPage() {
 
     const total = challengeSession.quiz.length;
     const correctAnswers = challengeSession.quiz.reduce((count, item, index) => {
-      return selectedChoices[index] === item.answer ? count + 1 : count;
+      return isQuizSelectionCorrect(item, selectedChoices[index]) ? count + 1 : count;
     }, 0);
     const durationSeconds = Math.max(0, challengeSession.timeLimitSeconds - remainingSeconds);
 
@@ -621,14 +614,15 @@ export default function ChallengeQuizPage() {
             <div className="space-y-3">
               <h2 className="text-base font-semibold sm:text-lg">{currentQuestion.question}</h2>
               <QuizChoiceList
+                questionKey={currentQuestion.question}
                 choices={currentQuestion.choices}
-                correctAnswer={currentQuestion.answer}
-                selectedChoice={selectedChoice}
+                correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                selectedChoiceIndex={selectedChoiceIndex}
                 revealAnswer={false}
                 selectionStyle="exam"
-                onSelectChoice={(choice) => {
+                onSelectChoice={(choiceIndex) => {
                   setSelectedChoices((previous) => {
-                    const next = { ...previous, [currentIndex]: choice };
+                    const next = { ...previous, [currentIndex]: choiceIndex };
                     persistProgress(currentIndex, next);
                     return next;
                   });
@@ -795,9 +789,10 @@ export default function ChallengeQuizPage() {
                     {index + 1}. {item.question}
                   </h2>
                   <QuizChoiceList
+                    questionKey={item.question}
                     choices={item.choices}
-                    correctAnswer={item.answer}
-                    selectedChoice={selectedChoices[index] ?? null}
+                    correctIndex={resolveQuizCorrectIndex(item)}
+                    selectedChoiceIndex={selectedChoices[index] ?? null}
                     revealAnswer
                   />
                 </Card>

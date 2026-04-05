@@ -270,11 +270,17 @@ Quiz item:
 {
   "question": "string",
   "choices": ["string", "string", "string", "string"],
-  "answerIndex": 0,
+  "correctIndex": 0,
   "explanation": "string",
   "concept": "string"
 }
 ```
+
+Notes:
+
+- Canonical stored/shared quiz data uses `correctIndex`, not answer letters or prefixed choice text.
+- Raw LLM generation may return `answer` as `A` / `B` / `C` / `D`, but backend normalization converts that into `correctIndex` before persistence.
+- Quiz session state should store selected canonical choice indexes. Compatibility loaders may still accept legacy answer text or `answerIndex` payloads while migrating old sessions.
 
 Key concepts:
 

@@ -266,7 +266,7 @@ public class ChallengeQuizService {
         }
 
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        Map<Integer, String> selectedChoices = extractSelectedChoices(session.getSessionState());
+        Map<Integer, Integer> selectedChoices = extractSelectedChoiceIndexes(session.getSessionState(), quiz);
         ChallengeStatistics statistics = computeStatistics(
                 quiz,
                 selectedChoices,
@@ -511,7 +511,7 @@ public class ChallengeQuizService {
         return nextState;
     }
 
-    private Map<Integer, String> extractSelectedChoices(Map<String, Object> sessionState) {
+    private Map<Integer, Integer> extractSelectedChoiceIndexes(Map<String, Object> sessionState, List<QuizItem> quiz) {
         if (sessionState == null || sessionState.isEmpty()) {
             return Map.of();
         }
@@ -520,23 +520,47 @@ public class ChallengeQuizService {
             return Map.of();
         }
 
-        Map<Integer, String> selectedChoices = new LinkedHashMap<>();
+        Map<Integer, Integer> selectedChoices = new LinkedHashMap<>();
         for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
             Object key = entry.getKey();
-            Object value = entry.getValue();
-            if (!(key instanceof String keyString) || !(value instanceof String selectedChoice)) {
+            if (!(key instanceof String keyString)) {
                 continue;
             }
             try {
                 int questionIndex = Integer.parseInt(keyString);
                 if (questionIndex >= 0) {
-                    selectedChoices.put(questionIndex, selectedChoice);
+                    Integer selectedChoiceIndex = resolveSelectedChoiceIndex(entry.getValue(), questionIndex, quiz);
+                    if (selectedChoiceIndex != null) {
+                        selectedChoices.put(questionIndex, selectedChoiceIndex);
+                    }
                 }
             } catch (NumberFormatException ignored) {
                 // Ignore invalid question index keys.
             }
         }
         return selectedChoices;
+    }
+
+    private Integer resolveSelectedChoiceIndex(Object rawValue, int questionIndex, List<QuizItem> quiz) {
+        if (questionIndex < 0 || questionIndex >= quiz.size()) {
+            return null;
+        }
+        QuizItem item = quiz.get(questionIndex);
+        if (item == null || item.choices() == null || item.choices().isEmpty()) {
+            return null;
+        }
+        if (rawValue instanceof Number number) {
+            int selectedChoiceIndex = number.intValue();
+            return selectedChoiceIndex >= 0 && selectedChoiceIndex < item.choices().size() ? selectedChoiceIndex : null;
+        }
+        if (rawValue instanceof String selectedChoice) {
+            for (int index = 0; index < item.choices().size(); index++) {
+                if (Objects.equals(item.choices().get(index), selectedChoice)) {
+                    return index;
+                }
+            }
+        }
+        return null;
     }
 
     private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
@@ -621,7 +645,7 @@ public class ChallengeQuizService {
 
     private ChallengeStatistics computeStatistics(
             List<QuizItem> quiz,
-            Map<Integer, String> selectedChoices,
+            Map<Integer, Integer> selectedChoices,
             int fallbackCorrectAnswers,
             int fallbackTotalQuestions
     ) {
@@ -651,8 +675,8 @@ public class ChallengeQuizService {
             ConceptCounter counter = conceptCounters.computeIfAbsent(concept, unused -> new ConceptCounter());
             counter.totalQuestions += 1;
 
-            String selectedChoice = selectedChoices.get(index);
-            if (selectedChoice != null && selectedChoice.equals(item.answer())) {
+            Integer selectedChoiceIndex = selectedChoices.get(index);
+            if (selectedChoiceIndex != null && selectedChoiceIndex.equals(item.correctIndex())) {
                 counter.correctAnswers += 1;
                 correctAnswers += 1;
             }

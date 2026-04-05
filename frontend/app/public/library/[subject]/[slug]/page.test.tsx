@@ -59,6 +59,7 @@ const baseNote = {
     {
       question: "What controls the cell?",
       choices: ["Nucleus", "Cytoplasm", "Membrane", "Ribosome"],
+      correctIndex: 0,
       answer: "Nucleus",
       explanation: "The nucleus controls cell activity.",
     },

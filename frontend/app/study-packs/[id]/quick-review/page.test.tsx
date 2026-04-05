@@ -74,7 +74,8 @@ describe("QuickReviewPage first-study onboarding", () => {
       quiz: [
         {
           question: "What is the powerhouse of the cell?",
-          choices: ["Mitochondria", "Nucleus"],
+          choices: ["Mitochondria", "Nucleus", "Ribosome", "Cell wall"],
+          correctIndex: 0,
           answer: "Mitochondria",
           explanation: "Mitochondria produce ATP.",
         },
@@ -113,7 +114,7 @@ describe("QuickReviewPage first-study onboarding", () => {
 
     render(<QuickReviewPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Mitochondria" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
 
     expect(await screen.findByText("You’re all set!")).toBeInTheDocument();

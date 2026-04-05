@@ -1,0 +1,91 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import AdaptivePracticePage from "./page";
+import { getAuthUser } from "@/lib/auth";
+import {
+  completeAdaptivePracticeSession,
+  generateAdaptiveQuickReviewQuiz,
+  getNote,
+} from "@/lib/api";
+
+const routerMock = {
+  push: jest.fn(),
+  replace: jest.fn(),
+};
+const searchParamsMock = {
+  toString: () => "",
+};
+
+jest.mock("next/navigation", () => ({
+  useRouter: () => routerMock,
+  usePathname: () => "/notes/note-1/adaptive-practice",
+  useParams: () => ({ id: "note-1" }),
+  useSearchParams: () => searchParamsMock,
+}));
+
+jest.mock("@/lib/route-guards", () => ({
+  requireAuthenticatedOnboardedUser: () => true,
+}));
+
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: jest.fn(),
+}));
+
+jest.mock("@/lib/api", () => ({
+  completeAdaptivePracticeSession: jest.fn(),
+  generateAdaptiveQuickReviewQuiz: jest.fn(),
+  getMyStudyPack: jest.fn(),
+  getNote: jest.fn(),
+  isEmailNotVerifiedError: () => false,
+  trackAnalyticsEvent: jest.fn(),
+}));
+
+describe("AdaptivePracticePage", () => {
+  beforeEach(() => {
+    (getAuthUser as jest.Mock).mockReset();
+    (getNote as jest.Mock).mockReset();
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockReset();
+    (completeAdaptivePracticeSession as jest.Mock).mockReset();
+  });
+
+  it("keeps answer correctness after displayed choice shuffling", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    expect(correctChoice).toBeDefined();
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+
+    expect(await screen.findByText("Adaptive Practice Complete")).toBeInTheDocument();
+    expect(screen.getByText("Score: 1 / 1 (100%)")).toBeInTheDocument();
+  });
+});

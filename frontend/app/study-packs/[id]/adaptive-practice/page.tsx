@@ -20,6 +20,7 @@ import {
   type NoteResponse,
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
+import { isQuizSelectionCorrect, resolveQuizCorrectIndex } from "@/lib/quiz";
 
 function AdaptivePracticeLoading() {
   return (
@@ -46,7 +47,7 @@ export default function AdaptivePracticePage() {
   const [error, setError] = useState<string | null>(null);
   const [adaptiveQuiz, setAdaptiveQuiz] = useState<QuickReviewAdaptiveQuizResponse | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
+  const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
   const [completionTracked, setCompletionTracked] = useState(false);
   const [premiumLocked, setPremiumLocked] = useState(false);
   const [quizStarted, setQuizStarted] = useState(false);
@@ -168,12 +169,12 @@ export default function AdaptivePracticePage() {
   const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
   const currentQuestion = hasQuestions ? quiz[currentIndex] : null;
-  const selectedChoice = selectedChoices[currentIndex] ?? null;
-  const hasAnsweredCurrent = Boolean(selectedChoice);
+  const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
+  const hasAnsweredCurrent = selectedChoiceIndex !== null;
   const isComplete = hasQuestions && currentIndex >= quiz.length;
   const score = useMemo(() => {
     return quiz.reduce((count, question, index) => {
-      return selectedChoices[index] === question.answer ? count + 1 : count;
+      return isQuizSelectionCorrect(question, selectedChoices[index]) ? count + 1 : count;
     }, 0);
   }, [quiz, selectedChoices]);
   const scorePercentage = useMemo(() => {
@@ -189,13 +190,13 @@ export default function AdaptivePracticePage() {
     return "Keep going - you're improving.";
   }, [scorePercentage]);
 
-  const handleSelectChoice = (choice: string) => {
+  const handleSelectChoice = (choiceIndex: number) => {
     if (!currentQuestion || hasAnsweredCurrent) {
       return;
     }
     setSelectedChoices((prev) => ({
       ...prev,
-      [currentIndex]: choice,
+      [currentIndex]: choiceIndex,
     }));
   };
 
@@ -387,9 +388,10 @@ export default function AdaptivePracticePage() {
             </h2>
             {currentQuestion ? (
               <QuizChoiceList
+                questionKey={currentQuestion.question}
                 choices={currentQuestion.choices}
-                correctAnswer={currentQuestion.answer}
-                selectedChoice={selectedChoice}
+                correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                selectedChoiceIndex={selectedChoiceIndex}
                 revealAnswer={hasAnsweredCurrent}
                 onSelectChoice={handleSelectChoice}
               />

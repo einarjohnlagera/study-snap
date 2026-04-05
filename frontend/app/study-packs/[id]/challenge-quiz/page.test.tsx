@@ -99,8 +99,8 @@ describe("ChallengeQuizPage", () => {
       quiz: [
         {
           question: "What powers the cell?",
-          choices: ["A", "B", "C", "D"],
-          answer: "A",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
           concept: "Concept",
           explanation: "Explanation",
         },
@@ -219,8 +219,8 @@ describe("ChallengeQuizPage", () => {
       quiz: [
         {
           question: "What powers the cell?",
-          choices: ["A", "B", "C", "D"],
-          answer: "A",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
           concept: "Concept",
           explanation: "Explanation",
         },
@@ -255,7 +255,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "A" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
 
     expect(await screen.findByText("Great job! Keep studying and improve your weak areas.")).toBeInTheDocument();

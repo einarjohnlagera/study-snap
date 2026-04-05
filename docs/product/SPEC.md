@@ -636,7 +636,8 @@ Page responsibilities:
   - optimized for fast concept checks (~30 to 60 seconds per question)
   - focused on definitions, key ideas, and direct understanding rather than exam-style traps
   - quantitative topics may include a simple computation only when clearly supported by the notes
-  - each question must include 4 choices, an `A`/`B`/`C`/`D` answer mapping, explanation, and concept metadata
+  - raw LLM output may use an `A`/`B`/`C`/`D` answer letter, but canonical stored quiz data must normalize to `question`, `choices`, `correctIndex`, `explanation`, and `concept`
+  - runtime quiz rendering must derive `A` / `B` / `C` / `D` from displayed order only; letters are not part of canonical stored data
 
 ### Challenge Quiz (Premium)
 
@@ -656,6 +657,7 @@ Page responsibilities:
   - quantitative subjects may include computation, formula-based, and multi-step problem-solving questions
   - explanations should teach like a tutor; computation explanations should show short step-by-step solution flow
   - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
+  - backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
 
 ### Adaptive Practice (Premium)
 
@@ -673,6 +675,7 @@ Page responsibilities:
   - quantitative weak concepts may use focused numerical questions when appropriate
   - explanations should reinforce the concept clearly and step through computations when applicable
   - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
+  - backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
 
 ### Quiz Generation Reliability
 
@@ -683,6 +686,13 @@ Page responsibilities:
   - `answer` (`A`, `B`, `C`, or `D`)
   - `explanation`
   - `concept`
+- Canonical stored/shared quiz data must normalize to:
+  - `question`
+  - `choices`
+  - `correctIndex`
+  - `explanation`
+  - `concept`
+- Quiz sessions must store selected canonical choice indexes. Legacy answer text or `answerIndex` payloads may still be normalized on load for backward compatibility.
 - Learner level should influence complexity:
   - `Grade School` -> very simple, direct questions
   - `Junior High` / `Senior High` -> concept understanding plus simple problem solving

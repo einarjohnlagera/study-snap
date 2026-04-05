@@ -1,5 +1,6 @@
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import type { QuizItem } from "@/lib/api";
+import { resolveQuizCorrectIndex } from "@/lib/quiz";
 import { QuizChoiceList } from "./quiz-choice-list";
 
 type PracticeQuizCardProps = {
@@ -17,8 +18,9 @@ export function PracticeQuizCard({ quiz }: PracticeQuizCardProps) {
               {index + 1}. {item.question}
             </CardTitle>
             <QuizChoiceList
+              questionKey={item.question}
               choices={item.choices}
-              correctAnswer={item.answer}
+              correctIndex={resolveQuizCorrectIndex(item)}
               revealAnswer
             />
             <CardDescription className="text-sm">

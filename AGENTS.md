@@ -481,6 +481,15 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
   - `answer` must be `A` / `B` / `C` / `D`
   - `explanation` is required
   - `concept` is required
+- Raw LLM quiz output may use answer letters, but canonical stored/shared quiz data must normalize to:
+  - `question`
+  - `choices`
+  - `correctIndex`
+  - `explanation`
+  - `concept`
+- `A` / `B` / `C` / `D` are UI-only labels derived from displayed order and must not be embedded into canonical choice strings.
+- Quiz sessions must persist selected canonical choice indexes, not display letters or prefixed choice text.
+- Compatibility loaders may accept legacy answer text, `answerIndex`, or string-based selected choices, but runtime grading/rendering must normalize them back to canonical indexes before use.
 - Quantitative subjects should allow computation and problem-solving questions when the note context supports them.
 - Computation explanations should show short step-by-step solution flow rather than a one-line answer.
 

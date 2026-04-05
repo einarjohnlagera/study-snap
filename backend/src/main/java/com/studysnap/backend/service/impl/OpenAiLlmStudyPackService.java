@@ -254,12 +254,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
 
             int answerIndex = resolveAnswerIndex(item.answer(), item.choices().size(), "The study pack service returned an invalid quiz answer. Please try again.");
-            List<String> randomizedChoices = QuizValidationUtils.randomizeChoices(item.choices(), item.question());
-            String correctAnswer = item.choices().get(answerIndex);
             quizItems.add(new QuizItem(
                     item.question(),
-                    randomizedChoices,
-                    correctAnswer,
+                    item.choices(),
+                    answerIndex,
                     normalizedConcept,
                     normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.")
             ));
@@ -786,7 +784,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         for (PromptGeneratedQuizItem item : promptGeneratedQuiz.questions()) {
             validateGeneratedQuizItem(item, operationLabel);
             int answerIndex = resolveAnswerIndex(item.answer(), item.choices().size(), operationLabel + " returned an invalid answer mapping. Please try again.");
-            String answer = item.choices().get(answerIndex).trim();
             String conceptFallback = conceptFallbackPool.isEmpty()
                     ? null
                     : conceptFallbackPool.get(conceptIndex % conceptFallbackPool.size());
@@ -794,7 +791,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             quizItems.add(new QuizItem(
                     item.question().trim(),
                     item.choices().stream().map(String::trim).toList(),
-                    answer,
+                    answerIndex,
                     normalizeAndValidateConceptOrFallback(item.concept(), conceptFallback),
                     normalizeAndValidateExplanation(item.explanation(), operationLabel + " returned an invalid explanation. Please try again.")
             ));

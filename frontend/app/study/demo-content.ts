@@ -32,14 +32,16 @@ export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
         "To release carbon dioxide",
         "To store oxygen in roots",
       ],
-      answer: "To convert sunlight into chemical energy",
+      correctIndex: 1,
+      concept: "Purpose of photosynthesis",
       explanation:
         "Photosynthesis transforms light energy into glucose, which plants use for energy and growth.",
     },
     {
       question: "Which molecule helps plants absorb sunlight?",
       choices: ["Glucose", "Oxygen", "Chlorophyll", "Water"],
-      answer: "Chlorophyll",
+      correctIndex: 2,
+      concept: "Chlorophyll",
       explanation:
         "Chlorophyll is the pigment in leaves that captures light energy for photosynthesis.",
     },
@@ -51,14 +53,16 @@ export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
         "Nitrogen and sunlight",
         "Chlorophyll and oxygen",
       ],
-      answer: "Carbon dioxide and water",
+      correctIndex: 1,
+      concept: "Photosynthesis inputs",
       explanation:
         "Plants use carbon dioxide from air and water from roots to build glucose.",
     },
     {
       question: "What is released as a byproduct of photosynthesis?",
       choices: ["Oxygen", "Glucose", "Chlorophyll", "Carbon dioxide"],
-      answer: "Oxygen",
+      correctIndex: 0,
+      concept: "Photosynthesis byproduct",
       explanation:
         "As plants make glucose, oxygen is produced and released into the air.",
     },
@@ -70,7 +74,8 @@ export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
         "It replaces chlorophyll",
         "It removes oxygen from leaves",
       ],
-      answer: "It provides energy for plant processes",
+      correctIndex: 1,
+      concept: "Role of glucose",
       explanation:
         "Glucose stores chemical energy that supports plant growth, repair, and metabolism.",
     },
@@ -80,4 +85,3 @@ export const DEMO_STUDY_PACK_RESULT: StudyPackResponse = {
     latencyMs: DEMO_GENERATION_DELAY_MS,
   },
 };
-
