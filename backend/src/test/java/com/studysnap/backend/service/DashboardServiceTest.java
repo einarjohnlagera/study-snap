@@ -353,6 +353,143 @@ class DashboardServiceTest {
     }
 
     @Test
+    void getContinueStudyingRecommendation_prefersNewestValidInProgressSessionAcrossModes() {
+        UUID userId = UUID.randomUUID();
+        UUID missingPackId = UUID.randomUUID();
+        UUID adaptivePackId = UUID.randomUUID();
+        UUID quickReviewPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+
+        QuickReviewSessionEntity newestBrokenChallenge = buildInProgressSession(
+                userId,
+                missingPackId,
+                4,
+                12,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                now.minusMinutes(2)
+        );
+        newestBrokenChallenge.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        newestBrokenChallenge.setRetryCount(0);
+
+        QuickReviewSessionEntity newestValidAdaptive = buildInProgressSession(
+                userId,
+                adaptivePackId,
+                1,
+                8,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                now.minusMinutes(3)
+        );
+        newestValidAdaptive.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
+        newestValidAdaptive.setRetryCount(0);
+
+        QuickReviewSessionEntity olderQuickReview = buildInProgressSession(
+                userId,
+                quickReviewPackId,
+                0,
+                5,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                now.minusMinutes(5)
+        );
+        olderQuickReview.setRetryCount(0);
+
+        StudyPackEntity adaptivePack = buildStudyPack(userId, adaptivePackId, "Adaptive Physics Review");
+        adaptivePack.setSubject("Physics");
+
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionMode.QUICK_REVIEW,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(olderQuickReview));
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionMode.CHALLENGE,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(newestBrokenChallenge));
+        when(quickReviewSessionRepository.findTopByUserIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                userId,
+                QuickReviewSessionMode.ADAPTIVE,
+                QuickReviewSessionStatus.IN_PROGRESS
+        )).thenReturn(Optional.of(newestValidAdaptive));
+        when(studyPackRepository.findByIdAndOwnerUserId(missingPackId, userId)).thenReturn(Optional.empty());
+        when(studyPackRepository.findByIdAndOwnerUserId(adaptivePackId, userId)).thenReturn(Optional.of(adaptivePack));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.reason()).isEqualTo(ContinueStudyingReason.RESUME_REVIEW);
+        assertThat(response.resumeType()).isEqualTo(ContinueStudyingResumeType.ADAPTIVE);
+        assertThat(response.studyPackId()).isEqualTo(adaptivePackId.toString());
+        assertThat(response.currentQuestionIndex()).isEqualTo(1);
+        assertThat(response.totalQuestions()).isEqualTo(8);
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_fallsBackToStudyPackMetadataWhenNoteMissing() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Cell Transport Reviewer");
+        studyPack.setNoteId(noteId);
+        studyPack.setSubject("Biology - Cell Transport");
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId,
+                studyPackId,
+                0,
+                6,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                now.minusMinutes(2)
+        );
+        inProgress.setRetryCount(0);
+
+        stubLatestInProgressSession(userId, inProgress);
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.empty());
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.noteTitle()).isEqualTo("Cell Transport Reviewer");
+        assertThat(response.subject()).isEqualTo("Biology - Cell Transport");
+        assertThat(response.courseProgram()).isNull();
+    }
+
+    @Test
+    void getContinueStudyingRecommendation_usesStudyPackMetadataWhenNoteFieldsAreBlank() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now();
+        StudyPackEntity studyPack = buildStudyPack(userId, studyPackId, "Genetics Finals");
+        studyPack.setNoteId(noteId);
+        studyPack.setSubject("Biology - Genetics");
+        QuickReviewSessionEntity inProgress = buildInProgressSession(
+                userId,
+                studyPackId,
+                3,
+                10,
+                QuickReviewRound.INITIAL,
+                Map.of(),
+                now.minusMinutes(1)
+        );
+        inProgress.setRetryCount(0);
+
+        stubLatestInProgressSession(userId, inProgress);
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(
+                buildNote(userId, noteId, "   ", "   ", "   ")
+        ));
+
+        ContinueStudyingResponse response = dashboardService.getContinueStudyingRecommendation(userId);
+
+        assertThat(response.noteTitle()).isEqualTo("Genetics Finals");
+        assertThat(response.subject()).isEqualTo("Biology - Genetics");
+        assertThat(response.courseProgram()).isNull();
+    }
+
+    @Test
     void getContinueStudyingRecommendation_setsRetryTransitionResumeStateAfterInitialPassEnds() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -631,6 +768,65 @@ class DashboardServiceTest {
         assertThat(response.type()).isEqualTo(TodayFocusType.PRACTICE_WEAK_CONCEPT);
         assertThat(response.studyPackId()).isEqualTo(studyPackId.toString());
         assertThat(response.actionLabel()).isEqualTo("Practice Weak Areas");
+    }
+
+    @Test
+    void getTodayFocus_skipsWeakConceptPracticeWhenNoWeakConceptsExist() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewedPackId = UUID.randomUUID();
+        StudyPackEntity reviewedPack = buildStudyPack(userId, reviewedPackId, "Reviewed Pack");
+        QuickReviewSessionEntity reviewedSession = buildCompletedSession(
+                userId,
+                reviewedPackId,
+                bigDecimal(70),
+                OffsetDateTime.now().minusMinutes(2)
+        );
+        reviewedSession.setSessionMetadata(Map.of("weakConcepts", List.of("  ", "")));
+
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of(reviewedSession), List.of(reviewedSession));
+        when(studyPackRepository.findByIdAndOwnerUserId(reviewedPackId, userId)).thenReturn(Optional.of(reviewedPack));
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.empty());
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.REVIEW_PACK);
+        assertThat(response.studyPackId()).isEqualTo(reviewedPackId.toString());
+        assertThat(response.actionLabel()).isEqualTo("Start Quick Review");
+    }
+
+    @Test
+    void getTodayFocus_skipsWeakConceptPracticeWhenReviewedPackIsMissing() {
+        UUID userId = UUID.randomUUID();
+        UUID reviewedPackId = UUID.randomUUID();
+        QuickReviewSessionEntity reviewedSession = buildCompletedSession(
+                userId,
+                reviewedPackId,
+                bigDecimal(65),
+                OffsetDateTime.now().minusMinutes(4)
+        );
+        reviewedSession.setSessionMetadata(Map.of("weakConcepts", List.of("Algebra")));
+
+        stubNoQuickReviewInProgressSession(userId);
+        stubRecentQuickReviewSessions(userId, List.of(reviewedSession), List.of(reviewedSession));
+        when(studyPackRepository.findByIdAndOwnerUserId(reviewedPackId, userId)).thenReturn(Optional.empty());
+        when(activityEventRepository.findByUserIdAndActivityTypeAndStudyPackIdIsNotNullOrderByCreatedAtDesc(
+                eq(userId),
+                eq(ActivityType.OPENED_STUDY_PACK),
+                any(Pageable.class)
+        )).thenReturn(List.of());
+        when(studyPackRepository.findTopByOwnerUserIdOrderByCreatedAtDesc(userId)).thenReturn(Optional.empty());
+
+        TodayFocusResponse response = dashboardService.getTodayFocus(userId);
+
+        assertThat(response.type()).isEqualTo(TodayFocusType.STUDY_SUGGESTION);
+        assertThat(response.studyPackId()).isNull();
+        assertThat(response.actionLabel()).isEqualTo("Create Study Pack");
     }
 
     @Test
