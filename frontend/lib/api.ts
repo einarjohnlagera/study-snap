@@ -711,6 +711,8 @@ export type NoteListItemResponse = {
   id: string;
   ownerUserId: string | null;
   title: string | null;
+  courseProgram: string | null;
+  learnerLevel: LearnerLevel | null;
   subject: string | null;
   tags: string[];
   contentPreview: string;
@@ -725,6 +727,7 @@ export type NoteListItemResponse = {
   authorDisplayName: string;
   isOfficialAuthor: boolean;
   isCurrentUser: boolean;
+  createdAt: string;
   updatedAt: string;
 };
 
@@ -748,6 +751,7 @@ export type PublicNoteDetailResponse = {
 export type PublicProfileNoteResponse = {
   noteId: string;
   title: string | null;
+  courseProgram: string | null;
   subject: string | null;
   tags: string[];
   contentPreview: string;

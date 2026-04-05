@@ -32,6 +32,8 @@ describe("Library page", () => {
       {
         id: "note-42",
         title: "Cell Respiration",
+        courseProgram: "Nursing",
+        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "ATP production in mitochondria...",
@@ -40,11 +42,14 @@ describe("Library page", () => {
         studyPackId: null,
         studyPackStatus: "DRAFT",
         quizCount: null,
+        createdAt: "2026-03-20T10:00:00Z",
         updatedAt: "2026-03-21T10:00:00Z",
       },
       {
         id: "note-99",
         title: "Zygote Review",
+        courseProgram: "Chemistry",
+        learnerLevel: "COLLEGE",
         subject: "Chemistry",
         tags: ["review"],
         contentPreview: "Generated chemistry review preview...",
@@ -53,6 +58,7 @@ describe("Library page", () => {
         studyPackId: "pack-99",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
+        createdAt: "2026-03-21T10:00:00Z",
         updatedAt: "2026-03-22T10:00:00Z",
       },
     ]);
@@ -67,6 +73,7 @@ describe("Library page", () => {
 
     expect(await screen.findByRole("heading", { name: "Library" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Create Note" })).toBeInTheDocument();
+    expect(screen.getByText("Nursing")).toBeInTheDocument();
     expect(listSubjects).toHaveBeenCalledWith("mine");
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
 
@@ -88,6 +95,9 @@ describe("Library page", () => {
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
+    fireEvent.change(screen.getByLabelText("Course / Program"), {
+      target: { value: "Chemistry" },
+    });
     fireEvent.click(screen.getByLabelText("Study Pack Ready"));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();

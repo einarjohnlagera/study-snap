@@ -302,11 +302,14 @@ Library is the user's private workspace for managing and revisiting their own no
 Users can:
 
 - view their saved notes
-- search by title/tags/content preview
+- search by title/tags/content preview/course metadata
+- filter by course/program (single select, `All course/programs` default)
 - filter by subject (single select, `All subjects` default)
 - filter by tags (multi-select OR matching)
+- filter by Study Pack status (`Study Pack Ready`, `Draft`)
+- filter by visibility (`Public`, `Private`)
 - combine search + subject + tag filters on the loaded note list
-- sort by recent/title/recently reviewed
+- sort by `Recently Updated`, `Recently Reviewed`, `Newest`, `Title (A-Z)`, `Title (Z-A)`, and `Oldest`
 - open by clicking card/title
 - start Quick Review for Study Pack Ready notes
 - manage note visibility (`Make Public` / `Make Private`)
@@ -323,7 +326,7 @@ Public Library lists notes where `visibility=PUBLIC`, including the current user
 Users can:
 
 - browse public notes
-- filter by search, subject, and tags
+- filter by search, course/program, learner level, subject, tags, and source
 - open read-only public note detail
 - copy a public note into Library (`Copy to Library`)
 - see source badges on cards:
@@ -347,14 +350,18 @@ Users can:
   - empty state when a known subject has no notes
 - Subject pages should reuse the same Subject badge styling as Public Library cards and note detail headers.
 - Library, Public Library, Public Profile, and public subject listing cards should share the same note-card content stack:
+  - subtle course/program line when available
+  - Title
+  - private-library visibility icon when relevant
   - Subject badge
   - Copy count when available
-  - Title
+  - Study Pack status badge when relevant
   - `Note Preview` from note content
   - `Summary Preview` from generated Study Pack summary
   - Tags
 - Note-card previews should clamp to 2-3 lines so cards stay visually consistent in a grid.
 - If a note has no generated summary yet, cards should show `No summary available yet.`
+- Public/Private card state should use a subtle globe/lock icon when needed instead of another large badge.
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name

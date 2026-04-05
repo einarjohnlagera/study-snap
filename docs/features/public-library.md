@@ -24,10 +24,13 @@ On mobile, `Filter` and `Sort` should open a bottom-sheet or modal instead of st
 
 Public Library filters:
 
+- `Course / Program`
+- `Learner Level` when public note-owner metadata is available
 - `Subject`
 - `Tags`
 - `By You`
 - `Official`
+- `Community`
 
 ## Sorting
 
@@ -42,9 +45,11 @@ Public Library sort options:
 
 Public Library note cards reuse the shared note-card layout:
 
+- subtle `courseProgram` line when available
+- title
 - subject badge
 - copy count when available
-- title
+- Study Pack status badge when relevant
 - `Note Preview`
 - `Summary Preview`
 - tags

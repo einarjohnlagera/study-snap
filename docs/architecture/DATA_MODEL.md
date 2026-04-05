@@ -32,6 +32,17 @@ Recommended fields:
 - `created_at`
 - `updated_at`
 
+Library/discovery payload usage:
+
+- Private and public note-list payloads should reuse note metadata directly from `notes`, especially:
+  - `course_program`
+  - `subject`
+  - `tags`
+  - `visibility`
+  - `created_at`
+  - `updated_at`
+- Public discovery payloads may also expose owner `learner_level` so Public Library can filter notes by audience level without introducing a separate note-level learner field.
+
 ## Generated Study Pack Fields
 
 Generated fields are linked to the same Note.

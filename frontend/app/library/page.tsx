@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
@@ -24,7 +25,7 @@ import { normalizeSubject } from "@/lib/subjects";
 type LibrarySortOption =
   | "RECENTLY_UPDATED"
   | "RECENTLY_REVIEWED"
-  | "RECENTLY_GENERATED"
+  | "NEWEST"
   | "TITLE_ASC"
   | "TITLE_DESC"
   | "OLDEST";
@@ -34,11 +35,12 @@ type ReviewSummaryMeta = {
 };
 
 const LIBRARY_PAGE_SIZE = 20;
+const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 const SORT_LABELS: Record<LibrarySortOption, string> = {
   RECENTLY_UPDATED: "Recently Updated",
   RECENTLY_REVIEWED: "Recently Reviewed",
-  RECENTLY_GENERATED: "Recently Generated",
+  NEWEST: "Newest",
   TITLE_ASC: "Title (A-Z)",
   TITLE_DESC: "Title (Z-A)",
   OLDEST: "Oldest",
@@ -51,6 +53,11 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
   return tags
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
+}
+
+function normalizeOptionalText(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
 
 function formatRelativeReviewTime(lastReviewedAt: string | null | undefined): string {
@@ -86,24 +93,36 @@ function formatVisibilityLabel(visibility: NoteVisibility) {
   return visibility === "PUBLIC" ? "Public" : "Private";
 }
 
-function visibilityBadgeClassName(visibility: NoteVisibility) {
-  return visibility === "PUBLIC"
-    ? "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-    : "border-border bg-muted/50 text-foreground/70";
+function renderVisibilityIcon(visibility: NoteVisibility) {
+  const Icon = visibility === "PUBLIC" ? Globe : Lock;
+  const label = formatVisibilityLabel(visibility);
+  return (
+    <span
+      className={visibility === "PUBLIC" ? "text-blue-600 dark:text-blue-300" : "text-foreground/55"}
+      aria-label={label}
+      title={label}
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
 }
 
 function countActiveFilterGroups({
+  courseProgram,
   subject,
   tags,
   statuses,
   visibilities,
 }: {
+  courseProgram: string;
   subject: string;
   tags: string[];
   statuses: NoteStudyPackStatus[];
   visibilities: NoteVisibility[];
 }) {
   return [
+    courseProgram !== ALL_COURSE_PROGRAMS,
     subject !== ALL_SUBJECTS,
     tags.length > 0,
     statuses.length > 0,
@@ -136,6 +155,7 @@ export default function LibraryPage() {
   const initialLoadStartedRef = useRef(false);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<NoteStudyPackStatus[]>([]);
@@ -224,6 +244,17 @@ export default function LibraryPage() {
 
   const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
+  const availableCoursePrograms = useMemo(() => {
+    const coursePrograms = new Set<string>();
+    for (const item of items) {
+      const courseProgram = normalizeOptionalText(item.courseProgram);
+      if (courseProgram) {
+        coursePrograms.add(courseProgram);
+      }
+    }
+    return Array.from(coursePrograms).sort((left, right) => left.localeCompare(right));
+  }, [items]);
+
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     for (const item of items) {
@@ -241,6 +272,12 @@ export default function LibraryPage() {
     }
     return availableTags.filter((tag) => tag.toLowerCase().includes(query));
   }, [availableTags, tagSearchQuery]);
+
+  useEffect(() => {
+    if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
+      setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+    }
+  }, [availableCoursePrograms, selectedCourseProgram]);
 
   useEffect(() => {
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
@@ -278,6 +315,7 @@ export default function LibraryPage() {
 
   const clearFilters = useCallback(() => {
     setSearchQuery("");
+    setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
     setSelectedSubject(ALL_SUBJECTS);
     setSelectedTags([]);
     setSelectedStatuses([]);
@@ -286,12 +324,14 @@ export default function LibraryPage() {
   }, []);
 
   const hasActiveFilters = searchQuery.trim().length > 0
+    || selectedCourseProgram !== ALL_COURSE_PROGRAMS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedStatuses.length > 0
     || selectedVisibilities.length > 0;
 
   const activeFilterCount = countActiveFilterGroups({
+    courseProgram: selectedCourseProgram,
     subject: selectedSubject,
     tags: selectedTags,
     statuses: selectedStatuses,
@@ -303,19 +343,25 @@ export default function LibraryPage() {
     const filtered = items.filter((item) => {
       const itemTitle = item.title?.trim() || "Untitled note";
       const itemTags = normalizeTags(item.tags);
+      const itemCourseProgram = normalizeOptionalText(item.courseProgram);
+      const itemSubject = normalizeSubject(item.subject);
 
       const titleMatch = query.length === 0
         || itemTitle.toLowerCase().includes(query)
+        || (itemCourseProgram?.toLowerCase().includes(query) ?? false)
+        || (itemSubject?.toLowerCase().includes(query) ?? false)
         || itemTags.some((tag) => tag.toLowerCase().includes(query))
         || item.contentPreview.toLowerCase().includes(query);
+      const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
+        || itemCourseProgram === selectedCourseProgram;
       const subjectMatch = selectedSubject === ALL_SUBJECTS
-        || normalizeSubject(item.subject) === selectedSubject;
+        || itemSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0
         || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
       const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(item.studyPackStatus);
       const visibilityMatch = selectedVisibilities.length === 0 || selectedVisibilities.includes(item.visibility);
 
-      return titleMatch && subjectMatch && tagMatch && statusMatch && visibilityMatch;
+      return titleMatch && courseProgramMatch && subjectMatch && tagMatch && statusMatch && visibilityMatch;
     });
 
     const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
@@ -337,7 +383,9 @@ export default function LibraryPage() {
         case "TITLE_DESC":
           return (right.title ?? "Untitled note").localeCompare(left.title ?? "Untitled note");
         case "OLDEST":
-          return byDateAsc(left.updatedAt, right.updatedAt);
+          return byDateAsc(left.createdAt, right.createdAt);
+        case "NEWEST":
+          return byDateDesc(left.createdAt, right.createdAt);
         case "RECENTLY_REVIEWED": {
           const reviewedDiff = byDateDesc(
             reviewSummaryByNoteId[left.id]?.lastReviewedAt,
@@ -345,16 +393,6 @@ export default function LibraryPage() {
           );
           if (reviewedDiff !== 0) {
             return reviewedDiff;
-          }
-          return byDateDesc(left.updatedAt, right.updatedAt);
-        }
-        case "RECENTLY_GENERATED": {
-          const generatedDiff = byDateDesc(
-            left.studyPackStatus === "STUDY_PACK_READY" ? left.updatedAt : null,
-            right.studyPackStatus === "STUDY_PACK_READY" ? right.updatedAt : null,
-          );
-          if (generatedDiff !== 0) {
-            return generatedDiff;
           }
           return byDateDesc(left.updatedAt, right.updatedAt);
         }
@@ -367,6 +405,7 @@ export default function LibraryPage() {
     items,
     reviewSummaryByNoteId,
     searchQuery,
+    selectedCourseProgram,
     selectedSubject,
     selectedTags,
     selectedStatuses,
@@ -382,6 +421,20 @@ export default function LibraryPage() {
 
   const activeFilterSummary = hasActiveFilters ? (
     <div className="flex flex-wrap items-center gap-2">
+      {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+          Course: {selectedCourseProgram}
+          <button
+            type="button"
+            className="text-foreground/65 hover:text-foreground"
+            onClick={() => setSelectedCourseProgram(ALL_COURSE_PROGRAMS)}
+            aria-label="Clear course program filter"
+          >
+            x
+          </button>
+        </span>
+      ) : null}
+
       {selectedSubject !== ALL_SUBJECTS ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
           Subject: {selectedSubject}
@@ -524,19 +577,14 @@ export default function LibraryPage() {
                   >
                     <SharedNoteCard
                       title={item.title}
+                      metaLine={normalizeOptionalText(item.courseProgram)}
                       subject={item.subject}
                       tags={itemTags}
                       contentPreview={item.contentPreview}
                       summaryPreview={item.summaryPreview}
+                      titleTrailing={renderVisibilityIcon(item.visibility)}
                       metadataBadges={(
-                        <>
-                          <NoteStateBadge status={item.studyPackStatus} />
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${visibilityBadgeClassName(item.visibility)}`}
-                          >
-                            {formatVisibilityLabel(item.visibility)}
-                          </span>
-                        </>
+                        <NoteStateBadge status={item.studyPackStatus} />
                       )}
                       footer={(
                         <div className="space-y-1">
@@ -587,6 +635,25 @@ export default function LibraryPage() {
           </div>
         )}
       >
+        <div className="space-y-2">
+          <label htmlFor="library-filter-course-program" className="text-sm font-medium">
+            Course / Program
+          </label>
+          <select
+            id="library-filter-course-program"
+            value={selectedCourseProgram}
+            onChange={(event) => setSelectedCourseProgram(event.target.value)}
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+          >
+            <option value={ALL_COURSE_PROGRAMS}>All course/programs</option>
+            {availableCoursePrograms.map((courseProgram) => (
+              <option key={courseProgram} value={courseProgram}>
+                {courseProgram}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-2">
           <label htmlFor="library-filter-subject" className="text-sm font-medium">
             Subject

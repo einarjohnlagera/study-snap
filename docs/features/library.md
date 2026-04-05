@@ -22,9 +22,12 @@ Library contains:
 
 Shared note-card layout:
 
+- subtle `courseProgram` line when available
+- title
+- private-library visibility icon near the title when relevant
 - subject badge
 - copy count when available
-- title
+- Study Pack status badge
 - `Note Preview`
 - `Summary Preview`
 - tags
@@ -42,6 +45,7 @@ Shared list controls:
 
 Private Library filters:
 
+- `Course / Program`
 - `Subject`
 - `Tags`
 - `Study Pack Ready`
@@ -53,7 +57,7 @@ Private Library sorting:
 
 - `Recently Updated`
 - `Recently Reviewed`
-- `Recently Generated`
+- `Newest`
 - `Title (A-Z)`
 - `Title (Z-A)`
 - `Oldest`
@@ -78,10 +82,13 @@ Public Library controls:
 
 Public Library filters:
 
+- `Course / Program`
+- `Learner Level`
 - `Subject`
 - `Tags`
 - `By You`
 - `Official`
+- `Community`
 
 Growth behavior:
 

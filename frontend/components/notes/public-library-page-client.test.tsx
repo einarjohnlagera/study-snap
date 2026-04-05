@@ -42,6 +42,8 @@ describe("PublicLibraryPageClient", () => {
         id: "note-1",
         ownerUserId: "user-1",
         title: "My Public Note",
+        courseProgram: "Nursing",
+        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "My note preview",
@@ -56,12 +58,15 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "My Notes",
         isOfficialAuthor: false,
         isCurrentUser: true,
+        createdAt: "2026-03-30T10:00:00Z",
         updatedAt: "2026-03-31T10:00:00Z",
       },
       {
         id: "note-2",
         ownerUserId: "admin-1",
         title: "Official Example",
+        courseProgram: "Chemistry",
+        learnerLevel: "PROFESSIONAL",
         subject: "Chemistry",
         tags: [],
         contentPreview: "Official preview",
@@ -76,12 +81,15 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "NoteLib",
         isOfficialAuthor: true,
         isCurrentUser: false,
+        createdAt: "2026-03-29T09:00:00Z",
         updatedAt: "2026-03-31T09:00:00Z",
       },
       {
         id: "note-3",
         ownerUserId: "user-2",
         title: "Community Note",
+        courseProgram: "Engineering",
+        learnerLevel: "BOARD_EXAM_REVIEW",
         subject: "Physics",
         tags: ["motion"],
         contentPreview: "Community preview",
@@ -96,6 +104,7 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "Study Buddy",
         isOfficialAuthor: false,
         isCurrentUser: false,
+        createdAt: "2026-03-28T08:00:00Z",
         updatedAt: "2026-03-31T08:00:00Z",
       },
     ]);
@@ -123,6 +132,8 @@ describe("PublicLibraryPageClient", () => {
         id: "note-1",
         ownerUserId: "user-1",
         title: "My Public Note",
+        courseProgram: "Nursing",
+        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "My note preview",
@@ -137,6 +148,7 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "My Notes",
         isOfficialAuthor: false,
         isCurrentUser: false,
+        createdAt: "2026-03-30T10:00:00Z",
         updatedAt: "2026-03-31T10:00:00Z",
       },
     ]);
@@ -159,6 +171,8 @@ describe("PublicLibraryPageClient", () => {
         id: "note-1",
         ownerUserId: "user-2",
         title: "Least Copied",
+        courseProgram: "Biology",
+        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "Least copied preview",
@@ -173,12 +187,15 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "Study Buddy",
         isOfficialAuthor: false,
         isCurrentUser: false,
+        createdAt: "2026-03-31T10:00:00Z",
         updatedAt: "2026-03-31T10:00:00Z",
       },
       {
         id: "note-2",
         ownerUserId: "user-3",
         title: "Most Copied",
+        courseProgram: "Physics",
+        learnerLevel: "PROFESSIONAL",
         subject: "Biology",
         tags: ["genetics"],
         contentPreview: "Most copied preview",
@@ -193,6 +210,7 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "Top Creator",
         isOfficialAuthor: false,
         isCurrentUser: false,
+        createdAt: "2026-03-30T09:00:00Z",
         updatedAt: "2026-03-31T09:00:00Z",
       },
     ]);
@@ -214,6 +232,8 @@ describe("PublicLibraryPageClient", () => {
         id: "note-1",
         ownerUserId: "user-1",
         title: "Mine",
+        courseProgram: "Nursing",
+        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
         contentPreview: "Mine preview",
@@ -228,12 +248,15 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "Me",
         isOfficialAuthor: false,
         isCurrentUser: true,
+        createdAt: "2026-03-31T10:00:00Z",
         updatedAt: "2026-03-31T10:00:00Z",
       },
       {
         id: "note-2",
         ownerUserId: "admin-1",
         title: "Official Example",
+        courseProgram: "Chemistry",
+        learnerLevel: "PROFESSIONAL",
         subject: "Chemistry",
         tags: [],
         contentPreview: "Official preview",
@@ -248,7 +271,31 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "NoteLib",
         isOfficialAuthor: true,
         isCurrentUser: false,
+        createdAt: "2026-03-30T09:00:00Z",
         updatedAt: "2026-03-31T09:00:00Z",
+      },
+      {
+        id: "note-3",
+        ownerUserId: "user-9",
+        title: "Community Physics",
+        courseProgram: "Engineering",
+        learnerLevel: "BOARD_EXAM_REVIEW",
+        subject: "Physics",
+        tags: ["motion"],
+        contentPreview: "Community preview",
+        summaryPreview: "Community summary",
+        visibility: "PUBLIC",
+        studyPackId: "pack-3",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 2,
+        copyCount: 1,
+        shareCount: 1,
+        viewCount: 3,
+        authorDisplayName: "Study Buddy",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-29T09:00:00Z",
+        updatedAt: "2026-03-31T08:00:00Z",
       },
     ]);
 
@@ -256,12 +303,20 @@ describe("PublicLibraryPageClient", () => {
 
     expect(await screen.findByText("Mine")).toBeInTheDocument();
     expect(screen.getByText("Official Example")).toBeInTheDocument();
+    expect(screen.getByText("Community Physics")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
-    fireEvent.click(screen.getByLabelText("Official"));
+    fireEvent.change(screen.getByLabelText("Course / Program"), {
+      target: { value: "Engineering" },
+    });
+    fireEvent.change(screen.getByLabelText("Learner Level"), {
+      target: { value: "BOARD_EXAM_REVIEW" },
+    });
+    fireEvent.click(screen.getByLabelText("Community"));
 
     expect(screen.queryByText("Mine")).not.toBeInTheDocument();
-    expect(screen.getByText("Official Example")).toBeInTheDocument();
+    expect(screen.queryByText("Official Example")).not.toBeInTheDocument();
+    expect(screen.getByText("Community Physics")).toBeInTheDocument();
   });
 
   it("opens public note detail when a card is clicked", async () => {
@@ -270,6 +325,8 @@ describe("PublicLibraryPageClient", () => {
         id: "note-1",
         ownerUserId: "user-2",
         title: "Community Note",
+        courseProgram: "Engineering",
+        learnerLevel: "BOARD_EXAM_REVIEW",
         subject: "Physics",
         tags: ["motion"],
         contentPreview: "Community preview",
@@ -284,6 +341,7 @@ describe("PublicLibraryPageClient", () => {
         authorDisplayName: "Study Buddy",
         isOfficialAuthor: false,
         isCurrentUser: false,
+        createdAt: "2026-03-30T08:00:00Z",
         updatedAt: "2026-03-31T08:00:00Z",
       },
     ]);

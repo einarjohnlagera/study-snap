@@ -22,6 +22,7 @@
 - Quiz generation now uses learner-level-aware prompt guidance across Quick Review, Challenge Quiz, and Adaptive Practice, defaulting to college-level when the user has no saved learner level.
 - Quantitative notes can now produce computation and problem-solving questions with step-based explanations when the note context supports it.
 - Challenge Quiz and Adaptive Practice now require richer explanations and concept labels in their generated quiz payloads.
+- Library and Public Library now use richer metadata-driven filtering with course/program support, Public Library learner-level/source filters, and subtler note-card metadata hierarchy with visibility icons instead of extra badges.
 
 ### Technical Changes
 

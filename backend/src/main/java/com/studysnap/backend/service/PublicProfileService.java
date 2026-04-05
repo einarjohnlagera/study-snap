@@ -71,6 +71,7 @@ public class PublicProfileService {
                         .map(note -> new PublicProfileNoteResponse(
                                 note.getId().toString(),
                                 note.getTitle(),
+                                normalizeOptionalText(note.getCourseProgram()),
                                 note.getSubject(),
                                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),

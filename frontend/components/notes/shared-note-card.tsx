@@ -3,12 +3,14 @@ import { SubjectBadge } from "@/components/notes/subject-badge";
 
 type SharedNoteCardProps = {
   title: string | null;
+  metaLine?: ReactNode;
   subject: string | null;
   tags: string[];
   contentPreview: string;
   summaryPreview?: string | null;
   copyCount?: number | null;
   metadataBadges?: ReactNode;
+  titleTrailing?: ReactNode;
   footer?: ReactNode;
 };
 
@@ -33,12 +35,14 @@ function resolveSummaryPreview(summaryPreview?: string | null) {
 
 export function SharedNoteCard({
   title,
+  metaLine,
   subject,
   tags,
   contentPreview,
   summaryPreview,
   copyCount,
   metadataBadges,
+  titleTrailing,
   footer,
 }: Readonly<SharedNoteCardProps>) {
   const normalizedTags = normalizeTags(tags);
@@ -46,20 +50,33 @@ export function SharedNoteCard({
   return (
     <div className="flex h-full min-w-0 flex-col justify-between gap-4">
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <SubjectBadge subject={subject} />
-          {typeof copyCount === "number" ? (
-            <span className="rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-foreground/70">
-              {copyCount} {copyCount === 1 ? "copy" : "copies"}
-            </span>
-          ) : null}
-          {metadataBadges}
-        </div>
+        {metaLine ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/60">
+            {metaLine}
+          </div>
+        ) : null}
 
         <div className="space-y-3">
-          <h3 className="line-clamp-2 text-base font-semibold sm:text-lg">
-            {title?.trim() || "Untitled note"}
-          </h3>
+          <div className="flex items-start justify-between gap-3">
+            <h3 className="line-clamp-2 min-w-0 flex-1 text-base font-semibold sm:text-lg">
+              {title?.trim() || "Untitled note"}
+            </h3>
+            {titleTrailing ? (
+              <div className="shrink-0 text-foreground/55">
+                {titleTrailing}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <SubjectBadge subject={subject} />
+            {typeof copyCount === "number" ? (
+              <span className="rounded-full border border-border bg-muted/40 px-2 py-1 text-xs text-foreground/70">
+                {copyCount} {copyCount === 1 ? "copy" : "copies"}
+              </span>
+            ) : null}
+            {metadataBadges}
+          </div>
 
           <div className="space-y-3">
             <div className="space-y-1">

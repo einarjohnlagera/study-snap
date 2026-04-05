@@ -13,15 +13,19 @@ import { NoteStateBadge } from "@/components/notes/note-state-badge";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import {
+  type LearnerLevel,
   listPublicNotes,
   listSubjects,
   type NoteListItemResponse,
 } from "@/lib/api";
+import { formatLearnerLevel } from "@/lib/learning-profile";
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
 
+const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
+const ALL_LEARNER_LEVELS = "__ALL_LEARNER_LEVELS__";
 
 type PublicLibrarySortOption =
   | "NEWEST"
@@ -29,7 +33,7 @@ type PublicLibrarySortOption =
   | "MOST_SHARED"
   | "TITLE_ASC";
 
-type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL";
+type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
 
 const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
   NEWEST: "Newest",
@@ -47,16 +51,27 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
 }
 
+function normalizeOptionalText(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
 function countActivePublicFilterGroups({
+  courseProgram,
+  learnerLevel,
   subject,
   tags,
   sourceFilters,
 }: {
+  courseProgram: string;
+  learnerLevel: string;
   subject: string;
   tags: string[];
   sourceFilters: PublicLibrarySourceFilter[];
 }) {
   return [
+    courseProgram !== ALL_COURSE_PROGRAMS,
+    learnerLevel !== ALL_LEARNER_LEVELS,
     subject !== ALL_SUBJECTS,
     tags.length > 0,
     sourceFilters.length > 0,
@@ -101,6 +116,8 @@ export function PublicLibraryPageClient() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
+  const [selectedLearnerLevel, setSelectedLearnerLevel] = useState<string>(ALL_LEARNER_LEVELS);
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
   const [selectedSort, setSelectedSort] = useState<PublicLibrarySortOption>("NEWEST");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -162,6 +179,27 @@ export function PublicLibraryPageClient() {
 
   const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
+  const availableCoursePrograms = useMemo(() => {
+    const coursePrograms = new Set<string>();
+    for (const item of items) {
+      const courseProgram = normalizeOptionalText(item.courseProgram);
+      if (courseProgram) {
+        coursePrograms.add(courseProgram);
+      }
+    }
+    return Array.from(coursePrograms).sort((left, right) => left.localeCompare(right));
+  }, [items]);
+
+  const availableLearnerLevels = useMemo(() => {
+    const learnerLevels = new Set<LearnerLevel>();
+    for (const item of items) {
+      if (item.learnerLevel) {
+        learnerLevels.add(item.learnerLevel);
+      }
+    }
+    return Array.from(learnerLevels).sort((left, right) => formatLearnerLevel(left)?.localeCompare(formatLearnerLevel(right) ?? "") ?? 0);
+  }, [items]);
+
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     for (const item of items) {
@@ -179,6 +217,18 @@ export function PublicLibraryPageClient() {
     }
     return availableTags.filter((tag) => tag.toLowerCase().includes(query));
   }, [availableTags, tagSearchQuery]);
+
+  useEffect(() => {
+    if (selectedCourseProgram !== ALL_COURSE_PROGRAMS && !availableCoursePrograms.includes(selectedCourseProgram)) {
+      setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+    }
+  }, [availableCoursePrograms, selectedCourseProgram]);
+
+  useEffect(() => {
+    if (selectedLearnerLevel !== ALL_LEARNER_LEVELS && !availableLearnerLevels.includes(selectedLearnerLevel as LearnerLevel)) {
+      setSelectedLearnerLevel(ALL_LEARNER_LEVELS);
+    }
+  }, [availableLearnerLevels, selectedLearnerLevel]);
 
   useEffect(() => {
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
@@ -208,6 +258,8 @@ export function PublicLibraryPageClient() {
 
   const clearFilters = useCallback(() => {
     setSearchQuery("");
+    setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+    setSelectedLearnerLevel(ALL_LEARNER_LEVELS);
     setSelectedSubject(ALL_SUBJECTS);
     setSelectedTags([]);
     setSelectedSourceFilters([]);
@@ -215,12 +267,16 @@ export function PublicLibraryPageClient() {
   }, []);
 
   const activeFilterCount = countActivePublicFilterGroups({
+    courseProgram: selectedCourseProgram,
+    learnerLevel: selectedLearnerLevel,
     subject: selectedSubject,
     tags: selectedTags,
     sourceFilters: selectedSourceFilters,
   });
 
   const hasActiveFilters = searchQuery.trim().length > 0
+    || selectedCourseProgram !== ALL_COURSE_PROGRAMS
+    || selectedLearnerLevel !== ALL_LEARNER_LEVELS
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
@@ -230,28 +286,40 @@ export function PublicLibraryPageClient() {
     return items.filter((item) => {
       const title = item.title?.trim() || "Untitled note";
       const tags = normalizeTags(item.tags);
+      const courseProgram = normalizeOptionalText(item.courseProgram);
+      const learnerLevelLabel = formatLearnerLevel(item.learnerLevel);
+      const normalizedSubject = normalizeSubject(item.subject);
       const titleMatch = query.length === 0
         || title.toLowerCase().includes(query)
+        || (courseProgram?.toLowerCase().includes(query) ?? false)
+        || (learnerLevelLabel?.toLowerCase().includes(query) ?? false)
+        || (normalizedSubject?.toLowerCase().includes(query) ?? false)
         || item.contentPreview.toLowerCase().includes(query)
         || tags.some((tag) => tag.toLowerCase().includes(query));
+      const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
+        || courseProgram === selectedCourseProgram;
+      const learnerLevelMatch = selectedLearnerLevel === ALL_LEARNER_LEVELS
+        || item.learnerLevel === selectedLearnerLevel;
       const subjectMatch = selectedSubject === ALL_SUBJECTS
-        || normalizeSubject(item.subject) === selectedSubject;
+        || normalizedSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0
         || selectedTags.some((selectedTag) => tags.includes(selectedTag));
       const sourceMatch = selectedSourceFilters.length === 0
         || selectedSourceFilters.some((filter) => (
           filter === "BY_YOU"
             ? item.ownerUserId === currentUserId || item.isCurrentUser
-            : item.isOfficialAuthor
+            : filter === "OFFICIAL"
+              ? item.isOfficialAuthor
+              : !(item.ownerUserId === currentUserId || item.isCurrentUser || item.isOfficialAuthor)
         ));
 
-      return titleMatch && subjectMatch && tagMatch && sourceMatch;
+      return titleMatch && courseProgramMatch && learnerLevelMatch && subjectMatch && tagMatch && sourceMatch;
     });
-  }, [currentUserId, items, searchQuery, selectedSourceFilters, selectedSubject, selectedTags]);
+  }, [currentUserId, items, searchQuery, selectedCourseProgram, selectedLearnerLevel, selectedSourceFilters, selectedSubject, selectedTags]);
 
   const sortedItems = useMemo(() => {
     const byNewest = (left: NoteListItemResponse, right: NoteListItemResponse) => (
-      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
     );
     const metricValue = (
       item: NoteListItemResponse,
@@ -285,6 +353,34 @@ export function PublicLibraryPageClient() {
 
   const activeFilterSummary = hasActiveFilters ? (
     <div className="flex flex-wrap items-center gap-2">
+      {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+          Course: {selectedCourseProgram}
+          <button
+            type="button"
+            className="text-foreground/65 hover:text-foreground"
+            onClick={() => setSelectedCourseProgram(ALL_COURSE_PROGRAMS)}
+            aria-label="Clear course program filter"
+          >
+            x
+          </button>
+        </span>
+      ) : null}
+
+      {selectedLearnerLevel !== ALL_LEARNER_LEVELS ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+          Level: {formatLearnerLevel(selectedLearnerLevel)}
+          <button
+            type="button"
+            className="text-foreground/65 hover:text-foreground"
+            onClick={() => setSelectedLearnerLevel(ALL_LEARNER_LEVELS)}
+            aria-label="Clear learner level filter"
+          >
+            x
+          </button>
+        </span>
+      ) : null}
+
       {selectedSubject !== ALL_SUBJECTS ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
           Subject: {selectedSubject}
@@ -301,12 +397,12 @@ export function PublicLibraryPageClient() {
 
       {selectedSourceFilters.map((filter) => (
         <span key={filter} className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
-          {filter === "BY_YOU" ? "By You" : "Official"}
+          {filter === "BY_YOU" ? "By You" : filter === "OFFICIAL" ? "Official" : "Community"}
           <button
             type="button"
             className="text-foreground/65 hover:text-foreground"
             onClick={() => setSelectedSourceFilters((previous) => previous.filter((value) => value !== filter))}
-            aria-label={`Remove ${filter === "BY_YOU" ? "By You" : "Official"} filter`}
+            aria-label={`Remove ${filter === "BY_YOU" ? "By You" : filter === "OFFICIAL" ? "Official" : "Community"} filter`}
           >
             x
           </button>
@@ -402,6 +498,7 @@ export function PublicLibraryPageClient() {
                   >
                     <SharedNoteCard
                       title={item.title}
+                      metaLine={normalizeOptionalText(item.courseProgram)}
                       subject={item.subject}
                       tags={itemTags}
                       contentPreview={item.contentPreview}
@@ -453,6 +550,44 @@ export function PublicLibraryPageClient() {
           </div>
         )}
       >
+        <div className="space-y-2">
+          <label htmlFor="public-library-filter-course-program" className="text-sm font-medium">
+            Course / Program
+          </label>
+          <select
+            id="public-library-filter-course-program"
+            value={selectedCourseProgram}
+            onChange={(event) => setSelectedCourseProgram(event.target.value)}
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+          >
+            <option value={ALL_COURSE_PROGRAMS}>All course/programs</option>
+            {availableCoursePrograms.map((courseProgram) => (
+              <option key={courseProgram} value={courseProgram}>
+                {courseProgram}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="public-library-filter-learner-level" className="text-sm font-medium">
+            Learner Level
+          </label>
+          <select
+            id="public-library-filter-learner-level"
+            value={selectedLearnerLevel}
+            onChange={(event) => setSelectedLearnerLevel(event.target.value)}
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
+          >
+            <option value={ALL_LEARNER_LEVELS}>All learner levels</option>
+            {availableLearnerLevels.map((learnerLevel) => (
+              <option key={learnerLevel} value={learnerLevel}>
+                {formatLearnerLevel(learnerLevel)}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="space-y-2">
           <label htmlFor="public-library-filter-subject" className="text-sm font-medium">
             Subject
@@ -508,6 +643,7 @@ export function PublicLibraryPageClient() {
             {([
               { value: "BY_YOU" as const, label: "By You" },
               { value: "OFFICIAL" as const, label: "Official" },
+              { value: "COMMUNITY" as const, label: "Community" },
             ]).map((option) => (
               <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50">
                 <input

@@ -8,6 +8,7 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.PlanType;
@@ -282,8 +283,10 @@ class NoteServiceTest {
 
         NoteEntity viewerNote = buildNote(viewerNoteId, viewerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "viewer content");
         viewerNote.setTitle("My public note");
+        viewerNote.setCourseProgram("Nursing");
         NoteEntity officialNote = buildNote(officialNoteId, officialOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "official content");
         officialNote.setTitle("Official note");
+        officialNote.setCourseProgram("Chemistry");
         StudyPackEntity officialStudyPack = new StudyPackEntity();
         officialStudyPack.setId(UUID.randomUUID());
         officialStudyPack.setNoteId(officialNoteId);
@@ -293,10 +296,12 @@ class NoteServiceTest {
         viewer.setId(viewerUserId);
         viewer.setFirstName("Viewer");
         viewer.setEmail("viewer@example.com");
+        viewer.setLearnerLevel(LearnerLevel.COLLEGE);
         UserEntity officialOwner = new UserEntity();
         officialOwner.setId(officialOwnerUserId);
         officialOwner.setFirstName("Einar");
         officialOwner.setEmail("einar.lagera@gmail.com");
+        officialOwner.setLearnerLevel(LearnerLevel.PROFESSIONAL);
 
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(viewerNote, officialNote));
@@ -312,6 +317,8 @@ class NoteServiceTest {
                 .extracting(NoteListItemResponse::id)
                 .containsExactly(viewerNoteId.toString(), officialNoteId.toString());
         assertThat(response.getFirst().ownerUserId()).isEqualTo(viewerUserId.toString());
+        assertThat(response.getFirst().courseProgram()).isEqualTo("Nursing");
+        assertThat(response.getFirst().learnerLevel()).isEqualTo("COLLEGE");
         assertThat(response.getFirst().authorDisplayName()).isEqualTo("Viewer");
         assertThat(response.getFirst().contentPreview()).isEqualTo("viewer content");
         assertThat(response.getFirst().summaryPreview()).isEmpty();
@@ -321,6 +328,8 @@ class NoteServiceTest {
         assertThat(response.getFirst().shareCount()).isZero();
         assertThat(response.getFirst().viewCount()).isZero();
         assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
+        assertThat(response.get(1).courseProgram()).isEqualTo("Chemistry");
+        assertThat(response.get(1).learnerLevel()).isEqualTo("PROFESSIONAL");
         assertThat(response.get(1).authorDisplayName()).isEqualTo("NoteLib");
         assertThat(response.get(1).contentPreview()).isEqualTo("official content");
         assertThat(response.get(1).summaryPreview()).isEqualTo("Official summary preview");

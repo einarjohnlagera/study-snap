@@ -433,6 +433,7 @@ export function PublicProfilePageClient({
               >
                 <SharedNoteCard
                   title={note.title}
+                  metaLine={note.courseProgram?.trim() || null}
                   subject={note.subject}
                   tags={note.tags}
                   contentPreview={note.contentPreview}

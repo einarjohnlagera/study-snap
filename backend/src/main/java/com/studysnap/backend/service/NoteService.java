@@ -428,6 +428,8 @@ public class NoteService {
                 note.getId().toString(),
                 note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
                 note.getTitle(),
+                normalizeOptionalText(note.getCourseProgram()),
+                owner == null || owner.getLearnerLevel() == null ? null : owner.getLearnerLevel().name(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),
@@ -442,6 +444,7 @@ public class NoteService {
                 resolvePublicAuthorName(owner),
                 isOfficialAuthor,
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
+                note.getCreatedAt(),
                 note.getUpdatedAt()
         );
     }

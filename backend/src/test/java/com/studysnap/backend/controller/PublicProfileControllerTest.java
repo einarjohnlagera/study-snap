@@ -46,6 +46,7 @@ class PublicProfileControllerTest {
                         "note-1",
                         "Cell Structure",
                         "Biology",
+                        "Biology",
                         List.of("cells"),
                         "Note preview",
                         "Summary preview",
