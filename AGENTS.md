@@ -278,6 +278,11 @@ Core loop:
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Profile is a public showcase of one creator's public notes and contribution stats.
 - Public Profile may show `bio`, optional `learnerLevel`, optional `courseProgram`, and derived subject chips, but it remains a learning profile rather than a social-media profile.
+- Public Profile should feel like a lightweight learning portfolio:
+  - compact metrics only
+  - real note-usage signals such as public-note count, copies, shares, and views when available
+  - optional featured-note callout only when backed by real usage data
+  - no follower/social-network patterns
 - Private Library and Public Library should keep the same top-level list structure:
   - `Search`
   - `Filter`

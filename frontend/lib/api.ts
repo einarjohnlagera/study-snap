@@ -758,6 +758,8 @@ export type PublicProfileNoteResponse = {
   contentPreview: string;
   summaryPreview: string;
   copyCount: number;
+  shareCount: number;
+  viewCount: number;
   slug: string;
 };
 
@@ -771,6 +773,8 @@ export type PublicProfileResponse = {
   publicProfileVisible: boolean;
   publicNotesCount: number;
   totalCopies: number;
+  totalShares: number;
+  totalViews: number;
   publicNotes: PublicProfileNoteResponse[];
 };
 

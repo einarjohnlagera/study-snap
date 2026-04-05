@@ -54,25 +54,33 @@ describe("PublicProfilePage", () => {
         publicProfileVisible: true,
         publicNotesCount: 2,
         totalCopies: 7,
+        totalShares: 4,
+        totalViews: 20,
         publicNotes: [
           {
             noteId: "note-1",
             title: "Plant Cells",
+            courseProgram: "Biology",
             subject: "Biology",
             tags: ["cells", "plants"],
             contentPreview: "Plant cells contain chloroplasts and cell walls.",
             summaryPreview: "Plant cells use chloroplasts for photosynthesis.",
             copyCount: 5,
+            shareCount: 3,
+            viewCount: 12,
             slug: "plant-cells",
           },
           {
             noteId: "note-2",
             title: "Atomic Bonds",
+            courseProgram: "Chemistry",
             subject: "Chemistry",
             tags: [],
             contentPreview: "Atoms share and transfer electrons to form bonds.",
             summaryPreview: "",
             copyCount: 2,
+            shareCount: 1,
+            viewCount: 8,
             slug: "atomic-bonds",
           },
         ],
@@ -87,13 +95,16 @@ describe("PublicProfilePage", () => {
     expect(screen.getAllByText("Biology")).not.toHaveLength(0);
     expect(screen.getAllByText("Teacher")).not.toHaveLength(0);
     expect(screen.getByText("Official")).toBeInTheDocument();
+    expect(screen.getByText("Total Shares")).toBeInTheDocument();
+    expect(screen.getByText("Total Views")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Featured note" })).toBeInTheDocument();
     expect(screen.getByText("Public notes")).toBeInTheDocument();
-    expect(screen.getByText("Plant Cells")).toBeInTheDocument();
-    expect(screen.getByText("5 copies")).toBeInTheDocument();
-    expect(screen.getByText("Plant cells contain chloroplasts and cell walls.")).toBeInTheDocument();
-    expect(screen.getByText("Plant cells use chloroplasts for photosynthesis.")).toBeInTheDocument();
+    expect(screen.getAllByText("Plant Cells")).not.toHaveLength(0);
+    expect(screen.getAllByText("5 copies")).not.toHaveLength(0);
+    expect(screen.getAllByText("Plant cells contain chloroplasts and cell walls.")).not.toHaveLength(0);
+    expect(screen.getAllByText("Plant cells use chloroplasts for photosynthesis.")).not.toHaveLength(0);
     expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: /Plant Cells/i }));
+    fireEvent.click(screen.getAllByText("Plant Cells")[0].closest("[role='link']") as HTMLElement);
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/public/library/biology/plant-cells");
     });
@@ -113,6 +124,8 @@ describe("PublicProfilePage", () => {
         publicProfileVisible: true,
         publicNotesCount: 0,
         totalCopies: 0,
+        totalShares: 0,
+        totalViews: 0,
         publicNotes: [],
       },
     });
@@ -145,6 +158,8 @@ describe("PublicProfilePage", () => {
         publicProfileVisible: true,
         publicNotesCount: 1,
         totalCopies: 5,
+        totalShares: 0,
+        totalViews: 0,
         publicNotes: [],
       },
     });

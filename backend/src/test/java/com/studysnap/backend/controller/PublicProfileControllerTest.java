@@ -42,6 +42,8 @@ class PublicProfileControllerTest {
                 true,
                 1,
                 3,
+                2,
+                9,
                 List.of(new PublicProfileNoteResponse(
                         "note-1",
                         "Cell Structure",
@@ -51,6 +53,8 @@ class PublicProfileControllerTest {
                         "Note preview",
                         "Summary preview",
                         3,
+                        2,
+                        9,
                         "cell-structure"
                 ))
         );

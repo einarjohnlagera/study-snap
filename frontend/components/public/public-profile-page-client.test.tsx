@@ -37,15 +37,20 @@ const baseProfile = {
   publicProfileVisible: true,
   publicNotesCount: 1,
   totalCopies: 5,
+  totalShares: 2,
+  totalViews: 9,
   publicNotes: [
     {
       noteId: "note-1",
       title: "Plant Cells",
+      courseProgram: "Biology",
       subject: "Biology",
       tags: ["cells"],
       contentPreview: "Plant cells contain chloroplasts and cell walls.",
       summaryPreview: "Plant cells use chloroplasts for photosynthesis.",
       copyCount: 5,
+      shareCount: 2,
+      viewCount: 9,
       slug: "plant-cells",
     },
   ],
@@ -86,6 +91,12 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getByText("Biology notes and board-review practice.")).toBeInTheDocument();
     expect(screen.getByText("Board Exam Review")).toBeInTheDocument();
     expect(screen.getAllByText("Biology")).not.toHaveLength(0);
+    expect(screen.getByText("Total Shares")).toBeInTheDocument();
+    expect(screen.getByText("Total Views")).toBeInTheDocument();
+    expect(screen.getByText("Mostly shares notes in Biology.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Featured note" })).toBeInTheDocument();
+    expect(screen.getByText("Featured Note")).toBeInTheDocument();
+    expect(screen.getAllByText("5 copies")).not.toHaveLength(0);
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
@@ -125,8 +136,10 @@ describe("PublicProfilePageClient", () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
     (getPublicProfile as jest.Mock).mockResolvedValue({
       ...baseProfile,
-      publicProfileVisible: false,
-    });
+        publicProfileVisible: false,
+        totalShares: 0,
+        totalViews: 0,
+      });
 
     render(
       <PublicProfilePageClient
@@ -157,8 +170,9 @@ describe("PublicProfilePageClient", () => {
     fireEvent.click(backButton);
     expect(backMock).toHaveBeenCalled();
 
-    const title = screen.getByText("Plant Cells");
-    fireEvent.click(title.closest("[role='link']") as HTMLElement);
+    const noteTitles = screen.getAllByText("Plant Cells");
+    expect(noteTitles).not.toHaveLength(0);
+    fireEvent.click(noteTitles[0].closest("[role='link']") as HTMLElement);
 
     expect(pushMock).toHaveBeenCalledWith(
       buildPublicLibraryNotePathFromSlug({ subject: "Biology", slug: "plant-cells" }),

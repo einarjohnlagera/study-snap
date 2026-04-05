@@ -25,7 +25,16 @@ Related APIs:
 - subjects derived from public notes
 - `publicNotesCount`
 - `totalCopies`
+- `totalShares` when the profile's notes have real share activity
+- `totalViews` when the profile's notes have real view activity
 - list of public notes only
+
+Portfolio polish:
+
+- Public Profile should feel like a lightweight learning portfolio, not a social feed.
+- Header metrics stay compact and should use real values only.
+- Derive learning-focus summary text from the user's real public-note subjects/course-programs when available.
+- A `Featured note` callout may appear when a real public note has copy/share/view signal; do not fake one.
 
 Public profile note cards reuse the shared note-card layout:
 
@@ -78,3 +87,4 @@ Navigation:
 
 - Public Profile remains a learning profile, not a social-media profile.
 - Note cards stay preview/navigation-focused; note actions live in Note Detail.
+- Public Profile note cards must keep using the shared note-card component and remain action-free for both owners and non-owners.

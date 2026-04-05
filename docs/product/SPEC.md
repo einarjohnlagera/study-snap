@@ -382,7 +382,13 @@ Users can:
   - derived public-note subjects
   - Total public notes
   - Total copies across that user's public notes
+  - Total shares across that user's public notes when real share data exists
+  - Total views across that user's public notes when real view data exists
   - list of that user's public notes with Title, Subject badge, Tags, and Copy count
+- Public Profile should feel like a lightweight learning portfolio:
+  - compact header metrics
+  - derived learning-focus summary from real public-note subjects/course-programs when reliable
+  - optional featured-note callout only when a real public note has copy/share/view signal
 - Public Profiles must only include notes where `visibility=PUBLIC`.
 - Public Profiles must never show email.
 - Public Profile owner controls belong on `/public/profile/{userId}`, not on `/profile`.

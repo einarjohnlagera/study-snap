@@ -13,6 +13,8 @@
 
 - Private Profile now separates `Identity`, `Learning Profile`, and `Profile Type` into distinct saveable cards.
 - Public Profile can now show learner level and course/program when the owner chooses to provide them.
+- Public Profile now feels more like a learning portfolio, with compact real metrics for public notes, copies, shares, and views when available.
+- Public Profile now derives lightweight learning-focus text from real public-note metadata and can highlight a featured note when usage data exists.
 - Learner-level and course/program inputs now reuse the same subject-style combobox UX as the Note Editor `Subject` field.
 - Fixed-option learner-level comboboxes now snap back to the last valid saved value if a user types an unsupported option and closes the field.
 - Note Editor now includes `Course / Program`, subject autocomplete, optional tags guidance, and the same metadata shape in both create and edit modes.

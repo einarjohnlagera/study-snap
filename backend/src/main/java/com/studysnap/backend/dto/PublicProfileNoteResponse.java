@@ -11,6 +11,8 @@ public record PublicProfileNoteResponse(
         String contentPreview,
         String summaryPreview,
         long copyCount,
+        long shareCount,
+        long viewCount,
         String slug
 ) {
 }
