@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import OnboardingPage from "./page";
-import { completeOnboarding, getMe } from "@/lib/api";
+import { completeOnboarding, getMe, listCoursePrograms } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 
 const routerMock = {
@@ -25,6 +25,7 @@ jest.mock("@/lib/auth", () => ({
 jest.mock("@/lib/api", () => ({
   completeOnboarding: jest.fn(),
   getMe: jest.fn(),
+  listCoursePrograms: jest.fn(),
 }));
 
 describe("OnboardingPage", () => {
@@ -35,7 +36,9 @@ describe("OnboardingPage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
+    (listCoursePrograms as jest.Mock).mockReset();
     (completeOnboarding as jest.Mock).mockReset();
+    (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Computer Science"]);
   });
 
   it("walks through the board exam flow and saves exam date plus reminder preferences", async () => {

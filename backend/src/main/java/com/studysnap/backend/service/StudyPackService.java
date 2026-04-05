@@ -32,6 +32,7 @@ import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.OcrResult;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.util.CreatedAtIdCursorUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
@@ -512,7 +513,7 @@ public class StudyPackService {
         note.setOwnerUserId(ownerUserId);
         note.setTitle(generated.title());
         note.setSubject(normalizeSubject(generated.subject()));
-        note.setCourseProgram(normalizeSubject(courseProgram));
+        note.setCourseProgram(normalizeCourseProgram(courseProgram));
         note.setTags(resolveTags(generated.tags(), generated.title()));
         note.setContent(normalizedContent);
         note.setStatus(NoteStatus.GENERATED);
@@ -643,6 +644,10 @@ public class StudyPackService {
                 .filter(existing -> SubjectNormalizationUtils.normalizeForLookup(existing).equals(lookup))
                 .findFirst()
                 .orElse(normalized);
+    }
+
+    private String normalizeCourseProgram(String courseProgram) {
+        return CourseProgramNormalizationUtils.normalizeForStorage(courseProgram);
     }
 
     private String normalizeEditableTitle(String title) {

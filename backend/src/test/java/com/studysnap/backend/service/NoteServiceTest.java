@@ -71,6 +71,8 @@ class NoteServiceTest {
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
+        lenient().when(noteRepository.findCourseProgramValuesByOwnerUserId(any())).thenReturn(List.of());
+        lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
         lenient().when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any())).thenReturn(List.of());
         lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(), any())).thenReturn(List.of());
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
@@ -135,6 +137,29 @@ class NoteServiceTest {
     }
 
     @Test
+    void create_normalizesProfileDefaultCourseProgram() {
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        owner.setCourseProgram("Senior High-STEM");
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Kinematics",
+                "Physics",
+                null,
+                List.of(),
+                "motion"
+        );
+
+        noteService.create(request, ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getCourseProgram()).isEqualTo("Senior High – STEM");
+    }
+
+    @Test
     void update_draftNote_updatesContentAndMetadata() {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
@@ -148,10 +173,10 @@ class NoteServiceTest {
 
         assertThat(draftNote.getTitle()).isEqualTo("New title");
         assertThat(draftNote.getSubject()).isEqualTo("Biology – Cell Division");
-        assertThat(draftNote.getCourseProgram()).isEqualTo("Pre-Med");
+        assertThat(draftNote.getCourseProgram()).isEqualTo("Pre – Med");
         assertThat(draftNote.getContent()).isEqualTo("new content");
         assertThat(updated.title()).isEqualTo("New title");
-        assertThat(updated.courseProgram()).isEqualTo("Pre-Med");
+        assertThat(updated.courseProgram()).isEqualTo("Pre – Med");
         assertThat(updated.content()).isEqualTo("new content");
     }
 
@@ -229,6 +254,36 @@ class NoteServiceTest {
         assertThat(copied.copiedFromPublic()).isTrue();
         assertThat(copied.copiedAt()).isNotNull();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.PUBLIC_NOTE_COPIED), eq(sourceNoteId), any());
+    }
+
+    @Test
+    void copyNote_normalizesCourseProgramFormatting() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        NoteEntity source = buildNote(sourceNoteId, UUID.randomUUID(), NoteStatus.GENERATED, NoteVisibility.PUBLIC, "source content");
+        source.setCourseProgram("Senior High-STEM");
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+
+        noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        ArgumentCaptor<NoteEntity> captor = ArgumentCaptor.forClass(NoteEntity.class);
+        verify(noteRepository).save(captor.capture());
+        assertThat(captor.getValue().getCourseProgram()).isEqualTo("Senior High – STEM");
+    }
+
+    @Test
+    void listMineCoursePrograms_returnsNormalizedDedupedSuggestionsIncludingProfileDefault() {
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = new UserEntity();
+        owner.setId(ownerUserId);
+        owner.setCourseProgram("Senior High-STEM");
+        when(noteRepository.findCourseProgramValuesByOwnerUserId(ownerUserId))
+                .thenReturn(List.of("  nursing  ", "Nursing", "Senior High – STEM"));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        List<String> coursePrograms = noteService.listMineCoursePrograms(ownerUserId);
+
+        assertThat(coursePrograms).containsExactly("Nursing", "Senior High – STEM");
     }
 
     @Test

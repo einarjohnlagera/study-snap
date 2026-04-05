@@ -269,7 +269,15 @@ Favicon requirements:
   - `/notes/{id}/edit` for Study Pack Ready notes -> metadata edit mode with `Save Changes`, `Cancel`, and `Make a Copy`
 - Existing notes on `/notes/{id}/edit` must render `Edit Note` copy, not the create-note title/description.
 - Note Editor metadata fields are `title`, `courseProgram`, `subject`, `tags`, and `content`.
+- Metadata hierarchy should stay:
+  - `courseProgram` -> top-level academic track or domain
+  - `subject` -> reusable academic topic for grouping/filtering
+  - `tags` -> fine-grained keywords
 - New notes default `courseProgram` from the user's profile, but it remains editable per note.
+- Course / Program suggestions should come from curated defaults plus normalized saved values returned by `GET /api/course-programs?scope=mine`.
+- Users may still type a custom course/program value, and the saved value should become reusable in later autocomplete/filter flows.
+- Course / Program saves should normalize whitespace and dash formatting so equivalent values such as `Senior High-STEM` and `Senior High – STEM` collapse into one reusable suggestion/filter label when possible.
+- Course / Program reuse checks should be case-insensitive while keeping a readable display label.
 - When a note already has a Study Pack, Note Editor keeps `title`, `courseProgram`, `subject`, and `tags` editable but locks `content` with the helper:
   - `Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.`
 - Generate button copy should stay short and may vary by `profileType` without changing backend generation:
@@ -507,6 +515,9 @@ Users can:
 - Subject display should stay consistent across Library, Public Library, Private Note Detail, and Public Note Detail:
   - render subject as a reusable badge, not `Subject: ...` text
   - place subject on the same line as the author label on note headers
+- Course / Program display should stay subtle:
+  - show it as supporting metadata on library cards and note detail headers
+  - do not promote it into a large badge that competes with subject/state badges
 - Subject persistence and suggestions:
   - `notes.subject` remains the persisted source of truth
   - subject suggestions come from `GET /api/subjects` using distinct existing note subject values
@@ -521,6 +532,14 @@ Users can:
   - avoid broad catch-all labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the notes support a narrower academic subject
   - example targets: `Nursing – Pharmacology`, `Biology – Cell Division`, `Criminal Law – Crimes Against Persons`, `Software Engineering – Data Structures`
   - no normalized `subjects` table is required for the current version
+- Course / Program persistence and suggestions:
+  - `users.courseProgram` is the profile-level default and `notes.courseProgram` is the note-level persisted source of truth
+  - the current course/program catalog is derived from saved values, not from a separate `course_programs` table
+  - `GET /api/course-programs?scope=mine` returns normalized distinct course/program values from the authenticated user's notes plus their profile default
+  - `GET /api/course-programs?scope=public` returns normalized distinct course/program values from public notes
+  - users can still type a custom course/program and save it directly into `notes.courseProgram`
+  - saved custom course/program values become future suggestions after the note is persisted
+  - normalize saved course/program values for whitespace and dash formatting and reuse them case-insensitively when possible
 - Library and Public Library should share the same control order:
   - `Search`
   - `Filter`

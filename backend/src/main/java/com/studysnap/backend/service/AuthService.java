@@ -30,6 +30,7 @@ import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
 import lombok.RequiredArgsConstructor;
@@ -364,7 +365,7 @@ public class AuthService {
     }
 
     private String normalizeOptionalCourseProgram(String value) {
-        String normalized = normalizeOptionalText(value);
+        String normalized = CourseProgramNormalizationUtils.normalizeForStorage(value);
         if (normalized == null) {
             return null;
         }

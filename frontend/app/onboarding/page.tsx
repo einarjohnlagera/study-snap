@@ -5,9 +5,13 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
-import { completeOnboarding, getMe, type EngagementMode, type LearnerLevel, type ProfileType } from "@/lib/api";
+import { completeOnboarding, getMe, listCoursePrograms, type EngagementMode, type LearnerLevel, type ProfileType } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
-import { COURSE_PROGRAM_SUGGESTIONS, LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import {
+  COURSE_PROGRAM_SUGGESTIONS,
+  LEARNER_LEVEL_OPTIONS,
+  mergeCourseProgramSuggestions,
+} from "@/lib/learning-profile";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type OnboardingProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
@@ -129,6 +133,7 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
 
   const steps = useMemo<OnboardingStep[]>(() => {
     return profileType === "BOARD_EXAM"
@@ -158,11 +163,18 @@ export default function OnboardingPage() {
     }
 
     let cancelled = false;
-    void getMe()
-      .then((me) => {
+    void Promise.allSettled([
+      getMe(),
+      listCoursePrograms("mine"),
+    ])
+      .then(([meResult, courseProgramsResult]) => {
         if (cancelled) {
           return;
         }
+        if (meResult.status !== "fulfilled") {
+          throw meResult.reason;
+        }
+        const me = meResult.value;
         if (me.onboardingCompletedAt) {
           router.replace("/dashboard");
           return;
@@ -174,12 +186,14 @@ export default function OnboardingPage() {
         setEngagementMode(me.engagementMode);
         setReminderPreset(getReminderPreset(me.inactivityRemindersEnabled, me.weakConceptRemindersEnabled));
         setExamDate(me.examDate ?? "");
+        setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
       })
       .catch((requestError) => {
         if (cancelled) {
           return;
         }
         setError(requestError instanceof Error ? requestError.message : "Could not load onboarding.");
+        setCourseProgramSuggestions([]);
       })
       .finally(() => {
         if (!cancelled) {
@@ -194,6 +208,14 @@ export default function OnboardingPage() {
 
   const currentStep = steps[currentStepIndex] ?? "profile";
   const isLastStep = currentStepIndex === steps.length - 1;
+  const availableCourseProgramSuggestions = useMemo(
+    () => mergeCourseProgramSuggestions(
+      COURSE_PROGRAM_SUGGESTIONS,
+      courseProgramSuggestions,
+      [courseProgram],
+    ),
+    [courseProgram, courseProgramSuggestions],
+  );
   const isCurrentStepValid = useMemo(() => {
     if (currentStep === "profile") {
       return profileType !== null;
@@ -352,7 +374,7 @@ export default function OnboardingPage() {
                     <SuggestionCombobox
                       id="onboarding-course-program"
                       value={courseProgram}
-                      options={COURSE_PROGRAM_SUGGESTIONS.map((option) => ({ value: option, label: option }))}
+                      options={availableCourseProgramSuggestions.map((option) => ({ value: option, label: option }))}
                       ariaLabel="Course / Program"
                       onChange={(value) => setCourseProgram(value.slice(0, 120))}
                       placeholder="Choose or type your course/program"

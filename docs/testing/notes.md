@@ -2,6 +2,9 @@
 
 ## Subject Suggestions
 
+- Create or edit a note with a custom course/program and save it.
+- Reopen Note Editor, Profile, or Onboarding and confirm the saved course/program appears in the `Course / Program` autocomplete suggestions.
+- Save equivalent course/program variants such as `Senior High-STEM`, `senior high - stem`, and `Senior High – STEM`, then confirm autocomplete/filter suggestions collapse them into one reusable course/program label.
 - Create a note with a custom subject and save it.
 - Reopen Note Editor and confirm the saved custom subject appears in the `Subject` autocomplete suggestions.
 - Save equivalent subject variants such as `Biology-Cell Division`, `biology - cell division`, and `Biology – Cell Division`, then confirm autocomplete/filter suggestions collapse them into one reusable subject label.

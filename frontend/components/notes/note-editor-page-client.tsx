@@ -15,6 +15,7 @@ import {
   getNote,
   isEmailNotVerifiedError,
   isOcrLimitReachedError,
+  listCoursePrograms,
   listSubjects,
   trackAnalyticsEvent,
   type NoteResponse,
@@ -49,6 +50,10 @@ import {
   type NoteEntryMode,
   type NoteEntrySource,
 } from "@/lib/note-entry";
+import {
+  COURSE_PROGRAM_SUGGESTIONS,
+  mergeCourseProgramSuggestions,
+} from "@/lib/learning-profile";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
 
 type NoteEditorPageClientProps = {
@@ -136,6 +141,7 @@ export function NoteEditorPageClient({
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
+  const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
   const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
@@ -177,17 +183,16 @@ export function NoteEditorPageClient({
   useEffect(() => {
     let active = true;
 
-    void listSubjects("mine")
-      .then((subjects) => {
-        if (active) {
-          setSubjectSuggestions(subjects);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setSubjectSuggestions([]);
-        }
-      });
+    void Promise.allSettled([
+      listSubjects("mine"),
+      listCoursePrograms("mine"),
+    ]).then(([subjectsResult, courseProgramsResult]) => {
+      if (!active) {
+        return;
+      }
+      setSubjectSuggestions(subjectsResult.status === "fulfilled" ? subjectsResult.value : []);
+      setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
+    });
 
     return () => {
       active = false;
@@ -246,6 +251,14 @@ export function NoteEditorPageClient({
   const contentEmpty = useMemo(() => draft.content.trim().length === 0, [draft.content]);
   const contentLocked = isEditMode && studyPackStatus === "STUDY_PACK_READY";
   const hasGeneratedStudyPack = studyPackStatus === "STUDY_PACK_READY";
+  const availableCourseProgramSuggestions = useMemo(
+    () => mergeCourseProgramSuggestions(
+      COURSE_PROGRAM_SUGGESTIONS,
+      courseProgramSuggestions,
+      [draft.courseProgram],
+    ),
+    [courseProgramSuggestions, draft.courseProgram],
+  );
   const openLockedFeaturePaywall = useCallback((variant: "study-pack-limit" | "ocr-limit", source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -749,6 +762,7 @@ export function NoteEditorPageClient({
         actionIcon={hasGeneratedStudyPack ? "copy" : "generate"}
         actionVariant={hasGeneratedStudyPack ? "outline" : "default"}
         subjectSuggestions={subjectSuggestions}
+        courseProgramSuggestions={availableCourseProgramSuggestions}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
         } : undefined}

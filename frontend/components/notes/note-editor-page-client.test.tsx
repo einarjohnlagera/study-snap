@@ -10,6 +10,7 @@ import {
   getMe,
   getMyPlan,
   getNote,
+  listCoursePrograms,
   listSubjects,
   joinPremiumWaitlist,
   updateNote,
@@ -45,6 +46,7 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  listCoursePrograms: jest.fn(),
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
@@ -94,11 +96,13 @@ describe("NoteEditorPageClient", () => {
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
+    (listCoursePrograms as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Anatomy", "Biology", "Chemistry"]);
+    (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Senior High – STEM"]);
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
       limits: {
@@ -194,6 +198,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("Select an existing subject or type your own.")).toBeInTheDocument();
     await waitFor(() => {
       expect(listSubjects).toHaveBeenCalledWith("mine");
+      expect(listCoursePrograms).toHaveBeenCalledWith("mine");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle subject suggestions" }));

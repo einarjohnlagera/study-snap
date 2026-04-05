@@ -19,6 +19,7 @@ import {
   type NoteStudyPackStatus,
   type NoteVisibility,
 } from "@/lib/api";
+import { mergeCourseProgramSuggestions, normalizeCourseProgram } from "@/lib/learning-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { normalizeSubject } from "@/lib/subjects";
 
@@ -53,11 +54,6 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
   return tags
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
-}
-
-function normalizeOptionalText(value: string | null | undefined): string | null {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
 }
 
 function formatRelativeReviewTime(lastReviewedAt: string | null | undefined): string {
@@ -245,14 +241,7 @@ export default function LibraryPage() {
   const availableSubjects = subjectSuggestions.length > 0 ? subjectSuggestions : derivedSubjects;
 
   const availableCoursePrograms = useMemo(() => {
-    const coursePrograms = new Set<string>();
-    for (const item of items) {
-      const courseProgram = normalizeOptionalText(item.courseProgram);
-      if (courseProgram) {
-        coursePrograms.add(courseProgram);
-      }
-    }
-    return Array.from(coursePrograms).sort((left, right) => left.localeCompare(right));
+    return mergeCourseProgramSuggestions(items.map((item) => item.courseProgram));
   }, [items]);
 
   const availableTags = useMemo(() => {
@@ -340,10 +329,14 @@ export default function LibraryPage() {
 
   const sortedFilteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
+    const selectedCourseProgramLookup = selectedCourseProgram === ALL_COURSE_PROGRAMS
+      ? null
+      : normalizeCourseProgram(selectedCourseProgram)?.toLowerCase() ?? null;
     const filtered = items.filter((item) => {
       const itemTitle = item.title?.trim() || "Untitled note";
       const itemTags = normalizeTags(item.tags);
-      const itemCourseProgram = normalizeOptionalText(item.courseProgram);
+      const itemCourseProgram = normalizeCourseProgram(item.courseProgram);
+      const itemCourseProgramLookup = itemCourseProgram?.toLowerCase() ?? null;
       const itemSubject = normalizeSubject(item.subject);
 
       const titleMatch = query.length === 0
@@ -352,8 +345,8 @@ export default function LibraryPage() {
         || (itemSubject?.toLowerCase().includes(query) ?? false)
         || itemTags.some((tag) => tag.toLowerCase().includes(query))
         || item.contentPreview.toLowerCase().includes(query);
-      const courseProgramMatch = selectedCourseProgram === ALL_COURSE_PROGRAMS
-        || itemCourseProgram === selectedCourseProgram;
+      const courseProgramMatch = selectedCourseProgramLookup === null
+        || itemCourseProgramLookup === selectedCourseProgramLookup;
       const subjectMatch = selectedSubject === ALL_SUBJECTS
         || itemSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0
@@ -577,7 +570,7 @@ export default function LibraryPage() {
                   >
                     <SharedNoteCard
                       title={item.title}
-                      metaLine={normalizeOptionalText(item.courseProgram)}
+                      metaLine={normalizeCourseProgram(item.courseProgram)}
                       subject={item.subject}
                       tags={itemTags}
                       contentPreview={item.contentPreview}

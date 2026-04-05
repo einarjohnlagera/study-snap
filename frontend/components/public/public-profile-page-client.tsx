@@ -8,7 +8,7 @@ import { SubjectBadge } from "@/components/notes/subject-badge";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
-import { formatLearnerLevel } from "@/lib/learning-profile";
+import { formatLearnerLevel, normalizeCourseProgram } from "@/lib/learning-profile";
 import {
   ApiRequestError,
   getPublicProfile,
@@ -163,8 +163,7 @@ export function PublicProfilePageClient({
   );
 
   const courseProgramLabel = useMemo(() => {
-    const normalized = profile?.courseProgram?.trim();
-    return normalized && normalized.length > 0 ? normalized : null;
+    return normalizeCourseProgram(profile?.courseProgram);
   }, [profile?.courseProgram]);
 
   const subjects = useMemo(() => {
@@ -433,7 +432,7 @@ export function PublicProfilePageClient({
               >
                 <SharedNoteCard
                   title={note.title}
-                  metaLine={note.courseProgram?.trim() || null}
+                  metaLine={normalizeCourseProgram(note.courseProgram)}
                   subject={note.subject}
                   tags={note.tags}
                   contentPreview={note.contentPreview}

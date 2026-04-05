@@ -6,7 +6,6 @@ import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { COURSE_PROGRAM_SUGGESTIONS } from "@/lib/learning-profile";
 
 export type NoteEditorDraft = {
   title: string;
@@ -57,6 +56,7 @@ type NoteEditorFormProps = {
   actionVariant?: "default" | "outline";
   disableAction?: boolean;
   subjectSuggestions?: string[];
+  courseProgramSuggestions?: string[];
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -105,6 +105,7 @@ export function NoteEditorForm({
   actionVariant = "default",
   disableAction = false,
   subjectSuggestions = [],
+  courseProgramSuggestions = [],
 }: Readonly<NoteEditorFormProps>) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -278,7 +279,7 @@ export function NoteEditorForm({
               <SuggestionCombobox
                 id="note-course-program"
                 value={note.courseProgram}
-                options={COURSE_PROGRAM_SUGGESTIONS.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
+                options={courseProgramSuggestions.map((courseProgram) => ({ value: courseProgram, label: courseProgram }))}
                 onChange={onCourseProgramChange}
                 placeholder="Choose or type a course/program"
                 disabled={isCopying}

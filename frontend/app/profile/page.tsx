@@ -8,13 +8,18 @@ import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
 import {
   completeOnboardingProfileType,
   getMe,
+  listCoursePrograms,
   type LearnerLevel,
   type MeResponse,
   type ProfileType,
   updateUserProfile,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-import { COURSE_PROGRAM_SUGGESTIONS, LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import {
+  COURSE_PROGRAM_SUGGESTIONS,
+  LEARNER_LEVEL_OPTIONS,
+  mergeCourseProgramSuggestions,
+} from "@/lib/learning-profile";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
@@ -72,6 +77,7 @@ export default function ProfilePage() {
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
   const [savingLearningProfile, setSavingLearningProfile] = useState(false);
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
+  const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -86,7 +92,14 @@ export default function ProfilePage() {
     setProfileTypeMessage(null);
     setLearningProfileMessage(null);
     try {
-      const me = await getMe();
+      const [meResult, courseProgramsResult] = await Promise.allSettled([
+        getMe(),
+        listCoursePrograms("mine"),
+      ]);
+      if (meResult.status !== "fulfilled") {
+        throw meResult.reason;
+      }
+      const me = meResult.value;
       setProfile(me);
       setIdentityForm({
         firstName: me.firstName ?? "",
@@ -100,11 +113,13 @@ export default function ProfilePage() {
         bio: me.bio ?? "",
       });
       setSelectedProfileType(me.profileType ?? "");
+      setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load profile.";
       setError(message);
       setProfile(null);
       setSelectedProfileType("");
+      setCourseProgramSuggestions([]);
     } finally {
       setLoading(false);
     }
@@ -131,6 +146,16 @@ export default function ProfilePage() {
     const fallback = resolvedDisplayName || profile?.email || "U";
     return fallback.charAt(0).toUpperCase();
   }, [profile?.email, resolvedDisplayName]);
+
+  const availableCourseProgramSuggestions = useMemo(
+    () => mergeCourseProgramSuggestions(
+      COURSE_PROGRAM_SUGGESTIONS,
+      courseProgramSuggestions,
+      [learningProfileForm.courseProgram],
+      [profile?.courseProgram],
+    ),
+    [courseProgramSuggestions, learningProfileForm.courseProgram, profile?.courseProgram],
+  );
 
   const handleIdentityFieldChange = (field: keyof IdentityForm, value: string) => {
     setIdentityMessage(null);
@@ -408,7 +433,7 @@ export default function ProfilePage() {
                 <SuggestionCombobox
                   id="profile-course-program"
                   value={learningProfileForm.courseProgram}
-                  options={COURSE_PROGRAM_SUGGESTIONS.map((option) => ({ value: option, label: option }))}
+                  options={availableCourseProgramSuggestions.map((option) => ({ value: option, label: option }))}
                   ariaLabel="Course / Program"
                   onChange={(value) =>
                     handleLearningProfileFieldChange("courseProgram", value.slice(0, 120))

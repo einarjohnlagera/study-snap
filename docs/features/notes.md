@@ -17,6 +17,12 @@ Current note-authoring fields:
 Rules:
 
 - `courseProgram` belongs to the note once saved and can differ from the profile default.
+- `courseProgram` is the top-level shelf for the note, while `subject` is the more specific academic topic and `tags` are the finer keywords.
+- `courseProgram` uses autocomplete from curated defaults plus normalized saved values from the user's notes/profile.
+- users can still type a custom course/program directly.
+- a saved custom course/program becomes available in future course/program suggestions after the note or profile value is persisted.
+- course/program saves normalize whitespace plus dash formatting so equivalent values like `Senior High-STEM` and `Senior High – STEM` reuse the same suggestion when possible.
+- course/program reuse checks are case-insensitive, but the saved/displayed course/program should keep a readable label format.
 - `subject` uses autocomplete from persisted note subjects.
 - users can still type a custom subject directly.
 - a saved custom subject becomes available in future subject suggestions after the note is persisted.

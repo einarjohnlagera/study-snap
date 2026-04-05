@@ -101,6 +101,10 @@ Growth behavior:
 
 Metadata behavior shared with note authoring:
 
+- `Course / Program` is the high-level shelf used to group notes by track/domain, while `Subject` remains the more specific academic topic.
+- Library course/program filters depend on the same persisted `notes.courseProgram` values used by note cards and Note Detail metadata.
+- When a user saves a custom course/program on a note or in their profile, that value becomes available in later course/program suggestions for authenticated authoring flows.
+- Equivalent course/program variants should collapse through shared normalization so filters do not split labels only because of case or dash formatting.
 - Library subject filters depend on the same persisted `notes.subject` values used by the Note Editor autocomplete.
 - When a user saves a custom subject on a note, that subject becomes available in later `Subject` suggestions and filters.
 - Equivalent subject variants should collapse through shared normalization so filters do not split labels only because of case or dash formatting.
