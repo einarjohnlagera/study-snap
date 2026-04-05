@@ -21,6 +21,25 @@ Core loop:
 
 `Capture -> Generate -> Review -> Improve -> Make a Copy -> Repeat`
 
+## Implementation Workflow Rules
+
+- After every completed prompt/task that results in code or doc changes, always include a suggested commit message in the final response.
+- Keep the suggested commit message aligned with the repo's current style: concise subject line plus 3-5 high-signal bullets when useful.
+
+## Backend Code Quality Rules
+
+- Avoid hardcoding domain-significant string values in implementation code.
+- When a string value is used for codes, messages, metadata keys, session keys, analytics names, action labels, query params, or other logic-bearing behavior, promote it to a constant where it belongs.
+- Prefer `private static final` constants inside the owning class when the value is local to that class.
+- If the same value is shared across multiple classes, move it to an appropriate shared constants/helper type instead of duplicating the literal.
+- Reuse existing constants before introducing new ones.
+- If helper logic is generic enough to be reused across methods/classes, move it into an existing utility class or create a new utility class in the appropriate package.
+- Reuse existing utility classes before creating new ones, and do not create duplicate utility types with overlapping responsibilities.
+- Reuse existing exception classes before creating new ones.
+- When throwing application-level exceptions, prefer a dedicated exception type that extends `AppException` instead of scattering inline `new AppException(...)` calls.
+- If no suitable exception type exists yet, create a new exception class that extends `AppException` and keep its code/status/message ownership there.
+- New exception classes should stay close to the domain they represent and should not duplicate an existing `AppException` subclass with the same meaning.
+
 ## Required Product Architecture (Current)
 
 - Note is the primary entity.
