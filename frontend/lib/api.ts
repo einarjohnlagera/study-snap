@@ -17,7 +17,10 @@ export type { MePlanResponse } from "./me-plan";
 export type QuizItem = {
   question: string;
   choices: string[];
-  answer: string;
+  correctIndex: number;
+  answerIndex?: number;
+  correctAnswerIndex?: number;
+  answer?: string;
   concept?: string;
   explanation: string;
 };

@@ -332,6 +332,51 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void completeSession_acceptsCanonicalSelectedChoiceIndexes() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(1);
+        session.setCurrentQuestionIndex(0);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                List.of(
+                        new QuizItem("Question 1", List.of("cos(x)", "-cos(x)", "-sin(x)", "tan(x)"), 0, "Concept 1", "Explanation")
+                ),
+                Map.of(
+                        "selectedChoices", Map.of("0", 0),
+                        "completed", false
+                )
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = challengeQuizService.completeSession(
+                sessionId.toString(),
+                userId,
+                new ChallengeQuizCompleteRequest(1, 1, 60)
+        );
+
+        assertThat(response.correctAnswers()).isEqualTo(1);
+        assertThat(response.scorePercentage()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
     void startSession_throwsTypedExceptionForInvalidDifficulty() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();

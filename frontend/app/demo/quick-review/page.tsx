@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { DEMO_STUDY_PACK_RESULT } from "@/app/study/demo-content";
+import { isQuizSelectionCorrect, resolveQuizCorrectIndex } from "@/lib/quiz";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
 
@@ -41,20 +42,20 @@ export default function DemoQuickReviewPage() {
   );
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [retryQuestionIndexes, setRetryQuestionIndexes] = useState<number[]>([]);
-  const [roundSelections, setRoundSelections] = useState<Record<number, string>>({});
-  const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
+  const [roundSelections, setRoundSelections] = useState<Record<number, number>>({});
+  const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
 
   const currentQuestionIndex = currentRoundIndex < activeQuestionIndexes.length
     ? activeQuestionIndexes[currentRoundIndex]
     : null;
   const currentQuestion = currentQuestionIndex !== null ? quiz[currentQuestionIndex] : null;
-  const selectedChoice = currentQuestionIndex !== null ? roundSelections[currentQuestionIndex] ?? null : null;
-  const hasAnsweredCurrent = Boolean(selectedChoice);
+  const selectedChoiceIndex = currentQuestionIndex !== null ? roundSelections[currentQuestionIndex] ?? null : null;
+  const hasAnsweredCurrent = selectedChoiceIndex !== null;
 
   const score = useMemo(
     () =>
       quiz.reduce((count, item, index) => {
-        return selectedChoices[index] === item.answer ? count + 1 : count;
+        return isQuizSelectionCorrect(item, selectedChoices[index]) ? count + 1 : count;
       }, 0),
     [quiz, selectedChoices],
   );
@@ -65,17 +66,17 @@ export default function DemoQuickReviewPage() {
     return Number(((score / totalQuestions) * 100).toFixed(0));
   }, [score, totalQuestions]);
 
-  const handleSelectChoice = (choice: string) => {
+  const handleSelectChoice = (choiceIndex: number) => {
     if (!currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent) {
       return;
     }
     setRoundSelections((previous) => ({
       ...previous,
-      [currentQuestionIndex]: choice,
+      [currentQuestionIndex]: choiceIndex,
     }));
     setSelectedChoices((previous) => ({
       ...previous,
-      [currentQuestionIndex]: choice,
+      [currentQuestionIndex]: choiceIndex,
     }));
   };
 
@@ -91,7 +92,7 @@ export default function DemoQuickReviewPage() {
 
     if (phase === "initial") {
       const incorrectIndexes = activeQuestionIndexes.filter(
-        (index) => selectedChoices[index] !== quiz[index]?.answer,
+        (index) => !isQuizSelectionCorrect(quiz[index], selectedChoices[index]),
       );
       if (incorrectIndexes.length === 0) {
         setPhase("complete");
@@ -212,9 +213,10 @@ export default function DemoQuickReviewPage() {
               {currentQuestionIndex + 1}. {currentQuestion.question}
             </h2>
             <QuizChoiceList
+              questionKey={currentQuestion.question}
               choices={currentQuestion.choices}
-              correctAnswer={currentQuestion.answer}
-              selectedChoice={selectedChoice}
+              correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+              selectedChoiceIndex={selectedChoiceIndex}
               revealAnswer={hasAnsweredCurrent}
               onSelectChoice={handleSelectChoice}
             />

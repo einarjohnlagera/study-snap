@@ -71,7 +71,7 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 
 ## Generation Contract
 
-- Shared generated-quiz JSON format:
+- Raw generated-quiz JSON format from the LLM:
   - `question`
   - `choices` (exactly 4)
   - `answer` (`A`, `B`, `C`, or `D`)
@@ -80,6 +80,18 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 - No markdown, comments, or extra text outside JSON.
 - Quiz explanations should teach, not just state the answer.
 - For computation questions, explanations should show short step-by-step solution flow.
+
+## Runtime Contract
+
+- Canonical stored/shared quiz data must normalize to:
+  - `question`
+  - `choices`
+  - `correctIndex`
+  - `explanation`
+  - `concept`
+- `A` / `B` / `C` / `D` are presentation-only labels derived from displayed order.
+- Quiz sessions must persist selected canonical choice indexes, not answer text or letters.
+- Choice shuffling must preserve correctness and remain stable for the same question/session once review starts.
 
 ## v0.6.0 Direction
 

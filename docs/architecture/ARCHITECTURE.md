@@ -512,6 +512,9 @@ Quick Review:
 - retry incorrect questions once
 - persists session and confidence feedback
 - session ownership is note-scoped (`noteId`)
+- stored quiz items are canonical `question`, `choices`, `correctIndex`, `explanation`, `concept`
+- UI letters are presentation-only and are derived from displayed choice order at render time
+- displayed choice order must stay deterministic for a given question/session so re-renders do not change correctness
 
 Challenge Quiz (Premium):
 
@@ -519,12 +522,16 @@ Challenge Quiz (Premium):
 - timed and continuously persisted
 - resumes in-progress session if present (no duplicate generation call)
 - session ownership is note-scoped (`noteId`)
+- generation may start from raw LLM `answer` letters, but backend/session persistence must normalize to canonical `correctIndex`
+- session state stores selected canonical choice indexes and may normalize legacy answer-text payloads on load
 
 Adaptive Practice (Premium):
 
 - generated from summary + key concepts + weak concepts only
 - resumes in-progress session if present (no duplicate generation call)
 - session ownership is note-scoped (`noteId`)
+- generation may start from raw LLM `answer` letters, but backend/session persistence must normalize to canonical `correctIndex`
+- session state stores selected canonical choice indexes and may normalize legacy answer-text payloads on load
 
 Usage tracking:
 

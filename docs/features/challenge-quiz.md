@@ -15,10 +15,16 @@ Challenge Quiz is the timed, exam-style quiz mode built on top of a Study Pack-r
 
 ## Contract
 
-Generated items must include:
+Generated LLM output must include:
 
 - `question`
 - `choices` (4)
 - `answer` (`A` / `B` / `C` / `D`)
 - `explanation`
 - `concept`
+
+Runtime/session rules:
+
+- Backend normalization must convert the LLM answer letter into canonical `correctIndex` before persistence.
+- Frontend rendering may shuffle displayed choices, but `A` / `B` / `C` / `D` stay UI-only labels derived from displayed order.
+- Session grading must compare selected canonical choice indexes against canonical `correctIndex`.

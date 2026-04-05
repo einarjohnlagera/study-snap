@@ -32,13 +32,20 @@ import {
   getFirstStudyOnboardingStep,
   hasPendingFirstStudyOnboarding,
 } from "@/lib/first-study-onboarding";
+import {
+  isQuizSelectionCorrect,
+  resolveQuizCorrectAnswer,
+  resolveQuizCorrectIndex,
+  serializeSelectedChoiceIndexRecord,
+  toSelectedChoiceIndexRecord,
+} from "@/lib/quiz";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
 type SessionStatePayload = {
-  selectedChoices?: Record<string, string>;
+  selectedChoices?: Record<string, number> | Record<string, string>;
   retryQuestionIndexes?: number[];
   activeQuestionIndexes?: number[];
-  roundSelections?: Record<string, string>;
+  roundSelections?: Record<string, number> | Record<string, string>;
 };
 
 function getMotivationalFeedback(scorePercentage: number) {
@@ -124,17 +131,6 @@ function toNumberArray(value: unknown): number[] {
   return value.filter((item): item is number => typeof item === "number");
 }
 
-function toChoiceRecord(value: unknown): Record<number, string> {
-  if (!value || typeof value !== "object") {
-    return {};
-  }
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, v]) => typeof v === "string")
-    .map(([k, v]) => [Number(k), v as string] as const)
-    .filter(([k]) => Number.isInteger(k) && k >= 0);
-  return Object.fromEntries(entries);
-}
-
 export default function QuickReviewPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -148,8 +144,8 @@ export default function QuickReviewPage() {
   const [activeQuestionIndexes, setActiveQuestionIndexes] = useState<number[]>([]);
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [retryQuestionIndexes, setRetryQuestionIndexes] = useState<number[]>([]);
-  const [roundSelections, setRoundSelections] = useState<Record<number, string>>({});
-  const [selectedChoices, setSelectedChoices] = useState<Record<number, string>>({});
+  const [roundSelections, setRoundSelections] = useState<Record<number, number>>({});
+  const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
   const [retryCount, setRetryCount] = useState(0);
   const [completionTracked, setCompletionTracked] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -263,12 +259,12 @@ export default function QuickReviewPage() {
     ? activeQuestionIndexes[currentRoundIndex]
     : null;
   const currentQuestion = currentQuestionIndex !== null ? quiz[currentQuestionIndex] : null;
-  const selectedChoice = currentQuestionIndex !== null ? roundSelections[currentQuestionIndex] ?? null : null;
-  const hasAnsweredCurrent = Boolean(selectedChoice);
+  const selectedChoiceIndex = currentQuestionIndex !== null ? roundSelections[currentQuestionIndex] ?? null : null;
+  const hasAnsweredCurrent = selectedChoiceIndex !== null;
   const score = useMemo(
     () =>
       quiz.reduce((count, item, index) => {
-        return selectedChoices[index] === item.answer ? count + 1 : count;
+        return isQuizSelectionCorrect(item, selectedChoices[index]) ? count + 1 : count;
       }, 0),
     [quiz, selectedChoices],
   );
@@ -298,12 +294,16 @@ export default function QuickReviewPage() {
   const incorrectQuestionsForStudyTip = useMemo<QuickReviewStudyTipRequest["incorrectQuestions"]>(() => {
     return quiz
       .map((item, index) => {
-        if (selectedChoices[index] === item.answer) {
+        if (isQuizSelectionCorrect(item, selectedChoices[index])) {
+          return null;
+        }
+        const correctAnswer = resolveQuizCorrectAnswer(item);
+        if (!correctAnswer) {
           return null;
         }
         return {
           question: item.question,
-          correctAnswer: item.answer,
+          correctAnswer,
           explanation: item.explanation,
         };
       })
@@ -312,7 +312,7 @@ export default function QuickReviewPage() {
   const weakConcepts = useMemo(() => {
     const concepts = quiz
       .map((item, index) => {
-        if (selectedChoices[index] === item.answer) {
+        if (isQuizSelectionCorrect(item, selectedChoices[index])) {
           return null;
         }
         const concept = item.concept?.trim();
@@ -372,19 +372,19 @@ export default function QuickReviewPage() {
     currentQuestionIndex: number;
     currentRound: "INITIAL" | "RETRY";
     retryCount: number;
-    selectedChoices: Record<number, string>;
+    selectedChoices: Record<number, number>;
     retryQuestionIndexes: number[];
     activeQuestionIndexes: number[];
-    roundSelections: Record<number, string>;
+    roundSelections: Record<number, number>;
   }) => {
     if (!currentSessionId) {
       return;
     }
     const sessionState: SessionStatePayload = {
-      selectedChoices: Object.fromEntries(Object.entries(next.selectedChoices).map(([k, v]) => [String(k), v])),
+      selectedChoices: serializeSelectedChoiceIndexRecord(next.selectedChoices),
       retryQuestionIndexes: next.retryQuestionIndexes,
       activeQuestionIndexes: next.activeQuestionIndexes,
-      roundSelections: Object.fromEntries(Object.entries(next.roundSelections).map(([k, v]) => [String(k), v])),
+      roundSelections: serializeSelectedChoiceIndexRecord(next.roundSelections),
     };
     void updateQuickReviewSessionProgress(currentSessionId, {
       currentQuestionIndex: next.currentQuestionIndex,
@@ -410,9 +410,9 @@ export default function QuickReviewPage() {
         }
 
         const state = (started.sessionState ?? {}) as SessionStatePayload;
-        const restoredSelectedChoices = toChoiceRecord(state.selectedChoices);
+        const restoredSelectedChoices = toSelectedChoiceIndexRecord(state.selectedChoices, quiz);
         const restoredRetryQuestionIndexes = toNumberArray(state.retryQuestionIndexes);
-        const restoredRoundSelections = toChoiceRecord(state.roundSelections);
+        const restoredRoundSelections = toSelectedChoiceIndexRecord(state.roundSelections, quiz);
         const allIndexes = quiz.map((_, index) => index);
         const round = started.currentRound ?? "INITIAL";
         const retryIndexes = restoredRetryQuestionIndexes;
@@ -515,17 +515,17 @@ export default function QuickReviewPage() {
     };
   }, [incorrectQuestionsForStudyTip, isComplete, isEmailVerified, note]);
 
-  const handleSelectChoice = (choice: string) => {
+  const handleSelectChoice = (choiceIndex: number) => {
     if (!currentQuestion || currentQuestionIndex === null || hasAnsweredCurrent) {
       return;
     }
     const nextRoundSelections = {
       ...roundSelections,
-      [currentQuestionIndex]: choice,
+      [currentQuestionIndex]: choiceIndex,
     };
     const nextSelectedChoices = {
       ...selectedChoices,
-      [currentQuestionIndex]: choice,
+      [currentQuestionIndex]: choiceIndex,
     };
     setRoundSelections(nextRoundSelections);
     setSelectedChoices(nextSelectedChoices);
@@ -561,7 +561,7 @@ export default function QuickReviewPage() {
     }
 
     if (phase === "initial") {
-      const incorrectIndexes = activeQuestionIndexes.filter((index) => selectedChoices[index] !== quiz[index]?.answer);
+      const incorrectIndexes = activeQuestionIndexes.filter((index) => !isQuizSelectionCorrect(quiz[index], selectedChoices[index]));
       if (incorrectIndexes.length === 0) {
         setPhase("complete");
         void completeSessionIfNeeded(0);
@@ -912,9 +912,10 @@ export default function QuickReviewPage() {
               {(currentQuestionIndex ?? 0) + 1}. {currentQuestion.question}
             </h2>
             <QuizChoiceList
+              questionKey={currentQuestion.question}
               choices={currentQuestion.choices}
-              correctAnswer={currentQuestion.answer}
-              selectedChoice={selectedChoice}
+              correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+              selectedChoiceIndex={selectedChoiceIndex}
               revealAnswer={hasAnsweredCurrent}
               onSelectChoice={handleSelectChoice}
             />

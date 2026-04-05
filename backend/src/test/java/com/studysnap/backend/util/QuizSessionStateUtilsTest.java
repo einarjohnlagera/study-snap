@@ -42,4 +42,26 @@ class QuizSessionStateUtilsTest {
         assertThat(QuizSessionStateUtils.extractQuiz(Map.of())).isEmpty();
         assertThat(QuizSessionStateUtils.extractQuiz(Map.of("quiz", "invalid"))).isEmpty();
     }
+
+    @Test
+    void extractQuiz_supportsLegacyAnswerIndexPayloads() {
+        Map<String, Object> state = Map.of(
+                "quiz",
+                List.of(
+                        Map.of(
+                                "question", "What is chlorophyll?",
+                                "choices", List.of("Pigment", "Protein", "Sugar", "Lipid"),
+                                "answerIndex", 0,
+                                "concept", "Photosynthesis",
+                                "explanation", "Review the Photosynthesis concept in your notes."
+                        )
+                )
+        );
+
+        List<QuizItem> restored = QuizSessionStateUtils.extractQuiz(state);
+
+        assertThat(restored).hasSize(1);
+        assertThat(restored.getFirst().correctIndex()).isEqualTo(0);
+        assertThat(restored.getFirst().answer()).isEqualTo("Pigment");
+    }
 }

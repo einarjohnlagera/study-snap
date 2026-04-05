@@ -1,18 +1,21 @@
 import { cn } from "@/lib/utils";
+import { getDisplayedQuizChoices } from "@/lib/quiz";
 
 type QuizChoiceListProps = {
+  questionKey: string;
   choices: string[];
-  correctAnswer: string;
-  selectedChoice?: string | null;
+  correctIndex: number;
+  selectedChoiceIndex?: number | null;
   revealAnswer: boolean;
-  onSelectChoice?: (choice: string) => void;
+  onSelectChoice?: (choiceIndex: number) => void;
   selectionStyle?: "default" | "exam";
 };
 
 export function QuizChoiceList({
+  questionKey,
   choices,
-  correctAnswer,
-  selectedChoice = null,
+  correctIndex,
+  selectedChoiceIndex = null,
   revealAnswer,
   onSelectChoice,
   selectionStyle = "default",
@@ -21,20 +24,27 @@ export function QuizChoiceList({
     return null;
   }
 
+  const displayedChoices = getDisplayedQuizChoices({
+    question: questionKey,
+    choices,
+    correctIndex,
+    explanation: "",
+  });
+
   return (
     <ul className="space-y-2 text-sm">
-      {choices.map((choice) => {
-        const isCorrect = choice === correctAnswer;
-        const isSelected = choice === selectedChoice;
+      {displayedChoices.map((choice) => {
+        const isCorrect = choice.canonicalIndex === correctIndex;
+        const isSelected = choice.canonicalIndex === selectedChoiceIndex;
         const isIncorrectSelection = revealAnswer && isSelected && !isCorrect;
         const isInteractive = Boolean(onSelectChoice) && !revealAnswer;
 
         return (
-          <li key={choice}>
+          <li key={`${choice.label}-${choice.canonicalIndex}-${choice.text}`}>
             <button
               type="button"
               disabled={!isInteractive}
-              onClick={() => onSelectChoice?.(choice)}
+              onClick={() => onSelectChoice?.(choice.canonicalIndex)}
               className={cn(
                 "min-h-11 w-full rounded-md border px-3 py-2 text-left text-sm leading-relaxed whitespace-normal break-words transition-colors",
                 revealAnswer && isCorrect
@@ -49,7 +59,8 @@ export function QuizChoiceList({
                 isInteractive ? "cursor-pointer" : "cursor-default",
               )}
             >
-              {choice}
+              <span className="mr-2 font-semibold text-foreground">{choice.label}.</span>
+              <span>{choice.text}</span>
               {revealAnswer && isCorrect ? (
                 <span className="ml-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                   ✓ Correct

@@ -201,14 +201,28 @@ public class ShareService {
             return List.of();
         }
         return quiz.stream()
-                .map(item -> new QuizItem(
-                        item.question(),
-                        item.choices() == null ? List.of() : List.copyOf(item.choices()),
-                        item.answer(),
-                        item.concept(),
-                        item.explanation()
-                ))
+                .map(this::copyQuizItem)
                 .toList();
+    }
+
+    private QuizItem copyQuizItem(QuizItem item) {
+        List<String> copiedChoices = item.choices() == null ? List.of() : List.copyOf(item.choices());
+        if (item.correctIndex() != null) {
+            return new QuizItem(
+                    item.question(),
+                    copiedChoices,
+                    item.correctIndex(),
+                    item.concept(),
+                    item.explanation()
+            );
+        }
+        return new QuizItem(
+                item.question(),
+                copiedChoices,
+                item.answer(),
+                item.concept(),
+                item.explanation()
+        );
     }
 
     private String[] copyTags(String[] tags) {
