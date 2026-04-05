@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -43,8 +44,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_SUMMARY_WORDS = 120;
     private static final int MAX_STUDY_TIP_WORDS = 20;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
+    private static final int MAX_SUBJECT_WORDS = 6;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
+    private static final Set<String> OVERLY_BROAD_SUBJECT_LABELS = Set.of(
+            "business",
+            "education",
+            "engineering",
+            "law",
+            "medicine"
+    );
     private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
             "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
             "balance", "calculus", "cash flow", "chemistry", "circuit", "circuits", "computation",
@@ -78,7 +87,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 promptResources.responseSchema(),
                 PromptStudyPack.class
         );
-        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model);
+        return toGeneratedStudyPackContent(response.payload(), response.responseJson(), model, context);
     }
 
     private ArrayNode buildInputMessages(String normalizedNotesText, StudyPackGenerationContext context) {
@@ -105,7 +114,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private String buildStudyPackUserPrompt(String normalizedNotesText, StudyPackGenerationContext context) {
-        return buildLearnerContextBlock(context) + "\nStudy notes:\n" + normalizedNotesText;
+        return buildLearnerContextBlock(context)
+                + "\n"
+                + buildSubjectSuggestionGuidanceBlock(context)
+                + "\nStudy notes:\n"
+                + normalizedNotesText;
     }
 
     private String requireConfiguredModel() {
@@ -204,10 +217,11 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private GeneratedStudyPackContent toGeneratedStudyPackContent(
             PromptStudyPack promptStudyPack,
             JsonNode responseJson,
-            String fallbackModel
+            String fallbackModel,
+            StudyPackGenerationContext context
     ) {
         validatePromptStudyPack(promptStudyPack);
-        String normalizedSubject = normalizeAndValidateSubject(promptStudyPack.subject());
+        String normalizedSubject = normalizeAndValidateSubject(promptStudyPack.subject(), context);
         List<String> normalizedKeyConcepts = normalizeAndValidateKeyConcepts(promptStudyPack.keyConcepts());
         List<String> normalizedTags = normalizeAndValidateTags(promptStudyPack.tags(), promptStudyPack.title());
         List<QuizItem> quizItems = buildStudyPackQuizItems(promptStudyPack.quiz());
@@ -445,10 +459,14 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return message;
     }
 
-    private String normalizeAndValidateSubject(String subject) {
+    private String normalizeAndValidateSubject(String subject, StudyPackGenerationContext context) {
         String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(subject);
-        if (!StringNormalizationUtils.containsAlphaNumeric(normalized) || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
+        if (!StringNormalizationUtils.containsAlphaNumeric(normalized)
+                || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, MAX_SUBJECT_WORDS)) {
             throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
+        }
+        if (isOverlyBroadSubjectLabel(normalized) || matchesBroadCourseProgram(normalized, context)) {
+            throw invalidOutput("The study pack service returned subject metadata that is too broad. Please try again.");
         }
         return normalized;
     }
@@ -608,11 +626,25 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             lines.add("Course / Program: " + context.courseProgram().trim());
         }
         if (context != null && context.subject() != null && !context.subject().isBlank()) {
-            lines.add("Subject: " + context.subject().trim());
+            lines.add("Current subject: " + context.subject().trim());
         }
         if (context != null && context.tags() != null && !context.tags().isEmpty()) {
             lines.add("Tags: " + String.join(", ", sanitizeStringList(context.tags())));
         }
+        return String.join("\n", lines);
+    }
+
+    private String buildSubjectSuggestionGuidanceBlock(StudyPackGenerationContext context) {
+        List<String> lines = new ArrayList<>();
+        lines.add("Subject guidance: choose a specific academic library subject, not a broad umbrella field.");
+        lines.add("Prefer a label like \"Primary field – subtopic\" when that helps group similar notes.");
+        lines.add("Examples: Nursing – Pharmacology; Biology – Cell Division; Criminal Law – Crimes Against Persons; Software Engineering – Data Structures.");
+        if (context != null && context.subject() != null && !context.subject().isBlank()) {
+            lines.add("If the current subject is already specific, stay close to it. If it is broad, refine it into a more specific academic subject.");
+        } else if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
+            lines.add("Use the course/program as context when it helps choose the best specific subject.");
+        }
+        lines.add("Avoid generic labels like Medicine, Engineering, Education, Law, or Business when the notes support a more useful filterable subject.");
         return String.join("\n", lines);
     }
 
@@ -643,6 +675,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
         }
         return false;
+    }
+
+    private boolean isOverlyBroadSubjectLabel(String subject) {
+        return OVERLY_BROAD_SUBJECT_LABELS.contains(subject.toLowerCase(Locale.ROOT));
+    }
+
+    private boolean matchesBroadCourseProgram(String subject, StudyPackGenerationContext context) {
+        if (context == null) {
+            return false;
+        }
+        String normalizedCourseProgram = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(context.courseProgram());
+        if (normalizedCourseProgram == null) {
+            return false;
+        }
+        if (!subject.equalsIgnoreCase(normalizedCourseProgram)) {
+            return false;
+        }
+        return !subject.contains(" - ") && !subject.contains(" – ");
     }
 
     private List<String> combineLists(List<String> primary, List<String> secondary) {

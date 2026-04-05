@@ -32,6 +32,13 @@ Recommended fields:
 - `created_at`
 - `updated_at`
 
+Subject storage rule:
+
+- `notes.subject` stays as free text on the note record.
+- There is no normalized `subjects` table in the current architecture.
+- Distinct subject suggestions and library filters are derived from persisted note subject values.
+- AI-generated subjects should prefer reusable academic library labels such as `Primary field – subtopic`, not broad umbrella categories.
+
 Library/discovery payload usage:
 
 - Private and public note-list payloads should reuse note metadata directly from `notes`, especially:

@@ -28,8 +28,11 @@ Summary
 Subject
 - exactly 1 value
 - choose the most specific academic subject that best organizes the note in a study library
-- avoid overly broad labels such as Medicine, Education, Law, or Engineering when a more specific subject is available
-- prefer labels such as Pharmacology, Anatomy and Physiology, Criminal Law, Calculus, Thermodynamics, Data Structures, or English Grammar
+- prefer a library-friendly label such as `Primary field – subtopic` when it helps group similar notes
+- avoid broad umbrella labels such as Medicine, Engineering, Education, Law, or Business when a more specific academic subject is available
+- prefer labels such as `Nursing – Pharmacology`, `Biology – Cell Division`, `Criminal Law – Crimes Against Persons`, `Mathematics – Calculus`, `Thermodynamics`, `Data Structures`, or `English Grammar`
+- use any provided course/program or current subject as context, but refine broad labels into a more specific academic subject when the notes support it
+- do not make the subject so narrow that it becomes a one-off note title
 - concise and human-readable
 - do not return a sentence
 

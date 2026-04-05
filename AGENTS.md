@@ -336,6 +336,8 @@ Core loop:
   - `notes.subject` remains the persisted source of truth; do not add a subjects table unless explicitly requested
   - note editor and library subject filters should use backend-driven distinct subject suggestions from persisted notes
   - subject inputs must still accept custom typed values and save them directly into `notes.subject`
+  - AI-generated subjects should prefer specific reusable academic labels, often `Primary field – subtopic`, rather than broad umbrella fields
+  - avoid broad generated labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the notes support a more specific subject
 - Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
 - Public subject listing pages use `/public/library/{subject}` and must reuse the existing route/data helpers rather than introducing parallel subject-page implementations.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.

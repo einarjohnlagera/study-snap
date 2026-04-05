@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -89,7 +90,7 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThat(content.title()).isEqualTo("Cell Respiration Review");
         assertThat(content.summary()).isEqualTo("Cell respiration turns glucose into ATP through glycolysis and aerobic pathways.");
-        assertThat(content.subject()).isEqualTo("Biology");
+        assertThat(content.subject()).isEqualTo("Biology – Cellular Respiration");
         assertThat(content.tags()).containsExactly("cells", "energy", "respiration");
         assertThat(content.keyConcepts()).hasSize(8);
         assertThat(content.quiz()).hasSize(5);
@@ -107,6 +108,77 @@ class OpenAiLlmStudyPackServiceTest {
         assertThat(content.inputTokens()).isEqualTo(42);
         assertThat(content.outputTokens()).isEqualTo(84);
         assertThat(content.cachedInputTokens()).isEqualTo(7);
+    }
+
+    @Test
+    void generateStudyPack_includesLearnerAndSubjectSpecificGuidanceInPrompt() throws JsonProcessingException {
+        stubResponsesCall();
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
+
+        service.generateStudyPack(
+                "Beam design notes",
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Civil Engineering",
+                        "Engineering",
+                        List.of("beams", "load")
+                )
+        );
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        String requestBody = requestCaptor.getValue();
+
+        assertThat(requestBody).contains("Course / Program: Civil Engineering");
+        assertThat(requestBody).contains("Current subject: Engineering");
+        assertThat(requestBody).contains("Subject guidance: choose a specific academic library subject");
+        assertThat(requestBody).contains("Primary field – subtopic");
+    }
+
+    @Test
+    void generateStudyPack_allowsStructuredSubjectsLongerThanFourWords() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        payload.put("subject", "Criminal Law – Crimes Against Persons");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Crimes against persons notes",
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Law",
+                        null,
+                        List.of("criminal law")
+                )
+        );
+
+        assertThat(content.subject()).isEqualTo("Criminal Law – Crimes Against Persons");
+    }
+
+    @Test
+    void generateStudyPack_retriesWhenSubjectIsTooBroad() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode broadPayload = buildValidStudyPackPayload();
+        broadPayload.put("subject", "Engineering");
+        ObjectNode specificPayload = buildValidStudyPackPayload();
+        specificPayload.put("subject", "Civil Engineering – Structural Design");
+        when(responseSpec.body(String.class)).thenReturn(
+                studyPackResponseJson(broadPayload),
+                studyPackResponseJson(specificPayload)
+        );
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Structural design notes",
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Civil Engineering",
+                        "Engineering",
+                        List.of("beams", "stress")
+                )
+        );
+
+        assertThat(content.subject()).isEqualTo("Civil Engineering – Structural Design");
+        verify(responseSpec, times(2)).body(String.class);
     }
 
     @Test
@@ -448,7 +520,7 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("title", "Cell Respiration Review");
         payload.put("summary", "Cell respiration turns glucose into ATP through glycolysis and aerobic pathways.");
-        payload.put("subject", "Biology");
+        payload.put("subject", "Biology – Cellular Respiration");
 
         ArrayNode tags = payload.putArray("tags");
         tags.add("cells");

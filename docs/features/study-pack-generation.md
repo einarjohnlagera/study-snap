@@ -186,6 +186,9 @@ Errors should remain supportive and actionable.
   - existing `tags` -> default `Merge Tags`
   - no existing `tags` -> default `Use AI Tags`
 - AI subject output should prefer the most specific academic subject that meaningfully organizes the note in a study library.
+- Prefer reusable labels such as `Primary field – subtopic` when that helps group notes, for example `Nursing – Pharmacology` or `Criminal Law – Crimes Against Persons`.
+- Avoid broad umbrella labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the note supports a narrower academic subject.
+- Generation context should use learner level, course/program, current subject, and tags to refine the suggested subject rather than treating the note as context-free.
 
 ## Validation and retry
 
