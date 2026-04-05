@@ -121,6 +121,7 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("Official")).toBeInTheDocument();
     expect(screen.getByText("By Study Buddy")).toBeInTheDocument();
     expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
+    expect(screen.getByText("8 views")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
   });
@@ -165,25 +166,25 @@ describe("PublicLibraryPageClient", () => {
     expect(await screen.findByText("By You")).toBeInTheDocument();
   });
 
-  it("sorts public notes from the shared sort sheet", async () => {
+  it("sorts public notes by most viewed from the shared sort sheet", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-1",
         ownerUserId: "user-2",
-        title: "Least Copied",
+        title: "Most Viewed",
         courseProgram: "Biology",
         learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
-        contentPreview: "Least copied preview",
-        summaryPreview: "Least copied summary",
+        contentPreview: "Most viewed preview",
+        summaryPreview: "Most viewed summary",
         visibility: "PUBLIC",
         studyPackId: "pack-1",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
         copyCount: 1,
         shareCount: 0,
-        viewCount: 2,
+        viewCount: 12,
         authorDisplayName: "Study Buddy",
         isOfficialAuthor: false,
         isCurrentUser: false,
@@ -217,12 +218,13 @@ describe("PublicLibraryPageClient", () => {
 
     const { container } = render(<PublicLibraryPageClient />);
 
-    await screen.findByText("Least Copied");
+    await screen.findByText("Most Viewed");
     fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
-    fireEvent.click(screen.getByRole("button", { name: "Most Copied" }));
+    fireEvent.click(screen.getByRole("button", { name: "Most Viewed" }));
 
     const cardTitles = Array.from(container.querySelectorAll("h3")).map((element) => element.textContent);
-    expect(cardTitles.slice(0, 2)).toEqual(["Most Copied", "Least Copied"]);
+    expect(cardTitles.slice(0, 2)).toEqual(["Most Viewed", "Most Copied"]);
+    expect(screen.getByText("12 views")).toBeInTheDocument();
     expect(screen.getByText("9 copies")).toBeInTheDocument();
   });
 

@@ -437,17 +437,19 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 ### Note Card Consistency Rule
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
+- Note cards must use a shared layout and component across note-list pages; Public Library may add subtle discovery metadata such as views and copies, but the base card structure must remain consistent.
 - Shared note-card content order is:
   - subtle `courseProgram` line when available
   - Title
   - private-library visibility icon (`Globe` / `Lock`) near the title when relevant
   - Subject badge
-  - Copy count when available
   - Study Pack status badge when relevant
   - `Note Preview`
   - `Summary Preview`
   - Tags
+  - subtle discovery metrics row (`views`, `copies`) when that surface has them
 - `Note Preview` comes from note content and `Summary Preview` comes from generated Study Pack summary.
+- `Note Preview` should read as the primary preview and `Summary Preview` should stay secondary.
 - If no generated summary exists, show `No summary available yet.`
 - Use clamped preview text so card heights stay consistent across listing grids.
 - Do not render `Public` / `Private` as a large badge on note cards; use a subtle icon instead when the visibility distinction matters.

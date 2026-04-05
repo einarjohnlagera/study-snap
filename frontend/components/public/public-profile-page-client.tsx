@@ -577,7 +577,8 @@ export function PublicProfilePageClient({
                   tags={note.tags}
                   contentPreview={note.contentPreview}
                   summaryPreview={note.summaryPreview}
-                  copyCount={note.copyCount}
+                  copyCount={note.copyCount > 0 ? note.copyCount : null}
+                  viewCount={note.viewCount > 0 ? note.viewCount : null}
                 />
               </Card>
             ))}

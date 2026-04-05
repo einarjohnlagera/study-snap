@@ -25,3 +25,4 @@ Verify these cases on mobile-sized viewports:
 - Library and Public Library keep `Filter` and `Sort` inside a mobile sheet/modal instead of always-visible controls.
 - Library and Public Library mobile filter sheets include the newer metadata filters (`Course / Program`, and Public Library `Learner Level` when available) without overcrowding the base layout.
 - Library, Public Library, and Public Profile note cards remain action-free on mobile and open note detail from the whole card.
+- Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.

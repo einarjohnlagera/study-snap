@@ -101,6 +101,7 @@ describe("PublicProfilePage", () => {
     expect(screen.getByText("Public notes")).toBeInTheDocument();
     expect(screen.getAllByText("Plant Cells")).not.toHaveLength(0);
     expect(screen.getAllByText("5 copies")).not.toHaveLength(0);
+    expect(screen.getAllByText("12 views")).not.toHaveLength(0);
     expect(screen.getAllByText("Plant cells contain chloroplasts and cell walls.")).not.toHaveLength(0);
     expect(screen.getAllByText("Plant cells use chloroplasts for photosynthesis.")).not.toHaveLength(0);
     expect(screen.getByText("No summary available yet.")).toBeInTheDocument();

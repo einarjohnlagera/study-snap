@@ -26,11 +26,11 @@ Shared note-card layout:
 - title
 - private-library visibility icon near the title when relevant
 - subject badge
-- copy count when available
 - Study Pack status badge
 - `Note Preview`
 - `Summary Preview`
 - tags
+- subtle discovery metrics row (`views`, `copies`) when a library-style surface exposes them
 
 Interaction:
 
@@ -96,8 +96,8 @@ Growth behavior:
 - Discovery sorting should help users find useful community notes faster:
   - `Newest`
   - `Most Copied`
-  - `Most Shared`
-  - `Title (A-Z)`
+  - `Most Viewed`
+  - `Title A-Z`
 
 Metadata behavior shared with note authoring:
 
