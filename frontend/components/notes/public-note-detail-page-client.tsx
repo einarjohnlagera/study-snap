@@ -105,7 +105,7 @@ export function PublicNoteDetailPageClient({ noteId }: PublicNoteDetailPageClien
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <PublicLibraryBackLink className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
+      <PublicLibraryBackLink />
 
       {loading ? (
         <Card className="p-6">Loading public note...</Card>

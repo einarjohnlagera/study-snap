@@ -40,6 +40,9 @@
 - Dashboard `Continue Studying` now shows the actual note title plus subject/course metadata and uses the correct resume label for Quick Review, Challenge Quiz, or Adaptive Practice.
 - Private and public note detail now include a `Full Notes` tab so users can inspect the complete original note alongside `Summary`, `Key Concepts`, and `Quiz`.
 - The `Summary` view on private and public note detail now includes a subtle `View Full Notes →` CTA so users can jump from AI preview to the original note without losing context.
+- Back navigation across all sub-pages now uses a shared `BackLink` component that renders `← {label}` with an arrow icon — small, muted, and link-styled rather than a button. Replaces all previous blue "Back to Library" / "Back to Note" link text and large Back buttons.
+- My Profile (owner view) has no back link — it is a main navigation page reachable from the sidebar. Non-owners viewing another user's public profile see `← Public Library` linking explicitly to `/library/public`.
+- Note Detail shows `← Library`, quiz pages show `← Note`, Create Note shows `← Library`, Edit Note shows `← Note`, Edit Profile shows `← Profile`, learn articles show `← Learn`. Inline card action buttons use short labels (`Note`, `Library`) without "Back to" prefix.
 
 ### Technical Changes
 

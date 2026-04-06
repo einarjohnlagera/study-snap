@@ -21,6 +21,7 @@ import {
   LEARNER_LEVEL_OPTIONS,
   mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
+import { BackLink } from "@/components/ui/back-link";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
@@ -319,6 +320,7 @@ export default function ProfilePage() {
         </Card>
       ) : profile ? (
         <div className="space-y-6">
+          <BackLink href={buildPublicProfilePath(profile.id)} label="Profile" />
           <PageHeader
             eyebrow="PROFILE"
             title="Profile"

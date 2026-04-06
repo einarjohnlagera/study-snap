@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { AppModal } from "@/components/ui/app-modal";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
@@ -392,14 +393,7 @@ export function PublicProfilePageClient({
   if (pageState === "private" || !profile) {
     return (
       <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-        <ResponsiveActionButton
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => router.back()}
-          action="back"
-          label="Back"
-        />
+        {!isOwner ? <BackLink href="/library/public" label="Public Library" /> : null}
         <header className="space-y-3 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
@@ -417,14 +411,7 @@ export function PublicProfilePageClient({
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <ResponsiveActionButton
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => router.back()}
-        action="back"
-        label="Back"
-      />
+      {!isOwner ? <BackLink href="/library/public" label="Public Library" /> : null}
       <header className="space-y-4 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 gap-4">

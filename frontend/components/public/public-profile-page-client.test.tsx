@@ -4,12 +4,10 @@ import { getAuthUser } from "@/lib/auth";
 import { getPublicProfile, updatePublicProfileVisibility } from "@/lib/api";
 import { buildPublicLibraryNotePathFromSlug } from "@/lib/public-note-path";
 
-const backMock = jest.fn();
 const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
-    back: backMock,
     push: pushMock,
   }),
 }));
@@ -63,7 +61,6 @@ describe("PublicProfilePageClient", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getPublicProfile as jest.Mock).mockReset();
     (updatePublicProfileVisibility as jest.Mock).mockReset();
-    backMock.mockReset();
     pushMock.mockReset();
     clipboardWriteText.mockReset();
     Object.defineProperty(navigator, "clipboard", {
@@ -194,7 +191,7 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
   });
 
-  it("uses a page-level back button and opens notes from whole-card clicks", async () => {
+  it("does not show a back link for the owner (My Profile is a main page)", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
     (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
 
@@ -205,11 +202,22 @@ describe("PublicProfilePageClient", () => {
       />,
     );
 
-    const backButton = screen.getByRole("button", { name: "Back" });
-    expect(backButton.closest("header")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Public Library" })).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(backButton);
-    expect(backMock).toHaveBeenCalled();
+  it("shows a back link to Public Library for non-owners and opens notes from whole-card clicks", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "other-user" });
+    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+
+    const backLink = screen.getByRole("link", { name: "Public Library" });
+    expect(backLink).toHaveAttribute("href", "/library/public");
 
     const noteTitles = screen.getAllByText("Plant Cells");
     expect(noteTitles).not.toHaveLength(0);

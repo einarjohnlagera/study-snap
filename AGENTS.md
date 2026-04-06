@@ -557,8 +557,17 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Public Profile should reuse the Note Detail control pattern for visibility and share actions.
 - Visibility controls should appear as badge/dropdown controls near the header identity cluster, not as detached toggle buttons.
 - Share actions should sit in the lower action row of the header card rather than in the top metadata cluster.
-- Public Profile header back navigation should use history back, not a hardcoded Library/Public Library link.
-- Public Profile `Back` should be page-level navigation above the header card, not inside the card.
+
+### Back Navigation Rule
+
+- All back navigation uses the `BackLink` component (`components/ui/back-link.tsx`): renders `← {label}` with `ArrowLeft` icon, blue link color (`text-blue-600 dark:text-blue-400`), underlines on hover — same style as "View Full Notes →". Not a button.
+- Back links appear on sub-pages only. Main pages (Dashboard, Library, Public Library, My Profile, Settings) must NOT have a back link.
+- Back navigation always uses explicit routing (`href` prop on `BackLink`) — never `router.back()`.
+- Back link label is the destination page name only — do NOT use "Back to X" or "Back" alone.
+- My Profile (owner's own public profile) is a main page — no back link.
+- Non-owner viewing another user's public profile: `<BackLink href="/library/public" label="Public Library" />`.
+- Inline card action buttons (quiz error/limit states etc.) should use short destination labels (`Note`, `Library`) — not "Back to Note" or "Back to Library".
+- Back link is positioned above the page header card, left-aligned.
 
 ### Note Ownership Rule
 

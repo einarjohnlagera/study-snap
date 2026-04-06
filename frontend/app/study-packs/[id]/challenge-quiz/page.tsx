@@ -8,6 +8,7 @@ import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
+import { BackLink } from "@/components/ui/back-link";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser } from "@/lib/auth";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
@@ -490,12 +491,7 @@ export default function ChallengeQuizPage() {
             </Button>
           </>
         ) : (
-          <Link
-            href={noteDetailHref}
-            className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-          >
-            Back to Note
-          </Link>
+          <BackLink href={noteDetailHref} label="Note" />
         )}
       </div>
 
@@ -515,7 +511,7 @@ export default function ChallengeQuizPage() {
             ) : null}
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
           </div>
@@ -777,7 +773,7 @@ export default function ChallengeQuizPage() {
             </Button>
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
           </div>

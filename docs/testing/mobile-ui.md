@@ -18,6 +18,9 @@ Verify these cases on mobile-sized viewports:
 - Note Editor mobile Generate CTA stays centered and readable
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA
 - mobile sticky CTA area stays compact and does not consume excessive vertical space
+- back navigation links (`← Library`, `← Note`, etc.) are compact and do not push the header too far down on mobile
+- back navigation links are not buttons — they render as lightweight `← {label}` text links
+- back links do NOT appear on main pages (Dashboard, Library, Public Library, My Profile, Settings) on mobile
 - mobile `Course / Program` autocomplete sheets stay tappable and scrollable while typing
 - typing into mobile `Course / Program` fields filters suggestions in place instead of keeping the full list open
 - the custom `Use "..."` action stays below matching saved suggestions on mobile

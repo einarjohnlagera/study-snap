@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { BackLink } from "@/components/ui/back-link";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import type { LearnGuide } from "@/lib/learn-guides";
 
@@ -11,13 +12,7 @@ type LearnArticleLayoutProps = {
 export function LearnArticleLayout({ guide }: Readonly<LearnArticleLayoutProps>) {
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12">
-      <Link
-        href="/learn"
-        className="inline-flex w-fit items-center gap-2 text-sm font-medium text-foreground/80 transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Learn
-      </Link>
+      <BackLink href="/learn" label="Learn" />
 
       <article className="space-y-8 rounded-[2rem] border border-border bg-background p-6 shadow-sm sm:p-8">
         <header className="space-y-3">

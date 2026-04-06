@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -226,12 +227,7 @@ export default function AdaptivePracticePage() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href={noteDetailHref}
-          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
-          Back to Note
-        </Link>
+        <BackLink href={noteDetailHref} label="Note" />
       </div>
 
       {loading ? (
@@ -246,7 +242,7 @@ export default function AdaptivePracticePage() {
             </Button>
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
           </div>
@@ -266,7 +262,7 @@ export default function AdaptivePracticePage() {
             </Button>
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
           </div>
@@ -322,7 +318,7 @@ export default function AdaptivePracticePage() {
             </Button>
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
           </div>
@@ -354,7 +350,7 @@ export default function AdaptivePracticePage() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()} disabled={loading}>
