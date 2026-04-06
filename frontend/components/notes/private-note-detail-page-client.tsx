@@ -72,6 +72,7 @@ import {
   type NoteDetailTab,
 } from "@/lib/note-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
+import Link from "next/link";
 
 function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
   if (status === "STUDY_PACK_READY") {
