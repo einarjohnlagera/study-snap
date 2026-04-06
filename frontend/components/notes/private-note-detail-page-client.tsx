@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackLink } from "@/components/ui/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown } from "lucide-react";
@@ -871,9 +871,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <Link href="/library" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-        Back to Library
-      </Link>
+      <BackLink href="/library" label="Library" />
 
       {loading ? (
         <Card className="p-6">Loading note...</Card>

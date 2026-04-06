@@ -769,6 +769,8 @@ export function NoteEditorPageClient({
         subjectSuggestions={subjectSuggestions}
         courseProgramSuggestions={availableCourseProgramSuggestions}
         learnerLevel={profileLearnerLevel}
+        backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
+        backLabel={isEditMode ? "Note" : "Library"}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {
           void dismissFirstStudyHint();
         } : undefined}

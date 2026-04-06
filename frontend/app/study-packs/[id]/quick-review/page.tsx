@@ -8,6 +8,7 @@ import { PaywallModal, type PaywallModalVariant } from "@/components/billing/pay
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
+import { BackLink } from "@/components/ui/back-link";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
@@ -678,12 +679,7 @@ export default function QuickReviewPage() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href={noteDetailHref}
-          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
-          Back to Note
-        </Link>
+        <BackLink href={noteDetailHref} label="Note" />
       </div>
 
       {loading || sessionInitializing ? (
@@ -706,7 +702,7 @@ export default function QuickReviewPage() {
             ) : null}
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
           </div>
@@ -833,7 +829,7 @@ export default function QuickReviewPage() {
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link href={noteDetailHref} className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
-                Back to Note
+                Note
               </Button>
             </Link>
             {showAdaptiveGuidedCta ? (

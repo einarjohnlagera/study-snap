@@ -18,6 +18,9 @@ Verify these cases on mobile-sized viewports:
 - Note Editor mobile Generate CTA stays centered and readable
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA
 - mobile sticky CTA area stays compact and does not consume excessive vertical space
+- back navigation links (`← Library`, `← Note`, etc.) are compact and do not push the header too far down on mobile
+- back navigation links are not buttons — they render as lightweight `← {label}` text links
+- back links do NOT appear on main pages (Dashboard, Library, Public Library, My Profile, Settings) on mobile
 - mobile `Course / Program` autocomplete sheets stay tappable and scrollable while typing
 - typing into mobile `Course / Program` fields filters suggestions in place instead of keeping the full list open
 - the custom `Use "..."` action stays below matching saved suggestions on mobile
@@ -29,3 +32,8 @@ Verify these cases on mobile-sized viewports:
 - Library and Public Library mobile filter sheets include the newer metadata filters (`Course / Program`, and Public Library `Learner Level` when available) without overcrowding the base layout.
 - Library, Public Library, and Public Profile note cards remain action-free on mobile and open note detail from the whole card.
 - Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.
+- the avatar dropdown on mobile shows `My Profile`, `Settings`, and `Sign Out` with full text labels
+- `My Profile` in the avatar dropdown links to the user's public profile page
+- `Settings` in the avatar dropdown links to `/settings` (same as sidebar Settings)
+- the share modal for notes and profiles is readable on mobile — the `Shareable URL` field, `Copy Link`, and `Close` buttons all remain tappable
+- the `This profile is private` confirm modal is readable on mobile with `Cancel` and `Make Public & Share` buttons stacked cleanly

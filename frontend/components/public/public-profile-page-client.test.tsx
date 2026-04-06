@@ -4,12 +4,10 @@ import { getAuthUser } from "@/lib/auth";
 import { getPublicProfile, updatePublicProfileVisibility } from "@/lib/api";
 import { buildPublicLibraryNotePathFromSlug } from "@/lib/public-note-path";
 
-const backMock = jest.fn();
 const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
-    back: backMock,
     push: pushMock,
   }),
 }));
@@ -63,7 +61,6 @@ describe("PublicProfilePageClient", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getPublicProfile as jest.Mock).mockReset();
     (updatePublicProfileVisibility as jest.Mock).mockReset();
-    backMock.mockReset();
     pushMock.mockReset();
     clipboardWriteText.mockReset();
     Object.defineProperty(navigator, "clipboard", {
@@ -101,8 +98,18 @@ describe("PublicProfilePageClient", () => {
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
+    expect(await screen.findByRole("dialog", { name: "Share this profile" })).toBeInTheDocument();
+    expect(screen.getByText(/\/public\/profile\/user-1/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
     await waitFor(() => {
       expect(clipboardWriteText).toHaveBeenCalledWith("http://localhost/public/profile/user-1");
+    });
+    expect(await screen.findByText("Link copied")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Share this profile" })).not.toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Public" }));
@@ -114,6 +121,36 @@ describe("PublicProfilePageClient", () => {
     });
     expect(await screen.findByText("Public profile is now private.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
+  });
+
+  it("shows private confirm modal when owner tries to share a private profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (getPublicProfile as jest.Mock).mockResolvedValue({
+      ...baseProfile,
+      publicProfileVisible: false,
+    });
+    (updatePublicProfileVisibility as jest.Mock).mockResolvedValue({
+      publicProfileVisible: true,
+    });
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "private" }}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Study Buddy" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
+    expect(await screen.findByRole("dialog", { name: "This profile is private" })).toBeInTheDocument();
+    expect(screen.getByText(/You need to make this profile public before sharing/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Make Public & Share" }));
+    await waitFor(() => {
+      expect(updatePublicProfileVisibility).toHaveBeenCalledWith({ publicProfileVisible: true });
+    });
+    expect(await screen.findByRole("dialog", { name: "Share this profile" })).toBeInTheDocument();
   });
 
   it("does not show owner controls for other viewers", async () => {
@@ -154,7 +191,7 @@ describe("PublicProfilePageClient", () => {
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
   });
 
-  it("uses a page-level back button and opens notes from whole-card clicks", async () => {
+  it("does not show a back link for the owner (My Profile is a main page)", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
     (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
 
@@ -165,11 +202,22 @@ describe("PublicProfilePageClient", () => {
       />,
     );
 
-    const backButton = screen.getByRole("button", { name: "Back" });
-    expect(backButton.closest("header")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Public Library" })).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(backButton);
-    expect(backMock).toHaveBeenCalled();
+  it("shows a back link to Public Library for non-owners and opens notes from whole-card clicks", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "other-user" });
+    (getPublicProfile as jest.Mock).mockResolvedValue(baseProfile);
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "ok", profile: baseProfile }}
+      />,
+    );
+
+    const backLink = screen.getByRole("link", { name: "Public Library" });
+    expect(backLink).toHaveAttribute("href", "/library/public");
 
     const noteTitles = screen.getAllByText("Plant Cells");
     expect(noteTitles).not.toHaveLength(0);

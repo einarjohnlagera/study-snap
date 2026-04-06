@@ -100,6 +100,7 @@ jest.mock("@/lib/api", () => ({
 }));
 
 const meResponse = {
+  id: "user-1",
   displayName: "Note",
   firstName: "Note",
   email: "[email protected]",
@@ -171,6 +172,26 @@ describe("AppShell", () => {
     await waitFor(() => {
       expect(logout).toHaveBeenCalled();
       expect(routerMock.replace).toHaveBeenCalledWith("/login?reason=logged_out");
+    });
+  });
+
+  it("shows My Profile and Settings in the avatar dropdown", async () => {
+    render(
+      <AppShell>
+        <div>Dashboard content</div>
+      </AppShell>,
+    );
+
+    fireEvent.click(await screen.findByLabelText("Open user menu"));
+
+    const myProfile = screen.getByRole("link", { name: "My Profile" });
+    expect(myProfile).toBeInTheDocument();
+    expect(myProfile).toHaveAttribute("href", "/public/profile/user-1");
+
+    const settingsLinks = screen.getAllByRole("link", { name: "Settings" });
+    expect(settingsLinks.length).toBeGreaterThan(0);
+    settingsLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/settings");
     });
   });
 

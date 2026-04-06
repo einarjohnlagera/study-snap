@@ -19,12 +19,34 @@ Keep in-app navigation predictable across private workspace, discovery, and publ
 - Keep the theme toggle in the mobile header utility cluster instead of duplicating it inside the opened menu.
 - Do not duplicate the visible primary CTA between the public header and the opened mobile menu.
 
+## Back Navigation Pattern
+
+All sub-pages use a `BackLink` component (`components/ui/back-link.tsx`) that renders `← {Destination}` using `ArrowLeft` icon + destination label text.
+
+Rules:
+- Back link appears on sub-pages only. Main pages (Dashboard, Library, Public Library, My Profile, Settings) have no back link.
+- Back link uses explicit routing (not `router.back()`), so the destination is always predictable.
+- Back link label is the destination page name only — no "Back to" prefix.
+- Back link is positioned above the page header card, left-aligned.
+- Style: small muted text (`text-foreground/70`), brightens on hover, no button border.
+
+| Sub-page | Destination | Label |
+|----------|-------------|-------|
+| Note Details | Library | Library |
+| Public Note Details | Public Library | Public Library |
+| Quiz pages (Quick Review, Challenge Quiz, Adaptive Practice) | Note Details | Note |
+| Create Note | Library | Library |
+| Edit Note | Note Details | Note |
+| Profile (Edit Profile) | My Profile (public) | Profile |
+| Public Profile (non-owner) | Public Library | Public Library |
+| Learn articles | Learn index | Learn |
+| Shared Study Pack | Home | Home |
+
 ## Public Profile Back Behavior
 
-- Public Profile can be opened from Public Library, Public Note, or other entry points.
-- Public Profile should use a page-level `Back` button driven by navigation history.
-- Keep the `Back` button above the header card so it reads as navigation rather than header content.
-- Do not hardcode Public Profile back navigation to `Library` or `Public Library`.
+- My Profile (owner viewing their own public profile) is a main navigation page — no back link.
+- Non-owner viewing another user's public profile sees `← Public Library` linking to `/library/public`.
+- Do not use `router.back()` for public profile navigation — use explicit `/library/public` route.
 
 ## Button Label Rule
 

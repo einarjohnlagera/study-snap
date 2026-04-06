@@ -80,6 +80,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           subject: note.subject,
         })}
       />
+      <PublicLibraryBackLink />
       <article className="space-y-6">
         <header className="rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-amber-500/10 p-6 shadow-sm sm:p-8">
           <div className="space-y-4">
@@ -149,12 +150,9 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
 
       </article>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <PublicLibraryBackLink className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" />
-        <p className="text-xs text-foreground/55">
-          Public pages are read-only. Open your own note in the app workspace to edit, review, or manage it.
-        </p>
-      </div>
+      <p className="text-xs text-foreground/55">
+        Public pages are read-only. Open your own note in the app workspace to edit, review, or manage it.
+      </p>
     </main>
   );
 }

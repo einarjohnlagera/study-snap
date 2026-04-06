@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
@@ -106,9 +107,7 @@ export default function PublicSharePage() {
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
-        <Link href="/" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400">
-          Back to NoteLib
-        </Link>
+        <BackLink href="/" label="Home" />
       </div>
 
       {loading ? (

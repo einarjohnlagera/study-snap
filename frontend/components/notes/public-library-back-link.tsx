@@ -1,14 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BackLink } from "@/components/ui/back-link";
 import { getAuthUser } from "@/lib/auth";
 
-type PublicLibraryBackLinkProps = {
-  className?: string;
-};
-
-export function PublicLibraryBackLink({ className }: PublicLibraryBackLinkProps) {
+export function PublicLibraryBackLink() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
@@ -27,9 +23,5 @@ export function PublicLibraryBackLink({ className }: PublicLibraryBackLinkProps)
     return null;
   }
 
-  return (
-    <Link href="/library/public" className={className}>
-      Back to Public Library
-    </Link>
-  );
+  return <BackLink href="/library/public" label="Public Library" />;
 }

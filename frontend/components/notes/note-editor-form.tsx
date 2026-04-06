@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, Uplo
 import type { LearnerLevel } from "@/lib/api";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
+import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -59,6 +60,8 @@ type NoteEditorFormProps = {
   subjectSuggestions?: string[];
   courseProgramSuggestions?: string[];
   learnerLevel?: LearnerLevel | "" | null;
+  backHref?: string;
+  backLabel?: string;
 };
 
 function normalizeTagInput(value: string): string | null {
@@ -109,6 +112,8 @@ export function NoteEditorForm({
   subjectSuggestions = [],
   courseProgramSuggestions = [],
   learnerLevel = null,
+  backHref,
+  backLabel,
 }: Readonly<NoteEditorFormProps>) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
@@ -230,6 +235,7 @@ export function NoteEditorForm({
 
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 pb-24 sm:px-6 sm:py-8 sm:pb-8">
+      {backHref && backLabel ? <BackLink href={backHref} label={backLabel} /> : null}
       <header className="sticky top-4 z-20 space-y-3">
         <Card className="space-y-3 border-border/80 bg-background/95 p-4 shadow-sm backdrop-blur sm:p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

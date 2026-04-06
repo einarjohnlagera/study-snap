@@ -215,6 +215,38 @@ Core loop:
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.
 
+### Public vs Private Profile Separation Rule
+
+- `Public Profile` (`/public/profile/{userId}`) is the user's public learning-portfolio surface.
+  - Shareable, view-only to non-owners.
+  - Shows `displayName`, `bio`, `learnerLevel`, `courseProgram`, `profileType`, public metrics, and public notes only.
+  - Owner controls (`Edit Profile`, `Share Profile`, visibility toggle) are on the Public Profile page only.
+- `Profile Settings` (`/profile`) is the private account editing surface.
+  - Editable identity, learning profile, and profile type.
+  - Accessed via the `Edit Profile` button on the Public Profile page.
+  - Does not own public-profile visibility or sharing.
+- The authenticated app shell avatar dropdown must always offer:
+  - `My Profile` → `/public/profile/{userId}` (public identity page)
+  - `Settings` → `/settings` (account and app settings)
+  - `Sign Out`
+- The sidebar Account section must use:
+  - `Profile` → `/public/profile/{userId}` (same as `My Profile` in the avatar dropdown)
+  - `Settings` → `/settings`
+- Terminology rule: **Profile = public identity page. Settings = account/app settings.** Do not use "Account Settings" as a nav label — use plain "Settings".
+
+### Shared Share Behavior Rule
+
+- NoteLib uses one share pattern for all shareable content (notes and profiles).
+- For public content: clicking Share opens a modal with title, `Shareable URL` field, `Copy Link`, and `Close` buttons.
+- For private content: clicking Share opens a confirm modal first. The confirm offers `Cancel` and `Make Public & Share`. The share modal only opens after the owner confirms the visibility change.
+- Share modal structure:
+  - Note share modal title: `Share this note`
+  - Profile share modal title: `Share this profile`
+- Private note confirm: title `This note is private`, body `You need to make this note public before sharing. Anyone with the link will be able to view and copy this note.`
+- Private profile confirm: title `This profile is private`, body `You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes.`
+- Do not implement content-specific share flows. Reuse `AppModal` with the same layout for all share actions.
+- Do not use toast-only or inline-text-only share confirmation as the primary share feedback.
+
 ### Preferences Rule
 
 - `Settings` should show `Preferences` before `Plan & Billing` and `Account`.
@@ -525,8 +557,17 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Public Profile should reuse the Note Detail control pattern for visibility and share actions.
 - Visibility controls should appear as badge/dropdown controls near the header identity cluster, not as detached toggle buttons.
 - Share actions should sit in the lower action row of the header card rather than in the top metadata cluster.
-- Public Profile header back navigation should use history back, not a hardcoded Library/Public Library link.
-- Public Profile `Back` should be page-level navigation above the header card, not inside the card.
+
+### Back Navigation Rule
+
+- All back navigation uses the `BackLink` component (`components/ui/back-link.tsx`): renders `← {label}` with `ArrowLeft` icon, blue link color (`text-blue-600 dark:text-blue-400`), underlines on hover — same style as "View Full Notes →". Not a button.
+- Back links appear on sub-pages only. Main pages (Dashboard, Library, Public Library, My Profile, Settings) must NOT have a back link.
+- Back navigation always uses explicit routing (`href` prop on `BackLink`) — never `router.back()`.
+- Back link label is the destination page name only — do NOT use "Back to X" or "Back" alone.
+- My Profile (owner's own public profile) is a main page — no back link.
+- Non-owner viewing another user's public profile: `<BackLink href="/library/public" label="Public Library" />`.
+- Inline card action buttons (quiz error/limit states etc.) should use short destination labels (`Note`, `Library`) — not "Back to Note" or "Back to Library".
+- Back link is positioned above the page header card, left-aligned.
 
 ### Note Ownership Rule
 
