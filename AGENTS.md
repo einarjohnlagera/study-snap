@@ -221,14 +221,18 @@ Core loop:
   - Shareable, view-only to non-owners.
   - Shows `displayName`, `bio`, `learnerLevel`, `courseProgram`, `profileType`, public metrics, and public notes only.
   - Owner controls (`Edit Profile`, `Share Profile`, visibility toggle) are on the Public Profile page only.
-- `Private Profile` (`/profile`) is the account settings and editing surface.
+- `Profile Settings` (`/profile`) is the private account editing surface.
   - Editable identity, learning profile, and profile type.
+  - Accessed via the `Edit Profile` button on the Public Profile page.
   - Does not own public-profile visibility or sharing.
 - The authenticated app shell avatar dropdown must always offer:
-  - `View Public Profile` → `/public/profile/{userId}`
-  - `Account Settings` → `/profile`
+  - `My Profile` → `/public/profile/{userId}` (public identity page)
+  - `Settings` → `/settings` (account and app settings)
   - `Sign Out`
-- Never label the `/profile` link as plain "Profile" in the avatar dropdown — use `Account Settings` to clarify the distinction.
+- The sidebar Account section must use:
+  - `Profile` → `/public/profile/{userId}` (same as `My Profile` in the avatar dropdown)
+  - `Settings` → `/settings`
+- Terminology rule: **Profile = public identity page. Settings = account/app settings.** Do not use "Account Settings" as a nav label — use plain "Settings".
 
 ### Shared Share Behavior Rule
 
@@ -236,8 +240,10 @@ Core loop:
 - For public content: clicking Share opens a modal with title, `Shareable URL` field, `Copy Link`, and `Close` buttons.
 - For private content: clicking Share opens a confirm modal first. The confirm offers `Cancel` and `Make Public & Share`. The share modal only opens after the owner confirms the visibility change.
 - Share modal structure:
-  - Note: title `Share this note`, content type is the note's public URL.
-  - Profile: title `Share this profile`, content type is the profile's public URL.
+  - Note share modal title: `Share this note`
+  - Profile share modal title: `Share this profile`
+- Private note confirm: title `This note is private`, body `You need to make this note public before sharing. Anyone with the link will be able to view and copy this note.`
+- Private profile confirm: title `This profile is private`, body `You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes.`
 - Do not implement content-specific share flows. Reuse `AppModal` with the same layout for all share actions.
 - Do not use toast-only or inline-text-only share confirmation as the primary share feedback.
 

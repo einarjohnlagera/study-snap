@@ -48,6 +48,16 @@ NoteLib uses one share behavior across all content types (notes and profiles):
 
 This rule applies consistently to both notes and profiles. Do not invent content-specific share flows. The same modal component and the same public/private gate must be used everywhere.
 
+Notes private confirm:
+- title: `This note is private`
+- body: `You need to make this note public before sharing. Anyone with the link will be able to view and copy this note.`
+- buttons: `Cancel` / `Make Public & Share`
+
+Profiles private confirm:
+- title: `This profile is private`
+- body: `You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes.`
+- buttons: `Cancel` / `Make Public & Share`
+
 ## Create and edit behavior
 
 Create mode:

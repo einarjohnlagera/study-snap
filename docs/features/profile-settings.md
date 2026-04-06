@@ -16,10 +16,15 @@
 - `/profile` does not own public-profile visibility, sharing, or portfolio presentation.
 - Public-profile controls remain on `/public/profile/{userId}`.
 - Public Profile is the public learning-portfolio surface, while `/profile` remains the private settings/editor surface.
-- The avatar dropdown in the authenticated app shell provides quick navigation to both:
-  - `View Public Profile` → `/public/profile/{userId}`
-  - `Account Settings` → `/profile`
-- This separation ensures users can easily access their public identity without conflating it with private account editing.
+- The avatar dropdown in the authenticated app shell provides quick navigation to:
+  - `My Profile` → `/public/profile/{userId}` (public identity page)
+  - `Settings` → `/settings` (account and app settings)
+  - `Sign Out`
+- The sidebar Account section uses the same mental model:
+  - `Profile` → `/public/profile/{userId}` (public identity page)
+  - `Settings` → `/settings`
+- `Profile` and `Settings` in the sidebar map to the same routes as the avatar dropdown.
+- This separation ensures users can easily access their public identity without conflating it with account settings.
 
 ## Course / Program
 

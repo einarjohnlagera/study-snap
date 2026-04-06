@@ -1040,6 +1040,43 @@ Canonical ownership rule:
 
 ---
 
+## Profile Navigation Model
+
+Two distinct profile surfaces:
+
+- **Public Profile** (`/public/profile/{userId}`) — public identity and learning-portfolio page
+  - View-only to non-owners
+  - Owner controls: `Edit Profile`, `Share Profile`, visibility toggle
+  - Accessible from avatar dropdown (`My Profile`) and sidebar (`Profile`)
+- **Profile Settings** (`/profile`) — private account and identity editing page
+  - Accessible from the `Edit Profile` button on Public Profile
+
+Avatar dropdown:
+- `My Profile` → public profile page
+- `Settings` → `/settings` (account and app settings)
+- `Sign Out`
+
+Sidebar Account section:
+- `Profile` → public profile page
+- `Settings` → `/settings`
+
+Terminology rule: **Profile = public identity page. Settings = account/app settings.** Do not mix these.
+
+## Sharing Rules
+
+NoteLib uses one share rule across all content types:
+
+| Content visibility | Share behavior |
+|---|---|
+| Public | `Share` opens the share modal with `Shareable URL`, `Copy Link`, and `Close` |
+| Private | `Share` opens a confirm modal offering `Make Public & Share`; the share modal only opens after owner confirmation |
+
+Note private confirm: `This note is private` / `You need to make this note public before sharing. Anyone with the link will be able to view and copy this note.`
+
+Profile private confirm: `This profile is private` / `You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes.`
+
+Share modals across the app must reuse the same `AppModal` component with title, `Shareable URL` field, `Copy Link`, and `Close` layout. Do not use toast-only or inline-only share feedback as the primary share confirmation.
+
 ## Non-Goals (Current Scope)
 
 Not included unless explicitly requested:

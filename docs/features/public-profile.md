@@ -90,6 +90,7 @@ If the profile is public:
 
 If the profile is private and the owner is viewing:
 - Clicking `Share Profile` opens a confirm modal: `This profile is private`
+- The confirm modal body: `You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes.`
 - The confirm modal offers `Cancel` and `Make Public & Share`
 - `Make Public & Share` sets the profile to public and then opens the share modal
 

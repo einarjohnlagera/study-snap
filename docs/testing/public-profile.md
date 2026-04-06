@@ -28,6 +28,7 @@ Share Profile behavior:
 - clicking `Copy Link` copies the URL to clipboard and shows `Link copied` feedback inline
 - clicking `Close` dismisses the share modal
 - when the owner's profile is private, clicking `Share Profile` opens a `This profile is private` confirm modal
+- the private confirm modal body says `You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes.`
 - the private confirm modal offers `Cancel` and `Make Public & Share`
 - `Make Public & Share` sets the profile to public and then opens the share modal
 - the share modal never opens directly for a private profile without owner confirmation

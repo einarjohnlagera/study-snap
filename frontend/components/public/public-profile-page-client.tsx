@@ -638,7 +638,7 @@ export function PublicProfilePageClient({
       <AppModal
         isOpen={showSharePrivateConfirm}
         title="This profile is private"
-        description="You need to make this profile public before sharing. Anyone with the link will be able to view your public profile."
+        description="You need to make this profile public before sharing. Anyone with the link will be able to view your public profile and notes."
         onClose={() => {
           if (!updatingVisibility) {
             setShowSharePrivateConfirm(false);

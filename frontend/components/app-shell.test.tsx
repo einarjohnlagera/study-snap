@@ -175,7 +175,7 @@ describe("AppShell", () => {
     });
   });
 
-  it("shows View Public Profile and Account Settings in the avatar dropdown", async () => {
+  it("shows My Profile and Settings in the avatar dropdown", async () => {
     render(
       <AppShell>
         <div>Dashboard content</div>
@@ -184,13 +184,15 @@ describe("AppShell", () => {
 
     fireEvent.click(await screen.findByLabelText("Open user menu"));
 
-    const viewPublicProfile = screen.getByRole("link", { name: "View Public Profile" });
-    expect(viewPublicProfile).toBeInTheDocument();
-    expect(viewPublicProfile).toHaveAttribute("href", "/public/profile/user-1");
+    const myProfile = screen.getByRole("link", { name: "My Profile" });
+    expect(myProfile).toBeInTheDocument();
+    expect(myProfile).toHaveAttribute("href", "/public/profile/user-1");
 
-    const accountSettings = screen.getByRole("link", { name: "Account Settings" });
-    expect(accountSettings).toBeInTheDocument();
-    expect(accountSettings).toHaveAttribute("href", "/profile");
+    const settingsLinks = screen.getAllByRole("link", { name: "Settings" });
+    expect(settingsLinks.length).toBeGreaterThan(0);
+    settingsLinks.forEach((link) => {
+      expect(link).toHaveAttribute("href", "/settings");
+    });
   });
 
   it("hides the mobile feedback widget on note editor routes", async () => {

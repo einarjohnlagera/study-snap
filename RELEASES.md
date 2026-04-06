@@ -11,11 +11,13 @@
 
 ### Improvements
 
-- Public Profile and Private Profile are now clearly separated in both navigation and purpose. Public Profile (`/public/profile/{userId}`) is the user's shareable learning-portfolio surface. Private Profile (`/profile`) is the account settings and editing surface only.
-- The authenticated app shell avatar dropdown now offers `View Public Profile`, `Account Settings`, and `Sign Out` — making public identity easy to access without conflating it with account editing.
+- Public Profile and Private Profile are now clearly separated in both navigation and purpose. Public Profile (`/public/profile/{userId}`) is the user's shareable learning-portfolio surface. Profile Settings (`/profile`) is the private account editing surface, accessed via `Edit Profile`.
+- The avatar dropdown now uses clear, consistent labels: `My Profile` (→ public profile), `Settings` (→ `/settings`), and `Sign Out`. The sidebar Account section uses the same model: `Profile` (→ public profile) and `Settings` (→ `/settings`).
+- Terminology is now consistent: **Profile = public identity page. Settings = account/app settings.**
 - Share Profile now uses the same modal pattern as note sharing: a modal with title `Share this profile`, a labeled `Shareable URL` field, and `Copy Link` + `Close` buttons. The previous toast/inline-text-only behavior is replaced.
 - If a profile is private, clicking Share Profile opens a confirm modal (`This profile is private`) that offers `Make Public & Share` — the same gate used for private note sharing.
 - Share behavior is now consistent across notes and profiles: public content opens the share modal directly; private content requires owner confirmation before the share modal appears.
+- Private profile confirm message updated to include `and notes` so users understand what becomes visible.
 - Private Profile now separates `Identity`, `Learning Profile`, and `Profile Type` into distinct saveable cards.
 - Public Profile can now show learner level and course/program when the owner chooses to provide them.
 - Public Profile now feels more like a learning portfolio, with compact real metrics for public notes, copies, shares, and views when available.

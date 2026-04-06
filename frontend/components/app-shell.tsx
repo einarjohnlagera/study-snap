@@ -158,10 +158,6 @@ const MAIN_NAV: NavLinkItem[] = [
   { href: "/library/public", label: "Public Library", action: "publicLibrary" },
 ];
 
-const SECONDARY_NAV: NavLinkItem[] = [
-  { href: "/profile", label: "Profile", action: "profile" },
-  { href: "/settings", label: "Settings", action: "settings" },
-];
 
 function NavLinks({
   pathname,
@@ -363,10 +359,16 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   }, [shouldUseShell, pathname]);
 
   const secondaryNav = useMemo<NavLinkItem[]>(() => {
-    return user.role === "ADMIN"
-      ? [...SECONDARY_NAV, { href: "/admin", label: "Admin", action: "admin" }]
-      : SECONDARY_NAV;
-  }, [user.role]);
+    const profileHref = user.id ? buildPublicProfilePath(user.id) : "/public/profile";
+    const nav: NavLinkItem[] = [
+      { href: profileHref, label: "Profile", action: "profile" },
+      { href: "/settings", label: "Settings", action: "settings" },
+    ];
+    if (user.role === "ADMIN") {
+      nav.push({ href: "/admin", label: "Admin", action: "admin" as const });
+    }
+    return nav;
+  }, [user.id, user.role]);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -506,16 +508,16 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                       className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
                     >
                       <span className="inline-flex items-center gap-2">
-                        <ResponsiveActionContent action="public" label="View Public Profile" showTextOnMobile />
+                        <ResponsiveActionContent action="profile" label="My Profile" showTextOnMobile />
                       </span>
                     </Link>
                   ) : null}
                   <Link
-                    href="/profile"
+                    href="/settings"
                     className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
                   >
                     <span className="inline-flex items-center gap-2">
-                      <ResponsiveActionContent action="profile" label="Account Settings" showTextOnMobile />
+                      <ResponsiveActionContent action="settings" label="Settings" showTextOnMobile />
                     </span>
                   </Link>
                   <button
