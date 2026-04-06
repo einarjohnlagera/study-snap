@@ -29,3 +29,6 @@ Verify these cases on mobile-sized viewports:
 - Library and Public Library mobile filter sheets include the newer metadata filters (`Course / Program`, and Public Library `Learner Level` when available) without overcrowding the base layout.
 - Library, Public Library, and Public Profile note cards remain action-free on mobile and open note detail from the whole card.
 - Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.
+- the avatar dropdown on mobile shows `View Public Profile`, `Account Settings`, and `Sign Out` with full text labels
+- the share modal for notes and profiles is readable on mobile — the `Shareable URL` field, `Copy Link`, and `Close` buttons all remain tappable
+- the `This profile is private` confirm modal is readable on mobile with `Cancel` and `Make Public & Share` buttons stacked cleanly

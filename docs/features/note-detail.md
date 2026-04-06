@@ -80,3 +80,21 @@ Copy-first generation rule:
 - `Generate Study Pack` on a public note must create a private copy first.
 - generation continues on the viewer's own note route after the copy is created.
 - do not run private study actions directly against the public source note
+
+## Share Modal Pattern
+
+The Note Detail share modal is the canonical share UI pattern for the entire app:
+
+- modal title: `Share this note`
+- labeled field: `Shareable URL` (read-only, visibly truncated)
+- buttons: `Close` and `Copy Link`
+- `Copy Link` copies the full URL to the clipboard and shows `Link copied` feedback inline for ~2 seconds
+
+Profile sharing must reuse the same AppModal component and the same layout, with only the title and URL differing (`Share this profile`).
+
+Private note share rule:
+- clicking Share on a private note opens a confirm modal: `This note is private`
+- confirm offers `Cancel` and `Make Public & Share`
+- `Make Public & Share` sets the note to public, then opens the share modal
+
+Do not use toast-only or inline-text-only share flows for any shareable content type.

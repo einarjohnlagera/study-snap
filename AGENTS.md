@@ -215,6 +215,32 @@ Core loop:
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.
 
+### Public vs Private Profile Separation Rule
+
+- `Public Profile` (`/public/profile/{userId}`) is the user's public learning-portfolio surface.
+  - Shareable, view-only to non-owners.
+  - Shows `displayName`, `bio`, `learnerLevel`, `courseProgram`, `profileType`, public metrics, and public notes only.
+  - Owner controls (`Edit Profile`, `Share Profile`, visibility toggle) are on the Public Profile page only.
+- `Private Profile` (`/profile`) is the account settings and editing surface.
+  - Editable identity, learning profile, and profile type.
+  - Does not own public-profile visibility or sharing.
+- The authenticated app shell avatar dropdown must always offer:
+  - `View Public Profile` → `/public/profile/{userId}`
+  - `Account Settings` → `/profile`
+  - `Sign Out`
+- Never label the `/profile` link as plain "Profile" in the avatar dropdown — use `Account Settings` to clarify the distinction.
+
+### Shared Share Behavior Rule
+
+- NoteLib uses one share pattern for all shareable content (notes and profiles).
+- For public content: clicking Share opens a modal with title, `Shareable URL` field, `Copy Link`, and `Close` buttons.
+- For private content: clicking Share opens a confirm modal first. The confirm offers `Cancel` and `Make Public & Share`. The share modal only opens after the owner confirms the visibility change.
+- Share modal structure:
+  - Note: title `Share this note`, content type is the note's public URL.
+  - Profile: title `Share this profile`, content type is the profile's public URL.
+- Do not implement content-specific share flows. Reuse `AppModal` with the same layout for all share actions.
+- Do not use toast-only or inline-text-only share confirmation as the primary share feedback.
+
 ### Preferences Rule
 
 - `Settings` should show `Preferences` before `Plan & Billing` and `Account`.

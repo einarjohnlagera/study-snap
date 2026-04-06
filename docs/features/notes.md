@@ -39,6 +39,15 @@ Rules:
 - learner level, course/program, current subject, and tags may be passed into Study Pack generation to improve subject suggestion quality without changing the note form flow.
 - tags stay optional and should include helper guidance rather than mandatory validation pressure.
 
+## Shared Share Behavior Rule
+
+NoteLib uses one share behavior across all content types (notes and profiles):
+
+- **Public content**: clicking Share opens the share modal with the shareable URL.
+- **Private content**: clicking Share opens a confirm modal that offers to make the content public before sharing. The share modal never opens for private content without owner confirmation first.
+
+This rule applies consistently to both notes and profiles. Do not invent content-specific share flows. The same modal component and the same public/private gate must be used everywhere.
+
 ## Create and edit behavior
 
 Create mode:

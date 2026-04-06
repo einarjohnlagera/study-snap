@@ -101,8 +101,18 @@ describe("PublicProfilePageClient", () => {
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
+    expect(await screen.findByRole("dialog", { name: "Share this profile" })).toBeInTheDocument();
+    expect(screen.getByText(/\/public\/profile\/user-1/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
     await waitFor(() => {
       expect(clipboardWriteText).toHaveBeenCalledWith("http://localhost/public/profile/user-1");
+    });
+    expect(await screen.findByText("Link copied")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Share this profile" })).not.toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Public" }));
@@ -114,6 +124,36 @@ describe("PublicProfilePageClient", () => {
     });
     expect(await screen.findByText("Public profile is now private.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Private" })).toBeInTheDocument();
+  });
+
+  it("shows private confirm modal when owner tries to share a private profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
+    (getPublicProfile as jest.Mock).mockResolvedValue({
+      ...baseProfile,
+      publicProfileVisible: false,
+    });
+    (updatePublicProfileVisibility as jest.Mock).mockResolvedValue({
+      publicProfileVisible: true,
+    });
+
+    render(
+      <PublicProfilePageClient
+        userId="user-1"
+        initialResult={{ status: "private" }}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Study Buddy" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
+    expect(await screen.findByRole("dialog", { name: "This profile is private" })).toBeInTheDocument();
+    expect(screen.getByText(/You need to make this profile public before sharing/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Make Public & Share" }));
+    await waitFor(() => {
+      expect(updatePublicProfileVisibility).toHaveBeenCalledWith({ publicProfileVisible: true });
+    });
+    expect(await screen.findByRole("dialog", { name: "Share this profile" })).toBeInTheDocument();
   });
 
   it("does not show owner controls for other viewers", async () => {

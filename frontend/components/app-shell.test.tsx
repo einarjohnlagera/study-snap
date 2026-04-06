@@ -100,6 +100,7 @@ jest.mock("@/lib/api", () => ({
 }));
 
 const meResponse = {
+  id: "user-1",
   displayName: "Note",
   firstName: "Note",
   email: "[email protected]",
@@ -172,6 +173,24 @@ describe("AppShell", () => {
       expect(logout).toHaveBeenCalled();
       expect(routerMock.replace).toHaveBeenCalledWith("/login?reason=logged_out");
     });
+  });
+
+  it("shows View Public Profile and Account Settings in the avatar dropdown", async () => {
+    render(
+      <AppShell>
+        <div>Dashboard content</div>
+      </AppShell>,
+    );
+
+    fireEvent.click(await screen.findByLabelText("Open user menu"));
+
+    const viewPublicProfile = screen.getByRole("link", { name: "View Public Profile" });
+    expect(viewPublicProfile).toBeInTheDocument();
+    expect(viewPublicProfile).toHaveAttribute("href", "/public/profile/user-1");
+
+    const accountSettings = screen.getByRole("link", { name: "Account Settings" });
+    expect(accountSettings).toBeInTheDocument();
+    expect(accountSettings).toHaveAttribute("href", "/profile");
   });
 
   it("hides the mobile feedback widget on note editor routes", async () => {

@@ -19,12 +19,14 @@ import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
+import { buildPublicProfilePath } from "@/lib/public-note-path";
 
 type AppShellProps = {
   children: React.ReactNode;
 };
 
 type ShellUser = {
+  id: string | null;
   displayName: string | null;
   firstName: string | null;
   email: string | null;
@@ -214,6 +216,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const [signingOut, setSigningOut] = useState(false);
   const [hasAuthUser, setHasAuthUser] = useState(false);
   const [user, setUser] = useState<ShellUser>({
+    id: null,
     displayName: null,
     firstName: null,
     email: null,
@@ -232,6 +235,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       setHasAuthUser(Boolean(authUser));
       if (!authUser) {
         setUser({
+          id: null,
           displayName: null,
           firstName: null,
           email: null,
@@ -242,6 +246,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         return;
       }
       setUser((previous) => ({
+        id: authUser.id ?? previous.id,
         displayName: authUser.displayName ?? previous.displayName,
         firstName: previous.firstName,
         email: authUser.email ?? previous.email,
@@ -304,6 +309,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     }
     const authUser = getAuthUser();
     setUser({
+      id: authUser?.id ?? null,
       displayName: authUser?.displayName ?? null,
       firstName: null,
       email: authUser?.email ?? null,
@@ -327,6 +333,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           return;
         }
         setUser({
+          id: me.id,
           displayName: me.displayName?.trim() || null,
           firstName: me.firstName?.trim() || null,
           email: me.email,
@@ -492,21 +499,23 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                 {avatarLetter}
               </button>
               {avatarMenuOpen ? (
-                <div className="absolute right-0 top-11 w-44 rounded-md border border-border bg-background p-1 shadow-sm">
+                <div className="absolute right-0 top-11 w-52 rounded-md border border-border bg-background p-1 shadow-sm">
+                  {user.id ? (
+                    <Link
+                      href={buildPublicProfilePath(user.id)}
+                      className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <ResponsiveActionContent action="public" label="View Public Profile" showTextOnMobile />
+                      </span>
+                    </Link>
+                  ) : null}
                   <Link
                     href="/profile"
                     className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
                   >
                     <span className="inline-flex items-center gap-2">
-                      <ResponsiveActionContent action="profile" label="Profile" showTextOnMobile />
-                    </span>
-                  </Link>
-                  <Link
-                    href="/settings"
-                    className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <ResponsiveActionContent action="settings" label="Settings" showTextOnMobile />
+                      <ResponsiveActionContent action="profile" label="Account Settings" showTextOnMobile />
                     </span>
                   </Link>
                   <button

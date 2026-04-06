@@ -68,13 +68,34 @@ Non-owners:
 
 - must not see `Edit Profile`
 - must not see the visibility toggle
-- may see `Share Profile`
+- may see `Share Profile` when the profile is public
 
 Navigation:
 
 - use a `Back` button that calls browser/app history back
 - place the `Back` button above the Public Profile header card
 - do not hardcode Public Profile back navigation to Library or Public Library
+
+## Share Profile Behavior
+
+`Share Profile` must use the same share modal pattern used for note sharing:
+
+- modal title: `Share this profile`
+- labeled field: `Shareable URL`
+- buttons: `Close` and `Copy Link`
+- `Copy Link` copies the URL to the clipboard and shows `Link copied` feedback inline
+
+If the profile is public:
+- Clicking `Share Profile` opens the share modal directly.
+
+If the profile is private and the owner is viewing:
+- Clicking `Share Profile` opens a confirm modal: `This profile is private`
+- The confirm modal offers `Cancel` and `Make Public & Share`
+- `Make Public & Share` sets the profile to public and then opens the share modal
+
+Private profiles are not directly shareable. The share modal must not be opened for private content without the owner confirming the visibility change first.
+
+Non-owners only see Share Profile when the profile is already public (they cannot reach the page if it is private).
 
 ## Public Identity Rules
 

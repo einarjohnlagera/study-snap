@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { SubjectBadge } from "@/components/notes/subject-badge";
+import { AppModal } from "@/components/ui/app-modal";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ResponsiveActionButton, ResponsiveActionContent, ResponsiveActionLink } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
@@ -49,6 +51,13 @@ function visibilityChip(publicProfileVisible: boolean) {
   return "border-border bg-muted/50 text-foreground/70";
 }
 
+function truncateShareUrl(url: string, maxLength = 58) {
+  if (url.length <= maxLength) {
+    return url;
+  }
+  return `${url.slice(0, maxLength - 3)}...`;
+}
+
 function formatLabelList(values: string[]): string {
   if (values.length === 0) {
     return "";
@@ -80,10 +89,13 @@ export function PublicProfilePageClient({
         : "loading",
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [visibilityMessage, setVisibilityMessage] = useState<string | null>(null);
   const [updatingVisibility, setUpdatingVisibility] = useState(false);
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareModalUrl, setShareModalUrl] = useState("");
+  const [shareModalCopied, setShareModalCopied] = useState(false);
+  const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
 
   const isOwner = currentUserId === userId;
 
@@ -150,6 +162,14 @@ export function PublicProfilePageClient({
     globalThis.addEventListener("mousedown", handleOutsideClick);
     return () => globalThis.removeEventListener("mousedown", handleOutsideClick);
   }, [visibilityMenuOpen]);
+
+  useEffect(() => {
+    if (!shareModalCopied) {
+      return;
+    }
+    const timeout = globalThis.setTimeout(() => setShareModalCopied(false), 2000);
+    return () => globalThis.clearTimeout(timeout);
+  }, [shareModalCopied]);
 
   const notesCountLabel = useMemo(() => {
     if (!profile) {
@@ -281,14 +301,47 @@ export function PublicProfilePageClient({
       ?? bestByMetric("shareCount", "Most Shared Note", "share");
   }, [profile?.publicNotes]);
 
-  const handleShareProfile = async () => {
+  const handleShareProfile = () => {
+    if (isOwner && profile && !profile.publicProfileVisible) {
+      setShowSharePrivateConfirm(true);
+      return;
+    }
+    const shareUrl = new URL(buildPublicProfilePath(userId), globalThis.location.origin).toString();
+    setShareModalUrl(shareUrl);
+    setShareModalCopied(false);
+    setShowShareModal(true);
+  };
+
+  const handleMakePublicAndShare = async () => {
+    if (!profile || updatingVisibility) {
+      return;
+    }
+    setUpdatingVisibility(true);
+    setShowSharePrivateConfirm(false);
+    setVisibilityMessage(null);
     try {
+      const updated = await updatePublicProfileVisibility({ publicProfileVisible: true });
+      setProfile((current) => (current ? { ...current, publicProfileVisible: updated.publicProfileVisible } : current));
       const shareUrl = new URL(buildPublicProfilePath(userId), globalThis.location.origin).toString();
-      await navigator.clipboard.writeText(shareUrl);
-      setShareMessage("Public profile link copied.");
-      setVisibilityMessage(null);
+      setShareModalUrl(shareUrl);
+      setShareModalCopied(false);
+      setShowShareModal(true);
+    } catch (error) {
+      setVisibilityMessage(error instanceof Error ? error.message : "Could not update public profile visibility.");
+    } finally {
+      setUpdatingVisibility(false);
+    }
+  };
+
+  const handleCopyShareLinkFromModal = async () => {
+    if (!shareModalUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareModalUrl);
+      setShareModalCopied(true);
     } catch {
-      setShareMessage("Could not copy public profile link.");
+      // Silently fail — the URL is still visible for manual copy.
     }
   };
 
@@ -299,7 +352,6 @@ export function PublicProfilePageClient({
 
     setUpdatingVisibility(true);
     setVisibilityMenuOpen(false);
-    setShareMessage(null);
     setVisibilityMessage(null);
     try {
       const updated = await updatePublicProfileVisibility({
@@ -480,16 +532,13 @@ export function PublicProfilePageClient({
               type="button"
               variant="outline"
               className="w-full sm:w-auto lg:w-full"
-              onClick={() => void handleShareProfile()}
+              onClick={handleShareProfile}
               action="share"
               label="Share Profile"
             />
           </div>
         </div>
 
-        {shareMessage ? (
-          <p className="text-xs text-foreground/60">{shareMessage}</p>
-        ) : null}
         {visibilityMessage ? (
           <p className="text-xs text-foreground/60">{visibilityMessage}</p>
         ) : null}
@@ -585,6 +634,68 @@ export function PublicProfilePageClient({
           </div>
         )}
       </section>
+
+      <AppModal
+        isOpen={showSharePrivateConfirm}
+        title="This profile is private"
+        description="You need to make this profile public before sharing. Anyone with the link will be able to view your public profile."
+        onClose={() => {
+          if (!updatingVisibility) {
+            setShowSharePrivateConfirm(false);
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSharePrivateConfirm(false)}
+              disabled={updatingVisibility}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void handleMakePublicAndShare()} disabled={updatingVisibility}>
+              {updatingVisibility ? "Updating..." : "Make Public & Share"}
+            </Button>
+          </div>
+        )}
+      />
+
+      <AppModal
+        isOpen={showShareModal}
+        title="Share this profile"
+        onClose={() => {
+          setShowShareModal(false);
+          setShareModalCopied(false);
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowShareModal(false);
+                setShareModalCopied(false);
+              }}
+            >
+              Close
+            </Button>
+            <Button type="button" onClick={() => void handleCopyShareLinkFromModal()}>
+              {shareModalCopied ? "Copied" : "Copy Link"}
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-2">
+          <p className="text-xs uppercase tracking-wide text-foreground/60">Shareable URL</p>
+          <p className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground/85">
+            {truncateShareUrl(shareModalUrl)}
+          </p>
+          {shareModalCopied ? (
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">Link copied</p>
+          ) : null}
+        </div>
+      </AppModal>
     </main>
   );
 }
