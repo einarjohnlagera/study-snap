@@ -29,8 +29,10 @@ Subject
 - exactly 1 value
 - choose the most specific academic subject that best organizes the note in a study library
 - prefer a library-friendly label such as `Primary field – subtopic` when it helps group similar notes
+- the total subject (including the dash and subtopic) must be at most 6 words
+  - correct examples: Electrical Engineering – Ohm's Law, Biology – Cell Division, Criminal Law – Crimes Against Persons, Mathematics – Calculus, Thermodynamics, Data Structures
+  - incorrect examples: "Electrical Engineering – Voltage, Current, Resistance, and Power Relationships" (too long), "Engineering – Ohm's Law and the Power Formula in Electrical Systems" (too long)
 - avoid broad umbrella labels such as Medicine, Engineering, Education, Law, or Business when a more specific academic subject is available
-- prefer labels such as `Nursing – Pharmacology`, `Biology – Cell Division`, `Criminal Law – Crimes Against Persons`, `Mathematics – Calculus`, `Thermodynamics`, `Data Structures`, or `English Grammar`
 - use any provided course/program or current subject as context, but refine broad labels into a more specific academic subject when the notes support it
 - do not make the subject so narrow that it becomes a one-off note title
 - concise and human-readable
@@ -54,7 +56,9 @@ Quiz
 - answer must be exactly one of: A, B, C, D
 - exactly one choice must be correct
 - each question should target a distinct concept when possible
-- concept should be a short topic label for the key idea being tested (1 to 4 words, never null)
+- concept must be 1 to 3 words — never a sentence, never more than 3 words, never null
+  - correct examples: Ohm's Law, Electrical Power, Resistance, Current Flow, Power Formula, ATP Production, Glycolysis
+  - incorrect examples: "Relationship between voltage and current", "Using the power formula", "How to calculate resistance"
 - explanation is required and should sound like a tutor
 - for computation questions, explanation must show a short step-by-step solution
 - learner level target: {LEARNER_LEVEL}

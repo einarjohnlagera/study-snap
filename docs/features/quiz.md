@@ -44,6 +44,19 @@ Shared ownership model:
 - quantitative weak concepts may use targeted numerical reinforcement questions
 - explanations should reinforce the weak concept clearly and step through computations when relevant
 
+## Quiz concept validation rules
+
+Every quiz item includes a `concept` field — a short topic label for the key idea being tested.
+
+- **Enforced range:** 1 to 4 words (validated after whitespace normalization)
+- **Prompt target:** 1 to 3 words — the prompt asks for short labels like `Ohm's Law`, `Electrical Power`, `Current Flow`
+- **Repair:** if the LLM returns a concept exceeding 4 words, the backend tries to repair it by:
+  1. Stripping common leading filler phrases (`Relationship between`, `Using the`, `The role of`, etc.)
+  2. Truncating to the first 4 words if still over the limit
+- **Logged on failure:** `requestId`, `field`, `value` (truncated to 80 chars), `reason`
+- **Null or blank concepts** fail immediately with `LLM_INVALID_OUTPUT`
+- This applies equally to Quick Review, Challenge Quiz, and Adaptive Practice concept fields
+
 ## Entry Surfaces
 
 Quiz entry points appear in:

@@ -1,6 +1,6 @@
 # quiz.md - Testing Notes
 
-Verify these cases for quiz surfaces:
+Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`):
 
 - Quick Review, Challenge Quiz, and Adaptive Practice each use distinct icons
 - Quick Review questions stay lightweight and aligned with the learner level
@@ -19,3 +19,19 @@ Verify these cases for quiz surfaces:
 - desktop quiz actions show icon + text
 - mobile quiz actions keep accessible labels
 - paywall/plan gating still applies to Premium-only quiz flows where configured
+
+## Concept validation and repair (backend unit tests)
+
+These cases are covered in `OpenAiLlmStudyPackServiceTest`:
+
+- valid 1-word concept (`NADH`) passes
+- valid 2-word concept (`Ohm's Law`) passes
+- whitespace-only concept fails with `LLM_INVALID_OUTPUT`
+- null concept fails with `LLM_INVALID_OUTPUT`
+- concept with repeated spaces (`ATP  production`) normalizes to `ATP production` and passes
+- 5-word concept with filler prefix (`Relationship between voltage and current`) is repaired to `voltage and current` and passes
+- 5-word concept without filler prefix (`Electrical power using Ohms Law`) is repaired by truncating to first 4 words and passes
+- overly long subject (`Electrical Engineering – Voltage Current Resistance and Power`) is repaired to `Electrical Engineering – Voltage Current Resistance` and passes
+- whitespace-only subject fails with `LLM_INVALID_OUTPUT`
+- technical subjects within word limit (`Electrical Engineering – Ohm's Law`, `Mathematics – Calculus`, `Physics – Electrical Power`) pass
+- Ohm's Law regression scenario: full study pack with electrical engineering subject and 1-2 word concepts succeeds end-to-end
