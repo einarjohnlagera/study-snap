@@ -29,6 +29,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -54,6 +55,17 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             "engineering",
             "law",
             "medicine"
+    );
+    private static final int MAX_LOG_VALUE_LENGTH = 80;
+    private static final List<String> CONCEPT_FILLER_PREFIXES = List.of(
+            "relationship between",
+            "using the",
+            "using a",
+            "the role of",
+            "definition of",
+            "overview of",
+            "the concept of",
+            "how to"
     );
     private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
             "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
@@ -256,9 +268,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         List<QuizItem> quizItems = new ArrayList<>();
         Set<String> normalizedQuestions = new HashSet<>();
         Set<String> normalizedConcepts = new HashSet<>();
-        for (PromptQuizItem item : promptQuizItems) {
-            validatePromptQuizItem(item, normalizedQuestions, normalizedConcepts);
-            String normalizedConcept = normalizeAndValidateConcept(item.concept());
+        for (int i = 0; i < promptQuizItems.size(); i++) {
+            PromptQuizItem item = promptQuizItems.get(i);
+            validatePromptQuizItem(item, normalizedQuestions, normalizedConcepts, i);
+            String normalizedConcept = normalizeAndValidateConcept(item.concept(), i);
             String normalizedQuestionKey = StringNormalizationUtils.normalizeForDuplicateCheck(item.question());
             if (!normalizedQuestions.add(normalizedQuestionKey)) {
                 throw invalidOutput("The study pack service returned repetitive quiz questions. Please try again.");
@@ -283,12 +296,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private void validatePromptQuizItem(
             PromptQuizItem item,
             Set<String> normalizedQuestions,
-            Set<String> normalizedConcepts
+            Set<String> normalizedConcepts,
+            int quizIndex
     ) {
         if (StringNormalizationUtils.isBlank(item.question())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
         }
-        normalizeAndValidateConcept(item.concept());
+        normalizeAndValidateConcept(item.concept(), quizIndex);
         normalizeAndValidateExplanation(item.explanation(), "The study pack service returned an invalid quiz explanation. Please try again.");
         if (QuizValidationUtils.hasInvalidChoices(item.choices())) {
             throw invalidOutput("The study pack service returned an invalid quiz format. Please try again.");
@@ -462,14 +476,91 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String normalizeAndValidateSubject(String subject, StudyPackGenerationContext context) {
         String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
-        if (!StringNormalizationUtils.containsAlphaNumeric(normalized)
-                || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, MAX_SUBJECT_WORDS)) {
+        boolean hasContent = StringNormalizationUtils.containsAlphaNumeric(normalized);
+        boolean withinWordLimit = hasContent && StringNormalizationUtils.hasWordCountBetween(normalized, 1, MAX_SUBJECT_WORDS);
+        if (!hasContent || !withinWordLimit) {
+            int wordCount = hasContent ? StringNormalizationUtils.countWords(normalized) : 0;
+            String reason = !hasContent ? "no alphanumeric content"
+                    : wordCount > MAX_SUBJECT_WORDS ? "more than " + MAX_SUBJECT_WORDS + " words" : "empty";
+            if (hasContent && wordCount > MAX_SUBJECT_WORDS) {
+                String repaired = tryRepairSubject(normalized);
+                if (repaired != null
+                        && !isOverlyBroadSubjectLabel(repaired)
+                        && !matchesBroadCourseProgram(repaired, context)) {
+                    log.info("requestId={} field=subject value='{}' reason='{}' repairedTo='{}'",
+                            MDC.get("requestId"), truncateForLog(normalized), reason, repaired);
+                    return repaired;
+                }
+            }
+            log.warn("requestId={} field=subject value='{}' reason='{}'",
+                    MDC.get("requestId"), truncateForLog(normalized), reason);
             throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
         }
         if (isOverlyBroadSubjectLabel(normalized) || matchesBroadCourseProgram(normalized, context)) {
+            log.warn("requestId={} field=subject value='{}' reason='overly broad'",
+                    MDC.get("requestId"), truncateForLog(normalized));
             throw invalidOutput("The study pack service returned subject metadata that is too broad. Please try again.");
         }
         return normalized;
+    }
+
+    private String truncateForLog(String value) {
+        if (value == null) {
+            return "null";
+        }
+        String sanitized = value.trim().replaceAll("\\s+", " ");
+        return sanitized.length() > MAX_LOG_VALUE_LENGTH
+                ? sanitized.substring(0, MAX_LOG_VALUE_LENGTH) + "..."
+                : sanitized;
+    }
+
+    private String tryRepairConcept(String normalized) {
+        String candidate = normalized;
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        for (String prefix : CONCEPT_FILLER_PREFIXES) {
+            if (lower.startsWith(prefix + " ")) {
+                candidate = normalized.substring(prefix.length()).trim();
+                break;
+            }
+        }
+        if (StringNormalizationUtils.countWords(candidate) > 4) {
+            String[] words = candidate.split("\\s+");
+            candidate = String.join(" ", Arrays.copyOf(words, 4));
+        }
+        String rechecked = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(candidate);
+        return rechecked != null && StringNormalizationUtils.hasWordCountBetween(rechecked, 1, 4)
+                ? rechecked : null;
+    }
+
+    private String tryRepairSubject(String normalized) {
+        if (normalized.contains(" – ")) {
+            int dashIdx = normalized.indexOf(" – ");
+            String primary = normalized.substring(0, dashIdx).trim();
+            String subtopic = normalized.substring(dashIdx + 3).trim();
+            int primaryWordCount = StringNormalizationUtils.countWords(primary);
+            int maxSubtopicWords = MAX_SUBJECT_WORDS - primaryWordCount - 1;
+            if (maxSubtopicWords > 0) {
+                String[] subtopicWords = subtopic.split("\\s+");
+                if (subtopicWords.length > maxSubtopicWords) {
+                    subtopic = String.join(" ", Arrays.copyOf(subtopicWords, maxSubtopicWords));
+                    subtopic = subtopic.replaceAll("[,;]+$", "").trim();
+                }
+                String repaired = primary + " – " + subtopic;
+                if (StringNormalizationUtils.hasWordCountBetween(repaired, 1, MAX_SUBJECT_WORDS)
+                        && StringNormalizationUtils.containsAlphaNumeric(repaired)) {
+                    return repaired;
+                }
+            }
+        }
+        String[] words = normalized.split("\\s+");
+        if (words.length > MAX_SUBJECT_WORDS) {
+            String truncated = String.join(" ", Arrays.copyOf(words, MAX_SUBJECT_WORDS));
+            truncated = truncated.replaceAll("[,;]+$", "").trim();
+            if (StringNormalizationUtils.containsAlphaNumeric(truncated)) {
+                return truncated;
+            }
+        }
+        return null;
     }
 
     private List<String> normalizeAndValidateTags(List<String> tags, String title) {
@@ -522,9 +613,26 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return normalizedConcepts;
     }
 
-    private String normalizeAndValidateConcept(String concept) {
+    private String normalizeAndValidateConcept(String concept, int quizIndex) {
         String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(concept);
-        if (normalized == null || !StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
+        if (normalized == null) {
+            log.warn("requestId={} field=quiz[{}].concept value=null reason=blank",
+                    MDC.get("requestId"), quizIndex);
+            throw invalidOutput("The study pack service returned an invalid quiz concept. Please try again.");
+        }
+        int wordCount = StringNormalizationUtils.countWords(normalized);
+        if (!StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
+            String reason = wordCount > 4 ? "more than 4 words" : "empty";
+            if (wordCount > 4) {
+                String repaired = tryRepairConcept(normalized);
+                if (repaired != null) {
+                    log.info("requestId={} field=quiz[{}].concept value='{}' reason='{}' repairedTo='{}'",
+                            MDC.get("requestId"), quizIndex, truncateForLog(normalized), reason, repaired);
+                    return repaired;
+                }
+            }
+            log.warn("requestId={} field=quiz[{}].concept value='{}' reason='{}'",
+                    MDC.get("requestId"), quizIndex, truncateForLog(normalized), reason);
             throw invalidOutput("The study pack service returned an invalid quiz concept. Please try again.");
         }
         return normalized;

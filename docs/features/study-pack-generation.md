@@ -59,8 +59,11 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 ### Subject
 - exactly one subject value per Study Pack
 - broad academic category (for example: History, Biology, Chemistry, Physics, Mathematics, Literature, Computer Science, Geography, Economics)
-- concise and human-readable
-- not sentence-like
+- prefer a library-friendly `Primary field – subtopic` format where helpful
+- concise and human-readable, not sentence-like
+- maximum 6 words (including the dash separator and subtopic)
+- overly broad single-word labels like `Engineering`, `Business`, or `Law` are rejected and retried
+- if the LLM returns a subject exceeding 6 words, the backend attempts automatic repair (truncate subtopic) before failing
 
 ### Tags
 - generate 3 to 6 tags
@@ -71,8 +74,15 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 
 ### Quiz concept metadata
 - every quiz question includes a non-null `concept`
-- concept should be concise and reusable (1 to 4 words)
-- concept should represent the key idea tested by the question
+- concept must be 1 to 3 words — a short topic label, never a sentence
+- examples: `Ohm's Law`, `Electrical Power`, `Resistance`, `ATP Production`, `Glycolysis`
+- if the LLM returns a concept exceeding 4 words, the backend attempts automatic repair (strip filler prefix, truncate) before failing
+
+### Validation reliability
+- subject and quiz concept validation now logs the failing field value with requestId, field name, and reason for safe debugging
+- full note content, full prompt, and full raw LLM output are never logged
+- sanitization/repair runs on subject and concept before a final validation failure is thrown
+- technical notes (Ohm's Law, electrical engineering, math formulas) should not fail due to harmless LLM metadata drift
 
 ## Note import flow
 

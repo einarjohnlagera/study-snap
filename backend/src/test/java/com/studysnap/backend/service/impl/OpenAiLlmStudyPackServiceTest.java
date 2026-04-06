@@ -259,6 +259,192 @@ class OpenAiLlmStudyPackServiceTest {
                 });
     }
 
+    // ── Quiz concept edge cases ──────────────────────────────────────────────
+
+    @Test
+    void generateStudyPack_repairsOverlongConceptWithFillerPrefix() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ObjectNode) payload.get("quiz").get(0)).put("concept", "Relationship between voltage and current");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Physics notes on electricity",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+        );
+
+        assertThat(content.quiz().getFirst().concept()).isEqualTo("voltage and current");
+    }
+
+    @Test
+    void generateStudyPack_repairsOverlongConceptByTruncating() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ObjectNode) payload.get("quiz").get(0)).put("concept", "Electrical power using Ohms Law");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Ohm's Law notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+        );
+
+        assertThat(content.quiz().getFirst().concept()).isEqualTo("Electrical power using Ohms");
+    }
+
+    @Test
+    void generateStudyPack_rejectsNullConcept() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ObjectNode) payload.get("quiz").get(0)).putNull("concept");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        assertThatThrownBy(() -> service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(null, null, null, List.of())
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getCode())
+                .isEqualTo("LLM_INVALID_OUTPUT");
+    }
+
+    @Test
+    void generateStudyPack_rejectsWhitespaceOnlyConcept() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ObjectNode) payload.get("quiz").get(0)).put("concept", "   ");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        assertThatThrownBy(() -> service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(null, null, null, List.of())
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getCode())
+                .isEqualTo("LLM_INVALID_OUTPUT");
+    }
+
+    @Test
+    void generateStudyPack_normalizesRepeatedSpacesInConcept() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ObjectNode) payload.get("quiz").get(0)).put("concept", "ATP  production");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+        );
+
+        assertThat(content.quiz().getFirst().concept()).isEqualTo("ATP production");
+    }
+
+    @Test
+    void generateStudyPack_acceptsShortValidConcepts() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        ((ObjectNode) payload.get("quiz").get(0)).put("concept", "Ohm's Law");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Electrical circuit notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+        );
+
+        assertThat(content.quiz().getFirst().concept()).isEqualTo("Ohm's Law");
+    }
+
+    // ── Subject edge cases ───────────────────────────────────────────────────
+
+    @Test
+    void generateStudyPack_repairsStructuredSubjectExceedingWordLimit() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        payload.put("subject", "Electrical Engineering – Voltage Current Resistance and Power");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Electrical engineering notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+        );
+
+        assertThat(content.subject()).isEqualTo("Electrical Engineering – Voltage Current Resistance");
+    }
+
+    @Test
+    void generateStudyPack_rejectsEmptySubject() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        payload.put("subject", "   ");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        assertThatThrownBy(() -> service.generateStudyPack(
+                "Cell respiration notes",
+                new StudyPackGenerationContext(null, null, null, List.of())
+        ))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getCode())
+                .isEqualTo("LLM_INVALID_OUTPUT");
+    }
+
+    @Test
+    void generateStudyPack_acceptsTechnicalSubjectsWithinWordLimit() throws JsonProcessingException {
+        stubResponsesCall();
+        for (String subject : List.of(
+                "Electrical Engineering – Ohm's Law",
+                "Mathematics – Calculus",
+                "Physics – Electrical Power",
+                "Electrical Engineering – Circuit Fundamentals"
+        )) {
+            ObjectNode payload = buildValidStudyPackPayload();
+            payload.put("subject", subject);
+            when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+            GeneratedStudyPackContent content = service.generateStudyPack(
+                    "Technical notes",
+                    new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            );
+
+            assertThat(content.subject()).isEqualTo(subject);
+        }
+    }
+
+    @Test
+    void generateStudyPack_ohmsLawRegressionScenario() throws JsonProcessingException {
+        // Regression: technical notes like Ohm's Law should not fail due to metadata drift
+        stubResponsesCall();
+        ObjectNode payload = buildValidStudyPackPayload();
+        payload.put("title", "Ohm's Law Study Pack");
+        payload.put("summary", "Ohm's Law states V equals IR where V is voltage, I is current, and R is resistance.");
+        payload.put("subject", "Electrical Engineering – Ohm's Law");
+        ArrayNode tags = objectMapper.createArrayNode();
+        tags.add("voltage");
+        tags.add("current");
+        tags.add("resistance");
+        payload.set("tags", tags);
+        ArrayNode quiz = (ArrayNode) payload.get("quiz");
+        ((ObjectNode) quiz.get(0)).put("concept", "Ohm's Law");
+        ((ObjectNode) quiz.get(1)).put("concept", "Voltage");
+        ((ObjectNode) quiz.get(2)).put("concept", "Current");
+        ((ObjectNode) quiz.get(3)).put("concept", "Resistance");
+        ((ObjectNode) quiz.get(4)).put("concept", "Power formula");
+        when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
+
+        GeneratedStudyPackContent content = service.generateStudyPack(
+                "Ohm's Law: V = IR. R is resistance in ohms. I is current in amperes. V is voltage in volts.",
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Electrical Engineering",
+                        "Electrical Engineering – Ohm's Law",
+                        List.of("voltage", "current", "resistance")
+                )
+        );
+
+        assertThat(content.subject()).isEqualTo("Electrical Engineering – Ohm's Law");
+        assertThat(content.quiz()).hasSize(5);
+        assertThat(content.quiz().get(0).concept()).isEqualTo("Ohm's Law");
+        assertThat(content.quiz().get(4).concept()).isEqualTo("Power formula");
+    }
+
     @Test
     void generateChallengeQuiz_mapsAnswerLetterAndExplanation() throws JsonProcessingException {
         stubResponsesCall();
