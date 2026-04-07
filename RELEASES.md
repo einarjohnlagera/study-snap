@@ -17,6 +17,8 @@
 - Added `frontend/lib/public-library-discovery.ts` with pure utility functions: `computeDiscoveryScore`, `getFeaturedNotes`, `getPopularNotes`, `getRecentNotes`, `getBrowseSubjects`, `excludeById`. All ranking is client-side using existing data from `listPublicNotes()` — no new backend endpoints required.
 - Extracted `PublicNoteCard` sub-component inside `public-library-page-client.tsx` to share card rendering between discovery sections and the main filtered list.
 - Added 28 unit tests for discovery utility functions and 5 integration tests for discovery UI behavior in `PublicLibraryPageClient`.
+- Added backend scoring support via `GET /notes/public?sort=featured|popular|recent`. Sort is computed dynamically from existing engagement signals — no DB persistence. `featured` uses score `(copies × 0.6) + (views × 0.4)` with newest-first tiebreak; `popular` uses copy count → view count → newest-first; `recent` uses `createdAt` desc. Unknown or missing sort values fall through to the default DB order.
+- Added `backend/util/PublicNotesScoringUtils.java` with `computeScore`, `sortByFeatured`, `sortByPopular`, and `sortByRecent`. Covered by 16 unit tests including scoring formula, sort ordering, null-count handling, tiebreaks, and empty dataset cases. Added 7 sort-specific tests to `NoteServiceTest`.
 
 ## v0.7.0 - Learning & Metadata Foundation (In Progress)
 

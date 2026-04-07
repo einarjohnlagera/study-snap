@@ -14,7 +14,9 @@ import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -456,6 +459,193 @@ class NoteServiceTest {
         List<String> subjects = noteService.listPublicSubjects();
 
         assertThat(subjects).containsExactly("Biology – Cell Division", "History", "Physics");
+    }
+
+    // --- listPublic sort tests ---
+
+    @Test
+    void listPublic_withNullSort_returnsNotesInDefaultDbOrder() {
+        UUID ownerId = UUID.randomUUID();
+        NoteEntity note1 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content1");
+        note1.setTitle("Note1");
+        NoteEntity note2 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content2");
+        note2.setTitle("Note2");
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, null);
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Note1", "Note2");
+    }
+
+    @Test
+    void listPublic_withSortFeatured_sortsByScoreDescThenNewestFirst() {
+        UUID ownerId = UUID.randomUUID();
+        UUID highScoreId = UUID.randomUUID();
+        UUID lowScoreId = UUID.randomUUID();
+        OffsetDateTime base = OffsetDateTime.now();
+
+        NoteEntity highScore = buildNote(highScoreId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "high");
+        highScore.setTitle("HighScore");
+        highScore.setCreatedAt(base.minusDays(1));
+        NoteEntity lowScore = buildNote(lowScoreId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "low");
+        lowScore.setTitle("LowScore");
+        lowScore.setCreatedAt(base.minusDays(2));
+
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        // highScore: 10 copies * 0.6 + 5 views * 0.4 = 8.0
+        // lowScore:  1 copy  * 0.6 + 1 view  * 0.4 = 1.0
+        NoteCopyCountProjection highCopies = mockCopyCount(highScoreId, 10L);
+        NoteCopyCountProjection lowCopies = mockCopyCount(lowScoreId, 1L);
+        PublicNoteEventCountProjection highViews = mockEventCount(highScoreId, 5L);
+        PublicNoteEventCountProjection lowViews = mockEventCount(lowScoreId, 1L);
+
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(lowScore, highScore));
+        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
+                .thenReturn(List.of(highCopies, lowCopies));
+        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
+                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
+                .thenReturn(List.of(highViews, lowViews));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, "featured");
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("HighScore", "LowScore");
+    }
+
+    @Test
+    void listPublic_withSortFeatured_tiebreakByNewestCreatedAt() {
+        UUID ownerId = UUID.randomUUID();
+        UUID olderNoteId = UUID.randomUUID();
+        UUID newerNoteId = UUID.randomUUID();
+        OffsetDateTime base = OffsetDateTime.now();
+
+        NoteEntity olderNote = buildNote(olderNoteId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "older");
+        olderNote.setTitle("OlderNote");
+        olderNote.setCreatedAt(base.minusDays(3));
+        NoteEntity newerNote = buildNote(newerNoteId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "newer");
+        newerNote.setTitle("NewerNote");
+        newerNote.setCreatedAt(base.minusDays(1));
+
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        // Both have 5 copies and 5 views → same score; newer wins by tiebreak
+        NoteCopyCountProjection olderCopies = mockCopyCount(olderNoteId, 5L);
+        NoteCopyCountProjection newerCopies = mockCopyCount(newerNoteId, 5L);
+        PublicNoteEventCountProjection olderViews = mockEventCount(olderNoteId, 5L);
+        PublicNoteEventCountProjection newerViews = mockEventCount(newerNoteId, 5L);
+
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(olderNote, newerNote));
+        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
+                .thenReturn(List.of(olderCopies, newerCopies));
+        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
+                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
+                .thenReturn(List.of(olderViews, newerViews));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, "featured");
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("NewerNote", "OlderNote");
+    }
+
+    @Test
+    void listPublic_withSortPopular_sortsByCopyCountDesc() {
+        UUID ownerId = UUID.randomUUID();
+        UUID manyId = UUID.randomUUID();
+        UUID fewId = UUID.randomUUID();
+
+        NoteEntity many = buildNote(manyId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "many");
+        many.setTitle("ManyCopies");
+        NoteEntity few = buildNote(fewId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "few");
+        few.setTitle("FewCopies");
+
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        NoteCopyCountProjection manyCopies = mockCopyCount(manyId, 50L);
+        NoteCopyCountProjection fewCopies = mockCopyCount(fewId, 3L);
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(few, many));
+        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
+                .thenReturn(List.of(manyCopies, fewCopies));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, "popular");
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("ManyCopies", "FewCopies");
+    }
+
+    @Test
+    void listPublic_withSortRecent_sortsByCreatedAtDesc() {
+        UUID ownerId = UUID.randomUUID();
+        UUID oldId = UUID.randomUUID();
+        UUID newId = UUID.randomUUID();
+        OffsetDateTime base = OffsetDateTime.now();
+
+        NoteEntity old = buildNote(oldId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "old");
+        old.setTitle("OldNote");
+        old.setCreatedAt(base.minusDays(5));
+        NoteEntity recent = buildNote(newId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "new");
+        recent.setTitle("RecentNote");
+        recent.setCreatedAt(base.minusDays(1));
+
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(old, recent));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, "recent");
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("RecentNote", "OldNote");
+    }
+
+    @Test
+    void listPublic_withUnknownSort_returnsDefaultOrder() {
+        UUID ownerId = UUID.randomUUID();
+        NoteEntity note1 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "c1");
+        note1.setTitle("First");
+        NoteEntity note2 = buildNote(UUID.randomUUID(), ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "c2");
+        note2.setTitle("Second");
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, "unknown_value");
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("First", "Second");
+    }
+
+    @Test
+    void listPublic_withEmptyPublicNotes_returnsEmptyRegardlessOfSort() {
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of());
+
+        assertThat(noteService.listPublic(null, "featured")).isEmpty();
+        assertThat(noteService.listPublic(null, "popular")).isEmpty();
+        assertThat(noteService.listPublic(null, "recent")).isEmpty();
+    }
+
+    // --- sort test helpers ---
+
+    private NoteCopyCountProjection mockCopyCount(UUID noteId, long count) {
+        NoteCopyCountProjection proj = mock(NoteCopyCountProjection.class);
+        when(proj.getNoteId()).thenReturn(noteId);
+        when(proj.getCopyCount()).thenReturn(count);
+        return proj;
+    }
+
+    private PublicNoteEventCountProjection mockEventCount(UUID noteId, long count) {
+        PublicNoteEventCountProjection proj = mock(PublicNoteEventCountProjection.class);
+        when(proj.getNoteId()).thenReturn(noteId);
+        when(proj.getTotalCount()).thenReturn(count);
+        return proj;
+    }
+
+    private UserEntity buildUser(UUID userId, String email) {
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setFirstName("Test");
+        user.setEmail(email);
+        return user;
     }
 
     private NoteEntity buildNote(
