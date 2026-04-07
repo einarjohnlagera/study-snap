@@ -90,6 +90,48 @@ public final class SubjectSanitizer {
     }
 
     /**
+     * Strips the subtopic suffix from a normalized subject string, returning only the base
+     * academic domain.
+     *
+     * <p>Handles two separator forms:
+     * <ul>
+     *   <li>{@code " – "} (em-dash with spaces) — produced by {@link SubjectNormalizationUtils#normalizeForStorage}
+     *       for all dash variants ({@code -}, {@code –}, {@code —}).</li>
+     *   <li>{@code ":"} (colon) — not normalized by {@code normalizeForStorage}, handled here directly.</li>
+     * </ul>
+     *
+     * <p>Examples:
+     * <pre>
+     *   "Biology – Cell Division"   → "Biology"
+     *   "Physics: Electricity"      → "Physics"
+     *   "Computer Science"          → "Computer Science" (no separator — unchanged)
+     *   "– Cell Division"           → null (empty left side)
+     * </pre>
+     *
+     * @param normalized already-normalized subject string (output of {@code normalizeForStorage})
+     * @return the domain-only part, the unchanged input if no separator is found, or {@code null}
+     *         when the resulting domain part is empty or has no alphanumeric content
+     */
+    public static String stripSubtopicSuffix(String normalized) {
+        if (normalized == null) {
+            return null;
+        }
+        String stripped;
+        if (normalized.contains(" – ")) {
+            stripped = normalized.substring(0, normalized.indexOf(" – ")).trim();
+        } else if (normalized.contains(":")) {
+            stripped = normalized.substring(0, normalized.indexOf(":")).trim();
+        } else {
+            return normalized;
+        }
+        String rechecked = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(stripped);
+        if (rechecked == null || !StringNormalizationUtils.containsAlphaNumeric(rechecked)) {
+            return null;
+        }
+        return rechecked;
+    }
+
+    /**
      * Returns {@code true} when the subject is just a flat echo of the course/program name
      * with no subtopic qualifier, which adds no discovery value beyond the course shelf.
      */

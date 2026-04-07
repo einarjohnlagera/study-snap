@@ -57,18 +57,18 @@ class OpenAiLlmStudyPackServiceTest {
 
         objectMapper = new ObjectMapper();
         service = new OpenAiLlmStudyPackService(
-                properties,
-                objectMapper,
-                restClient,
-                new OpenAiPromptResources(
-                        "System prompt",
-                        "Developer prompt with {QUIZ_COUNT} questions for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
-                        objectMapper.createObjectNode(),
-                        "Challenge quiz system prompt",
-                        "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
-                        "Adaptive practice system prompt",
-                        "Adaptive practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
-                )
+            properties,
+            objectMapper,
+            restClient,
+            new OpenAiPromptResources(
+                "System prompt",
+                "Developer prompt with {QUIZ_COUNT} questions for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                objectMapper.createObjectNode(),
+                "Challenge quiz system prompt",
+                "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
+                "Adaptive practice system prompt",
+                "Adaptive practice developer prompt for {QUESTION_COUNT} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}"
+            )
         );
 
     }
@@ -79,31 +79,33 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Cell respiration notes",
-                new StudyPackGenerationContext(
-                        LearnerLevel.COLLEGE,
-                        "Biology",
-                        "Biology",
-                        List.of("cells", "respiration")
-                )
+            "Cell respiration notes",
+            new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Biology",
+                "Biology",
+                List.of("cells", "respiration")
+            )
         );
 
         assertThat(content.title()).isEqualTo("Cell Respiration Review");
-        assertThat(content.summary()).isEqualTo("Cell respiration turns glucose into ATP through glycolysis and aerobic pathways.");
-        assertThat(content.subject()).isEqualTo("Biology – Cellular Respiration");
+        assertThat(content.summary()).isEqualTo(
+            "Cell respiration turns glucose into ATP through glycolysis and aerobic pathways.");
+        assertThat(content.subject()).isEqualTo("Biology");
         assertThat(content.tags()).containsExactly("cells", "energy", "respiration");
         assertThat(content.keyConcepts()).hasSize(8);
         assertThat(content.quiz()).hasSize(5);
         assertThat(content.quiz().stream().map(QuizItem::question))
-                .containsExactly(
-                        "What is the main goal of cell respiration?",
-                        "Which stage produces the most ATP?",
-                        "Where does glycolysis happen?",
-                        "What molecule carries electrons to the ETC?",
-                        "What final molecule accepts electrons in aerobic respiration?"
-                );
+            .containsExactly(
+                "What is the main goal of cell respiration?",
+                "Which stage produces the most ATP?",
+                "Where does glycolysis happen?",
+                "What molecule carries electrons to the ETC?",
+                "What final molecule accepts electrons in aerobic respiration?"
+            );
         assertThat(content.quiz().getFirst().answer()).isEqualTo("Produce ATP");
-        assertThat(content.quiz().getFirst().explanation()).isEqualTo("ATP is the usable energy output of cell respiration.");
+        assertThat(content.quiz().getFirst().explanation()).isEqualTo(
+            "ATP is the usable energy output of cell respiration.");
         assertThat(content.modelUsed()).isEqualTo("gpt-4.1-mini");
         assertThat(content.inputTokens()).isEqualTo(42);
         assertThat(content.outputTokens()).isEqualTo(84);
@@ -116,69 +118,64 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(buildValidStudyPackPayload()));
 
         service.generateStudyPack(
-                "Beam design notes",
-                new StudyPackGenerationContext(
-                        LearnerLevel.COLLEGE,
-                        "Civil Engineering",
-                        "Engineering",
-                        List.of("beams", "load")
-                )
+            "Beam design notes",
+            new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Civil Engineering",
+                "Engineering",
+                List.of("beams", "load")
+            )
         );
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());
         String requestBody = requestCaptor.getValue();
 
-        assertThat(requestBody).contains("Course / Program: Civil Engineering");
-        assertThat(requestBody).contains("Current subject: Engineering");
-        assertThat(requestBody).contains("Subject guidance: choose a specific academic library subject");
-        assertThat(requestBody).contains("Primary field – subtopic");
+        assertThat(requestBody).contains("Course / Program: Civil Engineering")
+            .contains("Current subject: Engineering")
+            .contains("Subject guidance: use a broad academic domain or curriculum category")
+            .contains("domain only, no topic suffix");
     }
 
     @Test
-    void generateStudyPack_allowsStructuredSubjectsLongerThanFourWords() throws JsonProcessingException {
+    void generateStudyPack_stripsSubtopicFromCombinedSubject() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = buildValidStudyPackPayload();
         payload.put("subject", "Criminal Law – Crimes Against Persons");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Crimes against persons notes",
-                new StudyPackGenerationContext(
-                        LearnerLevel.COLLEGE,
-                        "Law",
-                        null,
-                        List.of("criminal law")
-                )
+            "Crimes against persons notes",
+            new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Law",
+                null,
+                List.of("criminal law")
+            )
         );
 
-        assertThat(content.subject()).isEqualTo("Criminal Law – Crimes Against Persons");
+        // Subtopic stripped — domain only
+        assertThat(content.subject()).isEqualTo("Criminal Law");
     }
 
     @Test
-    void generateStudyPack_retriesWhenSubjectIsTooBroad() throws JsonProcessingException {
+    void generateStudyPack_acceptsBroadDomainSubjects() throws JsonProcessingException {
+        // Domain-level subjects like "Engineering" and "Medicine" are now valid — no retry needed
         stubResponsesCall();
-        ObjectNode broadPayload = buildValidStudyPackPayload();
-        broadPayload.put("subject", "Engineering");
-        ObjectNode specificPayload = buildValidStudyPackPayload();
-        specificPayload.put("subject", "Civil Engineering – Structural Design");
-        when(responseSpec.body(String.class)).thenReturn(
-                studyPackResponseJson(broadPayload),
-                studyPackResponseJson(specificPayload)
-        );
+        for (String domain : List.of("Engineering", "Medicine", "Law", "Business", "Education")) {
+            ObjectNode payload = buildValidStudyPackPayload();
+            payload.put("subject", domain);
+            when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
-        GeneratedStudyPackContent content = service.generateStudyPack(
-                "Structural design notes",
-                new StudyPackGenerationContext(
-                        LearnerLevel.COLLEGE,
-                        "Civil Engineering",
-                        "Engineering",
-                        List.of("beams", "stress")
-                )
-        );
+            GeneratedStudyPackContent content = service.generateStudyPack(
+                "Domain notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            );
 
-        assertThat(content.subject()).isEqualTo("Civil Engineering – Structural Design");
-        verify(responseSpec, times(2)).body(String.class);
+            assertThat(content.subject()).isEqualTo(domain);
+        }
+        // Only one API call per domain — no retry
+        verify(responseSpec, times(5)).body(String.class);
     }
 
     @Test
@@ -187,12 +184,12 @@ class OpenAiLlmStudyPackServiceTest {
 
         StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
         assertThatThrownBy(() -> service.generateStudyPack(
-                "Cell respiration notes",
-                context
+            "Cell respiration notes",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(error -> ((AppException) error).getCode())
-                .isEqualTo("LLM_CONFIGURATION_ERROR");
+            .isInstanceOf(AppException.class)
+            .extracting(error -> ((AppException) error).getCode())
+            .isEqualTo("LLM_CONFIGURATION_ERROR");
 
         verifyNoInteractions(restClient);
     }
@@ -201,26 +198,27 @@ class OpenAiLlmStudyPackServiceTest {
     void generateStudyPack_mapsRestClientResponseExceptionToRequestFailed() {
         stubResponsesCall();
         when(responseSpec.body(String.class)).thenThrow(HttpServerErrorException.create(
-                HttpStatus.BAD_GATEWAY,
-                "Bad Gateway",
-                HttpHeaders.EMPTY,
-                """
-                        {"error":{"message":"upstream unavailable"}}
-                        """.getBytes(StandardCharsets.UTF_8),
-                StandardCharsets.UTF_8
+            HttpStatus.BAD_GATEWAY,
+            "Bad Gateway",
+            HttpHeaders.EMPTY,
+            """
+                {"error":{"message":"upstream unavailable"}}
+                """.getBytes(StandardCharsets.UTF_8),
+            StandardCharsets.UTF_8
         ));
 
         StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
         assertThatThrownBy(() -> service.generateStudyPack(
-                "Cell respiration notes",
-                context
+            "Cell respiration notes",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .satisfies(error -> {
-                    AppException appException = (AppException) error;
-                    assertThat(appException.getCode()).isEqualTo("LLM_REQUEST_FAILED");
-                    assertThat(appException.getMessage()).isEqualTo("Study pack generation failed. Please try again in a moment.");
-                });
+            .isInstanceOf(AppException.class)
+            .satisfies(error -> {
+                AppException appException = (AppException) error;
+                assertThat(appException.getCode()).isEqualTo("LLM_REQUEST_FAILED");
+                assertThat(appException.getMessage()).isEqualTo(
+                    "Study pack generation failed. Please try again in a moment.");
+            });
     }
 
     @Test
@@ -230,12 +228,13 @@ class OpenAiLlmStudyPackServiceTest {
 
         List<String> incorrectQuestionSummaries = List.of("Missed ATP question");
         assertThatThrownBy(() -> service.generateQuickReviewStudyTip(incorrectQuestionSummaries))
-                .isInstanceOf(AppException.class)
-                .satisfies(error -> {
-                    AppException appException = (AppException) error;
-                    assertThat(appException.getCode()).isEqualTo("LLM_INVALID_OUTPUT");
-                    assertThat(appException.getMessage()).isEqualTo("The study tip service returned an unexpected format. Please try again.");
-                });
+            .isInstanceOf(AppException.class)
+            .satisfies(error -> {
+                AppException appException = (AppException) error;
+                assertThat(appException.getCode()).isEqualTo("LLM_INVALID_OUTPUT");
+                assertThat(appException.getMessage()).isEqualTo(
+                    "The study tip service returned an unexpected format. Please try again.");
+            });
     }
 
     @Test
@@ -248,15 +247,16 @@ class OpenAiLlmStudyPackServiceTest {
 
         StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
         assertThatThrownBy(() -> service.generateStudyPack(
-                "Cell respiration notes",
-                context
+            "Cell respiration notes",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .satisfies(error -> {
-                    AppException appException = (AppException) error;
-                    assertThat(appException.getCode()).isEqualTo("LLM_INVALID_OUTPUT");
-                    assertThat(appException.getMessage()).isEqualTo("The study pack service returned repetitive quiz questions. Please try again.");
-                });
+            .isInstanceOf(AppException.class)
+            .satisfies(error -> {
+                AppException appException = (AppException) error;
+                assertThat(appException.getCode()).isEqualTo("LLM_INVALID_OUTPUT");
+                assertThat(appException.getMessage()).isEqualTo(
+                    "The study pack service returned repetitive quiz questions. Please try again.");
+            });
     }
 
     // ── Quiz concept edge cases ──────────────────────────────────────────────
@@ -269,8 +269,8 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Physics notes on electricity",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            "Physics notes on electricity",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("voltage and current");
@@ -284,8 +284,8 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Ohm's Law notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            "Ohm's Law notes",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("Electrical power using Ohms");
@@ -298,13 +298,14 @@ class OpenAiLlmStudyPackServiceTest {
         ((ObjectNode) payload.get("quiz").get(0)).putNull("concept");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
         assertThatThrownBy(() -> service.generateStudyPack(
-                "Cell respiration notes",
-                new StudyPackGenerationContext(null, null, null, List.of())
+            "Cell respiration notes",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(e -> ((AppException) e).getCode())
-                .isEqualTo("LLM_INVALID_OUTPUT");
+            .isInstanceOf(AppException.class)
+            .extracting(e -> ((AppException) e).getCode())
+            .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     @Test
@@ -314,13 +315,14 @@ class OpenAiLlmStudyPackServiceTest {
         ((ObjectNode) payload.get("quiz").get(0)).put("concept", "   ");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
         assertThatThrownBy(() -> service.generateStudyPack(
-                "Cell respiration notes",
-                new StudyPackGenerationContext(null, null, null, List.of())
+            "Cell respiration notes",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(e -> ((AppException) e).getCode())
-                .isEqualTo("LLM_INVALID_OUTPUT");
+            .isInstanceOf(AppException.class)
+            .extracting(e -> ((AppException) e).getCode())
+            .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     @Test
@@ -331,8 +333,8 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Cell respiration notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            "Cell respiration notes",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("ATP production");
@@ -346,8 +348,8 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Electrical circuit notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            "Electrical circuit notes",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
         );
 
         assertThat(content.quiz().getFirst().concept()).isEqualTo("Ohm's Law");
@@ -356,18 +358,19 @@ class OpenAiLlmStudyPackServiceTest {
     // ── Subject edge cases ───────────────────────────────────────────────────
 
     @Test
-    void generateStudyPack_repairsStructuredSubjectExceedingWordLimit() throws JsonProcessingException {
+    void generateStudyPack_stripsSubtopicFromOverlongCombinedSubject() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = buildValidStudyPackPayload();
         payload.put("subject", "Electrical Engineering – Voltage Current Resistance and Power");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Electrical engineering notes",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+            "Electrical engineering notes",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
         );
 
-        assertThat(content.subject()).isEqualTo("Electrical Engineering – Voltage Current Resistance");
+        // Subtopic stripped — domain only
+        assertThat(content.subject()).isEqualTo("Electrical Engineering");
     }
 
     @Test
@@ -377,34 +380,35 @@ class OpenAiLlmStudyPackServiceTest {
         payload.put("subject", "   ");
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
+        StudyPackGenerationContext context = new StudyPackGenerationContext(null, null, null, List.of());
         assertThatThrownBy(() -> service.generateStudyPack(
-                "Cell respiration notes",
-                new StudyPackGenerationContext(null, null, null, List.of())
+            "Cell respiration notes",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(e -> ((AppException) e).getCode())
-                .isEqualTo("LLM_INVALID_OUTPUT");
+            .isInstanceOf(AppException.class)
+            .extracting(e -> ((AppException) e).getCode())
+            .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     @Test
-    void generateStudyPack_acceptsTechnicalSubjectsWithinWordLimit() throws JsonProcessingException {
+    void generateStudyPack_stripsCombinedSubjectToDomainOnly() throws JsonProcessingException {
         stubResponsesCall();
-        for (String subject : List.of(
-                "Electrical Engineering – Ohm's Law",
-                "Mathematics – Calculus",
-                "Physics – Electrical Power",
-                "Electrical Engineering – Circuit Fundamentals"
-        )) {
+        for (String[] pair : new String[][]{
+            {"Electrical Engineering – Ohm's Law", "Electrical Engineering"},
+            {"Mathematics – Calculus", "Mathematics"},
+            {"Physics – Electrical Power", "Physics"},
+            {"Electrical Engineering – Circuit Fundamentals", "Electrical Engineering"}
+        }) {
             ObjectNode payload = buildValidStudyPackPayload();
-            payload.put("subject", subject);
+            payload.put("subject", pair[0]);
             when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
             GeneratedStudyPackContent content = service.generateStudyPack(
-                    "Technical notes",
-                    new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
+                "Technical notes",
+                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, null, List.of())
             );
 
-            assertThat(content.subject()).isEqualTo(subject);
+            assertThat(content.subject()).isEqualTo(pair[1]);
         }
     }
 
@@ -430,16 +434,17 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(studyPackResponseJson(payload));
 
         GeneratedStudyPackContent content = service.generateStudyPack(
-                "Ohm's Law: V = IR. R is resistance in ohms. I is current in amperes. V is voltage in volts.",
-                new StudyPackGenerationContext(
-                        LearnerLevel.COLLEGE,
-                        "Electrical Engineering",
-                        "Electrical Engineering – Ohm's Law",
-                        List.of("voltage", "current", "resistance")
-                )
+            "Ohm's Law: V = IR. R is resistance in ohms. I is current in amperes. V is voltage in volts.",
+            new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Electrical Engineering",
+                "Electrical Engineering – Ohm's Law",
+                List.of("voltage", "current", "resistance")
+            )
         );
 
-        assertThat(content.subject()).isEqualTo("Electrical Engineering – Ohm's Law");
+        // Subtopic stripped — "Electrical Engineering – Ohm's Law" → "Electrical Engineering"
+        assertThat(content.subject()).isEqualTo("Electrical Engineering");
         assertThat(content.quiz()).hasSize(5);
         assertThat(content.quiz().get(0).concept()).isEqualTo("Ohm's Law");
         assertThat(content.quiz().get(4).concept()).isEqualTo("Power formula");
@@ -451,24 +456,25 @@ class OpenAiLlmStudyPackServiceTest {
         when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(buildGeneratedQuizPayload()));
 
         List<QuizItem> quizItems = service.generateChallengeQuiz(
-                "Cell Respiration Review",
-                "Cell respiration summary",
-                List.of("ATP production"),
-                List.of("What is the main goal of cell respiration?"),
-                2,
-                "hard",
-                new StudyPackGenerationContext(
-                        LearnerLevel.BOARD_EXAM_REVIEW,
-                        "Biology",
-                        "Biology",
-                        List.of("cells", "respiration")
-                )
+            "Cell Respiration Review",
+            "Cell respiration summary",
+            List.of("ATP production"),
+            List.of("What is the main goal of cell respiration?"),
+            2,
+            "hard",
+            new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Biology",
+                "Biology",
+                List.of("cells", "respiration")
+            )
         );
 
         assertThat(quizItems).hasSize(2);
         assertThat(quizItems.getFirst().answer()).isEqualTo("Electron transport chain");
         assertThat(quizItems.getFirst().concept()).isEqualTo("ATP production");
-        assertThat(quizItems.getFirst().explanation()).isEqualTo("The electron transport chain produces most ATP during aerobic respiration.");
+        assertThat(quizItems.getFirst().explanation()).isEqualTo(
+            "The electron transport chain produces most ATP during aerobic respiration.");
     }
 
     @Test
@@ -477,32 +483,32 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode payload = buildGeneratedQuizPayload();
         ArrayNode questions = (ArrayNode) payload.get("questions");
         questions.set(0, generatedQuizItem(
-                "What is the derivative of uv?",
-                List.of("u'v + uv'", "u'v - uv'", "(u/v)^2", "uv' - u'v"),
-                "A",
-                "Use the product rule: d(uv)/dx = u'v + uv'.",
-                "Product rule"
+            "What is the derivative of uv?",
+            List.of("u'v + uv'", "u'v - uv'", "(u/v)^2", "uv' - u'v"),
+            "A",
+            "Use the product rule: d(uv)/dx = u'v + uv'.",
+            "Product rule"
         ));
         when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
 
         List<QuizItem> quizItems = service.generateChallengeQuiz(
-                "Calculus Review",
-                "Derivative rules",
-                List.of("Product rule"),
-                List.of(),
-                2,
-                "medium",
-                new StudyPackGenerationContext(
-                        LearnerLevel.COLLEGE,
-                        "Engineering",
-                        "Calculus",
-                        List.of("derivatives")
-                )
+            "Calculus Review",
+            "Derivative rules",
+            List.of("Product rule"),
+            List.of(),
+            2,
+            "medium",
+            new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Engineering",
+                "Calculus",
+                List.of("derivatives")
+            )
         );
 
         assertThat(quizItems).hasSize(2);
         assertThat(quizItems.getFirst().choices())
-                .containsExactly("u'v + uv'", "u'v - uv'", "(u/v)^2", "uv' - u'v");
+            .containsExactly("u'v + uv'", "u'v - uv'", "(u/v)^2", "uv' - u'v");
     }
 
     @Test
@@ -511,25 +517,25 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode invalidPayload = buildGeneratedQuizPayload();
         ArrayNode invalidQuestions = (ArrayNode) invalidPayload.get("questions");
         invalidQuestions.set(0, generatedQuizItem(
-                "What is the derivative of uv?",
-                List.of("Derivative", "Derivative ", "Integral", "Limit"),
-                "A",
-                "Use the product rule.",
-                "Product rule"
+            "What is the derivative of uv?",
+            List.of("Derivative", "Derivative ", "Integral", "Limit"),
+            "A",
+            "Use the product rule.",
+            "Product rule"
         ));
         when(responseSpec.body(String.class)).thenReturn(
-                generatedQuizResponseJson(invalidPayload),
-                generatedQuizResponseJson(buildGeneratedQuizPayload())
+            generatedQuizResponseJson(invalidPayload),
+            generatedQuizResponseJson(buildGeneratedQuizPayload())
         );
 
         List<QuizItem> quizItems = service.generateChallengeQuiz(
-                "Calculus Review",
-                "Derivative rules",
-                List.of("Product rule"),
-                List.of(),
-                2,
-                "medium",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
+            "Calculus Review",
+            "Derivative rules",
+            List.of("Product rule"),
+            List.of(),
+            2,
+            "medium",
+            new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
         );
 
         assertThat(quizItems).hasSize(2);
@@ -542,32 +548,39 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode invalidPayload = buildGeneratedQuizPayload();
         ArrayNode invalidQuestions = (ArrayNode) invalidPayload.get("questions");
         invalidQuestions.set(0, generatedQuizItem(
-                "What is the derivative of uv?",
-                List.of("Derivative", "Derivative ", "Integral", "Limit"),
-                "A",
-                "Use the product rule.",
-                "Product rule"
+            "What is the derivative of uv?",
+            List.of("Derivative", "Derivative ", "Integral", "Limit"),
+            "A",
+            "Use the product rule.",
+            "Product rule"
         ));
         when(responseSpec.body(String.class)).thenReturn(
-                generatedQuizResponseJson(invalidPayload),
-                generatedQuizResponseJson(invalidPayload)
+            generatedQuizResponseJson(invalidPayload),
+            generatedQuizResponseJson(invalidPayload)
         );
 
+        List<String> keyConcepts = List.of("Product rule");
+        List<String> disallowed = List.of();
+        StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
+            null,
+            "Calculus",
+            List.of("derivatives"));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
-                "Calculus Review",
-                "Derivative rules",
-                List.of("Product rule"),
-                List.of(),
-                2,
-                "medium",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
+            "Calculus Review",
+            "Derivative rules",
+            keyConcepts,
+            disallowed,
+            2,
+            "medium",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .satisfies(error -> {
-                    AppException appException = (AppException) error;
-                    assertThat(appException.getCode()).isEqualTo("LLM_INVALID_OUTPUT");
-                    assertThat(appException.getMessage()).isEqualTo("Challenge quiz generation returned invalid choices. Please try again.");
-                });
+            .isInstanceOf(AppException.class)
+            .satisfies(error -> {
+                AppException appException = (AppException) error;
+                assertThat(appException.getCode()).isEqualTo("LLM_INVALID_OUTPUT");
+                assertThat(appException.getMessage()).isEqualTo(
+                    "Challenge quiz generation returned invalid choices. Please try again.");
+            });
         verify(responseSpec, times(2)).body(String.class);
     }
 
@@ -577,29 +590,35 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode payload = buildGeneratedQuizPayload();
         ArrayNode questions = (ArrayNode) payload.get("questions");
         questions.set(0, generatedQuizItem(
-                "What is the derivative of uv?",
-                List.of("u'v + uv'", "u'v - uv'", "(u/v)^2"),
-                "A",
-                "Use the product rule.",
-                "Product rule"
+            "What is the derivative of uv?",
+            List.of("u'v + uv'", "u'v - uv'", "(u/v)^2"),
+            "A",
+            "Use the product rule.",
+            "Product rule"
         ));
         when(responseSpec.body(String.class)).thenReturn(
-                generatedQuizResponseJson(payload),
-                generatedQuizResponseJson(payload)
+            generatedQuizResponseJson(payload),
+            generatedQuizResponseJson(payload)
         );
 
+        List<String> keyConcepts = List.of("Product rule");
+        List<String> disallowed = List.of();
+        StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
+            null,
+            "Calculus",
+            List.of("derivatives"));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
-                "Calculus Review",
-                "Derivative rules",
-                List.of("Product rule"),
-                List.of(),
-                2,
-                "medium",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Calculus", List.of("derivatives"))
+            "Calculus Review",
+            "Derivative rules",
+            keyConcepts,
+            disallowed,
+            2,
+            "medium",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(error -> ((AppException) error).getCode())
-                .isEqualTo("LLM_INVALID_OUTPUT");
+            .isInstanceOf(AppException.class)
+            .extracting(error -> ((AppException) error).getCode())
+            .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     @Test
@@ -609,22 +628,28 @@ class OpenAiLlmStudyPackServiceTest {
         ArrayNode questions = (ArrayNode) payload.get("questions");
         ((ObjectNode) questions.get(0)).put("answer", "E");
         when(responseSpec.body(String.class)).thenReturn(
-                generatedQuizResponseJson(payload),
-                generatedQuizResponseJson(payload)
+            generatedQuizResponseJson(payload),
+            generatedQuizResponseJson(payload)
         );
 
+        List<String> keyConcepts = List.of("ATP production");
+        List<String> disallowed = List.of();
+        StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
+            null,
+            "Biology",
+            List.of("cells"));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
-                "Cell Respiration Review",
-                "Cell respiration summary",
-                List.of("ATP production"),
-                List.of(),
-                2,
-                "hard",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+            "Cell Respiration Review",
+            "Cell respiration summary",
+            keyConcepts,
+            disallowed,
+            2,
+            "hard",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(error -> ((AppException) error).getCode())
-                .isEqualTo("LLM_INVALID_OUTPUT");
+            .isInstanceOf(AppException.class)
+            .extracting(error -> ((AppException) error).getCode())
+            .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     @Test
@@ -634,22 +659,28 @@ class OpenAiLlmStudyPackServiceTest {
         ArrayNode questions = (ArrayNode) payload.get("questions");
         ((ObjectNode) questions.get(0)).put("explanation", " ");
         when(responseSpec.body(String.class)).thenReturn(
-                generatedQuizResponseJson(payload),
-                generatedQuizResponseJson(payload)
+            generatedQuizResponseJson(payload),
+            generatedQuizResponseJson(payload)
         );
 
+        List<String> keyConcepts = List.of("ATP production");
+        List<String> disallowed = List.of();
+        StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
+            null,
+            "Biology",
+            List.of("cells"));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
-                "Cell Respiration Review",
-                "Cell respiration summary",
-                List.of("ATP production"),
-                List.of(),
-                2,
-                "hard",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+            "Cell Respiration Review",
+            "Cell respiration summary",
+            keyConcepts,
+            disallowed,
+            2,
+            "hard",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(error -> ((AppException) error).getCode())
-                .isEqualTo("LLM_INVALID_OUTPUT");
+            .isInstanceOf(AppException.class)
+            .extracting(error -> ((AppException) error).getCode())
+            .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     @Test
@@ -659,22 +690,28 @@ class OpenAiLlmStudyPackServiceTest {
         ArrayNode questions = (ArrayNode) payload.get("questions");
         ((ObjectNode) questions.get(0)).put("concept", " ");
         when(responseSpec.body(String.class)).thenReturn(
-                generatedQuizResponseJson(payload),
-                generatedQuizResponseJson(payload)
+            generatedQuizResponseJson(payload),
+            generatedQuizResponseJson(payload)
         );
 
+        List<String> keyConcepts = List.of("ATP production");
+        List<String> disallowed = List.of();
+        StudyPackGenerationContext context = new StudyPackGenerationContext(LearnerLevel.COLLEGE,
+            null,
+            "Biology",
+            List.of("cells"));
         assertThatThrownBy(() -> service.generateChallengeQuiz(
-                "Cell Respiration Review",
-                "Cell respiration summary",
-                List.of("ATP production"),
-                List.of(),
-                2,
-                "hard",
-                new StudyPackGenerationContext(LearnerLevel.COLLEGE, null, "Biology", List.of("cells"))
+            "Cell Respiration Review",
+            "Cell respiration summary",
+            keyConcepts,
+            disallowed,
+            2,
+            "hard",
+            context
         ))
-                .isInstanceOf(AppException.class)
-                .extracting(error -> ((AppException) error).getCode())
-                .isEqualTo("LLM_INVALID_OUTPUT");
+            .isInstanceOf(AppException.class)
+            .extracting(error -> ((AppException) error).getCode())
+            .isEqualTo("LLM_INVALID_OUTPUT");
     }
 
     private String studyPackResponseJson(ObjectNode payload) throws JsonProcessingException {
@@ -706,7 +743,7 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("title", "Cell Respiration Review");
         payload.put("summary", "Cell respiration turns glucose into ATP through glycolysis and aerobic pathways.");
-        payload.put("subject", "Biology – Cellular Respiration");
+        payload.put("subject", "Biology");
 
         ArrayNode tags = payload.putArray("tags");
         tags.add("cells");
@@ -725,34 +762,34 @@ class OpenAiLlmStudyPackServiceTest {
 
         ArrayNode quiz = payload.putArray("quiz");
         quiz.add(promptQuizItem(
-                "What is the main goal of cell respiration?",
-                List.of("Store oxygen", "Produce ATP", "Build proteins", "Copy DNA"),
-                "B",
-                "ATP production"
+            "What is the main goal of cell respiration?",
+            List.of("Store oxygen", "Produce ATP", "Build proteins", "Copy DNA"),
+            "B",
+            "ATP production"
         ));
         quiz.add(promptQuizItem(
-                "Which stage produces the most ATP?",
-                List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
-                "C",
-                "Electron transport chain"
+            "Which stage produces the most ATP?",
+            List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
+            "C",
+            "Electron transport chain"
         ));
         quiz.add(promptQuizItem(
-                "Where does glycolysis happen?",
-                List.of("Nucleus", "Cytoplasm", "Mitochondria", "Ribosome"),
-                "B",
-                "Glycolysis"
+            "Where does glycolysis happen?",
+            List.of("Nucleus", "Cytoplasm", "Mitochondria", "Ribosome"),
+            "B",
+            "Glycolysis"
         ));
         quiz.add(promptQuizItem(
-                "What molecule carries electrons to the ETC?",
-                List.of("ATP", "DNA", "NADH", "Water"),
-                "C",
-                "NADH"
+            "What molecule carries electrons to the ETC?",
+            List.of("ATP", "DNA", "NADH", "Water"),
+            "C",
+            "NADH"
         ));
         quiz.add(promptQuizItem(
-                "What final molecule accepts electrons in aerobic respiration?",
-                List.of("Carbon dioxide", "Glucose", "Oxygen", "Pyruvate"),
-                "C",
-                "Oxygen"
+            "What final molecule accepts electrons in aerobic respiration?",
+            List.of("Carbon dioxide", "Glucose", "Oxygen", "Pyruvate"),
+            "C",
+            "Oxygen"
         ));
         return payload;
     }
@@ -761,18 +798,18 @@ class OpenAiLlmStudyPackServiceTest {
         ObjectNode payload = objectMapper.createObjectNode();
         ArrayNode questions = payload.putArray("questions");
         questions.add(generatedQuizItem(
-                "Which stage generates the most ATP in aerobic respiration?",
-                List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
-                "C",
-                "The electron transport chain produces most ATP during aerobic respiration.",
-                "ATP production"
+            "Which stage generates the most ATP in aerobic respiration?",
+            List.of("Glycolysis", "Citric acid cycle", "Electron transport chain", "Fermentation"),
+            "C",
+            "The electron transport chain produces most ATP during aerobic respiration.",
+            "ATP production"
         ));
         questions.add(generatedQuizItem(
-                "What is the immediate product of glycolysis before aerobic processing continues?",
-                List.of("Acetyl-CoA", "Pyruvate", "Carbon dioxide", "Water"),
-                "B",
-                "Glycolysis ends with pyruvate, which is then processed further when oxygen is available.",
-                "Glycolysis"
+            "What is the immediate product of glycolysis before aerobic processing continues?",
+            List.of("Acetyl-CoA", "Pyruvate", "Carbon dioxide", "Water"),
+            "B",
+            "Glycolysis ends with pyruvate, which is then processed further when oxygen is available.",
+            "Glycolysis"
         ));
         return payload;
     }
@@ -785,12 +822,13 @@ class OpenAiLlmStudyPackServiceTest {
         item.put("answer", answer);
         item.put("concept", concept);
         item.put("explanation", question.equals("What is the main goal of cell respiration?")
-                ? "ATP is the usable energy output of cell respiration."
-                : "This question checks the " + concept + " concept.");
+            ? "ATP is the usable energy output of cell respiration."
+            : "This question checks the " + concept + " concept.");
         return item;
     }
 
-    private ObjectNode generatedQuizItem(String question, List<String> choices, String answer, String explanation, String concept) {
+    private ObjectNode generatedQuizItem(String question, List<String> choices, String answer, String explanation,
+        String concept) {
         ObjectNode item = objectMapper.createObjectNode();
         item.put("question", question);
         ArrayNode choiceArray = item.putArray("choices");

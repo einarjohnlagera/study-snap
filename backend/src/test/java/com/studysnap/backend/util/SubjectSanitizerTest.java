@@ -6,6 +6,54 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SubjectSanitizerTest {
 
+    // --- stripSubtopicSuffix ---
+
+    @Test
+    void stripSubtopicSuffix_nullInput_returnsNull() {
+        assertThat(SubjectSanitizer.stripSubtopicSuffix(null)).isNull();
+    }
+
+    @Test
+    void stripSubtopicSuffix_noSeparator_returnsUnchanged() {
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Biology")).isEqualTo("Biology");
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Computer Science")).isEqualTo("Computer Science");
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Physical Education")).isEqualTo("Physical Education");
+    }
+
+    @Test
+    void stripSubtopicSuffix_emDashSeparator_returnsLeftSide() {
+        // normalizeForStorage converts "-" to " – ", so callers pass the already-normalized form
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Biology – Cell Division")).isEqualTo("Biology");
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Mathematics – Derivatives")).isEqualTo("Mathematics");
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Electrical Engineering – Ohm's Law")).isEqualTo("Electrical Engineering");
+    }
+
+    @Test
+    void stripSubtopicSuffix_colonSeparator_returnsLeftSide() {
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Physics: Electricity")).isEqualTo("Physics");
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Computer Science: OOP")).isEqualTo("Computer Science");
+    }
+
+    @Test
+    void stripSubtopicSuffix_whitespaceAroundSeparator_trimmed() {
+        // normalizeForStorage already normalizes whitespace, but guard extra spaces just in case
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Biology – Photosynthesis")).isEqualTo("Biology");
+    }
+
+    @Test
+    void stripSubtopicSuffix_emptyLeftSide_returnsNull() {
+        // " – Cell Division" has separator at position 0 (space + dash) → left side empty → null
+        assertThat(SubjectSanitizer.stripSubtopicSuffix(" – Cell Division")).isNull();
+        // colon at position 0 → left side empty → null
+        assertThat(SubjectSanitizer.stripSubtopicSuffix(": Electricity")).isNull();
+    }
+
+    @Test
+    void stripSubtopicSuffix_multiWordDomain_returnsFullDomainPart() {
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Criminal Law – Crimes Against Persons")).isEqualTo("Criminal Law");
+        assertThat(SubjectSanitizer.stripSubtopicSuffix("Information Technology: Networking")).isEqualTo("Information Technology");
+    }
+
     // --- tryRepair ---
     // tryRepair is only for overlong inputs; returns null when no repair is needed or repair fails.
 

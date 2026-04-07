@@ -956,16 +956,17 @@ A feature is not complete unless:
 
 ## Subject Generation Strategy
 
-LLM-generated subjects follow a 3-tier hierarchy (pick first level that fits):
+LLM-generated subjects must be **domain-only** — a broad academic domain or curriculum category, no topic suffix.
 
-1. **SPECIFIC SUBJECT** (preferred) — standalone subtopic label reusable across notes: `Integral Calculus`, `Circuit Theory`, `Object-Oriented Programming`, `Cell Division`, `Criminal Procedure`
-2. **PRIMARY – SUBTOPIC** — only when the subtopic alone lacks context without the parent: `Electrical Engineering – Power Formula`, `Biology – Cell Division`
-3. **GENERAL SUBJECT** (fallback) — only when the note covers a broad area with no subtopic: `Mathematics`, `Physics`, `Chemistry`
+- Correct: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `Filipino`, `Engineering`, `Medicine`, `Law`
+- Incorrect: `Biology – Cell Division`, `Physics: Ohm's Law`, `Mathematics – Derivatives`
+- Topic-level specificity belongs in tags and key concepts, not in subject
 
-Rules:
-- Subject must be ≤ 6 words (including dash and subtopic); `SubjectSanitizer.tryRepair` trims overlong subjects
-- Never use broad umbrella labels (`Medicine`, `Engineering`, `Education`, `Law`, `Business`) when the note supports a narrower subject (`isOverlyBroad` check)
-- Never echo the course/program name verbatim as the subject without a subtopic (`matchesBroadCourseProgram` check)
+Backend enforcement (`SubjectSanitizer.stripSubtopicSuffix`):
+- Any separator (" – " or ":") triggers stripping → only the left/domain part is kept
+- `"Electrical Engineering – Ohm's Law"` → `"Electrical Engineering"`
+- Broad single-word domains (`Engineering`, `Medicine`, `Law`, `Business`, `Education`) are now valid and accepted without retry
+- Empty/unusable result after stripping → throws `LLM_INVALID_OUTPUT`
 
 ## Study Pack Sanitization
 

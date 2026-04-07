@@ -30,6 +30,7 @@
 - Key-concept sanitization now applies to the `keyConcepts` list (not just quiz `concept` fields): overlong concepts are repaired in-place and hard-truncated as a last resort — study pack creation is never blocked by word-count alone.
 - Updated LLM subject prompt to use the 3-tier subject strategy: Specific Subject (preferred) > Primary–Subtopic (when context needed) > General Subject (fallback).
 - Browse by Subject section repositioned to appear ABOVE Featured/Popular/Recently Added sections in discovery mode. Limit reduced from 12 to 8 subjects.
+- **Subject metadata cleanup**: subjects are now domain-only (e.g., `Biology`, `Physics`, `Engineering`). Any combined domain-topic value (`Biology – Cell Division`, `Physics: Ohm's Law`) is automatically stripped to the domain part before saving. Broad single-word domains (`Engineering`, `Medicine`, `Law`, `Business`, `Education`) are now valid and no longer trigger a retry. LLM prompt and subject guidance block updated to request domain-only subjects. Added `SubjectSanitizer.stripSubtopicSuffix` utility method. Covered by new `stripSubtopicSuffix` tests in `SubjectSanitizerTest` and updated `OpenAiLlmStudyPackServiceTest` subject edge cases.
 
 ## v0.7.0 - Learning & Metadata Foundation (In Progress)
 

@@ -27,21 +27,14 @@ Summary
 
 Subject
 - exactly 1 value
-- choose the most specific academic subject that best organizes the note in a study library
-- subject strategy — pick the first level that fits:
-  1. SPECIFIC SUBJECT (preferred): a standalone subtopic-level label that is reusable across notes
-     - correct examples: Integral Calculus, Circuit Theory, Object-Oriented Programming, Cell Division, Ohm's Law, Pharmacology, Criminal Procedure
-  2. PRIMARY – SUBTOPIC: use this format only when the subtopic alone lacks context without the parent field
-     - correct examples: Electrical Engineering – Power Formula, Biology – Cell Division, Criminal Law – Crimes Against Persons
-  3. GENERAL SUBJECT (fallback): use only when the note covers a broad area without a clear subtopic
-     - correct examples: Mathematics, Physics, Chemistry, History, English
-- the total subject (including the dash and subtopic) must be at most 6 words
-  - correct examples: Integral Calculus, Circuit Theory, Data Structures, Electrical Engineering – Ohm's Law, Biology – Cell Division
-  - incorrect examples: "Electrical Engineering – Voltage, Current, Resistance, and Power Relationships" (too long), "Engineering – Ohm's Law and the Power Formula in Electrical Systems" (too long)
-- avoid broad umbrella labels such as Medicine, Engineering, Education, Law, or Business when a more specific academic subject is available
-- use any provided course/program or current subject as context, but refine broad labels into a more specific academic subject when the notes support it
-- do not make the subject so narrow that it becomes a one-off note title
-- concise and human-readable
+- subject must be a single broad academic domain or curriculum-friendly category
+- do NOT include a topic or subtopic — domain only
+- do NOT return hyphenated, colon-separated, or dash-separated subject–topic combinations
+- correct examples: Biology, Physics, Mathematics, Computer Science, English, Filipino, History, Chemistry, Economics, Engineering, Medicine, Law
+- incorrect examples: "Biology - Photosynthesis", "Physics: Ohm's Law", "Mathematics – Derivatives", "Computer Science – Object-Oriented Programming"
+- topic-level specificity belongs in tags and key concepts, not in subject
+- subject is a reusable library shelf label — it should group many notes, not describe one note
+- concise and human-readable, at most 4 words
 - do not return a sentence
 
 Tags
