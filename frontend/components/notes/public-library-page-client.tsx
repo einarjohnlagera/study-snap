@@ -26,6 +26,13 @@ import {
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
+import {
+  excludeById,
+  getBrowseSubjects,
+  getFeaturedNotes,
+  getPopularNotes,
+  getRecentNotes,
+} from "@/lib/public-library-discovery";
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -108,6 +115,66 @@ function resolveAuthorBadge(
     className: "text-foreground/75",
     showOfficialBadge: false,
   };
+}
+
+interface PublicNoteCardProps {
+  item: NoteListItemResponse;
+  currentUserId: string | null;
+  onNavigate: (path: string) => void;
+}
+
+function PublicNoteCard({ item, currentUserId, onNavigate }: PublicNoteCardProps) {
+  const itemTags = normalizeTags(item.tags);
+  const authorBadge = resolveAuthorBadge(item, currentUserId);
+  const path = buildPublicLibraryNotePath({ subject: item.subject, title: item.title });
+
+  return (
+    <Card
+      role="link"
+      tabIndex={0}
+      onClick={() => onNavigate(path)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onNavigate(path);
+        }
+      }}
+      className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
+    >
+      <SharedNoteCard
+        title={item.title}
+        metaLine={normalizeCourseProgram(item.courseProgram)}
+        subject={item.subject}
+        tags={itemTags}
+        contentPreview={item.contentPreview}
+        summaryPreview={item.summaryPreview}
+        copyCount={typeof item.copyCount === "number" && item.copyCount > 0 ? item.copyCount : null}
+        viewCount={typeof item.viewCount === "number" && item.viewCount > 0 ? item.viewCount : null}
+        metadataBadges={<NoteStateBadge status={item.studyPackStatus} />}
+        footer={(
+          <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
+            {item.ownerUserId ? (
+              <Link
+                href={buildPublicProfilePath(item.ownerUserId)}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                className={`font-medium hover:underline ${authorBadge.className}`}
+              >
+                {authorBadge.label}
+              </Link>
+            ) : (
+              <span className={authorBadge.className}>{authorBadge.label}</span>
+            )}
+            {authorBadge.showOfficialBadge ? (
+              <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+                Official
+              </span>
+            ) : null}
+          </div>
+        )}
+      />
+    </Card>
+  );
 }
 
 export function PublicLibraryPageClient() {
@@ -272,6 +339,20 @@ export function PublicLibraryPageClient() {
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
+
+  // Discovery mode: no active search/filter and default sort → show discovery sections
+  const isDiscoveryMode = !hasActiveFilters && selectedSort === "NEWEST";
+
+  const featuredNotes = useMemo(() => getFeaturedNotes(items), [items]);
+  const popularNotes = useMemo(() => {
+    const featuredIds = new Set(featuredNotes.map((n) => n.id));
+    return getPopularNotes(excludeById(items, featuredIds));
+  }, [items, featuredNotes]);
+  const recentNotes = useMemo(() => {
+    const usedIds = new Set([...featuredNotes, ...popularNotes].map((n) => n.id));
+    return getRecentNotes(excludeById(items, usedIds));
+  }, [items, featuredNotes, popularNotes]);
+  const browseSubjects = useMemo(() => getBrowseSubjects(items), [items]);
 
   const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -464,7 +545,85 @@ export function PublicLibraryPageClient() {
             activeFilterSummary={activeFilterSummary}
           />
 
-          {sortedItems.length === 0 ? (
+          {isDiscoveryMode ? (
+            <div className="space-y-8">
+              {items.length === 0 ? (
+                <Card className="space-y-3 p-4 sm:p-6">
+                  <h2 className="text-base font-semibold sm:text-lg">No public notes yet.</h2>
+                  <p className="text-sm text-foreground/75">Be the first to share a note to the public library.</p>
+                </Card>
+              ) : null}
+
+              {featuredNotes.length > 0 ? (
+                <section aria-label="Featured Notes">
+                  <div className="mb-3">
+                    <h2 className="text-base font-semibold">🔥 Featured Notes</h2>
+                    <p className="mt-0.5 text-xs text-foreground/55">High-engagement notes worth studying</p>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {featuredNotes.map((item) => (
+                      <PublicNoteCard
+                        key={item.id}
+                        item={item}
+                        currentUserId={currentUserId}
+                        onNavigate={(path) => router.push(path)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {popularNotes.length > 0 ? (
+                <section aria-label="Most Popular">
+                  <h2 className="mb-3 text-base font-semibold">📈 Most Popular</h2>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {popularNotes.map((item) => (
+                      <PublicNoteCard
+                        key={item.id}
+                        item={item}
+                        currentUserId={currentUserId}
+                        onNavigate={(path) => router.push(path)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {recentNotes.length > 0 ? (
+                <section aria-label="Recently Added">
+                  <h2 className="mb-3 text-base font-semibold">🆕 Recently Added</h2>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {recentNotes.map((item) => (
+                      <PublicNoteCard
+                        key={item.id}
+                        item={item}
+                        currentUserId={currentUserId}
+                        onNavigate={(path) => router.push(path)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {browseSubjects.length > 0 ? (
+                <section aria-label="Browse by Subject">
+                  <h2 className="mb-3 text-base font-semibold">📚 Browse by Subject</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {browseSubjects.map((subject) => (
+                      <button
+                        key={subject}
+                        type="button"
+                        onClick={() => setSelectedSubject(subject)}
+                        className="rounded-full border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                      >
+                        {subject}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          ) : sortedItems.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-base font-semibold sm:text-lg">No public notes match your filters.</h2>
               <p className="text-sm text-foreground/75">Try adjusting search or filters.</p>
@@ -474,59 +633,14 @@ export function PublicLibraryPageClient() {
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {sortedItems.map((item) => {
-                const itemTags = normalizeTags(item.tags);
-                const authorBadge = resolveAuthorBadge(item, currentUserId);
-
-                return (
-                  <Card
-                    key={item.id}
-                    role="link"
-                    tabIndex={0}
-                    onClick={() => router.push(buildPublicLibraryNotePath({ subject: item.subject, title: item.title }))}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        router.push(buildPublicLibraryNotePath({ subject: item.subject, title: item.title }));
-                      }
-                    }}
-                    className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
-                  >
-                    <SharedNoteCard
-                      title={item.title}
-                      metaLine={normalizeCourseProgram(item.courseProgram)}
-                      subject={item.subject}
-                      tags={itemTags}
-                      contentPreview={item.contentPreview}
-                      summaryPreview={item.summaryPreview}
-                      copyCount={typeof item.copyCount === "number" && item.copyCount > 0 ? item.copyCount : null}
-                      viewCount={typeof item.viewCount === "number" && item.viewCount > 0 ? item.viewCount : null}
-                      metadataBadges={<NoteStateBadge status={item.studyPackStatus} />}
-                      footer={(
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
-                          {item.ownerUserId ? (
-                            <Link
-                              href={buildPublicProfilePath(item.ownerUserId)}
-                              onClick={(event) => event.stopPropagation()}
-                              onKeyDown={(event) => event.stopPropagation()}
-                              className={`font-medium hover:underline ${authorBadge.className}`}
-                            >
-                              {authorBadge.label}
-                            </Link>
-                          ) : (
-                            <span className={authorBadge.className}>{authorBadge.label}</span>
-                          )}
-                          {authorBadge.showOfficialBadge ? (
-                            <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-300">
-                              Official
-                            </span>
-                          ) : null}
-                        </div>
-                      )}
-                    />
-                  </Card>
-                );
-              })}
+              {sortedItems.map((item) => (
+                <PublicNoteCard
+                  key={item.id}
+                  item={item}
+                  currentUserId={currentUserId}
+                  onNavigate={(path) => router.push(path)}
+                />
+              ))}
             </div>
           )}
         </div>

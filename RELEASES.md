@@ -1,5 +1,23 @@
 # RELEASES.md - NoteLib
 
+## v0.8.0 - Public Library Discovery System (In Progress)
+
+### New Features
+
+- Public Library now has a **discovery mode** that replaces the flat note list with curated sections when no search or filters are active:
+  - 🔥 **Featured Notes** — top 6 notes ranked by a weighted engagement score: `(views × 0.4) + (copies × 0.5) + (shares × 0.1)`. Tiebreak by newest first.
+  - 📈 **Most Popular** — top 6 notes by copy count then view count, excluding notes already in Featured.
+  - 🆕 **Recently Added** — top 6 newest notes, excluding notes already in Featured or Most Popular.
+  - 📚 **Browse by Subject** — clickable chips of all unique subjects sorted by note count. Clicking a chip applies the subject filter and switches to filter mode.
+- Sections are deduplication-safe: each note appears in at most one section per page load.
+- Discovery mode is automatically hidden when the user types a search query, changes any filter, or selects a non-default sort option — switching seamlessly to the existing filter/sort list.
+
+### Technical Changes
+
+- Added `frontend/lib/public-library-discovery.ts` with pure utility functions: `computeDiscoveryScore`, `getFeaturedNotes`, `getPopularNotes`, `getRecentNotes`, `getBrowseSubjects`, `excludeById`. All ranking is client-side using existing data from `listPublicNotes()` — no new backend endpoints required.
+- Extracted `PublicNoteCard` sub-component inside `public-library-page-client.tsx` to share card rendering between discovery sections and the main filtered list.
+- Added 28 unit tests for discovery utility functions and 5 integration tests for discovery UI behavior in `PublicLibraryPageClient`.
+
 ## v0.7.0 - Learning & Metadata Foundation (In Progress)
 
 ### New Features
