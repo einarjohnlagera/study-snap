@@ -459,6 +459,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String normalizeAndValidateSubject(String subject, StudyPackGenerationContext context) {
         String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
+        // Strip subtopic suffix — subjects must be domain-only (e.g. "Biology", not "Biology – Cell Division")
+        if (normalized != null) {
+            String stripped = SubjectSanitizer.stripSubtopicSuffix(normalized);
+            if (stripped != null && !stripped.equals(normalized)) {
+                log.info("requestId={} field=subject value='{}' reason='combined domain-topic stripped' repairedTo='{}'",
+                        MDC.get("requestId"), truncateForLog(normalized), stripped);
+                normalized = stripped;
+            }
+        }
         boolean hasContent = StringNormalizationUtils.containsAlphaNumeric(normalized);
         boolean withinWordLimit = hasContent && StringNormalizationUtils.hasWordCountBetween(normalized, 1, SubjectSanitizer.MAX_SUBJECT_WORDS);
         if (!hasContent || !withinWordLimit) {
@@ -467,9 +476,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     : wordCount > SubjectSanitizer.MAX_SUBJECT_WORDS ? "more than " + SubjectSanitizer.MAX_SUBJECT_WORDS + " words" : "empty";
             if (hasContent && wordCount > SubjectSanitizer.MAX_SUBJECT_WORDS) {
                 String repaired = SubjectSanitizer.tryRepair(normalized, SubjectSanitizer.MAX_SUBJECT_WORDS);
-                if (repaired != null
-                        && !SubjectSanitizer.isOverlyBroad(repaired)
-                        && !SubjectSanitizer.matchesBroadCourseProgram(repaired, context == null ? null : context.courseProgram())) {
+                if (repaired != null) {
                     log.info("requestId={} field=subject value='{}' reason='{}' repairedTo='{}'",
                             MDC.get("requestId"), truncateForLog(normalized), reason, repaired);
                     return repaired;
@@ -478,12 +485,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             log.warn("requestId={} field=subject value='{}' reason='{}'",
                     MDC.get("requestId"), truncateForLog(normalized), reason);
             throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
-        }
-        if (SubjectSanitizer.isOverlyBroad(normalized)
-                || SubjectSanitizer.matchesBroadCourseProgram(normalized, context == null ? null : context.courseProgram())) {
-            log.warn("requestId={} field=subject value='{}' reason='overly broad'",
-                    MDC.get("requestId"), truncateForLog(normalized));
-            throw invalidOutput("The study pack service returned subject metadata that is too broad. Please try again.");
         }
         return normalized;
     }
@@ -697,15 +698,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String buildSubjectSuggestionGuidanceBlock(StudyPackGenerationContext context) {
         List<String> lines = new ArrayList<>();
-        lines.add("Subject guidance: choose a specific academic library subject, not a broad umbrella field.");
-        lines.add("Prefer a label like \"Primary field – subtopic\" when that helps group similar notes.");
-        lines.add("Examples: Nursing – Pharmacology; Biology – Cell Division; Criminal Law – Crimes Against Persons; Software Engineering – Data Structures.");
-        if (context != null && context.subject() != null && !context.subject().isBlank()) {
-            lines.add("If the current subject is already specific, stay close to it. If it is broad, refine it into a more specific academic subject.");
-        } else if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
-            lines.add("Use the course/program as context when it helps choose the best specific subject.");
+        lines.add("Subject guidance: use a broad academic domain or curriculum category — domain only, no topic suffix.");
+        lines.add("Examples of correct subjects: Biology, Physics, Mathematics, Computer Science, English, History, Engineering, Medicine, Law.");
+        lines.add("Do not combine domain and topic. Incorrect: \"Biology – Cell Division\", \"Physics: Ohm's Law\", \"Math – Derivatives\".");
+        lines.add("Topic-level specificity belongs in tags and key concepts, not in subject.");
+        if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
+            lines.add("Use the course/program as context when it helps identify the right academic domain.");
         }
-        lines.add("Avoid generic labels like Medicine, Engineering, Education, Law, or Business when the notes support a more useful filterable subject.");
         return String.join("\n", lines);
     }
 

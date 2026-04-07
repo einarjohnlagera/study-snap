@@ -58,12 +58,13 @@ Subject, tags, and quiz concept metadata are generated in the same Study Pack AI
 
 ### Subject
 - exactly one subject value per Study Pack
-- broad academic category (for example: History, Biology, Chemistry, Physics, Mathematics, Literature, Computer Science, Geography, Economics)
-- prefer a library-friendly `Primary field – subtopic` format where helpful
-- concise and human-readable, not sentence-like
-- maximum 6 words (including the dash separator and subtopic)
-- overly broad single-word labels like `Engineering`, `Business`, or `Law` are rejected and retried
-- if the LLM returns a subject exceeding 6 words, the backend attempts automatic repair (truncate subtopic) before failing
+- must be a **broad academic domain or curriculum category** — domain only, no topic suffix
+- correct examples: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `English`, `History`, `Engineering`, `Medicine`, `Law`
+- incorrect: `Biology – Cell Division`, `Physics: Ohm's Law`, `Mathematics – Derivatives`
+- topic-level specificity belongs in tags and key concepts, not in subject
+- concise and human-readable, not sentence-like, at most 4 words
+- backend enforcement: any combined domain-topic value (`Biology – Cell Division`) is stripped to the domain part (`Biology`) before saving
+- if stripping produces an empty/unusable result the study pack fails with `LLM_INVALID_OUTPUT`
 
 ### Tags
 - generate 3 to 6 tags
@@ -195,9 +196,9 @@ Errors should remain supportive and actionable.
   - existing `subject` -> default `Keep My Subject`
   - existing `tags` -> default `Merge Tags`
   - no existing `tags` -> default `Use AI Tags`
-- AI subject output should prefer the most specific academic subject that meaningfully organizes the note in a study library.
+- AI subject output must be a broad academic domain, not a specific topic. Topic specificity belongs in tags.
 - Prefer reusable labels such as `Primary field – subtopic` when that helps group notes, for example `Nursing – Pharmacology` or `Criminal Law – Crimes Against Persons`.
-- Avoid broad umbrella labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the note supports a narrower academic subject.
+- Subject must be domain-level (e.g., `Biology`, `Engineering`). Broad domains are valid — they are the intended output.
 - Generation context should use learner level, course/program, current subject, and tags to refine the suggested subject rather than treating the note as context-free.
 
 ## Validation and retry
