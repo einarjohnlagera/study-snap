@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/page-header";
 import { LibraryToolbar } from "@/components/notes/library-toolbar";
 import { LibrarySheetModal } from "@/components/notes/library-sheet-modal";
 import { NoteStateBadge } from "@/components/notes/note-state-badge";
+import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -150,7 +151,16 @@ function PublicNoteCard({ item, currentUserId, onNavigate }: PublicNoteCardProps
         summaryPreview={item.summaryPreview}
         copyCount={typeof item.copyCount === "number" && item.copyCount > 0 ? item.copyCount : null}
         viewCount={typeof item.viewCount === "number" && item.viewCount > 0 ? item.viewCount : null}
-        metadataBadges={<NoteStateBadge status={item.studyPackStatus} />}
+        metadataBadges={(
+          <>
+            <NoteStateBadge status={item.studyPackStatus} />
+            <NoteQualityBadges
+              copyCount={item.copyCount}
+              viewCount={item.viewCount}
+              createdAt={item.createdAt}
+            />
+          </>
+        )}
         footer={(
           <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
             {item.ownerUserId ? (

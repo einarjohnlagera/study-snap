@@ -4,6 +4,11 @@
 
 ### New Features
 
+- Public note cards in the Public Library, Public Profile, and public subject pages now show **quality indicator badges** (at most 2 per card) to help users quickly identify strong notes:
+  - ⭐ **High Quality** — `copyCount >= 5 AND viewCount >= 10`
+  - 🔥 **Popular** — `copyCount >= 10 OR viewCount >= 20` (shown only when High Quality is not already displayed)
+  - 🆕 **New** — note was created within the last 7 days
+  - Badges appear inline with the Subject badge row; layout is mobile-safe and capped at 2 to avoid clutter. Private Library cards never show quality badges.
 - Public Library now has a **discovery mode** that replaces the flat note list with curated sections when no search or filters are active:
   - 🔥 **Featured Notes** — top 6 notes ranked by a weighted engagement score: `(views × 0.4) + (copies × 0.5) + (shares × 0.1)`. Tiebreak by newest first.
   - 📈 **Most Popular** — top 6 notes by copy count then view count, excluding notes already in Featured.
@@ -14,6 +19,7 @@
 
 ### Technical Changes
 
+- Added `frontend/lib/note-quality-badges.ts` with `computeQualityBadges` and exported `QUALITY_THRESHOLDS` constants. Added `frontend/components/notes/note-quality-badge.tsx` with the `NoteQualityBadges` component. Covered by 22 unit tests in `note-quality-badges.test.ts` (zero counts, null/undefined, threshold boundaries, High Quality suppresses Popular, max-2 cap, label correctness, "New" date edge cases).
 - Added `frontend/lib/public-library-discovery.ts` with pure utility functions: `computeDiscoveryScore`, `getFeaturedNotes`, `getPopularNotes`, `getRecentNotes`, `getBrowseSubjects`, `excludeById`. All ranking is client-side using existing data from `listPublicNotes()` — no new backend endpoints required.
 - Extracted `PublicNoteCard` sub-component inside `public-library-page-client.tsx` to share card rendering between discovery sections and the main filtered list.
 - Added 28 unit tests for discovery utility functions and 5 integration tests for discovery UI behavior in `PublicLibraryPageClient`.
