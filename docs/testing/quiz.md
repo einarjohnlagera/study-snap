@@ -2,6 +2,26 @@
 
 Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`):
 
+## Exam Mode behavior
+
+- no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
+- selected choice shows neutral exam-style highlight (blue border) only
+- "Answers are graded only after submission." hint is visible during the quiz
+- Previous / Next navigation maintains all previously selected answers
+- Submit button appears only on the last question; Previous is disabled on the first question
+- timer auto-submits when it hits 00:00 and shows "Time ran out." message on result screen
+
+## Result screen
+
+- score summary shows correct count, total questions, and percentage (e.g. 7/10 · 70%)
+- performance badge maps correctly: 90–100 → Excellent, 75–89 → Good, 50–74 → Fair, 0–49 → Needs Improvement
+- concept breakdown lists per-concept accuracy with correct/total and percentage
+- weak concepts section lists only concepts with accuracy < 60%
+- "Practice Weak Concepts" button is visible only when weak concepts exist; links to Adaptive Practice
+- "Review Answers" toggle reveals full answer review with correct/incorrect highlights
+- answer review uses the same stable choice order as the answering phase
+- result screen is readable on mobile with sections stacking cleanly
+
 - Quick Review, Challenge Quiz, and Adaptive Practice each use distinct icons
 - Quick Review questions stay lightweight and aligned with the learner level
 - Challenge Quiz feels exam-style and does not repeat the base Quick Review question set
@@ -19,6 +39,14 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - desktop quiz actions show icon + text
 - mobile quiz actions keep accessible labels
 - paywall/plan gating still applies to Premium-only quiz flows where configured
+
+## `lib/challenge-quiz-results.ts` unit tests (covered in `challenge-quiz-results.test.ts`)
+
+- `computeScore` — all correct, all wrong, mixed, unanswered, single question, empty quiz
+- `mapPerformanceLevel` — boundary values at 90, 75, 50, 49, 0
+- `computeConceptBreakdown` — grouping, per-concept accuracy, Unknown fallback, alphabetical sort, empty quiz
+- `computeWeakConcepts` — below/at/above threshold, custom threshold, empty breakdown
+- end-to-end integration: mixed session → correct score + Fair level + correct weak concepts identified
 
 ## Concept validation and repair (backend unit tests)
 

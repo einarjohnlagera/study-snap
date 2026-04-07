@@ -1,9 +1,16 @@
 # RELEASES.md - NoteLib
 
-## v0.8.0 - Public Library Discovery System (In Progress)
+## v0.8.0 - Board Exam Mode + Public Library Discovery System (In Progress)
 
 ### New Features
 
+- **Board Exam Mode (Phase 1)** — Challenge Quiz is now a true exam experience:
+  - No correctness feedback during answering — answer first, see results later
+  - Selected answers show neutral exam-style highlight (blue) only
+  - Timer auto-submits when time runs out; manual submit from the last question
+  - Result screen: Score Summary (correct/total/%), Performance Level badge (Excellent / Good / Fair / Needs Improvement), Concept Breakdown (per-concept accuracy), Weak Concepts (< 60% accuracy), Answer Review toggle
+  - "Practice Weak Concepts" CTA (→ Adaptive Practice) shown only when weak concepts exist
+  - All result statistics are derived from session data only — no LLM calls
 - Public note cards in the Public Library, Public Profile, and public subject pages now show **quality indicator badges** (at most 2 per card) to help users quickly identify strong notes:
   - ⭐ **High Quality** — `copyCount >= 5 AND viewCount >= 10`
   - 🔥 **Popular** — `copyCount >= 10 OR viewCount >= 20` (shown only when High Quality is not already displayed)
@@ -23,6 +30,7 @@
 
 ### Technical Changes
 
+- Added `frontend/lib/challenge-quiz-results.ts` with pure result computation utilities: `computeScore`, `mapPerformanceLevel`, `computeConceptBreakdown`, `computeWeakConcepts`, and exported `WEAK_CONCEPT_THRESHOLD = 60`. Challenge Quiz page now uses `computeScore` in `handleSubmit` instead of an inline reduce. Covered by 31 unit tests in `challenge-quiz-results.test.ts` (all-correct, all-wrong, mixed, unanswered, single-question, empty quiz, all 8 performance level boundary values, concept grouping, Unknown fallback, alphabetical sort, weak concept threshold edge cases, end-to-end integration scenarios).
 - Added `frontend/lib/note-quality-badges.ts` with `computeQualityBadges` and exported `QUALITY_THRESHOLDS` constants. Added `frontend/components/notes/note-quality-badge.tsx` with the `NoteQualityBadges` component. Covered by 12 unit tests in `note-quality-badges.test.ts` (zero counts, null/undefined, threshold boundaries, High Quality suppresses Popular, label correctness). "New" badge removed — `createdAt` param and `NEW_WITHIN_DAYS` constant removed.
 - Refactored `SharedNoteCard`: replaced `metaLine?: ReactNode` with `courseProgram?: string | null` (renders neutral gray badge above title) and added `stateBadge?: ReactNode` (renders Study Pack Ready badge below title). Updated all 4 callers: `public-library-page-client.tsx`, `app/library/page.tsx`, `public-profile-page-client.tsx`, `app/public/library/[subject]/page.tsx`.
 - Added `frontend/lib/public-library-discovery.ts` with pure utility functions: `computeDiscoveryScore`, `getFeaturedNotes`, `getPopularNotes`, `getRecentNotes`, `getBrowseSubjects`, `excludeById`. All ranking is client-side using existing data from `listPublicNotes()` — no new backend endpoints required.

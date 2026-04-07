@@ -28,7 +28,10 @@ import {
   type ChallengeQuizStartResponse,
 } from "@/lib/api";
 import {
-  isQuizSelectionCorrect,
+  computeScore,
+  mapPerformanceLevel,
+} from "@/lib/challenge-quiz-results";
+import {
   resolveQuizCorrectIndex,
   serializeSelectedChoiceIndexRecord,
   toSelectedChoiceIndexRecord,
@@ -61,10 +64,11 @@ function ChallengeQuizLoading() {
 }
 
 function getChallengeResultMessage(scorePercentage: number) {
-  if (scorePercentage >= 80) {
-    return "Great work. You're mastering this.";
-  }
-  return "Keep going - you're improving.";
+  const level = mapPerformanceLevel(scorePercentage);
+  if (level === "Excellent") return "Outstanding. You've mastered this material.";
+  if (level === "Good") return "Great work. You have a solid grasp of this.";
+  if (level === "Fair") return "Good effort. Review the weak concepts below to improve.";
+  return "Keep going. Focus on the weak concepts below to build confidence.";
 }
 
 function getPerformanceBadgeClass(performanceLevel: string): string {
@@ -314,10 +318,7 @@ export default function ChallengeQuizPage() {
       return;
     }
 
-    const total = challengeSession.quiz.length;
-    const correctAnswers = challengeSession.quiz.reduce((count, item, index) => {
-      return isQuizSelectionCorrect(item, selectedChoices[index]) ? count + 1 : count;
-    }, 0);
+    const { correctAnswers, totalQuestions: total } = computeScore(challengeSession.quiz, selectedChoices);
     const durationSeconds = Math.max(0, challengeSession.timeLimitSeconds - remainingSeconds);
 
     setSubmitting(true);

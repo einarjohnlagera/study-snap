@@ -33,6 +33,39 @@ Shared ownership model:
 - quantitative notes may produce computation or formula-based questions
 - explanations should be tutor-style and step-based for computation questions
 
+#### Exam Mode Behavior
+
+- no correctness feedback during answering — answer first, see results later
+- user selects an answer and sees only a neutral visual selection state (blue highlight)
+- hint text: "Answers are graded only after submission."
+- user navigates freely between questions (Previous / Next) and can change answers until submission
+- quiz auto-submits if the timer reaches zero; user can also submit manually from the last question
+- explanations are hidden during the quiz and only appear in the Answer Review section on the result screen
+
+#### Result Screen
+
+After submission, the result screen shows:
+
+1. **Score Summary** — correct count, total questions, percentage
+2. **Performance Level** (badge):
+   - 90–100% → Excellent
+   - 75–89% → Good
+   - 50–74% → Fair
+   - 0–49% → Needs Improvement
+3. **Concept Breakdown** — per-concept accuracy (correct / total, percentage)
+4. **Weak Concepts** — concepts with accuracy < 60%; used to drive Adaptive Practice
+5. **Answer Review** — toggle to reveal all questions with correct/incorrect highlighting
+6. **CTAs**: "Practice Weak Concepts" (→ Adaptive Practice), "Start Another Challenge", "Note"
+
+#### Result Computation Rules
+
+- ALL result calculations are derived from quiz session data + stored `question → concept` mapping
+- no LLM calls are used for statistics
+- `computeScore`, `mapPerformanceLevel`, `computeConceptBreakdown`, and `computeWeakConcepts` are exposed as pure frontend utility functions in `lib/challenge-quiz-results.ts`
+- weak concept threshold: accuracy < 60% (`WEAK_CONCEPT_THRESHOLD = 60`)
+- questions without a `concept` label are grouped under "Unknown" in the breakdown
+- the backend independently computes and stores results; the frontend utility functions exist for testability
+
 ### Adaptive Practice
 
 - weak-area follow-up mode
@@ -106,6 +139,10 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 - Quiz sessions must persist selected canonical choice indexes, not answer text or letters.
 - Choice shuffling must preserve correctness and remain stable for the same question/session once review starts.
 
-## v0.6.0 Direction
+## v0.8.0 Board Exam Mode (Phase 1)
 
-Board Exam Mode should build on the same note-first quiz foundation rather than introducing a separate quiz ownership model.
+Challenge Quiz now functions as a full Exam Mode experience:
+- clean answering phase with no correctness hints
+- structured result screen with score, performance level, concept breakdown, and weak concepts
+- weak concepts feed into the Adaptive Practice flow
+- `lib/challenge-quiz-results.ts` provides pure, independently tested result computation utilities
