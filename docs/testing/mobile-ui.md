@@ -28,6 +28,9 @@ Verify these cases on mobile-sized viewports:
 - Library/Public Library/Public Profile/Public Note actions show text labels
 - Profile and Settings save/navigation actions show text labels
 - icon-only exceptions are limited to small utility controls such as edit/delete/back/menu/theme/avatar
+- Public Library discovery sections (Featured, Most Popular, Recently Added, Browse by Subject) stack to single-column on mobile
+- Browse by Subject chips wrap to multiple rows on narrow screens and remain tappable
+- Discovery section headings are readable on mobile at the base font size
 - Library and Public Library keep `Filter` and `Sort` inside a mobile sheet/modal instead of always-visible controls.
 - Library and Public Library mobile filter sheets include the newer metadata filters (`Course / Program`, and Public Library `Learner Level` when available) without overcrowding the base layout.
 - Library, Public Library, and Public Profile note cards remain action-free on mobile and open note detail from the whole card.
