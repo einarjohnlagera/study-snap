@@ -144,22 +144,19 @@ function PublicNoteCard({ item, currentUserId, onNavigate }: PublicNoteCardProps
     >
       <SharedNoteCard
         title={item.title}
-        metaLine={normalizeCourseProgram(item.courseProgram)}
+        courseProgram={normalizeCourseProgram(item.courseProgram)}
         subject={item.subject}
         tags={itemTags}
         contentPreview={item.contentPreview}
         summaryPreview={item.summaryPreview}
         copyCount={typeof item.copyCount === "number" && item.copyCount > 0 ? item.copyCount : null}
         viewCount={typeof item.viewCount === "number" && item.viewCount > 0 ? item.viewCount : null}
+        stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
         metadataBadges={(
-          <>
-            <NoteStateBadge status={item.studyPackStatus} />
-            <NoteQualityBadges
-              copyCount={item.copyCount}
-              viewCount={item.viewCount}
-              createdAt={item.createdAt}
-            />
-          </>
+          <NoteQualityBadges
+            copyCount={item.copyCount}
+            viewCount={item.viewCount}
+          />
         )}
         footer={(
           <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">

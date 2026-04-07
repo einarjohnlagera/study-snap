@@ -97,13 +97,13 @@ Public Library sort options:
 
 Public Library note cards reuse the shared note-card layout:
 
-- subtle `courseProgram` line when available
-- title
-- subject badge
-- Study Pack status badge when relevant
+- TOP ROW: Subject badge (blue) + Course/Program badge (neutral/gray) — above title
+- Title
+- Study Pack Ready badge (green) — below title when applicable
+- Quality badges (High Quality, Popular) — below title alongside state badge
 - `Note Preview`
 - `Summary Preview`
-- tags
+- Tags
 - subtle metrics row for `views` and `copies` when available
 
 Interaction rules:

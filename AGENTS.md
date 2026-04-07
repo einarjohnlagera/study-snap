@@ -498,15 +498,16 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
 - Note cards must use a shared layout and component across note-list pages; Public Library may add subtle discovery metadata such as views and copies, but the base card structure must remain consistent.
 - Shared note-card content order is:
-  - subtle `courseProgram` line when available
-  - Title
-  - private-library visibility icon (`Globe` / `Lock`) near the title when relevant
-  - Subject badge
-  - Study Pack status badge when relevant
+  - TOP ROW: Subject badge + Course/Program badge (neutral/gray) — above title
+  - Title (with optional private-library visibility icon `Globe`/`Lock` trailing)
+  - Study Pack Ready badge (green) — below title, only when applicable
+  - Quality badges (High Quality, Popular) — below title alongside stateBadge
   - `Note Preview`
   - `Summary Preview`
   - Tags
   - subtle discovery metrics row (`views`, `copies`) when that surface has them
+- `SharedNoteCard` props: `courseProgram` (neutral gray badge above title), `stateBadge` (Study Pack Ready, rendered below title), `metadataBadges` (quality badges)
+- The "New" badge has been removed; quality badges are High Quality and Popular only
 - `Note Preview` comes from note content and `Summary Preview` comes from generated Study Pack summary.
 - `Note Preview` should read as the primary preview and `Summary Preview` should stay secondary.
 - If no generated summary exists, show `No summary available yet.`

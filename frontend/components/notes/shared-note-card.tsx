@@ -4,13 +4,14 @@ import { SubjectBadge } from "@/components/notes/subject-badge";
 
 type SharedNoteCardProps = {
   title: string | null;
-  metaLine?: ReactNode;
+  courseProgram?: string | null;
   subject: string | null;
   tags: string[];
   contentPreview: string;
   summaryPreview?: string | null;
   copyCount?: number | null;
   viewCount?: number | null;
+  stateBadge?: ReactNode;
   metadataBadges?: ReactNode;
   titleTrailing?: ReactNode;
   footer?: ReactNode;
@@ -37,28 +38,34 @@ function resolveSummaryPreview(summaryPreview?: string | null) {
 
 export function SharedNoteCard({
   title,
-  metaLine,
+  courseProgram,
   subject,
   tags,
   contentPreview,
   summaryPreview,
   copyCount,
   viewCount,
+  stateBadge,
   metadataBadges,
   titleTrailing,
   footer,
 }: Readonly<SharedNoteCardProps>) {
   const normalizedTags = normalizeTags(tags);
+  const normalizedCourseProgram = courseProgram?.trim() || null;
   const hasDiscoveryMetrics = typeof viewCount === "number" || typeof copyCount === "number";
 
   return (
     <div className="flex h-full min-w-0 flex-col justify-between gap-4">
       <div className="space-y-4">
-        {metaLine ? (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/60">
-            {metaLine}
-          </div>
-        ) : null}
+        {/* TOP ROW: Subject badge + Course/Program badge — above title */}
+        <div className="flex flex-wrap items-center gap-2">
+          <SubjectBadge subject={subject} />
+          {normalizedCourseProgram ? (
+            <span className="inline-flex items-center rounded-full border border-border bg-muted/50 px-2 py-1 text-xs font-medium text-foreground/70">
+              {normalizedCourseProgram}
+            </span>
+          ) : null}
+        </div>
 
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -72,10 +79,13 @@ export function SharedNoteCard({
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <SubjectBadge subject={subject} />
-            {metadataBadges}
-          </div>
+          {/* BELOW TITLE: Study Pack Ready badge (stateBadge) + quality badges */}
+          {(stateBadge || metadataBadges) ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {stateBadge}
+              {metadataBadges}
+            </div>
+          ) : null}
 
           <div className="space-y-3">
             <div className="space-y-1">
