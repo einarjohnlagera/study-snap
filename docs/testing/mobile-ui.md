@@ -35,7 +35,10 @@ Verify these cases on mobile-sized viewports:
 - Library and Public Library mobile filter sheets include the newer metadata filters (`Course / Program`, and Public Library `Learner Level` when available) without overcrowding the base layout.
 - Library, Public Library, and Public Profile note cards remain action-free on mobile and open note detail from the whole card.
 - Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.
-- Quality badges (⭐ High Quality, 🔥 Popular, 🆕 New) appear inline with the subject badge row and wrap cleanly without breaking the card layout on mobile — at most 2 badges are visible per card.
+- Quality badges (⭐ High Quality, 🔥 Popular) appear below the title and wrap cleanly without breaking the card layout on mobile — at most 2 badges are visible per card.
+- Challenge Quiz exam phase: answer choices are fully tappable, fill the card width, and show no correctness hints on mobile
+- Challenge Quiz result screen: score summary, performance badge, concept breakdown, and weak concepts stack in single-column on mobile without crowding
+- "Practice Weak Concepts", "Start Another Challenge", and "Note" result CTAs are full-width and stack vertically on mobile
 - the avatar dropdown on mobile shows `My Profile`, `Settings`, and `Sign Out` with full text labels
 - `My Profile` in the avatar dropdown links to the user's public profile page
 - `Settings` in the avatar dropdown links to `/settings` (same as sidebar Settings)

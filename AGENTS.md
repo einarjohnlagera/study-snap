@@ -493,6 +493,17 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - `Adaptive Practice` uses a target or focused-practice icon.
 - Do not use the same icon for different quiz modes.
 
+### Challenge Quiz — Exam Mode Rule
+
+- Challenge Quiz must behave as an exam: **no correctness feedback during answering**.
+- Do not render "Correct" / "Incorrect" labels, green/red highlights, or explanations while the quiz is in progress.
+- Selected answers show a neutral exam-style visual state (blue border/background) only.
+- All result calculations (score, performance level, concept breakdown, weak concepts) must be derived from quiz session data — **no LLM calls for statistics**.
+- Use the utility functions in `lib/challenge-quiz-results.ts` for testable result computation.
+- Performance level thresholds: 90–100 → Excellent, 75–89 → Good, 50–74 → Fair, 0–49 → Needs Improvement.
+- Weak concept threshold: accuracy < 60% (`WEAK_CONCEPT_THRESHOLD`).
+- The "Practice Weak Concepts" CTA must only appear when `weakConcepts.length > 0` and must link to Adaptive Practice.
+
 ### Note Card Consistency Rule
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
