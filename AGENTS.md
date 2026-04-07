@@ -953,3 +953,36 @@ A feature is not complete unless:
 - Code compiles
 - Tests pass
 - New behavior has test coverage
+
+## Subject Generation Strategy
+
+LLM-generated subjects follow a 3-tier hierarchy (pick first level that fits):
+
+1. **SPECIFIC SUBJECT** (preferred) — standalone subtopic label reusable across notes: `Integral Calculus`, `Circuit Theory`, `Object-Oriented Programming`, `Cell Division`, `Criminal Procedure`
+2. **PRIMARY – SUBTOPIC** — only when the subtopic alone lacks context without the parent: `Electrical Engineering – Power Formula`, `Biology – Cell Division`
+3. **GENERAL SUBJECT** (fallback) — only when the note covers a broad area with no subtopic: `Mathematics`, `Physics`, `Chemistry`
+
+Rules:
+- Subject must be ≤ 6 words (including dash and subtopic); `SubjectSanitizer.tryRepair` trims overlong subjects
+- Never use broad umbrella labels (`Medicine`, `Engineering`, `Education`, `Law`, `Business`) when the note supports a narrower subject (`isOverlyBroad` check)
+- Never echo the course/program name verbatim as the subject without a subtopic (`matchesBroadCourseProgram` check)
+
+## Study Pack Sanitization
+
+`OpenAiLlmStudyPackService` validates and repairs LLM output before saving:
+
+- **Subject**: max 6 words (`SubjectSanitizer`); overly-broad or course-echo subjects cause retry
+- **Quiz concept**: max 4 words (`KeyConceptSanitizer.MAX_QUIZ_CONCEPT_WORDS`); filler prefixes stripped before truncation
+- **Key concepts**: max 4 words each (`KeyConceptSanitizer.MAX_KEY_CONCEPT_WORDS`); repaired in-place, never block study pack creation due to word-count alone
+
+Sanitizer classes live in `backend/.../util/SubjectSanitizer.java` and `KeyConceptSanitizer.java`.
+
+## Public Library Discovery
+
+Discovery mode layout order (no active filters):
+1. 📚 Browse by Subject — top 8 subjects by note count (appears ABOVE note sections)
+2. 🔥 Featured Notes — top 6 by engagement score
+3. 📈 Most Popular — top 6 by copies (excludes Featured)
+4. 🆕 Recently Added — top 6 by createdAt (excludes Featured + Popular)
+
+Backend subject filtering: `GET /notes/public?subject=<value>` — case-insensitive, server-side.

@@ -564,6 +564,24 @@ export function PublicLibraryPageClient() {
                 </Card>
               ) : null}
 
+              {browseSubjects.length > 0 ? (
+                <section aria-label="Browse by Subject">
+                  <h2 className="mb-3 text-base font-semibold">📚 Browse by Subject</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {browseSubjects.map((subject) => (
+                      <button
+                        key={subject}
+                        type="button"
+                        onClick={() => setSelectedSubject(subject)}
+                        className="rounded-full border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:bg-muted/50"
+                      >
+                        {subject}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
               {featuredNotes.length > 0 ? (
                 <section aria-label="Featured Notes">
                   <div className="mb-3">
@@ -610,24 +628,6 @@ export function PublicLibraryPageClient() {
                         currentUserId={currentUserId}
                         onNavigate={(path) => router.push(path)}
                       />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-
-              {browseSubjects.length > 0 ? (
-                <section aria-label="Browse by Subject">
-                  <h2 className="mb-3 text-base font-semibold">📚 Browse by Subject</h2>
-                  <div className="flex flex-wrap gap-2">
-                    {browseSubjects.map((subject) => (
-                      <button
-                        key={subject}
-                        type="button"
-                        onClick={() => setSelectedSubject(subject)}
-                        className="rounded-full border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:bg-muted/50"
-                      >
-                        {subject}
-                      </button>
                     ))}
                   </div>
                 </section>

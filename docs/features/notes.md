@@ -33,9 +33,12 @@ Rules:
 - a saved custom subject becomes available in future subject suggestions after the note is persisted.
 - subject saves normalize whitespace plus dash formatting so equivalent values like `Biology-Cell Division` and `Biology – Cell Division` reuse the same subject suggestion when possible.
 - subject reuse checks are case-insensitive, but the saved/displayed subject should keep a readable academic label format.
-- AI subject suggestions should stay specific and library-friendly:
-  - prefer reusable academic labels such as `Biology – Cell Division` or `Software Engineering – Data Structures`
-  - avoid broad umbrella labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the note supports a narrower subject
+- AI subject generation follows a 3-tier strategy (pick the first level that fits):
+  1. **SPECIFIC SUBJECT** (preferred): a standalone subtopic label reusable across notes — e.g., `Integral Calculus`, `Circuit Theory`, `Object-Oriented Programming`, `Cell Division`, `Criminal Procedure`
+  2. **PRIMARY – SUBTOPIC**: use this format only when the subtopic alone lacks context without the parent field — e.g., `Electrical Engineering – Power Formula`, `Biology – Cell Division`
+  3. **GENERAL SUBJECT** (fallback): use only when the note covers a broad area with no clear subtopic — e.g., `Mathematics`, `Physics`, `Chemistry`
+- Subject must be at most 6 words (including dash and subtopic); the backend trims overlong subjects rather than rejecting them
+- avoid broad umbrella labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the note supports a narrower subject
 - learner level, course/program, current subject, and tags may be passed into Study Pack generation to improve subject suggestion quality without changing the note form flow.
 - tags stay optional and should include helper guidance rather than mandatory validation pressure.
 

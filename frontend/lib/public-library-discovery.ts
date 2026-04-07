@@ -2,7 +2,7 @@ import type { NoteListItemResponse } from "@/lib/api";
 import { normalizeSubject } from "@/lib/subjects";
 
 export const DISCOVERY_SECTION_LIMIT = 6;
-export const BROWSE_SUBJECTS_LIMIT = 12;
+export const BROWSE_SUBJECTS_LIMIT = 8;
 
 /**
  * Compute a weighted discovery score from engagement signals.

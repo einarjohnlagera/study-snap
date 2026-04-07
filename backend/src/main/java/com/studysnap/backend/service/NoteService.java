@@ -230,13 +230,24 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
-        return listPublic(viewerUserId, null);
+        return listPublic(viewerUserId, null, null);
     }
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listPublic(UUID viewerUserId, String sort) {
+        return listPublic(viewerUserId, sort, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteListItemResponse> listPublic(UUID viewerUserId, String sort, String subject) {
         List<NoteEntity> notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
         List<NoteListItemResponse> items = toListItems(notes, viewerUserId);
+        if (subject != null && !subject.isBlank()) {
+            String normalizedSubjectFilter = SubjectNormalizationUtils.normalizeForLookup(subject);
+            items = items.stream()
+                    .filter(item -> normalizedSubjectFilter.equals(SubjectNormalizationUtils.normalizeForLookup(item.subject())))
+                    .toList();
+        }
         if (sort == null) {
             return items;
         }

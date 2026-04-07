@@ -220,11 +220,11 @@ class NoteControllerTest {
                         OffsetDateTime.now()
                 )
         );
-        when(noteService.listPublic(userId, null)).thenReturn(expected);
+        when(noteService.listPublic(userId, null, null)).thenReturn(expected);
 
-        List<NoteListItemResponse> response = noteController.listPublic(null, user);
+        List<NoteListItemResponse> response = noteController.listPublic(null, null, user);
 
         assertThat(response).isEqualTo(expected);
-        verify(noteService).listPublic(userId, null);
+        verify(noteService).listPublic(userId, null, null);
     }
 }
