@@ -23,6 +23,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.util.ContentPreviewUtils;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
+import com.studysnap.backend.util.PublicNotesScoringUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
 import com.studysnap.backend.util.SummaryPreviewUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
@@ -229,8 +230,22 @@ public class NoteService {
 
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
+        return listPublic(viewerUserId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<NoteListItemResponse> listPublic(UUID viewerUserId, String sort) {
         List<NoteEntity> notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
-        return toListItems(notes, viewerUserId);
+        List<NoteListItemResponse> items = toListItems(notes, viewerUserId);
+        if (sort == null) {
+            return items;
+        }
+        return switch (sort.toLowerCase()) {
+            case "featured" -> PublicNotesScoringUtils.sortByFeatured(items);
+            case "popular" -> PublicNotesScoringUtils.sortByPopular(items);
+            case "recent" -> PublicNotesScoringUtils.sortByRecent(items);
+            default -> items;
+        };
     }
 
     @Transactional(readOnly = true)
