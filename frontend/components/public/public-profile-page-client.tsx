@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { AppModal } from "@/components/ui/app-modal";
@@ -615,6 +616,12 @@ export function PublicProfilePageClient({
                   summaryPreview={note.summaryPreview}
                   copyCount={note.copyCount > 0 ? note.copyCount : null}
                   viewCount={note.viewCount > 0 ? note.viewCount : null}
+                  metadataBadges={(
+                    <NoteQualityBadges
+                      copyCount={note.copyCount}
+                      viewCount={note.viewCount}
+                    />
+                  )}
                 />
               </Card>
             ))}

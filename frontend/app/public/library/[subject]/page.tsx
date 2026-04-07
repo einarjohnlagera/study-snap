@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
@@ -124,6 +125,13 @@ export default async function PublicLibrarySubjectPage({ params }: Readonly<Publ
                     summaryPreview={note.summaryPreview}
                     copyCount={typeof note.copyCount === "number" && note.copyCount > 0 ? note.copyCount : null}
                     viewCount={typeof note.viewCount === "number" && note.viewCount > 0 ? note.viewCount : null}
+                    metadataBadges={(
+                      <NoteQualityBadges
+                        copyCount={note.copyCount}
+                        viewCount={note.viewCount}
+                        createdAt={note.createdAt}
+                      />
+                    )}
                   />
                 </Card>
               </Link>

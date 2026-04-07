@@ -39,6 +39,18 @@
 - Author badge: "By You" (green) / "By NoteLib" with Official chip (blue) / community author (muted)
 - Official badge visible only for isOfficialAuthor=true notes
 
+## Quality badges (covered in `note-quality-badges.test.ts`)
+
+- ⭐ **High Quality**: shown when `copyCount >= 5 AND viewCount >= 10`
+- 🔥 **Popular**: shown when `copyCount >= 10 OR viewCount >= 20`; suppressed when High Quality is already shown
+- 🆕 **New**: shown when note was created within the last 7 days
+- At most 2 badges are shown per card — High Quality or Popular occupies the first slot; New may occupy the second
+- Notes with zero counts show no quality badges
+- Notes with null or undefined counts are treated the same as zero
+- Quality badges appear on: Public Library, Public Profile, public subject pages
+- Quality badges do NOT appear on private Library cards (no public engagement metrics)
+- Badge conditions tested: zero counts, null counts, threshold boundaries (exact and ± 1), combinations, max-2 cap, label correctness
+
 ## Mobile
 
 - Filter and Sort open bottom-sheet modals, not inline dropdowns
