@@ -609,7 +609,7 @@ export function PublicProfilePageClient({
               >
                 <SharedNoteCard
                   title={note.title}
-                  metaLine={normalizeCourseProgram(note.courseProgram)}
+                  courseProgram={normalizeCourseProgram(note.courseProgram)}
                   subject={note.subject}
                   tags={note.tags}
                   contentPreview={note.contentPreview}

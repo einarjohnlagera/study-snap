@@ -570,15 +570,13 @@ export default function LibraryPage() {
                   >
                     <SharedNoteCard
                       title={item.title}
-                      metaLine={normalizeCourseProgram(item.courseProgram)}
+                      courseProgram={normalizeCourseProgram(item.courseProgram)}
                       subject={item.subject}
                       tags={itemTags}
                       contentPreview={item.contentPreview}
                       summaryPreview={item.summaryPreview}
                       titleTrailing={renderVisibilityIcon(item.visibility)}
-                      metadataBadges={(
-                        <NoteStateBadge status={item.studyPackStatus} />
-                      )}
+                      stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
                       footer={(
                         <div className="space-y-1">
                           <p className="text-xs text-foreground/65">
