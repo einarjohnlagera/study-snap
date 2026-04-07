@@ -14,10 +14,10 @@ Routes:
 Public Library has two display modes:
 
 **Discovery mode** (default, no active search/filters/sort changes):
+- 📚 Browse by Subject — clickable subject chips sorted by note count (top 8)
 - 🔥 Featured Notes — top 6 by weighted engagement score
 - 📈 Most Popular — top 6 by copies, then views (excluding Featured notes)
 - 🆕 Recently Added — top 6 by createdAt (excluding Featured and Popular)
-- 📚 Browse by Subject — clickable subject chips sorted by note count
 
 **Filter mode** (when any search, filter, or sort is active):
 - Standard sorted/filtered list of all matching public notes
@@ -52,10 +52,10 @@ Sections never repeat the same note:
 When no active filters (discovery mode):
 
 1. `Search` toolbar + `Filter` + `Sort` controls (always visible)
-2. 🔥 Featured Notes section (hidden if empty)
-3. 📈 Most Popular section (hidden if empty)
-4. 🆕 Recently Added section (hidden if empty)
-5. 📚 Browse by Subject chips (hidden if no subjects)
+2. 📚 Browse by Subject chips (hidden if no subjects, max 8)
+3. 🔥 Featured Notes section (hidden if empty)
+4. 📈 Most Popular section (hidden if empty)
+5. 🆕 Recently Added section (hidden if empty)
 
 When filters active (filter mode):
 
@@ -75,6 +75,14 @@ Public Library filters:
 - `By You`
 - `Official`
 - `Community`
+
+## Backend Subject Filtering
+
+`GET /notes/public` accepts an optional `?subject=` query parameter for server-side subject filtering:
+
+- Case-insensitive match via `SubjectNormalizationUtils.normalizeForLookup`
+- Applied after fetching all public notes, before sort
+- Frontend currently performs client-side filtering; the `listPublicNotes({ subject })` API function supports passing subject for backend filtering when needed
 
 ## Sorting
 

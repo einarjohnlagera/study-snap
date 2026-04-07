@@ -2,10 +2,10 @@
 
 ## Discovery sections (covered in `PublicLibraryPageClient` component tests)
 
+- 📚 Browse by Subject chip row appears FIRST (above Featured/Popular/Recent) when any public note has a non-null subject
 - 🔥 Featured Notes section appears when no search, filter, or sort change is active
 - 📈 Most Popular section appears when notes remain after Featured deduplication
 - 🆕 Recently Added section appears when notes remain after Featured + Popular deduplication
-- 📚 Browse by Subject chip row appears when any public note has a non-null subject
 - Sections are hidden when a search query is entered, any filter is selected, or sort changes from Newest
 - Clicking a subject chip sets the Subject filter and switches to filter mode (sections hidden)
 - Most Popular and Recently Added are not shown when all notes fit within the Featured section limit (≤ 6 notes)
@@ -20,8 +20,15 @@
 - `getBrowseSubjects` returns normalized unique subjects sorted by note count desc then alphabetically
 - `getBrowseSubjects` normalizes dash formatting ("Biology-Cell Division" → "Biology – Cell Division")
 - `getBrowseSubjects` excludes notes with null or blank subjects
-- `getBrowseSubjects` limits to BROWSE_SUBJECTS_LIMIT (12)
+- `getBrowseSubjects` limits to BROWSE_SUBJECTS_LIMIT (8)
 - `excludeById` removes specified notes by id; no-ops on empty inputs
+
+## Backend subject filter (`GET /notes/public?subject=`)
+
+- Returns only notes whose normalized subject matches the `subject` param (case-insensitive)
+- `?subject=Integral+Calculus` matches notes with subject `"integral calculus"`, `"Integral Calculus"`, etc.
+- When `subject` param is omitted, all public notes are returned
+- Covered by `NoteServiceTest.listPublic_withSubjectFilter_returnsOnlyMatchingNotes`
 
 ## Existing filter/sort behavior
 

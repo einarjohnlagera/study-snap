@@ -25,6 +25,11 @@
 - Added 28 unit tests for discovery utility functions and 5 integration tests for discovery UI behavior in `PublicLibraryPageClient`.
 - Added backend scoring support via `GET /notes/public?sort=featured|popular|recent`. Sort is computed dynamically from existing engagement signals — no DB persistence. `featured` uses score `(copies × 0.6) + (views × 0.4)` with newest-first tiebreak; `popular` uses copy count → view count → newest-first; `recent` uses `createdAt` desc. Unknown or missing sort values fall through to the default DB order.
 - Added `backend/util/PublicNotesScoringUtils.java` with `computeScore`, `sortByFeatured`, `sortByPopular`, and `sortByRecent`. Covered by 16 unit tests including scoring formula, sort ordering, null-count handling, tiebreaks, and empty dataset cases. Added 7 sort-specific tests to `NoteServiceTest`.
+- Added backend subject filtering: `GET /notes/public?subject=<value>` returns only notes whose normalized subject matches (case-insensitive). Applied after fetch, before sort. Frontend `listPublicNotes()` accepts optional `{ subject }` param. Covered by `NoteServiceTest.listPublic_withSubjectFilter_returnsOnlyMatchingNotes`.
+- Refactored LLM subject and key-concept sanitization into dedicated utility classes: `SubjectSanitizer` (max 6 words, overly-broad detection, course-program echo detection) and `KeyConceptSanitizer` (max 4 words per concept, filler-prefix stripping). Removed inline private methods from `OpenAiLlmStudyPackService`. Covered by new `SubjectSanitizerTest` and `KeyConceptSanitizerTest` unit test classes.
+- Key-concept sanitization now applies to the `keyConcepts` list (not just quiz `concept` fields): overlong concepts are repaired in-place and hard-truncated as a last resort — study pack creation is never blocked by word-count alone.
+- Updated LLM subject prompt to use the 3-tier subject strategy: Specific Subject (preferred) > Primary–Subtopic (when context needed) > General Subject (fallback).
+- Browse by Subject section repositioned to appear ABOVE Featured/Popular/Recently Added sections in discovery mode. Limit reduced from 12 to 8 subjects.
 
 ## v0.7.0 - Learning & Metadata Foundation (In Progress)
 

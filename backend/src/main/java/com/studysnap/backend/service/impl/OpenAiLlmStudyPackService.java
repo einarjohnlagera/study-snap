@@ -12,10 +12,12 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.service.LlmStudyPackService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import com.studysnap.backend.util.KeyConceptSanitizer;
 import com.studysnap.backend.util.LlmResponseUtils;
 import com.studysnap.backend.util.QuizValidationUtils;
 import com.studysnap.backend.util.StringNormalizationUtils;
 import com.studysnap.backend.util.SubjectNormalizationUtils;
+import com.studysnap.backend.util.SubjectSanitizer;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +34,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -46,27 +47,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_SUMMARY_WORDS = 120;
     private static final int MAX_STUDY_TIP_WORDS = 20;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
-    private static final int MAX_SUBJECT_WORDS = 6;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
-    private static final Set<String> OVERLY_BROAD_SUBJECT_LABELS = Set.of(
-            "business",
-            "education",
-            "engineering",
-            "law",
-            "medicine"
-    );
     private static final int MAX_LOG_VALUE_LENGTH = 80;
-    private static final List<String> CONCEPT_FILLER_PREFIXES = List.of(
-            "relationship between",
-            "using the",
-            "using a",
-            "the role of",
-            "definition of",
-            "overview of",
-            "the concept of",
-            "how to"
-    );
     private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
             "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
             "balance", "calculus", "cash flow", "chemistry", "circuit", "circuits", "computation",
@@ -477,16 +460,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private String normalizeAndValidateSubject(String subject, StudyPackGenerationContext context) {
         String normalized = SubjectNormalizationUtils.normalizeForStorage(subject);
         boolean hasContent = StringNormalizationUtils.containsAlphaNumeric(normalized);
-        boolean withinWordLimit = hasContent && StringNormalizationUtils.hasWordCountBetween(normalized, 1, MAX_SUBJECT_WORDS);
+        boolean withinWordLimit = hasContent && StringNormalizationUtils.hasWordCountBetween(normalized, 1, SubjectSanitizer.MAX_SUBJECT_WORDS);
         if (!hasContent || !withinWordLimit) {
             int wordCount = hasContent ? StringNormalizationUtils.countWords(normalized) : 0;
             String reason = !hasContent ? "no alphanumeric content"
-                    : wordCount > MAX_SUBJECT_WORDS ? "more than " + MAX_SUBJECT_WORDS + " words" : "empty";
-            if (hasContent && wordCount > MAX_SUBJECT_WORDS) {
-                String repaired = tryRepairSubject(normalized);
+                    : wordCount > SubjectSanitizer.MAX_SUBJECT_WORDS ? "more than " + SubjectSanitizer.MAX_SUBJECT_WORDS + " words" : "empty";
+            if (hasContent && wordCount > SubjectSanitizer.MAX_SUBJECT_WORDS) {
+                String repaired = SubjectSanitizer.tryRepair(normalized, SubjectSanitizer.MAX_SUBJECT_WORDS);
                 if (repaired != null
-                        && !isOverlyBroadSubjectLabel(repaired)
-                        && !matchesBroadCourseProgram(repaired, context)) {
+                        && !SubjectSanitizer.isOverlyBroad(repaired)
+                        && !SubjectSanitizer.matchesBroadCourseProgram(repaired, context == null ? null : context.courseProgram())) {
                     log.info("requestId={} field=subject value='{}' reason='{}' repairedTo='{}'",
                             MDC.get("requestId"), truncateForLog(normalized), reason, repaired);
                     return repaired;
@@ -496,7 +479,8 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     MDC.get("requestId"), truncateForLog(normalized), reason);
             throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
         }
-        if (isOverlyBroadSubjectLabel(normalized) || matchesBroadCourseProgram(normalized, context)) {
+        if (SubjectSanitizer.isOverlyBroad(normalized)
+                || SubjectSanitizer.matchesBroadCourseProgram(normalized, context == null ? null : context.courseProgram())) {
             log.warn("requestId={} field=subject value='{}' reason='overly broad'",
                     MDC.get("requestId"), truncateForLog(normalized));
             throw invalidOutput("The study pack service returned subject metadata that is too broad. Please try again.");
@@ -514,54 +498,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 : sanitized;
     }
 
-    private String tryRepairConcept(String normalized) {
-        String candidate = normalized;
-        String lower = normalized.toLowerCase(Locale.ROOT);
-        for (String prefix : CONCEPT_FILLER_PREFIXES) {
-            if (lower.startsWith(prefix + " ")) {
-                candidate = normalized.substring(prefix.length()).trim();
-                break;
-            }
-        }
-        if (StringNormalizationUtils.countWords(candidate) > 4) {
-            String[] words = candidate.split("\\s+");
-            candidate = String.join(" ", Arrays.copyOf(words, 4));
-        }
-        String rechecked = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(candidate);
-        return rechecked != null && StringNormalizationUtils.hasWordCountBetween(rechecked, 1, 4)
-                ? rechecked : null;
-    }
-
-    private String tryRepairSubject(String normalized) {
-        if (normalized.contains(" – ")) {
-            int dashIdx = normalized.indexOf(" – ");
-            String primary = normalized.substring(0, dashIdx).trim();
-            String subtopic = normalized.substring(dashIdx + 3).trim();
-            int primaryWordCount = StringNormalizationUtils.countWords(primary);
-            int maxSubtopicWords = MAX_SUBJECT_WORDS - primaryWordCount - 1;
-            if (maxSubtopicWords > 0) {
-                String[] subtopicWords = subtopic.split("\\s+");
-                if (subtopicWords.length > maxSubtopicWords) {
-                    subtopic = String.join(" ", Arrays.copyOf(subtopicWords, maxSubtopicWords));
-                    subtopic = subtopic.replaceAll("[,;]+$", "").trim();
-                }
-                String repaired = primary + " – " + subtopic;
-                if (StringNormalizationUtils.hasWordCountBetween(repaired, 1, MAX_SUBJECT_WORDS)
-                        && StringNormalizationUtils.containsAlphaNumeric(repaired)) {
-                    return repaired;
-                }
-            }
-        }
-        String[] words = normalized.split("\\s+");
-        if (words.length > MAX_SUBJECT_WORDS) {
-            String truncated = String.join(" ", Arrays.copyOf(words, MAX_SUBJECT_WORDS));
-            truncated = truncated.replaceAll("[,;]+$", "").trim();
-            if (StringNormalizationUtils.containsAlphaNumeric(truncated)) {
-                return truncated;
-            }
-        }
-        return null;
-    }
 
     private List<String> normalizeAndValidateTags(List<String> tags, String title) {
         if (tags == null || tags.size() < 3 || tags.size() > 6) {
@@ -603,6 +539,22 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 throw invalidOutput("The study pack service returned invalid key concepts. Please try again.");
             }
 
+            // Trim overlong key concepts rather than rejecting outright — always safe to trim.
+            if (StringNormalizationUtils.countWords(normalized) > KeyConceptSanitizer.MAX_KEY_CONCEPT_WORDS) {
+                String repaired = KeyConceptSanitizer.tryRepair(normalized, KeyConceptSanitizer.MAX_KEY_CONCEPT_WORDS);
+                if (repaired != null) {
+                    log.info("requestId={} field=keyConcepts value='{}' reason='more than {} words' repairedTo='{}'",
+                            MDC.get("requestId"), truncateForLog(normalized), KeyConceptSanitizer.MAX_KEY_CONCEPT_WORDS, repaired);
+                    normalized = repaired;
+                } else {
+                    // Hard-truncate as a last resort so the study pack is never blocked by word-count alone
+                    String[] words = normalized.split("\\s+");
+                    normalized = String.join(" ", Arrays.copyOf(words, KeyConceptSanitizer.MAX_KEY_CONCEPT_WORDS));
+                    log.warn("requestId={} field=keyConcepts value='{}' reason='hard-trimmed to {} words'",
+                            MDC.get("requestId"), truncateForLog(keyConcept), KeyConceptSanitizer.MAX_KEY_CONCEPT_WORDS);
+                }
+            }
+
             String duplicateKey = StringNormalizationUtils.normalizeForDuplicateCheck(normalized);
             if (duplicateKey.isBlank() || !normalizedSeen.add(duplicateKey)) {
                 throw invalidOutput("The study pack service returned repetitive key concepts. Please try again.");
@@ -621,10 +573,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             throw invalidOutput("The study pack service returned an invalid quiz concept. Please try again.");
         }
         int wordCount = StringNormalizationUtils.countWords(normalized);
-        if (!StringNormalizationUtils.hasWordCountBetween(normalized, 1, 4)) {
-            String reason = wordCount > 4 ? "more than 4 words" : "empty";
-            if (wordCount > 4) {
-                String repaired = tryRepairConcept(normalized);
+        if (!StringNormalizationUtils.hasWordCountBetween(normalized, 1, KeyConceptSanitizer.MAX_QUIZ_CONCEPT_WORDS)) {
+            String reason = wordCount > KeyConceptSanitizer.MAX_QUIZ_CONCEPT_WORDS ? "more than " + KeyConceptSanitizer.MAX_QUIZ_CONCEPT_WORDS + " words" : "empty";
+            if (wordCount > KeyConceptSanitizer.MAX_QUIZ_CONCEPT_WORDS) {
+                String repaired = KeyConceptSanitizer.tryRepair(normalized, KeyConceptSanitizer.MAX_QUIZ_CONCEPT_WORDS);
                 if (repaired != null) {
                     log.info("requestId={} field=quiz[{}].concept value='{}' reason='{}' repairedTo='{}'",
                             MDC.get("requestId"), quizIndex, truncateForLog(normalized), reason, repaired);
@@ -786,23 +738,6 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return false;
     }
 
-    private boolean isOverlyBroadSubjectLabel(String subject) {
-        return OVERLY_BROAD_SUBJECT_LABELS.contains(subject.toLowerCase(Locale.ROOT));
-    }
-
-    private boolean matchesBroadCourseProgram(String subject, StudyPackGenerationContext context) {
-        if (context == null) {
-            return false;
-        }
-        String normalizedCourseProgram = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(context.courseProgram());
-        if (normalizedCourseProgram == null) {
-            return false;
-        }
-        if (!subject.equalsIgnoreCase(normalizedCourseProgram)) {
-            return false;
-        }
-        return !subject.contains(" - ") && !subject.contains(" – ");
-    }
 
     private List<String> combineLists(List<String> primary, List<String> secondary) {
         List<String> combined = new ArrayList<>();

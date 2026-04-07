@@ -1981,8 +1981,9 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
 }
 
-export async function listPublicNotes(): Promise<NoteListItemResponse[]> {
-  const response = await fetch(buildUrl("/notes/public"), {
+export async function listPublicNotes(params?: { subject?: string }): Promise<NoteListItemResponse[]> {
+  const query = params?.subject ? `?subject=${encodeURIComponent(params.subject)}` : "";
+  const response = await fetch(buildUrl(`/notes/public${query}`), {
     method: "GET",
     headers: buildAuthHeaders(),
   });

@@ -276,10 +276,11 @@ public class NoteController {
     @GetMapping("/public")
     public List<NoteListItemResponse> listPublic(
             @RequestParam(value = "sort", required = false) String sort,
+            @RequestParam(value = "subject", required = false) String subject,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID viewerUserId = user == null ? null : user.userId();
-        return noteService.listPublic(viewerUserId, sort);
+        return noteService.listPublic(viewerUserId, sort, subject);
     }
 
     @GetMapping("/public/{id}")
