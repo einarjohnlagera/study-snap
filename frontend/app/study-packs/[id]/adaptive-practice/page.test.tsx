@@ -284,6 +284,7 @@ describe("AdaptivePracticePage", () => {
     await screen.findByText("Adaptive Practice Complete");
 
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
+    expect(screen.getByText("No targeted weak areas were attached to this set. Generate a new set or review your answers to keep practicing.")).toBeInTheDocument();
   });
 
   it('result screen shows "← Back to Note" navigation link', async () => {

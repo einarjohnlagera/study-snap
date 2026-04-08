@@ -481,7 +481,14 @@ export default function AdaptivePracticePage() {
                 ))}
               </ul>
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/75">
+              <p className="font-medium text-foreground">Targeted Weak Areas</p>
+              <p className="mt-1">
+                No targeted weak areas were attached to this set. Generate a new set or review your answers to keep practicing.
+              </p>
+            </div>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"

@@ -360,6 +360,7 @@ export default function QuickReviewPage() {
   const showAdaptiveGuidedCta = isStruggling;
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const showPracticeAgainPrimary = !isPerfectScore && (!showAdaptiveGuidedCta || !note?.adaptivePracticeAvailable);
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -773,11 +774,7 @@ export default function QuickReviewPage() {
           <p className="text-sm text-foreground/75">
             This note does not have quiz questions yet. Generate a Study Pack to try Quick Review.
           </p>
-          <Link href={noteDetailHref} className="w-full sm:w-auto">
-            <Button type="button" variant="outline" className="w-full sm:w-auto">
-              Back to Note
-            </Button>
-          </Link>
+          <BackLink href={noteDetailHref} label="Back to Note" />
         </Card>
       ) : note && !currentSessionId ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -785,11 +782,7 @@ export default function QuickReviewPage() {
           <p className="text-sm text-foreground/75">
             Start Quick Review from the note detail page to create a session.
           </p>
-          <Link href={noteDetailHref} className="w-full sm:w-auto">
-            <Button type="button" variant="outline" className="w-full sm:w-auto">
-              Back to Note
-            </Button>
-          </Link>
+          <BackLink href={noteDetailHref} label="Back to Note" />
         </Card>
       ) : note && isComplete ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -896,23 +889,17 @@ export default function QuickReviewPage() {
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            {showAdaptiveGuidedCta ? (
-              note?.adaptivePracticeAvailable ? (
-                <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
-                  <Button type="button" className="w-full sm:w-auto">
-                    Practice Weak Concepts
-                  </Button>
-                </Link>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:w-auto"
-                  onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
-                >
-                    Unlock Practice Weak Concepts
+            {showAdaptiveGuidedCta && note?.adaptivePracticeAvailable ? (
+              <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
+                <Button type="button" className="w-full sm:w-auto">
+                  Practice Weak Concepts
                 </Button>
-              )
+              </Link>
+            ) : null}
+            {showPracticeAgainPrimary ? (
+              <Button type="button" className="w-full sm:w-auto" onClick={handleRetry}>
+                Practice Again
+              </Button>
             ) : null}
             {showChallengeGuidedCta ? (
               <Link href={`/notes/${note.id}/challenge-quiz`} className="w-full sm:w-auto">
@@ -921,7 +908,17 @@ export default function QuickReviewPage() {
                 </Button>
               </Link>
             ) : null}
-            {!isPerfectScore ? (
+            {showAdaptiveGuidedCta && !note?.adaptivePracticeAvailable ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
+              >
+                Unlock Practice Weak Concepts
+              </Button>
+            ) : null}
+            {!isPerfectScore && !showPracticeAgainPrimary ? (
               <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>
                 Practice Again
               </Button>
