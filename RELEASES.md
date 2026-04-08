@@ -4,6 +4,13 @@
 
 ### New Features
 
+- **Post-Quiz UX Polish** — Unified quiz result UX across Quick Review, Challenge Quiz, and Adaptive Practice:
+  - Removed all "Note" buttons from quiz screens; replaced with `← Back to Note` text link placed **below** action buttons (not grouped with them)
+  - Quick Review confidence feedback: selecting a confidence level now replaces the option buttons with a styled badge — `🟢 Confident` (HIGH), `🟡 Improving` (MEDIUM), `🔴 Needs Practice` (LOW); "Thanks for the feedback." text removed
+  - Adaptive Practice result screen: "Generate New Set" is now the primary action; "Note" button removed
+  - Challenge Quiz result screen: "Practice Weak Concepts" is now primary (when present); "Start Another Challenge" and "Review Answers" are secondary; "Note" button removed
+  - Adaptive Practice `completionMessage` upgraded to use `mapPerformanceLevel` 4-tier thresholds (Excellent / Good / Fair / Needs Improvement) instead of a 2-tier check
+  - Error cards in Adaptive Practice (error, premiumLocked, prestart) no longer have a redundant "Note" button — the persistent `← Note` BackLink at the page header handles navigation
 - **Board Exam Mode (Phase 1)** — Challenge Quiz is now a true exam experience:
   - No correctness feedback during answering — answer first, see results later
   - Selected answers show neutral exam-style highlight (blue) only
@@ -30,6 +37,7 @@
 
 ### Technical Changes
 
+- Quick Review, Challenge Quiz, and Adaptive Practice test suites extended with 12 new post-quiz UX tests: no "Note" button on result screens, "← Back to Note" link present, confidence badge rendering (HIGH/MEDIUM/LOW), confidence option buttons hidden after selection, "Generate New Set" as primary on Adaptive Practice result, "Start Challenge Quiz" CTA on perfect Quick Review score.
 - Added `frontend/lib/challenge-quiz-results.ts` with pure result computation utilities: `computeScore`, `mapPerformanceLevel`, `computeConceptBreakdown`, `computeWeakConcepts`, and exported `WEAK_CONCEPT_THRESHOLD = 60`. Challenge Quiz page now uses `computeScore` in `handleSubmit` instead of an inline reduce. Covered by 31 unit tests in `challenge-quiz-results.test.ts` (all-correct, all-wrong, mixed, unanswered, single-question, empty quiz, all 8 performance level boundary values, concept grouping, Unknown fallback, alphabetical sort, weak concept threshold edge cases, end-to-end integration scenarios).
 - Added `frontend/lib/note-quality-badges.ts` with `computeQualityBadges` and exported `QUALITY_THRESHOLDS` constants. Added `frontend/components/notes/note-quality-badge.tsx` with the `NoteQualityBadges` component. Covered by 12 unit tests in `note-quality-badges.test.ts` (zero counts, null/undefined, threshold boundaries, High Quality suppresses Popular, label correctness). "New" badge removed — `createdAt` param and `NEW_WITHIN_DAYS` constant removed.
 - Refactored `SharedNoteCard`: replaced `metaLine?: ReactNode` with `courseProgram?: string | null` (renders neutral gray badge above title) and added `stateBadge?: ReactNode` (renders Study Pack Ready badge below title). Updated all 4 callers: `public-library-page-client.tsx`, `app/library/page.tsx`, `public-profile-page-client.tsx`, `app/public/library/[subject]/page.tsx`.

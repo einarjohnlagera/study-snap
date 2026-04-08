@@ -2,6 +2,14 @@
 
 Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`):
 
+## Post-quiz UX rules (all flows)
+
+- result screens do not contain a "Note" button — navigation is handled by `← Back to Note` link below action buttons
+- `← Back to Note` link is separate from the action button group, not inside it
+- Quick Review: after selecting a confidence level, option buttons are replaced by a single confidence badge (🟢 Confident, 🟡 Improving, or 🔴 Needs Practice)
+- Adaptive Practice: "Generate New Set" is the primary button on the result screen; "Note" button is absent
+- Challenge Quiz: "Practice Weak Concepts" is primary (when present), followed by "Start Another Challenge" and "Review Answers"
+
 ## Exam Mode behavior
 
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)

@@ -38,7 +38,9 @@ Verify these cases on mobile-sized viewports:
 - Quality badges (⭐ High Quality, 🔥 Popular) appear below the title and wrap cleanly without breaking the card layout on mobile — at most 2 badges are visible per card.
 - Challenge Quiz exam phase: answer choices are fully tappable, fill the card width, and show no correctness hints on mobile
 - Challenge Quiz result screen: score summary, performance badge, concept breakdown, and weak concepts stack in single-column on mobile without crowding
-- "Practice Weak Concepts", "Start Another Challenge", and "Note" result CTAs are full-width and stack vertically on mobile
+- "Practice Weak Concepts" and "Start Another Challenge" result CTAs are full-width and stack vertically on mobile; "← Back to Note" link appears below as a separate navigation element
+- Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile
+- Adaptive Practice result screen: "Generate New Set" is the primary action; "← Back to Note" appears below as a link
 - the avatar dropdown on mobile shows `My Profile`, `Settings`, and `Sign Out` with full text labels
 - `My Profile` in the avatar dropdown links to the user's public profile page
 - `Settings` in the avatar dropdown links to `/settings` (same as sidebar Settings)

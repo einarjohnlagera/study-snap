@@ -88,4 +88,127 @@ describe("AdaptivePracticePage", () => {
     expect(await screen.findByText("Adaptive Practice Complete")).toBeInTheDocument();
     expect(screen.getByText("Score: 1 / 1 (100%)")).toBeInTheDocument();
   });
+
+  it('result screen shows "Generate New Set" as the primary action', async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Derivatives"],
+      message: "Focusing on weak areas.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    await screen.findByText("Adaptive Practice Complete");
+
+    expect(screen.getByRole("button", { name: "Generate New Set" })).toBeInTheDocument();
+  });
+
+  it('result screen does not contain a "Note" button', async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: [],
+      message: "Focusing on weak areas.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    await screen.findByText("Adaptive Practice Complete");
+
+    expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
+  });
+
+  it('result screen shows "← Back to Note" navigation link', async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: [],
+      message: "Focusing on weak areas.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    const correctChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(correctChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    await screen.findByText("Adaptive Practice Complete");
+
+    expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
+  });
 });

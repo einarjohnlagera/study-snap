@@ -139,6 +139,27 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 - Quiz sessions must persist selected canonical choice indexes, not answer text or letters.
 - Choice shuffling must preserve correctness and remain stable for the same question/session once review starts.
 
+## Post-Quiz UX Rules (all flows)
+
+These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Practice:
+
+### Navigation
+- Never use a `Note` **button** for navigation; use a `← Back to Note` text link
+- The `← Back to Note` link must be placed **below** action buttons, visually separate from the CTA group
+- A `← Note` BackLink is always shown at the page header (above the card) regardless of phase
+
+### Button hierarchy on result screens
+- **Primary**: the most important next step (Practice Weak Concepts if applicable, or Start Challenge Quiz / Generate New Set)
+- **Secondary**: repeat/retry actions (Practice Again, Start Another Challenge, Generate New Set)
+- **Navigation**: `← Back to Note` text link below the button group — never a button
+
+### Confidence feedback (Quick Review only)
+- Once a confidence option is selected, the option buttons are replaced by a styled badge
+- HIGH → `🟢 Confident` (green badge)
+- MEDIUM → `🟡 Improving` (amber badge)
+- LOW → `🔴 Needs Practice` (orange badge)
+- "Thanks for the feedback." text is removed; the badge is the sole feedback signal
+
 ## v0.8.0 Board Exam Mode (Phase 1)
 
 Challenge Quiz now functions as a full Exam Mode experience:
@@ -146,3 +167,4 @@ Challenge Quiz now functions as a full Exam Mode experience:
 - structured result screen with score, performance level, concept breakdown, and weak concepts
 - weak concepts feed into the Adaptive Practice flow
 - `lib/challenge-quiz-results.ts` provides pure, independently tested result computation utilities
+- Adaptive Practice `completionMessage` uses `mapPerformanceLevel` for consistent 4-tier feedback
