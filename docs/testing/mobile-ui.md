@@ -47,6 +47,8 @@ Verify these cases on mobile-sized viewports:
 - quiz choices render one dynamic `A.` / `B.` / `C.` / `D.` label on mobile even when legacy payloads still include prefixed choice strings
 - Challenge Quiz result screen: score summary, performance badge, concept breakdown, and weak concepts stack in single-column on mobile without crowding
 - "Practice Weak Concepts" and "Start Another Challenge" result CTAs are full-width and stack vertically on mobile; "← Back to Note" link appears below as a separate navigation element
+- Review Answers on Quick Review, Challenge Quiz, and Adaptive Practice stays readable on mobile: question text, answer choices, concept chip, selected/correct badges, explanation, and Previous/Next controls stack without horizontal overflow
+- Review Answers mobile visual states remain restrained: correct choice is green, incorrect selected choice is red, unselected distractors stay neutral, and badges remain readable in dark mode
 - Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile
 - Adaptive Practice result screen: "Generate New Set" is the primary action; "← Back to Note" appears below as a link
 - the avatar dropdown on mobile shows `My Profile`, `Settings`, and `Sign Out` with full text labels

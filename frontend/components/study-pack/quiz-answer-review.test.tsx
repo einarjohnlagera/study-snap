@@ -1,0 +1,62 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { QuizAnswerReview } from "./quiz-answer-review";
+
+const reviewQuiz = [
+  {
+    question: "What powers the cell?",
+    choices: ["Mitochondria", "Nucleus", "Ribosome", "Cell wall"],
+    correctIndex: 0,
+    concept: "Cell organelles",
+    explanation: "Mitochondria produce ATP for the cell.",
+  },
+  {
+    question: "What carries genetic instructions?",
+    choices: ["DNA", "ATP", "Glucose", "Oxygen"],
+    correctIndex: 0,
+    concept: "Genetics",
+    explanation: "DNA stores hereditary information.",
+  },
+];
+
+describe("QuizAnswerReview", () => {
+  it("shows the selected answer, correct answer, explanation, and concept", () => {
+    render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
+
+    expect(screen.getByText("What powers the cell?")).toBeInTheDocument();
+    expect(screen.getByText("Cell organelles")).toBeInTheDocument();
+    expect(screen.getByText("Nucleus")).toBeInTheDocument();
+    expect(screen.getByText("Mitochondria")).toBeInTheDocument();
+    expect(screen.getByText("Your answer")).toBeInTheDocument();
+    expect(screen.getByText("Correct answer")).toBeInTheDocument();
+    expect(screen.getByText("Why this is correct")).toBeInTheDocument();
+    expect(screen.getByText("Mitochondria produce ATP for the cell.")).toBeInTheDocument();
+  });
+
+  it("moves through reviewed questions without losing answer state", () => {
+    render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+
+    expect(screen.getByText("What carries genetic instructions?")).toBeInTheDocument();
+    expect(screen.getByText("Genetics")).toBeInTheDocument();
+    expect(screen.getByText("DNA stores hereditary information.")).toBeInTheDocument();
+    expect(screen.getByText("DNA")).toBeInTheDocument();
+    expect(screen.getByText("Your answer")).toBeInTheDocument();
+    expect(screen.getByText("Correct answer")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous Question" }));
+
+    expect(screen.getByText("What powers the cell?")).toBeInTheDocument();
+    expect(screen.getByText("Mitochondria produce ATP for the cell.")).toBeInTheDocument();
+  });
+
+  it("can focus the review on incorrect answers only", () => {
+    render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Incorrect only" }));
+
+    expect(screen.getByText("What powers the cell?")).toBeInTheDocument();
+    expect(screen.queryByText("What carries genetic instructions?")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next Question" })).toBeDisabled();
+  });
+});

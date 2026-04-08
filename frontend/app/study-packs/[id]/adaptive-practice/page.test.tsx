@@ -328,4 +328,55 @@ describe("AdaptivePracticePage", () => {
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
   });
+
+  it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      message: "Focusing on weak areas.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await screen.findByText("1. What is the derivative of sin(x)?");
+    const wrongChoice = (await screen.findAllByRole("button")).find((button) =>
+      /^[A-D]\.\s*-cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
+    );
+    fireEvent.click(wrongChoice!);
+    fireEvent.click(screen.getByRole("button", { name: "Finish Adaptive Practice" }));
+    await screen.findByText("Adaptive Practice Complete");
+    fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
+
+    const review = screen.getByLabelText("Answer review");
+    expect(review).toHaveTextContent("What is the derivative of sin(x)?");
+    expect(review).toHaveTextContent("Trigonometric derivatives");
+    expect(review).toHaveTextContent("-cos(x)");
+    expect(review).toHaveTextContent("Your answer");
+    expect(review).toHaveTextContent("cos(x)");
+    expect(review).toHaveTextContent("Correct answer");
+    expect(review).toHaveTextContent("The derivative of sin(x) is cos(x).");
+  });
 });

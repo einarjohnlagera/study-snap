@@ -600,4 +600,93 @@ describe("ChallengeQuizPage", () => {
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
   });
+
+  it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: [],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: [],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 1,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 50,
+      difficultySelectionAvailable: true,
+      selectedDifficulty: "medium",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Cell Biology",
+          explanation: "Mitochondria produce ATP for the cell.",
+        },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: {
+        selectedChoices: {},
+        timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000),
+      },
+    });
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 0,
+      scorePercentage: 0,
+      performanceLevel: "Needs Improvement",
+      conceptBreakdown: [
+        { concept: "Cell Biology", correctAnswers: 0, totalQuestions: 1, accuracyPercentage: 0 },
+      ],
+      weakConcepts: ["Cell Biology"],
+      durationSeconds: 10,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:01:00Z",
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
+    await screen.findByText("Challenge Quiz Result");
+    fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
+
+    const review = screen.getByLabelText("Answer review");
+    expect(review).toHaveTextContent("What powers the cell?");
+    expect(review).toHaveTextContent("Cell Biology");
+    expect(review).toHaveTextContent("Nucleus");
+    expect(review).toHaveTextContent("Your answer");
+    expect(review).toHaveTextContent("Mitochondria");
+    expect(review).toHaveTextContent("Correct answer");
+    expect(review).toHaveTextContent("Mitochondria produce ATP for the cell.");
+  });
 });

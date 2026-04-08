@@ -186,6 +186,20 @@ These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Pr
 - **Secondary**: repeat/retry actions (Practice Again, Start Another Challenge, Generate New Set)
 - **Navigation**: `← Back to Note` text link below the button group — never a button
 
+### Review Answers
+- The result screen must expose a clear `Review Answers` action for post-assessment learning.
+- Review Answers uses the same shared review layout across Quick Review, Challenge Quiz, and Adaptive Practice.
+- The review layout shows one question at a time with Previous / Next navigation, plus an optional `Incorrect only` filter when mistakes exist.
+- Each reviewed question shows:
+  - original question number and text
+  - concept chip from the stored quiz item
+  - answer choices in stable displayed order
+  - `Your answer` badge on the selected choice
+  - `Correct answer` badge on the correct choice
+  - visible `Why this is correct` explanation below the choices
+- Correct answers use restrained green styling, incorrect selected answers use restrained red styling, and neutral distractors stay visually quiet.
+- Review Answers must use stored quiz/session data (`question`, `choices`, selected canonical choice indexes, `correctIndex`, `explanation`, `concept`) so the same component can later support completed-session history or export without depending on freshly completed page state only.
+
 ### Confidence feedback (Quick Review only)
 - Once a confidence option is selected, the option buttons are replaced by a styled badge
 - HIGH → `🟢 Confident` (green badge)

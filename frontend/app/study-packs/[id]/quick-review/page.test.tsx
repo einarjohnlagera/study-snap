@@ -4,6 +4,7 @@ import {
   completeProductOnboarding,
   completeQuickReviewSession,
   forfeitQuickReviewSession,
+  generateQuickReviewStudyTip,
   getNote,
   saveQuickReviewConfidence,
   startQuickReviewSession,
@@ -181,6 +182,8 @@ describe("QuickReviewPage post-quiz UX", () => {
     (completeQuickReviewSession as jest.Mock).mockReset();
     (forfeitQuickReviewSession as jest.Mock).mockReset();
     (forfeitQuickReviewSession as jest.Mock).mockResolvedValue({ message: "Quick Review session forfeited." });
+    (generateQuickReviewStudyTip as jest.Mock).mockReset();
+    (generateQuickReviewStudyTip as jest.Mock).mockResolvedValue({ studyTip: null });
     (getNote as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (saveQuickReviewConfidence as jest.Mock).mockReset();
@@ -335,5 +338,25 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     // Perfect score → showChallengeGuidedCta = true → "Start Challenge Quiz" appears
     expect(screen.getByRole("link", { name: "Start Challenge Quiz" })).toBeInTheDocument();
+  });
+
+  it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+    await screen.findByText("Quick Review Complete");
+    fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
+
+    const review = screen.getByLabelText("Answer review");
+    expect(review).toHaveTextContent("What is the powerhouse of the cell?");
+    expect(review).toHaveTextContent("Cell organelles");
+    expect(review).toHaveTextContent("Nucleus");
+    expect(review).toHaveTextContent("Your answer");
+    expect(review).toHaveTextContent("Mitochondria");
+    expect(review).toHaveTextContent("Correct answer");
+    expect(review).toHaveTextContent("Mitochondria produce ATP.");
   });
 });

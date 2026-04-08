@@ -8,6 +8,7 @@ import { PaywallModal } from "@/components/billing/paywall-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
@@ -63,6 +64,7 @@ export default function AdaptivePracticePage() {
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
+  const [showAnswerReview, setShowAnswerReview] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -89,6 +91,7 @@ export default function AdaptivePracticePage() {
     setCurrentIndex(0);
     setSelectedChoices({});
     setCompletionTracked(false);
+    setShowAnswerReview(false);
     if (response.status === "IN_PROGRESS" && response.quiz.length > 0) {
       setQuizStarted(true);
       setSessionStartedAt(Date.now());
@@ -488,10 +491,21 @@ export default function AdaptivePracticePage() {
             >
               {adaptiveGenerationLocked ? "Starting..." : "Generate New Set"}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setShowAnswerReview((previous) => !previous)}
+            >
+              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
+            </Button>
           </div>
           <div className="pt-1">
             <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
+          {showAnswerReview ? (
+            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
+          ) : null}
         </Card>
       ) : (
         <div className="space-y-4">

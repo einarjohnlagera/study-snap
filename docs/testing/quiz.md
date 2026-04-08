@@ -9,6 +9,12 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - Quick Review: after selecting a confidence level, option buttons are replaced by a single confidence badge (🟢 Confident, 🟡 Improving, or 🔴 Needs Practice)
 - Adaptive Practice: "Generate New Set" is the primary button on the result screen; "Note" button is absent
 - Challenge Quiz: "Practice Weak Concepts" is primary (when present), followed by "Start Another Challenge" and "Review Answers"
+- Quick Review, Challenge Quiz, and Adaptive Practice result screens expose `Review Answers` as a learning/review action, not a retry or new-quiz action
+- `Review Answers` shows each question with the user's selected answer, the correct answer, the explanation, and the concept label from the quiz item
+- incorrect selected answers are visually distinct from the correct answer; selected-correct answers show both `Your answer` and `Correct answer`
+- Review Answers Previous / Next navigation preserves the current reviewed question and does not reset answer state
+- the optional `Incorrect only` filter shows only missed questions and does not reorder or reshuffle choices
+- Review Answers must be backed by stored quiz/session data so completed-session review/history can reuse the same structure later
 
 ## Exam Mode behavior
 

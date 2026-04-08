@@ -8,6 +8,7 @@ import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
+import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
@@ -859,22 +860,7 @@ export default function ChallengeQuizPage() {
             <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
           {showAnswerReview ? (
-            <div className="space-y-3 pt-2">
-              {quiz.map((item, index) => (
-                <Card key={`${item.question}-${index}`} className="space-y-3 p-4">
-                  <h2 className="text-sm font-semibold">
-                    {index + 1}. {item.question}
-                  </h2>
-                  <QuizChoiceList
-                    questionKey={item.question}
-                    choices={item.choices}
-                    correctIndex={resolveQuizCorrectIndex(item)}
-                    selectedChoiceIndex={selectedChoices[index] ?? null}
-                    revealAnswer
-                  />
-                </Card>
-              ))}
-            </div>
+            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
           ) : null}
         </Card>
       ) : null}
