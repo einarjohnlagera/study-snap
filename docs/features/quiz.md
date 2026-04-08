@@ -55,7 +55,7 @@ After submission, the result screen shows:
 3. **Concept Breakdown** — per-concept accuracy (correct / total, percentage)
 4. **Weak Concepts** — concepts with accuracy < 60%; used to drive Adaptive Practice
 5. **Answer Review** — toggle to reveal all questions with correct/incorrect highlighting
-6. **CTAs**: "Practice Weak Concepts" (→ Adaptive Practice), "Start Another Challenge", "Note"
+6. **CTAs**: "Practice Weak Concepts" (→ Adaptive Practice), "Start Another Challenge", and the separate `← Back to Note` link below the action group
 
 #### Result Computation Rules
 
@@ -136,8 +136,24 @@ Use distinct icons for each mode and keep the action mapping consistent across p
   - `explanation`
   - `concept`
 - `A` / `B` / `C` / `D` are presentation-only labels derived from displayed order.
+- Backend quiz normalization strips hardcoded leading choice labels such as `A. `, `B) `, `c. `, and `D) ` from generated and legacy choice text before validation/storage.
+- Frontend choice rendering also strips legacy prefixes defensively so the UI never shows doubled labels such as `A. A. Encapsulation`.
 - Quiz sessions must persist selected canonical choice indexes, not answer text or letters.
-- Choice shuffling must preserve correctness and remain stable for the same question/session once review starts.
+- Choice shuffling must preserve correctness by keeping selections and correct answers mapped to canonical choice indexes, not displayed letters.
+- Displayed choice order must remain stable for the same question/session once review starts.
+
+## Active Session Lock and Forfeit Rules
+
+- Quick Review, Challenge Quiz, and Adaptive Practice must show a visible `Leave Quiz` action while a quiz session is active.
+- Active quiz sessions block navigation away through app links, browser back navigation, and refresh/reload warnings.
+- Leaving shows the shared confirmation modal:
+  - title: `Leave quiz?`
+  - message: `You are currently in an active quiz. Leaving will forfeit your progress.`
+  - actions: `Stay` and `Leave Quiz`
+- Confirming `Leave Quiz` marks the active session `FORFEITED` and leaves `completedAt` unset.
+- `FORFEITED` sessions are not counted as completed attempts and must not appear in completed/recent quiz results.
+- Challenge Quiz and Adaptive Practice forfeits do not refund quiz credits because quota is consumed when the generated session starts.
+- Quick Review forfeits abandon the lightweight in-progress session without any premium-credit handling.
 
 ## Post-Quiz UX Rules (all flows)
 
@@ -146,7 +162,8 @@ These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Pr
 ### Navigation
 - Never use a `Note` **button** for navigation; use a `← Back to Note` text link
 - The `← Back to Note` link must be placed **below** action buttons, visually separate from the CTA group
-- A `← Note` BackLink is always shown at the page header (above the card) regardless of phase
+- A `← Note` BackLink is shown at the page header (above the card) when no quiz session is active
+- During an active quiz, the header BackLink is replaced by active-session text plus `Leave Quiz`; users must confirm forfeiting before leaving.
 
 ### Button hierarchy on result screens
 - **Primary**: the most important next step (Practice Weak Concepts if applicable, or Start Challenge Quiz / Generate New Set)

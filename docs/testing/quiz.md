@@ -36,10 +36,16 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - Adaptive Practice stays focused on weak concepts instead of drifting into unrelated topics
 - quantitative notes can produce computation questions with useful step-based explanations
 - displayed `A` / `B` / `C` / `D` labels match the displayed choice order only and are not embedded in stored choice strings
+- generated and legacy choice strings with prefixes such as `A. Encapsulation` or `B) Abstraction` are sanitized to plain choice text before storage/rendering
 - choice shuffling preserves correctness for Quick Review, Challenge Quiz, and Adaptive Practice
 - the same in-progress session does not reshuffle choices differently on re-render
 - result and review states still map the selected displayed answer back to the canonical correct choice
-- legacy payloads that still expose answer text or `answerIndex` normalize correctly on load
+- legacy payloads that still expose answer text, answer letters, `answerIndex`, or prefixed selected-choice strings normalize correctly on load
+- active Quick Review, Challenge Quiz, and Adaptive Practice sessions show `Leave Quiz`
+- app route clicks, browser back, and refresh/reload attempts are blocked or warned while a quiz session is active
+- the shared `Leave quiz?` modal offers `Stay` and `Leave Quiz`
+- confirming `Leave Quiz` marks the session `FORFEITED`, does not set `completedAt`, and does not record a completed quiz result
+- Challenge Quiz and Adaptive Practice forfeits do not refund quiz credits or decrement usage counters
 - Note Detail `Summary` / `Quiz` controls render as tabs, not buttons
 - active Note Detail tab updates with underline state and `aria-selected`
 - `?tab=quiz` opens the quiz view directly

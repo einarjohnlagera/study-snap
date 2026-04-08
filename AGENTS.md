@@ -506,6 +506,9 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - **Confidence feedback** (Quick Review only): after selecting, option buttons are replaced by a badge — `🟢 Confident`, `🟡 Improving`, `🔴 Needs Practice`; "Thanks for the feedback." text is removed
 - **Adaptive Practice completion**: "Generate New Set" is always the primary button; `← Back to Note` link below
 - Motivation/feedback messages use `mapPerformanceLevel` thresholds for consistency (Excellent / Good / Fair / Needs Improvement)
+- While a quiz session is active, replace normal header back navigation with active-session text plus `Leave Quiz`; navigation away must open the shared `Leave quiz?` confirmation instead of leaving immediately.
+- The shared leave confirmation copy is `You are currently in an active quiz. Leaving will forfeit your progress.` with `Stay` and `Leave Quiz` actions.
+- Confirmed leaves mark the session `FORFEITED`; Challenge Quiz and Adaptive Practice forfeits must not refund quiz credits or mark the session completed.
 
 ### Challenge Quiz — Exam Mode Rule
 
@@ -639,8 +642,10 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
   - `explanation`
   - `concept`
 - `A` / `B` / `C` / `D` are UI-only labels derived from displayed order and must not be embedded into canonical choice strings.
+- Backend quiz normalization must strip leading hardcoded choice prefixes such as `A. `, `B) `, `c. `, and `D) ` from generated and legacy choice strings before validation/storage.
 - Quiz sessions must persist selected canonical choice indexes, not display letters or prefixed choice text.
 - Compatibility loaders may accept legacy answer text, `answerIndex`, or string-based selected choices, but runtime grading/rendering must normalize them back to canonical indexes before use.
+- Runtime grading must compare canonical choice indexes or explicit correctness metadata, never displayed letters or post-shuffle display positions.
 - Quantitative subjects should allow computation and problem-solving questions when the note context supports them.
 - Computation explanations should show short step-by-step solution flow rather than a one-line answer.
 

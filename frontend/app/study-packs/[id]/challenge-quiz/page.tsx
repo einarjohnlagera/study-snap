@@ -7,15 +7,16 @@ import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-require
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser } from "@/lib/auth";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   type ChallengeQuizStartRequest,
   completeChallengeQuizSession,
+  forfeitChallengeQuizSession,
   getInProgressChallengeQuizSession,
   getMyStudyPack,
   getNote,
@@ -43,8 +44,6 @@ type ChallengeSessionStatePayload = {
   timerStartedAtEpochSeconds?: number;
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
-
-const LEAVE_WARNING_MESSAGE = "Leave Challenge Quiz? Your progress is saved, but the timer will continue.";
 
 function formatTimer(seconds: number): string {
   const safeSeconds = Math.max(0, seconds);
@@ -116,8 +115,6 @@ export default function ChallengeQuizPage() {
     selectedChoices: {},
   });
   const weakConceptsRef = useRef<HTMLDivElement | null>(null);
-  const leaveGuardInsertedRef = useRef(false);
-  const showLeaveDialogRef = useRef(false);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
@@ -132,7 +129,6 @@ export default function ChallengeQuizPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedChoices, setSelectedChoices] = useState<Record<number, number>>({});
   const [timedOut, setTimedOut] = useState(false);
-  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [showFirstQuizCompletionBanner, setShowFirstQuizCompletionBanner] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
@@ -313,6 +309,11 @@ export default function ChallengeQuizPage() {
     };
   }, [currentIndex, selectedChoices]);
 
+  const persistLatestProgress = useCallback((keepalive = false) => {
+    const latest = progressRef.current;
+    persistProgress(latest.currentIndex, latest.selectedChoices, keepalive);
+  }, [persistProgress]);
+
   const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
     if (!challengeSession?.sessionId || submitting) {
       return;
@@ -367,36 +368,9 @@ export default function ChallengeQuizPage() {
   }, [challengeSession, deadlineEpochSeconds, handleSubmit, phase, submitting]);
 
   useEffect(() => {
-    showLeaveDialogRef.current = showLeaveDialog;
-  }, [showLeaveDialog]);
-
-  useEffect(() => {
     if (phase !== "running") {
-      leaveGuardInsertedRef.current = false;
       return;
     }
-
-    const persistLatestProgress = (keepalive = false) => {
-      const latest = progressRef.current;
-      persistProgress(latest.currentIndex, latest.selectedChoices, keepalive);
-    };
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      persistLatestProgress(true);
-      event.preventDefault();
-      event.returnValue = LEAVE_WARNING_MESSAGE;
-      return LEAVE_WARNING_MESSAGE;
-    };
-
-    const handlePopState = () => {
-      persistLatestProgress(true);
-      if (showLeaveDialogRef.current) {
-        globalThis.history.pushState(null, "", globalThis.location.href);
-        return;
-      }
-      globalThis.history.pushState(null, "", globalThis.location.href);
-      setShowLeaveDialog(true);
-    };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -404,20 +378,11 @@ export default function ChallengeQuizPage() {
       }
     };
 
-    if (!leaveGuardInsertedRef.current) {
-      globalThis.history.pushState(null, "", globalThis.location.href);
-      leaveGuardInsertedRef.current = true;
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    globalThis.addEventListener("popstate", handlePopState);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      globalThis.removeEventListener("popstate", handlePopState);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [persistProgress, phase]);
+  }, [persistLatestProgress, phase]);
 
   const handleStartChallenge = useCallback(async () => {
     if (!note || starting) {
@@ -473,11 +438,19 @@ export default function ChallengeQuizPage() {
     setPhase("prestart");
   };
 
-  const handleLeaveQuiz = () => {
-    persistProgress(currentIndex, selectedChoices, true);
-    setShowLeaveDialog(false);
-    router.push(noteDetailHref);
-  };
+  const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
+  const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
+    active: challengeQuizActive,
+    fallbackHref: noteDetailHref,
+    onBeforeRouteLeave: () => persistLatestProgress(true),
+    onConfirmLeave: async () => {
+      if (!challengeSession?.sessionId) {
+        return;
+      }
+      persistLatestProgress(true);
+      await forfeitChallengeQuizSession(challengeSession.sessionId);
+    },
+  });
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
@@ -487,7 +460,7 @@ export default function ChallengeQuizPage() {
         {phase === "running" ? (
           <>
             <p className="text-sm font-medium text-foreground/80">Challenge Quiz in progress</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => setShowLeaveDialog(true)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()}>
               Leave Quiz
             </Button>
           </>
@@ -580,7 +553,7 @@ export default function ChallengeQuizPage() {
             <ul className="mt-2 list-disc space-y-1 pl-5">
               <li>10-minute timer</li>
               <li>10 to 15 AI-generated questions</li>
-              <li>If you leave, the timer still continues</li>
+              <li>If you leave, the quiz is forfeited and the attempt is not refunded</li>
             </ul>
           </div>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
@@ -792,23 +765,6 @@ export default function ChallengeQuizPage() {
         </Card>
       ) : null}
 
-      <AppModal
-        isOpen={showLeaveDialog}
-        title="Leave Challenge Quiz?"
-        description="Your progress is saved, but the timer will continue."
-        onClose={() => setShowLeaveDialog(false)}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setShowLeaveDialog(false)}>
-              Stay
-            </Button>
-            <Button type="button" onClick={handleLeaveQuiz}>
-              Leave Quiz
-            </Button>
-          </div>
-        )}
-      />
-
       <PaywallModal
         isOpen={activePaywallModal !== null}
         variant={activePaywallModal ?? "challenge-quiz-limit"}
@@ -819,6 +775,7 @@ export default function ChallengeQuizPage() {
         isOpen={showVerifyEmailModal}
         onClose={() => setShowVerifyEmailModal(false)}
       />
+      <LeaveQuizModal />
     </main>
   );
 }

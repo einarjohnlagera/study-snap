@@ -3,6 +3,7 @@ import QuickReviewPage from "./page";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
+  forfeitQuickReviewSession,
   getNote,
   saveQuickReviewConfidence,
   startQuickReviewSession,
@@ -38,6 +39,7 @@ jest.mock("@/lib/auth", () => ({
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
   completeQuickReviewSession: jest.fn(),
+  forfeitQuickReviewSession: jest.fn(),
   generateQuickReviewStudyTip: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
@@ -94,6 +96,7 @@ describe("QuickReviewPage first-study onboarding", () => {
     (setAuthUser as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (completeQuickReviewSession as jest.Mock).mockReset();
+    (forfeitQuickReviewSession as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (updateQuickReviewSessionProgress as jest.Mock).mockReset();
@@ -175,6 +178,8 @@ describe("QuickReviewPage post-quiz UX", () => {
     (setAuthUser as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (completeQuickReviewSession as jest.Mock).mockReset();
+    (forfeitQuickReviewSession as jest.Mock).mockReset();
+    (forfeitQuickReviewSession as jest.Mock).mockResolvedValue({ message: "Quick Review session forfeited." });
     (getNote as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (saveQuickReviewConfidence as jest.Mock).mockReset();
@@ -232,6 +237,22 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Very confident" }));
     expect(await screen.findByText("🟢 Confident")).toBeInTheDocument();
+  });
+
+  it("forfeits the active Quick Review session before leaving", async () => {
+    setupCompleteState();
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Leave Quiz" }));
+    expect(screen.getByRole("dialog", { name: "Leave quiz?" })).toBeInTheDocument();
+
+    const leaveButtons = screen.getAllByRole("button", { name: "Leave Quiz" });
+    fireEvent.click(leaveButtons[leaveButtons.length - 1]!);
+
+    await waitFor(() => {
+      expect(forfeitQuickReviewSession).toHaveBeenCalledWith("session-1");
+    });
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
   });
 
   it("shows confidence badge after selecting MEDIUM confidence", async () => {

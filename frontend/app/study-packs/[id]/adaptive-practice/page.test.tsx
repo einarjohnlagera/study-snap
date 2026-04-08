@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdaptivePracticePage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
   completeAdaptivePracticeSession,
+  forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
   getNote,
 } from "@/lib/api";
@@ -32,6 +33,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeAdaptivePracticeSession: jest.fn(),
+  forfeitAdaptivePracticeSession: jest.fn(),
   generateAdaptiveQuickReviewQuiz: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
@@ -41,11 +43,44 @@ jest.mock("@/lib/api", () => ({
 
 describe("AdaptivePracticePage", () => {
   beforeEach(() => {
+    routerMock.push.mockReset();
+    routerMock.replace.mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockReset();
     (completeAdaptivePracticeSession as jest.Mock).mockReset();
+    (forfeitAdaptivePracticeSession as jest.Mock).mockReset();
+    (forfeitAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Adaptive Practice session forfeited." });
   });
+
+  function setupGeneratedAdaptiveQuiz() {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (completeAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Saved" });
+  }
 
   it("keeps answer correctness after displayed choice shuffling", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -87,6 +122,23 @@ describe("AdaptivePracticePage", () => {
 
     expect(await screen.findByText("Adaptive Practice Complete")).toBeInTheDocument();
     expect(screen.getByText("Score: 1 / 1 (100%)")).toBeInTheDocument();
+  });
+
+  it("forfeits the active Adaptive Practice session before leaving", async () => {
+    setupGeneratedAdaptiveQuiz();
+
+    render(<AdaptivePracticePage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Leave Quiz" }));
+    expect(screen.getByRole("dialog", { name: "Leave quiz?" })).toBeInTheDocument();
+
+    const leaveButtons = screen.getAllByRole("button", { name: "Leave Quiz" });
+    fireEvent.click(leaveButtons[leaveButtons.length - 1]!);
+
+    await waitFor(() => {
+      expect(forfeitAdaptivePracticeSession).toHaveBeenCalledWith("session-1");
+    });
+    expect(routerMock.push).toHaveBeenCalledWith("/notes/note-1");
   });
 
   it('result screen shows "Generate New Set" as the primary action', async () => {

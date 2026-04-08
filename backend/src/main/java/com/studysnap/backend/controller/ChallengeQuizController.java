@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
+import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.ChallengeQuizService;
 import jakarta.validation.Valid;
@@ -91,5 +92,14 @@ public class ChallengeQuizController {
     ) {
         UUID userId = user.userId();
         return challengeQuizService.completeSession(sessionId, userId, request);
+    }
+
+    @PostMapping("/sessions/{sessionId}/forfeit")
+    public SimpleMessageResponse forfeitChallengeQuiz(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return challengeQuizService.forfeitSession(sessionId, userId);
     }
 }

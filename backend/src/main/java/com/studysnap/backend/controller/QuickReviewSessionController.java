@@ -85,6 +85,15 @@ public class QuickReviewSessionController {
         return quickReviewSessionService.updateSessionProgress(sessionId, userId, request);
     }
 
+    @PostMapping("/{sessionId}/forfeit")
+    public SimpleMessageResponse forfeitSession(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewSessionService.forfeitSession(sessionId, userId);
+    }
+
     @GetMapping("/study-packs/{studyPackId}/in-progress")
     @Deprecated
     public QuickReviewSessionStartResponse getInProgressSession(
@@ -153,6 +162,15 @@ public class QuickReviewSessionController {
         );
     }
 
+    @PostMapping("/adaptive-practice/{sessionId}/forfeit")
+    public SimpleMessageResponse forfeitAdaptivePracticeQuiz(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewAdaptivePracticeService.forfeitAdaptiveSession(sessionId, userId);
+    }
+
     @PostMapping("/study-packs/{studyPackId}/challenge/start")
     @Deprecated
     public ChallengeQuizStartResponse startChallengeQuiz(
@@ -171,5 +189,14 @@ public class QuickReviewSessionController {
     ) {
         UUID userId = user.userId();
         return challengeQuizService.completeSession(sessionId, userId, request);
+    }
+
+    @PostMapping("/challenge/{sessionId}/forfeit")
+    public SimpleMessageResponse forfeitChallengeQuiz(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return challengeQuizService.forfeitSession(sessionId, userId);
     }
 }

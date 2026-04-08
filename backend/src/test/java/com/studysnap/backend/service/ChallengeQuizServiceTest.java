@@ -377,6 +377,41 @@ class ChallengeQuizServiceTest {
     }
 
     @Test
+    void forfeitSession_marksChallengeSessionForfeitedWithoutRefundingCreditOrCompletingIt() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(1);
+        session.setCurrentQuestionIndex(0);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = challengeQuizService.forfeitSession(sessionId.toString(), userId);
+
+        assertThat(response.message()).isEqualTo("Challenge Quiz session forfeited.");
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(session.getCompletedAt()).isNull();
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(activityTrackingService, never()).recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, studyPackId);
+    }
+
+    @Test
     void startSession_throwsTypedExceptionForInvalidDifficulty() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
@@ -386,10 +421,12 @@ class ChallengeQuizServiceTest {
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
 
+        String id = studyPackId.toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest("expert");
         assertThatThrownBy(() -> challengeQuizService.startSession(
-                studyPackId.toString(),
+                id,
                 userId,
-                new ChallengeQuizStartRequest("expert")
+                request
         ))
                 .isInstanceOf(InvalidChallengeQuizDifficultyException.class)
                 .hasMessage("Difficulty must be easy, medium, or hard.");

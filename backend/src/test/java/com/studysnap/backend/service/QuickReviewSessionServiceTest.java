@@ -200,7 +200,7 @@ class QuickReviewSessionServiceTest {
 
         QuickReviewSessionResponse response = quickReviewSessionService.completeSession(sessionId.toString(), userId, request);
 
-        assertThat(response.correctAnswers()).isEqualTo(0);
+        assertThat(response.correctAnswers()).isZero();
         assertThat(response.totalQuestions()).isEqualTo(5);
         assertThat(response.scorePercentage()).isEqualByComparingTo("0.00");
     }
@@ -312,7 +312,8 @@ class QuickReviewSessionServiceTest {
 
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
 
-        assertThatThrownBy(() -> quickReviewSessionService.completeSession(sessionId.toString(), userId, request))
+        String id = sessionId.toString();
+        assertThatThrownBy(() -> quickReviewSessionService.completeSession(id, userId, request))
                 .isInstanceOf(AppException.class)
                 .hasMessage("Correct answers cannot exceed total questions.")
                 .extracting(ex -> ((AppException) ex).getCode())
@@ -343,9 +344,9 @@ class QuickReviewSessionServiceTest {
         assertThat(saved.getUserId()).isEqualTo(userId);
         assertThat(saved.getStudyPackId()).isEqualTo(studyPackId);
         assertThat(saved.getStatus()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
-        assertThat(saved.getCurrentQuestionIndex()).isEqualTo(0);
+        assertThat(saved.getCurrentQuestionIndex()).isZero();
         assertThat(saved.getCurrentRound()).isEqualTo(QuickReviewRound.INITIAL);
-        assertThat(saved.getRetryCount()).isEqualTo(0);
+        assertThat(saved.getRetryCount()).isZero();
         assertThat(saved.getTotalQuestions()).isEqualTo(5);
         assertThat(response.sessionId()).isEqualTo(saved.getId().toString());
         verify(activityTrackingService, times(1)).recordActivity(userId, ActivityType.STARTED_QUICK_REVIEW, studyPackId);
@@ -508,11 +509,28 @@ class QuickReviewSessionServiceTest {
         );
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
 
-        assertThatThrownBy(() -> quickReviewSessionService.updateSessionProgress(sessionId.toString(), userId, request))
+        String id = sessionId.toString();
+        assertThatThrownBy(() -> quickReviewSessionService.updateSessionProgress(id, userId, request))
                 .isInstanceOf(AppException.class)
                 .hasMessage("Quick Review session is already completed.")
                 .extracting(ex -> ((AppException) ex).getCode())
                 .isEqualTo("SESSION_NOT_IN_PROGRESS");
+    }
+
+    @Test
+    void forfeitSession_marksInProgressSessionAsForfeitedWithoutCompletingIt() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressSession(sessionId, userId, studyPackId);
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        var response = quickReviewSessionService.forfeitSession(sessionId.toString(), userId);
+
+        assertThat(response.message()).isEqualTo("Quick Review session forfeited.");
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(session.getCompletedAt()).isNull();
+        verify(activityTrackingService, never()).recordActivity(any(UUID.class), any(ActivityType.class), any(UUID.class));
     }
 
     @Test

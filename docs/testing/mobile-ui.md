@@ -37,6 +37,10 @@ Verify these cases on mobile-sized viewports:
 - Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.
 - Quality badges (⭐ High Quality, 🔥 Popular) appear below the title and wrap cleanly without breaking the card layout on mobile — at most 2 badges are visible per card.
 - Challenge Quiz exam phase: answer choices are fully tappable, fill the card width, and show no correctness hints on mobile
+- Quick Review, Challenge Quiz, and Adaptive Practice active sessions show a tappable `Leave Quiz` action on mobile
+- the `Leave quiz?` modal remains readable on mobile and stacks `Stay` / `Leave Quiz` actions cleanly
+- mobile route/back/refresh attempts during an active quiz show the same leave-confirmation or browser warning behavior as desktop
+- quiz choices render one dynamic `A.` / `B.` / `C.` / `D.` label on mobile even when legacy payloads still include prefixed choice strings
 - Challenge Quiz result screen: score summary, performance badge, concept breakdown, and weak concepts stack in single-column on mobile without crowding
 - "Practice Weak Concepts" and "Start Another Challenge" result CTAs are full-width and stack vertically on mobile; "← Back to Note" link appears below as a separate navigation element
 - Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile

@@ -9,10 +9,12 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeAdaptivePracticeSession,
+  forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
   getMyStudyPack,
   getNote,
@@ -193,6 +195,18 @@ export default function AdaptivePracticePage() {
     return "Keep going. These concepts need more practice — try again when ready.";
   }, [scorePercentage]);
 
+  const adaptiveQuizActive = Boolean(adaptiveQuiz?.sessionId && hasQuestions && !isComplete && !completionTracked && !error);
+  const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
+    active: adaptiveQuizActive,
+    fallbackHref: noteDetailHref,
+    onConfirmLeave: async () => {
+      if (!adaptiveQuiz?.sessionId) {
+        return;
+      }
+      await forfeitAdaptivePracticeSession(adaptiveQuiz.sessionId);
+    },
+  });
+
   const handleSelectChoice = (choiceIndex: number) => {
     if (!currentQuestion || hasAnsweredCurrent) {
       return;
@@ -229,7 +243,16 @@ export default function AdaptivePracticePage() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
-        <BackLink href={noteDetailHref} label="Note" />
+        {adaptiveQuizActive ? (
+          <>
+            <p className="text-sm font-medium text-foreground/80">Adaptive Practice in progress</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()}>
+              Leave Quiz
+            </Button>
+          </>
+        ) : (
+          <BackLink href={noteDetailHref} label="Note" />
+        )}
       </div>
 
       {loading ? (
@@ -404,6 +427,7 @@ export default function AdaptivePracticePage() {
         isOpen={showVerifyEmailModal}
         onClose={() => setShowVerifyEmailModal(false)}
       />
+      <LeaveQuizModal />
     </main>
   );
 }

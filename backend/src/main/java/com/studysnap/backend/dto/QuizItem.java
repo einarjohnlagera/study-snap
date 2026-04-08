@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.studysnap.backend.util.QuizValidationUtils;
 
 import java.util.List;
 import java.util.Objects;
@@ -47,7 +48,7 @@ public final class QuizItem {
             String legacyAnswer
     ) {
         this.question = question;
-        this.choices = choices == null ? List.of() : List.copyOf(choices);
+        this.choices = choices == null ? List.of() : List.copyOf(QuizValidationUtils.sanitizeChoiceTexts(choices));
         this.correctIndex = resolveCorrectIndex(this.choices, correctIndex, null, null, legacyAnswer);
         this.concept = concept;
         this.explanation = explanation;
@@ -116,12 +117,31 @@ public final class QuizItem {
         if (legacyAnswer == null || choices == null || choices.isEmpty()) {
             return null;
         }
+        String normalizedLegacyAnswer = QuizValidationUtils.sanitizeChoiceText(legacyAnswer);
+        if (normalizedLegacyAnswer == null) {
+            return answerLetterIndex(legacyAnswer, choices.size());
+        }
         for (int index = 0; index < choices.size(); index++) {
-            if (Objects.equals(choices.get(index), legacyAnswer)) {
+            if (Objects.equals(choices.get(index), normalizedLegacyAnswer)) {
                 return index;
             }
         }
-        return null;
+        return answerLetterIndex(normalizedLegacyAnswer, choices.size());
+    }
+
+    private static Integer answerLetterIndex(String answer, int choiceCount) {
+        if (answer == null || choiceCount <= 0) {
+            return null;
+        }
+        String normalized = answer.trim();
+        if (normalized.length() == 2 && (normalized.charAt(1) == '.' || normalized.charAt(1) == ')')) {
+            normalized = normalized.substring(0, 1);
+        }
+        if (normalized.length() != 1) {
+            return null;
+        }
+        int index = Character.toUpperCase(normalized.charAt(0)) - 'A';
+        return index >= 0 && index < choiceCount ? index : null;
     }
 
     private static Integer firstValidIndex(List<String> choices, Integer... candidates) {

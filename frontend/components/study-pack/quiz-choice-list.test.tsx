@@ -59,4 +59,21 @@ describe("QuizChoiceList", () => {
     expect(choiceButtons.find((button) => button.textContent?.includes("cos(x)") && button.textContent?.includes("Correct"))).toBeTruthy();
     expect(choiceButtons.find((button) => button.textContent?.includes("tan(x)") && button.textContent?.includes("Incorrect"))).toBeTruthy();
   });
+
+  it("renders one dynamic letter label when data still contains legacy prefixes", () => {
+    render(
+      <QuizChoiceList
+        questionKey="Which OOP principle hides implementation details?"
+        choices={["A. Encapsulation", "B) Abstraction", "C. Inheritance", "D) Polymorphism"]}
+        correctIndex={0}
+        selectedChoiceIndex={null}
+        revealAnswer={false}
+      />,
+    );
+
+    const encapsulationChoice = screen.getAllByRole("button").find((button) => button.textContent?.includes("Encapsulation"));
+
+    expect(encapsulationChoice?.textContent).toMatch(/^[A-D]\.\s*Encapsulation$/);
+    expect(encapsulationChoice?.textContent).not.toContain("A. A.");
+  });
 });
