@@ -91,6 +91,7 @@ const baseResult = {
 describe("QuickReviewPage first-study onboarding", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    routerMock.replace.mockReset();
     window.localStorage.clear();
     (getAuthUser as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
@@ -209,6 +210,19 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     const noteButton = screen.queryByRole("button", { name: /^Note$/ });
     expect(noteButton).not.toBeInTheDocument();
+  });
+
+  it("loads Quick Review once and does not loop initialization calls", async () => {
+    setupCompleteState();
+
+    render(<QuickReviewPage />);
+
+    await screen.findByText("Quick Review in progress");
+    await waitFor(() => {
+      expect(getNote).toHaveBeenCalledTimes(1);
+      expect(startQuickReviewSession).toHaveBeenCalledTimes(1);
+    });
+    expect(routerMock.replace).not.toHaveBeenCalled();
   });
 
   it('result screen shows "← Back to Note" navigation link', async () => {

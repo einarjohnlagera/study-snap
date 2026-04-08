@@ -131,16 +131,17 @@ class ChallengeQuizServiceTest {
                 )
         ));
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.CHALLENGE,
-                QuickReviewSessionStatus.IN_PROGRESS
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
         )).thenReturn(Optional.of(inProgress));
-        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 eq(userId),
                 eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
         )).thenReturn(0L);
@@ -167,6 +168,72 @@ class ChallengeQuizServiceTest {
         assertThat(response.quiz()).hasSize(1);
     }
 
+    @Test
+    void startSession_reusesExistingGeneratingSession_withoutCallingLlmAgain() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity generating = new QuickReviewSessionEntity();
+        generating.setId(sessionId);
+        generating.setUserId(userId);
+        generating.setStudyPackId(studyPackId);
+        generating.setNoteId(noteId);
+        generating.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        generating.setStatus(QuickReviewSessionStatus.GENERATING);
+        generating.setCurrentRound(QuickReviewRound.INITIAL);
+        generating.setCurrentQuestionIndex(0);
+        generating.setTotalQuestions(0);
+        generating.setCorrectAnswers(0);
+        generating.setScorePercentage(BigDecimal.ZERO);
+        generating.setRetryCount(0);
+        generating.setCreatedAt(OffsetDateTime.now().minusSeconds(30));
+        generating.setSessionState(Map.of(
+                "timeLimitSeconds", 600,
+                "timerStartedAtEpochSeconds", 0L,
+                "selectedChoices", Map.of(),
+                "completed", false
+        ));
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.of(generating));
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
+
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        assertThat(response.quiz()).isEmpty();
+        verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID noteId, UUID userId) {
         StudyPackEntity studyPack = new StudyPackEntity();
         studyPack.setId(studyPackId);
@@ -190,16 +257,17 @@ class ChallengeQuizServiceTest {
         QuickReviewSessionEntity previousQuickReview = new QuickReviewSessionEntity();
         previousQuickReview.setScorePercentage(BigDecimal.valueOf(40));
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.CHALLENGE,
-                QuickReviewSessionStatus.IN_PROGRESS
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
         )).thenReturn(Optional.empty());
-        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 eq(userId),
                 eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
                 any(OffsetDateTime.class),
                 any(OffsetDateTime.class)
         )).thenReturn(0L);
@@ -418,7 +486,7 @@ class ChallengeQuizServiceTest {
         UUID noteId = UUID.randomUUID();
         StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
 
         String id = studyPackId.toString();

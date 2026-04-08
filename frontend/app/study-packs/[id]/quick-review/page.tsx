@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Trophy } from "lucide-react";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
@@ -164,6 +164,8 @@ export default function QuickReviewPage() {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
+  const loadedNoteIdRef = useRef<string | null>(null);
+  const legacyRedirectTargetRef = useRef<string | null>(null);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -171,6 +173,7 @@ export default function QuickReviewPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+  const queryString = useMemo(() => searchParams.toString(), [searchParams]);
   const openAdaptivePracticePaywall = useCallback((source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -202,10 +205,14 @@ export default function QuickReviewPage() {
     setConfidenceError(null);
   }, []);
 
-  const loadNote = useCallback(async () => {
+  const loadNote = useCallback(async (force = false) => {
     if (!noteId) {
       setError("Note not found.");
       setLoading(false);
+      return;
+    }
+
+    if (!force && loadedNoteIdRef.current === noteId) {
       return;
     }
 
@@ -219,10 +226,12 @@ export default function QuickReviewPage() {
       const detail = await getNote(noteId);
       if (detail.studyPackStatus !== "STUDY_PACK_READY") {
         setNote(detail);
+        loadedNoteIdRef.current = noteId;
         setError("Generate a Study Pack first.");
         return;
       }
       setNote(detail);
+      loadedNoteIdRef.current = noteId;
       resetQuickReviewState(detail.quiz.map((_, index) => index));
       setRecentSessions([]);
       setCurrentSessionId(null);
@@ -232,22 +241,28 @@ export default function QuickReviewPage() {
       if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
         if (byStudyPack?.noteId) {
-          const nextQuery = searchParams.toString();
+          const nextQuery = queryString;
+          const targetHref = nextQuery
+            ? `/notes/${byStudyPack.noteId}/quick-review?${nextQuery}`
+            : `/notes/${byStudyPack.noteId}/quick-review`;
+          if (legacyRedirectTargetRef.current === targetHref) {
+            return;
+          }
+          legacyRedirectTargetRef.current = targetHref;
           router.replace(
-            nextQuery
-              ? `/notes/${byStudyPack.noteId}/quick-review?${nextQuery}`
-              : `/notes/${byStudyPack.noteId}/quick-review`,
+            targetHref,
           );
           return;
         }
       }
+      loadedNoteIdRef.current = null;
       const message = err instanceof Error ? err.message : "Could not load this note.";
       setError(message);
       setNote(null);
     } finally {
       setLoading(false);
     }
-  }, [noteId, pathname, resetQuickReviewState, router, searchParams]);
+  }, [noteId, pathname, queryString, resetQuickReviewState, router]);
 
   useEffect(() => {
     void loadNote();
@@ -743,7 +758,7 @@ export default function QuickReviewPage() {
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             {!isNotFound ? (
-              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadNote()}>
+              <Button type="button" className="w-full sm:w-auto" onClick={() => void loadNote(true)}>
                 Retry
               </Button>
             ) : null}

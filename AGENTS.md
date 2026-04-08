@@ -642,6 +642,11 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 - Quick Review comes from the Study Pack quiz generated during note generation and should stay lightweight, fast, and learner-level aware.
 - Challenge Quiz and Adaptive Practice use separate LLM generation flows and must receive learner-level context, defaulting to `COLLEGE` when the user has no saved learner level.
+- Quick Review must not use the Challenge/Adaptive LLM-generation hard lock or full-screen generation overlay because it does not run an LLM at quiz start.
+- Challenge Quiz and Adaptive Practice must reserve a `GENERATING` session before calling the LLM, then transition to `IN_PROGRESS` when the quiz payload is ready or `FAILED` when generation fails.
+- Challenge Quiz and Adaptive Practice start flows must be idempotent: return existing `GENERATING` sessions without another LLM call, return existing `IN_PROGRESS` quiz payloads without another LLM call, and allow retry only after `FAILED`.
+- While Challenge Quiz or Adaptive Practice generation is active, the UI must disable start controls, difficulty/options controls, app links, sidebar/header navigation, and browser back/refresh through the shared generation lock and native `beforeunload` warning.
+- Challenge Quiz and Adaptive Practice reload recovery must check existing session state first: `GENERATING` continues the loading/poll state, `IN_PROGRESS` resumes the quiz, and `FAILED` shows retry.
 - Generated quiz JSON contracts must stay strict:
   - exactly 4 choices
   - `answer` must be `A` / `B` / `C` / `D`

@@ -345,6 +345,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "medium" })).toBeDisabled();
     expect(hardButton).toBeDisabled();
     expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+    expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
     expect(screen.getByText("Preparing your Challenge Quiz...")).toBeInTheDocument();
   });
 

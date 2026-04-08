@@ -32,6 +32,7 @@ Shared ownership model:
 - should not repeat the Study Pack / Quick Review question set
 - the start screen must disable difficulty controls and the Start button immediately after `Start Challenge Quiz` is clicked.
 - duplicate starts must be prevented while the start request is in flight.
+- while Challenge Quiz LLM generation is in progress, the page shows a full-screen generation overlay and blocks page interaction/navigation until the backend returns `IN_PROGRESS` or `FAILED`.
 - quantitative notes may produce computation or formula-based questions
 - explanations should be tutor-style and step-based for computation questions
 
@@ -76,6 +77,8 @@ After submission, the result screen shows:
 - generated separately from Quick Review
 - learner-level aware, defaulting to `College` when missing
 - may be slightly easier than Challenge Quiz, but must stay focused on weak concepts only
+- Adaptive Practice must not trigger LLM generation on page load. The page may load existing `GENERATING`, `IN_PROGRESS`, or `FAILED` state, but new generation starts only after the visible `Start Adaptive Practice` / `Generate New Set` action.
+- while Adaptive Practice LLM generation is in progress, the page shows a full-screen generation overlay and blocks page interaction/navigation until the backend returns `IN_PROGRESS` or `FAILED`.
 - quantitative weak concepts may use targeted numerical reinforcement questions
 - explanations should reinforce the weak concept clearly and step through computations when relevant
 
@@ -143,6 +146,17 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 - Quiz sessions must persist selected canonical choice indexes, not answer text or letters.
 - Choice shuffling must preserve correctness by keeping selections and correct answers mapped to canonical choice indexes, not displayed letters.
 - Displayed choice order must remain stable for the same question/session once review starts.
+
+## LLM Generation Lock and Idempotency
+
+- Quick Review is excluded from LLM generation locks because it uses the base Study Pack quiz and should remain lightweight. Do not add the full-screen generation overlay or LLM-generation navigation lock to Quick Review.
+- Challenge Quiz and Adaptive Practice are LLM-generated and must reserve a `GENERATING` session before calling the LLM.
+- If a Challenge Quiz or Adaptive Practice start request finds an active `GENERATING` session, it returns that session and must not call the LLM again.
+- If it finds an `IN_PROGRESS` session with quiz payload, it returns that ready active quiz and must not call the LLM again.
+- If the latest observed session is `FAILED`, the UI shows a friendly retry state and a new start request may retry generation.
+- `IN_PROGRESS` is the ready/active quiz state for Challenge Quiz and Adaptive Practice; there is no separate persisted `READY` status in the current model.
+- Challenge Quiz and Adaptive Practice refresh/reload recovery uses the in-progress status endpoint: `GENERATING` continues polling, `IN_PROGRESS` resumes the quiz, and `FAILED` allows retry.
+- While LLM generation is active, the frontend disables all quiz controls, blocks app link clicks and browser back navigation, and uses the browser-native refresh warning.
 
 ## Active Session Lock and Forfeit Rules
 

@@ -249,6 +249,17 @@ public class NoteController {
         return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId);
     }
 
+    @GetMapping("/{id}/adaptive-practice/in-progress")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuickReviewAdaptiveQuizResponse getInProgressAdaptivePractice(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
+        return quickReviewAdaptivePracticeService.getAdaptiveQuizSession(studyPackId, userId);
+    }
+
     @PostMapping("/{id}/visibility")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public NoteResponse updateVisibility(
