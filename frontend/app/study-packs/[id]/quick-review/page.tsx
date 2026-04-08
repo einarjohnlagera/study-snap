@@ -10,11 +10,13 @@ import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
+  forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
   getMyStudyPack,
   getNote,
@@ -159,7 +161,6 @@ export default function QuickReviewPage() {
   const [savingConfidence, setSavingConfidence] = useState(false);
   const [confidenceAcknowledged, setConfidenceAcknowledged] = useState(false);
   const [confidenceError, setConfidenceError] = useState<string | null>(null);
-  const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
@@ -345,7 +346,6 @@ export default function QuickReviewPage() {
   useEffect(() => {
     const syncAuthState = () => {
       const authUser = getAuthUser();
-      setIsPremiumPlan((authUser?.planType ?? "FREE") === "PREMIUM");
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
     };
     syncAuthState();
@@ -396,6 +396,31 @@ export default function QuickReviewPage() {
       // Progress persistence should not block review flow.
     });
   }, [currentSessionId]);
+
+  const persistCurrentProgress = useCallback(() => {
+    if (currentQuestionIndex === null) {
+      return;
+    }
+    persistProgress({
+      currentQuestionIndex: currentRoundIndex,
+      currentRound: currentRoundType,
+      retryCount,
+      selectedChoices,
+      retryQuestionIndexes,
+      activeQuestionIndexes,
+      roundSelections,
+    });
+  }, [
+    activeQuestionIndexes,
+    currentQuestionIndex,
+    currentRoundIndex,
+    currentRoundType,
+    persistProgress,
+    retryCount,
+    retryQuestionIndexes,
+    roundSelections,
+    selectedChoices,
+  ]);
 
   useEffect(() => {
     if (!note || !sessionInitializing) {
@@ -676,10 +701,32 @@ export default function QuickReviewPage() {
     }
   }, [router]);
 
+  const quizSessionActive = Boolean(note && currentSessionId && !isComplete && totalQuestions > 0 && !error);
+  const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
+    active: quizSessionActive,
+    fallbackHref: noteDetailHref,
+    onBeforeRouteLeave: persistCurrentProgress,
+    onConfirmLeave: async () => {
+      if (!currentSessionId) {
+        return;
+      }
+      await forfeitQuickReviewSession(currentSessionId);
+    },
+  });
+
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-center justify-between gap-3">
-        <BackLink href={noteDetailHref} label="Note" />
+        {quizSessionActive ? (
+          <>
+            <p className="text-sm font-medium text-foreground/80">Quick Review in progress</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()}>
+              Leave Quiz
+            </Button>
+          </>
+        ) : (
+          <BackLink href={noteDetailHref} label="Note" />
+        )}
       </div>
 
       {loading || sessionInitializing ? (
@@ -968,6 +1015,7 @@ export default function QuickReviewPage() {
           </div>
         )}
       />
+      <LeaveQuizModal />
     </main>
   );
 }

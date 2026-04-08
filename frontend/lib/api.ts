@@ -454,7 +454,7 @@ export type QuickReviewActivityType =
 
 export type QuickReviewSessionStartResponse = {
   sessionId: string | null;
-  status: "IN_PROGRESS" | "COMPLETED" | null;
+  status: "IN_PROGRESS" | "COMPLETED" | "FORFEITED" | null;
   currentQuestionIndex: number;
   currentRound: "INITIAL" | "RETRY" | null;
   retryCount: number;
@@ -484,7 +484,7 @@ export type QuickReviewSessionProgressRequest = {
 export type QuickReviewSessionSummaryResponse = {
   id: string;
   studyPackId: string;
-  status?: "IN_PROGRESS" | "COMPLETED";
+  status?: "IN_PROGRESS" | "COMPLETED" | "FORFEITED";
   currentQuestionIndex?: number;
   currentRound?: "INITIAL" | "RETRY";
   totalQuestions: number;
@@ -568,7 +568,7 @@ export type ChallengeQuizCompleteRequest = {
 export type ChallengeQuizSessionResponse = {
   sessionId: string;
   studyPackId: string;
-  status: "IN_PROGRESS" | "COMPLETED";
+  status: "IN_PROGRESS" | "COMPLETED" | "FORFEITED";
   totalQuestions: number;
   correctAnswers: number;
   scorePercentage: number;
@@ -1563,6 +1563,20 @@ export async function completeQuickReviewSession(
   return parseApiResponse<QuickReviewSessionSummaryResponse>(response, "Could not save Quick Review results.");
 }
 
+export async function forfeitQuickReviewSession(
+  sessionId: string,
+): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/quick-review/${sessionId}/forfeit`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not leave Quick Review.");
+}
+
 export async function saveQuickReviewConfidence(
   sessionId: string,
   confidenceLevel: QuickReviewConfidenceLevel,
@@ -1669,6 +1683,23 @@ export async function completeAdaptivePracticeSession(
   );
 }
 
+export async function forfeitAdaptivePracticeSession(
+  sessionId: string,
+): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/adaptive-practice/sessions/${sessionId}/forfeit`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(
+    response,
+    "Could not leave Adaptive Practice.",
+  );
+}
+
 export async function startChallengeQuizSession(
   noteId: string,
   request: ChallengeQuizStartRequest = {},
@@ -1737,6 +1768,20 @@ export async function completeChallengeQuizSession(
     true,
   );
   return parseApiResponse<ChallengeQuizSessionResponse>(response, "Could not save Challenge Quiz results.");
+}
+
+export async function forfeitChallengeQuizSession(
+  sessionId: string,
+): Promise<SimpleMessageResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}/forfeit`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<SimpleMessageResponse>(response, "Could not leave Challenge Quiz.");
 }
 
 export async function listRecentChallengeQuizSessions(

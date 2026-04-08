@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.PlanType;
@@ -79,6 +80,8 @@ public class ChallengeQuizService {
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_QUESTION_COUNT = "questionCount";
     private static final String ANALYTICS_METADATA_DIFFICULTY = "difficulty";
+    private static final String CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE = "Challenge Quiz session has already ended.";
+    private static final String CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE = "Challenge Quiz session forfeited.";
     private static final int FIRST_PAGE = 0;
     private static final int MAX_RECENT_SESSION_LIMIT = 10;
     private static final int WEAK_CONCEPT_ACCURACY_THRESHOLD = 60;
@@ -125,8 +128,7 @@ public class ChallengeQuizService {
                 int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
                 return toStartResponse(existing, studyPack, usedThisMonth, planType);
             }
-            existing.setStatus(QuickReviewSessionStatus.COMPLETED);
-            existing.setCompletedAt(OffsetDateTime.now());
+            markSessionForfeited(existing);
             quickReviewSessionRepository.save(existing);
         }
 
@@ -306,6 +308,17 @@ public class ChallengeQuizService {
                 saved.getCreatedAt(),
                 saved.getCompletedAt()
         );
+    }
+
+    public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
+        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
+            return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE);
+        }
+
+        markSessionForfeited(session);
+        quickReviewSessionRepository.save(session);
+        return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE);
     }
 
     private int assertChallengeQuizQuotaAvailable(UUID userId, PlanType planType) {
@@ -819,6 +832,11 @@ public class ChallengeQuizService {
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new ChallengeQuizSessionNotInProgressException();
         }
+    }
+
+    private void markSessionForfeited(QuickReviewSessionEntity session) {
+        session.setStatus(QuickReviewSessionStatus.FORFEITED);
+        session.setCompletedAt(null);
     }
 
     private List<String> getKeyConcepts(StudyPackEntity studyPack) {

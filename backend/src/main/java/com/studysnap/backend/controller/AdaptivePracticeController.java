@@ -49,4 +49,13 @@ public class AdaptivePracticeController {
                 request.durationSeconds()
         );
     }
+
+    @PostMapping("/sessions/{sessionId}/forfeit")
+    public SimpleMessageResponse forfeitAdaptivePractice(
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return quickReviewAdaptivePracticeService.forfeitAdaptiveSession(sessionId, userId);
+    }
 }

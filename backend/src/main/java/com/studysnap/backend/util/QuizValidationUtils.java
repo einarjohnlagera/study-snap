@@ -8,9 +8,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 @UtilityClass
 public class QuizValidationUtils {
+    private static final Pattern LEADING_CHOICE_LABEL_PATTERN = Pattern.compile("^\\s*[A-Da-d]\\s*[.)]\\s*");
 
     public boolean hasInvalidChoices(List<String> choices) {
         if (choices == null || choices.size() != 4) {
@@ -18,14 +20,34 @@ public class QuizValidationUtils {
         }
         Set<String> normalizedChoices = new HashSet<>();
         for (String choice : choices) {
-            if (StringNormalizationUtils.isBlank(choice)) {
+            String sanitizedChoice = sanitizeChoiceText(choice);
+            if (StringNormalizationUtils.isBlank(sanitizedChoice)) {
                 return true;
             }
-            if (!normalizedChoices.add(StringNormalizationUtils.normalizeForChoiceDuplicateCheck(choice))) {
+            if (!normalizedChoices.add(StringNormalizationUtils.normalizeForChoiceDuplicateCheck(sanitizedChoice))) {
                 return true;
             }
         }
         return false;
+    }
+
+    public List<String> sanitizeChoiceTexts(List<String> choices) {
+        if (choices == null || choices.isEmpty()) {
+            return List.of();
+        }
+        return choices.stream()
+                .map(QuizValidationUtils::sanitizeChoiceText)
+                .map(choice -> choice == null ? "" : choice)
+                .toList();
+    }
+
+    public String sanitizeChoiceText(String choice) {
+        if (choice == null) {
+            return null;
+        }
+        return StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(
+                LEADING_CHOICE_LABEL_PATTERN.matcher(choice).replaceFirst("")
+        );
     }
 
     public List<String> randomizeChoices(List<String> choices, String question) {

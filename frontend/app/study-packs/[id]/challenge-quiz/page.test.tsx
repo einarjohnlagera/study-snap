@@ -3,6 +3,7 @@ import ChallengeQuizPage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
   completeChallengeQuizSession,
+  forfeitChallengeQuizSession,
   getInProgressChallengeQuizSession,
   getNote,
   updateChallengeQuizSessionProgress,
@@ -32,6 +33,7 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeChallengeQuizSession: jest.fn(),
+  forfeitChallengeQuizSession: jest.fn(),
   getInProgressChallengeQuizSession: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
@@ -52,9 +54,68 @@ describe("ChallengeQuizPage", () => {
     (getNote as jest.Mock).mockReset();
     (getInProgressChallengeQuizSession as jest.Mock).mockReset();
     (completeChallengeQuizSession as jest.Mock).mockReset();
+    (forfeitChallengeQuizSession as jest.Mock).mockReset();
+    (forfeitChallengeQuizSession as jest.Mock).mockResolvedValue({ message: "Challenge Quiz session forfeited." });
     (updateChallengeQuizSessionProgress as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockResolvedValue(undefined);
   });
+
+  function setupInProgressChallengeQuiz() {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: ["cells"],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: ["Concept"],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 1,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 50,
+      difficultySelectionAvailable: true,
+      selectedDifficulty: "medium",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Concept",
+          explanation: "Explanation",
+        },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: {
+        selectedChoices: {},
+        timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000),
+      },
+    });
+  }
 
   it("loads note/session once and does not loop initialization calls", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -120,6 +181,50 @@ describe("ChallengeQuizPage", () => {
       expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(1);
     });
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("forfeits the active Challenge Quiz session before leaving", async () => {
+    setupInProgressChallengeQuiz();
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Leave Quiz" }));
+    expect(screen.getByRole("dialog", { name: "Leave quiz?" })).toBeInTheDocument();
+
+    const leaveButtons = screen.getAllByRole("button", { name: "Leave Quiz" });
+    fireEvent.click(leaveButtons[leaveButtons.length - 1]!);
+
+    await waitFor(() => {
+      expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1");
+    });
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
+  });
+
+  it("blocks route clicks during an active Challenge Quiz until confirmed", async () => {
+    setupInProgressChallengeQuiz();
+
+    render(<ChallengeQuizPage />);
+
+    await screen.findByText("Challenge Quiz in progress");
+    const dashboardLink = document.createElement("a");
+    dashboardLink.href = "/dashboard";
+    dashboardLink.textContent = "Dashboard";
+    document.body.appendChild(dashboardLink);
+
+    fireEvent.click(dashboardLink);
+
+    expect(screen.getByRole("dialog", { name: "Leave quiz?" })).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+
+    const leaveButtons = screen.getAllByRole("button", { name: "Leave Quiz" });
+    fireEvent.click(leaveButtons[leaveButtons.length - 1]!);
+
+    await waitFor(() => {
+      expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1");
+    });
+    expect(pushMock).toHaveBeenCalledWith("/dashboard");
+
+    dashboardLink.remove();
   });
 
   it("shows the difficulty-selection paywall instead of redirecting immediately", async () => {

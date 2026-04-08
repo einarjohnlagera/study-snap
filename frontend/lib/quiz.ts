@@ -1,6 +1,7 @@
 import type { QuizItem } from "@/lib/api";
 
 const CHOICE_LABELS = ["A", "B", "C", "D"] as const;
+const LEADING_CHOICE_LABEL_PATTERN = /^\s*[A-D]\s*[.)]\s*/i;
 
 export type QuizDisplayChoice = {
   displayIndex: number;
@@ -32,9 +33,14 @@ export function resolveQuizCorrectIndex(item: QuizItem): number {
     return legacyCorrectAnswerIndex;
   }
   if (typeof item.answer === "string") {
-    const fallbackIndex = item.choices.findIndex((choice) => choice === item.answer);
+    const normalizedAnswer = sanitizeQuizChoiceText(item.answer);
+    const fallbackIndex = item.choices.findIndex((choice) => sanitizeQuizChoiceText(choice) === normalizedAnswer);
     if (fallbackIndex >= 0) {
       return fallbackIndex;
+    }
+    const letterIndex = resolveChoiceLetterIndex(normalizedAnswer || item.answer, item.choices.length);
+    if (letterIndex !== null) {
+      return letterIndex;
     }
   }
   return -1;
@@ -84,8 +90,12 @@ export function getDisplayedQuizChoices(item: QuizItem): QuizDisplayChoice[] {
     displayIndex,
     canonicalIndex,
     label: CHOICE_LABELS[displayIndex] ?? String.fromCharCode(65 + displayIndex),
-    text: item.choices[canonicalIndex] ?? "",
+    text: sanitizeQuizChoiceText(item.choices[canonicalIndex] ?? ""),
   }));
+}
+
+export function sanitizeQuizChoiceText(value: string): string {
+  return value.replace(LEADING_CHOICE_LABEL_PATTERN, "").replace(/\s+/g, " ").trim();
 }
 
 function resolveSelectedChoiceIndex(rawValue: unknown, item: QuizItem): number | null {
@@ -93,10 +103,23 @@ function resolveSelectedChoiceIndex(rawValue: unknown, item: QuizItem): number |
     return rawValue;
   }
   if (typeof rawValue === "string") {
-    const matchedIndex = item.choices.findIndex((choice) => choice === rawValue);
-    return matchedIndex >= 0 ? matchedIndex : null;
+    const normalizedSelectedChoice = sanitizeQuizChoiceText(rawValue);
+    const matchedIndex = item.choices.findIndex((choice) => sanitizeQuizChoiceText(choice) === normalizedSelectedChoice);
+    if (matchedIndex >= 0) {
+      return matchedIndex;
+    }
+    return resolveChoiceLetterIndex(normalizedSelectedChoice || rawValue, item.choices.length);
   }
   return null;
+}
+
+function resolveChoiceLetterIndex(value: string, choiceCount: number): number | null {
+  const normalizedValue = value.trim().replace(/^([A-D])[.)]$/i, "$1");
+  if (!/^[A-D]$/i.test(normalizedValue)) {
+    return null;
+  }
+  const index = normalizedValue.toUpperCase().charCodeAt(0) - 65;
+  return index >= 0 && index < choiceCount ? index : null;
 }
 
 function buildDeterministicChoiceOrder(question: string, choices: string[]): number[] {

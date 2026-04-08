@@ -207,6 +207,31 @@ class QuickReviewAdaptivePracticeServiceTest {
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }
 
+    @Test
+    void forfeitAdaptiveSession_marksSessionForfeitedWithoutRefundingCreditOrCompletingIt() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        QuickReviewSessionEntity session = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.ADAPTIVE
+        )).thenReturn(Optional.of(session));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = adaptivePracticeService.forfeitAdaptiveSession(sessionId.toString(), userId);
+
+        assertThat(response.message()).isEqualTo("Adaptive Practice session forfeited.");
+        assertThat(session.getStatus()).isEqualTo(QuickReviewSessionStatus.FORFEITED);
+        assertThat(session.getCompletedAt()).isNull();
+        verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(activityTrackingService, never()).recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
+    }
+
     private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {
         return new MeResponse(
                 userId.toString(),

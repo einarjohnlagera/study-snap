@@ -51,6 +51,8 @@ public class QuickReviewAdaptivePracticeService {
     private static final int MID_QUESTION_COUNT = 7;
     private static final int HIGH_QUESTION_COUNT = 10;
     private static final String FOCUS_MESSAGE = "Focusing on concepts you need to improve.";
+    private static final String ADAPTIVE_PRACTICE_SESSION_ALREADY_ENDED_MESSAGE = "Adaptive Practice session has already ended.";
+    private static final String ADAPTIVE_PRACTICE_SESSION_FORFEITED_MESSAGE = "Adaptive Practice session forfeited.";
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
@@ -94,8 +96,7 @@ public class QuickReviewAdaptivePracticeService {
                     FOCUS_MESSAGE
                 );
             }
-            existing.setStatus(QuickReviewSessionStatus.COMPLETED);
-            existing.setCompletedAt(OffsetDateTime.now());
+            markSessionForfeited(existing);
             quickReviewSessionRepository.save(existing);
         }
 
@@ -259,6 +260,29 @@ public class QuickReviewAdaptivePracticeService {
         session.setCompletedAt(OffsetDateTime.now());
         quickReviewSessionRepository.save(session);
         return new SimpleMessageResponse("Adaptive Practice session completed.");
+    }
+
+    public SimpleMessageResponse forfeitAdaptiveSession(String sessionIdRaw, UUID userId) {
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, AdaptivePracticeSessionNotFoundException::new);
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.ADAPTIVE
+            )
+            .orElseThrow(AdaptivePracticeSessionNotFoundException::new);
+
+        if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
+            return new SimpleMessageResponse(ADAPTIVE_PRACTICE_SESSION_ALREADY_ENDED_MESSAGE);
+        }
+
+        markSessionForfeited(session);
+        quickReviewSessionRepository.save(session);
+        return new SimpleMessageResponse(ADAPTIVE_PRACTICE_SESSION_FORFEITED_MESSAGE);
+    }
+
+    private void markSessionForfeited(QuickReviewSessionEntity session) {
+        session.setStatus(QuickReviewSessionStatus.FORFEITED);
+        session.setCompletedAt(null);
     }
 
     private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {

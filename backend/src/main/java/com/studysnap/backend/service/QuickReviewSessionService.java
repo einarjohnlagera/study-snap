@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
@@ -40,6 +41,11 @@ import java.util.UUID;
 @Transactional
 @RequiredArgsConstructor
 public class QuickReviewSessionService {
+    private static final String SESSION_NOT_IN_PROGRESS_CODE = "SESSION_NOT_IN_PROGRESS";
+    private static final String QUICK_REVIEW_SESSION_NOT_IN_PROGRESS_MESSAGE = "Quick Review session is already completed.";
+    private static final String QUICK_REVIEW_SESSION_ALREADY_ENDED_MESSAGE = "Quick Review session has already ended.";
+    private static final String QUICK_REVIEW_SESSION_FORFEITED_MESSAGE = "Quick Review session forfeited.";
+
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final StudyPackRepository studyPackRepository;
     private final ActivityTrackingService activityTrackingService;
@@ -122,8 +128,8 @@ public class QuickReviewSessionService {
 
         if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
             throw new AppException(
-                    "SESSION_NOT_IN_PROGRESS",
-                    "Quick Review session is already completed.",
+                    SESSION_NOT_IN_PROGRESS_CODE,
+                    QUICK_REVIEW_SESSION_NOT_IN_PROGRESS_MESSAGE,
                     HttpStatus.BAD_REQUEST
             );
         }
@@ -145,6 +151,14 @@ public class QuickReviewSessionService {
                         QuickReviewSessionMode.QUICK_REVIEW
                 )
                 .orElseThrow(QuickReviewSessionNotFoundException::new);
+
+        if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
+            throw new AppException(
+                    SESSION_NOT_IN_PROGRESS_CODE,
+                    QUICK_REVIEW_SESSION_ALREADY_ENDED_MESSAGE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
 
         if (request.correctAnswers() > request.totalQuestions()) {
             throw new AppException(
@@ -174,6 +188,25 @@ public class QuickReviewSessionService {
         activityTrackingService.recordActivity(userId, ActivityType.COMPLETED_QUICK_REVIEW, saved.getStudyPackId());
 
         return toResponse(saved, planType);
+    }
+
+    public SimpleMessageResponse forfeitSession(String sessionIdRaw, UUID userId) {
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        sessionId,
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW
+                )
+                .orElseThrow(QuickReviewSessionNotFoundException::new);
+
+        if (session.getStatus() != QuickReviewSessionStatus.IN_PROGRESS) {
+            return new SimpleMessageResponse(QUICK_REVIEW_SESSION_ALREADY_ENDED_MESSAGE);
+        }
+
+        session.setStatus(QuickReviewSessionStatus.FORFEITED);
+        session.setCompletedAt(null);
+        quickReviewSessionRepository.save(session);
+        return new SimpleMessageResponse(QUICK_REVIEW_SESSION_FORFEITED_MESSAGE);
     }
 
     public QuickReviewSessionResponse saveConfidenceLevel(

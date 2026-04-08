@@ -61,7 +61,31 @@ class QuizSessionStateUtilsTest {
         List<QuizItem> restored = QuizSessionStateUtils.extractQuiz(state);
 
         assertThat(restored).hasSize(1);
-        assertThat(restored.getFirst().correctIndex()).isEqualTo(0);
+        assertThat(restored.getFirst().correctIndex()).isZero();
         assertThat(restored.getFirst().answer()).isEqualTo("Pigment");
+    }
+
+    @Test
+    void extractQuiz_stripsLegacyChoiceLabelsAndKeepsLetterAnswerMapping() {
+        Map<String, Object> state = Map.of(
+                "quiz",
+                List.of(
+                        Map.of(
+                                "question", "Which concept hides implementation details?",
+                                "choices", List.of("A. Encapsulation", "B) Abstraction", "C. Inheritance", "D) Polymorphism"),
+                                "answer", "A)",
+                                "concept", "OOP",
+                                "explanation", "Encapsulation hides implementation details."
+                        )
+                )
+        );
+
+        List<QuizItem> restored = QuizSessionStateUtils.extractQuiz(state);
+
+        assertThat(restored).hasSize(1);
+        assertThat(restored.getFirst().choices())
+                .containsExactly("Encapsulation", "Abstraction", "Inheritance", "Polymorphism");
+        assertThat(restored.getFirst().correctIndex()).isZero();
+        assertThat(restored.getFirst().answer()).isEqualTo("Encapsulation");
     }
 }

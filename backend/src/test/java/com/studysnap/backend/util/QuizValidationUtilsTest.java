@@ -15,6 +15,26 @@ class QuizValidationUtilsTest {
     }
 
     @Test
+    void hasInvalidChoices_detectsDuplicatesAfterStrippingChoiceLabels() {
+        assertThat(QuizValidationUtils.hasInvalidChoices(List.of(
+                "A. Encapsulation",
+                "Encapsulation",
+                "B) Abstraction",
+                "Polymorphism"
+        ))).isTrue();
+    }
+
+    @Test
+    void sanitizeChoiceTexts_stripsLeadingChoiceLabels() {
+        assertThat(QuizValidationUtils.sanitizeChoiceTexts(List.of(
+                "A. Encapsulation",
+                "B) Abstraction",
+                "c. Polymorphism",
+                "D) Inheritance"
+        ))).containsExactly("Encapsulation", "Abstraction", "Polymorphism", "Inheritance");
+    }
+
+    @Test
     void hasInvalidChoices_treatsDistinctMathExpressionsAsUnique() {
         assertThat(QuizValidationUtils.hasInvalidChoices(List.of(
                 "u'v + uv'",
