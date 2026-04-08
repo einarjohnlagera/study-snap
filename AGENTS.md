@@ -493,6 +493,20 @@ Primary CTAs may keep full text on mobile when the action would be ambiguous as 
 - `Adaptive Practice` uses a target or focused-practice icon.
 - Do not use the same icon for different quiz modes.
 
+### Post-Quiz UX Consistency Rule
+
+All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must follow the same UX pattern:
+
+- **No "Note" button** on any quiz screen — `Note` as a `<Button>` is forbidden
+- Navigation back to the note must be a `← Back to Note` **text link** (`BackLink` component), placed **below** action buttons, never grouped with them
+- **Button hierarchy** on result screens:
+  - Primary: next learning action (Practice Weak Concepts, Start Challenge Quiz, Generate New Set)
+  - Secondary: repeat action (Practice Again, Start Another Challenge)
+  - Navigation: `← Back to Note` link below
+- **Confidence feedback** (Quick Review only): after selecting, option buttons are replaced by a badge — `🟢 Confident`, `🟡 Improving`, `🔴 Needs Practice`; "Thanks for the feedback." text is removed
+- **Adaptive Practice completion**: "Generate New Set" is always the primary button; `← Back to Note` link below
+- Motivation/feedback messages use `mapPerformanceLevel` thresholds for consistency (Excellent / Good / Fair / Needs Improvement)
+
 ### Challenge Quiz — Exam Mode Rule
 
 - Challenge Quiz must behave as an exam: **no correctness feedback during answering**.

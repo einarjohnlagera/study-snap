@@ -700,11 +700,6 @@ export default function QuickReviewPage() {
                 Retry
               </Button>
             ) : null}
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
           </div>
         </Card>
       ) : note && totalQuestions === 0 ? (
@@ -803,39 +798,43 @@ export default function QuickReviewPage() {
             ) : null}
             <div className="space-y-2 rounded-md border border-border bg-background p-3">
               <p className="text-sm font-medium text-foreground">How confident did you feel about this topic?</p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                {confidenceOptions.map((option) => (
-                  <Button
-                    key={option.value}
-                    type="button"
-                    size="sm"
-                    variant={confidenceLevel === option.value ? "default" : "outline"}
-                    className="w-full sm:w-auto"
-                    disabled={savingConfidence || completingSession || !completionTracked}
-                    onClick={() => void handleSelectConfidence(option.value)}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
               {confidenceAcknowledged ? (
-                <p className="text-xs text-foreground/70">Thanks for the feedback.</p>
-              ) : null}
+                <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+                  confidenceLevel === "HIGH"
+                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : confidenceLevel === "MEDIUM"
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                      : "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300"
+                }`}>
+                  {confidenceLevel === "HIGH" ? "🟢 Confident" : confidenceLevel === "MEDIUM" ? "🟡 Improving" : "🔴 Needs Practice"}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {confidenceOptions.map((option) => (
+                    <Button
+                      key={option.value}
+                      type="button"
+                      size="sm"
+                      variant={confidenceLevel === option.value ? "default" : "outline"}
+                      className="w-full sm:w-auto"
+                      disabled={savingConfidence || completingSession || !completionTracked}
+                      onClick={() => void handleSelectConfidence(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
               {confidenceError ? (
                 <p className="text-xs text-red-600 dark:text-red-400">{confidenceError}</p>
               ) : null}
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
             {showAdaptiveGuidedCta ? (
               note?.adaptivePracticeAvailable ? (
                 <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
-                  <Button type="button" variant="outline" className="w-full sm:w-auto">
+                  <Button type="button" className="w-full sm:w-auto">
                     Practice Weak Concepts
                   </Button>
                 </Link>
@@ -852,7 +851,7 @@ export default function QuickReviewPage() {
             ) : null}
             {showChallengeGuidedCta ? (
               <Link href={`/notes/${note.id}/challenge-quiz`} className="w-full sm:w-auto">
-                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                <Button type="button" className="w-full sm:w-auto">
                   Start Challenge Quiz
                 </Button>
               </Link>
@@ -862,6 +861,9 @@ export default function QuickReviewPage() {
                 Practice Again
               </Button>
             ) : null}
+          </div>
+          <div className="pt-1">
+            <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
         </Card>
       ) : note && phase === "retry-transition" ? (

@@ -510,11 +510,6 @@ export default function ChallengeQuizPage() {
                 Retry
               </Button>
             ) : null}
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
           </div>
         </Card>
       ) : phase === "limit-reached" ? (
@@ -759,24 +754,22 @@ export default function ChallengeQuizPage() {
             </Card>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
-              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
-            </Button>
             {result.weakConcepts.length > 0 ? (
               <Link href={note ? `/notes/${note.id}/adaptive-practice` : "/dashboard"} className="w-full sm:w-auto">
-                <Button type="button" variant="outline" className="w-full sm:w-auto">
+                <Button type="button" className="w-full sm:w-auto">
                   Practice Weak Concepts
                 </Button>
               </Link>
             ) : null}
-            <Button type="button" className="w-full sm:w-auto" onClick={handleRetry}>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>
               Start Another Challenge
             </Button>
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
+              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
+            </Button>
+          </div>
+          <div className="pt-1">
+            <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
           {showAnswerReview ? (
             <div className="space-y-3 pt-2">

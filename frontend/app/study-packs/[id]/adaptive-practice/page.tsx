@@ -22,6 +22,7 @@ import {
   type QuickReviewAdaptiveQuizResponse,
 } from "@/lib/api";
 import { isQuizSelectionCorrect, resolveQuizCorrectIndex } from "@/lib/quiz";
+import { mapPerformanceLevel } from "@/lib/challenge-quiz-results";
 
 function AdaptivePracticeLoading() {
   return (
@@ -185,10 +186,11 @@ export default function AdaptivePracticePage() {
     return Number(((score / quiz.length) * 100).toFixed(0));
   }, [quiz.length, score]);
   const completionMessage = useMemo(() => {
-    if (scorePercentage >= 80) {
-      return "Great work. You're mastering this.";
-    }
-    return "Keep going - you're improving.";
+    const level = mapPerformanceLevel(scorePercentage);
+    if (level === "Excellent") return "Outstanding. You've mastered these weak areas.";
+    if (level === "Good") return "Great work. You're making strong progress on these concepts.";
+    if (level === "Fair") return "Good effort. Keep reviewing these concepts to build confidence.";
+    return "Keep going. These concepts need more practice — try again when ready.";
   }, [scorePercentage]);
 
   const handleSelectChoice = (choiceIndex: number) => {
@@ -240,11 +242,6 @@ export default function AdaptivePracticePage() {
             <Button type="button" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()}>
               Try Again
             </Button>
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
           </div>
         </Card>
       ) : premiumLocked ? (
@@ -260,11 +257,6 @@ export default function AdaptivePracticePage() {
             <Button type="button" className="w-full sm:w-auto" onClick={() => openAdaptivePracticePaywall("adaptive_practice_page_card")}>
               See Premium options
             </Button>
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
           </div>
         </Card>
       ) : !adaptiveQuiz || !hasQuestions ? (
@@ -305,23 +297,16 @@ export default function AdaptivePracticePage() {
               <p>No specific weak concepts were found. This set still focuses on recent review gaps.</p>
             )}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                setQuizStarted(true);
-                setSessionStartedAt(Date.now());
-              }}
-            >
-              Start Adaptive Practice
-            </Button>
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" variant="outline" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
-          </div>
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              setQuizStarted(true);
+              setSessionStartedAt(Date.now());
+            }}
+          >
+            Start Adaptive Practice
+          </Button>
         </Card>
       ) : isComplete ? (
         <Card className="space-y-4 p-4 sm:p-6">
@@ -348,14 +333,12 @@ export default function AdaptivePracticePage() {
             </div>
           ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Link href={noteDetailHref} className="w-full sm:w-auto">
-              <Button type="button" className="w-full sm:w-auto">
-                Note
-              </Button>
-            </Link>
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()} disabled={loading}>
+            <Button type="button" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()} disabled={loading}>
               Generate New Set
             </Button>
+          </div>
+          <div className="pt-1">
+            <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
         </Card>
       ) : (
