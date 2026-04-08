@@ -596,11 +596,7 @@ export default function ChallengeQuizPage() {
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">Monthly limit reached</h1>
           <p className="text-sm text-foreground/75">You&apos;ve reached your monthly Challenge Quiz limit.</p>
-          <Link href={noteDetailHref} className="w-full sm:w-auto">
-            <Button type="button" variant="outline" className="w-full sm:w-auto">
-              Back to Note
-            </Button>
-          </Link>
+          <BackLink href={noteDetailHref} label="Back to Note" />
         </Card>
       ) : phase === "generating" ? (
         <ChallengeQuizLoading />
@@ -837,7 +833,9 @@ export default function ChallengeQuizPage() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-foreground/70">No weak concepts identified in this challenge.</p>
+                <p className="text-sm text-foreground/70">
+                  No weak concepts identified in this challenge. Review your answers or start another challenge when ready.
+                </p>
               )}
             </Card>
           </div>
@@ -849,7 +847,12 @@ export default function ChallengeQuizPage() {
                 </Button>
               </Link>
             ) : null}
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>
+            <Button
+              type="button"
+              variant={result.weakConcepts.length > 0 ? "outline" : "default"}
+              className="w-full sm:w-auto"
+              onClick={handleRetry}
+            >
               Start Another Challenge
             </Button>
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>

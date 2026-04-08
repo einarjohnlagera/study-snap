@@ -59,4 +59,11 @@ describe("QuizAnswerReview", () => {
     expect(screen.queryByText("What carries genetic instructions?")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next Question" })).toBeDisabled();
   });
+
+  it("keeps review navigation controls mobile-stackable", () => {
+    render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
+
+    expect(screen.getByRole("button", { name: "Previous Question" })).toHaveClass("w-full", "sm:w-auto");
+    expect(screen.getByRole("button", { name: "Next Question" })).toHaveClass("w-full", "sm:w-auto");
+  });
 });

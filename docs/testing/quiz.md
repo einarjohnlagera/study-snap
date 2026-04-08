@@ -7,8 +7,12 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - result screens do not contain a "Note" button — navigation is handled by `← Back to Note` link below action buttons
 - `← Back to Note` link is separate from the action button group, not inside it
 - Quick Review: after selecting a confidence level, option buttons are replaced by a single confidence badge (🟢 Confident, 🟡 Improving, or 🔴 Needs Practice)
+- Quick Review: when the user misses concepts and Adaptive Practice is locked/unavailable, `Practice Again` is the primary action and locked weak-practice messaging remains secondary
 - Adaptive Practice: "Generate New Set" is the primary button on the result screen; "Note" button is absent
-- Challenge Quiz: "Practice Weak Concepts" is primary (when present), followed by "Start Another Challenge" and "Review Answers"
+- Adaptive Practice: if a completed set has no attached weak-area labels, the result screen shows a clear empty targeted-weak-areas message and still offers `Generate New Set` plus `Review Answers`
+- Challenge Quiz: "Practice Weak Concepts" is primary when weak concepts exist, followed by "Start Another Challenge" and "Review Answers"
+- Challenge Quiz: if no weak concepts are identified, `Start Another Challenge` becomes the primary result action and the no-weak-concepts copy explains the next step
+- empty or blocked quiz edge states use a `← Back to Note` text link, not a `Back to Note` button
 - Quick Review, Challenge Quiz, and Adaptive Practice result screens expose `Review Answers` as a learning/review action, not a retry or new-quiz action
 - `Review Answers` shows each question with the user's selected answer, the correct answer, the explanation, and the concept label from the quiz item
 - incorrect selected answers are visually distinct from the correct answer; selected-correct answers show both `Your answer` and `Correct answer`

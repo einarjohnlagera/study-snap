@@ -182,9 +182,14 @@ These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Pr
 - During an active quiz, the header BackLink is replaced by active-session text plus `Leave Quiz`; users must confirm forfeiting before leaving.
 
 ### Button hierarchy on result screens
-- **Primary**: the most important next step (Practice Weak Concepts if applicable, or Start Challenge Quiz / Generate New Set)
-- **Secondary**: repeat/retry actions (Practice Again, Start Another Challenge, Generate New Set)
+- **Primary**: the most useful next learning step for the result state
+  - Quick Review: `Practice Weak Concepts` when available, otherwise `Practice Again` for missed concepts or `Start Challenge Quiz` after a strong/perfect result
+  - Challenge Quiz: `Practice Weak Concepts` when weak concepts exist, otherwise `Start Another Challenge`
+  - Adaptive Practice: `Generate New Set`
+- **Secondary**: learning support and repeat actions that are not the main next step (`Review Answers`, locked `Unlock Practice Weak Concepts`, secondary `Practice Again`, secondary `Start Another Challenge`)
 - **Navigation**: `← Back to Note` text link below the button group — never a button
+- Edge states such as empty quiz data, monthly limits, or unavailable sessions must still use text-link navigation back to the note, not a `Back to Note` button.
+- If no weak concepts are identified, the result screen should say so directly and still provide a clear next step.
 
 ### Review Answers
 - The result screen must expose a clear `Review Answers` action for post-assessment learning.

@@ -10,6 +10,7 @@
   - Adaptive Practice result screen: "Generate New Set" is now the primary action; "Note" button removed
   - Challenge Quiz result screen: "Practice Weak Concepts" is now primary (when present); "Start Another Challenge" and "Review Answers" are secondary; "Note" button removed
   - Review Answers now uses a shared learning-focused layout across Quick Review, Challenge Quiz, and Adaptive Practice with selected/correct answer badges, concept chips, visible explanations, Previous/Next navigation, and an `Incorrect only` filter for missed questions
+  - Final result-flow alignment pass: Quick Review now promotes `Practice Again` when weak practice is locked, Challenge Quiz promotes `Start Another Challenge` when no weak concepts exist, Adaptive Practice shows a clear empty targeted-weak-areas state, and quiz edge states use text-link `← Back to Note` navigation instead of navigation buttons
   - Adaptive Practice `completionMessage` upgraded to use `mapPerformanceLevel` 4-tier thresholds (Excellent / Good / Fair / Needs Improvement) instead of a 2-tier check
   - Error cards in Adaptive Practice (error, premiumLocked, prestart) no longer have a redundant "Note" button — the persistent `← Note` BackLink at the page header handles navigation
 - **Board Exam Mode (Phase 1)** — Challenge Quiz is now a true exam experience:

@@ -599,6 +599,9 @@ describe("ChallengeQuizPage", () => {
     await screen.findByText("Challenge Quiz Result");
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
+    expect(screen.getByText("No weak concepts identified in this challenge. Review your answers or start another challenge when ready.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Another Challenge" })).toHaveClass("bg-blue-600");
+    expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {

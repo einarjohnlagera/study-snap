@@ -510,9 +510,10 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - **No "Note" button** on any quiz screen — `Note` as a `<Button>` is forbidden
 - Navigation back to the note must be a `← Back to Note` **text link** (`BackLink` component), placed **below** action buttons, never grouped with them
 - **Button hierarchy** on result screens:
-  - Primary: next learning action (Practice Weak Concepts, Start Challenge Quiz, Generate New Set)
-  - Secondary: repeat action (Practice Again, Start Another Challenge)
+  - Primary: next learning action (`Practice Weak Concepts` when available, `Practice Again` when Quick Review needs recovery and Adaptive Practice is locked/unavailable, `Start Another Challenge` when Challenge has no weak concepts, `Start Challenge Quiz` after strong Quick Review results, or `Generate New Set` for Adaptive Practice)
+  - Secondary: review/repeat/support actions (`Review Answers`, secondary `Practice Again`, secondary `Start Another Challenge`, locked `Unlock Practice Weak Concepts`)
   - Navigation: `← Back to Note` link below
+- Edge states such as empty quiz data, monthly limits, unavailable sessions, or missing weak-area labels must keep a clear next step and use text-link navigation rather than `Back to Note` buttons.
 - **Confidence feedback** (Quick Review only): after selecting, option buttons are replaced by a badge — `🟢 Confident`, `🟡 Improving`, `🔴 Needs Practice`; "Thanks for the feedback." text is removed
 - **Adaptive Practice completion**: "Generate New Set" is always the primary button; `← Back to Note` link below
 - **Review Answers**: Quick Review, Challenge Quiz, and Adaptive Practice must use the shared post-quiz review pattern showing question text, selected answer, correct answer, explanation, and concept chip.

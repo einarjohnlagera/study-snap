@@ -239,6 +239,25 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
   });
 
+  it("uses Back to Note as a text link in empty quiz edge states", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      quiz: [],
+    });
+    (startQuickReviewSession as jest.Mock).mockResolvedValue(baseSession);
+
+    render(<QuickReviewPage />);
+
+    await screen.findByText("No quiz questions available");
+
+    expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back to Note" })).not.toBeInTheDocument();
+  });
+
   it("shows confidence badge after selecting HIGH confidence", async () => {
     setupCompleteState();
     (saveQuickReviewConfidence as jest.Mock).mockResolvedValue({
@@ -358,5 +377,19 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(review).toHaveTextContent("Mitochondria");
     expect(review).toHaveTextContent("Correct answer");
     expect(review).toHaveTextContent("Mitochondria produce ATP.");
+  });
+
+  it("uses Practice Again as the primary next step when weak practice is locked", async () => {
+    setupCompleteState({ adaptivePracticeAvailable: false });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.getByRole("button", { name: "Practice Again" })).toHaveClass("bg-blue-600");
+    expect(screen.getByRole("button", { name: "Unlock Practice Weak Concepts" })).toHaveClass("border");
+    expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 });
