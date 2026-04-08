@@ -47,6 +47,24 @@ type ChallengeSessionStatePayload = {
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
 
+function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number {
+  if (difficulty === "easy") {
+    return 10;
+  }
+  if (difficulty === "hard") {
+    return 15;
+  }
+  return 12;
+}
+
+async function requestBoardExamFullscreen() {
+  const element = globalThis.document?.documentElement;
+  if (!element || typeof element.requestFullscreen !== "function" || globalThis.document.fullscreenElement) {
+    return;
+  }
+  await element.requestFullscreen().catch(() => undefined);
+}
+
 function formatTimer(seconds: number): string {
   const safeSeconds = Math.max(0, seconds);
   const minutes = Math.floor(safeSeconds / 60);
@@ -488,6 +506,9 @@ export default function ChallengeQuizPage() {
     startInFlightRef.current = true;
     setStarting(true);
     setError(null);
+    if (note.difficultySelectionAvailable) {
+      void requestBoardExamFullscreen();
+    }
     try {
       const request: ChallengeQuizStartRequest = note.difficultySelectionAvailable
         ? { difficulty: selectedDifficulty }
@@ -533,6 +554,9 @@ export default function ChallengeQuizPage() {
 
   const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
+  const isBoardExamMode = Boolean(note?.difficultySelectionAvailable);
+  const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
+  const quizResultLabel = isBoardExamMode ? "Board Exam Result" : "Challenge Quiz Result";
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: challengeQuizActive,
     fallbackHref: noteDetailHref,
@@ -559,7 +583,7 @@ export default function ChallengeQuizPage() {
       <div className="flex items-center justify-between gap-3">
         {phase === "running" ? (
           <>
-            <p className="text-sm font-medium text-foreground/80">Challenge Quiz in progress</p>
+            <p className="text-sm font-medium text-foreground/80">{quizModeLabel} in progress</p>
             <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()}>
               Leave Quiz
             </Button>
@@ -578,7 +602,7 @@ export default function ChallengeQuizPage() {
       ) : error && !note ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">
-            {isNotFound ? "Note not found" : "Could not load Challenge Quiz"}
+            {isNotFound ? "Note not found" : `Could not load ${quizModeLabel}`}
           </h1>
           <p className="text-sm text-foreground/75">{error}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -603,12 +627,34 @@ export default function ChallengeQuizPage() {
       ) : phase === "prestart" ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Challenge Quiz
+            {quizModeLabel}
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? "Challenge Quiz"}</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">
+            {isBoardExamMode ? "Board Exam Mode" : (note?.title ?? "Challenge Quiz")}
+          </h1>
           <p className="text-sm text-foreground/80">
-            We tailored this quiz based on your recent performance.
+            {isBoardExamMode
+              ? `Strict exam simulation for ${note?.title ?? "this note"}. Results appear only after submission.`
+              : "We tailored this quiz based on your recent performance."}
           </p>
+          {!isBoardExamMode ? (
+            <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-foreground/80">
+              <p className="font-medium text-foreground">Board Exam Mode</p>
+              <p className="mt-1">
+                Premium unlocks the stricter board-exam setup with difficulty selection and focus-mode entry.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full sm:w-auto"
+                onClick={() => openLockedFeaturePaywall("difficulty-selection", "board_exam_mode_card")}
+                disabled={challengeGenerationLocked}
+              >
+                Unlock Board Exam Mode
+              </Button>
+            </div>
+          ) : null}
           <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
             <div className="space-y-1">
               <p className="font-medium text-foreground">Difficulty</p>
@@ -655,30 +701,43 @@ export default function ChallengeQuizPage() {
                 </Button>
               </div>
             )}
+            <div className="space-y-1 border-t border-border pt-3">
+              <p className="font-medium text-foreground">Question count</p>
+              <p>
+                {note?.difficultySelectionAvailable
+                  ? `${getQuestionCountForDifficulty(selectedDifficulty)} questions for the selected difficulty.`
+                  : "Auto-selected from your recent performance."}
+              </p>
+            </div>
           </div>
           {challengeGenerationLocked ? (
-            <p className="text-sm text-foreground/75">Preparing your Challenge Quiz...</p>
+            <p className="text-sm text-foreground/75">Preparing your {quizModeLabel}...</p>
           ) : null}
           <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
-            <p>Rules:</p>
+            <p>{isBoardExamMode ? "Board Exam Mode rules:" : "Rules:"}</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>10-minute timer</li>
-              <li>10 to 15 AI-generated questions</li>
+              <li>10-minute countdown starts when the exam begins</li>
+              <li>No correct/incorrect feedback until you submit</li>
+              <li>Previous and Next are available; unanswered questions are submitted as blank</li>
+              <li>Timer expiry auto-submits your answers</li>
               <li>If you leave, the quiz is forfeited and the attempt is not refunded</li>
             </ul>
           </div>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <Button type="button" className="w-full sm:w-auto" onClick={() => void handleStartChallenge()} disabled={challengeGenerationLocked}>
-            {challengeGenerationLocked ? "Starting..." : "Start Challenge Quiz"}
+            {challengeGenerationLocked ? "Starting..." : isBoardExamMode ? "Start Board Exam" : "Start Challenge Quiz"}
           </Button>
         </Card>
       ) : phase === "running" && challengeSession ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Challenge Quiz
+              {quizModeLabel}
             </p>
-            <p className="rounded-md border border-border bg-background px-3 py-1 text-sm font-semibold">
+            <p
+              className="rounded-md border border-border bg-background px-3 py-1 text-sm font-semibold"
+              aria-label="Exam timer"
+            >
               {formatTimer(remainingSeconds)}
             </p>
           </div>
@@ -707,6 +766,36 @@ export default function ChallengeQuizPage() {
               <p className="text-xs text-foreground/65">Answers are graded only after submission.</p>
             </div>
           ) : null}
+          <div className="space-y-2 rounded-md border border-border bg-background p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
+            <div className="grid grid-cols-5 gap-2 sm:grid-cols-8" aria-label="Question navigator">
+              {quiz.map((item, index) => {
+                const isCurrentQuestion = index === currentIndex;
+                const isAnswered = selectedChoices[index] != null;
+                return (
+                  <button
+                    key={`${item.question}-${index}`}
+                    type="button"
+                    aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
+                    className={`rounded-md border px-2 py-1.5 text-sm font-medium transition ${
+                      isCurrentQuestion
+                        ? "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                        : isAnswered
+                          ? "border-foreground/30 bg-muted/60 text-foreground"
+                          : "border-border bg-background text-foreground/70"
+                    }`}
+                    onClick={() => {
+                      setCurrentIndex(index);
+                      persistProgress(index, selectedChoices);
+                    }}
+                    disabled={submitting}
+                  >
+                    {index + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
@@ -750,9 +839,9 @@ export default function ChallengeQuizPage() {
       ) : phase === "complete" && result ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Challenge Quiz Result
+            {quizResultLabel}
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? "Challenge Quiz"}</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? quizModeLabel}</h1>
           {showFirstQuizCompletionBanner ? (
             <Card className="space-y-3 border-emerald-500/30 bg-emerald-500/5 p-4">
               <div className="space-y-1">

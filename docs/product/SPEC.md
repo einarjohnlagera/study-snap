@@ -714,6 +714,9 @@ Page responsibilities:
 
 - Timed exam-style mode (10 minutes)
 - Generated from Study Pack summary + key concepts, plus learner-level and note-context metadata
+- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine for Premium-capable sessions.
+- Premium-capable sessions label the entry as `Board Exam Mode`, use `Start Board Exam`, support difficulty selection, derive question count from difficulty, and may request fullscreen/focus mode as a best-effort browser enhancement.
+- Free/recommended Challenge Quiz sessions keep limited Challenge Quiz access and show Board Exam Mode as a locked Premium enhancement rather than making Challenge Quiz itself Premium-only.
 - Difficulty and question count adapt by latest Quick Review score:
   - `<50`: 10 questions, easy-medium
   - `<80`: 12 questions, medium

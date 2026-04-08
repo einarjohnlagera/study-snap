@@ -36,13 +36,28 @@ Shared ownership model:
 - quantitative notes may produce computation or formula-based questions
 - explanations should be tutor-style and step-based for computation questions
 
+#### Board Exam Mode
+
+- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine.
+- Premium-capable Challenge Quiz sessions show `Board Exam Mode` as the entry label and use `Start Board Exam`.
+- Free/recommended-difficulty sessions keep the `Challenge Quiz` entry and show Board Exam Mode as a locked Premium enhancement rather than blocking limited Challenge Quiz access.
+- Premium Board Exam Mode supports difficulty selection; question count is derived from the selected difficulty:
+  - easy -> 10 questions
+  - medium -> 12 questions
+  - hard -> 15 questions
+- If difficulty selection is not available, question count remains auto-selected from recent performance.
+- Board Exam Mode may request browser fullscreen/focus mode on start as a best-effort enhancement, but the session must still work if the browser denies fullscreen.
+- Board Exam Mode uses the same Challenge Quiz session persistence, usage limits, idempotency, timer, answer storage, session guard, and Review Answers flow.
+
 #### Exam Mode Behavior
 
 - no correctness feedback during answering — answer first, see results later
 - user selects an answer and sees only a neutral visual selection state (blue highlight)
 - hint text: "Answers are graded only after submission."
 - user navigates freely between questions (Previous / Next) and can change answers until submission
+- user may jump by question number through the neutral Question Navigator; answered/current states must not reveal correctness
 - quiz auto-submits if the timer reaches zero; user can also submit manually from the last question
+- timer start is derived from persisted session state so refresh/reload does not reset the countdown
 - explanations are hidden during the quiz and only appear in the Answer Review section on the result screen
 
 #### Result Screen
@@ -214,8 +229,12 @@ These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Pr
 
 ## v0.8.0 Board Exam Mode (Phase 1)
 
-Challenge Quiz now functions as a full Exam Mode experience:
+Board Exam Mode now makes the Challenge Quiz engine feel like a strict board-exam simulation:
 - clean answering phase with no correctness hints
+- explicit `Board Exam Mode` entry for Premium-capable sessions
+- locked Premium Board Exam card for Free/recommended Challenge Quiz sessions
+- 10-minute persisted countdown that auto-submits on expiry
+- neutral question-number navigator for moving through the exam without revealing correctness
 - structured result screen with score, performance level, concept breakdown, and weak concepts
 - weak concepts feed into the Adaptive Practice flow
 - `lib/challenge-quiz-results.ts` provides pure, independently tested result computation utilities

@@ -22,18 +22,22 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 
 ## Exam Mode behavior
 
+- Premium-capable Challenge Quiz sessions show `Board Exam Mode`, `Start Board Exam`, difficulty selection, and derived question count by selected difficulty
+- Free/recommended Challenge Quiz sessions keep `Start Challenge Quiz` and show Board Exam Mode as a locked Premium enhancement instead of blocking limited Challenge Quiz access
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
 - selected choice shows neutral exam-style highlight (blue border) only
-- after `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
-- after `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
+- question-number navigation during Board Exam Mode shows current/answered/unanswered states only and never correctness
+- after `Start Board Exam` / `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
+- after `Start Board Exam` / `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
 - double-clicking Start does not create duplicate Challenge Quiz start requests
-- after `Start Challenge Quiz` is clicked, a full-screen `Generating your quiz...` overlay appears and page interaction is blocked until generation resolves
+- after `Start Board Exam` / `Start Challenge Quiz` is clicked, a full-screen `Generating your quiz...` overlay appears and page interaction is blocked until generation resolves
 - Challenge Quiz generation refresh/status checks reuse existing `GENERATING` or `IN_PROGRESS` sessions and do not call the LLM again
 - if Challenge Quiz generation returns `FAILED`, the page shows a retryable failure state rather than starting an active quiz
 - "Answers are graded only after submission." hint is visible during the quiz
 - Previous / Next navigation maintains all previously selected answers
 - Submit button appears only on the last question; Previous is disabled on the first question
-- timer auto-submits when it hits 00:00 and shows "Time ran out." message on result screen
+- timer resumes from persisted session state after refresh/reload instead of resetting
+- timer auto-submits when it hits 00:00 and shows "Time ran out." message on the Board Exam result screen
 
 ## Result screen
 

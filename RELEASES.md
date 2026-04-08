@@ -14,9 +14,12 @@
   - Adaptive Practice `completionMessage` upgraded to use `mapPerformanceLevel` 4-tier thresholds (Excellent / Good / Fair / Needs Improvement) instead of a 2-tier check
   - Error cards in Adaptive Practice (error, premiumLocked, prestart) no longer have a redundant "Note" button — the persistent `← Note` BackLink at the page header handles navigation
 - **Board Exam Mode (Phase 1)** — Challenge Quiz is now a true exam experience:
+  - Premium-capable Challenge Quiz sessions now enter through explicit `Board Exam Mode` copy with `Start Board Exam`, difficulty selection, derived question count, and best-effort fullscreen focus entry
+  - Free/recommended Challenge Quiz sessions retain limited Challenge Quiz access and show Board Exam Mode as a locked Premium enhancement
   - No correctness feedback during answering — answer first, see results later
   - Selected answers show neutral exam-style highlight (blue) only
-  - Timer auto-submits when time runs out; manual submit from the last question
+  - Timer resumes from persisted session state after refresh and auto-submits when time runs out; manual submit remains available from the last question
+  - Neutral question-number navigation lets users move through the exam without revealing correctness
   - Result screen: Score Summary (correct/total/%), Performance Level badge (Excellent / Good / Fair / Needs Improvement), Concept Breakdown (per-concept accuracy), Weak Concepts (< 60% accuracy), Answer Review toggle
   - "Practice Weak Concepts" CTA (→ Adaptive Practice) shown only when weak concepts exist
   - All result statistics are derived from session data only — no LLM calls
