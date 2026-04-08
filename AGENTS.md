@@ -515,6 +515,9 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
   - Navigation: `← Back to Note` link below
 - **Confidence feedback** (Quick Review only): after selecting, option buttons are replaced by a badge — `🟢 Confident`, `🟡 Improving`, `🔴 Needs Practice`; "Thanks for the feedback." text is removed
 - **Adaptive Practice completion**: "Generate New Set" is always the primary button; `← Back to Note` link below
+- **Review Answers**: Quick Review, Challenge Quiz, and Adaptive Practice must use the shared post-quiz review pattern showing question text, selected answer, correct answer, explanation, and concept chip.
+- Review Answers answer states must stay consistent: correct answer uses restrained green styling, incorrect selected answer uses restrained red styling, neutral distractors stay quiet, and selected-correct answers show both `Your answer` and `Correct answer`.
+- Review Answers should use stored quiz/session data (`question`, `choices`, selected canonical choice indexes, `correctIndex`, `explanation`, `concept`) so completed-session history/review can reuse the same structure later.
 - Motivation/feedback messages use `mapPerformanceLevel` thresholds for consistency (Excellent / Good / Fair / Needs Improvement)
 - While a quiz session is active, replace normal header back navigation with active-session text plus `Leave Quiz`; navigation away must open the shared `Leave quiz?` confirmation instead of leaving immediately.
 - The shared leave confirmation copy is `You are currently in an active quiz. Leaving will forfeit your progress.` with `Stay` and `Leave Quiz` actions.

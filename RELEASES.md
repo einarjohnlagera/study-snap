@@ -9,6 +9,7 @@
   - Quick Review confidence feedback: selecting a confidence level now replaces the option buttons with a styled badge — `🟢 Confident` (HIGH), `🟡 Improving` (MEDIUM), `🔴 Needs Practice` (LOW); "Thanks for the feedback." text removed
   - Adaptive Practice result screen: "Generate New Set" is now the primary action; "Note" button removed
   - Challenge Quiz result screen: "Practice Weak Concepts" is now primary (when present); "Start Another Challenge" and "Review Answers" are secondary; "Note" button removed
+  - Review Answers now uses a shared learning-focused layout across Quick Review, Challenge Quiz, and Adaptive Practice with selected/correct answer badges, concept chips, visible explanations, Previous/Next navigation, and an `Incorrect only` filter for missed questions
   - Adaptive Practice `completionMessage` upgraded to use `mapPerformanceLevel` 4-tier thresholds (Excellent / Good / Fair / Needs Improvement) instead of a 2-tier check
   - Error cards in Adaptive Practice (error, premiumLocked, prestart) no longer have a redundant "Note" button — the persistent `← Note` BackLink at the page header handles navigation
 - **Board Exam Mode (Phase 1)** — Challenge Quiz is now a true exam experience:
@@ -37,7 +38,8 @@
 
 ### Technical Changes
 
-- Quick Review, Challenge Quiz, and Adaptive Practice test suites extended with 12 new post-quiz UX tests: no "Note" button on result screens, "← Back to Note" link present, confidence badge rendering (HIGH/MEDIUM/LOW), confidence option buttons hidden after selection, "Generate New Set" as primary on Adaptive Practice result, "Start Challenge Quiz" CTA on perfect Quick Review score.
+- Quick Review, Challenge Quiz, and Adaptive Practice test suites extended with post-quiz UX tests: no "Note" button on result screens, "← Back to Note" link present, confidence badge rendering (HIGH/MEDIUM/LOW), confidence option buttons hidden after selection, "Generate New Set" as primary on Adaptive Practice result, "Start Challenge Quiz" CTA on perfect Quick Review score, and Review Answers coverage across all quiz modes.
+- Added `frontend/components/study-pack/quiz-answer-review.tsx` as the shared Review Answers surface for selected-vs-correct answer states, concept linking, visible explanations, and sequential review navigation. Covered by component tests plus Quick Review, Challenge Quiz, and Adaptive Practice page integration tests.
 - Added a shared active quiz session guard for Quick Review, Challenge Quiz, and Adaptive Practice. Active sessions now block app route clicks, browser back navigation, and refresh/reload attempts with a shared `Leave quiz?` confirmation before users can forfeit and leave.
 - Added explicit quiz session forfeits with `FORFEITED` status for Quick Review, Challenge Quiz, and Adaptive Practice. Challenge Quiz and Adaptive Practice forfeits do not refund consumed quiz credits and are not marked completed.
 - Centralized quiz choice prefix cleanup so generated and legacy payloads strip hardcoded leading labels such as `A. ` and `B) ` before validation/storage; the frontend also strips legacy prefixes defensively before rendering dynamic choice letters.

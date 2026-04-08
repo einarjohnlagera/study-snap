@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
+import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
@@ -164,6 +165,7 @@ export default function QuickReviewPage() {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
+  const [showAnswerReview, setShowAnswerReview] = useState(false);
   const loadedNoteIdRef = useRef<string | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
 
@@ -203,6 +205,7 @@ export default function QuickReviewPage() {
     setSavingConfidence(false);
     setConfidenceAcknowledged(false);
     setConfidenceError(null);
+    setShowAnswerReview(false);
   }, []);
 
   const loadNote = useCallback(async (force = false) => {
@@ -923,10 +926,16 @@ export default function QuickReviewPage() {
                 Practice Again
               </Button>
             ) : null}
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
+              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
+            </Button>
           </div>
           <div className="pt-1">
             <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
+          {showAnswerReview ? (
+            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
+          ) : null}
         </Card>
       ) : note && phase === "retry-transition" ? (
         <Card className="space-y-4 p-4 sm:p-6">
