@@ -8,6 +8,7 @@ import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
+import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser } from "@/lib/auth";
@@ -38,7 +39,7 @@ import {
   toSelectedChoiceIndexRecord,
 } from "@/lib/quiz";
 
-type ChallengePhase = "prestart" | "running" | "complete" | "limit-reached";
+type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
 type ChallengeSessionStatePayload = {
   selectedChoices?: Record<string, number> | Record<string, string>;
   timerStartedAtEpochSeconds?: number;
@@ -114,6 +115,9 @@ export default function ChallengeQuizPage() {
     currentIndex: 0,
     selectedChoices: {},
   });
+  const remainingSecondsRef = useRef(0);
+  const startInFlightRef = useRef(false);
+  const submitInFlightRef = useRef(false);
   const weakConceptsRef = useRef<HTMLDivElement | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
@@ -171,6 +175,48 @@ export default function ChallengeQuizPage() {
   }, []);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
+    if (started.status === "GENERATING") {
+      setChallengeSession(started);
+      setResult(null);
+      setError(null);
+      setSelectedChoices({});
+      setCurrentIndex(0);
+      setDeadlineEpochSeconds(null);
+      setRemainingSeconds(0);
+      setTimedOut(false);
+      setShowAnswerReview(false);
+      setPhase("generating");
+      return;
+    }
+
+    if (started.status === "FAILED") {
+      setChallengeSession(started);
+      setResult(null);
+      setSelectedChoices({});
+      setCurrentIndex(0);
+      setDeadlineEpochSeconds(null);
+      setRemainingSeconds(0);
+      setTimedOut(false);
+      setShowAnswerReview(false);
+      setError("We couldn't generate the Challenge Quiz this time. Try again.");
+      setPhase("prestart");
+      return;
+    }
+
+    if (!started.sessionId || started.quiz.length === 0) {
+      setChallengeSession(started);
+      setResult(null);
+      setError(null);
+      setSelectedChoices({});
+      setCurrentIndex(0);
+      setDeadlineEpochSeconds(null);
+      setRemainingSeconds(0);
+      setTimedOut(false);
+      setShowAnswerReview(false);
+      setPhase("prestart");
+      return;
+    }
+
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
     const restoredChoices = toSelectedChoiceIndexRecord(state.selectedChoices, started.quiz);
     const normalizedIndex = Math.max(0, Math.min(started.currentQuestionIndex ?? 0, Math.max(0, started.quiz.length - 1)));
@@ -178,6 +224,7 @@ export default function ChallengeQuizPage() {
 
     setChallengeSession(started);
     setResult(null);
+    setError(null);
     setSelectedChoices(restoredChoices);
     setCurrentIndex(normalizedIndex);
     setDeadlineEpochSeconds(nextDeadlineEpochSeconds);
@@ -309,19 +356,24 @@ export default function ChallengeQuizPage() {
     };
   }, [currentIndex, selectedChoices]);
 
+  useEffect(() => {
+    remainingSecondsRef.current = remainingSeconds;
+  }, [remainingSeconds]);
+
   const persistLatestProgress = useCallback((keepalive = false) => {
     const latest = progressRef.current;
     persistProgress(latest.currentIndex, latest.selectedChoices, keepalive);
   }, [persistProgress]);
 
   const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
-    if (!challengeSession?.sessionId || submitting) {
+    if (!challengeSession?.sessionId || submitInFlightRef.current) {
       return;
     }
 
     const { correctAnswers, totalQuestions: total } = computeScore(challengeSession.quiz, selectedChoices);
-    const durationSeconds = Math.max(0, challengeSession.timeLimitSeconds - remainingSeconds);
+    const durationSeconds = Math.max(0, challengeSession.timeLimitSeconds - remainingSecondsRef.current);
 
+    submitInFlightRef.current = true;
     setSubmitting(true);
     setError(null);
     setTimedOut(timeoutTriggered);
@@ -342,9 +394,10 @@ export default function ChallengeQuizPage() {
       const message = err instanceof Error ? err.message : "Could not save Challenge Quiz results.";
       setError(message);
     } finally {
+      submitInFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [challengeSession, remainingSeconds, selectedChoices, submitting]);
+  }, [challengeSession, selectedChoices]);
 
   useEffect(() => {
     if (phase !== "running" || !challengeSession || submitting || deadlineEpochSeconds === null) {
@@ -368,6 +421,43 @@ export default function ChallengeQuizPage() {
   }, [challengeSession, deadlineEpochSeconds, handleSubmit, phase, submitting]);
 
   useEffect(() => {
+    if (phase !== "generating" || !note) {
+      return;
+    }
+
+    let isMounted = true;
+    const pollGenerationStatus = async () => {
+      try {
+        const nextSession = await getInProgressChallengeQuizSession(note.id);
+        if (!isMounted) {
+          return;
+        }
+        if (nextSession.status === "GENERATING") {
+          setChallengeSession(nextSession);
+          return;
+        }
+        applyStartedSession(nextSession, Boolean(nextSession.sessionId));
+      } catch (err) {
+        if (isMounted) {
+          const message = err instanceof Error ? err.message : "Could not load Challenge Quiz generation status.";
+          setError(message);
+          setPhase("prestart");
+        }
+      }
+    };
+
+    void pollGenerationStatus();
+    const intervalId = globalThis.setInterval(() => {
+      void pollGenerationStatus();
+    }, 2000);
+
+    return () => {
+      isMounted = false;
+      globalThis.clearInterval(intervalId);
+    };
+  }, [applyStartedSession, note, phase]);
+
+  useEffect(() => {
     if (phase !== "running") {
       return;
     }
@@ -385,7 +475,7 @@ export default function ChallengeQuizPage() {
   }, [persistLatestProgress, phase]);
 
   const handleStartChallenge = useCallback(async () => {
-    if (!note || starting) {
+    if (!note || startInFlightRef.current) {
       return;
     }
     if (!isEmailVerified) {
@@ -394,6 +484,7 @@ export default function ChallengeQuizPage() {
       return;
     }
 
+    startInFlightRef.current = true;
     setStarting(true);
     setError(null);
     try {
@@ -421,9 +512,10 @@ export default function ChallengeQuizPage() {
         openLockedFeaturePaywall("challenge-quiz-limit", "challenge_quiz_start");
       }
     } finally {
+      startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, starting]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty]);
 
   const handleRetry = () => {
     setChallengeSession(null);
@@ -438,6 +530,7 @@ export default function ChallengeQuizPage() {
     setPhase("prestart");
   };
 
+  const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: challengeQuizActive,
@@ -450,6 +543,12 @@ export default function ChallengeQuizPage() {
       persistLatestProgress(true);
       await forfeitChallengeQuizSession(challengeSession.sessionId);
     },
+  });
+  const { LeaveQuizModal: GenerationLockModal } = useQuizSessionGuard({
+    active: challengeGenerationLocked,
+    fallbackHref: noteDetailHref,
+    onConfirmLeave: () => undefined,
+    blockWithoutConfirmation: true,
   });
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
@@ -468,6 +567,10 @@ export default function ChallengeQuizPage() {
           <BackLink href={noteDetailHref} label="Note" />
         )}
       </div>
+
+      {challengeGenerationLocked ? (
+        <QuizGenerationOverlay />
+      ) : null}
 
       {loading ? (
         <ChallengeQuizLoading />
@@ -498,6 +601,8 @@ export default function ChallengeQuizPage() {
             </Button>
           </Link>
         </Card>
+      ) : phase === "generating" ? (
+        <ChallengeQuizLoading />
       ) : phase === "prestart" ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
@@ -527,7 +632,12 @@ export default function ChallengeQuizPage() {
                         ? "border-blue-500 bg-blue-500/10 text-foreground"
                         : "border-border bg-background"
                     }`}
-                    onClick={() => setSelectedDifficulty(difficulty)}
+                    onClick={() => {
+                      if (!starting) {
+                        setSelectedDifficulty(difficulty);
+                      }
+                    }}
+                    disabled={challengeGenerationLocked}
                   >
                     {difficulty}
                   </button>
@@ -542,12 +652,16 @@ export default function ChallengeQuizPage() {
                   type="button"
                   variant="outline"
                   onClick={() => openLockedFeaturePaywall("difficulty-selection", "challenge_quiz_difficulty_button")}
+                  disabled={challengeGenerationLocked}
                 >
                   Choose Difficulty (Premium)
                 </Button>
               </div>
             )}
           </div>
+          {challengeGenerationLocked ? (
+            <p className="text-sm text-foreground/75">Preparing your Challenge Quiz...</p>
+          ) : null}
           <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
             <p>Rules:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">
@@ -557,8 +671,8 @@ export default function ChallengeQuizPage() {
             </ul>
           </div>
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-          <Button type="button" className="w-full sm:w-auto" onClick={() => void handleStartChallenge()} disabled={starting}>
-            {starting ? "Starting..." : "Start Challenge Quiz"}
+          <Button type="button" className="w-full sm:w-auto" onClick={() => void handleStartChallenge()} disabled={challengeGenerationLocked}>
+            {challengeGenerationLocked ? "Starting..." : "Start Challenge Quiz"}
           </Button>
         </Card>
       ) : phase === "running" && challengeSession ? (
@@ -776,6 +890,7 @@ export default function ChallengeQuizPage() {
         onClose={() => setShowVerifyEmailModal(false)}
       />
       <LeaveQuizModal />
+      <GenerationLockModal />
     </main>
   );
 }

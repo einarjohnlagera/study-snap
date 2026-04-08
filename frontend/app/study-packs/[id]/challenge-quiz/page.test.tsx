@@ -6,6 +6,7 @@ import {
   forfeitChallengeQuizSession,
   getInProgressChallengeQuizSession,
   getNote,
+  startChallengeQuizSession,
   updateChallengeQuizSessionProgress,
 } from "@/lib/api";
 
@@ -56,6 +57,7 @@ describe("ChallengeQuizPage", () => {
     (completeChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockReset();
     (forfeitChallengeQuizSession as jest.Mock).mockResolvedValue({ message: "Challenge Quiz session forfeited." });
+    (startChallengeQuizSession as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockReset();
     (updateChallengeQuizSessionProgress as jest.Mock).mockResolvedValue(undefined);
   });
@@ -277,6 +279,76 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Choose Difficulty (Premium)" }));
 
     expect(await screen.findByText("Difficulty Selection is a Premium feature")).toBeInTheDocument();
+  });
+
+  it("locks difficulty controls and prevents duplicate Challenge Quiz starts", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: ["cells"],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: ["Concept"],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 0,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 50,
+      difficultySelectionAvailable: true,
+      selectedDifficulty: "medium",
+      quiz: [],
+      currentQuestionIndex: 0,
+      sessionState: {},
+    });
+    (startChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    render(<ChallengeQuizPage />);
+
+    const hardButton = await screen.findByRole("button", { name: "hard" });
+    fireEvent.click(hardButton);
+    expect(hardButton).toHaveClass("border-blue-500");
+
+    const startButton = screen.getByRole("button", { name: "Start Challenge Quiz" });
+    fireEvent.click(startButton);
+    fireEvent.click(startButton);
+
+    await waitFor(() => {
+      expect(startChallengeQuizSession).toHaveBeenCalledTimes(1);
+    });
+    expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { difficulty: "hard" });
+    expect(screen.getByRole("button", { name: "easy" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "medium" })).toBeDisabled();
+    expect(hardButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+    expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
+    expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
+    expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
+    expect(screen.getByText("Preparing your Challenge Quiz...")).toBeInTheDocument();
   });
 
   it("shows the first-quiz completion banner after completing the first challenge quiz", async () => {

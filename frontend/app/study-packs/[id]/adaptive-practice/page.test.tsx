@@ -5,6 +5,7 @@ import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
+  getInProgressAdaptivePracticeSession,
   getNote,
 } from "@/lib/api";
 
@@ -35,6 +36,7 @@ jest.mock("@/lib/api", () => ({
   completeAdaptivePracticeSession: jest.fn(),
   forfeitAdaptivePracticeSession: jest.fn(),
   generateAdaptiveQuickReviewQuiz: jest.fn(),
+  getInProgressAdaptivePracticeSession: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: () => false,
@@ -48,6 +50,16 @@ describe("AdaptivePracticePage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockReset();
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockReset();
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      status: null,
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [],
+    });
     (completeAdaptivePracticeSession as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockReset();
     (forfeitAdaptivePracticeSession as jest.Mock).mockResolvedValue({ message: "Adaptive Practice session forfeited." });
@@ -65,6 +77,24 @@ describe("AdaptivePracticePage", () => {
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
+      status: "IN_PROGRESS",
+      studyPackId: "study-pack-1",
+      title: "Derivatives",
+      weakConcepts: ["Trigonometric derivatives"],
+      message: "Focusing on concepts you need to improve.",
+      quiz: [
+        {
+          question: "What is the derivative of sin(x)?",
+          choices: ["cos(x)", "-cos(x)", "-sin(x)", "tan(x)"],
+          correctIndex: 0,
+          concept: "Trigonometric derivatives",
+          explanation: "The derivative of sin(x) is cos(x).",
+        },
+      ],
+    });
+    (getInProgressAdaptivePracticeSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
       weakConcepts: ["Trigonometric derivatives"],
@@ -94,6 +124,7 @@ describe("AdaptivePracticePage", () => {
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
+      status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
       weakConcepts: ["Trigonometric derivatives"],
@@ -113,6 +144,7 @@ describe("AdaptivePracticePage", () => {
     render(<AdaptivePracticePage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await screen.findByText("1. What is the derivative of sin(x)?");
     const correctChoice = (await screen.findAllByRole("button")).find((button) =>
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
@@ -141,6 +173,33 @@ describe("AdaptivePracticePage", () => {
     expect(routerMock.push).toHaveBeenCalledWith("/notes/note-1");
   });
 
+  it("locks the page and prevents duplicate Adaptive Practice starts while generating", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+    (generateAdaptiveQuickReviewQuiz as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    render(<AdaptivePracticePage />);
+
+    const startButton = await screen.findByRole("button", { name: "Start Adaptive Practice" });
+    fireEvent.click(startButton);
+    fireEvent.click(startButton);
+
+    await waitFor(() => {
+      expect(generateAdaptiveQuickReviewQuiz).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
+    expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
+    expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+  });
+
   it('result screen shows "Generate New Set" as the primary action', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -153,6 +212,7 @@ describe("AdaptivePracticePage", () => {
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
+      status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
       weakConcepts: ["Derivatives"],
@@ -172,6 +232,7 @@ describe("AdaptivePracticePage", () => {
     render(<AdaptivePracticePage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await screen.findByText("1. What is the derivative of sin(x)?");
     const correctChoice = (await screen.findAllByRole("button")).find((button) =>
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
@@ -194,6 +255,7 @@ describe("AdaptivePracticePage", () => {
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
+      status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
       weakConcepts: [],
@@ -213,6 +275,7 @@ describe("AdaptivePracticePage", () => {
     render(<AdaptivePracticePage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await screen.findByText("1. What is the derivative of sin(x)?");
     const correctChoice = (await screen.findAllByRole("button")).find((button) =>
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );
@@ -235,6 +298,7 @@ describe("AdaptivePracticePage", () => {
     });
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
+      status: "IN_PROGRESS",
       studyPackId: "study-pack-1",
       title: "Derivatives",
       weakConcepts: [],
@@ -254,6 +318,7 @@ describe("AdaptivePracticePage", () => {
     render(<AdaptivePracticePage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Start Adaptive Practice" }));
+    await screen.findByText("1. What is the derivative of sin(x)?");
     const correctChoice = (await screen.findAllByRole("button")).find((button) =>
       /^[A-D]\.\s*cos\(x\)$/i.test(button.textContent?.trim() ?? ""),
     );

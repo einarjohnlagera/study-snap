@@ -520,8 +520,11 @@ export type QuickReviewStudyTipResponse = {
   studyTip: string | null;
 };
 
+export type QuizSessionStatus = "GENERATING" | "FAILED" | "IN_PROGRESS" | "COMPLETED" | "FORFEITED";
+
 export type QuickReviewAdaptiveQuizResponse = {
   sessionId: string | null;
+  status: QuizSessionStatus | null;
   studyPackId: string;
   title: string;
   weakConcepts: string[];
@@ -541,6 +544,7 @@ export type ChallengeQuizStartRequest = {
 
 export type ChallengeQuizStartResponse = {
   sessionId: string | null;
+  status: QuizSessionStatus | null;
   studyPackId: string;
   title: string;
   totalQuestions: number;
@@ -568,7 +572,7 @@ export type ChallengeQuizCompleteRequest = {
 export type ChallengeQuizSessionResponse = {
   sessionId: string;
   studyPackId: string;
-  status: "IN_PROGRESS" | "COMPLETED" | "FORFEITED";
+  status: QuizSessionStatus;
   totalQuestions: number;
   correctAnswers: number;
   scorePercentage: number;
@@ -707,7 +711,7 @@ export type NoteResponse = {
   difficultySelectionAvailable: boolean;
 };
 
-export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
+export type NoteStudyPackStatus = "DRAFT" | "GENERATING" | "FAILED" | "STUDY_PACK_READY";
 export type NoteVisibility = "PRIVATE" | "PUBLIC";
 export type SubjectSuggestionScope = "mine" | "public";
 export type CourseProgramSuggestionScope = "mine" | "public";
@@ -1258,7 +1262,7 @@ export async function createStudyPackFromText(notesText: string): Promise<StudyP
   return payload;
 }
 
-export async function createStudyPackFromNote(noteId: string): Promise<StudyPackResponse> {
+export async function createStudyPackFromNote(noteId: string): Promise<NoteResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/generate`,
     {
@@ -1267,7 +1271,7 @@ export async function createStudyPackFromNote(noteId: string): Promise<StudyPack
     },
     true,
   );
-  return parseApiResponse<StudyPackResponse>(
+  return parseApiResponse<NoteResponse>(
     response,
     "We could not generate your study pack right now. Please try again.",
   );
@@ -1661,6 +1665,23 @@ export async function generateAdaptiveQuickReviewQuiz(
   return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
     response,
     "Could not generate adaptive practice quiz.",
+  );
+}
+
+export async function getInProgressAdaptivePracticeSession(
+  noteId: string,
+): Promise<QuickReviewAdaptiveQuizResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/adaptive-practice/in-progress`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuickReviewAdaptiveQuizResponse>(
+    response,
+    "Could not load Adaptive Practice session.",
   );
 }
 

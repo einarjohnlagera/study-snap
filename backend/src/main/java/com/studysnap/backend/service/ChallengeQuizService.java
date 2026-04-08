@@ -82,6 +82,20 @@ public class ChallengeQuizService {
     private static final String ANALYTICS_METADATA_DIFFICULTY = "difficulty";
     private static final String CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE = "Challenge Quiz session has already ended.";
     private static final String CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE = "Challenge Quiz session forfeited.";
+    private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
+            QuickReviewSessionStatus.GENERATING,
+            QuickReviewSessionStatus.IN_PROGRESS
+    );
+    private static final List<QuickReviewSessionStatus> OBSERVABLE_STATUSES = List.of(
+            QuickReviewSessionStatus.GENERATING,
+            QuickReviewSessionStatus.IN_PROGRESS,
+            QuickReviewSessionStatus.FAILED
+    );
+    private static final List<QuickReviewSessionStatus> USAGE_COUNTED_STATUSES = List.of(
+            QuickReviewSessionStatus.IN_PROGRESS,
+            QuickReviewSessionStatus.COMPLETED,
+            QuickReviewSessionStatus.FORFEITED
+    );
     private static final int FIRST_PAGE = 0;
     private static final int MAX_RECENT_SESSION_LIMIT = 10;
     private static final int WEAK_CONCEPT_ACCURACY_THRESHOLD = 60;
@@ -110,21 +124,21 @@ public class ChallengeQuizService {
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
         authService.requireEmailVerified(userId);
         UUID studyPackId = parseStudyPackId(studyPackIdRaw);
-        StudyPackEntity studyPack = findOwnedStudyPackOrThrow(studyPackId, userId);
+        StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         String selectedDifficulty = resolveSelectedDifficulty(planType, request);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId,
                         studyPackId,
                         QuickReviewSessionMode.CHALLENGE,
-                        QuickReviewSessionStatus.IN_PROGRESS
+                        ACTIVE_GENERATION_STATUSES
                 )
                 .orElse(null);
         if (existing != null) {
-            List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(existing.getSessionState());
-            if (!existingQuiz.isEmpty()) {
+            if (existing.getStatus() == QuickReviewSessionStatus.GENERATING
+                    || !QuizSessionStateUtils.extractQuiz(existing.getSessionState()).isEmpty()) {
                 int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
                 return toStartResponse(existing, studyPack, usedThisMonth, planType);
             }
@@ -135,35 +149,50 @@ public class ChallengeQuizService {
         int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
         ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty);
+        QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
+                userId,
+                studyPackId,
+                studyPack,
+                profile.difficulty()
+        ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
-        List<QuizItem> generatedQuiz = llmStudyPackService.generateChallengeQuiz(
-                studyPack.getTitle(),
-                studyPack.getSummary(),
-                getKeyConcepts(studyPack),
-                disallowedQuestions,
-                profile.questionCount(),
-                profile.difficulty(),
-                generationContext
-        );
-        List<QuizItem> challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
-                generatedQuiz,
-                QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
-        );
-        if (challengeQuiz.size() != profile.questionCount()) {
-            throw new ChallengeQuizGenerationFailedException();
+        try {
+            List<QuizItem> generatedQuiz = llmStudyPackService.generateChallengeQuiz(
+                    studyPack.getTitle(),
+                    studyPack.getSummary(),
+                    getKeyConcepts(studyPack),
+                    disallowedQuestions,
+                    profile.questionCount(),
+                    profile.difficulty(),
+                    generationContext
+            );
+            List<QuizItem> challengeQuiz = QuizDeduplicationUtils.uniqueQuestions(
+                    generatedQuiz,
+                    QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
+            );
+            if (challengeQuiz.size() != profile.questionCount()) {
+                throw new ChallengeQuizGenerationFailedException();
+            }
+
+            markSessionReady(session, challengeQuiz, profile.difficulty());
+            QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
+            userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
+            try {
+                analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, studyPackId, Map.of(
+                        ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
+                        ANALYTICS_METADATA_QUESTION_COUNT, challengeQuiz.size(),
+                        ANALYTICS_METADATA_DIFFICULTY, profile.difficulty()
+                ));
+            } catch (RuntimeException ignored) {
+                // Analytics must never turn a successfully generated quiz into a failed session.
+            }
+            return toStartResponse(saved, studyPack, usedThisMonth + 1, planType);
+        } catch (Exception ex) {
+            markSessionFailed(session);
+            QuickReviewSessionEntity failed = quickReviewSessionRepository.save(session);
+            return toStartResponse(failed, studyPack, usedThisMonth, planType);
         }
-
-        QuickReviewSessionEntity session = buildNewSession(userId, studyPackId, studyPack, challengeQuiz, profile.difficulty());
-
-        QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
-        userUsageService.incrementChallengeQuizGeneration(userId, saved.getCreatedAt());
-        analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, studyPackId, Map.of(
-                ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
-                ANALYTICS_METADATA_QUESTION_COUNT, challengeQuiz.size(),
-                ANALYTICS_METADATA_DIFFICULTY, profile.difficulty()
-        ));
-        return toStartResponse(saved, studyPack, usedThisMonth + 1, planType);
     }
 
     @Transactional(readOnly = true)
@@ -174,11 +203,11 @@ public class ChallengeQuizService {
 
         int usedThisMonth = (int) countChallengeQuizUsedThisMonth(userId);
         return quickReviewSessionRepository
-                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
+                .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                         userId,
                         studyPackId,
                         QuickReviewSessionMode.CHALLENGE,
-                        QuickReviewSessionStatus.IN_PROGRESS
+                        OBSERVABLE_STATUSES
                 )
                 .map(session -> toStartResponse(session, studyPack, usedThisMonth, planType))
                 .orElse(buildEmptyStartResponse(studyPack, usedThisMonth, planType));
@@ -334,14 +363,15 @@ public class ChallengeQuizService {
     private long countChallengeQuizUsedThisMonth(UUID userId) {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, now);
-        long usedFromSessions = quickReviewSessionRepository.countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        long usedFromCountedSessions = quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
                 userId,
                 QuickReviewSessionMode.CHALLENGE,
+                USAGE_COUNTED_STATUSES,
                 usagePeriod.periodStart(),
                 usagePeriod.periodEnd()
         );
         long usedFromUsage = userUsageService.getMonthlyUsage(userId, now).challengeQuizGenerations();
-        return Math.max(usedFromSessions, usedFromUsage);
+        return Math.max(usedFromCountedSessions, usedFromUsage);
     }
 
     private ChallengeGenerationProfile resolveGenerationProfile(UUID userId, UUID studyPackId, String selectedDifficulty) {
@@ -398,12 +428,16 @@ public class ChallengeQuizService {
     ) {
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
         if (quiz.isEmpty()) {
-            throw new ChallengeQuizNotAvailableException();
+            if (session.getStatus() != QuickReviewSessionStatus.GENERATING
+                    && session.getStatus() != QuickReviewSessionStatus.FAILED) {
+                throw new ChallengeQuizNotAvailableException();
+            }
         }
         int timeLimitSeconds = extractTimeLimitSeconds(session.getSessionState());
         int limit = resolveMonthlyChallengeQuizLimit(planType);
         return new ChallengeQuizStartResponse(
                 session.getId().toString(),
+                session.getStatus(),
                 studyPack.getId().toString(),
                 studyPack.getTitle(),
                 quiz.size(),
@@ -858,6 +892,7 @@ public class ChallengeQuizService {
     ) {
         return new ChallengeQuizStartResponse(
                 null,
+                null,
                 studyPack.getId().toString(),
                 studyPack.getTitle(),
                 0,
@@ -872,11 +907,15 @@ public class ChallengeQuizService {
         );
     }
 
-    private QuickReviewSessionEntity buildNewSession(
+    private StudyPackEntity findOwnedStudyPackForGenerationOrThrow(UUID studyPackId, UUID userId) {
+        return studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)
+                .orElseThrow(StudyPackNotFoundException::new);
+    }
+
+    private QuickReviewSessionEntity buildGeneratingSession(
             UUID userId,
             UUID studyPackId,
             StudyPackEntity studyPack,
-            List<QuizItem> challengeQuiz,
             String difficulty
     ) {
         OffsetDateTime createdAt = OffsetDateTime.now();
@@ -886,6 +925,21 @@ public class ChallengeQuizService {
         session.setStudyPackId(studyPackId);
         session.setNoteId(studyPack.getNoteId());
         session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.GENERATING);
+        session.setCurrentQuestionIndex(0);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setTotalQuestions(0);
+        session.setCorrectAnswers(0);
+        session.setScorePercentage(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        session.setRetryCount(0);
+        session.setSessionMetadata(null);
+        session.setSessionState(buildInitialSessionState(difficulty));
+        session.setCreatedAt(createdAt);
+        session.setCompletedAt(null);
+        return session;
+    }
+
+    private void markSessionReady(QuickReviewSessionEntity session, List<QuizItem> challengeQuiz, String difficulty) {
         session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
         session.setCurrentQuestionIndex(0);
         session.setCurrentRound(QuickReviewRound.INITIAL);
@@ -898,9 +952,16 @@ public class ChallengeQuizService {
                 challengeQuiz,
                 buildInitialSessionState(difficulty)
         ));
-        session.setCreatedAt(createdAt);
         session.setCompletedAt(null);
-        return session;
+    }
+
+    private void markSessionFailed(QuickReviewSessionEntity session) {
+        session.setStatus(QuickReviewSessionStatus.FAILED);
+        session.setCurrentQuestionIndex(0);
+        session.setTotalQuestions(0);
+        session.setCorrectAnswers(0);
+        session.setScorePercentage(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+        session.setCompletedAt(null);
     }
 
 }

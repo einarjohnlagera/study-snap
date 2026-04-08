@@ -1,5 +1,18 @@
 # study-pack.md - Testing Notes
 
+## Async note-owned generation
+
+- Note Editor `Generate Study Pack` saves the note before calling generation.
+- after generation is queued, Note Editor redirects to Note Detail with `generating=1` and the appropriate `tab`.
+- Note Detail renders the `GENERATING` state with friendly loading copy and placeholder Study Pack content.
+- Note Detail polling stops when the note reaches `STUDY_PACK_READY`.
+- Note Detail polling stops when the note reaches `FAILED`.
+- `FAILED` renders a friendly recovery card and `Retry Generate`.
+- retry queues generation again from the saved note.
+- failed generation and failed retries do not increment Study Pack quota.
+- note content remains saved and visible in `Full Notes` after a failed generation.
+- AI title/subject/tag suggestions still appear after async generation reaches `STUDY_PACK_READY`.
+
 ## Subject sanitization (covered in `SubjectSanitizerTest` and `OpenAiLlmStudyPackServiceTest`)
 
 ### stripSubtopicSuffix behavior

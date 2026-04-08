@@ -155,9 +155,9 @@ describe("NoteEditorPageClient", () => {
       content: "Generated from teacher flow",
     });
     (createStudyPackFromNote as jest.Mock).mockResolvedValue({
-      title: "Suggested Title",
-      subject: "Biology",
-      tags: ["cells"],
+      ...baseNote,
+      id: "note-created",
+      studyPackStatus: "GENERATING",
     });
     (copyNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -294,7 +294,7 @@ describe("NoteEditorPageClient", () => {
     }));
   });
 
-  it("lets the user apply AI suggestions per field after generation", async () => {
+  it("saves the note, starts generation, and redirects to the generating note detail state", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (createNote as jest.Mock).mockResolvedValueOnce({
       ...baseNote,
@@ -317,20 +317,17 @@ describe("NoteEditorPageClient", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
 
-    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Use AI Subject"));
-    fireEvent.click(screen.getByLabelText("Merge My Tags + AI Tags"));
-    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
-
     await waitFor(() => {
-      expect(updateNote).toHaveBeenCalledWith("note-created", expect.objectContaining({
+      expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
         title: "My Notes",
-        subject: "Biology",
+        subject: "General Science",
         courseProgram: "Nursing",
-        tags: ["review", "cells"],
+        tags: ["review"],
       }));
-      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=summary");
+      expect(createStudyPackFromNote).toHaveBeenCalledWith("note-created");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=summary");
     });
+    expect(updateNote).not.toHaveBeenCalled();
   });
 
   it("shows the first-study hint on the create note page when onboarding is in progress", async () => {
@@ -774,7 +771,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByRole("button", { name: "Upgrade to Premium" })).not.toBeInTheDocument();
   });
 
-  it("redirects generated quiz-focused notes to the practice quiz section", async () => {
+  it("redirects queued quiz-focused generation to the practice quiz section", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
 
     render(<NoteEditorPageClient initialMode="quiz" />);
@@ -783,15 +780,13 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
-    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=quiz");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=quiz");
     });
   });
 
-  it("redirects student note generation to the summary view by default", async () => {
+  it("redirects queued student note generation to the summary view by default", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "STUDENT" });
 
     render(<NoteEditorPageClient />);
@@ -800,11 +795,9 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Student note content" } });
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
-    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&created=1&tab=summary");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=summary");
     });
   });
 

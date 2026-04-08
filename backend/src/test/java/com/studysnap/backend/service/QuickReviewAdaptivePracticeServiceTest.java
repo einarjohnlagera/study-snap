@@ -1,35 +1,26 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
-import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
-import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
-import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.ThemePreference;
-import com.studysnap.backend.entity.UserRole;
-import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
-import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -105,12 +96,12 @@ class QuickReviewAdaptivePracticeServiceTest {
         StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
         QuickReviewSessionEntity existing = buildInProgressAdaptiveSession(sessionId, userId, studyPackId, noteId);
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.ADAPTIVE,
-                QuickReviewSessionStatus.IN_PROGRESS
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.ADAPTIVE),
+                any()
         )).thenReturn(Optional.of(existing));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
 
@@ -127,82 +118,32 @@ class QuickReviewAdaptivePracticeServiceTest {
     }
 
     @Test
-    void generateAdaptiveQuiz_whenSaveHitsDuplicateInProgress_returnsResumedSession() {
+    void generateAdaptiveQuiz_reusesExistingGeneratingSession_withoutCallingLlmAgain() {
         UUID userId = UUID.randomUUID();
         UUID studyPackId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
-        UUID resumedSessionId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
 
         StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
-        QuickReviewSessionEntity latestQuickReview = buildCompletedQuickReviewSource(userId, studyPackId, noteId);
-        QuickReviewSessionEntity resumed = buildInProgressAdaptiveSession(resumedSessionId, userId, studyPackId, noteId);
+        QuickReviewSessionEntity generating = buildGeneratingAdaptiveSession(sessionId, userId, studyPackId, noteId);
 
-        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusOrderByCreatedAtDesc(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.ADAPTIVE,
-                QuickReviewSessionStatus.IN_PROGRESS
-        )).thenReturn(Optional.empty(), Optional.of(resumed));
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.QUICK_REVIEW,
-                Pageable.ofSize(1)
-        )).thenReturn(List.of(latestQuickReview));
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                userId,
-                studyPackId,
-                QuickReviewSessionMode.CHALLENGE,
-                Pageable.ofSize(1)
-        )).thenReturn(List.of());
-        when(activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId),
-                eq(ActivityType.STARTED_ADAPTIVE_PRACTICE),
-                any(OffsetDateTime.class),
-                any(OffsetDateTime.class)
-        )).thenReturn(0L);
-        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
-                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.FREE,
-                        BillingCycle.MONTHLY,
-                        OffsetDateTime.now().minusDays(10),
-                        OffsetDateTime.now().plusDays(20),
-                        2026,
-                        3
-                ));
-        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.ADAPTIVE),
+                any()
+        )).thenReturn(Optional.of(generating));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
-        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
-        when(llmStudyPackService.generateAdaptivePracticeQuiz(
-                any(),
-                any(),
-                any(),
-                any(),
-                any(),
-                anyInt(),
-                eq(new StudyPackGenerationContext(
-                        LearnerLevel.COLLEGE,
-                        "Engineering",
-                        null,
-                        List.of()
-                ))
-        )).thenReturn(List.of(
-                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
-                new QuizItem("Q2", List.of("A", "B", "C", "D"), "B", "Concept", "Explanation"),
-                new QuizItem("Q3", List.of("A", "B", "C", "D"), "C", "Concept", "Explanation"),
-                new QuizItem("Q4", List.of("A", "B", "C", "D"), "D", "Concept", "Explanation"),
-                new QuizItem("Q5", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
-        ));
-        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
-                .thenThrow(new DataIntegrityViolationException("duplicate in-progress session"));
 
         QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId);
 
-        assertThat(response.sessionId()).isEqualTo(resumedSessionId.toString());
-        assertThat(response.quiz()).hasSize(1);
+        assertThat(response.sessionId()).isEqualTo(sessionId.toString());
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
+        assertThat(response.quiz()).isEmpty();
         verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
-        verify(aiRateLimitService).assertAllowed(userId, PlanType.PREMIUM, "adaptive-practice");
+        verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
+        verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }
@@ -230,36 +171,6 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(session.getCompletedAt()).isNull();
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(activityTrackingService, never()).recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
-    }
-
-    private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {
-        return new MeResponse(
-                userId.toString(),
-                "user@example.com",
-                null,
-                "Test",
-                "User",
-                "Test User",
-                null,
-                learnerLevel,
-                courseProgram,
-                true,
-                null,
-                null,
-                null,
-                null,
-                true,
-                true,
-                ThemePreference.SYSTEM,
-                OffsetDateTime.now(),
-                OffsetDateTime.now(),
-                OffsetDateTime.now(),
-                0L,
-                UserRole.USER,
-                UserStatus.ACTIVE,
-                PlanType.PREMIUM,
-                null
-        );
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID noteId, UUID ownerUserId) {
@@ -303,23 +214,23 @@ class QuickReviewAdaptivePracticeServiceTest {
         return session;
     }
 
-    private QuickReviewSessionEntity buildCompletedQuickReviewSource(UUID userId, UUID studyPackId, UUID noteId) {
+    private QuickReviewSessionEntity buildGeneratingAdaptiveSession(UUID sessionId, UUID userId, UUID studyPackId, UUID noteId) {
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
-        session.setId(UUID.randomUUID());
+        session.setId(sessionId);
         session.setUserId(userId);
         session.setStudyPackId(studyPackId);
         session.setNoteId(noteId);
-        session.setSessionMode(QuickReviewSessionMode.QUICK_REVIEW);
-        session.setStatus(QuickReviewSessionStatus.COMPLETED);
-        session.setCurrentRound(QuickReviewRound.RETRY);
-        session.setCurrentQuestionIndex(5);
-        session.setTotalQuestions(5);
-        session.setCorrectAnswers(2);
-        session.setScorePercentage(new BigDecimal("40.00"));
-        session.setRetryCount(1);
+        session.setSessionMode(QuickReviewSessionMode.ADAPTIVE);
+        session.setStatus(QuickReviewSessionStatus.GENERATING);
+        session.setCurrentQuestionIndex(0);
+        session.setCurrentRound(QuickReviewRound.INITIAL);
+        session.setTotalQuestions(0);
+        session.setCorrectAnswers(0);
+        session.setScorePercentage(BigDecimal.ZERO);
+        session.setRetryCount(0);
+        session.setCreatedAt(OffsetDateTime.now().minusMinutes(1));
         session.setSessionMetadata(Map.of("weakConcepts", List.of("Concept")));
-        session.setCreatedAt(OffsetDateTime.now().minusHours(2));
-        session.setCompletedAt(OffsetDateTime.now().minusHours(1));
+        session.setSessionState(null);
         return session;
     }
 }

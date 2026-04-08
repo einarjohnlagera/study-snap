@@ -62,6 +62,9 @@ Implementation stance:
 
 Primary focus:
 
+- Async Study Pack generation handoff from Note Editor to Note Detail
+- Graceful Study Pack generation failure and retry recovery
+- Quiz start integrity locks for exam-like Challenge Quiz starts
 - Exam Countdown
 - Exam Readiness Score
 - Study Plan

@@ -27,7 +27,7 @@ Recommended fields:
 - `subject` (nullable)
 - `content` (text, required)
 - `tags` (text[] or json array, default empty)
-- `state` (`DRAFT` | `STUDY_PACK_READY`)
+- `state` (`DRAFT` | `GENERATING` | `FAILED` | `STUDY_PACK_READY`)
 - `visibility` (`PRIVATE` | `PUBLIC`)
 - `created_at`
 - `updated_at`
@@ -80,7 +80,9 @@ Generated fields:
 
 State transition:
 
-- generating validated output sets Note state from `DRAFT` to `STUDY_PACK_READY`
+- queued note-owned generation sets Note state from `DRAFT` or `FAILED` to `GENERATING`
+- successful generation persists a Study Pack and sets Note state to `STUDY_PACK_READY`
+- failed generation sets Note state to `FAILED` without consuming Study Pack quota
 
 Ownership rule:
 
@@ -332,7 +334,7 @@ Suggested migration direction:
 
 1. keep legacy tables functioning
 2. introduce/confirm `notes` as primary owned entity
-3. map generated output to Note lifecycle (`DRAFT` -> `STUDY_PACK_READY`)
+3. map generated output to Note lifecycle (`DRAFT` -> `GENERATING` -> `STUDY_PACK_READY` or `FAILED`)
 4. add visibility field and public-note query surface
 5. add copy endpoint for versioning behavior
 6. shift feature code to Note-centric ownership checks

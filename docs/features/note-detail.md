@@ -26,6 +26,19 @@ Draft note actions:
 - `Make a Copy`
 - `Share`
 
+Generating note behavior:
+
+- Note Detail is the status surface after a user starts Study Pack generation.
+- `GENERATING` shows a clear in-page status message, friendly rotating loading copy, and placeholder/skeleton content for Summary, Key Concepts, and Quiz.
+- actions that depend on finished Study Pack output stay disabled or hidden until the status becomes ready.
+- Note Detail polls lightly while generation is active and stops polling when the note becomes `STUDY_PACK_READY` or `FAILED`.
+
+Failed generation behavior:
+
+- `FAILED` shows a friendly recovery state instead of empty Study Pack content.
+- copy should make clear that the note is saved and generation did not complete.
+- `Retry Generate` queues generation again without consuming quota unless a Study Pack is successfully persisted.
+
 Study Pack Ready actions:
 
 - `Edit` -> inline metadata edit only

@@ -7,9 +7,9 @@ import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -19,7 +19,6 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class AnalyticsService {
     private static final Logger log = LoggerFactory.getLogger(AnalyticsService.class);
 
@@ -28,6 +27,20 @@ public class AnalyticsService {
     private final NoteRepository noteRepository;
     private final StudyPackRepository studyPackRepository;
     private final TaskExecutor analyticsTaskExecutor;
+
+    public AnalyticsService(
+            AnalyticsEventRepository analyticsEventRepository,
+            UserRepository userRepository,
+            NoteRepository noteRepository,
+            StudyPackRepository studyPackRepository,
+            @Qualifier("analyticsTaskExecutor") TaskExecutor analyticsTaskExecutor
+    ) {
+        this.analyticsEventRepository = analyticsEventRepository;
+        this.userRepository = userRepository;
+        this.noteRepository = noteRepository;
+        this.studyPackRepository = studyPackRepository;
+        this.analyticsTaskExecutor = analyticsTaskExecutor;
+    }
 
     public void trackEvent(UUID userId, AnalyticsEventType eventType, UUID entityId, Map<String, Object> metadata) {
         if (eventType == null) {

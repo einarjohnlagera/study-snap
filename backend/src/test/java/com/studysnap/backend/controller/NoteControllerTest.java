@@ -1,12 +1,9 @@
 package com.studysnap.backend.controller;
 
-import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
-import com.studysnap.backend.dto.StudyPackMeta;
-import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
@@ -33,7 +30,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -79,27 +75,39 @@ class NoteControllerTest {
     void generate_callsEmailVerificationBeforeGeneration() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        StudyPackResponse expected = new StudyPackResponse(
-                UUID.randomUUID().toString(),
-                UUID.randomUUID().toString(),
-                "TEXT",
-                null,
-                "Generated",
-                "Summary",
-                "Source",
+        NoteResponse expected = new NoteResponse(
+                "note-1",
+                "Draft note",
                 "Biology",
-                List.of("Concept"),
+                "Nursing",
                 List.of("tag"),
-                List.of(),
+                "content",
+                "PRIVATE",
                 OffsetDateTime.now(),
-                new StudyPackMeta(null, null)
+                OffsetDateTime.now(),
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                "GENERATING",
+                null,
+                List.of(),
+                List.of(),
+                0,
+                false,
+                false,
+                false,
+                false
         );
-        when(studyPackService.createFromText(any(CreateStudyPackRequest.class), any(UUID.class))).thenReturn(expected);
+        when(noteService.getById("note-1", userId)).thenReturn(expected);
 
-        StudyPackResponse response = noteController.generate("note-1", user);
+        NoteResponse response = noteController.generate("note-1", user);
 
         verify(authService).requireEmailVerified(userId);
-        verify(studyPackService).createFromText(new CreateStudyPackRequest(null, "note-1"), userId);
+        verify(studyPackService).startAsyncGenerationFromNote("note-1", userId);
+        verify(noteService).getById("note-1", userId);
         assertThat(response).isEqualTo(expected);
     }
 
@@ -135,7 +143,7 @@ class NoteControllerTest {
         assertThatThrownBy(() -> noteController.generate("note-1", user))
                 .isSameAs(verificationError);
 
-        verify(studyPackService, never()).createFromText(any(CreateStudyPackRequest.class), any(UUID.class));
+        verify(studyPackService, never()).startAsyncGenerationFromNote("note-1", userId);
     }
 
     @Test

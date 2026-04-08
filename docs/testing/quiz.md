@@ -14,6 +14,12 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
 - selected choice shows neutral exam-style highlight (blue border) only
+- after `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
+- after `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
+- double-clicking Start does not create duplicate Challenge Quiz start requests
+- after `Start Challenge Quiz` is clicked, a full-screen `Generating your quiz...` overlay appears and page interaction is blocked until generation resolves
+- Challenge Quiz generation refresh/status checks reuse existing `GENERATING` or `IN_PROGRESS` sessions and do not call the LLM again
+- if Challenge Quiz generation returns `FAILED`, the page shows a retryable failure state rather than starting an active quiz
 - "Answers are graded only after submission." hint is visible during the quiz
 - Previous / Next navigation maintains all previously selected answers
 - Submit button appears only on the last question; Previous is disabled on the first question
@@ -46,6 +52,13 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - the shared `Leave quiz?` modal offers `Stay` and `Leave Quiz`
 - confirming `Leave Quiz` marks the session `FORFEITED`, does not set `completedAt`, and does not record a completed quiz result
 - Challenge Quiz and Adaptive Practice forfeits do not refund quiz credits or decrement usage counters
+- Quick Review load/reload does not loop, repeatedly redirect, or repeatedly call the note/session start APIs.
+- Quick Review does not use the LLM-generation overlay or LLM-generation navigation lock; only the active-session `Leave Quiz` guard applies after a Quick Review session starts.
+- Adaptive Practice page load checks existing session state without triggering new LLM generation.
+- after `Start Adaptive Practice` or `Generate New Set` is clicked, a full-screen `Generating your quiz...` overlay appears and page interaction is blocked until generation resolves
+- Adaptive Practice double-click start attempts create only one generation request from the frontend.
+- backend Challenge Quiz and Adaptive Practice start tests cover `GENERATING` session reuse without a second LLM call.
+- backend Challenge Quiz and Adaptive Practice status tests should cover `GENERATING` -> poll, `IN_PROGRESS` -> resume, and `FAILED` -> retry.
 - Note Detail `Summary` / `Quiz` controls render as tabs, not buttons
 - active Note Detail tab updates with underline state and `aria-selected`
 - `?tab=quiz` opens the quiz view directly

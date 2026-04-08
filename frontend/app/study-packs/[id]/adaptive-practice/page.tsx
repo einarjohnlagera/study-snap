@@ -8,6 +8,7 @@ import { PaywallModal } from "@/components/billing/paywall-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser } from "@/lib/auth";
@@ -16,6 +17,7 @@ import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
   generateAdaptiveQuickReviewQuiz,
+  getInProgressAdaptivePracticeSession,
   getMyStudyPack,
   getNote,
   isEmailNotVerifiedError,
@@ -47,7 +49,9 @@ export default function AdaptivePracticePage() {
   const searchParams = useSearchParams();
   const requestInFlightRef = useRef(false);
   const loadedForNoteRef = useRef<string | null>(null);
+  const legacyRedirectTargetRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [startingAdaptive, setStartingAdaptive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [adaptiveQuiz, setAdaptiveQuiz] = useState<QuickReviewAdaptiveQuizResponse | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -80,13 +84,33 @@ export default function AdaptivePracticePage() {
     setShowPremiumPaywall(true);
   }, [noteId, pathname]);
 
-  const loadAdaptiveQuiz = useCallback(async () => {
+  const applyAdaptiveSession = useCallback((response: QuickReviewAdaptiveQuizResponse) => {
+    setAdaptiveQuiz(response);
+    setCurrentIndex(0);
+    setSelectedChoices({});
+    setCompletionTracked(false);
+    if (response.status === "IN_PROGRESS" && response.quiz.length > 0) {
+      setQuizStarted(true);
+      setSessionStartedAt(Date.now());
+      setError(null);
+      return;
+    }
+    setQuizStarted(false);
+    setSessionStartedAt(null);
+    setError(null);
+  }, []);
+
+  const loadAdaptiveQuiz = useCallback(async (force = false) => {
     if (requestInFlightRef.current) {
       return;
     }
     if (!noteId) {
       setError("Note not found.");
       setLoading(false);
+      return;
+    }
+
+    if (!force && loadedForNoteRef.current === noteId) {
       return;
     }
 
@@ -110,6 +134,7 @@ export default function AdaptivePracticePage() {
 
     try {
       const detail = await getNote(noteId);
+      loadedForNoteRef.current = noteId;
       if (detail.studyPackStatus !== "STUDY_PACK_READY") {
         setNote(detail);
         setError("Generate a Study Pack first.");
@@ -123,26 +148,24 @@ export default function AdaptivePracticePage() {
         setShowPremiumPaywall(true);
         return;
       }
-      const response = await generateAdaptiveQuickReviewQuiz(detail.id);
-      setAdaptiveQuiz(response);
-      setCurrentIndex(0);
-      setSelectedChoices({});
-      setCompletionTracked(false);
-      setQuizStarted(false);
-      setSessionStartedAt(null);
+      const response = await getInProgressAdaptivePracticeSession(detail.id);
+      applyAdaptiveSession(response);
     } catch (err) {
       if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(noteId).catch(() => null);
         if (byStudyPack?.noteId) {
           const nextQuery = searchParams.toString();
-          router.replace(
-            nextQuery
-              ? `/notes/${byStudyPack.noteId}/adaptive-practice?${nextQuery}`
-              : `/notes/${byStudyPack.noteId}/adaptive-practice`,
-          );
+          const targetHref = nextQuery
+            ? `/notes/${byStudyPack.noteId}/adaptive-practice?${nextQuery}`
+            : `/notes/${byStudyPack.noteId}/adaptive-practice`;
+          if (legacyRedirectTargetRef.current !== targetHref) {
+            legacyRedirectTargetRef.current = targetHref;
+            router.replace(targetHref);
+          }
           return;
         }
       }
+      loadedForNoteRef.current = null;
       const message = isEmailNotVerifiedError(err)
         ? "Verify your email to use this feature."
         : err instanceof Error
@@ -157,7 +180,7 @@ export default function AdaptivePracticePage() {
       setLoading(false);
       requestInFlightRef.current = false;
     }
-  }, [noteId, pathname, router, searchParams]);
+  }, [applyAdaptiveSession, noteId, pathname, router, searchParams]);
 
   useEffect(() => {
     if (!noteId) {
@@ -166,7 +189,6 @@ export default function AdaptivePracticePage() {
     if (loadedForNoteRef.current === noteId) {
       return;
     }
-    loadedForNoteRef.current = noteId;
     void loadAdaptiveQuiz();
   }, [loadAdaptiveQuiz, noteId]);
 
@@ -195,7 +217,83 @@ export default function AdaptivePracticePage() {
     return "Keep going. These concepts need more practice — try again when ready.";
   }, [scorePercentage]);
 
-  const adaptiveQuizActive = Boolean(adaptiveQuiz?.sessionId && hasQuestions && !isComplete && !completionTracked && !error);
+  useEffect(() => {
+    if (adaptiveQuiz?.status !== "GENERATING" || !note) {
+      return;
+    }
+
+    let isMounted = true;
+    const pollGenerationStatus = async () => {
+      try {
+        const response = await getInProgressAdaptivePracticeSession(note.id);
+        if (!isMounted) {
+          return;
+        }
+        applyAdaptiveSession(response);
+      } catch (err) {
+        if (isMounted) {
+          const message = err instanceof Error ? err.message : "Could not load Adaptive Practice generation status.";
+          setError(message);
+          setAdaptiveQuiz(null);
+        }
+      }
+    };
+
+    void pollGenerationStatus();
+    const intervalId = globalThis.setInterval(() => {
+      void pollGenerationStatus();
+    }, 2000);
+
+    return () => {
+      isMounted = false;
+      globalThis.clearInterval(intervalId);
+    };
+  }, [adaptiveQuiz?.status, applyAdaptiveSession, note]);
+
+  const handleStartAdaptivePractice = useCallback(async () => {
+    if (!note || requestInFlightRef.current) {
+      return;
+    }
+
+    const authUser = getAuthUser();
+    if (!authUser?.emailVerifiedAt) {
+      setError("Verify your email to use this feature.");
+      setShowVerifyEmailModal(true);
+      return;
+    }
+
+    requestInFlightRef.current = true;
+    setStartingAdaptive(true);
+    setError(null);
+    try {
+      const response = await generateAdaptiveQuickReviewQuiz(note.id);
+      applyAdaptiveSession(response);
+    } catch (err) {
+      const message = isEmailNotVerifiedError(err)
+        ? "Verify your email to use this feature."
+        : err instanceof Error
+          ? err.message
+          : "Could not generate adaptive practice.";
+      if (isEmailNotVerifiedError(err)) {
+        setShowVerifyEmailModal(true);
+      }
+      setError(message);
+    } finally {
+      requestInFlightRef.current = false;
+      setStartingAdaptive(false);
+    }
+  }, [applyAdaptiveSession, note]);
+
+  const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
+  const adaptiveQuizActive = Boolean(
+    adaptiveQuiz?.sessionId
+    && adaptiveQuiz.status === "IN_PROGRESS"
+    && quizStarted
+    && hasQuestions
+    && !isComplete
+    && !completionTracked
+    && !error,
+  );
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: adaptiveQuizActive,
     fallbackHref: noteDetailHref,
@@ -205,6 +303,12 @@ export default function AdaptivePracticePage() {
       }
       await forfeitAdaptivePracticeSession(adaptiveQuiz.sessionId);
     },
+  });
+  const { LeaveQuizModal: GenerationLockModal } = useQuizSessionGuard({
+    active: adaptiveGenerationLocked,
+    fallbackHref: noteDetailHref,
+    onConfirmLeave: () => undefined,
+    blockWithoutConfirmation: true,
   });
 
   const handleSelectChoice = (choiceIndex: number) => {
@@ -255,6 +359,10 @@ export default function AdaptivePracticePage() {
         )}
       </div>
 
+      {adaptiveGenerationLocked ? (
+        <QuizGenerationOverlay />
+      ) : null}
+
       {loading ? (
         <AdaptivePracticeLoading />
       ) : error ? (
@@ -262,7 +370,7 @@ export default function AdaptivePracticePage() {
           <h1 className="text-2xl font-semibold">Could not generate adaptive practice</h1>
           <p className="text-sm text-foreground/75">{error}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()}>
+            <Button type="button" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz(true)}>
               Try Again
             </Button>
           </div>
@@ -282,7 +390,25 @@ export default function AdaptivePracticePage() {
             </Button>
           </div>
         </Card>
-      ) : !adaptiveQuiz || !hasQuestions ? (
+      ) : adaptiveQuiz?.status === "FAILED" ? (
+        <Card className="space-y-4 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Adaptive Practice
+          </p>
+          <h1 className="text-xl font-semibold sm:text-2xl">Could not generate adaptive practice</h1>
+          <p className="text-sm text-foreground/75">
+            {adaptiveQuiz.message}
+          </p>
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={() => void handleStartAdaptivePractice()}
+            disabled={adaptiveGenerationLocked}
+          >
+            {adaptiveGenerationLocked ? "Starting..." : "Try Again"}
+          </Button>
+        </Card>
+      ) : !adaptiveQuiz || (!hasQuestions && adaptiveQuiz.weakConcepts.length === 0) ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Adaptive Practice
@@ -297,7 +423,7 @@ export default function AdaptivePracticePage() {
             </Button>
           </Link>
         </Card>
-      ) : !quizStarted ? (
+      ) : !hasQuestions || !quizStarted ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Adaptive Practice
@@ -323,12 +449,10 @@ export default function AdaptivePracticePage() {
           <Button
             type="button"
             className="w-full sm:w-auto"
-            onClick={() => {
-              setQuizStarted(true);
-              setSessionStartedAt(Date.now());
-            }}
+            onClick={() => void handleStartAdaptivePractice()}
+            disabled={adaptiveGenerationLocked}
           >
-            Start Adaptive Practice
+            {adaptiveGenerationLocked ? "Starting..." : "Start Adaptive Practice"}
           </Button>
         </Card>
       ) : isComplete ? (
@@ -356,8 +480,13 @@ export default function AdaptivePracticePage() {
             </div>
           ) : null}
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="button" className="w-full sm:w-auto" onClick={() => void loadAdaptiveQuiz()} disabled={loading}>
-              Generate New Set
+            <Button
+              type="button"
+              className="w-full sm:w-auto"
+              onClick={() => void handleStartAdaptivePractice()}
+              disabled={adaptiveGenerationLocked}
+            >
+              {adaptiveGenerationLocked ? "Starting..." : "Generate New Set"}
             </Button>
           </div>
           <div className="pt-1">
@@ -428,6 +557,7 @@ export default function AdaptivePracticePage() {
         onClose={() => setShowVerifyEmailModal(false)}
       />
       <LeaveQuizModal />
+      <GenerationLockModal />
     </main>
   );
 }

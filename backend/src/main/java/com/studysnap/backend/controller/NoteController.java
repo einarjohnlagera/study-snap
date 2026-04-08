@@ -4,8 +4,6 @@ import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
-import com.studysnap.backend.dto.CreateStudyPackRequest;
-import com.studysnap.backend.dto.StudyPackResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
@@ -94,13 +92,14 @@ public class NoteController {
 
     @PostMapping("/{id}/generate")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
-    public StudyPackResponse generate(
+    public NoteResponse generate(
             @PathVariable String id,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
-        return studyPackService.createFromText(new CreateStudyPackRequest(null, id), userId);
+        studyPackService.startAsyncGenerationFromNote(id, userId);
+        return noteService.getById(id, userId);
     }
 
     @GetMapping("/{id}")
@@ -248,6 +247,17 @@ public class NoteController {
         authService.requireEmailVerified(userId);
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return quickReviewAdaptivePracticeService.generateAdaptiveQuiz(studyPackId, userId);
+    }
+
+    @GetMapping("/{id}/adaptive-practice/in-progress")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuickReviewAdaptiveQuizResponse getInProgressAdaptivePractice(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
+        return quickReviewAdaptivePracticeService.getAdaptiveQuizSession(studyPackId, userId);
     }
 
     @PostMapping("/{id}/visibility")

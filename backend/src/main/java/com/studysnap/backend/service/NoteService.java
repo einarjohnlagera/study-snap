@@ -50,6 +50,8 @@ public class NoteService {
     private static final int CONTENT_PREVIEW_MAX_LENGTH = 180;
     private static final int SUMMARY_PREVIEW_MAX_LENGTH = 180;
     private static final String STUDY_PACK_STATUS_DRAFT = "DRAFT";
+    private static final String STUDY_PACK_STATUS_GENERATING = "GENERATING";
+    private static final String STUDY_PACK_STATUS_FAILED = "FAILED";
     private static final String STUDY_PACK_STATUS_READY = "STUDY_PACK_READY";
     private static final String DEFAULT_PUBLIC_SUBJECT_SLUG = "general";
     private static final String DEFAULT_PUBLIC_TITLE_SLUG = "untitled-note";
@@ -557,6 +559,12 @@ public class NoteService {
         NoteStatus noteStatus = resolveStatus(note);
         if (noteStatus == NoteStatus.GENERATED) {
             return STUDY_PACK_STATUS_READY;
+        }
+        if (noteStatus == NoteStatus.GENERATING) {
+            return STUDY_PACK_STATUS_GENERATING;
+        }
+        if (noteStatus == NoteStatus.FAILED) {
+            return STUDY_PACK_STATUS_FAILED;
         }
         if (studyPack == null) {
             return STUDY_PACK_STATUS_DRAFT;

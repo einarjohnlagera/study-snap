@@ -27,9 +27,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -76,6 +81,12 @@ class StudyPackServiceTest {
     private AiRateLimitService aiRateLimitService;
 
     private StudyPackService studyPackService;
+    private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
+        @Override
+        public <T> T execute(TransactionCallback<T> action) throws TransactionException {
+            return action.doInTransaction(new SimpleTransactionStatus());
+        }
+    };
 
     @BeforeEach
     void setUp() {
@@ -94,7 +105,9 @@ class StudyPackServiceTest {
                 studyPackUsageService,
                 ocrRateLimitService,
                 ocrUsageProtectionService,
-                aiRateLimitService
+                aiRateLimitService,
+                TEST_TRANSACTION_OPERATIONS,
+                new StudyPackGenerationTaskDispatcher(Runnable::run)
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -301,7 +314,9 @@ class StudyPackServiceTest {
                 studyPackUsageService,
                 ocrRateLimitService,
                 ocrUsageProtectionService,
-                aiRateLimitService
+                aiRateLimitService,
+                TEST_TRANSACTION_OPERATIONS,
+                new StudyPackGenerationTaskDispatcher(Runnable::run)
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -348,6 +363,74 @@ class StudyPackServiceTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("LLM unavailable");
 
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+        verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_marksNoteGeneratingAndDefersLlmWork() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        List<Runnable> generationTasks = new ArrayList<>();
+        studyPackService = new StudyPackService(
+                studyPackRepository,
+                studyPackDraftRepository,
+                noteRepository,
+                userRepository,
+                ocrService,
+                llmStudyPackService,
+                new StudySnapProperties(),
+                activityTrackingService,
+                analyticsService,
+                subscriptionService,
+                userUsageService,
+                studyPackUsageService,
+                ocrRateLimitService,
+                ocrUsageProtectionService,
+                aiRateLimitService,
+                TEST_TRANSACTION_OPERATIONS,
+                new StudyPackGenerationTaskDispatcher(generationTasks::add)
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.GENERATING);
+        assertThat(generationTasks).hasSize(1);
+        verify(llmStudyPackService, never()).generateStudyPack(any(), any());
+        verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_marksFailedAndDoesNotConsumeCreditWhenWorkerFails() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenThrow(new RuntimeException("LLM unavailable"));
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        assertThat(draftNote.getStatus()).isEqualTo(NoteStatus.FAILED);
         verify(userUsageService, never()).incrementStudyPackGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
     }

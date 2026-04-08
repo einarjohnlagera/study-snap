@@ -15,6 +15,7 @@ type QuizSessionGuardOptions = {
   fallbackHref: string;
   onConfirmLeave: () => Promise<void> | void;
   onBeforeRouteLeave?: () => void;
+  blockWithoutConfirmation?: boolean;
 };
 
 type QuizSessionGuardResult = {
@@ -27,6 +28,7 @@ export function useQuizSessionGuard({
   fallbackHref,
   onConfirmLeave,
   onBeforeRouteLeave,
+  blockWithoutConfirmation = false,
 }: QuizSessionGuardOptions): QuizSessionGuardResult {
   const router = useRouter();
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
@@ -42,10 +44,13 @@ export function useQuizSessionGuard({
 
   const requestLeave = useCallback((targetHref?: string) => {
     onBeforeRouteLeave?.();
+    if (blockWithoutConfirmation) {
+      return;
+    }
     setPendingHref(targetHref ?? fallbackHref);
     setLeaveError(null);
     setShowLeaveDialog(true);
-  }, [fallbackHref, onBeforeRouteLeave]);
+  }, [blockWithoutConfirmation, fallbackHref, onBeforeRouteLeave]);
 
   useEffect(() => {
     if (!active) {
@@ -55,6 +60,9 @@ export function useQuizSessionGuard({
 
     const openLeaveDialog = (targetHref?: string) => {
       onBeforeRouteLeave?.();
+      if (blockWithoutConfirmation) {
+        return;
+      }
       if (showLeaveDialogRef.current) {
         return;
       }
@@ -115,7 +123,7 @@ export function useQuizSessionGuard({
       globalThis.removeEventListener("popstate", handlePopState);
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [active, fallbackHref, onBeforeRouteLeave]);
+  }, [active, blockWithoutConfirmation, fallbackHref, onBeforeRouteLeave]);
 
   const handleConfirmLeave = useCallback(async () => {
     if (leaving) {

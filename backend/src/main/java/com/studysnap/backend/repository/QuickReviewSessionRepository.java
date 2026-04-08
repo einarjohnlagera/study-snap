@@ -61,6 +61,13 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             QuickReviewSessionStatus status
     );
 
+    Optional<QuickReviewSessionEntity> findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+            UUID userId,
+            UUID studyPackId,
+            QuickReviewSessionMode sessionMode,
+            Collection<QuickReviewSessionStatus> statuses
+    );
+
     @Deprecated
     Optional<QuickReviewSessionEntity> findTopByUserIdAndStudyPackIdAndStatusOrderByCreatedAtDesc(
             UUID userId,
@@ -92,6 +99,14 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     long countByUserIdAndSessionModeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
             UUID userId,
             QuickReviewSessionMode sessionMode,
+            OffsetDateTime createdAtStart,
+            OffsetDateTime createdAtEnd
+    );
+
+    long countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+            UUID userId,
+            QuickReviewSessionMode sessionMode,
+            Collection<QuickReviewSessionStatus> statuses,
             OffsetDateTime createdAtStart,
             OffsetDateTime createdAtEnd
     );

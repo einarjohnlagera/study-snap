@@ -92,6 +92,8 @@ NoteLib uses a note-first model.
 - Study Pack is the generated enhancement state of a Note.
 - A Note can be:
   - `Draft` (user-authored content only)
+  - `Generating` (Study Pack generation queued/running)
+  - `Failed` (last generation attempt failed without persisted Study Pack output)
   - `Study Pack Ready` (generated content exists)
 - A Note also has visibility:
   - `PRIVATE`
@@ -268,16 +270,19 @@ Profile Type does not affect:
 Recommended flow:
 
 1. validate note ownership and input size
-2. if image input: OCR detect/extract
-3. if OCR low confidence: return confirmation draft payload
-4. normalize note text
-5. build LLM prompt
-6. call LLM
-7. parse and schema-validate JSON
-8. run one repair pass on validation failure
-9. persist validated generated output linked to Note
-10. set Note state to `Study Pack Ready`
-11. return generated payload
+2. set note state to `Generating`
+3. return Note Detail payload so the frontend can redirect immediately
+4. run generation in the background
+5. if image input: OCR detect/extract
+6. if OCR low confidence: return confirmation draft payload
+7. normalize note text
+8. build LLM prompt
+9. call LLM
+10. parse and schema-validate JSON
+11. run one repair pass on validation failure
+12. persist validated generated output linked to Note
+13. set Note state to `Study Pack Ready`
+14. on failure, set Note state to `Failed` and do not increment usage
 
 Default post-generation presentation stays on the unified note detail route:
 
@@ -293,6 +298,7 @@ Notes:
 - `PUT /api/notes/{id}` (update note content/metadata)
 - `GET /api/notes/{id}` (unified note detail payload: note content + generated fields + quiz availability flags)
 - `POST /api/notes/{id}/generate` (generate Study Pack for this note)
+- returns immediately after queueing note-owned generation; Note Detail observes `Generating` / `Study Pack Ready` / `Failed`
 - `POST /api/notes/{id}/copy` (make a copy)
 - `POST /api/notes/{id}/visibility` (set `PUBLIC` or `PRIVATE`)
 - `POST /api/notes/{id}/quick-review/start`
@@ -482,6 +488,9 @@ Required backend behavior:
 Study Pack generation architecture:
 
 - generation remains note-first and uses the same persisted note content
+- note-owned generation is asynchronous: Note Detail observes status with light polling rather than keeping the user on the editor.
+- usage increments only after a Study Pack row is successfully persisted.
+- failed generation leaves the note saved, marks status `Failed`, and allows retry without refund/usage side effects.
 - backend generation context may carry:
   - `learnerLevel`
   - note `courseProgram` with user-profile fallback
