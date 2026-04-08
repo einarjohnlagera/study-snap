@@ -527,8 +527,13 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 ### Challenge Quiz — Exam Mode Rule
 
 - Challenge Quiz must behave as an exam: **no correctness feedback during answering**.
+- Board Exam Mode is the explicit strict-exam presentation of the Challenge Quiz engine for Premium-capable sessions; it must show `Board Exam Mode` and `Start Board Exam`.
+- Free/recommended-difficulty Challenge Quiz sessions must keep limited Challenge Quiz access and may show Board Exam Mode as a locked Premium enhancement instead of making Challenge Quiz Premium-only.
 - Do not render "Correct" / "Incorrect" labels, green/red highlights, or explanations while the quiz is in progress.
 - Selected answers show a neutral exam-style visual state (blue border/background) only.
+- Question-number navigation during Board Exam Mode may show current/answered/unanswered states, but must not reveal correctness.
+- Board Exam timers must start from persisted session state and survive refresh/reload without resetting; timer expiry must auto-submit.
+- Browser fullscreen/focus entry is best effort only; a denied fullscreen request must not block starting or resuming the exam.
 - The Challenge Quiz start screen must disable difficulty controls and the Start button immediately after Start is clicked.
 - Duplicate Challenge Quiz start requests must be blocked while quiz initialization is in flight.
 - All result calculations (score, performance level, concept breakdown, weak concepts) must be derived from quiz session data — **no LLM calls for statistics**.

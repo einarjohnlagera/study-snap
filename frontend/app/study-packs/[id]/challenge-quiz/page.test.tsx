@@ -62,6 +62,10 @@ describe("ChallengeQuizPage", () => {
     (updateChallengeQuizSessionProgress as jest.Mock).mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   function setupInProgressChallengeQuiz() {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PREMIUM",
@@ -118,6 +122,220 @@ describe("ChallengeQuizPage", () => {
       },
     });
   }
+
+  function setupChallengePrestart(difficultySelectionAvailable = true) {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: difficultySelectionAvailable ? "PREMIUM" : "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: ["cells"],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: ["Concept"],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: null,
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 0,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: difficultySelectionAvailable ? 50 : 5,
+      difficultySelectionAvailable,
+      selectedDifficulty: "medium",
+      quiz: [],
+      currentQuestionIndex: 0,
+      sessionState: {},
+    });
+  }
+
+  function setupBoardExamSession(options: {
+    currentQuestionIndex?: number;
+    selectedChoices?: Record<string, number>;
+    timerStartedAtEpochSeconds?: number;
+  } = {}) {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Board Exam Note",
+      subject: "Biology",
+      tags: ["cells"],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: ["Cell Biology"],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      title: "Board Exam Note",
+      totalQuestions: 2,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 50,
+      difficultySelectionAvailable: true,
+      selectedDifficulty: "medium",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Cell Biology",
+          explanation: "Mitochondria produce ATP.",
+        },
+        {
+          question: "What protects the plant cell?",
+          choices: ["Cell wall", "Mitochondria", "Nucleus", "Ribosome"],
+          correctIndex: 0,
+          concept: "Cell Structure",
+          explanation: "The cell wall protects plant cells.",
+        },
+      ],
+      currentQuestionIndex: options.currentQuestionIndex ?? 0,
+      sessionState: {
+        selectedChoices: options.selectedChoices ?? {},
+        timerStartedAtEpochSeconds: options.timerStartedAtEpochSeconds ?? Math.floor(Date.now() / 1000),
+      },
+    });
+  }
+
+  it("shows Board Exam Mode setup for Premium users", async () => {
+    setupChallengePrestart(true);
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Board Exam Mode" })).toBeInTheDocument();
+    expect(screen.getByText("Strict exam simulation for Challenge Note. Results appear only after submission.")).toBeInTheDocument();
+    expect(screen.getByText("12 questions for the selected difficulty.")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Mode rules:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Board Exam" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Challenge Quiz" })).not.toBeInTheDocument();
+  });
+
+  it("keeps recommended Challenge Quiz entry for Free users and shows Board Exam Mode as locked", async () => {
+    setupChallengePrestart(false);
+
+    render(<ChallengeQuizPage />);
+
+    await screen.findByText("Challenge Quiz");
+
+    expect(screen.getByText("Board Exam Mode")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unlock Board Exam Mode" })).toBeInTheDocument();
+    expect(screen.getByText("Auto-selected from your recent performance.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Challenge Quiz" })).toBeInTheDocument();
+  });
+
+  it("keeps Board Exam answers neutral and allows question navigation", async () => {
+    setupBoardExamSession();
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
+
+    expect(screen.queryByText(/Correct/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Incorrect/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Mitochondria produce ATP/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to question 2 (unanswered)" }));
+
+    expect(screen.getByText("What protects the plant cell?")).toBeInTheDocument();
+    expect(screen.getByText("1 answered")).toBeInTheDocument();
+  });
+
+  it("resumes Board Exam timer, question index, and answer state from session state", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_120_000);
+    setupBoardExamSession({
+      currentQuestionIndex: 1,
+      selectedChoices: { "0": 0 },
+      timerStartedAtEpochSeconds: 1_720_000_000,
+    });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByText("What protects the plant cell?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Exam timer")).toHaveTextContent("08:00");
+    expect(screen.getByText("1 answered")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go to question 1 (answered)" })).toBeInTheDocument();
+
+    nowSpy.mockRestore();
+  });
+
+  it("auto-submits Board Exam when the timer expires", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_601_000);
+    setupBoardExamSession({
+      selectedChoices: { "0": 0 },
+      timerStartedAtEpochSeconds: 1_720_000_000,
+    });
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 2,
+      correctAnswers: 1,
+      scorePercentage: 50,
+      performanceLevel: "Fair",
+      conceptBreakdown: [
+        { concept: "Cell Biology", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 },
+        { concept: "Cell Structure", correctAnswers: 0, totalQuestions: 1, accuracyPercentage: 0 },
+      ],
+      weakConcepts: ["Cell Structure"],
+      durationSeconds: 600,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:10:00Z",
+    });
+
+    render(<ChallengeQuizPage />);
+
+    await waitFor(() => {
+      expect(completeChallengeQuizSession).toHaveBeenCalledWith("session-1", {
+        correctAnswers: 1,
+        totalQuestions: 2,
+        durationSeconds: 600,
+      });
+    });
+    expect(await screen.findByText("Board Exam Result")).toBeInTheDocument();
+    expect(screen.getByText("Time ran out. Your answers were submitted automatically.")).toBeInTheDocument();
+
+    nowSpy.mockRestore();
+  });
 
   it("loads note/session once and does not loop initialization calls", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -177,7 +395,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    await screen.findByText("Challenge Quiz in progress");
+    await screen.findByText("Board Exam Mode in progress");
     await waitFor(() => {
       expect(getNote).toHaveBeenCalledTimes(1);
       expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(1);
@@ -207,7 +425,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    await screen.findByText("Challenge Quiz in progress");
+    await screen.findByText("Board Exam Mode in progress");
     const dashboardLink = document.createElement("a");
     dashboardLink.href = "/dashboard";
     dashboardLink.textContent = "Dashboard";
@@ -333,7 +551,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(hardButton);
     expect(hardButton).toHaveClass("border-blue-500");
 
-    const startButton = screen.getByRole("button", { name: "Start Challenge Quiz" });
+    const startButton = screen.getByRole("button", { name: "Start Board Exam" });
     fireEvent.click(startButton);
     fireEvent.click(startButton);
 
@@ -348,7 +566,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
     expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
     expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
-    expect(screen.getByText("Preparing your Challenge Quiz...")).toBeInTheDocument();
+    expect(screen.getByText("Preparing your Board Exam Mode...")).toBeInTheDocument();
   });
 
   it("shows the first-quiz completion banner after completing the first challenge quiz", async () => {
@@ -515,7 +733,7 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
-    await screen.findByText("Challenge Quiz Result");
+    await screen.findByText("Board Exam Result");
 
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
   });
@@ -596,7 +814,7 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
-    await screen.findByText("Challenge Quiz Result");
+    await screen.findByText("Board Exam Result");
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
     expect(screen.getByText("No weak concepts identified in this challenge. Review your answers or start another challenge when ready.")).toBeInTheDocument();
@@ -680,7 +898,7 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
-    await screen.findByText("Challenge Quiz Result");
+    await screen.findByText("Board Exam Result");
     fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
 
     const review = screen.getByLabelText("Answer review");
