@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
 import {
   createStudyPackFromNote,
@@ -8,6 +8,7 @@ import {
   getChallengeQuizPerformanceSummary,
   getMe,
   getNote,
+  getMyStudyPack,
   getQuickReviewPerformanceSummary,
   listCoursePrograms,
   listSubjects,
@@ -114,6 +115,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
+    (getMyStudyPack as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
@@ -181,10 +183,24 @@ describe("PrivateNoteDetailPageClient", () => {
       message: "You're on the list! We'll notify you when Premium launches.",
     });
     (createStudyPackFromNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "GENERATING",
+      studyPackId: null,
+      quickReviewAvailable: false,
+      challengeQuizAvailable: false,
+      adaptivePracticeAvailable: false,
+    });
+    (getMyStudyPack as jest.Mock).mockResolvedValue({
+      id: "sp-1",
+      noteId: "note-1",
       title: "Suggested Title",
       subject: "Biology",
       tags: ["cells"],
     });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it("routes Edit to note editor for draft note", async () => {
@@ -308,7 +324,9 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByText("Step 2: Generate your Study Pack")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Generate Study Pack" }).at(-1) as HTMLButtonElement);
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Generate Study Pack" }).at(-1) as HTMLButtonElement);
+    });
 
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
   });
@@ -350,7 +368,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
   });
 
-  it("routes board exam note generation to quiz view after creating a Study Pack", async () => {
+  it("shows the generating state immediately after starting generation from note detail", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       planType: "FREE",
@@ -358,71 +376,127 @@ describe("PrivateNoteDetailPageClient", () => {
       profileType: "BOARD_EXAM",
       productOnboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
-    (getNote as jest.Mock).mockResolvedValue({
-      ...baseNote,
-      title: "",
-      subject: null,
-      tags: [],
-      studyPackStatus: "DRAFT",
-    });
-    (updateNote as jest.Mock).mockResolvedValue({
-      ...baseNote,
-      title: "Suggested Title",
-      subject: "Biology",
-      tags: ["cells"],
-      studyPackStatus: "STUDY_PACK_READY",
-    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
-    expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
+    const generateButton = await screen.findByRole("button", { name: "Generate Study Pack" });
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
 
     await waitFor(() => {
-      expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=quiz");
+      expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
     });
+    expect(await screen.findByText("Your Study Pack is being generated...")).toBeInTheDocument();
+    expect(screen.getByText("Building your Study Pack...")).toBeInTheDocument();
   });
 
-  it("shows metadata suggestions after generating from note detail when the note already has metadata", async () => {
+  it("polls a generating Study Pack until ready, then shows metadata suggestions and stops polling", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       planType: "FREE",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
       profileType: "STUDENT",
     });
-    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+    (getNote as jest.Mock)
+      .mockResolvedValueOnce({ ...baseNote, studyPackStatus: "DRAFT" })
+      .mockResolvedValueOnce({
+        ...baseNote,
+        studyPackStatus: "STUDY_PACK_READY",
+        studyPackId: "sp-1",
+        quickReviewAvailable: true,
+        challengeQuizAvailable: true,
+        summary: "Generated summary",
+        keyConcepts: ["Cells"],
+        quiz: [],
+      });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+    const generateButton = await screen.findByRole("button", { name: "Generate Study Pack" });
+    jest.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+    expect(await screen.findByText("Your Study Pack is being generated...")).toBeInTheDocument();
 
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
 
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
     });
+    const getNoteCallsAfterReady = (getNote as jest.Mock).mock.calls.length;
+    await act(async () => {
+      jest.advanceTimersByTime(6000);
+    });
+    expect(getNote).toHaveBeenCalledTimes(getNoteCallsAfterReady);
+    jest.useRealTimers();
   });
 
-  it("applies selected AI metadata choices from note detail without clearing course/program", async () => {
+  it("shows a recoverable failure state and retries generation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       planType: "FREE",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
       profileType: "STUDENT",
     });
-    (getNote as jest.Mock).mockResolvedValue({
-      ...baseNote,
-      title: "My Note",
-      subject: "General Science",
-      tags: ["review"],
-      studyPackStatus: "DRAFT",
-    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "FAILED" });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+    expect(await screen.findByText("We couldn't generate the Study Pack this time.")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Retry Generate" })[0]);
+    });
+
+    await waitFor(() => {
+      expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
+    });
+    expect(await screen.findByText("Your Study Pack is being generated...")).toBeInTheDocument();
+  });
+
+  it("applies selected AI metadata choices from note detail after async generation completes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getNote as jest.Mock)
+      .mockResolvedValueOnce({
+        ...baseNote,
+        title: "My Note",
+        subject: "General Science",
+        tags: ["review"],
+        studyPackStatus: "DRAFT",
+      })
+      .mockResolvedValueOnce({
+        ...baseNote,
+        title: "My Note",
+        subject: "General Science",
+        tags: ["review"],
+        studyPackStatus: "STUDY_PACK_READY",
+        studyPackId: "sp-1",
+        quickReviewAvailable: true,
+        challengeQuizAvailable: true,
+      });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    const generateButton = await screen.findByRole("button", { name: "Generate Study Pack" });
+    jest.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(generateButton);
+    });
+    expect(await screen.findByText("Your Study Pack is being generated...")).toBeInTheDocument();
+    await act(async () => {
+      jest.advanceTimersByTime(3000);
+    });
 
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Use AI Subject"));
@@ -438,6 +512,7 @@ describe("PrivateNoteDetailPageClient", () => {
       }));
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
     });
+    jest.useRealTimers();
   });
 
   it("shows the premium monthly-limit modal when Generate is clicked at the premium limit", async () => {

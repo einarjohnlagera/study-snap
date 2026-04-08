@@ -67,11 +67,14 @@ Create mode:
 
 - route: `/notes/new`
 - actions: `Save`, `Generate Study Pack`
+- `Generate Study Pack` first saves the note, queues Study Pack generation, then redirects immediately to Note Detail with the requested default tab.
+- the editor must not wait for the LLM request to finish before navigation.
 
 Edit mode for draft notes:
 
 - route: `/notes/{id}/edit`
 - actions: `Save Changes`, `Cancel`, `Generate Study Pack`
+- `Generate Study Pack` saves the latest draft, queues generation, and redirects immediately to Note Detail.
 
 Edit mode for Study Pack Ready notes:
 
@@ -99,3 +102,4 @@ Rules:
 - compare `Your` value versus `AI` value for each field
 - show tags as chips, not inside long action labels
 - include a live preview of the final metadata before applying changes
+- because generation is asynchronous from the Note Editor, the suggestion modal appears from Note Detail after the queued Study Pack becomes ready.

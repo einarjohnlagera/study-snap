@@ -9,6 +9,18 @@ export function getNoteStateMeta(status: NoteStudyPackStatus) {
       className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
     };
   }
+  if (status === "GENERATING") {
+    return {
+      label: "Generating",
+      className: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+    };
+  }
+  if (status === "FAILED") {
+    return {
+      label: "Generation Failed",
+      className: "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+    };
+  }
 
   return {
     label: "Draft",

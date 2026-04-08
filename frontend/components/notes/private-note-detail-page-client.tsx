@@ -50,6 +50,7 @@ import {
   type ChallengeQuizPerformanceSummaryResponse,
   type LearnerLevel,
   type NoteResponse,
+  type NoteStudyPackStatus,
   type NoteVisibility,
   type QuickReviewPerformanceSummaryResponse,
 } from "@/lib/api";
@@ -72,13 +73,37 @@ import {
   type NoteDetailTab,
 } from "@/lib/note-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
+import {
+  STUDY_PACK_GENERATION_MESSAGE_ROTATION_MS,
+  STUDY_PACK_GENERATION_POLL_INTERVAL_MS,
+  resolveStudyPackGenerationMessage,
+} from "@/lib/study-pack-generation";
 import Link from "next/link";
 
-function stateChip(status: "DRAFT" | "STUDY_PACK_READY") {
+function stateChip(status: NoteStudyPackStatus) {
   if (status === "STUDY_PACK_READY") {
     return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   }
+  if (status === "GENERATING") {
+    return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  }
+  if (status === "FAILED") {
+    return "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300";
+  }
   return "border-border bg-muted/50 text-foreground/70";
+}
+
+function stateLabel(status: NoteStudyPackStatus) {
+  if (status === "STUDY_PACK_READY") {
+    return "Study Pack";
+  }
+  if (status === "GENERATING") {
+    return "Generating";
+  }
+  if (status === "FAILED") {
+    return "Generation Failed";
+  }
+  return "Draft";
 }
 
 function visibilityChip(visibility: NoteVisibility) {
@@ -119,6 +144,59 @@ type PendingSuggestion = {
   tags: string[];
 };
 
+function StudyPackGeneratingCard({ message }: Readonly<{ message: string }>) {
+  return (
+    <Card className="space-y-4 border-blue-500/30 bg-blue-500/5 p-4 sm:p-6">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+          Study Pack generation
+        </p>
+        <h2 className="text-lg font-semibold sm:text-xl">Your Study Pack is being generated...</h2>
+        <p className="text-sm text-foreground/80">{message}</p>
+        <p className="text-sm text-foreground/70">
+          This may take a little while depending on note length. You can stay here while the page checks for updates.
+        </p>
+      </div>
+      <div className="space-y-2" aria-hidden="true">
+        <div className="h-4 w-2/3 animate-pulse rounded bg-blue-500/15" />
+        <div className="h-4 w-full animate-pulse rounded bg-blue-500/15" />
+        <div className="h-4 w-5/6 animate-pulse rounded bg-blue-500/15" />
+      </div>
+    </Card>
+  );
+}
+
+function StudyPackFailureCard({
+  retrying,
+  onRetry,
+}: Readonly<{
+  retrying: boolean;
+  onRetry: () => void;
+}>) {
+  return (
+    <Card className="space-y-4 border-red-500/30 bg-red-500/5 p-4 sm:p-6">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
+          Study Pack generation
+        </p>
+        <h2 className="text-lg font-semibold sm:text-xl">We couldn&apos;t generate the Study Pack this time.</h2>
+        <p className="text-sm text-foreground/80">
+          Your note is saved. You can try generating again when you&apos;re ready.
+        </p>
+      </div>
+      <ResponsiveActionButton
+        type="button"
+        className="w-full sm:w-auto"
+        onClick={onRetry}
+        disabled={retrying}
+        action="studyPack"
+        label={retrying ? "Retrying..." : "Retry Generate"}
+        showTextOnMobile
+      />
+    </Card>
+  );
+}
+
 export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDetailPageClientProps>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -127,6 +205,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const latestSearchQueryRef = useRef(searchParams.toString());
   const autoGenerateHandledRef = useRef(false);
   const autoEditHandledRef = useRef(false);
+  const awaitingGeneratedMetadataSuggestionRef = useRef(false);
+  const suggestedStudyPackIdRef = useRef<string | null>(null);
 
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
@@ -155,6 +235,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [showQuickReviewGuide, setShowQuickReviewGuide] = useState(false);
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
+  const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
@@ -183,6 +264,29 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
 
+  const maybeShowGeneratedMetadataSuggestion = useCallback(async (loadedNote: NoteResponse) => {
+    if (!awaitingGeneratedMetadataSuggestionRef.current || loadedNote.studyPackStatus !== "STUDY_PACK_READY" || !loadedNote.studyPackId) {
+      return;
+    }
+    if (suggestedStudyPackIdRef.current === loadedNote.studyPackId) {
+      return;
+    }
+
+    suggestedStudyPackIdRef.current = loadedNote.studyPackId;
+    awaitingGeneratedMetadataSuggestionRef.current = false;
+    try {
+      const generated = await getMyStudyPack(loadedNote.studyPackId);
+      setPendingSuggestion({
+        noteId: loadedNote.id,
+        title: generated.title,
+        subject: generated.subject ?? null,
+        tags: generated.tags ?? [],
+      });
+    } catch {
+      setToast("Study Pack generated successfully.");
+    }
+  }, []);
+
   useEffect(() => {
     latestSearchQueryRef.current = searchParams.toString();
   }, [searchParams]);
@@ -202,6 +306,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     try {
       const loadedNote = await getNote(normalizedRouteId);
       setNote(loadedNote);
+      void maybeShowGeneratedMetadataSuggestion(loadedNote);
 
       if (!loadedNote.quickReviewAvailable) {
         setQuickSummary(null);
@@ -232,7 +337,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setLoading(false);
     }
-  }, [normalizedRouteId, pathname, router]);
+  }, [maybeShowGeneratedMetadataSuggestion, normalizedRouteId, pathname, router]);
 
   useEffect(() => {
     void loadDetail();
@@ -339,7 +444,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     const created = searchParams.get("created") === "1";
     const copied = searchParams.get("copied") === "1";
     const saved = searchParams.get("saved") === "1";
-    if (!created && !copied && !saved) {
+    const generationQueued = searchParams.get("generating") === "1";
+    if (generationQueued) {
+      awaitingGeneratedMetadataSuggestionRef.current = true;
+    }
+    if (!created && !copied && !saved && !generationQueued) {
       return;
     }
 
@@ -355,6 +464,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     next.delete("created");
     next.delete("copied");
     next.delete("saved");
+    next.delete("generating");
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname);
   }, [pathname, router, searchParams]);
 
@@ -370,7 +480,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     });
   }, [isInlineMetadataEditMode, note]);
 
-  const isDraft = note?.studyPackStatus !== "STUDY_PACK_READY";
+  const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
+  const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
+  const isGeneratingStudyPack = studyPackStatus === "GENERATING";
+  const hasGenerationFailed = studyPackStatus === "FAILED";
+  const canGenerateStudyPack = studyPackStatus === "DRAFT" || hasGenerationFailed;
+  const isDraft = !isStudyPackReady;
+  const generationMessage = resolveStudyPackGenerationMessage(generationMessageIndex);
+  const pollingNoteId = note?.id ?? null;
   const title = note?.title?.trim() || "Untitled note";
   const tags = note?.tags ?? [];
   const courseProgramLabel = normalizeCourseProgram(note?.courseProgram);
@@ -404,6 +521,59 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     ),
     [courseProgramSuggestions, metadataDraft.courseProgram, note?.courseProgram],
   );
+
+  useEffect(() => {
+    if (!isGeneratingStudyPack) {
+      setGenerationMessageIndex(0);
+      return;
+    }
+
+    const intervalId = globalThis.setInterval(() => {
+      setGenerationMessageIndex((previous) => previous + 1);
+    }, STUDY_PACK_GENERATION_MESSAGE_ROTATION_MS);
+
+    return () => {
+      globalThis.clearInterval(intervalId);
+    };
+  }, [isGeneratingStudyPack]);
+
+  useEffect(() => {
+    if (!pollingNoteId || !isGeneratingStudyPack) {
+      return;
+    }
+
+    let active = true;
+    const poll = async () => {
+      try {
+        const loadedNote = await getNote(pollingNoteId);
+        if (!active) {
+          return;
+        }
+        setNote(loadedNote);
+        if (loadedNote.studyPackStatus === "STUDY_PACK_READY") {
+          void refreshUsageSummary();
+          void maybeShowGeneratedMetadataSuggestion(loadedNote);
+          setToast("Study Pack generated successfully.");
+          return;
+        }
+        if (loadedNote.studyPackStatus === "FAILED") {
+          setToast("Study Pack generation did not complete. Your note is saved.");
+        }
+      } catch {
+        // Keep the current generating state. The next poll can recover.
+      }
+    };
+
+    const intervalId = globalThis.setInterval(() => {
+      void poll();
+    }, STUDY_PACK_GENERATION_POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      globalThis.clearInterval(intervalId);
+    };
+  }, [isGeneratingStudyPack, maybeShowGeneratedMetadataSuggestion, pollingNoteId, refreshUsageSummary]);
+
   const openPaywallModal = useCallback((variant: PaywallModalVariant, source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -481,7 +651,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [isEmailVerified, note, togglingVisibility, visibility]);
 
   const handleGenerate = useCallback(async () => {
-    if (!note || generating || !isDraft) {
+    if (!note || generating || !canGenerateStudyPack) {
       return;
     }
     if (!isEmailVerified) {
@@ -495,19 +665,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
     setGenerating(true);
     try {
-      const generated = await createStudyPackFromNote(note.id);
-      await refreshUsageSummary();
-      const authUser = getAuthUser();
-      if (authUser && firstStudyStep === "saved-note") {
-        setFirstStudyOnboardingStep(authUser.id, "study-pack-ready");
-        setFirstStudyStep("study-pack-ready");
-      }
-      setPendingSuggestion({
-        noteId: note.id,
-        title: generated.title,
-        subject: generated.subject ?? null,
-        tags: generated.tags ?? [],
-      });
+      awaitingGeneratedMetadataSuggestionRef.current = true;
+      const queued = await createStudyPackFromNote(note.id);
+      setNote(queued);
+      setToast("Study Pack generation started.");
     } catch (err) {
       if (isEmailNotVerifiedError(err)) {
         setToast("Email verification is required before generating Study Packs.");
@@ -524,10 +685,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setGenerating(false);
     }
   }, [
-    firstStudyStep,
+    canGenerateStudyPack,
     generating,
     hasReachedStudyPackLimit,
-    isDraft,
     isEmailVerified,
     note,
     openStudyPackLimitModal,
@@ -536,7 +696,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   useEffect(() => {
     const shouldAutoGenerate = searchParams.get("generate") === "1";
-    if (!shouldAutoGenerate || autoGenerateHandledRef.current || !note || !isDraft) {
+    if (!shouldAutoGenerate || autoGenerateHandledRef.current || !note || !canGenerateStudyPack) {
       return;
     }
 
@@ -545,7 +705,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     next.delete("generate");
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
     void handleGenerate();
-  }, [handleGenerate, isDraft, note, pathname, router, searchParams]);
+  }, [canGenerateStudyPack, handleGenerate, note, pathname, router, searchParams]);
 
   useEffect(() => {
     const shouldAutoEdit = searchParams.get("edit") === "1";
@@ -955,8 +1115,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(isDraft ? "DRAFT" : "STUDY_PACK_READY")}`}>
-                    {isDraft ? "Draft" : "Study Pack"}
+                  <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${stateChip(studyPackStatus)}`}>
+                    {stateLabel(studyPackStatus)}
                   </span>
                   {isInlineMetadataEditMode ? (
                     <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${visibilityChip(visibility)}`}>
@@ -1012,7 +1172,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   </>
                 ) : (
                   <>
-                    <ResponsiveActionButton type="button" variant="outline" size="sm" onClick={handleEdit} action="edit" label="Edit" />
+                    <ResponsiveActionButton type="button" variant="outline" size="sm" onClick={handleEdit} disabled={isGeneratingStudyPack} action="edit" label="Edit" />
                     <ResponsiveActionButton
                       type="button"
                       variant="outline"
@@ -1125,6 +1285,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <p className="text-xs text-foreground/70">
                 Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.
               </p>
+            ) : isGeneratingStudyPack ? (
+              <p className="text-xs text-foreground/70">
+                Your note is saved. NoteLib is generating the Study Pack in the background.
+              </p>
+            ) : hasGenerationFailed ? (
+              <p className="text-xs text-foreground/70">
+                Generation did not complete. Your note is saved and ready to retry.
+              </p>
             ) : isDraft ? (
               <p className="text-xs text-foreground/70">
                 Generating locks this note to preserve its Study Pack. Need changes later? Use Make a Copy.
@@ -1133,8 +1301,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             {!isInlineMetadataEditMode ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  {isDraft ? (
-                    <ResponsiveActionButton type="button" onClick={() => void handleGenerate()} disabled={generating || !isEmailVerified} action="studyPack" label={generating ? "Generating..." : "Generate Study Pack"} showTextOnMobile />
+                  {isGeneratingStudyPack ? (
+                    <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />
+                  ) : canGenerateStudyPack ? (
+                    <ResponsiveActionButton
+                      type="button"
+                      onClick={() => void handleGenerate()}
+                      disabled={generating || !isEmailVerified}
+                      action="studyPack"
+                      label={generating ? "Generating..." : hasGenerationFailed ? "Retry Generate" : "Generate Study Pack"}
+                      showTextOnMobile
+                    />
                   ) : (
                     <>
                       <ResponsiveActionButton type="button" onClick={() => void handleStartQuickReview()} action="quickReview" label="Start Quick Review" showTextOnMobile />
@@ -1153,6 +1330,19 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             ) : null}
           </Card>
 
+          {isGeneratingStudyPack ? (
+            <StudyPackGeneratingCard message={generationMessage} />
+          ) : null}
+
+          {hasGenerationFailed ? (
+            <StudyPackFailureCard
+              retrying={generating}
+              onRetry={() => {
+                void handleGenerate();
+              }}
+            />
+          ) : null}
+
           <Card className="space-y-3 p-4 sm:p-6">
             <NoteDetailTabs
               activeTab={activeStudyPackTab}
@@ -1166,7 +1356,15 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
           {activeStudyPackTab === "summary" ? (
             <NoteDetailSummaryCard
-              summary={isDraft ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide." : (note.summary ?? "No summary available.")}
+              summary={
+                isGeneratingStudyPack
+                  ? "Your Study Pack is being generated. The summary will appear here when it is ready."
+                  : hasGenerationFailed
+                    ? "We couldn't generate the Study Pack this time. Your note is saved, and you can retry generation."
+                    : isDraft
+                      ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide."
+                      : (note.summary ?? "No summary available.")
+              }
               onViewFullNotes={() => handleChangeStudyPackTab("full-notes")}
             />
           ) : null}
@@ -1174,7 +1372,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           {activeStudyPackTab === "key-concepts" ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
-              {isDraft || note.keyConcepts.length === 0 ? (
+              {isGeneratingStudyPack ? (
+                <p className="text-sm text-foreground/75">Key concepts are being generated from your note.</p>
+              ) : hasGenerationFailed ? (
+                <p className="text-sm text-foreground/75">Generation did not complete, so key concepts are not available yet. Retry Generate when you are ready.</p>
+              ) : isDraft || note.keyConcepts.length === 0 ? (
                 <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
               ) : (
                 <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
@@ -1187,7 +1389,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           ) : null}
 
           {activeStudyPackTab === "quiz" ? (
-            isDraft ? (
+            isGeneratingStudyPack ? (
+              <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
+                <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
+                <p className="text-sm text-foreground/75">Practice questions are being generated from your note.</p>
+              </Card>
+            ) : hasGenerationFailed ? (
+              <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
+                <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
+                <p className="text-sm text-foreground/75">Generation did not complete, so the quiz is not available yet. Retry Generate when you are ready.</p>
+              </Card>
+            ) : isDraft ? (
               <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
                 <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
                 <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
@@ -1212,7 +1424,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
           <Card className="space-y-3 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
-            {isDraft ? (
+            {isGeneratingStudyPack ? (
+              <p className="text-sm text-foreground/75">Performance will appear after the Study Pack is ready and you complete a quiz.</p>
+            ) : hasGenerationFailed ? (
+              <p className="text-sm text-foreground/75">Performance is unavailable because generation did not complete.</p>
+            ) : isDraft ? (
               <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">

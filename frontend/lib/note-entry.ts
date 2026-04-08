@@ -63,6 +63,15 @@ export function buildGeneratedNoteDetailPath(noteId: string, tab: NoteDetailTab)
   return `/notes/${noteId}?${searchParams.toString()}`;
 }
 
+export function buildGeneratingNoteDetailPath(noteId: string, tab: NoteDetailTab): string {
+  const searchParams = new URLSearchParams({
+    from: "notes",
+    generating: "1",
+    tab,
+  });
+  return `/notes/${noteId}?${searchParams.toString()}`;
+}
+
 export function buildNoteDetailPathWithTab(
   noteId: string,
   tab: NoteDetailTab,

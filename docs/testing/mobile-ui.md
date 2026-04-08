@@ -16,6 +16,9 @@ Verify these cases on mobile-sized viewports:
 - the four-tab row remains scrollable/readable on mobile instead of becoming cramped
 - `Full Notes` remains readable on mobile for long note bodies
 - Note Editor mobile Generate CTA stays centered and readable
+- after tapping Generate in Note Editor, mobile users are redirected to Note Detail instead of waiting on the editor
+- Note Detail `GENERATING` and `FAILED` Study Pack states stay readable on mobile, including `Retry Generate`
+- Study Pack generation loading messages are calm, short, and do not crowd the tab content on mobile
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA
 - mobile sticky CTA area stays compact and does not consume excessive vertical space
 - back navigation links (`← Library`, `← Note`, etc.) are compact and do not push the header too far down on mobile
@@ -37,6 +40,7 @@ Verify these cases on mobile-sized viewports:
 - Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.
 - Quality badges (⭐ High Quality, 🔥 Popular) appear below the title and wrap cleanly without breaking the card layout on mobile — at most 2 badges are visible per card.
 - Challenge Quiz exam phase: answer choices are fully tappable, fill the card width, and show no correctness hints on mobile
+- Challenge Quiz start screen disables difficulty and Start controls immediately after Start is tapped
 - Quick Review, Challenge Quiz, and Adaptive Practice active sessions show a tappable `Leave Quiz` action on mobile
 - the `Leave quiz?` modal remains readable on mobile and stacks `Stay` / `Leave Quiz` actions cleanly
 - mobile route/back/refresh attempts during an active quiz show the same leave-confirmation or browser warning behavior as desktop

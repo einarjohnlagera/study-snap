@@ -46,6 +46,8 @@ Core loop:
 - Study Pack is generated content attached to a Note.
 - A Note has state:
   - `DRAFT`
+  - `GENERATING`
+  - `FAILED`
   - `STUDY_PACK_READY`
 - A Note also has visibility:
   - `PRIVATE`
@@ -87,6 +89,14 @@ Core loop:
 - Study Pack usage increments only after a successful Study Pack is persisted.
 - Saving a note, opening generation surfaces, failed generations, and failed retries must not consume Study Pack quota.
 - Frontend warning/blocking surfaces should use `GET /api/me/plan` remaining values and must not recalculate quota from local note lists.
+
+### Async Study Pack Generation Rule
+
+- Note-owned Study Pack generation must save the note first, mark it `GENERATING`, and redirect the user to Note Detail immediately.
+- Note Detail owns generation observation: show a clear `GENERATING` state, friendly loading copy, and light polling until `STUDY_PACK_READY` or `FAILED`.
+- `FAILED` must keep note content safe, show a friendly recovery message, and expose `Retry Generate`.
+- Retry generation must reuse the saved note content and must not consume Study Pack quota unless a Study Pack is successfully persisted.
+- Create/Edit Note should not keep users blocked on the editor while the LLM request runs.
 
 ### Marketing Landing Page Rule
 
@@ -515,6 +525,8 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Challenge Quiz must behave as an exam: **no correctness feedback during answering**.
 - Do not render "Correct" / "Incorrect" labels, green/red highlights, or explanations while the quiz is in progress.
 - Selected answers show a neutral exam-style visual state (blue border/background) only.
+- The Challenge Quiz start screen must disable difficulty controls and the Start button immediately after Start is clicked.
+- Duplicate Challenge Quiz start requests must be blocked while quiz initialization is in flight.
 - All result calculations (score, performance level, concept breakdown, weak concepts) must be derived from quiz session data — **no LLM calls for statistics**.
 - Use the utility functions in `lib/challenge-quiz-results.ts` for testable result computation.
 - Performance level thresholds: 90–100 → Excellent, 75–89 → Good, 50–74 → Fair, 0–49 → Needs Improvement.

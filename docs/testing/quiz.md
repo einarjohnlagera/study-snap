@@ -14,6 +14,9 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
 - selected choice shows neutral exam-style highlight (blue border) only
+- after `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
+- after `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
+- double-clicking Start does not create duplicate Challenge Quiz start requests
 - "Answers are graded only after submission." hint is visible during the quiz
 - Previous / Next navigation maintains all previously selected answers
 - Submit button appears only on the last question; Previous is disabled on the first question

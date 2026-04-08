@@ -114,6 +114,7 @@ export default function ChallengeQuizPage() {
     currentIndex: 0,
     selectedChoices: {},
   });
+  const startInFlightRef = useRef(false);
   const weakConceptsRef = useRef<HTMLDivElement | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
@@ -385,7 +386,7 @@ export default function ChallengeQuizPage() {
   }, [persistLatestProgress, phase]);
 
   const handleStartChallenge = useCallback(async () => {
-    if (!note || starting) {
+    if (!note || startInFlightRef.current) {
       return;
     }
     if (!isEmailVerified) {
@@ -394,6 +395,7 @@ export default function ChallengeQuizPage() {
       return;
     }
 
+    startInFlightRef.current = true;
     setStarting(true);
     setError(null);
     try {
@@ -421,9 +423,10 @@ export default function ChallengeQuizPage() {
         openLockedFeaturePaywall("challenge-quiz-limit", "challenge_quiz_start");
       }
     } finally {
+      startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, starting]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty]);
 
   const handleRetry = () => {
     setChallengeSession(null);
@@ -527,7 +530,12 @@ export default function ChallengeQuizPage() {
                         ? "border-blue-500 bg-blue-500/10 text-foreground"
                         : "border-border bg-background"
                     }`}
-                    onClick={() => setSelectedDifficulty(difficulty)}
+                    onClick={() => {
+                      if (!starting) {
+                        setSelectedDifficulty(difficulty);
+                      }
+                    }}
+                    disabled={starting}
                   >
                     {difficulty}
                   </button>
@@ -542,12 +550,16 @@ export default function ChallengeQuizPage() {
                   type="button"
                   variant="outline"
                   onClick={() => openLockedFeaturePaywall("difficulty-selection", "challenge_quiz_difficulty_button")}
+                  disabled={starting}
                 >
                   Choose Difficulty (Premium)
                 </Button>
               </div>
             )}
           </div>
+          {starting ? (
+            <p className="text-sm text-foreground/75">Preparing your Challenge Quiz...</p>
+          ) : null}
           <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
             <p>Rules:</p>
             <ul className="mt-2 list-disc space-y-1 pl-5">

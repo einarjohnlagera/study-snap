@@ -32,6 +32,32 @@ function toFormattedDate(value: string | null | undefined) {
   return timestamp.toLocaleString();
 }
 
+function getStatusLabel(item: NoteListItemResponse, readyStatusLabel: string, draftStatusLabel: string) {
+  if (item.studyPackStatus === "STUDY_PACK_READY") {
+    return readyStatusLabel;
+  }
+  if (item.studyPackStatus === "GENERATING") {
+    return "Generating";
+  }
+  if (item.studyPackStatus === "FAILED") {
+    return "Generation Failed";
+  }
+  return draftStatusLabel;
+}
+
+function getStatusClassName(item: NoteListItemResponse) {
+  if (item.studyPackStatus === "STUDY_PACK_READY") {
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  }
+  if (item.studyPackStatus === "GENERATING") {
+    return "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  }
+  if (item.studyPackStatus === "FAILED") {
+    return "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300";
+  }
+  return "border-border bg-muted/50 text-foreground/70";
+}
+
 export function StudyPackGrid({
   notes,
   totalNotes,
@@ -61,13 +87,9 @@ export function StudyPackGrid({
                   {item.subject?.trim() || "No subject"}
                 </p>
                 <span
-                  className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${
-                    item.studyPackStatus === "STUDY_PACK_READY"
-                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                      : "border-border bg-muted/50 text-foreground/70"
-                  }`}
+                  className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-medium ${getStatusClassName(item)}`}
                 >
-                  {item.studyPackStatus === "STUDY_PACK_READY" ? readyStatusLabel : draftStatusLabel}
+                  {getStatusLabel(item, readyStatusLabel, draftStatusLabel)}
                 </span>
                 <p className="text-sm leading-relaxed text-foreground/75">
                   {toPreview(item.contentPreview)}

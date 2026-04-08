@@ -707,7 +707,7 @@ export type NoteResponse = {
   difficultySelectionAvailable: boolean;
 };
 
-export type NoteStudyPackStatus = "DRAFT" | "STUDY_PACK_READY";
+export type NoteStudyPackStatus = "DRAFT" | "GENERATING" | "FAILED" | "STUDY_PACK_READY";
 export type NoteVisibility = "PRIVATE" | "PUBLIC";
 export type SubjectSuggestionScope = "mine" | "public";
 export type CourseProgramSuggestionScope = "mine" | "public";
@@ -1258,7 +1258,7 @@ export async function createStudyPackFromText(notesText: string): Promise<StudyP
   return payload;
 }
 
-export async function createStudyPackFromNote(noteId: string): Promise<StudyPackResponse> {
+export async function createStudyPackFromNote(noteId: string): Promise<NoteResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/generate`,
     {
@@ -1267,7 +1267,7 @@ export async function createStudyPackFromNote(noteId: string): Promise<StudyPack
     },
     true,
   );
-  return parseApiResponse<StudyPackResponse>(
+  return parseApiResponse<NoteResponse>(
     response,
     "We could not generate your study pack right now. Please try again.",
   );

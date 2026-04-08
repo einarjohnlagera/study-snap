@@ -30,6 +30,8 @@ Shared ownership model:
 - learner-level aware, defaulting to `College` when missing
 - question count adapts by recent Quick Review performance
 - should not repeat the Study Pack / Quick Review question set
+- the start screen must disable difficulty controls and the Start button immediately after `Start Challenge Quiz` is clicked.
+- duplicate starts must be prevented while the start request is in flight.
 - quantitative notes may produce computation or formula-based questions
 - explanations should be tutor-style and step-based for computation questions
 

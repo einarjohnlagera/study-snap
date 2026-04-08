@@ -23,6 +23,8 @@ Note-first model:
 Note states:
 
 - `Draft` (no AI-generated content yet)
+- `Generating` (Study Pack generation is running in the background)
+- `Failed` (last Study Pack generation attempt did not complete)
 - `Study Pack Ready` (AI-generated content exists)
 - visibility: `PRIVATE` or `PUBLIC`
 
@@ -65,11 +67,12 @@ This supports iterative learning and avoids accidental overwrites.
 1. User creates or saves a Note.
 2. Note is stored in the system.
 3. User clicks `Generate Study Pack`.
-4. AI generates summary, key concepts, and quizzes.
-5. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice.
-6. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
-7. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
-8. Public notes can be copied into Library as new Draft notes.
+4. NoteLib redirects the user to Note Detail while generation runs asynchronously.
+5. Note Detail shows `Generating`, then either `Study Pack Ready` or `Failed`.
+6. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice when the Study Pack is ready.
+7. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
+8. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
+9. Public notes can be copied into Library as new Draft notes.
 
 ## Architecture Overview
 
@@ -301,6 +304,9 @@ Favicon requirements:
   - `STUDENT` -> open `tab=summary`
   - `BOARD_EXAM` -> open `tab=quiz`
   - `TEACHER` -> open `tab=quiz`
+- Generate saves the note first, marks it `Generating`, starts background generation, and redirects immediately to Note Detail.
+- Note Detail polls lightly while generation is active and stops when the status is `Study Pack Ready` or `Failed`.
+- Failed generation shows a friendly recovery state with `Retry Generate`; the note content remains saved.
 - Entry modes reuse the same note pipeline:
   - `/notes/new` -> normal note creation
   - `/notes/new?mode=quiz` -> quiz-first flow
@@ -794,6 +800,7 @@ Page responsibilities:
 - `Create Note` and `Note Detail` are both valid Study Pack generation entry points for draft notes.
 - Both generation entry points must use the same metadata-suggestion behavior for AI-generated `title`, `subject`, and `tags`.
 - Generated metadata must never silently overwrite user-entered `title` or `subject`.
+- Create Note hands off to Note Detail during asynchronous generation; the suggestion modal appears there after the Study Pack becomes ready.
 - After generation, users should see the shared suggestion review modal with per-field choices:
   - `Title` -> `Keep My Title` or `Use AI Title`
   - `Subject` -> `Keep My Subject` or `Use AI Subject`

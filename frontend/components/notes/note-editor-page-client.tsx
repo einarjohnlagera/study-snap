@@ -46,7 +46,7 @@ import {
   type FirstStudyOnboardingStep,
 } from "@/lib/first-study-onboarding";
 import {
-  buildGeneratedNoteDetailPath,
+  buildGeneratingNoteDetailPath,
   resolveGeneratedNoteTab,
   type NoteEntryMode,
   type NoteEntrySource,
@@ -492,7 +492,7 @@ export function NoteEditorPageClient({
 
   const finalizeGenerationRedirect = useCallback((noteIdToOpen: string) => {
     const tab = resolveGeneratedNoteTab(currentProfileType, initialMode, initialSource);
-    router.push(buildGeneratedNoteDetailPath(noteIdToOpen, tab));
+    router.push(buildGeneratingNoteDetailPath(noteIdToOpen, tab));
   }, [currentProfileType, initialMode, initialSource, router]);
 
   const handleGenerate = useCallback(async () => {
@@ -515,15 +515,9 @@ export function NoteEditorPageClient({
         return;
       }
 
-      const generated = await createStudyPackFromNote(saved.id);
-      await refreshUsageSummary();
-
-      setPendingSuggestion({
-        noteId: saved.id,
-        title: generated.title,
-        subject: generated.subject ?? null,
-        tags: generated.tags ?? [],
-      });
+      const queued = await createStudyPackFromNote(saved.id);
+      setStudyPackStatus(queued.studyPackStatus ?? "GENERATING");
+      finalizeGenerationRedirect(saved.id);
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
         showToast("Email verification is required before generating Study Packs.", "info");
@@ -541,6 +535,7 @@ export function NoteEditorPageClient({
     }
   }, [
     contentEmpty,
+    finalizeGenerationRedirect,
     hasReachedStudyPackLimit,
     isEmailVerified,
     isGenerating,

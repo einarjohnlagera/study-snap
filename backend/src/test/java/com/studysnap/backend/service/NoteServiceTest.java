@@ -120,6 +120,26 @@ class NoteServiceTest {
     }
 
     @Test
+    void getById_mapsTransientGenerationStatuses() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity generatingNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATING, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(generatingNote));
+        when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
+
+        NoteResponse generating = noteService.getById(noteId.toString(), ownerUserId);
+
+        assertThat(generating.studyPackStatus()).isEqualTo("GENERATING");
+
+        NoteEntity failedNote = buildNote(noteId, ownerUserId, NoteStatus.FAILED, NoteVisibility.PRIVATE, "content");
+        when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(failedNote));
+
+        NoteResponse failed = noteService.getById(noteId.toString(), ownerUserId);
+
+        assertThat(failed.studyPackStatus()).isEqualTo("FAILED");
+    }
+
+    @Test
     void create_reusesCanonicalSubjectFormattingWhenEquivalentSubjectAlreadyExists() {
         UUID ownerUserId = UUID.randomUUID();
         when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));

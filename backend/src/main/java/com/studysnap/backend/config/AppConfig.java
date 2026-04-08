@@ -7,6 +7,9 @@ import org.springframework.core.task.TaskExecutor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionOperations;
+import org.springframework.transaction.support.TransactionTemplate;
 import com.studysnap.backend.security.SecurityProperties;
 
 import java.time.Clock;
@@ -28,6 +31,24 @@ public class AppConfig {
         executor.setQueueCapacity(500);
         executor.initialize();
         return executor;
+    }
+
+    @Bean
+    public TaskExecutor studyPackGenerationTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("study-pack-generation-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(3);
+        executor.setQueueCapacity(100);
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean
+    public TransactionOperations studyPackGenerationTransactionOperations(
+            PlatformTransactionManager transactionManager
+    ) {
+        return new TransactionTemplate(transactionManager);
     }
 
     @Bean

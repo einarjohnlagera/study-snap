@@ -182,11 +182,30 @@ Errors should remain supportive and actionable.
 - Study Pack quota only increments after a successful Study Pack is saved.
 - Failed generation attempts, note saves, opening generation surfaces, and failed retries must not consume Study Pack quota.
 
+## Async note generation flow
+
+For note-owned Study Pack generation:
+
+1. Note Editor saves the note first.
+2. `POST /notes/{id}/generate` marks the note as `GENERATING` and starts background Study Pack generation.
+3. The frontend redirects immediately to Note Detail.
+4. Note Detail observes generation state with light polling.
+5. Successful generation persists the Study Pack, increments usage, and maps the note to `STUDY_PACK_READY`.
+6. Failed generation maps the note to `FAILED`, keeps the note content safe, does not increment usage, and exposes `Retry Generate`.
+
+User-facing generation statuses:
+
+- `DRAFT`: no Study Pack has been generated yet.
+- `GENERATING`: generation is running in the background.
+- `STUDY_PACK_READY`: generated summary, key concepts, and quiz are available.
+- `FAILED`: generation did not complete and can be retried from Note Detail.
+
 ## Metadata suggestion parity
 
 - Create Note and Note Detail must use the same metadata suggestion behavior after successful generation.
 - Generated `title`, `subject`, and `tags` should be suggested from both entry points.
 - Generated metadata must not silently overwrite user-entered `title` or `subject`.
+- Note Editor generation is asynchronous, so Create Note hands off to Note Detail and the suggestion modal opens there once generation reaches `STUDY_PACK_READY`.
 - The shared AI suggestion modal should support:
   - `Title` -> `Keep My Title` or `Use AI Title`
   - `Subject` -> `Keep My Subject` or `Use AI Subject`
