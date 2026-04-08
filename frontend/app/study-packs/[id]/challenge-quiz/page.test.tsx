@@ -346,6 +346,8 @@ describe("ChallengeQuizPage", () => {
     expect(hardButton).toBeDisabled();
     expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
     expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
+    expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
+    expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
     expect(screen.getByText("Preparing your Challenge Quiz...")).toBeInTheDocument();
   });
 

@@ -569,10 +569,7 @@ export default function ChallengeQuizPage() {
       </div>
 
       {challengeGenerationLocked ? (
-        <QuizGenerationOverlay
-          title="Generating your quiz..."
-          message="Preparing your questions..."
-        />
+        <QuizGenerationOverlay />
       ) : null}
 
       {loading ? (
