@@ -4,11 +4,10 @@ import {
   BookOpen,
   Brain,
   FileText,
-  Globe,
   Library,
-  ListChecks,
   Sparkles,
   Target,
+  Trophy,
 } from "lucide-react";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
@@ -58,62 +57,103 @@ export const metadata: Metadata = {
 
 const howItWorksSteps = [
   {
-    title: "Create a Note",
-    description: "Paste notes, upload images, or write directly.",
+    title: "Add notes",
+    description: "Paste class notes, upload reviewers, or write directly into your workspace.",
     icon: FileText,
   },
   {
-    title: "Build Your Library",
-    description: "Organize notes by subject and tags.",
-    icon: Library,
-  },
-  {
-    title: "Generate Study Pack",
-    description: "Get summary, key concepts, and quiz.",
+    title: "Generate study pack",
+    description: "Turn one saved note into a summary, key concepts, and quiz material when review starts.",
     icon: Sparkles,
   },
   {
-    title: "Review & Practice",
-    description: "Use Quick Review, Challenge Quiz, and Adaptive Practice.",
-    icon: Brain,
+    title: "Test yourself",
+    description: "Use Challenge Quiz and Board Exam Mode to practice active recall instead of passive rereading.",
+    icon: Trophy,
   },
 ];
 
-const libraryHighlights = [
+const featureCards = [
   {
-    title: "Notes library first",
-    description: "Keep subjects, tags, and study material in one place instead of generating one-off outputs.",
-    icon: BookOpen,
-  },
-  {
-    title: "Study Pack when ready",
-    description: "Turn saved notes into summaries, key concepts, and quizzes when you want to review.",
+    title: "Study Packs",
+    description: "Generate summary, key concepts, and quiz-ready material from the notes you already keep.",
     icon: Sparkles,
   },
   {
-    title: "Active recall built in",
-    description: "Move from reading to self-testing with quizzes, weak concepts, and focused practice.",
+    title: "Challenge Quiz",
+    description: "Run a flexible quiz session that helps you check understanding before the real exam.",
+    icon: Brain,
+  },
+  {
+    title: "Adaptive Practice",
+    description: "Premium weak-area follow-up that targets the concepts you keep missing.",
     icon: Target,
+    badge: "Premium",
+  },
+];
+
+const differentiationRows = [
+  {
+    label: "Starts from your own material",
+    generic: "Usually needs a fresh prompt every time.",
+    noteLib: "Keeps your notes in one place, then builds review tools from them.",
+  },
+  {
+    label: "Built for active recall",
+    generic: "Often stops at a single answer or summary.",
+    noteLib: "Moves from note to study pack to quiz practice in one workflow.",
+  },
+  {
+    label: "Exam-style practice",
+    generic: "Rarely feels like a real review session.",
+    noteLib: "Includes Challenge Quiz and Board Exam Mode for structured self-testing.",
+  },
+  {
+    label: "Designed for repeated review",
+    generic: "Outputs are easy to lose after one session.",
+    noteLib: "Your notes stay reusable, editable, and ready for the next review cycle.",
+  },
+];
+
+const targetUsers = [
+  {
+    title: "Students",
+    description: "Turn lecture notes and reviewers into summaries and quizzes before quizzes and major exams.",
+    icon: BookOpen,
+  },
+  {
+    title: "Board exam reviewees",
+    description: "Practice from your own notes with timed quizzes and Board Exam Mode sessions.",
+    icon: Trophy,
+  },
+  {
+    title: "Teachers and tutors",
+    description: "Convert lesson notes into structured review material students can revisit and test themselves on.",
+    icon: Library,
   },
 ];
 
 function HeroSection() {
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-border bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.94))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.12),_transparent_28%),linear-gradient(135deg,_rgba(2,6,23,0.96),_rgba(15,23,42,0.94))] sm:p-8 lg:p-10">
+    <section className="relative overflow-hidden rounded-[2rem] border border-sky-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.18),_transparent_30%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.96))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.16),_transparent_30%),linear-gradient(135deg,_rgba(2,6,23,0.96),_rgba(15,23,42,0.94))] sm:p-8 lg:p-10">
       <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="space-y-5">
-          <BrandFullLogo width={220} height={48} priority />
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-background/85 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
-            Notes library + study workspace
+          <BrandFullLogo width={224} height={48} priority />
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-background/85 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+              Notes to active recall
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              Board Exam Mode · Free for a limited time
+            </span>
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Build your own library of notes. Turn them into summaries and quizzes when you&apos;re ready to
-              review.
+              Turn your notes into summaries, quizzes, and exam simulations
             </h1>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              NoteLib helps you organize your notes, generate summaries, extract key concepts, and practice with
-              quizzes all in one study workspace.
+              Save your notes once, then turn them into Study Packs, Challenge Quizzes, and board-style practice that
+              helps you learn through active recall instead of passive rereading.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -123,65 +163,57 @@ function HeroSection() {
               eventType="LANDING_CTA_CLICKED"
               eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
             >
-              Get Started
+              Start for Free
+            </TrackedLink>
+            <TrackedLink
+              href="#how-it-works"
+              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+              eventType="LANDING_CTA_CLICKED"
+              eventMetadata={{ placement: "hero_secondary", destination: "#how-it-works" }}
+            >
+              See how it works
+            </TrackedLink>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-foreground/70">
+            <TrackedLink
+              href="/demo"
+              className="inline-flex items-center gap-2 font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+              eventType="LANDING_CTA_CLICKED"
+              eventMetadata={{ placement: "hero_demo", destination: "/demo" }}
+            >
+              Try demo access
+              <ArrowRight className="h-4 w-4" />
             </TrackedLink>
             <TrackedLink
               href="/public/library"
-              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+              className="inline-flex items-center gap-2 font-medium text-foreground/75 transition hover:text-foreground dark:text-foreground/75 dark:hover:text-foreground"
               eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_secondary", destination: "/public/library" }}
+              eventMetadata={{ placement: "hero_public_library", destination: "/public/library" }}
             >
-              View Public Library
+              Browse Public Library
+              <ArrowRight className="h-4 w-4" />
             </TrackedLink>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-foreground/70">
-            <span className="inline-flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              Save and organize notes by subject
-            </span>
-            <span className="inline-flex items-center gap-2">
-              <Brain className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              Practice with active recall
-            </span>
-          </div>
-          <TrackedLink
-            href="/demo"
-            className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
-            eventType="LANDING_CTA_CLICKED"
-            eventMetadata={{ placement: "hero_demo_link", destination: "/demo" }}
-          >
-            Try demo access
-            <ArrowRight className="h-4 w-4" />
-          </TrackedLink>
         </div>
 
-        <Card className="overflow-hidden border-sky-500/20 bg-background/90 p-0 shadow-lg backdrop-blur">
+        <Card className="overflow-hidden border-sky-500/20 bg-background/92 p-0 shadow-xl backdrop-blur">
           <div className="border-b border-border bg-muted/30 px-5 py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-              Inside your workspace
+              From note to exam practice
             </p>
             <p className="mt-1 text-sm text-foreground/75">
-              Build a reusable library of notes first, then switch into review mode when you need summaries,
-              key concepts, and practice.
+              NoteLib keeps your study material in one place, then turns it into a review workflow when you are ready
+              to test yourself.
             </p>
           </div>
           <div className="space-y-4 p-5">
             <div className="rounded-2xl border border-border bg-background p-4">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                    Notes library
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
-                      Med Surg
-                    </span>
-                    <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
-                      Pharmacology
-                    </span>
-                    <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5 text-sm font-medium">
-                      Board Review
-                    </span>
+                <div className="space-y-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Saved note</p>
+                  <div className="space-y-2 text-sm text-foreground/80">
+                    <p className="font-medium text-foreground">Cardiovascular Physiology</p>
+                    <p>Lecture notes, reviewer highlights, and exam reminders stay in one reusable note.</p>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3">
@@ -190,25 +222,23 @@ function HeroSection() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Note</span>
-              <ArrowRight className="h-4 w-4 text-sky-600 dark:text-sky-400" />
               <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Summary</span>
               <ArrowRight className="h-4 w-4 text-sky-600 dark:text-sky-400" />
               <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Key Concepts</span>
               <ArrowRight className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Quiz</span>
+              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Challenge Quiz</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Review modes</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Board Exam Mode</p>
                 <p className="mt-2 text-sm text-foreground/80">
-                  Quick Review, Challenge Quiz, and Adaptive Practice help you shift from reading to active recall.
+                  Stricter exam simulation with focused UI, delayed results, and timed practice.
                 </p>
               </div>
               <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Public Library</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Adaptive Practice</p>
                 <p className="mt-2 text-sm text-foreground/80">
-                  Discover public notes, copy useful reviewers, and share your own notes when you want to help others.
+                  Premium weak-area follow-up that keeps drilling the concepts you miss.
                 </p>
               </div>
             </div>
@@ -219,47 +249,14 @@ function HeroSection() {
   );
 }
 
-function WhatIsNoteLibSection() {
-  return (
-    <section className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-      <Card className="space-y-4 p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-          What Is NoteLib
-        </p>
-        <div className="space-y-3">
-          <CardTitle className="text-2xl sm:text-3xl">Your Notes. Your Library. Your Review Tool.</CardTitle>
-          <CardDescription className="text-sm leading-relaxed sm:text-base">
-            NoteLib is a study workspace where you build your own library of notes. When you&apos;re ready to review,
-            you can turn your notes into summaries, key concepts, and practice quizzes to test your understanding and
-            focus on weak areas.
-          </CardDescription>
-        </div>
-      </Card>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {libraryHighlights.map((item) => (
-          <Card key={item.title} className="space-y-4 p-5">
-            <item.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
-            <div className="space-y-2">
-              <CardTitle className="text-lg">{item.title}</CardTitle>
-              <CardDescription className="text-sm">{item.description}</CardDescription>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function HowItWorksSection() {
   return (
-    <section className="space-y-5">
+    <section id="how-it-works" className="space-y-5 scroll-mt-24">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-          How It Works
-        </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">From note capture to active recall in four steps</h2>
+        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">How It Works</p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Go from notes to self-testing in three steps</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         {howItWorksSteps.map((step, index) => (
           <Card key={step.title} className="space-y-4 p-5 sm:p-6">
             <div className="flex items-center justify-between">
@@ -279,79 +276,151 @@ function HowItWorksSection() {
   );
 }
 
-function PublicLibrarySection() {
+function FeaturesSection() {
   return (
-    <section className="rounded-[2rem] border border-border bg-[linear-gradient(135deg,_rgba(240,249,255,0.92),_rgba(255,255,255,0.98))] p-6 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(8,47,73,0.46),_rgba(15,23,42,0.95))] sm:p-8">
-      <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-            Public Library
-          </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Explore Public Notes and Reviewers</h2>
-          <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Browse public notes shared by other students and turn them into quizzes instantly. You can also share your
-            own notes to help others.
-          </p>
-          <div className="flex flex-wrap gap-3 text-sm text-foreground/75">
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1.5">
-              <Globe className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              Discover shared notes
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/80 px-3 py-1.5">
-              <ListChecks className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              Copy useful reviewers into your library
+    <section className="space-y-5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Features</p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for review, not just one-time AI output</h2>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <Card className="space-y-5 border-amber-500/20 bg-[linear-gradient(135deg,_rgba(255,251,235,0.95),_rgba(255,255,255,0.98))] p-6 dark:bg-[linear-gradient(135deg,_rgba(69,26,3,0.22),_rgba(15,23,42,0.94))]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                <Trophy className="h-3.5 w-3.5" />
+                Board Exam Mode
+              </div>
+              <CardTitle className="text-2xl">Practice in a stricter exam-style environment</CardTitle>
+              <CardDescription className="max-w-2xl text-sm leading-relaxed sm:text-base">
+                Use mixed-difficulty, timed sessions with delayed results and a more focused interface when you want a
+                realistic exam simulation.
+              </CardDescription>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              Free for a limited time
             </span>
           </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-background/90 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Mixed difficulty</p>
+              <p className="mt-2 text-sm text-foreground/80">A more realistic spread of questions for serious review sessions.</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background/90 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Results at the end</p>
+              <p className="mt-2 text-sm text-foreground/80">Stay focused while answering instead of seeing feedback after every choice.</p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background/90 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Exam-style flow</p>
+              <p className="mt-2 text-sm text-foreground/80">Cleaner in-session UI with timer pressure and limited distractions.</p>
+            </div>
+          </div>
+        </Card>
+
+        <div className="grid gap-4">
+          {featureCards.map((feature) => (
+            <Card key={feature.title} className="space-y-4 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <feature.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+                {feature.badge ? (
+                  <span className="inline-flex items-center rounded-full border border-border bg-muted/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-foreground/65">
+                    {feature.badge}
+                  </span>
+                ) : null}
+              </div>
+              <div className="space-y-2">
+                <CardTitle>{feature.title}</CardTitle>
+                <CardDescription className="text-sm">{feature.description}</CardDescription>
+              </div>
+            </Card>
+          ))}
         </div>
-        <TrackedLink
-          href="/public/library"
-          className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-          eventType="LANDING_CTA_CLICKED"
-          eventMetadata={{ placement: "public_library_section", destination: "/public/library" }}
-        >
-          Browse Public Library
-        </TrackedLink>
       </div>
     </section>
   );
 }
 
-function StudyMethodSection() {
+function DifferentiationSection() {
   return (
-    <section className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-      <Card className="space-y-4 p-6">
+    <section className="space-y-5">
+      <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-          Study Method
+          Why NoteLib
         </p>
-        <div className="space-y-3">
-          <CardTitle className="text-2xl sm:text-3xl">Study Smarter with Active Recall</CardTitle>
-          <CardDescription className="text-sm leading-relaxed sm:text-base">
-            NoteLib is built around active recall, a study method where you test yourself instead of just re-reading
-            notes. This helps you remember more and prepare better for exams and board exams.
-          </CardDescription>
+        <h2 className="text-2xl font-semibold sm:text-3xl">More useful than a generic AI answer box</h2>
+      </div>
+      <Card className="overflow-hidden p-0">
+        <div className="grid border-b border-border bg-muted/20 text-sm font-medium sm:grid-cols-[0.9fr_1fr_1fr]">
+          <div className="px-4 py-3 sm:px-6">What matters</div>
+          <div className="border-t border-border px-4 py-3 text-foreground/70 sm:border-l sm:border-t-0 sm:px-6">
+            Generic AI tools
+          </div>
+          <div className="border-t border-border bg-sky-500/8 px-4 py-3 sm:border-l sm:border-t-0 sm:px-6 dark:bg-sky-500/12">
+            NoteLib
+          </div>
+        </div>
+        {differentiationRows.map((row, index) => (
+          <div
+            key={row.label}
+            className={`grid text-sm sm:grid-cols-[0.9fr_1fr_1fr] ${index === differentiationRows.length - 1 ? "" : "border-b border-border"}`}
+          >
+            <div className="px-4 py-4 font-medium sm:px-6">{row.label}</div>
+            <div className="border-t border-border px-4 py-4 text-foreground/70 sm:border-l sm:border-t-0 sm:px-6">
+              {row.generic}
+            </div>
+            <div className="border-t border-border bg-sky-500/8 px-4 py-4 text-foreground sm:border-l sm:border-t-0 sm:px-6 dark:bg-sky-500/12">
+              {row.noteLib}
+            </div>
+          </div>
+        ))}
+      </Card>
+    </section>
+  );
+}
+
+function TargetUsersSection() {
+  return (
+    <section className="space-y-5">
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Who It&apos;s For</p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Made for learners who need more than passive notes</h2>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {targetUsers.map((user) => (
+          <Card key={user.title} className="space-y-4 p-5">
+            <user.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+            <div className="space-y-2">
+              <CardTitle>{user.title}</CardTitle>
+              <CardDescription className="text-sm">{user.description}</CardDescription>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PricingPreviewSection() {
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
+            Pricing Preview
+          </p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Start free, then upgrade when review gets serious</h2>
         </div>
         <TrackedLink
-          href="/learn"
-          className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+          href="/pricing"
+          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
           eventType="LANDING_CTA_CLICKED"
-          eventMetadata={{ placement: "study_method", destination: "/learn" }}
+          eventMetadata={{ placement: "pricing_preview", destination: "/pricing" }}
         >
-          Learn How to Study Using Active Recall
+          See full pricing
+          <ArrowRight className="h-4 w-4" />
         </TrackedLink>
-      </Card>
-      <Card className="space-y-4 p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Why this matters</p>
-        <div className="space-y-3 text-sm text-foreground/80">
-          <p>
-            Re-reading notes can feel productive without showing what you actually remember. Active recall closes that
-            gap by forcing your brain to retrieve information, not just recognize it.
-          </p>
-          <p>
-            NoteLib keeps that method practical by connecting your saved notes to summaries, key concepts, quiz
-            practice, and weak-area follow-up in the same workspace.
-          </p>
-        </div>
-      </Card>
+      </div>
+      <SimplePricingSection />
     </section>
   );
 }
@@ -364,7 +433,11 @@ function FinalCtaSection() {
           <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
             Start Today
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Start building your notes library today.</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Build a study system from the notes you already have.</h2>
+          <p className="mx-auto max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+            Turn saved notes into summaries, quizzes, and Board Exam Mode sessions that keep you reviewing with
+            purpose.
+          </p>
         </div>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <TrackedLink
@@ -373,15 +446,15 @@ function FinalCtaSection() {
             eventType="LANDING_CTA_CLICKED"
             eventMetadata={{ placement: "bottom_cta_primary", destination: "/signup" }}
           >
-            Get Started
+            Start for Free
           </TrackedLink>
           <TrackedLink
-            href="/public/library"
+            href="/pricing"
             className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
             eventType="LANDING_CTA_CLICKED"
-            eventMetadata={{ placement: "bottom_cta_secondary", destination: "/public/library" }}
+            eventMetadata={{ placement: "bottom_cta_secondary", destination: "/pricing" }}
           >
-            View Public Library
+            View Pricing
           </TrackedLink>
         </div>
       </div>
@@ -398,11 +471,11 @@ export default function Home() {
       />
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
-      <WhatIsNoteLibSection />
       <HowItWorksSection />
-      <PublicLibrarySection />
-      <StudyMethodSection />
-      <SimplePricingSection />
+      <FeaturesSection />
+      <DifferentiationSection />
+      <TargetUsersSection />
+      <PricingPreviewSection />
       <FinalCtaSection />
       <PublicFooter />
     </main>

@@ -1,108 +1,140 @@
 # landing.md - NoteLib Feature Context
 
-This document is the current landing-page source of truth for `v0.6.0 - Landing Revamp & Positioning`.
+This document is the landing-page source of truth for the current public marketing flow.
 
 ## Goal
 
-Explain NoteLib as a notes library and study workspace where users save notes first, then generate Study Packs when they are ready to review.
+Explain NoteLib in seconds, show why it is different from generic AI tools, and drive signups without feeling like a checkout page.
 
-Primary message:
+Landing-page goals:
 
-`Build your own library of notes. Turn them into summaries and quizzes when you're ready to review.`
+- explain the product quickly
+- position NoteLib as a note-to-study-pack workflow
+- make Board Exam Mode visible
+- keep the main CTA obvious
+- stay clean on mobile
 
 ## Product Positioning
 
-NoteLib should be framed as:
+NoteLib should still read as:
 
 - a notes library
-- a long-term study workspace
-- a place where notes become summaries, key concepts, and quizzes
-- a product built around active recall
+- a study workspace
+- a product that turns saved notes into active-recall review tools
 
-Do not frame NoteLib as only:
-
-- a quiz generator
-- a summarizer
-- a generic AI tool
-
-## Required Public Navigation
-
-Shared public navbar items:
-
-- `Home`
-- `Public Library`
-- `Learn`
-- `Pricing`
-- `Login`
-- `Get Started`
-- theme toggle
-
-Public navbar hierarchy:
-
-- navigation links should read as navigation, not buttons
-- `Get Started` is the primary CTA
-- `Login` is the secondary action
-- theme toggle is a utility control and should not sit inside the CTA stack
-- on mobile, keep the theme toggle in the header utility cluster and keep the opened menu panel focused on nav links plus `Login` and `Get Started`
-- do not duplicate the theme toggle or visible primary CTA between the header and the opened mobile menu
-
-Public Library must stay accessible without login.
-
-## Required Sections
-
-1. Hero
-2. What Is NoteLib
-3. How It Works
-4. Public Library
-5. Study Method / Learn CTA
-6. Pricing teaser
-7. Final CTA
+The public homepage may lead with summaries, quizzes, and exam simulations, but the supporting copy should still make it clear that the workflow starts from the user’s own notes.
 
 ## Hero
 
-- Headline: `Build your own library of notes. Turn them into summaries and quizzes when you're ready to review.`
-- Supporting copy should explain NoteLib as a notes library, study workspace, and review tool.
-- Primary CTA: `Get Started`
-- Secondary CTA: `View Public Library`
+Primary landing headline:
 
-## What Is NoteLib
+`Turn your notes into summaries, quizzes, and exam simulations`
 
-Title:
+Supporting copy should explain the active-learning benefit:
 
-`Your Notes. Your Library. Your Review Tool.`
+- notes are saved first
+- Study Packs and quizzes are generated when review starts
+- active recall is the value, not passive rereading
 
-Purpose:
+Hero CTA rules:
 
-- explain the note-first workflow
-- reinforce that users build a reusable library first
-- connect note storage to later review and quiz practice
+- primary CTA: `Start for Free`
+- secondary CTA: `See how it works`
+- supporting links may include demo access and Public Library discovery
+
+Board Exam Mode must be visible in the hero with:
+
+- `Board Exam Mode`
+- `Free for a limited time`
+
+## Required Landing Sections
+
+1. Hero
+2. How It Works
+3. Features
+4. Differentiation
+5. Target Users
+6. Pricing Preview
+7. Final CTA
 
 ## How It Works
 
-Use the shared 4-step explanation:
+Use the tighter 3-step explanation:
 
-1. `Create a Note`
-2. `Build Your Library`
-3. `Generate Study Pack`
-4. `Review & Practice`
+1. `Add notes`
+2. `Generate study pack`
+3. `Test yourself`
 
-## Public Library Section
+The third step should explicitly connect quiz practice and Board Exam Mode to active recall.
 
-- Public Library is a first-class discovery feature.
-- Section CTA should route to `/public/library`.
-- Messaging should explain that users can browse public notes, copy them into Library, and share their own notes later.
+## Features
 
-## Study Method Section
+Landing feature coverage should include:
 
-- Explain active recall in simple student terms.
-- Link to `/learn`.
-- Keep this section focused on why self-testing is more effective than rereading.
+- Study Packs
+- Challenge Quiz
+- Adaptive Practice (`Premium`)
+- Board Exam Mode
 
-## SEO Alignment
+Board Exam Mode should receive the strongest visual emphasis among feature cards because it is a key differentiator in the current release.
 
-- Landing copy, metadata, and Open Graph messaging should stay aligned.
-- Canonical landing title:
-  - `NoteLib — Build your notes library and turn notes into quizzes`
-- Canonical landing description:
-  - `NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.`
-- See `docs/features/seo.md` for metadata-specific rules.
+## Differentiation
+
+Landing should compare NoteLib against generic AI tools in practical terms:
+
+- one-off output vs reusable study workspace
+- generic prompt interaction vs note-based workflow
+- shallow answer generation vs structured quiz practice
+- no exam simulation vs Board Exam Mode
+
+The goal is not to attack generic AI tools, but to show why NoteLib fits repeated study better.
+
+## Target Users
+
+Landing should clearly call out ideal users such as:
+
+- students
+- board exam reviewees
+- teachers or tutors
+
+The copy should stay broad enough for the public homepage while still reflecting the strongest review use cases.
+
+## Pricing Preview
+
+Landing should preview Free vs Premium without becoming a payment page.
+
+Pricing preview rules:
+
+- show Free and Premium at a glance
+- keep Board Exam Mode visible in the preview
+- include a clear link to `/pricing`
+- keep upgrade language student-friendly and non-aggressive
+
+## Final CTA
+
+The bottom CTA should reinforce the core promise:
+
+- start from your own notes
+- turn them into structured review tools
+- begin for free
+
+Recommended primary action:
+
+- `Start for Free`
+
+Recommended secondary action:
+
+- `View Pricing`
+
+## Public Marketing Rules
+
+- Public navigation remains:
+  - `Home`
+  - `Public Library`
+  - `Learn`
+  - `Pricing`
+  - `Login`
+  - `Get Started`
+- Public Library must stay accessible without login
+- Demo access must remain available without signup
+- Landing metadata should remain aligned with NoteLib’s note-library-first SEO positioning even if the on-page hero becomes more conversion-forward
