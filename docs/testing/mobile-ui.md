@@ -40,10 +40,16 @@ Verify these cases on mobile-sized viewports:
 - Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.
 - Quality badges (⭐ High Quality, 🔥 Popular) appear below the title and wrap cleanly without breaking the card layout on mobile — at most 2 badges are visible per card.
 - Challenge Quiz exam phase: answer choices are fully tappable, fill the card width, and show no correctness hints on mobile
+- in-progress quiz screens use a compact sticky top bar under the app header instead of a tall stacked header block
+- Quick Review mobile top bar stays minimal: `Leave Quiz`, `Quick Review`, and compact progress only
+- Challenge Quiz and Board Exam mobile top bars keep timer visible without burying the question below bulky metadata
+- mobile in-progress quiz cards start with `Question X of Y` and keep the question text as the main visual focus
 - Board Exam Mode mode-card entry, `Board Exam setup` confirmation, timer, and question-number navigator remain readable and tappable on mobile without revealing correctness
 - mobile Challenge Quiz keeps the Question Navigator collapsed by default so the question and choices stay closer to the top of the screen
 - mobile Board Exam Mode keeps the Question Navigator collapsed by default for a less distracting exam surface
 - collapsed mobile Question Navigator summary shows current question and answered count and expands cleanly without pushing controls unpredictably
+- mobile Quick Review has no Question Navigator and keeps explanation + next-step controls readable without extra header noise
+- in-progress mobile quiz actions sit in a sticky bottom bar so `Next`, `Previous`, `Submit`, or `Finish Quick Review` stays reachable in the thumb zone
 - Challenge Quiz start screen disables difficulty and Start controls immediately after Start is tapped
 - Quick Review, Challenge Quiz, and Adaptive Practice active sessions show a tappable `Leave Quiz` action on mobile
 - the `Leave quiz?` modal remains readable on mobile and stacks `Stay` / `Leave Quiz` actions cleanly

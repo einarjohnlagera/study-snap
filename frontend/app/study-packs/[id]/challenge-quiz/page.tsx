@@ -845,26 +845,52 @@ export default function ChallengeQuizPage() {
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <div className="flex items-center justify-between gap-3">
-        {phase === "running" ? (
-          <>
-            {isBoardExamMode ? (
-              <div className="space-y-0.5">
-                <p className="text-sm font-medium text-foreground">Board Exam Mode</p>
-                <p className="text-xs text-foreground/65">Exam in progress. Navigation is limited to help you stay focused.</p>
-              </div>
-            ) : (
-              <p className="text-sm font-medium text-foreground/80">{quizModeLabel} in progress</p>
+    <main className={cn(
+      "mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:px-6 sm:py-10",
+      phase === "running" && "pb-28 sm:pb-10",
+    )}>
+      {phase === "running" ? (
+        <div
+          data-testid="challenge-quiz-top-bar"
+          className={cn(
+            "sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border",
+            isBoardExamMode ? "border-foreground/15" : "border-border",
+          )}
+        >
+          <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()} disabled={submitting}>
+            {isBoardExamMode ? "Leave Exam" : "Leave Quiz"}
+          </Button>
+          <div className="min-w-0 flex-1 text-center">
+            <p className={cn(
+              "truncate text-sm font-semibold",
+              isBoardExamMode ? "text-foreground" : "text-blue-700 dark:text-blue-300",
+            )}>
+              {quizModeLabel}
+            </p>
+          </div>
+          <div
+            data-testid={isBoardExamMode ? "board-exam-timer" : "challenge-quiz-timer"}
+            data-timer-state={isBoardExamMode ? boardExamTimerState : undefined}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1 text-sm font-semibold",
+              isBoardExamMode
+                ? boardExamTimerState === "normal"
+                  ? "border-foreground/15 bg-background text-foreground"
+                  : boardExamTimerState === "warning"
+                    ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                    : "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300"
+                : "border-border bg-background text-foreground",
             )}
-            <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()} disabled={submitting}>
-              {isBoardExamMode ? "Leave Exam" : "Leave Quiz"}
-            </Button>
-          </>
-        ) : (
+            aria-label="Exam timer"
+          >
+            {formatTimer(remainingSeconds)}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
           <BackLink href={noteDetailHref} label="Note" />
-        )}
-      </div>
+        </div>
+      )}
 
       {challengeGenerationLocked ? (
         <QuizGenerationOverlay
@@ -1098,62 +1124,7 @@ export default function ChallengeQuizPage() {
           </Card>
         )
       ) : phase === "running" && challengeSession ? (
-        <Card className={cn("space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
-          {isBoardExamMode ? (
-            <div className="grid gap-3 rounded-xl border border-foreground/15 bg-muted/20 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/60">Board Exam Mode</p>
-                <h2 className="text-lg font-semibold text-foreground">Exam in progress</h2>
-                <p className="text-sm text-foreground/70">Distraction-free exam view. Selected answers are saved, grading appears only after submission.</p>
-              </div>
-              <div
-                data-testid="board-exam-timer"
-                data-timer-state={boardExamTimerState}
-                className={cn(
-                  "rounded-lg border px-3 py-2 transition-colors",
-                  boardExamTimerState === "normal"
-                    ? "border-foreground/15 bg-background"
-                    : boardExamTimerState === "warning"
-                      ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                      : "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300",
-                )}
-              >
-                <p className={cn(
-                  "text-[11px] font-semibold uppercase tracking-wide",
-                  boardExamTimerState === "normal" ? "text-foreground/55" : "text-current",
-                )}>Timer</p>
-                <p className={cn(
-                  "text-base font-semibold",
-                  boardExamTimerState === "normal" ? "text-foreground" : "text-current",
-                )} aria-label="Exam timer">
-                  {formatTimer(remainingSeconds)}
-                </p>
-                {boardExamTimerDescription ? (
-                  <p className="mt-1 text-[11px] font-medium">
-                    {boardExamTimerDescription}
-                  </p>
-                ) : null}
-              </div>
-              <div className="rounded-lg border border-foreground/15 bg-background px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Progress</p>
-                <p className="text-base font-semibold text-foreground">
-                  {Math.min(currentIndex + 1, totalQuestions)} / {totalQuestions}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                {quizModeLabel}
-              </p>
-              <p
-                className="rounded-md border border-border bg-background px-3 py-1 text-sm font-semibold"
-                aria-label="Exam timer"
-              >
-                {formatTimer(remainingSeconds)}
-              </p>
-            </div>
-          )}
+        <div className="space-y-4">
           {isBoardExamMode && showBoardExamFocusTip ? (
             <div className="flex flex-col gap-3 rounded-xl border border-foreground/15 bg-muted/20 p-4 text-sm text-foreground/80 sm:flex-row sm:items-center sm:justify-between">
               <p>{BOARD_EXAM_FOCUS_TIP}</p>
@@ -1162,141 +1133,161 @@ export default function ChallengeQuizPage() {
               </Button>
             </div>
           ) : null}
-          <div className="flex items-center justify-between gap-3 text-sm text-foreground/75">
-            <p>Question {Math.min(currentIndex + 1, totalQuestions)} of {totalQuestions}</p>
-            <p>{answeredCount} answered</p>
-          </div>
-          {currentQuestion ? (
-            <div className="space-y-3">
-              <h2 className="text-base font-semibold sm:text-lg">{currentQuestion.question}</h2>
-              <QuizChoiceList
-                questionKey={currentQuestion.question}
-                choices={currentQuestion.choices}
-                correctIndex={resolveQuizCorrectIndex(currentQuestion)}
-                selectedChoiceIndex={selectedChoiceIndex}
-                revealAnswer={false}
-                disabled={quizInteractionDisabled}
-                selectionStyle={isBoardExamMode ? "board-exam" : "exam"}
-                onSelectChoice={(choiceIndex) => {
-                  setSelectedChoices((previous) => {
-                    const next = { ...previous, [currentIndex]: choiceIndex };
-                    syncProgressRef(currentIndex, next);
-                    persistProgress(currentIndex, next);
-                    return next;
-                  });
-                }}
-              />
-              <p className="text-xs text-foreground/65">Answers are graded only after submission.</p>
-            </div>
-          ) : null}
-          <div className={cn(
-            "rounded-md border p-3",
-            isBoardExamMode ? "border-foreground/15 bg-muted/10" : "border-border bg-background",
-          )}>
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-3 text-left"
-              onClick={() => setIsQuestionNavigatorCollapsed((current) => !current)}
-              aria-expanded={!isQuestionNavigatorCollapsed}
-              aria-controls="challenge-question-navigator-grid"
-            >
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
-                <p className="text-sm text-foreground/75">{questionNavigatorSummary}</p>
-              </div>
-              <ChevronDown
-                className={cn(
-                  "h-4 w-4 shrink-0 text-foreground/65 transition-transform",
-                  !isQuestionNavigatorCollapsed && "rotate-180",
-                )}
-                aria-hidden="true"
-              />
-            </button>
-            {!isQuestionNavigatorCollapsed ? (
-              <div
-                id="challenge-question-navigator-grid"
-                className="mt-3 grid grid-cols-5 gap-2 sm:grid-cols-8"
-                aria-label="Question navigator"
-              >
-                {quiz.map((item, index) => {
-                  const isCurrentQuestion = index === currentIndex;
-                  const isAnswered = selectedChoices[index] != null;
-                  return (
-                    <button
-                      key={`${item.question}-${index}`}
-                      type="button"
-                      aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
+          <Card className={cn("space-y-4 p-4 sm:p-5", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
+            {currentQuestion ? (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">
+                    Question {Math.min(currentIndex + 1, totalQuestions)} of {totalQuestions}
+                  </p>
+                  {isBoardExamMode && boardExamTimerDescription ? (
+                    <p className={cn(
+                      "text-xs font-medium",
+                      boardExamTimerState === "warning"
+                        ? "text-amber-700 dark:text-amber-300"
+                        : boardExamTimerState === "urgent" || boardExamTimerState === "expired"
+                          ? "text-red-700 dark:text-red-300"
+                          : "text-foreground/65",
+                    )}>
+                      {boardExamTimerDescription}
+                    </p>
+                  ) : null}
+                </div>
+                <h2 className="text-lg font-semibold leading-7 sm:text-xl">{currentQuestion.question}</h2>
+                <QuizChoiceList
+                  questionKey={currentQuestion.question}
+                  choices={currentQuestion.choices}
+                  correctIndex={resolveQuizCorrectIndex(currentQuestion)}
+                  selectedChoiceIndex={selectedChoiceIndex}
+                  revealAnswer={false}
+                  disabled={quizInteractionDisabled}
+                  selectionStyle={isBoardExamMode ? "board-exam" : "exam"}
+                  onSelectChoice={(choiceIndex) => {
+                    setSelectedChoices((previous) => {
+                      const next = { ...previous, [currentIndex]: choiceIndex };
+                      syncProgressRef(currentIndex, next);
+                      persistProgress(currentIndex, next);
+                      return next;
+                    });
+                  }}
+                />
+                <p className="text-xs text-foreground/65">Answers are graded only after submission.</p>
+                <div className={cn(
+                  "rounded-md border p-3",
+                  isBoardExamMode ? "border-foreground/15 bg-muted/10" : "border-border bg-background",
+                )}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                    onClick={() => setIsQuestionNavigatorCollapsed((current) => !current)}
+                    aria-expanded={!isQuestionNavigatorCollapsed}
+                    aria-controls="challenge-question-navigator-grid"
+                  >
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
+                      <p className="text-sm text-foreground/75">{questionNavigatorSummary}</p>
+                    </div>
+                    <ChevronDown
                       className={cn(
-                        "rounded-md border px-2 py-1.5 text-sm font-medium transition",
-                        isCurrentQuestion
-                          ? isBoardExamMode
-                            ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
-                            : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                          : isAnswered
-                            ? "border-foreground/30 bg-muted/60 text-foreground"
-                            : "border-border bg-background text-foreground/70",
+                        "h-4 w-4 shrink-0 text-foreground/65 transition-transform",
+                        !isQuestionNavigatorCollapsed && "rotate-180",
                       )}
-                      onClick={() => {
-                        syncProgressRef(index, selectedChoices);
-                        setCurrentIndex(index);
-                        persistProgress(index, selectedChoices);
-                      }}
-                      disabled={quizInteractionDisabled}
+                      aria-hidden="true"
+                    />
+                  </button>
+                  {!isQuestionNavigatorCollapsed ? (
+                    <div
+                      id="challenge-question-navigator-grid"
+                      className="mt-3 grid grid-cols-5 gap-2 sm:grid-cols-8"
+                      aria-label="Question navigator"
                     >
-                      {index + 1}
-                    </button>
-                  );
-                })}
+                      {quiz.map((item, index) => {
+                        const isCurrentQuestion = index === currentIndex;
+                        const isAnswered = selectedChoices[index] != null;
+                        return (
+                          <button
+                            key={`${item.question}-${index}`}
+                            type="button"
+                            aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
+                            className={cn(
+                              "rounded-md border px-2 py-1.5 text-sm font-medium transition",
+                              isCurrentQuestion
+                                ? isBoardExamMode
+                                  ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
+                                  : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                : isAnswered
+                                  ? "border-foreground/30 bg-muted/60 text-foreground"
+                                  : "border-border bg-background text-foreground/70",
+                            )}
+                            onClick={() => {
+                              syncProgressRef(index, selectedChoices);
+                              setCurrentIndex(index);
+                              persistProgress(index, selectedChoices);
+                            }}
+                            disabled={quizInteractionDisabled}
+                          >
+                            {index + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
-          </div>
-          {timedOut && submitting && isBoardExamMode ? (
-            <div className="rounded-md border border-foreground/15 bg-muted/20 px-3 py-2 text-sm text-foreground/80">
-              Time&apos;s up. Submitting your exam...
-            </div>
-          ) : null}
-          {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                const nextIndex = Math.max(0, currentIndex - 1);
-                syncProgressRef(nextIndex, selectedChoices);
-                setCurrentIndex(nextIndex);
-                persistProgress(nextIndex, selectedChoices);
-              }}
-              disabled={currentIndex <= 0 || quizInteractionDisabled}
-            >
-              Previous
-            </Button>
-            {currentIndex < totalQuestions - 1 && !boardExamTimerExpired ? (
+            {timedOut && submitting && isBoardExamMode ? (
+              <div className="rounded-md border border-foreground/15 bg-muted/20 px-3 py-2 text-sm text-foreground/80">
+                Time&apos;s up. Submitting your exam...
+              </div>
+            ) : null}
+            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+          </Card>
+          <div
+            data-testid="challenge-quiz-action-bar"
+            className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
+          >
+            <div className="mx-auto flex w-full max-w-3xl gap-2 sm:justify-start">
               <Button
                 type="button"
-                className="w-full sm:w-auto"
+                variant="outline"
+                className="w-28 shrink-0 sm:w-auto"
                 onClick={() => {
-                  const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
+                  const nextIndex = Math.max(0, currentIndex - 1);
                   syncProgressRef(nextIndex, selectedChoices);
                   setCurrentIndex(nextIndex);
                   persistProgress(nextIndex, selectedChoices);
                 }}
-                disabled={quizInteractionDisabled}
+                disabled={currentIndex <= 0 || quizInteractionDisabled}
               >
-                Next
+                Previous
               </Button>
-            ) : (
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => void handleSubmit(false)}
-                disabled={submitting}
-              >
-                {submitting ? "Submitting..." : submitButtonLabel}
-              </Button>
-            )}
+              {currentIndex < totalQuestions - 1 && !boardExamTimerExpired ? (
+                <Button
+                  type="button"
+                  className="flex-1 sm:w-auto sm:flex-none"
+                  onClick={() => {
+                    const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
+                    syncProgressRef(nextIndex, selectedChoices);
+                    setCurrentIndex(nextIndex);
+                    persistProgress(nextIndex, selectedChoices);
+                  }}
+                  disabled={quizInteractionDisabled}
+                >
+                  Next
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  className="flex-1 sm:w-auto sm:flex-none"
+                  onClick={() => void handleSubmit(false)}
+                  disabled={submitting}
+                >
+                  {submitting ? "Submitting..." : submitButtonLabel}
+                </Button>
+              )}
+            </div>
           </div>
-        </Card>
+        </div>
       ) : phase === "complete" && result ? (
         <Card className={cn("space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
           <p className={cn(

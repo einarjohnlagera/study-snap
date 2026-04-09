@@ -435,6 +435,12 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
+    const topBar = await screen.findByTestId("challenge-quiz-top-bar");
+    const actionBar = screen.getByTestId("challenge-quiz-action-bar");
+
+    expect(topBar).toHaveClass("sticky");
+    expect(topBar).toHaveTextContent("Challenge Quiz");
+    expect(actionBar).toHaveClass("fixed");
     expect(await screen.findByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("button", { name: "Go to question 1 (unanswered)" })).toBeInTheDocument();
   });
@@ -463,8 +469,11 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    expect((await screen.findAllByText("Board Exam Mode")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Exam in progress. Navigation is limited to help you stay focused.")).toBeInTheDocument();
+    const topBar = await screen.findByTestId("challenge-quiz-top-bar");
+    const actionBar = screen.getByTestId("challenge-quiz-action-bar");
+
+    expect(topBar).toHaveTextContent("Board Exam Mode");
+    expect(actionBar).toHaveClass("fixed");
     expect(await screen.findByText("Board Exam Mode hides distractions to simulate a real test environment.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
@@ -477,7 +486,6 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Go to question 2 (unanswered)" }));
 
     expect(screen.getByText("What protects the plant cell?")).toBeInTheDocument();
-    expect(screen.getByText("1 answered")).toBeInTheDocument();
     expect(screen.getByText("Question Navigator · 2 of 2 · 1 answered")).toBeInTheDocument();
   });
 
@@ -524,7 +532,7 @@ describe("ChallengeQuizPage", () => {
     setupBoardExamSession();
     render(<ChallengeQuizPage />);
 
-    expect(await screen.findByText("Exam in progress")).toBeInTheDocument();
+    expect(await screen.findByTestId("challenge-quiz-top-bar")).toHaveTextContent("Board Exam Mode");
     expect(screen.queryByText("Board Exam Mode hides distractions to simulate a real test environment.")).not.toBeInTheDocument();
   });
 
@@ -540,7 +548,7 @@ describe("ChallengeQuizPage", () => {
 
     expect(await screen.findByText("What protects the plant cell?")).toBeInTheDocument();
     expect(screen.getByLabelText("Exam timer")).toHaveTextContent("08:00");
-    expect(screen.getByText("1 answered")).toBeInTheDocument();
+    expect(screen.getByText("Question Navigator · 2 of 2 · 1 answered")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "false");
     });
@@ -733,7 +741,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    await screen.findByText("Challenge Quiz in progress");
+    await screen.findByTestId("challenge-quiz-top-bar");
     await waitFor(() => {
       expect(getNote).toHaveBeenCalledTimes(1);
       expect(getInProgressChallengeQuizSession).toHaveBeenCalledTimes(1);
@@ -807,7 +815,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    await screen.findByText("Challenge Quiz in progress");
+    await screen.findByTestId("challenge-quiz-top-bar");
     const dashboardLink = document.createElement("a");
     dashboardLink.href = "/dashboard";
     dashboardLink.textContent = "Dashboard";

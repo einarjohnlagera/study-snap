@@ -43,6 +43,7 @@ import {
   serializeSelectedChoiceIndexRecord,
   toSelectedChoiceIndexRecord,
 } from "@/lib/quiz";
+import { cn } from "@/lib/utils";
 
 type QuickReviewPhase = "initial" | "retry-transition" | "retry" | "complete";
 type SessionStatePayload = {
@@ -361,6 +362,9 @@ export default function QuickReviewPage() {
   const showChallengeGuidedCta = !isStruggling;
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const showPracticeAgainPrimary = !isPerfectScore && (!showAdaptiveGuidedCta || !note?.adaptivePracticeAvailable);
+  const quickReviewProgressLabel = phase === "retry"
+    ? `Retry ${Math.min(currentRoundIndex + 1, Math.max(activeQuestionIndexes.length, 1))} / ${Math.max(activeQuestionIndexes.length, 1)}`
+    : `${Math.min(currentRoundIndex + 1, Math.max(totalQuestions, 1))} / ${Math.max(totalQuestions, 1)}`;
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -734,19 +738,30 @@ export default function QuickReviewPage() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      <div className="flex items-center justify-between gap-3">
-        {quizSessionActive ? (
-          <>
-            <p className="text-sm font-medium text-foreground/80">Quick Review in progress</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()}>
-              Leave Quiz
-            </Button>
-          </>
-        ) : (
+    <main className={cn(
+      "mx-auto w-full max-w-3xl space-y-4 px-4 py-6 sm:px-6 sm:py-10",
+      note && currentQuestion && !isComplete && "pb-28 sm:pb-10",
+    )}>
+      {quizSessionActive ? (
+        <div
+          data-testid="quick-review-top-bar"
+          className="sticky top-16 z-20 -mx-4 flex items-center gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border"
+        >
+          <Button type="button" variant="outline" size="sm" className="shrink-0 px-3" onClick={() => requestLeave()}>
+            Leave Quiz
+          </Button>
+          <div className="min-w-0 flex-1 text-center">
+            <p className="truncate text-sm font-semibold text-foreground">Quick Review</p>
+          </div>
+          <div className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-sm font-semibold text-foreground">
+            {quickReviewProgressLabel}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
           <BackLink href={noteDetailHref} label="Note" />
-        )}
-      </div>
+        </div>
+      )}
 
       {loading || sessionInitializing ? (
         <QuickReviewLoading />
@@ -961,20 +976,15 @@ export default function QuickReviewPage() {
         </Card>
       ) : note && currentQuestion ? (
         <div className="space-y-4">
-          <Card className="space-y-2 p-4 sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Quick Review
-            </p>
-            <h1 className="text-xl font-semibold sm:text-2xl">{note.title ?? "Untitled note"}</h1>
-            <p className="text-sm text-foreground/75">
-              {phase === "retry"
-                ? `Retry question ${currentRoundIndex + 1} of ${activeQuestionIndexes.length}`
-                : `Question ${currentRoundIndex + 1} of ${totalQuestions}`}
-            </p>
-          </Card>
-
-          <Card className="space-y-4 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold">
+          <Card className="space-y-4 p-4 sm:p-5">
+            <div className="space-y-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">
+                {phase === "retry"
+                  ? `Retry question ${currentRoundIndex + 1} of ${activeQuestionIndexes.length}`
+                  : `Question ${currentRoundIndex + 1} of ${totalQuestions}`}
+              </p>
+            </div>
+            <h2 className="text-lg font-semibold leading-7 sm:text-xl">
               {(currentQuestionIndex ?? 0) + 1}. {currentQuestion.question}
             </h2>
             <QuizChoiceList
@@ -994,17 +1004,21 @@ export default function QuickReviewPage() {
                 </p>
               </div>
             ) : null}
-
-            <div className="flex justify-stretch sm:justify-end">
+          </Card>
+          <div
+            data-testid="quick-review-action-bar"
+            className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
+          >
+            <div className="mx-auto flex w-full max-w-3xl">
               <Button type="button" className="w-full sm:w-auto" onClick={handleNext} disabled={!hasAnsweredCurrent}>
                 {currentRoundIndex + 1 === activeQuestionIndexes.length
                   ? phase === "retry"
                     ? "Finish Retry"
                     : "Finish Quick Review"
-                  : "Next Question"}
+                  : "Next"}
               </Button>
             </div>
-          </Card>
+          </div>
         </div>
       ) : null}
 
