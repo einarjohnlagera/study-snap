@@ -17,6 +17,13 @@ const routerMock = {
   replace: replaceMock,
 };
 const paramsMock = { id: "note-1" };
+let mobileViewport = false;
+const mediaQueryListeners = new Set<(event: MediaQueryListEvent) => void>();
+
+function setMobileViewport(matches: boolean) {
+  mobileViewport = matches;
+  mediaQueryListeners.forEach((listener) => listener({ matches } as MediaQueryListEvent));
+}
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
@@ -48,6 +55,29 @@ describe("ChallengeQuizPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    mobileViewport = false;
+    mediaQueryListeners.clear();
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: jest.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 639px)" ? mobileViewport : false,
+        media: query,
+        onchange: null,
+        addEventListener: (_eventName: string, listener: (event: MediaQueryListEvent) => void) => {
+          mediaQueryListeners.add(listener);
+        },
+        removeEventListener: (_eventName: string, listener: (event: MediaQueryListEvent) => void) => {
+          mediaQueryListeners.delete(listener);
+        },
+        addListener: (listener: (event: MediaQueryListEvent) => void) => {
+          mediaQueryListeners.add(listener);
+        },
+        removeListener: (listener: (event: MediaQueryListEvent) => void) => {
+          mediaQueryListeners.delete(listener);
+        },
+        dispatchEvent: jest.fn(),
+      })),
+    });
     window.localStorage.clear();
     window.sessionStorage.clear();
     Element.prototype.scrollIntoView = jest.fn();
@@ -400,6 +430,34 @@ describe("ChallengeQuizPage", () => {
     });
   });
 
+  it("keeps the Challenge Quiz navigator expanded by default on desktop", async () => {
+    setupInProgressChallengeQuiz();
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Go to question 1 (unanswered)" })).toBeInTheDocument();
+  });
+
+  it("collapses the Challenge Quiz navigator by default on mobile and lets users expand it", async () => {
+    setMobileViewport(true);
+    setupInProgressChallengeQuiz();
+
+    render(<ChallengeQuizPage />);
+
+    const navigatorToggle = await screen.findByRole("button", { name: /Question Navigator/i });
+    await waitFor(() => {
+      expect(navigatorToggle).toHaveAttribute("aria-expanded", "false");
+    });
+    expect(screen.getByText("Question Navigator · 1 of 1 · 0 answered")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Go to question 1 (unanswered)" })).not.toBeInTheDocument();
+
+    fireEvent.click(navigatorToggle);
+
+    expect(screen.getByRole("button", { name: "Go to question 1 (unanswered)" })).toBeInTheDocument();
+    expect(navigatorToggle).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("keeps Board Exam answers neutral and allows question navigation", async () => {
     setupBoardExamSession();
 
@@ -408,16 +466,32 @@ describe("ChallengeQuizPage", () => {
     expect((await screen.findAllByText("Board Exam Mode")).length).toBeGreaterThan(0);
     expect(screen.getByText("Exam in progress. Navigation is limited to help you stay focused.")).toBeInTheDocument();
     expect(await screen.findByText("Board Exam Mode hides distractions to simulate a real test environment.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
 
     expect(screen.queryByText(/Correct/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Incorrect/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Mitochondria produce ATP/i)).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /Question Navigator/i }));
     fireEvent.click(screen.getByRole("button", { name: "Go to question 2 (unanswered)" }));
 
     expect(screen.getByText("What protects the plant cell?")).toBeInTheDocument();
     expect(screen.getByText("1 answered")).toBeInTheDocument();
+    expect(screen.getByText("Question Navigator · 2 of 2 · 1 answered")).toBeInTheDocument();
+  });
+
+  it("keeps the Board Exam navigator collapsed by default on mobile", async () => {
+    setMobileViewport(true);
+    setupBoardExamSession();
+
+    render(<ChallengeQuizPage />);
+
+    const navigatorToggle = await screen.findByRole("button", { name: /Question Navigator/i });
+    await waitFor(() => {
+      expect(navigatorToggle).toHaveAttribute("aria-expanded", "false");
+    });
+    expect(screen.queryByRole("button", { name: "Go to question 2 (unanswered)" })).not.toBeInTheDocument();
   });
 
   it("shows the Board Exam start confirmation modal before generation begins", async () => {
@@ -467,6 +541,10 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByText("What protects the plant cell?")).toBeInTheDocument();
     expect(screen.getByLabelText("Exam timer")).toHaveTextContent("08:00");
     expect(screen.getByText("1 answered")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "false");
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Question Navigator/i }));
     expect(screen.getByRole("button", { name: "Go to question 1 (answered)" })).toBeInTheDocument();
 
     nowSpy.mockRestore();
@@ -558,6 +636,7 @@ describe("ChallengeQuizPage", () => {
     });
     expect(screen.getByRole("button", { name: "Submit Exam" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Mitochondria/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Question Navigator/i }));
     expect(screen.getByRole("button", { name: "Go to question 2 (unanswered)" })).toBeDisabled();
 
     await act(async () => {

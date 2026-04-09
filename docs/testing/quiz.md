@@ -40,6 +40,10 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
 - selected choice shows neutral exam-style highlight only
 - question-number navigation during Board Exam Mode shows current/answered/unanswered states only and never correctness
+- Question Navigator is collapsible:
+  - Challenge Quiz defaults to expanded on desktop and collapsed on mobile
+  - Board Exam Mode defaults to collapsed on both desktop and mobile
+  - expanding/collapsing does not break direct question jumps or answered/current indicators
 - active Board Exam pages visibly reinforce context with `Board Exam Mode`, `Exam in progress`, and copy explaining that limited navigation is intentional
 - the one-time Board Exam focus tip can be dismissed and does not reappear for the same user after dismissal
 - after `Start Exam` / `Start Quiz` is clicked, difficulty buttons are disabled immediately
