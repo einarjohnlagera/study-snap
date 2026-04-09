@@ -22,10 +22,10 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 
 ## Exam Mode behavior
 
-- Challenge Quiz start screen shows two explicit mode options: `Practice Mode` and `Board Exam Mode`
+- Challenge Quiz start screen shows two explicit mode options: `Challenge Quiz` and `Board Exam Mode`
 - entering Challenge Quiz does not auto-start generation; the user must choose a mode first
-- Premium users who choose `Practice Mode` see the dedicated difficulty setup screen before generation
-- Free users who choose `Practice Mode` skip difficulty selection entirely and start generation immediately
+- Premium users who choose `Challenge Quiz` see the dedicated difficulty setup screen before generation
+- Free users who choose `Challenge Quiz` skip difficulty selection entirely and start generation immediately
 - Board Exam Mode is available on both Free and Premium plans and still consumes the standard Challenge Quiz quota
 - Board Exam Mode shows a dedicated `Board Exam setup` confirmation state with `Cancel` and `Start Exam`
 - Board Exam setup includes an explicit explanation block covering:

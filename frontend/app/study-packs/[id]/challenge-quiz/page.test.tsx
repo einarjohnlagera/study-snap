@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import ChallengeQuizPage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -68,8 +68,8 @@ describe("ChallengeQuizPage", () => {
   });
 
   function getModeCard(label: string): HTMLButtonElement {
-    const card = screen.getByText(label).closest("button");
-    expect(card).not.toBeNull();
+    const card = screen.getAllByRole("button").find((button) => within(button).queryByText(label));
+    expect(card).toBeDefined();
     return card as HTMLButtonElement;
   }
 
@@ -259,21 +259,21 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(getModeCard("Practice Mode")).toBeInTheDocument();
+    expect(getModeCard("Challenge Quiz")).toBeInTheDocument();
     expect(getModeCard("Board Exam Mode")).toBeInTheDocument();
     expect(screen.getByText("Both modes use your standard Challenge Quiz attempt for this note.")).toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 
-  it("shows Premium difficulty selection only after Practice Mode is chosen", async () => {
+  it("shows Premium difficulty selection only after Challenge Quiz is chosen", async () => {
     setupChallengePrestart(true);
 
     render(<ChallengeQuizPage />);
 
     await screen.findByRole("heading", { name: "Choose your quiz mode" });
-    fireEvent.click(getModeCard("Practice Mode"));
+    fireEvent.click(getModeCard("Challenge Quiz"));
 
-    expect(await screen.findByRole("heading", { name: "Practice challenge setup" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "easy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "medium" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "hard" })).toBeInTheDocument();
@@ -282,7 +282,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "Start Challenge Quiz" })).toBeInTheDocument();
   });
 
-  it("starts Practice Mode immediately for Free users without showing difficulty selection", async () => {
+  it("starts Challenge Quiz immediately for Free users without showing difficulty selection", async () => {
     setupChallengePrestart(false);
     (startChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -304,12 +304,12 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     await screen.findByRole("heading", { name: "Choose your quiz mode" });
-    fireEvent.click(getModeCard("Practice Mode"));
+    fireEvent.click(getModeCard("Challenge Quiz"));
 
     await waitFor(() => {
       expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" });
     });
-    expect(screen.queryByRole("heading", { name: "Practice challenge setup" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Challenge Quiz Setup" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
   });
 
@@ -741,7 +741,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     await screen.findByRole("heading", { name: "Choose your quiz mode" });
-    fireEvent.click(getModeCard("Practice Mode"));
+    fireEvent.click(getModeCard("Challenge Quiz"));
     const hardButton = await screen.findByRole("button", { name: "hard" });
     fireEvent.click(hardButton);
     expect(hardButton).toHaveClass("border-blue-500");
@@ -761,7 +761,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
     expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
     expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
-    expect(screen.getByText("Preparing your practice challenge...")).toBeInTheDocument();
+    expect(screen.getByText("Preparing your Challenge Quiz...")).toBeInTheDocument();
   });
 
   it("shows the first-quiz completion banner after completing the first challenge quiz", async () => {
