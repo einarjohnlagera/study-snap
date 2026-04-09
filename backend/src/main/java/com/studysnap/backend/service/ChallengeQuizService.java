@@ -26,6 +26,7 @@ import com.studysnap.backend.exception.ChallengeQuizNotAvailableException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotInProgressException;
 import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
+import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.exception.InvalidChallengeQuizResultException;
 import com.studysnap.backend.exception.MonthlyChallengeQuizLimitReachedException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
@@ -61,6 +62,7 @@ public class ChallengeQuizService {
     private static final String SESSION_STATE_SELECTED_CHOICES = "selectedChoices";
     private static final String SESSION_STATE_COMPLETED = "completed";
     private static final String SESSION_STATE_DIFFICULTY = "difficulty";
+    private static final String SESSION_STATE_MODE = "mode";
     private static final String SESSION_STATE_QUIZ = "quiz";
     private static final String SESSION_METADATA_WEAK_CONCEPTS = "weakConcepts";
     private static final String SESSION_METADATA_CONCEPT_BREAKDOWN = "conceptBreakdown";
@@ -80,8 +82,11 @@ public class ChallengeQuizService {
     private static final String ANALYTICS_METADATA_SESSION_ID = "sessionId";
     private static final String ANALYTICS_METADATA_QUESTION_COUNT = "questionCount";
     private static final String ANALYTICS_METADATA_DIFFICULTY = "difficulty";
+    private static final String ANALYTICS_METADATA_MODE = "mode";
     private static final String CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE = "Challenge Quiz session has already ended.";
     private static final String CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE = "Challenge Quiz session forfeited.";
+    private static final String MODE_CHALLENGE = "challenge";
+    private static final String MODE_BOARD_EXAM = "board_exam";
     private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
             QuickReviewSessionStatus.GENERATING,
             QuickReviewSessionStatus.IN_PROGRESS
@@ -127,6 +132,7 @@ public class ChallengeQuizService {
         StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
         String selectedDifficulty = resolveSelectedDifficulty(planType, request);
+        String selectedMode = resolveSelectedMode(request);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
@@ -153,7 +159,8 @@ public class ChallengeQuizService {
                 userId,
                 studyPackId,
                 studyPack,
-                profile.difficulty()
+                profile.difficulty(),
+                selectedMode
         ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
@@ -182,7 +189,8 @@ public class ChallengeQuizService {
                 analyticsService.trackEvent(userId, AnalyticsEventType.CHALLENGE_QUIZ_STARTED, studyPackId, Map.of(
                         ANALYTICS_METADATA_SESSION_ID, saved.getId().toString(),
                         ANALYTICS_METADATA_QUESTION_COUNT, challengeQuiz.size(),
-                        ANALYTICS_METADATA_DIFFICULTY, profile.difficulty()
+                        ANALYTICS_METADATA_DIFFICULTY, profile.difficulty(),
+                        ANALYTICS_METADATA_MODE, selectedMode
                 ));
             } catch (RuntimeException ignored) {
                 // Analytics must never turn a successfully generated quiz into a failed session.
@@ -445,6 +453,7 @@ public class ChallengeQuizService {
                 usedThisMonth,
                 limit,
                 isDifficultySelectionAvailable(planType),
+                extractMode(session.getSessionState()),
                 extractDifficulty(session.getSessionState()),
                 quiz,
                 session.getCurrentQuestionIndex() == null ? 0 : session.getCurrentQuestionIndex(),
@@ -464,6 +473,17 @@ public class ChallengeQuizService {
         };
     }
 
+    private String resolveSelectedMode(ChallengeQuizStartRequest request) {
+        if (request == null || request.mode() == null || request.mode().isBlank()) {
+            return MODE_CHALLENGE;
+        }
+        String normalized = request.mode().trim().toLowerCase();
+        return switch (normalized) {
+            case MODE_CHALLENGE, MODE_BOARD_EXAM -> normalized;
+            default -> throw new InvalidChallengeQuizModeException();
+        };
+    }
+
     private ChallengeQuizSessionSummaryResponse toSessionSummaryResponse(QuickReviewSessionEntity session) {
         BigDecimal score = session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage();
         return new ChallengeQuizSessionSummaryResponse(
@@ -479,14 +499,26 @@ public class ChallengeQuizService {
         );
     }
 
-    private Map<String, Object> buildInitialSessionState(String difficulty) {
+    private Map<String, Object> buildInitialSessionState(String difficulty, String mode) {
         Map<String, Object> state = new LinkedHashMap<>();
         state.put(SESSION_STATE_TIME_LIMIT_SECONDS, DEFAULT_TIME_LIMIT_SECONDS);
         state.put(SESSION_STATE_TIMER_STARTED_AT_EPOCH_SECONDS, OffsetDateTime.now(ZoneOffset.UTC).toEpochSecond());
         state.put(SESSION_STATE_SELECTED_CHOICES, Map.of());
         state.put(SESSION_STATE_COMPLETED, false);
         state.put(SESSION_STATE_DIFFICULTY, difficulty);
+        state.put(SESSION_STATE_MODE, mode);
         return state;
+    }
+
+    private String extractMode(Map<String, Object> sessionState) {
+        if (sessionState == null) {
+            return MODE_CHALLENGE;
+        }
+        Object raw = sessionState.get(SESSION_STATE_MODE);
+        if (raw instanceof String mode && !mode.isBlank()) {
+            return mode;
+        }
+        return MODE_CHALLENGE;
     }
 
     private String extractDifficulty(Map<String, Object> sessionState) {
@@ -900,6 +932,7 @@ public class ChallengeQuizService {
                 usedThisMonth,
                 resolveMonthlyChallengeQuizLimit(planType),
                 isDifficultySelectionAvailable(planType),
+                MODE_CHALLENGE,
                 DEFAULT_SELECTED_DIFFICULTY,
                 List.of(),
                 0,
@@ -916,7 +949,8 @@ public class ChallengeQuizService {
             UUID userId,
             UUID studyPackId,
             StudyPackEntity studyPack,
-            String difficulty
+            String difficulty,
+            String mode
     ) {
         OffsetDateTime createdAt = OffsetDateTime.now();
         QuickReviewSessionEntity session = new QuickReviewSessionEntity();
@@ -933,7 +967,7 @@ public class ChallengeQuizService {
         session.setScorePercentage(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
         session.setRetryCount(0);
         session.setSessionMetadata(null);
-        session.setSessionState(buildInitialSessionState(difficulty));
+        session.setSessionState(buildInitialSessionState(difficulty, mode));
         session.setCreatedAt(createdAt);
         session.setCompletedAt(null);
         return session;
@@ -950,7 +984,7 @@ public class ChallengeQuizService {
         session.setSessionMetadata(null);
         session.setSessionState(QuizSessionStateUtils.withQuiz(
                 challengeQuiz,
-                buildInitialSessionState(difficulty)
+                buildInitialSessionState(difficulty, extractMode(session.getSessionState()))
         ));
         session.setCompletedAt(null);
     }

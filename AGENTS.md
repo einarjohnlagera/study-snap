@@ -527,10 +527,13 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 ### Challenge Quiz — Exam Mode Rule
 
 - Challenge Quiz must behave as an exam: **no correctness feedback during answering**.
-- Board Exam Mode is the explicit strict-exam presentation of the Challenge Quiz engine for Premium-capable sessions; it must show `Board Exam Mode` and `Start Board Exam`.
-- Free/recommended-difficulty Challenge Quiz sessions must keep limited Challenge Quiz access and may show Board Exam Mode as a locked Premium enhancement instead of making Challenge Quiz Premium-only.
+- Board Exam Mode is the explicit strict-exam presentation of the Challenge Quiz engine and must be available as a distinct Challenge mode for both Free and Premium users.
+- Challenge Quiz entry must present both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices rather than inferring Board Exam from billing or difficulty-selection capability.
+- Board Exam Mode must use a formal `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
+- Board Exam Mode uses the same Challenge Quiz quota and credit rules as standard Challenge Quiz in the current product stage; do not create a separate billing gate for Board Exam Mode.
+- Difficulty selection may remain plan-gated, but Board Exam Mode itself must still work with recommended difficulty/question count when difficulty selection is unavailable.
 - Do not render "Correct" / "Incorrect" labels, green/red highlights, or explanations while the quiz is in progress.
-- Selected answers show a neutral exam-style visual state (blue border/background) only.
+- Standard Challenge Quiz may keep a lighter practice-oriented answering UI, but Board Exam Mode must use a more formal neutral selected-answer state and cleaner hierarchy.
 - Question-number navigation during Board Exam Mode may show current/answered/unanswered states, but must not reveal correctness.
 - Board Exam timers must start from persisted session state and survive refresh/reload without resetting; timer expiry must auto-submit.
 - Browser fullscreen/focus entry is best effort only; a denied fullscreen request must not block starting or resuming the exam.

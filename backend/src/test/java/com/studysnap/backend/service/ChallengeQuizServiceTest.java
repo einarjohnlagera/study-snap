@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
@@ -20,6 +21,7 @@ import com.studysnap.backend.entity.ThemePreference;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
+import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -320,8 +322,84 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(studyPackId.toString(), userId, null);
 
         assertThat(response.sessionId()).isNotNull();
+        assertThat(response.mode()).isEqualTo("challenge");
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
+    }
+
+    @Test
+    void startSession_acceptsBoardExamModeForFreePlanUsingStandardChallengeQuota() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any()
+        )).thenReturn(List.of());
+        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
+        when(llmStudyPackService.generateChallengeQuiz(
+                eq("Pack title"),
+                eq("Summary"),
+                eq(List.of("Concept")),
+                eq(List.of("Practice?")),
+                eq(12),
+                eq("medium"),
+                any(StudyPackGenerationContext.class)
+        )).thenReturn(List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q3", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q4", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q5", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q6", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q7", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q8", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q9", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q10", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q11", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q12", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        ));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = challengeQuizService.startSession(
+                studyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest(null, "board_exam")
+        );
+
+        assertThat(response.mode()).isEqualTo("board_exam");
+        assertThat(response.monthlyLimit()).isEqualTo(5);
+        verify(featureGateService, never()).checkFeatureAccess(PlanType.FREE, Feature.DIFFICULTY_SELECTION);
     }
 
     private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {
@@ -490,7 +568,7 @@ class ChallengeQuizServiceTest {
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
 
         String id = studyPackId.toString();
-        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest("expert");
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest("expert", null);
         assertThatThrownBy(() -> challengeQuizService.startSession(
                 id,
                 userId,
@@ -498,5 +576,26 @@ class ChallengeQuizServiceTest {
         ))
                 .isInstanceOf(InvalidChallengeQuizDifficultyException.class)
                 .hasMessage("Difficulty must be easy, medium, or hard.");
+    }
+
+    @Test
+    void startSession_throwsTypedExceptionForInvalidMode() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        String id = studyPackId.toString();
+        ChallengeQuizStartRequest request = new ChallengeQuizStartRequest(null, "oral_exam");
+        assertThatThrownBy(() -> challengeQuizService.startSession(
+                id,
+                userId,
+                request
+        ))
+                .isInstanceOf(InvalidChallengeQuizModeException.class)
+                .hasMessage("Challenge Quiz mode must be challenge or board_exam.");
     }
 }

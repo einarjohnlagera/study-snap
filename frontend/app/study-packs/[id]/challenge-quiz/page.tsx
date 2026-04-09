@@ -17,6 +17,7 @@ import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/li
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   type ChallengeQuizStartRequest,
+  type ChallengeQuizMode,
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
   getInProgressChallengeQuizSession,
@@ -39,6 +40,7 @@ import {
   serializeSelectedChoiceIndexRecord,
   toSelectedChoiceIndexRecord,
 } from "@/lib/quiz";
+import { cn } from "@/lib/utils";
 
 type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
 type ChallengeSessionStatePayload = {
@@ -46,6 +48,9 @@ type ChallengeSessionStatePayload = {
   timerStartedAtEpochSeconds?: number;
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
+
+const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
+const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
 
 function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number {
   if (difficulty === "easy") {
@@ -55,6 +60,16 @@ function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number 
     return 15;
   }
   return 12;
+}
+
+function getQuestionCountSummary(
+  difficultySelectionAvailable: boolean | undefined,
+  selectedDifficulty: ChallengeDifficulty,
+): string {
+  if (difficultySelectionAvailable) {
+    return `${getQuestionCountForDifficulty(selectedDifficulty)} questions for the selected difficulty.`;
+  }
+  return "Recommended question count based on your recent performance.";
 }
 
 async function requestBoardExamFullscreen() {
@@ -82,8 +97,15 @@ function ChallengeQuizLoading() {
   );
 }
 
-function getChallengeResultMessage(scorePercentage: number) {
+function getChallengeResultMessage(scorePercentage: number, mode: ChallengeQuizMode) {
   const level = mapPerformanceLevel(scorePercentage);
+  if (mode === BOARD_EXAM_MODE) {
+    if (level === "Excellent") return "Exam complete. You performed at an excellent level.";
+    if (level === "Good") return "Exam complete. Your performance is strong with room to sharpen a few topics.";
+    if (level === "Fair") return "Exam complete. Review the weak concepts below before your next attempt.";
+    return "Exam complete. Use the weak concepts below to rebuild confidence before retaking.";
+  }
+
   if (level === "Excellent") return "Outstanding. You've mastered this material.";
   if (level === "Good") return "Great work. You have a solid grasp of this.";
   if (level === "Fair") return "Good effort. Review the weak concepts below to improve.";
@@ -157,6 +179,7 @@ export default function ChallengeQuizPage() {
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<"difficulty-selection" | "challenge-quiz-limit" | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
+  const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(CHALLENGE_MODE);
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
 
   const noteId = useMemo(() => {
@@ -194,6 +217,8 @@ export default function ChallengeQuizPage() {
   }, []);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
+    setSelectedMode(started.mode ?? CHALLENGE_MODE);
+
     if (started.status === "GENERATING") {
       setChallengeSession(started);
       setResult(null);
@@ -217,7 +242,9 @@ export default function ChallengeQuizPage() {
       setRemainingSeconds(0);
       setTimedOut(false);
       setShowAnswerReview(false);
-      setError("We couldn't generate the Challenge Quiz this time. Try again.");
+      setError(started.mode === BOARD_EXAM_MODE
+        ? "We couldn't generate Board Exam Mode this time. Try again."
+        : "We couldn't generate the Challenge Quiz this time. Try again.");
       setPhase("prestart");
       return;
     }
@@ -314,6 +341,7 @@ export default function ChallengeQuizPage() {
       }
 
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
+      setSelectedMode(inProgress.mode ?? CHALLENGE_MODE);
       if (inProgress.sessionId) {
         setSelectedDifficulty(inProgress.selectedDifficulty);
         applyStartedSession(inProgress, true);
@@ -506,16 +534,16 @@ export default function ChallengeQuizPage() {
     startInFlightRef.current = true;
     setStarting(true);
     setError(null);
-    if (note.difficultySelectionAvailable) {
+    if (selectedMode === BOARD_EXAM_MODE) {
       void requestBoardExamFullscreen();
     }
     try {
       const request: ChallengeQuizStartRequest = note.difficultySelectionAvailable
-        ? { difficulty: selectedDifficulty }
-        : {};
+        ? { difficulty: selectedDifficulty, mode: selectedMode }
+        : { mode: selectedMode };
       const started = await startChallengeQuizSession(note.id, request);
       if (!started.sessionId) {
-        throw new Error("Could not start Challenge Quiz.");
+        throw new Error(selectedMode === BOARD_EXAM_MODE ? "Could not start Board Exam Mode." : "Could not start Challenge Quiz.");
       }
       setSelectedDifficulty(started.selectedDifficulty);
       applyStartedSession(started, true);
@@ -524,7 +552,9 @@ export default function ChallengeQuizPage() {
         ? "Verify your email to use this feature."
         : err instanceof Error
           ? err.message
-          : "Could not start Challenge Quiz.";
+          : selectedMode === BOARD_EXAM_MODE
+            ? "Could not start Board Exam Mode."
+            : "Could not start Challenge Quiz.";
       if (isEmailNotVerifiedError(err)) {
         setShowVerifyEmailModal(true);
       }
@@ -537,7 +567,7 @@ export default function ChallengeQuizPage() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty]);
+  }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, selectedMode]);
 
   const handleRetry = () => {
     setChallengeSession(null);
@@ -554,9 +584,18 @@ export default function ChallengeQuizPage() {
 
   const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
-  const isBoardExamMode = Boolean(note?.difficultySelectionAvailable);
+  const activeMode = challengeSession?.mode ?? selectedMode;
+  const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
   const quizResultLabel = isBoardExamMode ? "Board Exam Result" : "Challenge Quiz Result";
+  const startButtonLabel = isBoardExamMode ? "Start Exam" : "Start Challenge Quiz";
+  const submitButtonLabel = isBoardExamMode ? "Submit Exam" : "Submit Challenge Quiz";
+  const retryButtonLabel = isBoardExamMode ? "Take Another Board Exam" : "Start Another Challenge";
+  const generationOverlayTitle = isBoardExamMode ? "Preparing your board exam..." : "Generating your quiz...";
+  const generationOverlayMessage = isBoardExamMode
+    ? "Creating a stricter exam simulation from your notes"
+    : "Creating personalized questions from your notes";
+  const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable, selectedDifficulty);
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: challengeQuizActive,
     fallbackHref: noteDetailHref,
@@ -594,7 +633,10 @@ export default function ChallengeQuizPage() {
       </div>
 
       {challengeGenerationLocked ? (
-        <QuizGenerationOverlay />
+        <QuizGenerationOverlay
+          title={generationOverlayTitle}
+          message={generationOverlayMessage}
+        />
       ) : null}
 
       {loading ? (
@@ -625,122 +667,218 @@ export default function ChallengeQuizPage() {
       ) : phase === "generating" ? (
         <ChallengeQuizLoading />
       ) : phase === "prestart" ? (
-        <Card className="space-y-4 p-4 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            {quizModeLabel}
-          </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">
-            {isBoardExamMode ? "Board Exam Mode" : (note?.title ?? "Challenge Quiz")}
-          </h1>
-          <p className="text-sm text-foreground/80">
-            {isBoardExamMode
-              ? `Strict exam simulation for ${note?.title ?? "this note"}. Results appear only after submission.`
-              : "We tailored this quiz based on your recent performance."}
-          </p>
-          {!isBoardExamMode ? (
-            <div className="rounded-md border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-foreground/80">
-              <p className="font-medium text-foreground">Board Exam Mode</p>
-              <p className="mt-1">
-                Premium unlocks the stricter board-exam setup with difficulty selection and focus-mode entry.
-              </p>
-              <Button
+        <div className="space-y-4">
+          <Card className="space-y-4 p-4 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+              Challenge Quiz
+            </p>
+            <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? "Challenge Quiz"}</h1>
+            <p className="text-sm text-foreground/80">
+              Choose a practice-oriented Challenge Quiz or switch to Board Exam Mode for a stricter exam simulation.
+              Both modes use the same Challenge Quiz attempt for this note.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="mt-3 w-full sm:w-auto"
-                onClick={() => openLockedFeaturePaywall("difficulty-selection", "board_exam_mode_card")}
+                className={cn(
+                  "rounded-xl border p-4 text-left transition",
+                  activeMode === CHALLENGE_MODE
+                    ? "border-blue-500 bg-blue-500/10"
+                    : "border-border bg-background hover:border-blue-400/50",
+                )}
+                onClick={() => setSelectedMode(CHALLENGE_MODE)}
                 disabled={challengeGenerationLocked}
               >
-                Unlock Board Exam Mode
-              </Button>
+                <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
+                <p className="mt-1 text-sm text-foreground/70">
+                  Timed practice with delayed results and a lighter, review-focused setup.
+                </p>
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "rounded-xl border p-4 text-left transition",
+                  activeMode === BOARD_EXAM_MODE
+                    ? "border-foreground/40 bg-foreground/[0.03]"
+                    : "border-border bg-background hover:border-foreground/30",
+                )}
+                onClick={() => setSelectedMode(BOARD_EXAM_MODE)}
+                disabled={challengeGenerationLocked}
+              >
+                <p className="text-sm font-semibold text-foreground">Board Exam Mode</p>
+                <p className="mt-1 text-sm text-foreground/70">
+                  Simulate a focused exam session with delayed results, stricter framing, and formal review flow.
+                </p>
+              </button>
             </div>
-          ) : null}
-          <div className="space-y-3 rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">Difficulty</p>
+          </Card>
+
+          <Card className={cn("space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-muted/20" : "")}>
+            <p className={cn(
+              "text-xs font-semibold uppercase tracking-wide",
+              isBoardExamMode ? "text-foreground/70" : "text-blue-600 dark:text-blue-400",
+            )}>
+              {quizModeLabel}
+            </p>
+            <h2 className="text-xl font-semibold sm:text-2xl">
+              {isBoardExamMode ? "Board Exam setup" : "Practice challenge setup"}
+            </h2>
+            <p className="text-sm text-foreground/80">
+              {isBoardExamMode
+                ? `Simulate a focused exam session for ${note?.title ?? "this note"}. Results appear only after submission, and leaving may forfeit the attempt.`
+                : "We tailor this challenge to your recent performance so you can practice under time pressure without immediate answer feedback."}
+            </p>
+
+            <div className={cn(
+              "space-y-3 rounded-xl border p-4 text-sm text-foreground/80",
+              isBoardExamMode ? "border-foreground/15 bg-background/80" : "border-border bg-background",
+            )}>
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Difficulty</p>
+                {note?.difficultySelectionAvailable ? (
+                  <p>{isBoardExamMode ? "Choose the difficulty before you commit to the exam." : "Choose the level you want before you start."}</p>
+                ) : (
+                  <p>Difficulty selection is still a Premium feature. Free users use the recommended difficulty automatically.</p>
+                )}
+              </div>
               {note?.difficultySelectionAvailable ? (
-                <p>Choose the level you want before you start.</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {(["easy", "medium", "hard"] as const).map((difficulty) => (
+                    <button
+                      key={difficulty}
+                      type="button"
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-left capitalize transition",
+                        selectedDifficulty === difficulty
+                          ? isBoardExamMode
+                            ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
+                            : "border-blue-500 bg-blue-500/10 text-foreground"
+                          : "border-border bg-background",
+                      )}
+                      onClick={() => {
+                        if (!starting) {
+                          setSelectedDifficulty(difficulty);
+                        }
+                      }}
+                      disabled={challengeGenerationLocked}
+                    >
+                      {difficulty}
+                    </button>
+                  ))}
+                </div>
               ) : (
-                <p>Difficulty selection is available on Premium. Free users get a recommended level automatically.</p>
-              )}
-            </div>
-            {note?.difficultySelectionAvailable ? (
-              <div className="grid gap-2 sm:grid-cols-3">
-                {(["easy", "medium", "hard"] as const).map((difficulty) => (
-                  <button
-                    key={difficulty}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm capitalize">
+                    Recommended difficulty: {selectedDifficulty}
+                  </p>
+                  <Button
                     type="button"
-                    className={`rounded-md border px-3 py-2 text-left capitalize transition ${
-                      selectedDifficulty === difficulty
-                        ? "border-blue-500 bg-blue-500/10 text-foreground"
-                        : "border-border bg-background"
-                    }`}
-                    onClick={() => {
-                      if (!starting) {
-                        setSelectedDifficulty(difficulty);
-                      }
-                    }}
+                    variant="outline"
+                    onClick={() => openLockedFeaturePaywall("difficulty-selection", "challenge_quiz_difficulty_button")}
                     disabled={challengeGenerationLocked}
                   >
-                    {difficulty}
-                  </button>
-                ))}
+                    Choose Difficulty (Premium)
+                  </Button>
+                </div>
+              )}
+
+              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Timer</p>
+                  <p>10 minutes. The timer keeps running until you submit or time expires.</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Question count</p>
+                  <p>{questionCountSummary}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Results</p>
+                  <p>{isBoardExamMode ? "See your score only after the exam ends." : "See your score after the challenge ends."}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Attempt usage</p>
+                  <p>Starting this mode consumes one Challenge Quiz attempt from your current plan.</p>
+                </div>
               </div>
-            ) : (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm capitalize">
-                  Recommended difficulty: {selectedDifficulty}
-                </p>
+            </div>
+
+            <div className={cn(
+              "rounded-xl border p-4 text-sm text-foreground/80",
+              isBoardExamMode ? "border-foreground/15 bg-background/80" : "border-border bg-background",
+            )}>
+              <p className="font-medium text-foreground">
+                {isBoardExamMode ? "Board Exam Mode rules" : "Challenge Quiz rules"}
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>No correct or incorrect feedback appears while the session is active.</li>
+                <li>Previous and Next are available, but unanswered questions are submitted as blank.</li>
+                <li>The timer auto-submits the session when it reaches zero.</li>
+                <li>Leaving the quiz may forfeit the attempt and does not refund the credit.</li>
+              </ul>
+            </div>
+
+            {challengeGenerationLocked ? (
+              <p className="text-sm text-foreground/75">Preparing your {quizModeLabel.toLowerCase()}...</p>
+            ) : null}
+            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {isBoardExamMode ? (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => openLockedFeaturePaywall("difficulty-selection", "challenge_quiz_difficulty_button")}
+                  className="w-full sm:w-auto"
+                  onClick={() => setSelectedMode(CHALLENGE_MODE)}
                   disabled={challengeGenerationLocked}
                 >
-                  Choose Difficulty (Premium)
+                  Cancel
                 </Button>
+              ) : null}
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleStartChallenge()}
+                disabled={challengeGenerationLocked}
+              >
+                {challengeGenerationLocked ? "Starting..." : startButtonLabel}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : phase === "running" && challengeSession ? (
+        <Card className={cn("space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
+          {isBoardExamMode ? (
+            <div className="grid gap-3 rounded-xl border border-foreground/15 bg-muted/20 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/60">Board Exam Mode</p>
+                <h2 className="text-lg font-semibold text-foreground">Exam in progress</h2>
+                <p className="text-sm text-foreground/70">Selected answers are saved, but grading is delayed until submission.</p>
               </div>
-            )}
-            <div className="space-y-1 border-t border-border pt-3">
-              <p className="font-medium text-foreground">Question count</p>
-              <p>
-                {note?.difficultySelectionAvailable
-                  ? `${getQuestionCountForDifficulty(selectedDifficulty)} questions for the selected difficulty.`
-                  : "Auto-selected from your recent performance."}
+              <div className="rounded-lg border border-foreground/15 bg-background px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Timer</p>
+                <p className="text-base font-semibold text-foreground" aria-label="Exam timer">
+                  {formatTimer(remainingSeconds)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-foreground/15 bg-background px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Progress</p>
+                <p className="text-base font-semibold text-foreground">
+                  {Math.min(currentIndex + 1, totalQuestions)} / {totalQuestions}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                {quizModeLabel}
+              </p>
+              <p
+                className="rounded-md border border-border bg-background px-3 py-1 text-sm font-semibold"
+                aria-label="Exam timer"
+              >
+                {formatTimer(remainingSeconds)}
               </p>
             </div>
-          </div>
-          {challengeGenerationLocked ? (
-            <p className="text-sm text-foreground/75">Preparing your {quizModeLabel}...</p>
-          ) : null}
-          <div className="rounded-md border border-border bg-background p-3 text-sm text-foreground/80">
-            <p>{isBoardExamMode ? "Board Exam Mode rules:" : "Rules:"}</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>10-minute countdown starts when the exam begins</li>
-              <li>No correct/incorrect feedback until you submit</li>
-              <li>Previous and Next are available; unanswered questions are submitted as blank</li>
-              <li>Timer expiry auto-submits your answers</li>
-              <li>If you leave, the quiz is forfeited and the attempt is not refunded</li>
-            </ul>
-          </div>
-          {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-          <Button type="button" className="w-full sm:w-auto" onClick={() => void handleStartChallenge()} disabled={challengeGenerationLocked}>
-            {challengeGenerationLocked ? "Starting..." : isBoardExamMode ? "Start Board Exam" : "Start Challenge Quiz"}
-          </Button>
-        </Card>
-      ) : phase === "running" && challengeSession ? (
-        <Card className="space-y-4 p-4 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              {quizModeLabel}
-            </p>
-            <p
-              className="rounded-md border border-border bg-background px-3 py-1 text-sm font-semibold"
-              aria-label="Exam timer"
-            >
-              {formatTimer(remainingSeconds)}
-            </p>
-          </div>
+          )}
           <div className="flex items-center justify-between gap-3 text-sm text-foreground/75">
             <p>Question {Math.min(currentIndex + 1, totalQuestions)} of {totalQuestions}</p>
             <p>{answeredCount} answered</p>
@@ -754,7 +892,7 @@ export default function ChallengeQuizPage() {
                 correctIndex={resolveQuizCorrectIndex(currentQuestion)}
                 selectedChoiceIndex={selectedChoiceIndex}
                 revealAnswer={false}
-                selectionStyle="exam"
+                selectionStyle={isBoardExamMode ? "board-exam" : "exam"}
                 onSelectChoice={(choiceIndex) => {
                   setSelectedChoices((previous) => {
                     const next = { ...previous, [currentIndex]: choiceIndex };
@@ -777,13 +915,16 @@ export default function ChallengeQuizPage() {
                     key={`${item.question}-${index}`}
                     type="button"
                     aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
-                    className={`rounded-md border px-2 py-1.5 text-sm font-medium transition ${
+                    className={cn(
+                      "rounded-md border px-2 py-1.5 text-sm font-medium transition",
                       isCurrentQuestion
-                        ? "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                        ? isBoardExamMode
+                          ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
+                          : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
                         : isAnswered
                           ? "border-foreground/30 bg-muted/60 text-foreground"
-                          : "border-border bg-background text-foreground/70"
-                    }`}
+                          : "border-border bg-background text-foreground/70",
+                    )}
                     onClick={() => {
                       setCurrentIndex(index);
                       persistProgress(index, selectedChoices);
@@ -796,6 +937,11 @@ export default function ChallengeQuizPage() {
               })}
             </div>
           </div>
+          {timedOut && submitting && isBoardExamMode ? (
+            <div className="rounded-md border border-foreground/15 bg-muted/20 px-3 py-2 text-sm text-foreground/80">
+              Time&apos;s up. Submitting your exam...
+            </div>
+          ) : null}
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
@@ -831,17 +977,27 @@ export default function ChallengeQuizPage() {
                 onClick={() => void handleSubmit(false)}
                 disabled={submitting}
               >
-                {submitting ? "Submitting..." : "Submit Challenge Quiz"}
+                {submitting ? "Submitting..." : submitButtonLabel}
               </Button>
             )}
           </div>
         </Card>
       ) : phase === "complete" && result ? (
-        <Card className="space-y-4 p-4 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+        <Card className={cn("space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
+          <p className={cn(
+            "text-xs font-semibold uppercase tracking-wide",
+            isBoardExamMode ? "text-foreground/70" : "text-blue-600 dark:text-blue-400",
+          )}>
             {quizResultLabel}
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">{note?.title ?? quizModeLabel}</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">
+            {isBoardExamMode ? "Assessment complete" : (note?.title ?? quizModeLabel)}
+          </h1>
+          <p className="text-sm text-foreground/75">
+            {isBoardExamMode
+              ? "Your exam session is complete. Review the result summary first, then use the follow-up actions to recover weak areas."
+              : "Your Challenge Quiz is complete. Review the result summary first, then choose the next study action."}
+          </p>
           {showFirstQuizCompletionBanner ? (
             <Card className="space-y-3 border-emerald-500/30 bg-emerald-500/5 p-4">
               <div className="space-y-1">
@@ -862,7 +1018,10 @@ export default function ChallengeQuizPage() {
               </Button>
             </Card>
           ) : null}
-          <div className="rounded-md border border-border bg-background p-4">
+          <div className={cn(
+            "rounded-md border bg-background p-4",
+            isBoardExamMode ? "border-foreground/15" : "border-border",
+          )}>
             <p className="text-lg font-semibold">{result.scorePercentage}%</p>
             <p className="mt-1 text-sm text-foreground/80">
               {result.correctAnswers} / {result.totalQuestions} correct
@@ -873,7 +1032,7 @@ export default function ChallengeQuizPage() {
             {timedOut ? (
               <p className="mt-2 text-sm text-foreground/75">Time ran out. Your answers were submitted automatically.</p>
             ) : null}
-            <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage)}</p>
+            <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage, activeMode)}</p>
             <div className={`mt-3 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getPerformanceBadgeClass(result.performanceLevel)}`}>
               {result.performanceLevel}
             </div>
@@ -923,7 +1082,9 @@ export default function ChallengeQuizPage() {
                 </ul>
               ) : (
                 <p className="text-sm text-foreground/70">
-                  No weak concepts identified in this challenge. Review your answers or start another challenge when ready.
+                  {isBoardExamMode
+                    ? "No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready."
+                    : "No weak concepts identified in this challenge. Review your answers or start another challenge when ready."}
                 </p>
               )}
             </Card>
@@ -942,7 +1103,7 @@ export default function ChallengeQuizPage() {
               className="w-full sm:w-auto"
               onClick={handleRetry}
             >
-              Start Another Challenge
+              {retryButtonLabel}
             </Button>
             <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
               {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
