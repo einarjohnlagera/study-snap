@@ -50,7 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
-type ChallengePrestartStep = "mode-selection" | "practice-setup" | "board-exam-setup";
+type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup";
 type ChallengeSessionStatePayload = {
   selectedChoices?: Record<string, number> | Record<string, string>;
   timerStartedAtEpochSeconds?: number;
@@ -105,7 +105,7 @@ function resolveRecoveryPrestartStep(
   if (mode === BOARD_EXAM_MODE) {
     return "board-exam-setup";
   }
-  return difficultySelectionAvailable ? "practice-setup" : "mode-selection";
+  return difficultySelectionAvailable ? "challenge-setup" : "mode-selection";
 }
 
 async function requestBoardExamFullscreen() {
@@ -726,11 +726,11 @@ export default function ChallengeQuizPage() {
     () => (viewerId ? `${BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX}:${viewerId}` : null),
     [viewerId],
   );
-  const handleSelectPracticeMode = useCallback(() => {
+  const handleSelectChallengeQuizMode = useCallback(() => {
     setSelectedMode(CHALLENGE_MODE);
     setError(null);
     if (canChoosePracticeDifficulty) {
-      setPrestartStep("practice-setup");
+      setPrestartStep("challenge-setup");
       return;
     }
     void handleStartChallenge(CHALLENGE_MODE);
@@ -862,18 +862,18 @@ export default function ChallengeQuizPage() {
             </p>
             <h1 className="text-xl font-semibold sm:text-2xl">Choose your quiz mode</h1>
             <p className="text-sm text-foreground/80">
-              Choose how you want to take this quiz for {note?.title ?? "this note"}. Practice Mode stays flexible, while Board Exam Mode uses a stricter exam-style flow.
+              Choose how you want to take this quiz for {note?.title ?? "this note"}. Challenge Quiz stays flexible, while Board Exam Mode uses a stricter exam-style flow.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
                 className="rounded-xl border border-border bg-background p-4 text-left transition hover:border-blue-400/50 hover:bg-blue-500/[0.04]"
-                onClick={() => void handleSelectPracticeMode()}
+                onClick={() => void handleSelectChallengeQuizMode()}
                 disabled={challengeGenerationLocked}
               >
-                <p className="text-sm font-semibold text-foreground">Practice Mode</p>
+                <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
                 <p className="mt-1 text-sm text-foreground/70">
-                  Flexible practice mode with optional difficulty selection.
+                  Flexible quiz mode with optional difficulty selection.
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
                   {canChoosePracticeDifficulty
@@ -892,7 +892,7 @@ export default function ChallengeQuizPage() {
                   Simulate a real exam with mixed difficulty and a stricter, more controlled flow.
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
-                  Uses the same Challenge Quiz attempt as Practice Mode.
+                  Uses the same Challenge Quiz attempt as the standard Challenge Quiz flow.
                 </p>
               </button>
             </div>
@@ -904,14 +904,14 @@ export default function ChallengeQuizPage() {
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           </Card>
-        ) : prestartStep === "practice-setup" ? (
+        ) : prestartStep === "challenge-setup" ? (
           <Card className="space-y-4 p-4 sm:p-6">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-              Practice Mode
+              Challenge Quiz
             </p>
-            <h1 className="text-xl font-semibold sm:text-2xl">Practice challenge setup</h1>
+            <h1 className="text-xl font-semibold sm:text-2xl">Challenge Quiz Setup</h1>
             <p className="text-sm text-foreground/80">
-              Flexible practice mode for {note?.title ?? "this note"}. Pick the difficulty, then generate your Challenge Quiz.
+              Flexible quiz mode for {note?.title ?? "this note"}. Pick the difficulty, then generate your Challenge Quiz.
             </p>
             <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
               <div className="space-y-1">
@@ -952,7 +952,7 @@ export default function ChallengeQuizPage() {
               </div>
             </div>
             {challengeGenerationLocked ? (
-              <p className="text-sm text-foreground/75">Preparing your practice challenge...</p>
+              <p className="text-sm text-foreground/75">Preparing your Challenge Quiz...</p>
             ) : null}
             {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
             <div className="flex flex-col gap-2 sm:flex-row">

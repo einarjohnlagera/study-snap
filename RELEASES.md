@@ -14,8 +14,8 @@
   - Adaptive Practice `completionMessage` upgraded to use `mapPerformanceLevel` 4-tier thresholds (Excellent / Good / Fair / Needs Improvement) instead of a 2-tier check
   - Error cards in Adaptive Practice (error, premiumLocked, prestart) no longer have a redundant "Note" button — the persistent `← Note` BackLink at the page header handles navigation
 - **Board Exam Mode (Phase 1)** — Challenge Quiz is now a true exam experience:
-  - Challenge Quiz now opens with explicit mode selection between `Practice Mode` and `Board Exam Mode` instead of auto-starting or inferring exam mode from Premium-only capabilities
-  - `Practice Mode` now branches cleanly by plan: Premium users get the dedicated difficulty setup screen, while Free users skip difficulty selection and start immediately with a recommended difficulty
+  - Challenge Quiz now opens with explicit mode selection between `Challenge Quiz` and `Board Exam Mode` instead of auto-starting or inferring exam mode from Premium-only capabilities
+  - `Challenge Quiz` now branches cleanly by plan: Premium users get the dedicated difficulty setup screen, while Free users skip difficulty selection and start immediately with a recommended difficulty
   - Board Exam Mode is available on both Free and Premium plans and uses the same Challenge Quiz credit/quota rules during the current rollout stage
   - Board Exam Mode now has a formal `Board Exam setup` confirmation flow with timer/question/result summary, `Cancel`, `Start Exam`, and best-effort fullscreen focus entry
   - Board Exam Mode now explains its distraction-free restrictions before the exam starts, confirms start explicitly, reinforces `Exam in progress` during the session, and uses more formal result framing so hidden navigation does not feel like a bug

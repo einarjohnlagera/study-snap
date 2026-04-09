@@ -41,11 +41,11 @@ Shared ownership model:
 - Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine.
 - Board Exam Mode is available to all users from the Challenge Quiz screen and uses the same Challenge Quiz credit/quota rules as the standard Challenge Quiz flow.
 - The Challenge Quiz start screen now presents two explicit mode cards:
-  - `Practice Mode` for practice-oriented timed review
+  - `Challenge Quiz` for flexible timed review
   - `Board Exam Mode` for stricter exam simulation
 - Entering `Challenge Quiz` no longer auto-starts generation; users must choose a mode first.
-- `Practice Mode` branches by plan:
-  - Premium users go to `Practice challenge setup` and can choose `easy`, `medium`, or `hard` before generation.
+- `Challenge Quiz` branches by plan:
+  - Premium users go to `Challenge Quiz Setup` and can choose `easy`, `medium`, or `hard` before generation.
   - Free users skip the difficulty step entirely and start generation immediately with a backend-selected recommended difficulty.
 - Board Exam Mode uses a dedicated pre-exam confirmation/setup state with:
   - `Board Exam setup`
@@ -64,11 +64,11 @@ Shared ownership model:
   - message: the user is about to start a board exam simulation, results are delayed until the end, and navigation will be limited during the exam
   - actions: `Cancel`, `Start Exam`
 - Board Exam Mode always skips difficulty selection in the UI and uses internally controlled mixed difficulty (`12` questions) for the current rollout stage.
-- Difficulty selection remains Premium-gated for `Practice Mode`; when available, question count is derived from the selected difficulty:
+- Difficulty selection remains Premium-gated for `Challenge Quiz`; when available, question count is derived from the selected difficulty:
   - easy -> 10 questions
   - medium -> 12 questions
   - hard -> 15 questions
-- If Practice Mode difficulty selection is not available, question count and difficulty remain auto-selected from recent performance.
+- If Challenge Quiz difficulty selection is not available, question count and difficulty remain auto-selected from recent performance.
 - Board Exam Mode may request browser fullscreen/focus mode on start as a best-effort enhancement, but the session must still work if the browser denies fullscreen.
 - Board Exam Mode uses the same Challenge Quiz session persistence, usage limits, idempotency, timer, answer storage, session guard, and Review Answers flow.
 - Board Exam Mode is persisted as an explicit Challenge Quiz session mode value (`board_exam`) so refresh/reload resumes the same exam presentation rather than falling back to the practice view.
@@ -284,9 +284,9 @@ These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Pr
 
 Board Exam Mode now makes the Challenge Quiz engine feel like a strict board-exam simulation:
 - clean answering phase with no correctness hints
-- explicit mode selector with both `Practice Mode` and `Board Exam Mode`
+- explicit mode selector with both `Challenge Quiz` and `Board Exam Mode`
 - entering `Challenge Quiz` now always starts at mode selection instead of auto-generating a session
-- Free users can launch `Practice Mode` immediately without a disabled difficulty step; Premium users still get the dedicated difficulty setup screen
+- Free users can launch `Challenge Quiz` immediately without a disabled difficulty step; Premium users still get the dedicated difficulty setup screen
 - Board Exam Mode available to Free and Premium users under the existing Challenge Quiz quota rules
 - formal `Board Exam setup` confirmation screen with `Cancel` and `Start Exam`
 - Board Exam Mode skips difficulty selection and uses mixed difficulty during generation
