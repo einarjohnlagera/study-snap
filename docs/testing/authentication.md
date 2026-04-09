@@ -10,6 +10,7 @@ Verify these cases whenever auth/session logic changes:
 - manual logout -> redirected to `/login?reason=logged_out` (or plain `/login` if no logout banner is desired)
 - successful login with explicit `redirect` returns to the exact path, including query string
 - successful login without explicit `redirect` falls back to `/dashboard`
+- successful login after `reason=logged_out` must ignore any stale `redirect` query and land on `/dashboard`
 - manual login from public pages falls back to `/dashboard`
 - unverified users still land on `/verify-email` even when a redirect target exists
 - onboarding-required users still land on `/onboarding` even when a redirect target exists
@@ -27,5 +28,6 @@ Verify these cases whenever auth/session logic changes:
 - authenticated visitors who hit `/auth` or `/login` should be redirected away immediately
 - manual logout must not show `Your session has expired. Please log in again.`
 - manual logout must still stay neutral even if a protected request returns `401` while sign-out is in progress
+- manual logout must clear stale protected-route return intent for both same-account and different-account relogin
 - expired-session recovery must show `Your session has expired. Please log in again.`
 - protected-route access while logged out should use neutral login messaging such as `Please log in to continue.`

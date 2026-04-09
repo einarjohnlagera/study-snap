@@ -130,6 +130,7 @@
 
 ### Fixes
 
+- Manual sign-out no longer reuses a stale protected-page `redirect` on the next login, so same-account and cross-account relogin now return to `Dashboard` instead of leaking back into the previous protected route.
 - Restored distinct Note Editor create vs edit behavior so existing notes now render `Edit Note` copy, correct edit-mode actions, and the generated-note content lock without falling back to create-note messaging.
 - Quiz validation now uses math-safe choice normalization, catches real blank/duplicate/invalid-choice payloads more accurately, and retries LLM invalid quiz output only once before failing.
 - Quiz choice shuffling now preserves answer correctness by normalizing runtime data to canonical `choices + correctIndex`, keeping `A` / `B` / `C` / `D` as UI-only labels, and accepting legacy answer-text session payloads during load.
