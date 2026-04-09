@@ -220,12 +220,27 @@ describe("QuickReviewPage post-quiz UX", () => {
 
     render(<QuickReviewPage />);
 
-    await screen.findByText("Quick Review in progress");
+    expect(await screen.findByTestId("quick-review-top-bar")).toBeInTheDocument();
     await waitFor(() => {
       expect(getNote).toHaveBeenCalledTimes(1);
       expect(startQuickReviewSession).toHaveBeenCalledTimes(1);
     });
     expect(routerMock.replace).not.toHaveBeenCalled();
+  });
+
+  it("uses a compact top bar and sticky action bar during active Quick Review", async () => {
+    setupCompleteState();
+
+    render(<QuickReviewPage />);
+
+    const topBar = await screen.findByTestId("quick-review-top-bar");
+    const actionBar = screen.getByTestId("quick-review-action-bar");
+
+    expect(topBar).toHaveClass("sticky");
+    expect(topBar).toHaveTextContent("Quick Review");
+    expect(topBar).toHaveTextContent("1 / 1");
+    expect(actionBar).toHaveClass("fixed");
+    expect(screen.getByRole("button", { name: "Finish Quick Review" })).toBeInTheDocument();
   });
 
   it('result screen shows "← Back to Note" navigation link', async () => {

@@ -94,12 +94,22 @@ Shared ownership model:
   - reminder that limited navigation is intentional, not a broken UI state
 - Board Exam Mode may show a one-time, dismissible focus tip per user explaining that distractions are hidden intentionally to simulate a real test environment
 - hint text: "Answers are graded only after submission."
+- In-progress quiz layout should stay mobile-first and focused:
+  - compact sticky top bar with leave action, mode label, and timer/progress
+  - question section as the primary focus, starting with `Question X of Y`
+  - Question Navigator below the choices for Challenge Quiz / Board Exam only
+  - sticky bottom action bar on mobile so `Next`, `Previous`, or `Submit` stays reachable
+- remove redundant in-card quiz labels during the active question flow when the top bar already provides the context
 - user navigates freely between questions (Previous / Next) and can change answers until submission
 - user may jump by question number through the neutral Question Navigator; answered/current states must not reveal correctness
 - the Question Navigator is collapsible to reduce clutter:
   - Challenge Quiz: expanded by default on desktop, collapsed by default on mobile
   - Board Exam Mode: collapsed by default on both desktop and mobile for a more focused exam feel
   - the collapsed summary shows current question position plus answered count and can be expanded on demand without losing navigator functionality
+- Quick Review shares the same focused mobile rhythm but stays simpler:
+  - no timer emphasis
+  - no Question Navigator
+  - compact top bar plus sticky bottom `Next` / `Finish` action during active questions
 - quiz auto-submits if the timer reaches zero; user can also submit manually from the last question
 - if the timer expires during Board Exam Mode, show `Time's up. Submitting your exam...` while submission finishes
 - timer source of truth is persisted session timing: `timerStartedAtEpochSeconds + timeLimitSeconds`
