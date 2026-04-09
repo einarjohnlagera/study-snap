@@ -278,11 +278,31 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "medium" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "hard" })).toBeInTheDocument();
     expect(screen.getByText("Premium lets you choose the level before you start.")).toBeInTheDocument();
+    expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
+    expect(screen.getByText("Consumes 1 Challenge Quiz attempt.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start Challenge Quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Quiz" })).toBeInTheDocument();
   });
 
-  it("starts Challenge Quiz immediately for Free users without showing difficulty selection", async () => {
+  it("shows the free Challenge Quiz prescreen before starting", async () => {
+    setupChallengePrestart(false);
+
+    render(<ChallengeQuizPage />);
+
+    await screen.findByRole("heading", { name: "Choose your quiz mode" });
+    fireEvent.click(getModeCard("Challenge Quiz"));
+
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
+    expect(screen.getByText("Recommended difficulty: Medium")).toBeInTheDocument();
+    expect(screen.getByText("Choose difficulty (Premium)")).toBeInTheDocument();
+    expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
+    expect(screen.getByText("Recommended based on your recent performance.")).toBeInTheDocument();
+    expect(screen.getByText("Consumes 1 Challenge Quiz attempt.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("starts Challenge Quiz from the free prescreen", async () => {
     setupChallengePrestart(false);
     (startChallengeQuizSession as jest.Mock).mockResolvedValue({
       sessionId: "session-1",
@@ -305,12 +325,11 @@ describe("ChallengeQuizPage", () => {
 
     await screen.findByRole("heading", { name: "Choose your quiz mode" });
     fireEvent.click(getModeCard("Challenge Quiz"));
+    fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
 
     await waitFor(() => {
       expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" });
     });
-    expect(screen.queryByRole("heading", { name: "Challenge Quiz Setup" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
   });
 
   it("shows Board Exam Mode as a distinct setup flow without difficulty controls", async () => {
@@ -321,17 +340,14 @@ describe("ChallengeQuizPage", () => {
     await screen.findByRole("heading", { name: "Choose your quiz mode" });
     fireEvent.click(getModeCard("Board Exam Mode"));
 
-    expect(await screen.findByRole("heading", { name: "Board Exam setup" })).toBeInTheDocument();
-    expect(screen.getByText("Prepare a stricter exam simulation for Challenge Note before you begin.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Board Exam Mode" })).toBeInTheDocument();
-    expect(screen.getByText("Simulate a real exam experience with a focused, distraction-free environment.")).toBeInTheDocument();
-    expect(screen.getByText("Timed session")).toBeInTheDocument();
-    expect(screen.getByText("Mixed difficulty questions")).toBeInTheDocument();
-    expect(screen.getByText("No interruptions during the exam")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Board Exam Setup" })).toBeInTheDocument();
+    expect(screen.getByText("Review the exam setup for Challenge Note before you begin.")).toBeInTheDocument();
+    expect(screen.getByText("Simulate a focused exam session with mixed difficulty.")).toBeInTheDocument();
+    expect(screen.getByText("Strict timed session.")).toBeInTheDocument();
+    expect(screen.getByText("No navigation during exam")).toBeInTheDocument();
     expect(screen.getByText("Results shown after completion")).toBeInTheDocument();
-    expect(screen.getByText("Navigation will be limited during the exam to help you stay focused.")).toBeInTheDocument();
-    expect(screen.getByText("12 questions with mixed difficulty.")).toBeInTheDocument();
-    expect(screen.getByText("Mixed and internally controlled for exam simulation.")).toBeInTheDocument();
+    expect(screen.getByText("Leaving counts as submission")).toBeInTheDocument();
+    expect(screen.getByText("Consumes 1 Challenge Quiz attempt.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "hard" })).not.toBeInTheDocument();
@@ -347,8 +363,8 @@ describe("ChallengeQuizPage", () => {
     await screen.findByRole("heading", { name: "Choose your quiz mode" });
     fireEvent.click(getModeCard("Board Exam Mode"));
 
-    expect(await screen.findByRole("heading", { name: "Board Exam setup" })).toBeInTheDocument();
-    expect(screen.getByText("12 questions with mixed difficulty.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Board Exam Setup" })).toBeInTheDocument();
+    expect(screen.getByText("Simulate a focused exam session with mixed difficulty.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Exam" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
   });
@@ -746,7 +762,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(hardButton);
     expect(hardButton).toHaveClass("border-blue-500");
 
-    const startButton = screen.getByRole("button", { name: "Start Challenge Quiz" });
+    const startButton = screen.getByRole("button", { name: "Start Quiz" });
     fireEvent.click(startButton);
     fireEvent.click(startButton);
 

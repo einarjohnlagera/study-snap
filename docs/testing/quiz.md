@@ -23,18 +23,17 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 ## Exam Mode behavior
 
 - Challenge Quiz start screen shows two explicit mode options: `Challenge Quiz` and `Board Exam Mode`
-- entering Challenge Quiz does not auto-start generation; the user must choose a mode first
-- Premium users who choose `Challenge Quiz` see the dedicated difficulty setup screen before generation
-- Free users who choose `Challenge Quiz` skip difficulty selection entirely and start generation immediately
+- entering Challenge Quiz does not auto-start generation; the user must choose a mode first and then land on a mode-specific prescreen
+- Premium users who choose `Challenge Quiz` see `Challenge Quiz Setup` before generation with visible difficulty controls
+- Free users who choose `Challenge Quiz` also see `Challenge Quiz Setup` before generation, but only as a recommended-difficulty summary with subtle Premium upsell copy
+- `Challenge Quiz Setup` shows timer, question-count, and attempt-usage sections in addition to the mode-specific difficulty section
 - Board Exam Mode is available on both Free and Premium plans and still consumes the standard Challenge Quiz quota
-- Board Exam Mode shows a dedicated `Board Exam setup` confirmation state with `Cancel` and `Start Exam`
-- Board Exam setup includes an explicit explanation block covering:
-  - focused exam simulation framing
-  - timed session
-  - mixed difficulty questions
-  - no interruptions during the exam
-  - results shown after completion
-  - intentional limited navigation during the exam
+- Board Exam Mode shows a dedicated `Board Exam Setup` confirmation state with `Cancel` and `Start Exam`
+- Board Exam Setup includes:
+  - focused exam simulation description
+  - strict timed session summary
+  - rules for no navigation, results after completion, and leaving counts as submission
+  - attempt-usage summary
 - tapping `Start Exam` first opens the `Start Board Exam Mode?` confirmation modal and generation does not begin until the user confirms
 - Board Exam Mode never shows difficulty selection in the UI and always uses mixed difficulty with the fixed Board Exam question count
 - Free users can still enter Board Exam Mode without a separate Premium lock or dead-end disabled controls
@@ -43,10 +42,10 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - question-number navigation during Board Exam Mode shows current/answered/unanswered states only and never correctness
 - active Board Exam pages visibly reinforce context with `Board Exam Mode`, `Exam in progress`, and copy explaining that limited navigation is intentional
 - the one-time Board Exam focus tip can be dismissed and does not reappear for the same user after dismissal
-- after `Start Exam` / `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
-- after `Start Exam` / `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
+- after `Start Exam` / `Start Quiz` is clicked, difficulty buttons are disabled immediately
+- after `Start Exam` / `Start Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
 - double-clicking Start does not create duplicate Challenge Quiz start requests
-- after `Start Exam` / `Start Challenge Quiz` is clicked, a full-screen generation overlay appears and page interaction is blocked until generation resolves
+- after `Start Exam` / `Start Quiz` is clicked, a full-screen generation overlay appears and page interaction is blocked until generation resolves
 - Challenge Quiz generation refresh/status checks reuse existing `GENERATING` or `IN_PROGRESS` sessions and do not call the LLM again
 - if Challenge Quiz generation returns `FAILED`, the page shows a retryable failure state rather than starting an active quiz
 - "Answers are graded only after submission." hint is visible during the quiz

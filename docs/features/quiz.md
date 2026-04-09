@@ -30,7 +30,7 @@ Shared ownership model:
 - learner-level aware, defaulting to `College` when missing
 - question count adapts by recent Quick Review performance
 - should not repeat the Study Pack / Quick Review question set
-- the start screen must disable difficulty controls and the Start button immediately after `Start Challenge Quiz` is clicked.
+- the start screen must disable difficulty controls and the Start button immediately after `Start Quiz` is clicked.
 - duplicate starts must be prevented while the start request is in flight.
 - while Challenge Quiz LLM generation is in progress, the page shows a full-screen generation overlay and blocks page interaction/navigation until the backend returns `IN_PROGRESS` or `FAILED`.
 - quantitative notes may produce computation or formula-based questions
@@ -43,22 +43,29 @@ Shared ownership model:
 - The Challenge Quiz start screen now presents two explicit mode cards:
   - `Challenge Quiz` for flexible timed review
   - `Board Exam Mode` for stricter exam simulation
-- Entering `Challenge Quiz` no longer auto-starts generation; users must choose a mode first.
+- Entering `Challenge Quiz` no longer auto-starts generation; users first choose a mode, then review a mode-specific prescreen before generation begins.
 - `Challenge Quiz` branches by plan:
-  - Premium users go to `Challenge Quiz Setup` and can choose `easy`, `medium`, or `hard` before generation.
-  - Free users skip the difficulty step entirely and start generation immediately with a backend-selected recommended difficulty.
+  - Premium users go to `Challenge Quiz Setup`, can choose `easy`, `medium`, or `hard`, then start the quiz from that prescreen.
+  - Free users also go to `Challenge Quiz Setup`, see the recommended `Medium` difficulty plus a subtle `Choose difficulty (Premium)` upsell, then start from the same prescreen.
+- `Challenge Quiz Setup` should show:
+  - difficulty section
+  - timer summary: `10 minutes. Timer runs until submission or expiration.`
+  - question-count summary
+  - attempt-usage summary: `Consumes 1 Challenge Quiz attempt.`
+  - primary action: `Start Quiz`
 - Board Exam Mode uses a dedicated pre-exam confirmation/setup state with:
-  - `Board Exam setup`
-  - explanation block for why the mode hides distractions and delays results
-  - timer, question-count, result, and attempt-usage summary
+  - `Board Exam Setup`
+  - concise description block
+  - timer summary
+  - rules summary
+  - attempt-usage summary
   - `Cancel` and `Start Exam`
-- Board Exam setup must explicitly explain:
-  - this is a focused exam simulation
-  - timed session
-  - mixed difficulty questions
-  - no interruptions during the exam
+- Board Exam Setup must explicitly explain:
+  - this is a focused exam simulation with mixed difficulty
+  - strict timed session
+  - no navigation during the exam
   - results shown only after completion
-  - navigation will be limited intentionally during the session to help the user stay focused
+  - leaving counts as submission
 - Tapping `Start Exam` opens a confirmation modal before generation starts:
   - title: `Start Board Exam Mode?`
   - message: the user is about to start a board exam simulation, results are delayed until the end, and navigation will be limited during the exam
@@ -288,7 +295,7 @@ Board Exam Mode now makes the Challenge Quiz engine feel like a strict board-exa
 - entering `Challenge Quiz` now always starts at mode selection instead of auto-generating a session
 - Free users can launch `Challenge Quiz` immediately without a disabled difficulty step; Premium users still get the dedicated difficulty setup screen
 - Board Exam Mode available to Free and Premium users under the existing Challenge Quiz quota rules
-- formal `Board Exam setup` confirmation screen with `Cancel` and `Start Exam`
+- formal `Board Exam Setup` confirmation screen with `Cancel` and `Start Exam`
 - Board Exam Mode skips difficulty selection and uses mixed difficulty during generation
 - 10-minute persisted countdown that auto-submits on expiry
 - neutral question-number navigator for moving through the exam without revealing correctness

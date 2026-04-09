@@ -59,7 +59,6 @@ type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
 
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
-const BOARD_EXAM_QUESTION_COUNT = 12;
 const TIMER_TICK_INTERVAL_MS = 1000;
 const BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX = "notelib-board-exam-mode-tip-dismissed";
 const BOARD_EXAM_START_CONFIRM_TITLE = "Start Board Exam Mode?";
@@ -715,8 +714,7 @@ export default function ChallengeQuizPage() {
     ? "Creating a stricter exam simulation from your notes"
     : "Creating personalized questions from your notes";
   const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable, selectedDifficulty);
-  const canChoosePracticeDifficulty = Boolean(note?.difficultySelectionAvailable);
-  const boardExamQuestionSummary = `${BOARD_EXAM_QUESTION_COUNT} questions with mixed difficulty.`;
+  const canChooseChallengeDifficulty = Boolean(note?.difficultySelectionAvailable);
   const boardExamTimerState = useMemo(
     () => resolveBoardExamTimerState(remainingSeconds),
     [remainingSeconds],
@@ -729,12 +727,8 @@ export default function ChallengeQuizPage() {
   const handleSelectChallengeQuizMode = useCallback(() => {
     setSelectedMode(CHALLENGE_MODE);
     setError(null);
-    if (canChoosePracticeDifficulty) {
-      setPrestartStep("challenge-setup");
-      return;
-    }
-    void handleStartChallenge(CHALLENGE_MODE);
-  }, [canChoosePracticeDifficulty, handleStartChallenge]);
+    setPrestartStep("challenge-setup");
+  }, []);
   const handleSelectBoardExamMode = useCallback(() => {
     setSelectedMode(BOARD_EXAM_MODE);
     setError(null);
@@ -876,9 +870,9 @@ export default function ChallengeQuizPage() {
                   Flexible quiz mode with optional difficulty selection.
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
-                  {canChoosePracticeDifficulty
+                  {canChooseChallengeDifficulty
                     ? "Premium users can choose the challenge difficulty before generation."
-                    : "Free users start right away with a recommended difficulty."}
+                    : "Review the recommended setup before you start."}
                 </p>
               </button>
               <button
@@ -911,43 +905,56 @@ export default function ChallengeQuizPage() {
             </p>
             <h1 className="text-xl font-semibold sm:text-2xl">Challenge Quiz Setup</h1>
             <p className="text-sm text-foreground/80">
-              Flexible quiz mode for {note?.title ?? "this note"}. Pick the difficulty, then generate your Challenge Quiz.
+              Review the quiz setup for {note?.title ?? "this note"} before you begin.
             </p>
             <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
               <div className="space-y-1">
                 <p className="font-medium text-foreground">Difficulty</p>
-                <p>Premium lets you choose the level before you start.</p>
+                {canChooseChallengeDifficulty ? (
+                  <p>Premium lets you choose the level before you start.</p>
+                ) : (
+                  <>
+                    <p>Recommended difficulty: Medium</p>
+                    <p className="text-foreground/65">Choose difficulty (Premium)</p>
+                  </>
+                )}
               </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {(["easy", "medium", "hard"] as const).map((difficulty) => (
-                  <button
-                    key={difficulty}
-                    type="button"
-                    className={cn(
-                      "rounded-md border px-3 py-2 text-left capitalize transition",
-                      selectedDifficulty === difficulty
-                        ? "border-blue-500 bg-blue-500/10 text-foreground"
-                        : "border-border bg-background",
-                    )}
-                    onClick={() => {
-                      if (!starting) {
-                        setSelectedDifficulty(difficulty);
-                      }
-                    }}
-                    disabled={challengeGenerationLocked}
-                  >
-                    {difficulty}
-                  </button>
-                ))}
-              </div>
-              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+              {canChooseChallengeDifficulty ? (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {(["easy", "medium", "hard"] as const).map((difficulty) => (
+                    <button
+                      key={difficulty}
+                      type="button"
+                      className={cn(
+                        "rounded-md border px-3 py-2 text-left capitalize transition",
+                        selectedDifficulty === difficulty
+                          ? "border-blue-500 bg-blue-500/10 text-foreground"
+                          : "border-border bg-background",
+                      )}
+                      onClick={() => {
+                        if (!starting) {
+                          setSelectedDifficulty(difficulty);
+                        }
+                      }}
+                      disabled={challengeGenerationLocked}
+                    >
+                      {difficulty}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-3">
                 <div className="space-y-1">
-                  <p className="font-medium text-foreground">Question count</p>
-                  <p>{questionCountSummary}</p>
+                  <p className="font-medium text-foreground">Timer</p>
+                  <p>10 minutes. Timer runs until submission or expiration.</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="font-medium text-foreground">Results</p>
-                  <p>See your score after the challenge ends.</p>
+                  <p className="font-medium text-foreground">Question count</p>
+                  <p>{canChooseChallengeDifficulty ? questionCountSummary : "Recommended based on your recent performance."}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Attempt usage</p>
+                  <p>Consumes 1 Challenge Quiz attempt.</p>
                 </div>
               </div>
             </div>
@@ -971,7 +978,7 @@ export default function ChallengeQuizPage() {
                 onClick={() => void handleStartChallenge(CHALLENGE_MODE)}
                 disabled={challengeGenerationLocked}
               >
-                {challengeGenerationLocked ? "Starting..." : "Start Challenge Quiz"}
+                {challengeGenerationLocked ? "Starting..." : "Start Quiz"}
               </Button>
             </div>
           </Card>
@@ -980,49 +987,36 @@ export default function ChallengeQuizPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
               Board Exam Mode
             </p>
-            <h1 className="text-xl font-semibold sm:text-2xl">Board Exam setup</h1>
+            <h1 className="text-xl font-semibold sm:text-2xl">Board Exam Setup</h1>
             <p className="text-sm text-foreground/80">
-              Prepare a stricter exam simulation for {note?.title ?? "this note"} before you begin.
+              Review the exam setup for {note?.title ?? "this note"} before you begin.
             </p>
 
             <div className="space-y-3 rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
               <div className="space-y-2">
-                <h2 className="text-base font-semibold text-foreground">Board Exam Mode</h2>
-                <p>Simulate a real exam experience with a focused, distraction-free environment.</p>
+                <h2 className="text-base font-semibold text-foreground">Description</h2>
+                <p>Simulate a focused exam session with mixed difficulty.</p>
               </div>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>Timed session</li>
-                <li>Mixed difficulty questions</li>
-                <li>No interruptions during the exam</li>
-                <li>Results shown after completion</li>
-              </ul>
-              <p className="rounded-md border border-foreground/15 bg-muted/30 px-3 py-2 text-sm text-foreground/75">
-                Navigation will be limited during the exam to help you stay focused.
-              </p>
             </div>
 
             <div className="space-y-3 rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Difficulty</p>
-                  <p>Mixed and internally controlled for exam simulation.</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">Question count</p>
-                  <p>{boardExamQuestionSummary}</p>
-                </div>
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">Timer</p>
-                  <p>10 minutes. The timer keeps running until you submit or time expires.</p>
+                  <p>Strict timed session.</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="font-medium text-foreground">Results</p>
-                  <p>See your score only after the exam ends.</p>
+                  <p className="font-medium text-foreground">Rules</p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>No navigation during exam</li>
+                    <li>Results shown after completion</li>
+                    <li>Leaving counts as submission</li>
+                  </ul>
                 </div>
-              </div>
-              <div className="space-y-1 border-t border-border pt-3">
-                <p className="font-medium text-foreground">Attempt usage</p>
-                <p>Starting this mode consumes one Challenge Quiz attempt from your current plan.</p>
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">Attempt usage</p>
+                  <p>Consumes 1 Challenge Quiz attempt.</p>
+                </div>
               </div>
             </div>
 
