@@ -21,7 +21,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("next/image", () => ({
   __esModule: true,
-  default: ({ alt }: { alt: string }) => <img alt={alt} />,
+  default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} />,
 }));
 
 jest.mock("@/lib/auth", () => {
@@ -54,6 +54,13 @@ const verifiedAuthUser = {
   refreshToken: "refresh-token",
   accessTokenExpiresAt: "2026-03-31T01:00:00Z",
   refreshTokenExpiresAt: "2026-04-30T01:00:00Z",
+};
+
+const secondVerifiedAuthUser = {
+  ...verifiedAuthUser,
+  id: "user-2",
+  email: "[email protected]",
+  displayName: "Second",
 };
 
 describe("AuthPage", () => {
@@ -142,6 +149,48 @@ describe("AuthPage", () => {
     expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
   });
 
+  it("redirects manual logout relogin to the dashboard even when a stale redirect query remains", async () => {
+    window.history.replaceState(
+      {},
+      "",
+      "/login?reason=logged_out&redirect=%2Fstudy-packs%2Fnote-1%2Fchallenge-quiz",
+    );
+    (login as jest.Mock).mockResolvedValue(verifiedAuthUser);
+
+    const { container } = render(<AuthPage />);
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "note@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
+    });
+  });
+
+  it("does not leak a stale protected redirect across accounts after manual logout", async () => {
+    window.history.replaceState({}, "", "/login?reason=logged_out&redirect=%2Fnotes%2Fnote-1");
+    (login as jest.Mock).mockResolvedValue(secondVerifiedAuthUser);
+
+    const { container } = render(<AuthPage />);
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "second@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText("Password"), {
+      target: { value: "password123" },
+    });
+    fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+    await waitFor(() => {
+      expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
+    });
+  });
+
   it("shows a neutral prompt for protected-route access while logged out", () => {
     window.history.replaceState({}, "", "/login?reason=auth_required&redirect=%2Flibrary");
 
@@ -159,6 +208,18 @@ describe("AuthPage", () => {
 
     await waitFor(() => {
       expect(routerMock.replace).toHaveBeenCalledWith("/profile");
+    });
+    expect(screen.queryByRole("heading", { name: "Log in to NoteLib" })).not.toBeInTheDocument();
+  });
+
+  it("sends authenticated visitors to the dashboard when the login page came from manual logout", async () => {
+    currentAuthUser = verifiedAuthUser;
+    window.history.replaceState({}, "", "/login?reason=logged_out&redirect=%2Fprofile");
+
+    render(<AuthPage />);
+
+    await waitFor(() => {
+      expect(routerMock.replace).toHaveBeenCalledWith("/dashboard");
     });
     expect(screen.queryByRole("heading", { name: "Log in to NoteLib" })).not.toBeInTheDocument();
   });

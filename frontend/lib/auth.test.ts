@@ -27,6 +27,13 @@ const verifiedUser: AuthUser = {
   refreshTokenExpiresAt: "2026-04-30T01:00:00Z",
 };
 
+const secondVerifiedUser: AuthUser = {
+  ...verifiedUser,
+  id: "user-2",
+  email: "second@example.com",
+  displayName: "Second",
+};
+
 describe("auth redirect helpers", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -44,6 +51,24 @@ describe("auth redirect helpers", () => {
 
   it("falls back to the dashboard when no redirect query exists", () => {
     expect(resolvePostLoginDestination(verifiedUser)).toBe("/dashboard");
+  });
+
+  it("ignores stale redirect queries after manual logout for the same user", () => {
+    const destination = resolvePostLoginDestination(
+      verifiedUser,
+      { search: "?reason=logged_out&redirect=%2Fstudy-packs%2Fnote-1%2Fchallenge-quiz" },
+    );
+
+    expect(destination).toBe("/dashboard");
+  });
+
+  it("ignores stale redirect queries after manual logout for a different user", () => {
+    const destination = resolvePostLoginDestination(
+      secondVerifiedUser,
+      { search: "?reason=logged_out&redirect=%2Fnotes%2Fnote-1%3Ftab%3Dquiz" },
+    );
+
+    expect(destination).toBe("/dashboard");
   });
 
   it("ignores auth-page redirect targets", () => {

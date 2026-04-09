@@ -46,6 +46,10 @@ Required endpoints:
   - `/verify-email` or `/onboarding` when required by the authenticated user state
   - explicit `redirect` query destination for protected-route access and session-expired recovery
   - `/dashboard` fallback
+- Manual logout is different from session-expired recovery:
+  - logout should redirect to `/login?reason=logged_out` without preserving a protected return target
+  - if a stale `redirect` query is still present on the login URL, successful login must ignore it and send the user to `Dashboard`
+  - this prevents same-account and cross-account reuse of a previous protected page after sign-out
 - Preserve query-string state when restoring note/detail views such as `?tab=quiz`.
 - Manual login from public pages such as Landing, Learn, Public Library, or Public Note should resolve to `Dashboard`.
 - Auth pages should also redirect already-authenticated users to the same resolved post-login destination.

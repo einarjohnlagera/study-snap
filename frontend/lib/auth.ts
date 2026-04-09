@@ -171,6 +171,10 @@ export function resolvePostLoginDestination(
   const params = options?.search instanceof URLSearchParams
     ? options.search
     : new URLSearchParams(options?.search ?? globalThis.location?.search ?? "");
+  const loginReason = params.get(LOGIN_REASON_QUERY_KEY);
+  if (loginReason === LOGIN_REASON_LOGGED_OUT) {
+    return "/dashboard";
+  }
   const redirectTarget = getSafeRedirectPath(params.get(LOGIN_REDIRECT_QUERY_KEY));
   if (redirectTarget && !isAuthRoutePath(redirectTarget)) {
     return redirectTarget;

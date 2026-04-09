@@ -588,6 +588,8 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - If a session expires while the user is inside authenticated app pages, login should return them to that interrupted page through the explicit `redirect` query.
 - If a logged-out user tries to open a protected route, login should return them to that requested protected page through the explicit `redirect` query.
 - Manual login from public pages should land on `Dashboard`.
+- Manual sign-out must clear any remembered protected return path and must not reuse a stale `redirect` query on the next login.
+- After manual sign-out, the next successful login should land on `Dashboard` unless verification or onboarding gating applies.
 - Do not send users back to public marketing or discovery pages automatically after login unless a protected-route redirect explicitly requires it.
 
 ### Auth Messaging Rule
