@@ -16,6 +16,13 @@ type QuizSessionGuardOptions = {
   onConfirmLeave: () => Promise<void> | void;
   onBeforeRouteLeave?: () => void;
   blockWithoutConfirmation?: boolean;
+  dialogTitle?: string;
+  dialogDescription?: string;
+  cancelLabel?: string;
+  confirmLabel?: string;
+  confirmLoadingLabel?: string;
+  leaveErrorMessage?: string;
+  beforeUnloadMessage?: string;
 };
 
 type QuizSessionGuardResult = {
@@ -29,6 +36,13 @@ export function useQuizSessionGuard({
   onConfirmLeave,
   onBeforeRouteLeave,
   blockWithoutConfirmation = false,
+  dialogTitle = LEAVE_QUIZ_TITLE,
+  dialogDescription = LEAVE_QUIZ_DESCRIPTION,
+  cancelLabel = "Stay",
+  confirmLabel = "Leave Quiz",
+  confirmLoadingLabel = "Leaving...",
+  leaveErrorMessage = LEAVE_QUIZ_ERROR,
+  beforeUnloadMessage = BEFORE_UNLOAD_MESSAGE,
 }: QuizSessionGuardOptions): QuizSessionGuardResult {
   const router = useRouter();
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
@@ -74,8 +88,8 @@ export function useQuizSessionGuard({
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       onBeforeRouteLeave?.();
       event.preventDefault();
-      event.returnValue = BEFORE_UNLOAD_MESSAGE;
-      return BEFORE_UNLOAD_MESSAGE;
+      event.returnValue = beforeUnloadMessage;
+      return beforeUnloadMessage;
     };
 
     const handlePopState = () => {
@@ -123,7 +137,7 @@ export function useQuizSessionGuard({
       globalThis.removeEventListener("popstate", handlePopState);
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [active, blockWithoutConfirmation, fallbackHref, onBeforeRouteLeave]);
+  }, [active, beforeUnloadMessage, blockWithoutConfirmation, fallbackHref, onBeforeRouteLeave]);
 
   const handleConfirmLeave = useCallback(async () => {
     if (leaving) {
@@ -141,17 +155,17 @@ export function useQuizSessionGuard({
         router.push(targetHref);
       }
     } catch {
-      setLeaveError(LEAVE_QUIZ_ERROR);
+      setLeaveError(leaveErrorMessage);
     } finally {
       setLeaving(false);
     }
-  }, [fallbackHref, leaving, onConfirmLeave, pendingHref, router]);
+  }, [fallbackHref, leaveErrorMessage, leaving, onConfirmLeave, pendingHref, router]);
 
   const LeaveQuizModal = useCallback(() => (
     <AppModal
       isOpen={showLeaveDialog}
-      title={LEAVE_QUIZ_TITLE}
-      description={LEAVE_QUIZ_DESCRIPTION}
+      title={dialogTitle}
+      description={dialogDescription}
       onClose={() => {
         if (!leaving) {
           setShowLeaveDialog(false);
@@ -160,10 +174,10 @@ export function useQuizSessionGuard({
       actions={(
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={() => setShowLeaveDialog(false)} disabled={leaving}>
-            Stay
+            {cancelLabel}
           </Button>
           <Button type="button" onClick={() => void handleConfirmLeave()} disabled={leaving}>
-            {leaving ? "Leaving..." : "Leave Quiz"}
+            {leaving ? confirmLoadingLabel : confirmLabel}
           </Button>
         </div>
       )}
@@ -172,7 +186,17 @@ export function useQuizSessionGuard({
         <p className="text-sm text-red-600 dark:text-red-400">{leaveError}</p>
       ) : null}
     </AppModal>
-  ), [handleConfirmLeave, leaveError, leaving, showLeaveDialog]);
+  ), [
+    cancelLabel,
+    confirmLabel,
+    confirmLoadingLabel,
+    dialogDescription,
+    dialogTitle,
+    handleConfirmLeave,
+    leaveError,
+    leaving,
+    showLeaveDialog,
+  ]);
 
   return {
     requestLeave,

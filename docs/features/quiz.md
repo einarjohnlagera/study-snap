@@ -49,9 +49,20 @@ Shared ownership model:
   - Free users skip the difficulty step entirely and start generation immediately with a backend-selected recommended difficulty.
 - Board Exam Mode uses a dedicated pre-exam confirmation/setup state with:
   - `Board Exam setup`
-  - mode explanation
+  - explanation block for why the mode hides distractions and delays results
   - timer, question-count, result, and attempt-usage summary
   - `Cancel` and `Start Exam`
+- Board Exam setup must explicitly explain:
+  - this is a focused exam simulation
+  - timed session
+  - mixed difficulty questions
+  - no interruptions during the exam
+  - results shown only after completion
+  - navigation will be limited intentionally during the session to help the user stay focused
+- Tapping `Start Exam` opens a confirmation modal before generation starts:
+  - title: `Start Board Exam Mode?`
+  - message: the user is about to start a board exam simulation, results are delayed until the end, and navigation will be limited during the exam
+  - actions: `Cancel`, `Start Exam`
 - Board Exam Mode always skips difficulty selection in the UI and uses internally controlled mixed difficulty (`12` questions) for the current rollout stage.
 - Difficulty selection remains Premium-gated for `Practice Mode`; when available, question count is derived from the selected difficulty:
   - easy -> 10 questions
@@ -70,6 +81,11 @@ Shared ownership model:
   - neutral selected-state styling
   - formal timer/progress header
   - reduced color emphasis
+- Board Exam running state must reinforce context explicitly:
+  - top-page header copy indicating `Board Exam Mode`
+  - small `Exam in progress` framing
+  - reminder that limited navigation is intentional, not a broken UI state
+- Board Exam Mode may show a one-time, dismissible focus tip per user explaining that distractions are hidden intentionally to simulate a real test environment
 - hint text: "Answers are graded only after submission."
 - user navigates freely between questions (Previous / Next) and can change answers until submission
 - user may jump by question number through the neutral Question Navigator; answered/current states must not reveal correctness
@@ -85,6 +101,11 @@ Shared ownership model:
 - once the timer reaches zero, Board Exam locks answer changes and question navigation immediately
 - timeout auto-submit must fire at most once per expiry event; if that submission fails, the page may offer explicit retry submission but must not silently auto-submit on every subsequent tick
 - explanations are hidden during the quiz and only appear in the Answer Review section on the result screen
+- Board Exam leave handling is stricter than standard Challenge Quiz:
+  - leave modal title: `Leave exam?`
+  - message: `Your progress will be submitted and counted as complete.`
+  - actions: `Stay`, `Submit & Leave`
+  - confirming the leave submits the current exam once, then exits to the target route
 
 #### Result Screen
 
@@ -102,6 +123,10 @@ After submission, the result screen shows:
 6. **CTAs**:
    - Challenge Quiz: "Practice Weak Concepts", "Start Another Challenge", `← Back to Note`
    - Board Exam Mode: "Practice Weak Concepts", "Take Another Board Exam", `← Back to Note`
+- Board Exam result framing should stay more formal than standard Challenge Quiz:
+  - section label remains tied to `Board Exam Mode`
+  - main heading uses `Exam Result`
+  - summary copy refers to `performance` rather than casual encouragement while still leading into recovery actions
 
 #### Result Computation Rules
 

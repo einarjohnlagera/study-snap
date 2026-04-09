@@ -8,6 +8,7 @@ import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
+import { AppModal } from "@/components/ui/app-modal";
 import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
@@ -60,6 +61,13 @@ const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
 const BOARD_EXAM_QUESTION_COUNT = 12;
 const TIMER_TICK_INTERVAL_MS = 1000;
+const BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX = "notelib-board-exam-mode-tip-dismissed";
+const BOARD_EXAM_START_CONFIRM_TITLE = "Start Board Exam Mode?";
+const BOARD_EXAM_LEAVE_TITLE = "Leave exam?";
+const BOARD_EXAM_LEAVE_DESCRIPTION = "Your progress will be submitted and counted as complete.";
+const BOARD_EXAM_LEAVE_ERROR = "Could not submit and leave. Please try again.";
+const BOARD_EXAM_BEFORE_UNLOAD_MESSAGE = "You are currently in Board Exam Mode. Leaving will submit your current answers and end the exam.";
+const BOARD_EXAM_FOCUS_TIP = "Board Exam Mode hides distractions to simulate a real test environment.";
 
 function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number {
   if (difficulty === "easy") {
@@ -202,10 +210,13 @@ export default function ChallengeQuizPage() {
   const [showAnswerReview, setShowAnswerReview] = useState(false);
   const [showFirstQuizCompletionBanner, setShowFirstQuizCompletionBanner] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [viewerId, setViewerId] = useState<string | null>(null);
   const [activePaywallModal, setActivePaywallModal] = useState<"difficulty-selection" | "challenge-quiz-limit" | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
   const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(CHALLENGE_MODE);
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
+  const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
+  const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -238,7 +249,9 @@ export default function ChallengeQuizPage() {
 
   useEffect(() => {
     const syncVerification = () => {
-      setIsEmailVerified(Boolean(getAuthUser()?.emailVerifiedAt));
+      const authUser = getAuthUser();
+      setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
+      setViewerId(authUser?.id ?? null);
     };
     syncVerification();
     globalThis.addEventListener("studysnap-auth-change", syncVerification);
@@ -448,6 +461,8 @@ export default function ChallengeQuizPage() {
   const answeredCount = useMemo(() => Object.keys(selectedChoices).length, [selectedChoices]);
   const currentQuestion = totalQuestions > 0 && currentIndex < totalQuestions ? quiz[currentIndex] : null;
   const selectedChoiceIndex = selectedChoices[currentIndex] ?? null;
+  const activeMode = challengeSession?.mode ?? selectedMode;
+  const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
 
   useEffect(() => {
     progressRef.current = {
@@ -465,10 +480,16 @@ export default function ChallengeQuizPage() {
     persistProgress(latest.currentIndex, latest.selectedChoices, keepalive);
   }, [persistProgress]);
 
-  const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
+  const finalizeChallengeSession = useCallback(async ({
+    timeoutTriggered,
+    persistResultToPage,
+  }: {
+    timeoutTriggered: boolean;
+    persistResultToPage: boolean;
+  }) => {
     const activeSession = challengeSessionRef.current;
     if (!activeSession?.sessionId || submitInFlightRef.current) {
-      return;
+      return null;
     }
 
     if (timeoutTriggered) {
@@ -482,7 +503,9 @@ export default function ChallengeQuizPage() {
     submitInFlightRef.current = true;
     setSubmitting(true);
     setError(null);
-    setTimedOut(timeoutTriggered);
+    if (persistResultToPage) {
+      setTimedOut(timeoutTriggered);
+    }
     try {
       const completed = await completeChallengeQuizSession(activeSession.sessionId, {
         correctAnswers,
@@ -491,19 +514,36 @@ export default function ChallengeQuizPage() {
       });
       const authUser = getAuthUser();
       if (authUser?.id && getFirstStudyOnboardingStep(authUser.id) === "study-pack-ready") {
-        setShowFirstQuizCompletionBanner(true);
         clearFirstStudyOnboardingStep(authUser.id);
+        if (persistResultToPage) {
+          setShowFirstQuizCompletionBanner(true);
+        }
       }
-      setResult(completed);
-      setPhase("complete");
+      if (persistResultToPage) {
+        setResult(completed);
+        setPhase("complete");
+      }
+      return completed;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not save Challenge Quiz results.";
       setError(message);
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       submitInFlightRef.current = false;
       setSubmitting(false);
     }
   }, []);
+
+  const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
+    try {
+      await finalizeChallengeSession({
+        timeoutTriggered,
+        persistResultToPage: true,
+      });
+    } catch {
+      // Submission errors are surfaced through the shared page error state.
+    }
+  }, [finalizeChallengeSession]);
 
   useEffect(() => {
     if (phase !== "running" || !challengeSession || submitting || deadlineEpochSeconds === null) {
@@ -657,18 +697,17 @@ export default function ChallengeQuizPage() {
     setTimedOut(false);
     setError(null);
     setShowAnswerReview(false);
+    setShowBoardExamStartModal(false);
     setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode, Boolean(note?.difficultySelectionAvailable)));
     setPhase("prestart");
   };
 
   const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
-  const activeMode = challengeSession?.mode ?? selectedMode;
-  const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
   const boardExamTimerExpired = isBoardExamMode && remainingSeconds <= 0;
   const quizInteractionDisabled = submitting || boardExamTimerExpired;
   const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
-  const quizResultLabel = isBoardExamMode ? "Board Exam Result" : "Challenge Quiz Result";
+  const quizResultLabel = isBoardExamMode ? "Exam Result" : "Challenge Quiz Result";
   const submitButtonLabel = isBoardExamMode ? "Submit Exam" : "Submit Challenge Quiz";
   const retryButtonLabel = isBoardExamMode ? "Take Another Board Exam" : "Start Another Challenge";
   const generationOverlayTitle = isBoardExamMode ? "Preparing your board exam..." : "Generating your quiz...";
@@ -683,6 +722,10 @@ export default function ChallengeQuizPage() {
     [remainingSeconds],
   );
   const boardExamTimerDescription = getBoardExamTimerDescription(boardExamTimerState);
+  const boardExamFocusTipStorageKey = useMemo(
+    () => (viewerId ? `${BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX}:${viewerId}` : null),
+    [viewerId],
+  );
   const handleSelectPracticeMode = useCallback(() => {
     setSelectedMode(CHALLENGE_MODE);
     setError(null);
@@ -699,6 +742,7 @@ export default function ChallengeQuizPage() {
   }, []);
   const returnToModeSelection = useCallback(() => {
     setError(null);
+    setShowBoardExamStartModal(false);
     setPrestartStep("mode-selection");
     setSelectedMode(CHALLENGE_MODE);
   }, []);
@@ -710,9 +754,25 @@ export default function ChallengeQuizPage() {
       if (!challengeSession?.sessionId) {
         return;
       }
+      if (submitInFlightRef.current) {
+        throw new Error("Challenge Quiz submission is already in progress.");
+      }
       persistLatestProgress(true);
+      if (activeMode === BOARD_EXAM_MODE) {
+        await finalizeChallengeSession({
+          timeoutTriggered: false,
+          persistResultToPage: false,
+        });
+        return;
+      }
       await forfeitChallengeQuizSession(challengeSession.sessionId);
     },
+    dialogTitle: isBoardExamMode ? BOARD_EXAM_LEAVE_TITLE : undefined,
+    dialogDescription: isBoardExamMode ? BOARD_EXAM_LEAVE_DESCRIPTION : undefined,
+    confirmLabel: isBoardExamMode ? "Submit & Leave" : undefined,
+    confirmLoadingLabel: isBoardExamMode ? "Submitting..." : undefined,
+    leaveErrorMessage: isBoardExamMode ? BOARD_EXAM_LEAVE_ERROR : undefined,
+    beforeUnloadMessage: isBoardExamMode ? BOARD_EXAM_BEFORE_UNLOAD_MESSAGE : undefined,
   });
   const { LeaveQuizModal: GenerationLockModal } = useQuizSessionGuard({
     active: challengeGenerationLocked,
@@ -721,6 +781,21 @@ export default function ChallengeQuizPage() {
     blockWithoutConfirmation: true,
   });
 
+  useEffect(() => {
+    if (!isBoardExamMode || phase !== "running" || !boardExamFocusTipStorageKey) {
+      setShowBoardExamFocusTip(false);
+      return;
+    }
+    setShowBoardExamFocusTip(globalThis.localStorage.getItem(boardExamFocusTipStorageKey) !== "dismissed");
+  }, [boardExamFocusTipStorageKey, isBoardExamMode, phase]);
+
+  const dismissBoardExamFocusTip = useCallback(() => {
+    if (boardExamFocusTipStorageKey) {
+      globalThis.localStorage.setItem(boardExamFocusTipStorageKey, "dismissed");
+    }
+    setShowBoardExamFocusTip(false);
+  }, [boardExamFocusTipStorageKey]);
+
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
   return (
@@ -728,9 +803,16 @@ export default function ChallengeQuizPage() {
       <div className="flex items-center justify-between gap-3">
         {phase === "running" ? (
           <>
-            <p className="text-sm font-medium text-foreground/80">{quizModeLabel} in progress</p>
-            <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()}>
-              Leave Quiz
+            {isBoardExamMode ? (
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">Board Exam Mode</p>
+                <p className="text-xs text-foreground/65">Exam in progress. Navigation is limited to help you stay focused.</p>
+              </div>
+            ) : (
+              <p className="text-sm font-medium text-foreground/80">{quizModeLabel} in progress</p>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={() => requestLeave()} disabled={submitting}>
+              {isBoardExamMode ? "Leave Exam" : "Leave Quiz"}
             </Button>
           </>
         ) : (
@@ -900,8 +982,24 @@ export default function ChallengeQuizPage() {
             </p>
             <h1 className="text-xl font-semibold sm:text-2xl">Board Exam setup</h1>
             <p className="text-sm text-foreground/80">
-              Simulate a focused exam session for {note?.title ?? "this note"}. Results appear only after submission, and leaving may forfeit the attempt.
+              Prepare a stricter exam simulation for {note?.title ?? "this note"} before you begin.
             </p>
+
+            <div className="space-y-3 rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
+              <div className="space-y-2">
+                <h2 className="text-base font-semibold text-foreground">Board Exam Mode</h2>
+                <p>Simulate a real exam experience with a focused, distraction-free environment.</p>
+              </div>
+              <ul className="list-disc space-y-1 pl-5">
+                <li>Timed session</li>
+                <li>Mixed difficulty questions</li>
+                <li>No interruptions during the exam</li>
+                <li>Results shown after completion</li>
+              </ul>
+              <p className="rounded-md border border-foreground/15 bg-muted/30 px-3 py-2 text-sm text-foreground/75">
+                Navigation will be limited during the exam to help you stay focused.
+              </p>
+            </div>
 
             <div className="space-y-3 rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -928,16 +1026,6 @@ export default function ChallengeQuizPage() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-foreground/15 bg-background/80 p-4 text-sm text-foreground/80">
-              <p className="font-medium text-foreground">Board Exam Mode rules</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                <li>No correct or incorrect feedback appears while the session is active.</li>
-                <li>Results are shown only after submission or timer expiry.</li>
-                <li>The timer auto-submits the session when it reaches zero.</li>
-                <li>Leaving the quiz may forfeit the attempt and does not refund the credit.</li>
-              </ul>
-            </div>
-
             {challengeGenerationLocked ? (
               <p className="text-sm text-foreground/75">Preparing your board exam...</p>
             ) : null}
@@ -955,7 +1043,7 @@ export default function ChallengeQuizPage() {
               <Button
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={() => void handleStartChallenge(BOARD_EXAM_MODE)}
+                onClick={() => setShowBoardExamStartModal(true)}
                 disabled={challengeGenerationLocked}
               >
                 {challengeGenerationLocked ? "Starting..." : "Start Exam"}
@@ -970,7 +1058,7 @@ export default function ChallengeQuizPage() {
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-foreground/60">Board Exam Mode</p>
                 <h2 className="text-lg font-semibold text-foreground">Exam in progress</h2>
-                <p className="text-sm text-foreground/70">Selected answers are saved, but grading is delayed until submission.</p>
+                <p className="text-sm text-foreground/70">Distraction-free exam view. Selected answers are saved, grading appears only after submission.</p>
               </div>
               <div
                 data-testid="board-exam-timer"
@@ -1020,6 +1108,14 @@ export default function ChallengeQuizPage() {
               </p>
             </div>
           )}
+          {isBoardExamMode && showBoardExamFocusTip ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-foreground/15 bg-muted/20 p-4 text-sm text-foreground/80 sm:flex-row sm:items-center sm:justify-between">
+              <p>{BOARD_EXAM_FOCUS_TIP}</p>
+              <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={dismissBoardExamFocusTip}>
+                Got it
+              </Button>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3 text-sm text-foreground/75">
             <p>Question {Math.min(currentIndex + 1, totalQuestions)} of {totalQuestions}</p>
             <p>{answeredCount} answered</p>
@@ -1134,14 +1230,14 @@ export default function ChallengeQuizPage() {
             "text-xs font-semibold uppercase tracking-wide",
             isBoardExamMode ? "text-foreground/70" : "text-blue-600 dark:text-blue-400",
           )}>
-            {quizResultLabel}
+            {isBoardExamMode ? "Board Exam Mode" : quizResultLabel}
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">
-            {isBoardExamMode ? "Assessment complete" : (note?.title ?? quizModeLabel)}
+            {isBoardExamMode ? "Exam Result" : (note?.title ?? quizModeLabel)}
           </h1>
           <p className="text-sm text-foreground/75">
             {isBoardExamMode
-              ? "Your exam session is complete. Review the result summary first, then use the follow-up actions to recover weak areas."
+              ? "Your board exam simulation is complete. Review your performance first, then use the follow-up actions to recover weak areas."
               : "Your Challenge Quiz is complete. Review the result summary first, then choose the next study action."}
           </p>
           {showFirstQuizCompletionBanner ? (
@@ -1179,8 +1275,11 @@ export default function ChallengeQuizPage() {
               <p className="mt-2 text-sm text-foreground/75">Time ran out. Your answers were submitted automatically.</p>
             ) : null}
             <p className="mt-2 text-sm text-foreground/75">{getChallengeResultMessage(result.scorePercentage, activeMode)}</p>
-            <div className={`mt-3 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getPerformanceBadgeClass(result.performanceLevel)}`}>
-              {result.performanceLevel}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Performance</span>
+              <div className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getPerformanceBadgeClass(result.performanceLevel)}`}>
+                {result.performanceLevel}
+              </div>
             </div>
           </div>
           <Card className="space-y-3 p-4">
@@ -1264,6 +1363,45 @@ export default function ChallengeQuizPage() {
         </Card>
       ) : null}
 
+      <AppModal
+        isOpen={showBoardExamStartModal}
+        title={BOARD_EXAM_START_CONFIRM_TITLE}
+        onClose={() => {
+          if (!challengeGenerationLocked) {
+            setShowBoardExamStartModal(false);
+          }
+        }}
+        contentClassName="space-y-2"
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowBoardExamStartModal(false)}
+              disabled={challengeGenerationLocked}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setShowBoardExamStartModal(false);
+                void handleStartChallenge(BOARD_EXAM_MODE);
+              }}
+              disabled={challengeGenerationLocked}
+            >
+              {challengeGenerationLocked ? "Starting..." : "Start Exam"}
+            </Button>
+          </div>
+        )}
+      >
+        <p className="text-sm leading-relaxed text-foreground/80">
+          You are about to start a board exam simulation.
+        </p>
+        <p className="text-sm leading-relaxed text-foreground/80">
+          You will not see results until the end, and navigation will be limited during the exam.
+        </p>
+      </AppModal>
       <PaywallModal
         isOpen={activePaywallModal !== null}
         variant={activePaywallModal ?? "challenge-quiz-limit"}
