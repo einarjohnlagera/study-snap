@@ -359,12 +359,6 @@ class ChallengeQuizServiceTest {
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
-                eq(userId),
-                eq(studyPackId),
-                eq(QuickReviewSessionMode.QUICK_REVIEW),
-                any()
-        )).thenReturn(List.of());
         when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
         when(llmStudyPackService.generateChallengeQuiz(
                 eq("Pack title"),
@@ -372,7 +366,7 @@ class ChallengeQuizServiceTest {
                 eq(List.of("Concept")),
                 eq(List.of("Practice?")),
                 eq(12),
-                eq("medium"),
+                eq("mixed"),
                 any(StudyPackGenerationContext.class)
         )).thenReturn(List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
@@ -394,10 +388,11 @@ class ChallengeQuizServiceTest {
         ChallengeQuizStartResponse response = challengeQuizService.startSession(
                 studyPackId.toString(),
                 userId,
-                new ChallengeQuizStartRequest(null, "board_exam")
+                new ChallengeQuizStartRequest("hard", "board_exam")
         );
 
         assertThat(response.mode()).isEqualTo("board_exam");
+        assertThat(response.selectedDifficulty()).isEqualTo("mixed");
         assertThat(response.monthlyLimit()).isEqualTo(5);
         verify(featureGateService, never()).checkFeatureAccess(PlanType.FREE, Feature.DIFFICULTY_SELECTION);
     }

@@ -75,6 +75,7 @@ public class ChallengeQuizService {
     private static final String DIFFICULTY_EASY = "easy";
     private static final String DIFFICULTY_MEDIUM = "medium";
     private static final String DIFFICULTY_HARD = "hard";
+    private static final String DIFFICULTY_MIXED = "mixed";
     private static final String PERFORMANCE_LEVEL_EXCELLENT = "Excellent";
     private static final String PERFORMANCE_LEVEL_GOOD = "Good";
     private static final String PERFORMANCE_LEVEL_FAIR = "Fair";
@@ -131,8 +132,8 @@ public class ChallengeQuizService {
         UUID studyPackId = parseStudyPackId(studyPackIdRaw);
         StudyPackEntity studyPack = findOwnedStudyPackForGenerationOrThrow(studyPackId, userId);
         PlanType planType = subscriptionService.resolvePlan(userId);
-        String selectedDifficulty = resolveSelectedDifficulty(planType, request);
         String selectedMode = resolveSelectedMode(request);
+        String selectedDifficulty = resolveSelectedDifficulty(planType, selectedMode, request);
 
         QuickReviewSessionEntity existing = quickReviewSessionRepository
                 .findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
@@ -154,7 +155,7 @@ public class ChallengeQuizService {
 
         int usedThisMonth = assertChallengeQuizQuotaAvailable(userId, planType);
         aiRateLimitService.assertAllowed(userId, planType, AI_RATE_LIMIT_SCOPE);
-        ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty);
+        ChallengeGenerationProfile profile = resolveGenerationProfile(userId, studyPackId, selectedDifficulty, selectedMode);
         QuickReviewSessionEntity session = quickReviewSessionRepository.save(buildGeneratingSession(
                 userId,
                 studyPackId,
@@ -382,7 +383,15 @@ public class ChallengeQuizService {
         return Math.max(usedFromCountedSessions, usedFromUsage);
     }
 
-    private ChallengeGenerationProfile resolveGenerationProfile(UUID userId, UUID studyPackId, String selectedDifficulty) {
+    private ChallengeGenerationProfile resolveGenerationProfile(
+            UUID userId,
+            UUID studyPackId,
+            String selectedDifficulty,
+            String selectedMode
+    ) {
+        if (MODE_BOARD_EXAM.equals(selectedMode)) {
+            return new ChallengeGenerationProfile(MID_SCORE_QUESTION_COUNT, DIFFICULTY_MIXED);
+        }
         if (selectedDifficulty != null) {
             return new ChallengeGenerationProfile(resolveQuestionCountForDifficulty(selectedDifficulty), selectedDifficulty);
         }
@@ -414,6 +423,7 @@ public class ChallengeQuizService {
         return switch (difficulty) {
             case DIFFICULTY_EASY -> LOW_SCORE_QUESTION_COUNT;
             case DIFFICULTY_HARD -> HIGH_SCORE_QUESTION_COUNT;
+            case DIFFICULTY_MIXED -> MID_SCORE_QUESTION_COUNT;
             default -> MID_SCORE_QUESTION_COUNT;
         };
     }
@@ -461,7 +471,10 @@ public class ChallengeQuizService {
         );
     }
 
-    private String resolveSelectedDifficulty(PlanType planType, ChallengeQuizStartRequest request) {
+    private String resolveSelectedDifficulty(PlanType planType, String selectedMode, ChallengeQuizStartRequest request) {
+        if (MODE_BOARD_EXAM.equals(selectedMode)) {
+            return DIFFICULTY_MIXED;
+        }
         if (request == null || request.difficulty() == null || request.difficulty().isBlank()) {
             return null;
         }

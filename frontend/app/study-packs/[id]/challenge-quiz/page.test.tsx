@@ -66,6 +66,12 @@ describe("ChallengeQuizPage", () => {
     jest.restoreAllMocks();
   });
 
+  function getModeCard(label: string): HTMLButtonElement {
+    const card = screen.getByText(label).closest("button");
+    expect(card).not.toBeNull();
+    return card as HTMLButtonElement;
+  }
+
   function setupInProgressChallengeQuiz(mode: "challenge" | "board_exam" = "challenge") {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PREMIUM",
@@ -107,7 +113,7 @@ describe("ChallengeQuizPage", () => {
       monthlyLimit: 50,
       difficultySelectionAvailable: true,
       mode,
-      selectedDifficulty: "medium",
+      selectedDifficulty: mode === "board_exam" ? "mixed" : "medium",
       quiz: [
         {
           question: "What powers the cell?",
@@ -218,7 +224,7 @@ describe("ChallengeQuizPage", () => {
       monthlyLimit: 50,
       difficultySelectionAvailable: true,
       mode: "board_exam",
-      selectedDifficulty: "medium",
+      selectedDifficulty: "mixed",
       quiz: [
         {
           question: "What powers the cell?",
@@ -243,36 +249,98 @@ describe("ChallengeQuizPage", () => {
     });
   }
 
-  it("shows Board Exam Mode as a distinct setup flow for Premium users", async () => {
+  it("shows a mode-selection entry screen and does not auto-start the quiz", async () => {
     setupChallengePrestart(true);
 
     render(<ChallengeQuizPage />);
 
-    await screen.findByRole("heading", { name: "Challenge Note" });
-    fireEvent.click(screen.getByRole("button", { name: /Board Exam Mode/i }));
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(getModeCard("Practice Mode")).toBeInTheDocument();
+    expect(getModeCard("Board Exam Mode")).toBeInTheDocument();
+    expect(screen.getByText("Both modes use your standard Challenge Quiz attempt for this note.")).toBeInTheDocument();
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("shows Premium difficulty selection only after Practice Mode is chosen", async () => {
+    setupChallengePrestart(true);
+
+    render(<ChallengeQuizPage />);
+
+    await screen.findByRole("heading", { name: "Choose your quiz mode" });
+    fireEvent.click(getModeCard("Practice Mode"));
+
+    expect(await screen.findByRole("heading", { name: "Practice challenge setup" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "easy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "medium" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "hard" })).toBeInTheDocument();
+    expect(screen.getByText("Premium lets you choose the level before you start.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start Challenge Quiz" })).toBeInTheDocument();
+  });
+
+  it("starts Practice Mode immediately for Free users without showing difficulty selection", async () => {
+    setupChallengePrestart(false);
+    (startChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      status: "GENERATING",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 0,
+      timeLimitSeconds: 600,
+      usedThisMonth: 1,
+      monthlyLimit: 5,
+      difficultySelectionAvailable: false,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [],
+      currentQuestionIndex: 0,
+      sessionState: {},
+    });
+
+    render(<ChallengeQuizPage />);
+
+    await screen.findByRole("heading", { name: "Choose your quiz mode" });
+    fireEvent.click(getModeCard("Practice Mode"));
+
+    await waitFor(() => {
+      expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "challenge" });
+    });
+    expect(screen.queryByRole("heading", { name: "Practice challenge setup" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
+  });
+
+  it("shows Board Exam Mode as a distinct setup flow without difficulty controls", async () => {
+    setupChallengePrestart(true);
+
+    render(<ChallengeQuizPage />);
+
+    await screen.findByRole("heading", { name: "Choose your quiz mode" });
+    fireEvent.click(getModeCard("Board Exam Mode"));
 
     expect(await screen.findByRole("heading", { name: "Board Exam setup" })).toBeInTheDocument();
     expect(screen.getByText("Simulate a focused exam session for Challenge Note. Results appear only after submission, and leaving may forfeit the attempt.")).toBeInTheDocument();
-    expect(screen.getByText("12 questions for the selected difficulty.")).toBeInTheDocument();
+    expect(screen.getByText("12 questions with mixed difficulty.")).toBeInTheDocument();
+    expect(screen.getByText("Mixed and internally controlled for exam simulation.")).toBeInTheDocument();
     expect(screen.getByText("Board Exam Mode rules")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "hard" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Exam" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 
-  it("keeps Board Exam Mode available to Free users with recommended difficulty", async () => {
+  it("keeps Board Exam Mode available to Free users without a difficulty step", async () => {
     setupChallengePrestart(false);
 
     render(<ChallengeQuizPage />);
 
-    await screen.findByRole("heading", { name: "Challenge Note" });
-
-    fireEvent.click(screen.getByRole("button", { name: /Board Exam Mode/i }));
+    await screen.findByRole("heading", { name: "Choose your quiz mode" });
+    fireEvent.click(getModeCard("Board Exam Mode"));
 
     expect(await screen.findByRole("heading", { name: "Board Exam setup" })).toBeInTheDocument();
-    expect(screen.getByText("Recommended question count based on your recent performance.")).toBeInTheDocument();
-    expect(screen.getByText("Recommended difficulty: medium")).toBeInTheDocument();
+    expect(screen.getByText("12 questions with mixed difficulty.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Exam" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Challenge Quiz/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
   });
 
   it("starts Board Exam Mode with the standard Challenge Quiz request for Free users", async () => {
@@ -288,7 +356,7 @@ describe("ChallengeQuizPage", () => {
       monthlyLimit: 5,
       difficultySelectionAvailable: false,
       mode: "board_exam",
-      selectedDifficulty: "medium",
+      selectedDifficulty: "mixed",
       quiz: [],
       currentQuestionIndex: 0,
       sessionState: {},
@@ -490,130 +558,34 @@ describe("ChallengeQuizPage", () => {
     dashboardLink.remove();
   });
 
-  it("shows the difficulty-selection paywall instead of redirecting immediately", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "FREE",
-      emailVerifiedAt: "2026-03-21T09:00:00Z",
-    });
-    (getNote as jest.Mock).mockResolvedValue({
-      id: "note-1",
-      title: "Challenge Note",
-      subject: "Biology",
-      tags: ["cells"],
-      content: "content",
-      visibility: "PRIVATE",
-      createdAt: "2026-03-21T10:00:00Z",
-      updatedAt: "2026-03-21T10:30:00Z",
-      copiedFromNoteId: null,
-      copiedFromUserId: null,
-      copiedFromTitle: null,
-      copiedFromPublic: false,
-      copiedAt: null,
-      studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
-      summary: "Summary",
-      keyConcepts: ["Concept"],
-      quiz: [],
-      quizCount: 0,
-      quickReviewAvailable: true,
-      challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: false,
-    });
-    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
-      sessionId: null,
-      studyPackId: "sp-1",
-      title: "Challenge Note",
-      totalQuestions: 0,
-      timeLimitSeconds: 600,
-      usedThisMonth: 0,
-      monthlyLimit: 5,
-      difficultySelectionAvailable: false,
-      mode: "challenge",
-      selectedDifficulty: "medium",
-      quiz: [],
-      currentQuestionIndex: 0,
-      sessionState: {},
-    });
-
-    render(<ChallengeQuizPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Choose Difficulty (Premium)" }));
-
-    expect(await screen.findByText("Difficulty Selection is a Premium feature")).toBeInTheDocument();
-  });
-
   it("locks difficulty controls and prevents duplicate Challenge Quiz starts", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
-      emailVerifiedAt: "2026-03-21T09:00:00Z",
-    });
-    (getNote as jest.Mock).mockResolvedValue({
-      id: "note-1",
-      title: "Challenge Note",
-      subject: "Biology",
-      tags: ["cells"],
-      content: "content",
-      visibility: "PRIVATE",
-      createdAt: "2026-03-21T10:00:00Z",
-      updatedAt: "2026-03-21T10:30:00Z",
-      copiedFromNoteId: null,
-      copiedFromUserId: null,
-      copiedFromTitle: null,
-      copiedFromPublic: false,
-      copiedAt: null,
-      studyPackId: "sp-1",
-      studyPackStatus: "STUDY_PACK_READY",
-      summary: "Summary",
-      keyConcepts: ["Concept"],
-      quiz: [],
-      quizCount: 0,
-      quickReviewAvailable: true,
-      challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
-      difficultySelectionAvailable: true,
-    });
-    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
-      sessionId: null,
-      status: null,
-      studyPackId: "sp-1",
-      title: "Challenge Note",
-      totalQuestions: 0,
-      timeLimitSeconds: 600,
-      usedThisMonth: 0,
-      monthlyLimit: 50,
-      difficultySelectionAvailable: true,
-      mode: "challenge",
-      selectedDifficulty: "medium",
-      quiz: [],
-      currentQuestionIndex: 0,
-      sessionState: {},
-    });
+    setupChallengePrestart(true);
     (startChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise(() => {}));
 
     render(<ChallengeQuizPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /Board Exam Mode/i }));
+    await screen.findByRole("heading", { name: "Choose your quiz mode" });
+    fireEvent.click(getModeCard("Practice Mode"));
     const hardButton = await screen.findByRole("button", { name: "hard" });
     fireEvent.click(hardButton);
-    expect(hardButton).toHaveClass("border-foreground/40");
+    expect(hardButton).toHaveClass("border-blue-500");
 
-    const startButton = screen.getByRole("button", { name: "Start Exam" });
+    const startButton = screen.getByRole("button", { name: "Start Challenge Quiz" });
     fireEvent.click(startButton);
     fireEvent.click(startButton);
 
     await waitFor(() => {
       expect(startChallengeQuizSession).toHaveBeenCalledTimes(1);
     });
-    expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { difficulty: "hard", mode: "board_exam" });
+    expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { difficulty: "hard", mode: "challenge" });
     expect(screen.getByRole("button", { name: "easy" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "medium" })).toBeDisabled();
     expect(hardButton).toBeDisabled();
     expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
-    expect(screen.getByRole("alertdialog", { name: "Preparing your board exam..." })).toBeInTheDocument();
-    expect(screen.getByText("Creating a stricter exam simulation from your notes")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog", { name: "Generating your quiz..." })).toBeInTheDocument();
+    expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
     expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
-    expect(screen.getByText("Preparing your board exam mode...")).toBeInTheDocument();
+    expect(screen.getByText("Preparing your practice challenge...")).toBeInTheDocument();
   });
 
   it("shows the first-quiz completion banner after completing the first challenge quiz", async () => {
@@ -745,7 +717,7 @@ describe("ChallengeQuizPage", () => {
       monthlyLimit: 50,
       difficultySelectionAvailable: true,
       mode: "board_exam",
-      selectedDifficulty: "medium",
+      selectedDifficulty: "mixed",
       quiz: [
         {
           question: "What powers the cell?",
@@ -827,7 +799,7 @@ describe("ChallengeQuizPage", () => {
       monthlyLimit: 50,
       difficultySelectionAvailable: true,
       mode: "board_exam",
-      selectedDifficulty: "medium",
+      selectedDifficulty: "mixed",
       quiz: [
         {
           question: "What powers the cell?",
@@ -912,7 +884,7 @@ describe("ChallengeQuizPage", () => {
       monthlyLimit: 50,
       difficultySelectionAvailable: true,
       mode: "board_exam",
-      selectedDifficulty: "medium",
+      selectedDifficulty: "mixed",
       quiz: [
         {
           question: "What powers the cell?",

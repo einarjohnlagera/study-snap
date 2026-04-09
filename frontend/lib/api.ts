@@ -556,7 +556,7 @@ export type ChallengeQuizStartResponse = {
   monthlyLimit: number;
   difficultySelectionAvailable: boolean;
   mode: ChallengeQuizMode;
-  selectedDifficulty: "easy" | "medium" | "hard";
+  selectedDifficulty: "easy" | "medium" | "hard" | "mixed";
   quiz: QuizItem[];
   currentQuestionIndex: number;
   sessionState: Record<string, unknown> | null;

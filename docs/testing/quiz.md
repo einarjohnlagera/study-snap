@@ -22,11 +22,14 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 
 ## Exam Mode behavior
 
-- Challenge Quiz start screen shows two explicit mode options: `Challenge Quiz` and `Board Exam Mode`
+- Challenge Quiz start screen shows two explicit mode options: `Practice Mode` and `Board Exam Mode`
+- entering Challenge Quiz does not auto-start generation; the user must choose a mode first
+- Premium users who choose `Practice Mode` see the dedicated difficulty setup screen before generation
+- Free users who choose `Practice Mode` skip difficulty selection entirely and start generation immediately
 - Board Exam Mode is available on both Free and Premium plans and still consumes the standard Challenge Quiz quota
 - Board Exam Mode shows a dedicated `Board Exam setup` confirmation state with `Cancel` and `Start Exam`
-- Difficulty selection remains Premium-gated; when it is available, Board Exam Mode derives question count from the selected difficulty
-- Free users can still enter Board Exam Mode with recommended difficulty/question count and without a separate Premium lock
+- Board Exam Mode never shows difficulty selection in the UI and always uses mixed difficulty with the fixed Board Exam question count
+- Free users can still enter Board Exam Mode without a separate Premium lock or dead-end disabled controls
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
 - selected choice shows neutral exam-style highlight only
 - question-number navigation during Board Exam Mode shows current/answered/unanswered states only and never correctness
