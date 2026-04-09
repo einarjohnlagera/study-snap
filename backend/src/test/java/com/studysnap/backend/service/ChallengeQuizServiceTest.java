@@ -455,7 +455,7 @@ class ChallengeQuizServiceTest {
                 )
         ));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.CHALLENGE
@@ -499,7 +499,7 @@ class ChallengeQuizServiceTest {
                 )
         ));
 
-        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                 sessionId,
                 userId,
                 QuickReviewSessionMode.CHALLENGE

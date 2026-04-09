@@ -535,7 +535,9 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Do not render "Correct" / "Incorrect" labels, green/red highlights, or explanations while the quiz is in progress.
 - Standard Challenge Quiz may keep a lighter practice-oriented answering UI, but Board Exam Mode must use a more formal neutral selected-answer state and cleaner hierarchy.
 - Question-number navigation during Board Exam Mode may show current/answered/unanswered states, but must not reveal correctness.
-- Board Exam timers must start from persisted session state and survive refresh/reload without resetting; timer expiry must auto-submit.
+- Board Exam timers must use persisted session timing as the source of truth (`timerStartedAtEpochSeconds + timeLimitSeconds`) and survive refresh/reload without resetting or extending the exam.
+- Board Exam timer UI should surface calm warning states as time gets low, but once time expires it must lock answer changes/navigation immediately.
+- Timer expiry must auto-submit exactly once per expiry event; if timeout submission fails, the page may expose explicit retry submission but must not silently keep auto-submitting every tick.
 - Browser fullscreen/focus entry is best effort only; a denied fullscreen request must not block starting or resuming the exam.
 - The Challenge Quiz start screen must disable difficulty controls and the Start button immediately after Start is clicked.
 - Duplicate Challenge Quiz start requests must be blocked while quiz initialization is in flight.

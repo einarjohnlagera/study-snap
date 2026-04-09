@@ -21,6 +21,7 @@
   - Board Exam Mode no longer shows difficulty selection in the UI and now always uses mixed difficulty with the fixed exam question count
   - No correctness feedback during answering — answer first, see results later
   - Board Exam answering UI now uses a more neutral, formal presentation than the standard Challenge Quiz screen
+  - Board Exam timer is now hardened around persisted session timing, low-time warning states, refresh-safe recovery, and one-shot timeout submission
   - Timer resumes from persisted session state after refresh and auto-submits when time runs out; manual submit remains available from the last question
   - Neutral question-number navigation lets users move through the exam without revealing correctness
   - Result screen keeps shared recovery actions and Review Answers, but now uses more formal Board Exam framing plus `Take Another Board Exam`

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ChallengeQuizPage from "./page";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -63,6 +63,7 @@ describe("ChallengeQuizPage", () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -444,6 +445,89 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("Time ran out. Your answers were submitted automatically.")).toBeInTheDocument();
 
     nowSpy.mockRestore();
+  });
+
+  it("shows the Board Exam timer warning state when time is running low", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_421_000);
+    setupBoardExamSession({
+      timerStartedAtEpochSeconds: 1_720_000_000,
+    });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByTestId("board-exam-timer")).toHaveAttribute("data-timer-state", "warning");
+    expect(screen.getByText("Less than 3 minutes remaining.")).toBeInTheDocument();
+
+    nowSpy.mockRestore();
+  });
+
+  it("shows the Board Exam timer urgent state in the final minute", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_560_000);
+    setupBoardExamSession({
+      timerStartedAtEpochSeconds: 1_720_000_000,
+    });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByTestId("board-exam-timer")).toHaveAttribute("data-timer-state", "urgent");
+    expect(screen.getByText("Final minute.")).toBeInTheDocument();
+
+    nowSpy.mockRestore();
+  });
+
+  it("does not retry timeout auto-submit on every tick after a timeout submission failure", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(1_720_000_601_000));
+    setupBoardExamSession({
+      selectedChoices: { "0": 0 },
+      timerStartedAtEpochSeconds: 1_720_000_000,
+    });
+    (completeChallengeQuizSession as jest.Mock).mockRejectedValue(new Error("Could not save Challenge Quiz results."));
+
+    render(<ChallengeQuizPage />);
+
+    await waitFor(() => {
+      expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Could not save Challenge Quiz results.")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "Submit Exam" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mitochondria/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Go to question 2 (unanswered)" })).toBeDisabled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(5_000);
+    });
+
+    expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it("does not double-submit when manual submit is already in flight as the timer expires", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(1_720_000_598_000));
+    setupBoardExamSession({
+      currentQuestionIndex: 1,
+      selectedChoices: { "0": 0 },
+      timerStartedAtEpochSeconds: 1_720_000_000,
+    });
+    (completeChallengeQuizSession as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Submit Exam" }));
+
+    await waitFor(() => {
+      expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      jest.advanceTimersByTime(5_000);
+    });
+
+    expect(completeChallengeQuizSession).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   it("loads note/session once and does not loop initialization calls", async () => {

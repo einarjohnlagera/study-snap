@@ -9,6 +9,7 @@ type QuizChoiceListProps = {
   revealAnswer: boolean;
   onSelectChoice?: (choiceIndex: number) => void;
   selectionStyle?: "default" | "exam" | "board-exam";
+  disabled?: boolean;
 };
 
 export function QuizChoiceList({
@@ -19,6 +20,7 @@ export function QuizChoiceList({
   revealAnswer,
   onSelectChoice,
   selectionStyle = "default",
+  disabled = false,
 }: QuizChoiceListProps) {
   if (choices.length === 0) {
     return null;
@@ -37,7 +39,7 @@ export function QuizChoiceList({
         const isCorrect = choice.canonicalIndex === correctIndex;
         const isSelected = choice.canonicalIndex === selectedChoiceIndex;
         const isIncorrectSelection = revealAnswer && isSelected && !isCorrect;
-        const isInteractive = Boolean(onSelectChoice) && !revealAnswer;
+        const isInteractive = Boolean(onSelectChoice) && !revealAnswer && !disabled;
 
         return (
           <li key={`${choice.label}-${choice.canonicalIndex}-${choice.text}`}>
