@@ -298,7 +298,7 @@ public class ChallengeQuizService {
     }
 
     public ChallengeQuizSessionResponse completeSession(String sessionIdRaw, UUID userId, ChallengeQuizCompleteRequest request) {
-        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
         assertSessionInProgress(session);
         int totalQuestions = session.getTotalQuestions() == null ? request.totalQuestions() : session.getTotalQuestions();
         if (request.correctAnswers() > totalQuestions) {
@@ -900,6 +900,15 @@ public class ChallengeQuizService {
 
     private QuickReviewSessionEntity findChallengeSessionOrThrow(UUID sessionId, UUID userId) {
         return quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        sessionId,
+                        userId,
+                        QuickReviewSessionMode.CHALLENGE
+                )
+                .orElseThrow(ChallengeQuizSessionNotFoundException::new);
+    }
+
+    private QuickReviewSessionEntity findChallengeSessionForUpdateOrThrow(UUID sessionId, UUID userId) {
+        return quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
                         sessionId,
                         userId,
                         QuickReviewSessionMode.CHALLENGE

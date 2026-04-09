@@ -36,6 +36,12 @@ import {
   mapPerformanceLevel,
 } from "@/lib/challenge-quiz-results";
 import {
+  type BoardExamTimerState,
+  resolveBoardExamTimerState,
+  resolveDeadlineEpochSeconds,
+  resolveRemainingSecondsFromDeadline,
+} from "@/lib/challenge-quiz-timer";
+import {
   resolveQuizCorrectIndex,
   serializeSelectedChoiceIndexRecord,
   toSelectedChoiceIndexRecord,
@@ -53,6 +59,7 @@ type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
 const BOARD_EXAM_QUESTION_COUNT = 12;
+const TIMER_TICK_INTERVAL_MS = 1000;
 
 function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number {
   if (difficulty === "easy") {
@@ -108,6 +115,23 @@ function formatTimer(seconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
 }
 
+function getNowEpochSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+function getBoardExamTimerDescription(timerState: BoardExamTimerState): string | null {
+  if (timerState === "warning") {
+    return "Less than 3 minutes remaining.";
+  }
+  if (timerState === "urgent") {
+    return "Final minute.";
+  }
+  if (timerState === "expired") {
+    return "Time has expired.";
+  }
+  return null;
+}
+
 function ChallengeQuizLoading() {
   return (
     <Card className="space-y-4 p-4 sm:p-6">
@@ -146,29 +170,6 @@ function getPerformanceBadgeClass(performanceLevel: string): string {
   return "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300";
 }
 
-function resolveTimerStartedAtEpochSeconds(
-  session: ChallengeQuizStartResponse,
-  sessionState: ChallengeSessionStatePayload,
-): number {
-  if (typeof sessionState.timerStartedAtEpochSeconds === "number") {
-    return sessionState.timerStartedAtEpochSeconds;
-  }
-  return Math.floor(Date.now() / 1000);
-}
-
-function resolveDeadlineEpochSeconds(
-  session: ChallengeQuizStartResponse,
-  sessionState: ChallengeSessionStatePayload,
-): number {
-  const startedAtEpochSeconds = resolveTimerStartedAtEpochSeconds(session, sessionState);
-  return startedAtEpochSeconds + session.timeLimitSeconds;
-}
-
-function resolveRemainingSeconds(deadlineEpochSeconds: number): number {
-  const nowEpochSeconds = Math.floor(Date.now() / 1000);
-  return Math.max(0, deadlineEpochSeconds - nowEpochSeconds);
-}
-
 export default function ChallengeQuizPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -178,8 +179,10 @@ export default function ChallengeQuizPage() {
     selectedChoices: {},
   });
   const remainingSecondsRef = useRef(0);
+  const challengeSessionRef = useRef<ChallengeQuizStartResponse | null>(null);
   const startInFlightRef = useRef(false);
   const submitInFlightRef = useRef(false);
+  const timeoutAutoSubmitRequestedRef = useRef(false);
   const weakConceptsRef = useRef<HTMLDivElement | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
@@ -211,6 +214,12 @@ export default function ChallengeQuizPage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const syncProgressRef = useCallback((nextIndex: number, nextSelectedChoices: Record<number, number>) => {
+    progressRef.current = {
+      currentIndex: nextIndex,
+      selectedChoices: nextSelectedChoices,
+    };
+  }, []);
   const openLockedFeaturePaywall = useCallback(
     (variant: "difficulty-selection" | "challenge-quiz-limit", source: string) => {
       void trackAnalyticsEvent({
@@ -238,11 +247,17 @@ export default function ChallengeQuizPage() {
     };
   }, []);
 
+  useEffect(() => {
+    challengeSessionRef.current = challengeSession;
+  }, [challengeSession]);
+
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
+    timeoutAutoSubmitRequestedRef.current = false;
     setSelectedMode(started.mode ?? CHALLENGE_MODE);
     setSelectedDifficulty(normalizePracticeDifficulty(started.selectedDifficulty));
 
     if (started.status === "GENERATING") {
+      syncProgressRef(0, {});
       setChallengeSession(started);
       setResult(null);
       setError(null);
@@ -258,6 +273,7 @@ export default function ChallengeQuizPage() {
     }
 
     if (started.status === "FAILED") {
+      syncProgressRef(0, {});
       setChallengeSession(started);
       setResult(null);
       setSelectedChoices({});
@@ -275,6 +291,7 @@ export default function ChallengeQuizPage() {
     }
 
     if (!started.sessionId || started.quiz.length === 0) {
+      syncProgressRef(0, {});
       setChallengeSession(started);
       setResult(null);
       setError(null);
@@ -292,7 +309,12 @@ export default function ChallengeQuizPage() {
     const state = (started.sessionState ?? {}) as ChallengeSessionStatePayload;
     const restoredChoices = toSelectedChoiceIndexRecord(state.selectedChoices, started.quiz);
     const normalizedIndex = Math.max(0, Math.min(started.currentQuestionIndex ?? 0, Math.max(0, started.quiz.length - 1)));
-    const nextDeadlineEpochSeconds = resolveDeadlineEpochSeconds(started, state);
+    const nextDeadlineEpochSeconds = resolveDeadlineEpochSeconds(
+      started.timeLimitSeconds,
+      state,
+      getNowEpochSeconds(),
+    );
+    syncProgressRef(normalizedIndex, restoredChoices);
 
     setChallengeSession(started);
     setResult(null);
@@ -300,11 +322,11 @@ export default function ChallengeQuizPage() {
     setSelectedChoices(restoredChoices);
     setCurrentIndex(normalizedIndex);
     setDeadlineEpochSeconds(nextDeadlineEpochSeconds);
-    setRemainingSeconds(resolveRemainingSeconds(nextDeadlineEpochSeconds));
+    setRemainingSeconds(resolveRemainingSecondsFromDeadline(nextDeadlineEpochSeconds, getNowEpochSeconds()));
     setTimedOut(false);
     setShowAnswerReview(false);
     setPhase(forceRunning || Boolean(started.sessionId) ? "running" : "prestart");
-  }, []);
+  }, [syncProgressRef]);
 
   const persistProgress = useCallback(
     (nextIndex: number, nextSelectedChoices: Record<number, number>, keepalive = false) => {
@@ -343,6 +365,7 @@ export default function ChallengeQuizPage() {
 
     setLoading(true);
     setError(null);
+    timeoutAutoSubmitRequestedRef.current = false;
     try {
       const detail = await getNote(noteId);
       if (detail.studyPackStatus !== "STUDY_PACK_READY") {
@@ -354,6 +377,7 @@ export default function ChallengeQuizPage() {
       const authUser = getAuthUser();
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
       if (!authUser?.emailVerifiedAt) {
+        syncProgressRef(0, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
@@ -374,6 +398,7 @@ export default function ChallengeQuizPage() {
         applyStartedSession(inProgress, true);
       } else {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
+        syncProgressRef(0, {});
         setChallengeSession(null);
         setResult(null);
         setSelectedChoices({});
@@ -412,7 +437,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, noteId, pathname, router]);
+  }, [applyStartedSession, noteId, pathname, router, syncProgressRef]);
 
   useEffect(() => {
     void loadNote();
@@ -441,19 +466,25 @@ export default function ChallengeQuizPage() {
   }, [persistProgress]);
 
   const handleSubmit = useCallback(async (timeoutTriggered: boolean) => {
-    if (!challengeSession?.sessionId || submitInFlightRef.current) {
+    const activeSession = challengeSessionRef.current;
+    if (!activeSession?.sessionId || submitInFlightRef.current) {
       return;
     }
 
-    const { correctAnswers, totalQuestions: total } = computeScore(challengeSession.quiz, selectedChoices);
-    const durationSeconds = Math.max(0, challengeSession.timeLimitSeconds - remainingSecondsRef.current);
+    if (timeoutTriggered) {
+      timeoutAutoSubmitRequestedRef.current = true;
+    }
+
+    const latestSelectedChoices = progressRef.current.selectedChoices;
+    const { correctAnswers, totalQuestions: total } = computeScore(activeSession.quiz, latestSelectedChoices);
+    const durationSeconds = Math.max(0, activeSession.timeLimitSeconds - remainingSecondsRef.current);
 
     submitInFlightRef.current = true;
     setSubmitting(true);
     setError(null);
     setTimedOut(timeoutTriggered);
     try {
-      const completed = await completeChallengeQuizSession(challengeSession.sessionId, {
+      const completed = await completeChallengeQuizSession(activeSession.sessionId, {
         correctAnswers,
         totalQuestions: total,
         durationSeconds,
@@ -472,23 +503,26 @@ export default function ChallengeQuizPage() {
       submitInFlightRef.current = false;
       setSubmitting(false);
     }
-  }, [challengeSession, selectedChoices]);
+  }, []);
 
   useEffect(() => {
     if (phase !== "running" || !challengeSession || submitting || deadlineEpochSeconds === null) {
       return;
     }
 
-    const tick = () => {
-      const nextRemainingSeconds = resolveRemainingSeconds(deadlineEpochSeconds);
+    const syncTimerState = () => {
+      const nextRemainingSeconds = resolveRemainingSecondsFromDeadline(deadlineEpochSeconds, getNowEpochSeconds());
+      remainingSecondsRef.current = nextRemainingSeconds;
       setRemainingSeconds(nextRemainingSeconds);
       if (nextRemainingSeconds <= 0) {
-        void handleSubmit(true);
+        if (!timeoutAutoSubmitRequestedRef.current) {
+          void handleSubmit(true);
+        }
       }
     };
 
-    tick();
-    const timer = globalThis.setInterval(tick, 1000);
+    syncTimerState();
+    const timer = globalThis.setInterval(syncTimerState, TIMER_TICK_INTERVAL_MS);
 
     return () => {
       globalThis.clearInterval(timer);
@@ -533,21 +567,34 @@ export default function ChallengeQuizPage() {
   }, [applyStartedSession, note, phase]);
 
   useEffect(() => {
-    if (phase !== "running") {
+    if (phase !== "running" || deadlineEpochSeconds === null) {
       return;
     }
+
+    const syncVisibleTimerState = () => {
+      const nextRemainingSeconds = resolveRemainingSecondsFromDeadline(deadlineEpochSeconds, getNowEpochSeconds());
+      remainingSecondsRef.current = nextRemainingSeconds;
+      setRemainingSeconds(nextRemainingSeconds);
+      if (nextRemainingSeconds <= 0 && !submitInFlightRef.current && !timeoutAutoSubmitRequestedRef.current) {
+        void handleSubmit(true);
+      }
+    };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         persistLatestProgress(true);
+        return;
       }
+      syncVisibleTimerState();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    globalThis.addEventListener("focus", syncVisibleTimerState);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      globalThis.removeEventListener("focus", syncVisibleTimerState);
     };
-  }, [persistLatestProgress, phase]);
+  }, [deadlineEpochSeconds, handleSubmit, persistLatestProgress, phase]);
 
   const handleStartChallenge = useCallback(async (modeOverride?: ChallengeQuizMode) => {
     if (!note || startInFlightRef.current) {
@@ -599,6 +646,8 @@ export default function ChallengeQuizPage() {
   }, [applyStartedSession, isEmailVerified, note, openLockedFeaturePaywall, selectedDifficulty, selectedMode]);
 
   const handleRetry = () => {
+    timeoutAutoSubmitRequestedRef.current = false;
+    syncProgressRef(0, {});
     setChallengeSession(null);
     setResult(null);
     setSelectedChoices({});
@@ -616,6 +665,8 @@ export default function ChallengeQuizPage() {
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
   const activeMode = challengeSession?.mode ?? selectedMode;
   const isBoardExamMode = activeMode === BOARD_EXAM_MODE;
+  const boardExamTimerExpired = isBoardExamMode && remainingSeconds <= 0;
+  const quizInteractionDisabled = submitting || boardExamTimerExpired;
   const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
   const quizResultLabel = isBoardExamMode ? "Board Exam Result" : "Challenge Quiz Result";
   const submitButtonLabel = isBoardExamMode ? "Submit Exam" : "Submit Challenge Quiz";
@@ -627,6 +678,11 @@ export default function ChallengeQuizPage() {
   const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable, selectedDifficulty);
   const canChoosePracticeDifficulty = Boolean(note?.difficultySelectionAvailable);
   const boardExamQuestionSummary = `${BOARD_EXAM_QUESTION_COUNT} questions with mixed difficulty.`;
+  const boardExamTimerState = useMemo(
+    () => resolveBoardExamTimerState(remainingSeconds),
+    [remainingSeconds],
+  );
+  const boardExamTimerDescription = getBoardExamTimerDescription(boardExamTimerState);
   const handleSelectPracticeMode = useCallback(() => {
     setSelectedMode(CHALLENGE_MODE);
     setError(null);
@@ -916,11 +972,33 @@ export default function ChallengeQuizPage() {
                 <h2 className="text-lg font-semibold text-foreground">Exam in progress</h2>
                 <p className="text-sm text-foreground/70">Selected answers are saved, but grading is delayed until submission.</p>
               </div>
-              <div className="rounded-lg border border-foreground/15 bg-background px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Timer</p>
-                <p className="text-base font-semibold text-foreground" aria-label="Exam timer">
+              <div
+                data-testid="board-exam-timer"
+                data-timer-state={boardExamTimerState}
+                className={cn(
+                  "rounded-lg border px-3 py-2 transition-colors",
+                  boardExamTimerState === "normal"
+                    ? "border-foreground/15 bg-background"
+                    : boardExamTimerState === "warning"
+                      ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                      : "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300",
+                )}
+              >
+                <p className={cn(
+                  "text-[11px] font-semibold uppercase tracking-wide",
+                  boardExamTimerState === "normal" ? "text-foreground/55" : "text-current",
+                )}>Timer</p>
+                <p className={cn(
+                  "text-base font-semibold",
+                  boardExamTimerState === "normal" ? "text-foreground" : "text-current",
+                )} aria-label="Exam timer">
                   {formatTimer(remainingSeconds)}
                 </p>
+                {boardExamTimerDescription ? (
+                  <p className="mt-1 text-[11px] font-medium">
+                    {boardExamTimerDescription}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-lg border border-foreground/15 bg-background px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Progress</p>
@@ -955,10 +1033,12 @@ export default function ChallengeQuizPage() {
                 correctIndex={resolveQuizCorrectIndex(currentQuestion)}
                 selectedChoiceIndex={selectedChoiceIndex}
                 revealAnswer={false}
+                disabled={quizInteractionDisabled}
                 selectionStyle={isBoardExamMode ? "board-exam" : "exam"}
                 onSelectChoice={(choiceIndex) => {
                   setSelectedChoices((previous) => {
                     const next = { ...previous, [currentIndex]: choiceIndex };
+                    syncProgressRef(currentIndex, next);
                     persistProgress(currentIndex, next);
                     return next;
                   });
@@ -989,10 +1069,11 @@ export default function ChallengeQuizPage() {
                           : "border-border bg-background text-foreground/70",
                     )}
                     onClick={() => {
+                      syncProgressRef(index, selectedChoices);
                       setCurrentIndex(index);
                       persistProgress(index, selectedChoices);
                     }}
-                    disabled={submitting}
+                    disabled={quizInteractionDisabled}
                   >
                     {index + 1}
                   </button>
@@ -1013,23 +1094,25 @@ export default function ChallengeQuizPage() {
               className="w-full sm:w-auto"
               onClick={() => {
                 const nextIndex = Math.max(0, currentIndex - 1);
+                syncProgressRef(nextIndex, selectedChoices);
                 setCurrentIndex(nextIndex);
                 persistProgress(nextIndex, selectedChoices);
               }}
-              disabled={currentIndex <= 0 || submitting}
+              disabled={currentIndex <= 0 || quizInteractionDisabled}
             >
               Previous
             </Button>
-            {currentIndex < totalQuestions - 1 ? (
+            {currentIndex < totalQuestions - 1 && !boardExamTimerExpired ? (
               <Button
                 type="button"
                 className="w-full sm:w-auto"
                 onClick={() => {
                   const nextIndex = Math.min(totalQuestions - 1, currentIndex + 1);
+                  syncProgressRef(nextIndex, selectedChoices);
                   setCurrentIndex(nextIndex);
                   persistProgress(nextIndex, selectedChoices);
                 }}
-                disabled={submitting}
+                disabled={quizInteractionDisabled}
               >
                 Next
               </Button>

@@ -43,8 +43,12 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - Previous / Next navigation maintains all previously selected answers
 - Submit button appears only on the last question; Previous is disabled on the first question
 - timer resumes from persisted session state after refresh/reload instead of resetting
+- Board Exam timer warning state appears with less than 3 minutes remaining, and urgent state appears in the final minute
+- timer display is derived from persisted timing instead of trusting a purely local decrement counter
 - timer auto-submits when it hits 00:00 and shows "Time ran out." message on the Board Exam result screen
 - timer expiry in Board Exam Mode also shows the transient `Time's up. Submitting your exam...` state before the result screen renders
+- if timeout submission fails, answer changes and question navigation stay locked and the page does not retry auto-submit on every later tick
+- if manual submit is already in flight when the timer expires, only one completion request is sent
 
 ## Result screen
 

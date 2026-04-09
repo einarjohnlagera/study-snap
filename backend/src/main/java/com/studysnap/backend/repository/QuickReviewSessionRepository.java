@@ -3,9 +3,11 @@ package com.studysnap.backend.repository;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -17,6 +19,16 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
     Optional<QuickReviewSessionEntity> findByIdAndUserId(UUID id, UUID userId);
 
     Optional<QuickReviewSessionEntity> findByIdAndUserIdAndSessionMode(UUID id, UUID userId, QuickReviewSessionMode sessionMode);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select q
+            from QuickReviewSessionEntity q
+            where q.id = :id
+              and q.userId = :userId
+              and q.sessionMode = :sessionMode
+            """)
+    Optional<QuickReviewSessionEntity> findByIdAndUserIdAndSessionModeForUpdate(UUID id, UUID userId, QuickReviewSessionMode sessionMode);
 
     @Deprecated
     List<QuickReviewSessionEntity> findByUserIdAndStudyPackIdAndCompletedAtIsNotNullOrderByCompletedAtDesc(

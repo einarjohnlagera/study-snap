@@ -75,7 +75,15 @@ Shared ownership model:
 - user may jump by question number through the neutral Question Navigator; answered/current states must not reveal correctness
 - quiz auto-submits if the timer reaches zero; user can also submit manually from the last question
 - if the timer expires during Board Exam Mode, show `Time's up. Submitting your exam...` while submission finishes
-- timer start is derived from persisted session state so refresh/reload does not reset the countdown
+- timer source of truth is persisted session timing: `timerStartedAtEpochSeconds + timeLimitSeconds`
+- the visible countdown is always re-derived from persisted timing so refresh/reload does not reset or extend the exam
+- Board Exam timer warning states:
+  - normal -> more than 3 minutes remaining
+  - warning -> 3:00 to 1:01 remaining
+  - urgent -> 1:00 to 0:01 remaining
+  - expired -> 0:00
+- once the timer reaches zero, Board Exam locks answer changes and question navigation immediately
+- timeout auto-submit must fire at most once per expiry event; if that submission fails, the page may offer explicit retry submission but must not silently auto-submit on every subsequent tick
 - explanations are hidden during the quiz and only appear in the Answer Review section on the result screen
 
 #### Result Screen
