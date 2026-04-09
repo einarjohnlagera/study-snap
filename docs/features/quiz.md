@@ -96,6 +96,10 @@ Shared ownership model:
 - hint text: "Answers are graded only after submission."
 - user navigates freely between questions (Previous / Next) and can change answers until submission
 - user may jump by question number through the neutral Question Navigator; answered/current states must not reveal correctness
+- the Question Navigator is collapsible to reduce clutter:
+  - Challenge Quiz: expanded by default on desktop, collapsed by default on mobile
+  - Board Exam Mode: collapsed by default on both desktop and mobile for a more focused exam feel
+  - the collapsed summary shows current question position plus answered count and can be expanded on demand without losing navigator functionality
 - quiz auto-submits if the timer reaches zero; user can also submit manually from the last question
 - if the timer expires during Board Exam Mode, show `Time's up. Submitting your exam...` while submission finishes
 - timer source of truth is persisted session timing: `timerStartedAtEpochSeconds + timeLimitSeconds`

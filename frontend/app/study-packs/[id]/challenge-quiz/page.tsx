@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,24 @@ const BOARD_EXAM_LEAVE_DESCRIPTION = "Your progress will be submitted and counte
 const BOARD_EXAM_LEAVE_ERROR = "Could not submit and leave. Please try again.";
 const BOARD_EXAM_BEFORE_UNLOAD_MESSAGE = "You are currently in Board Exam Mode. Leaving will submit your current answers and end the exam.";
 const BOARD_EXAM_FOCUS_TIP = "Board Exam Mode hides distractions to simulate a real test environment.";
+const MOBILE_NAVIGATOR_MEDIA_QUERY = "(max-width: 639px)";
+
+function isMobileQuestionNavigatorViewport(): boolean {
+  if (globalThis.window === undefined || typeof globalThis.matchMedia !== "function") {
+    return false;
+  }
+  return globalThis.matchMedia(MOBILE_NAVIGATOR_MEDIA_QUERY).matches;
+}
+
+function shouldCollapseQuestionNavigatorByDefault(
+  mode: ChallengeQuizMode,
+  isMobileViewport: boolean,
+): boolean {
+  if (mode === BOARD_EXAM_MODE) {
+    return true;
+  }
+  return isMobileViewport;
+}
 
 function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number {
   if (difficulty === "easy") {
@@ -216,6 +235,8 @@ export default function ChallengeQuizPage() {
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
   const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
+  const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
+  const [isQuestionNavigatorCollapsed, setIsQuestionNavigatorCollapsed] = useState(false);
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -262,6 +283,27 @@ export default function ChallengeQuizPage() {
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
   }, [challengeSession]);
+
+  useEffect(() => {
+    if (globalThis.window === undefined || typeof globalThis.matchMedia !== "function") {
+      return;
+    }
+    const mediaQuery = globalThis.matchMedia(MOBILE_NAVIGATOR_MEDIA_QUERY);
+    const updateViewport = (event?: MediaQueryListEvent) => {
+      setIsMobileNavigatorViewport(event ? event.matches : mediaQuery.matches);
+    };
+    updateViewport();
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", updateViewport);
+      return () => {
+        mediaQuery.removeEventListener("change", updateViewport);
+      };
+    }
+    mediaQuery.addListener(updateViewport);
+    return () => {
+      mediaQuery.removeListener(updateViewport);
+    };
+  }, []);
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
@@ -720,6 +762,7 @@ export default function ChallengeQuizPage() {
     [remainingSeconds],
   );
   const boardExamTimerDescription = getBoardExamTimerDescription(boardExamTimerState);
+  const questionNavigatorSummary = `Question Navigator · ${Math.min(currentIndex + 1, totalQuestions)} of ${totalQuestions} · ${answeredCount} answered`;
   const boardExamFocusTipStorageKey = useMemo(
     () => (viewerId ? `${BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX}:${viewerId}` : null),
     [viewerId],
@@ -789,6 +832,15 @@ export default function ChallengeQuizPage() {
     }
     setShowBoardExamFocusTip(false);
   }, [boardExamFocusTipStorageKey]);
+
+  useEffect(() => {
+    if (phase !== "running" || !challengeSession?.sessionId || totalQuestions === 0) {
+      return;
+    }
+    setIsQuestionNavigatorCollapsed(
+      shouldCollapseQuestionNavigatorByDefault(activeMode, isMobileNavigatorViewport),
+    );
+  }, [activeMode, challengeSession?.sessionId, isMobileNavigatorViewport, phase, totalQuestions]);
 
   const isNotFound = error?.toLowerCase().includes("not found") ?? false;
 
@@ -1137,39 +1189,66 @@ export default function ChallengeQuizPage() {
               <p className="text-xs text-foreground/65">Answers are graded only after submission.</p>
             </div>
           ) : null}
-          <div className="space-y-2 rounded-md border border-border bg-background p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
-            <div className="grid grid-cols-5 gap-2 sm:grid-cols-8" aria-label="Question navigator">
-              {quiz.map((item, index) => {
-                const isCurrentQuestion = index === currentIndex;
-                const isAnswered = selectedChoices[index] != null;
-                return (
-                  <button
-                    key={`${item.question}-${index}`}
-                    type="button"
-                    aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
-                    className={cn(
-                      "rounded-md border px-2 py-1.5 text-sm font-medium transition",
-                      isCurrentQuestion
-                        ? isBoardExamMode
-                          ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
-                          : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                        : isAnswered
-                          ? "border-foreground/30 bg-muted/60 text-foreground"
-                          : "border-border bg-background text-foreground/70",
-                    )}
-                    onClick={() => {
-                      syncProgressRef(index, selectedChoices);
-                      setCurrentIndex(index);
-                      persistProgress(index, selectedChoices);
-                    }}
-                    disabled={quizInteractionDisabled}
-                  >
-                    {index + 1}
-                  </button>
-                );
-              })}
-            </div>
+          <div className={cn(
+            "rounded-md border p-3",
+            isBoardExamMode ? "border-foreground/15 bg-muted/10" : "border-border bg-background",
+          )}>
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-3 text-left"
+              onClick={() => setIsQuestionNavigatorCollapsed((current) => !current)}
+              aria-expanded={!isQuestionNavigatorCollapsed}
+              aria-controls="challenge-question-navigator-grid"
+            >
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Question Navigator</p>
+                <p className="text-sm text-foreground/75">{questionNavigatorSummary}</p>
+              </div>
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 text-foreground/65 transition-transform",
+                  !isQuestionNavigatorCollapsed && "rotate-180",
+                )}
+                aria-hidden="true"
+              />
+            </button>
+            {!isQuestionNavigatorCollapsed ? (
+              <div
+                id="challenge-question-navigator-grid"
+                className="mt-3 grid grid-cols-5 gap-2 sm:grid-cols-8"
+                aria-label="Question navigator"
+              >
+                {quiz.map((item, index) => {
+                  const isCurrentQuestion = index === currentIndex;
+                  const isAnswered = selectedChoices[index] != null;
+                  return (
+                    <button
+                      key={`${item.question}-${index}`}
+                      type="button"
+                      aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
+                      className={cn(
+                        "rounded-md border px-2 py-1.5 text-sm font-medium transition",
+                        isCurrentQuestion
+                          ? isBoardExamMode
+                            ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
+                            : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                          : isAnswered
+                            ? "border-foreground/30 bg-muted/60 text-foreground"
+                            : "border-border bg-background text-foreground/70",
+                      )}
+                      onClick={() => {
+                        syncProgressRef(index, selectedChoices);
+                        setCurrentIndex(index);
+                        persistProgress(index, selectedChoices);
+                      }}
+                      disabled={quizInteractionDisabled}
+                    >
+                      {index + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
           {timedOut && submitting && isBoardExamMode ? (
             <div className="rounded-md border border-foreground/15 bg-muted/20 px-3 py-2 text-sm text-foreground/80">

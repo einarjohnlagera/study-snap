@@ -146,6 +146,10 @@
 
 ### Improvements
 
+- Challenge Quiz and Board Exam Mode now use a collapsible Question Navigator so mobile quiz screens stay less cluttered:
+  - Challenge Quiz defaults to an expanded navigator on desktop and a collapsed summary on mobile
+  - Board Exam Mode defaults to a collapsed navigator on both desktop and mobile to keep the exam view more focused
+  - the collapsed summary still shows current question position and answered count, and expanding it keeps direct jump navigation intact
 - Major action buttons now keep icon + text labels on mobile across the app’s shared action surfaces instead of collapsing to icon-only.
 - Profile now supports a short bio on the private identity page, and Public Profile now renders that bio with avatar/initial styling and derived subject chips.
 - Public Profile now uses a page-level `Back` action above the header card, based on navigation history instead of a hardcoded return link to Public Library.
