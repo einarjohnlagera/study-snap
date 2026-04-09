@@ -32,49 +32,57 @@ jest.mock("@/components/analytics/tracked-link", () => ({
 }));
 
 describe("LandingPage", () => {
-  it("renders the note-library positioning sections and primary public discovery CTAs", () => {
+  it("renders the redesigned conversion-focused landing flow", () => {
     const { container } = render(<Home />);
 
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Build your own library of notes. Turn them into summaries and quizzes when you're ready to review.",
+        name: "Turn your notes into summaries, quizzes, and exam simulations",
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "NoteLib helps you organize your notes, generate summaries, extract key concepts, and practice with quizzes all in one study workspace.",
+        "Save your notes once, then turn them into Study Packs, Challenge Quizzes, and board-style practice that helps you learn through active recall instead of passive rereading.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Get Started" })[0]).toHaveAttribute("href", "/signup");
-    expect(screen.getAllByRole("link", { name: "View Public Library" })[0]).toHaveAttribute("href", "/public/library");
+    expect(screen.getByText("Board Exam Mode · Free for a limited time")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "#how-it-works");
     expect(screen.getByRole("link", { name: "Try demo access" })).toHaveAttribute("href", "/demo");
-
-    expect(screen.getByText("What Is NoteLib")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Your Notes. Your Library. Your Review Tool." })).toBeInTheDocument();
-    expect(screen.getByText("Notes library first")).toBeInTheDocument();
-    expect(screen.getByText("Study Pack when ready")).toBeInTheDocument();
-    expect(screen.getByText("Active recall built in")).toBeInTheDocument();
-
-    expect(screen.getByText("How It Works")).toBeInTheDocument();
-    expect(screen.getByText("Create a Note")).toBeInTheDocument();
-    expect(screen.getByText("Build Your Library")).toBeInTheDocument();
-    expect(screen.getByText("Generate Study Pack")).toBeInTheDocument();
-    expect(screen.getByText("Review & Practice")).toBeInTheDocument();
-
-    expect(screen.getAllByText("Public Library")).not.toHaveLength(0);
-    expect(screen.getByRole("heading", { name: "Explore Public Notes and Reviewers" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
 
-    expect(screen.getByText("Study Method")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Study Smarter with Active Recall" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Learn How to Study Using Active Recall" }),
-    ).toHaveAttribute("href", "/learn");
+    expect(screen.getByText("How It Works")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Go from notes to self-testing in three steps" })).toBeInTheDocument();
+    expect(screen.getByText("Add notes")).toBeInTheDocument();
+    expect(screen.getByText("Generate study pack")).toBeInTheDocument();
+    expect(screen.getByText("Test yourself")).toBeInTheDocument();
 
-    expect(screen.getByText("Simple, Transparent Pricing")).toBeInTheDocument();
+    expect(screen.getByText("Features")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Built for review, not just one-time AI output" })).toBeInTheDocument();
+    expect(screen.getByText("Study Packs")).toBeInTheDocument();
+    expect(screen.getAllByText("Challenge Quiz")).not.toHaveLength(0);
+    expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
+    expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
+
+    expect(screen.getByText("Why NoteLib")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "More useful than a generic AI answer box" })).toBeInTheDocument();
+    expect(screen.getByText("Generic AI tools")).toBeInTheDocument();
+    expect(screen.getAllByText("NoteLib")).not.toHaveLength(0);
+    expect(screen.getByText("Starts from your own material")).toBeInTheDocument();
+    expect(screen.getByText("Designed for repeated review")).toBeInTheDocument();
+
+    expect(screen.getByText("Who It's For")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Made for learners who need more than passive notes" })).toBeInTheDocument();
+    expect(screen.getByText("Students")).toBeInTheDocument();
+    expect(screen.getByText("Board exam reviewees")).toBeInTheDocument();
+    expect(screen.getByText("Teachers and tutors")).toBeInTheDocument();
+
     expect(screen.getByText("Pricing section placeholder")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Start building your notes library today." })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "See full pricing" })).toHaveAttribute("href", "/pricing");
+
+    expect(screen.getByRole("heading", { name: "Build a study system from the notes you already have." })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View Pricing" })).toHaveAttribute("href", "/pricing");
 
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");

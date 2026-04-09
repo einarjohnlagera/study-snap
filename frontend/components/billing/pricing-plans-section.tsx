@@ -257,9 +257,10 @@ export function SimplePricingSection() {
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
           Pricing
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Simple, Transparent Pricing</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Two plans. Clear upgrade path.</h2>
         <p className="max-w-3xl text-sm text-foreground/75">
-          Start free for everyday studying, then upgrade when you need deeper practice for serious exam prep.
+          Start with Free for the full note-to-study-pack workflow, then move to Premium when you need more practice
+          and deeper quiz control.
         </p>
       </div>
 
@@ -267,16 +268,17 @@ export function SimplePricingSection() {
         <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-            <CardTitle>For casual studying</CardTitle>
+            <CardTitle>For everyday review</CardTitle>
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Quick Review</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Tracking</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />AI Summary + Key Concepts</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts tracking</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Board Exam Mode (Free for limited time)</li>
           </ul>
           <Link href="/signup" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-            Get Started Free
+            Start for Free
           </Link>
         </Card>
 
@@ -286,13 +288,13 @@ export function SimplePricingSection() {
               <Crown className="h-3.5 w-3.5" />
               Premium
             </div>
-            <CardTitle>For serious exam preparation</CardTitle>
+            <CardTitle>For deeper exam prep</CardTitle>
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher monthly limits</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty Selection</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Future premium features</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty selection</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Board Exam Mode</li>
           </ul>
           <Link href="/pricing" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
             View Pricing

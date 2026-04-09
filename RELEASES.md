@@ -152,6 +152,12 @@
 
 ### Improvements
 
+- Landing page now uses a tighter high-conversion structure built around:
+  - a faster product headline focused on summaries, quizzes, and exam simulations
+  - a 3-step `Add notes -> Generate study pack -> Test yourself` explanation
+  - dedicated feature coverage for Study Packs, Challenge Quiz, Adaptive Practice, and Board Exam Mode
+  - clearer comparison against generic AI tools plus target-user guidance for students, board exam reviewees, and teachers
+  - stronger CTA flow with `Start for Free`, `See how it works`, pricing preview, and a clearer closing section
 - Challenge Quiz and Board Exam Mode now use a collapsible Question Navigator so mobile quiz screens stay less cluttered:
   - Challenge Quiz defaults to an expanded navigator on desktop and a collapsed summary on mobile
   - Board Exam Mode defaults to a collapsed navigator on both desktop and mobile to keep the exam view more focused
