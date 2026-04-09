@@ -23,80 +23,69 @@ jest.mock("@/lib/api", () => ({
 }));
 
 describe("PricingPage", () => {
-  it("renders localized pricing and upgrade messaging", async () => {
+  it("renders the simplified Free vs Premium pricing layout", async () => {
     render(<PricingPage />);
 
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
-    expect(screen.getByText("Study smarter. Pass exams faster.")).toBeInTheDocument();
+    expect(screen.getByText("Simple plans for everyday study and serious review.")).toBeInTheDocument();
     expect(
-      screen.getByText("Turn your notes into reviewers, practice questions, and better exam prep."),
+      screen.getByText("Start with Free to turn notes into Study Packs, summaries, key concepts, and quizzes."),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "NoteLib is a notes library and review tool in one — you build your own reviewers, then turn them into summaries, key concepts, and practice quizzes.",
+        "Upgrade to Premium when you need higher limits, Adaptive Practice, and more control during heavy exam weeks.",
       ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Board Exam Mode is available on Free for a limited time and stays included on Premium."),
     ).toBeInTheDocument();
     expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
     expect(screen.getByText("₱1,999/year (Save ₱989)")).toBeInTheDocument();
-    expect(screen.queryByText("Included")).not.toBeInTheDocument();
-    expect(screen.queryByText("Not included")).not.toBeInTheDocument();
-    expect(screen.getByText("Built for serious review")).toBeInTheDocument();
-    expect(screen.getByText("Why Go Premium")).toBeInTheDocument();
-    expect(screen.getByText("For serious review and exam preparation")).toBeInTheDocument();
-    expect(
-      screen.getByText("Premium is designed for students who are preparing for exams, board exams, or major tests."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Choose the study flow that fits your review season.")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "If you review often, Premium gives you more Study Packs, more Challenge Quizzes, and Adaptive Practice that focuses on the topics you get wrong so you can improve faster.",
+        "Free covers the core NoteLib workflow. Premium is positioned for students who need deeper quiz practice and higher monthly limits.",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText("Start with the core NoteLib study flow.")).toBeInTheDocument();
     expect(
-      screen.getByText("This makes NoteLib not just a notes app, but a full review and practice tool."),
+      screen.getByText("Build notes, generate Study Packs, and review with quizzes without paying upfront."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Start studying for free.")).toBeInTheDocument();
-    expect(
-      screen.getByText("Free gives you the core NoteLib workflow: Create notes, turn them into Study Packs, and review with quizzes."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Unlock adaptive practice and deeper quiz training.")).toBeInTheDocument();
-    expect(screen.getByText("Most students upgrade during exam weeks.")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Premium is designed for exam preparation periods when you need more practice, more quizzes, and Adaptive Practice to focus on weak topics so you can improve faster.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("10 Study Packs per month")).toBeInTheDocument();
-    expect(screen.getByText("5 Challenge Quizzes per month")).toBeInTheDocument();
-    expect(screen.getAllByText("Weak Concepts Tracking")).not.toHaveLength(0);
-    expect(screen.getAllByText("Quick Review")).not.toHaveLength(0);
-    expect(screen.getByText("Everything in Free")).toBeInTheDocument();
-    expect(screen.getByText("More Study Packs and Quizzes")).toBeInTheDocument();
-    expect(screen.getByText("Adaptive Practice for weak topics")).toBeInTheDocument();
-    expect(screen.getAllByText("Choose Quiz Difficulty")).not.toHaveLength(0);
-    expect(screen.getAllByText("Future premium features")).not.toHaveLength(0);
-    expect(screen.getByText("More practice. Better results.")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
-    expect(
-      screen.getByText("Free helps you study consistently. Premium unlocks deeper practice and higher limits when exams get serious."),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Included in Free")).toBeInTheDocument();
-    expect(screen.getByText("Monthly Limits")).toBeInTheDocument();
-    expect(screen.getByText("Premium Features")).toBeInTheDocument();
+    expect(screen.getAllByText("10 Study Packs / month")).not.toHaveLength(0);
+    expect(screen.getAllByText("5 Challenge Quizzes / month")).not.toHaveLength(0);
+    expect(screen.getAllByText("AI Summary + Key Concepts")).not.toHaveLength(0);
+    expect(screen.getAllByText("Weak Concepts tracking")).not.toHaveLength(0);
+    expect(screen.getByText("Board Exam Mode (Free for limited time)")).toBeInTheDocument();
+    expect(screen.getByText("Adaptive Practice (Premium)")).toBeInTheDocument();
+    expect(screen.getByText("Difficulty selection (Premium)")).toBeInTheDocument();
+    expect(screen.getByText("Move into deeper, exam-focused practice.")).toBeInTheDocument();
     expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getByText("50")).toBeInTheDocument();
+    expect(screen.getAllByText("100")).not.toHaveLength(0);
     expect(screen.getByText("30")).toBeInTheDocument();
-    expect(screen.queryByText("Public Library Access")).not.toBeInTheDocument();
-    expect(screen.queryByText("File Uploads (PDF, DOCX, TXT)")).not.toBeInTheDocument();
-    expect(screen.queryByText("Image to Text (OCR)")).not.toBeInTheDocument();
+    expect(screen.getByText("50 Challenge Quizzes / month")).toBeInTheDocument();
+    expect(screen.getByText("30 Adaptive Practice sessions / month")).toBeInTheDocument();
+    expect(screen.getAllByText("Difficulty selection")).not.toHaveLength(0);
+    expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
+    expect(
+      screen.getByText(
+        "Premium pricing is shown now, but upgrades currently join the waitlist while checkout is still being prepared.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Plan comparison")).toBeInTheDocument();
+    expect(
+      screen.getByText("Free covers the core study loop. Premium expands limits and unlocks deeper quiz training."),
+    ).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Not included")).toHaveLength(2);
 
     const comparisonTable = screen.getByRole("table");
     const pricingText = comparisonTable.textContent ?? "";
-    expect(pricingText.indexOf("Quick Review")).toBeLessThan(pricingText.indexOf("Weak Concepts Tracking"));
-    expect(pricingText.indexOf("Weak Concepts Tracking")).toBeLessThan(pricingText.indexOf("AI Study Packs / month"));
-    expect(pricingText.indexOf("AI Study Packs / month")).toBeLessThan(pricingText.indexOf("Challenge Quizzes / month"));
-    expect(pricingText.indexOf("Challenge Quizzes / month")).toBeLessThan(pricingText.indexOf("Adaptive Practice"));
-    expect(pricingText.indexOf("Adaptive Practice")).toBeLessThan(pricingText.indexOf("Choose Quiz Difficulty"));
-    expect(pricingText.indexOf("Choose Quiz Difficulty")).toBeLessThan(pricingText.indexOf("Future Premium Features"));
+    expect(pricingText.indexOf("Study Packs / month")).toBeLessThan(pricingText.indexOf("Challenge Quizzes / month"));
+    expect(pricingText.indexOf("Challenge Quizzes / month")).toBeLessThan(pricingText.indexOf("AI Summary + Key Concepts"));
+    expect(pricingText.indexOf("AI Summary + Key Concepts")).toBeLessThan(pricingText.indexOf("Weak Concepts tracking"));
+    expect(pricingText.indexOf("Weak Concepts tracking")).toBeLessThan(pricingText.indexOf("Adaptive Practice"));
+    expect(pricingText.indexOf("Adaptive Practice")).toBeLessThan(pricingText.indexOf("Difficulty selection"));
+    expect(pricingText.indexOf("Difficulty selection")).toBeLessThan(pricingText.indexOf("Board Exam Mode"));
+    expect(pricingText).toContain("Free for limited time");
   });
 
   it("links signup CTA and opens the premium waitlist flow", async () => {
@@ -116,8 +105,7 @@ describe("PricingPage", () => {
   it("exports pricing metadata with canonical and social preview fields", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib Pricing — Free and Premium Plans",
-      description:
-        "Choose between Free and Premium plans for turning notes into reviewers, practice questions, and better exam prep.",
+      description: "Compare Free and Premium plans for Study Packs, Challenge Quiz, Adaptive Practice, and Board Exam Mode.",
       alternates: {
         canonical: "https://notelib.app/pricing",
       },

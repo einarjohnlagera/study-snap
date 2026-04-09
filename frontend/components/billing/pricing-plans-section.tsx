@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment } from "react";
 import { Check, Crown, Minus } from "lucide-react";
 import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,57 +20,62 @@ type ComparisonRow = {
   premium: ComparisonValue;
 };
 
-type ComparisonSection = {
-  title: string;
-  rows: ComparisonRow[];
-};
+const FREE_FEATURES = [
+  `${pricingConfig.free.studyPacksPerMonth} Study Packs / month`,
+  `${pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month`,
+  "AI Summary + Key Concepts",
+  "Weak Concepts tracking",
+  "Board Exam Mode (Free for limited time)",
+];
 
-const COMPARISON_SECTIONS: ComparisonSection[] = [
+const FREE_LIMITATIONS = [
+  "Adaptive Practice (Premium)",
+  "Difficulty selection (Premium)",
+];
+
+const PREMIUM_FEATURES = [
+  `${pricingConfig.premium.studyPacksPerMonth} Study Packs / month`,
+  `${pricingConfig.premium.challengeQuizzesPerMonth} Challenge Quizzes / month`,
+  `${pricingConfig.premium.adaptivePracticePerMonth} Adaptive Practice sessions / month`,
+  "Difficulty selection",
+  "Board Exam Mode",
+];
+
+const COMPARISON_ROWS: ComparisonRow[] = [
   {
-    title: "Included in Free",
-    rows: [
-      {
-        label: "Quick Review",
-        free: "check",
-        premium: "check",
-      },
-      {
-        label: "Weak Concepts Tracking",
-        free: "check",
-        premium: "check",
-      },
-    ],
+    label: "Study Packs / month",
+    free: String(pricingConfig.free.studyPacksPerMonth),
+    premium: String(pricingConfig.premium.studyPacksPerMonth),
   },
   {
-    title: "Monthly Limits",
-    rows: [
-      {
-        label: "AI Study Packs / month",
-        free: String(pricingConfig.free.studyPacksPerMonth),
-        premium: String(pricingConfig.premium.studyPacksPerMonth),
-      },
-      {
-        label: "Challenge Quizzes / month",
-        free: String(pricingConfig.free.challengeQuizzesPerMonth),
-        premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
-      },
-    ],
+    label: "Challenge Quizzes / month",
+    free: String(pricingConfig.free.challengeQuizzesPerMonth),
+    premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
   },
   {
-    title: "Premium Features",
-    rows: [
-      {
-        label: "Adaptive Practice",
-        free: null,
-        premium: String(pricingConfig.premium.adaptivePracticePerMonth),
-      },
-      {
-        label: "Choose Quiz Difficulty",
-        free: null,
-        premium: "check",
-      },
-      { label: "Future Premium Features", free: null, premium: "check" },
-    ],
+    label: "AI Summary + Key Concepts",
+    free: "check",
+    premium: "check",
+  },
+  {
+    label: "Weak Concepts tracking",
+    free: "check",
+    premium: "check",
+  },
+  {
+    label: "Adaptive Practice",
+    free: null,
+    premium: String(pricingConfig.premium.adaptivePracticePerMonth),
+  },
+  {
+    label: "Difficulty selection",
+    free: null,
+    premium: "check",
+  },
+  {
+    label: "Board Exam Mode",
+    free: "Free for limited time",
+    premium: "check",
   },
 ];
 
@@ -121,46 +125,55 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Pricing
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Move from note-taking to exam prep</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Premium for deeper exam prep.</h2>
           <p className="max-w-3xl text-sm text-foreground/75">
-            Free helps you get started. Premium adds the exam-style practice and extra generation room students need during serious review weeks.
+            Compare the core NoteLib workflow with the higher limits and premium practice tools designed for heavier review weeks.
           </p>
         </div>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="space-y-4 p-4 sm:p-6">
+        <Card className="space-y-5 p-4 sm:p-6">
           <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-            <CardTitle>Start studying for free.</CardTitle>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
+            <CardTitle>Start with the core NoteLib study flow.</CardTitle>
             <CardDescription>
-              Free gives you the core NoteLib workflow: Create notes, turn them into Study Packs, and review with quizzes.
+              Build notes, generate Study Packs, and review with quizzes without paying upfront.
             </CardDescription>
           </div>
           <p className="text-3xl font-semibold">Free</p>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes per month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Quick Review</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts Tracking</li>
+            {FREE_FEATURES.map((feature) => (
+              <li key={feature} className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
+                {feature}
+              </li>
+            ))}
           </ul>
+          <div className="space-y-2 rounded-lg border border-dashed border-border bg-background/70 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium-only extras</p>
+            <ul className="space-y-2 text-sm text-foreground/75">
+              {FREE_LIMITATIONS.map((feature) => (
+                <li key={feature} className="flex items-start gap-2">
+                  <Minus className="mt-0.5 h-4 w-4 text-foreground/55" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
+          </div>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
             Start for Free
           </Link>
         </Card>
 
-        <Card className="space-y-4 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
+        <Card className="space-y-5 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
           <div className="space-y-2">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
               <Crown className="h-3.5 w-3.5" />
               Premium
             </div>
-            <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
-              Most students upgrade during exam weeks.
-            </p>
-            <CardTitle>Unlock adaptive practice and deeper quiz training.</CardTitle>
+            <CardTitle>Move into deeper, exam-focused practice.</CardTitle>
             <CardDescription>
-              Premium is designed for exam preparation periods when you need more practice, more quizzes, and
-              Adaptive Practice to focus on weak topics so you can improve faster.
+              Premium adds higher limits and targeted quiz tools for the weeks when review gets serious.
             </CardDescription>
           </div>
           <div className="space-y-1">
@@ -176,12 +189,12 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             ) : null}
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Everything in Free</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />More Study Packs and Quizzes</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice for weak topics</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Choose Quiz Difficulty</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher monthly limits</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Future premium features</li>
+            {PREMIUM_FEATURES.map((feature) => (
+              <li key={feature} className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
+                {feature}
+              </li>
+            ))}
           </ul>
           <div className="space-y-2">
             <PremiumWaitlistButton
@@ -189,7 +202,9 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
               source="pricing_plans_section"
               className="w-full sm:w-auto"
             />
-            <p className="text-sm text-foreground/65">More practice. Better results.</p>
+            <p className="text-sm text-foreground/65">
+              Premium pricing is shown now, but upgrades currently join the waitlist while checkout is still being prepared.
+            </p>
           </div>
         </Card>
       </div>
@@ -198,7 +213,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
         <div className="border-b border-border px-4 py-4 sm:px-6">
           <h3 className="text-lg font-semibold sm:text-xl">Plan comparison</h3>
           <p className="mt-1 text-sm text-foreground/70">
-            Free helps you study consistently. Premium unlocks deeper practice and higher limits when exams get serious.
+            Free covers the core study loop. Premium expands limits and unlocks deeper quiz training.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -213,30 +228,19 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
               </tr>
             </thead>
             <tbody>
-              {COMPARISON_SECTIONS.map((section) => (
-                <Fragment key={section.title}>
-                  <tr className="bg-muted/20">
-                    <td className="px-4 pb-2 pt-5 text-xs font-semibold uppercase tracking-wide text-foreground/55 sm:px-6">
-                      {section.title}
-                    </td>
-                    <td className="px-4 pb-2 pt-5 sm:px-6" />
-                    <td className="bg-blue-500/8 px-4 pb-2 pt-5 sm:px-6 dark:bg-blue-500/12" />
-                  </tr>
-                  {section.rows.map((row, rowIndex) => (
-                    <tr
-                      key={row.label}
-                      className={`border-b border-border ${rowIndex === section.rows.length - 1 ? "last:border-b-0" : ""}`}
-                    >
-                      <td className="px-4 py-3 font-medium sm:px-6">{row.label}</td>
-                      <td className="px-4 py-3 text-center align-middle sm:px-6">
-                        <ComparisonCell value={row.free} />
-                      </td>
-                      <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12">
-                        <ComparisonCell value={row.premium} emphasize />
-                      </td>
-                    </tr>
-                  ))}
-                </Fragment>
+              {COMPARISON_ROWS.map((row, rowIndex) => (
+                <tr
+                  key={row.label}
+                  className={`border-b border-border ${rowIndex === COMPARISON_ROWS.length - 1 ? "border-b-0" : ""}`}
+                >
+                  <td className="px-4 py-3 font-medium sm:px-6">{row.label}</td>
+                  <td className="px-4 py-3 text-center align-middle sm:px-6">
+                    <ComparisonCell value={row.free} />
+                  </td>
+                  <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12">
+                    <ComparisonCell value={row.premium} emphasize />
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>

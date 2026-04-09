@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Pricing — Free and Premium Plans",
-  description: "Choose between Free and Premium plans for turning notes into reviewers, practice questions, and better exam prep.",
+  description: "Compare Free and Premium plans for Study Packs, Challenge Quiz, Adaptive Practice, and Board Exam Mode.",
   path: "/pricing",
 });
 
@@ -19,78 +17,51 @@ export default function PricingPage() {
     <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 sm:px-6 sm:py-12">
       <section className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-amber-500/10 p-6 shadow-sm sm:p-10">
         <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="relative grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-          <div className="space-y-4">
-            <BrandFullLogo width={208} height={44} priority />
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700 dark:text-blue-300">
-              Pricing
-            </p>
-            <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-              Study smarter. Pass exams faster.
-            </h1>
-            <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Turn your notes into reviewers, practice questions, and better exam prep.
-            </p>
-            <p className="max-w-2xl text-sm leading-relaxed text-foreground/75">
-              NoteLib is a notes library and review tool in one — you build your own reviewers, then turn them into
-              summaries, key concepts, and practice quizzes.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/auth" className="w-full sm:w-auto">
-                <Button type="button" className="w-full sm:w-auto">
-                  Start Free
-                </Button>
-              </Link>
-              <PremiumWaitlistButton
-                label="Upgrade to Premium"
-                source="pricing_hero"
-                variant="outline"
-                className="w-full sm:w-auto"
-              />
-            </div>
+        <div className="relative space-y-5">
+          <BrandFullLogo width={208} height={44} priority />
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700 dark:text-blue-300">
+            Pricing
+          </p>
+          <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
+            Simple plans for everyday study and serious review.
+          </h1>
+          <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+            Start with Free to turn notes into Study Packs, summaries, key concepts, and quizzes.
+          </p>
+          <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+            Upgrade to Premium when you need higher limits, Adaptive Practice, and more control during heavy exam weeks.
+          </p>
+          <p className="max-w-3xl rounded-2xl border border-blue-500/15 bg-background/80 px-4 py-3 text-sm text-foreground/75 backdrop-blur">
+            Board Exam Mode is available on Free for a limited time and stays included on Premium.
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link href="/auth" className="w-full sm:w-auto">
+              <Button type="button" className="w-full sm:w-auto">
+                Start for Free
+              </Button>
+            </Link>
+            <PremiumWaitlistButton
+              label="Upgrade to Premium"
+              source="pricing_hero"
+              variant="outline"
+              className="w-full sm:w-auto"
+            />
           </div>
-          <Card className="space-y-3 border-blue-500/20 bg-background/90 p-5 backdrop-blur sm:p-6">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
-              Built for serious review
-            </p>
-            <ul className="space-y-3 text-sm text-foreground/80">
-              <li className="flex items-start gap-2">
-                <ArrowRight className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
-                Challenge Quiz simulates exam pressure by hiding answers until you commit.
-              </li>
-              <li className="flex items-start gap-2">
-                <ArrowRight className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
-                Adaptive Practice helps you revisit weak topics instead of repeating what you already know.
-              </li>
-              <li className="flex items-start gap-2">
-                <ArrowRight className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
-                Premium gives you room to generate more Study Packs during heavy review weeks.
-              </li>
-            </ul>
-          </Card>
         </div>
       </section>
 
-      <section>
-        <Card className="space-y-3 p-5 sm:p-6">
+      <section className="space-y-3">
+        <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Why Go Premium
+            Free vs Premium
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">For serious review and exam preparation</h2>
-          <p className="max-w-4xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Premium is designed for students who are preparing for exams, board exams, or major tests.
+          <h2 className="text-2xl font-semibold sm:text-3xl">Choose the study flow that fits your review season.</h2>
+          <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+            Free covers the core NoteLib workflow. Premium is positioned for students who need deeper quiz practice and higher monthly limits.
           </p>
-          <p className="max-w-4xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            If you review often, Premium gives you more Study Packs, more Challenge Quizzes, and Adaptive Practice
-            that focuses on the topics you get wrong so you can improve faster.
-          </p>
-          <p className="max-w-4xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            This makes NoteLib not just a notes app, but a full review and practice tool.
-          </p>
-        </Card>
+        </div>
+        <PricingPlansSection showHeading={false} />
       </section>
-
-      <PricingPlansSection showHeading={false} />
     </main>
   );
 }
