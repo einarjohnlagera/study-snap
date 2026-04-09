@@ -1122,6 +1122,8 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take Another Board Exam" })).toHaveClass("bg-blue-600");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
+    expect(screen.getByText("Help improve this quiz")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confusing Explanation" })).toBeInTheDocument();
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
@@ -1212,5 +1214,6 @@ describe("ChallengeQuizPage", () => {
     expect(review).toHaveTextContent("Mitochondria");
     expect(review).toHaveTextContent("Correct answer");
     expect(review).toHaveTextContent("Mitochondria produce ATP for the cell.");
+    expect(screen.getByText("Found a confusing question or explanation while reviewing answers? Tell us what felt off.")).toBeInTheDocument();
   });
 });

@@ -6,11 +6,30 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { submitFeedback } from "@/lib/api";
 
-type SendFeedbackWidgetProps = {
-  mobileHidden?: boolean;
+export type FeedbackQuickAction = {
+  label: string;
+  template: string;
 };
 
-export function SendFeedbackWidget({ mobileHidden = false }: Readonly<SendFeedbackWidgetProps>) {
+type SendFeedbackWidgetProps = {
+  hidden?: boolean;
+  mobileHidden?: boolean;
+  variant?: "floating" | "inline";
+  title?: string;
+  description?: string;
+  triggerLabel?: string;
+  quickActions?: FeedbackQuickAction[];
+};
+
+export function SendFeedbackWidget({
+  hidden = false,
+  mobileHidden = false,
+  variant = "floating",
+  title = "Send Feedback",
+  description = "Found a bug? Something confusing? Have a feature idea? Tell us what happened or what you'd like to see in NoteLib. We read every message and use it to improve the app.",
+  triggerLabel = "Send Feedback",
+  quickActions = [],
+}: Readonly<SendFeedbackWidgetProps>) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -29,9 +48,13 @@ export function SendFeedbackWidget({ mobileHidden = false }: Readonly<SendFeedba
     resetState();
   };
 
-  const handleOpen = () => {
+  const handleOpen = (prefill?: string) => {
     setOpen(true);
     setError(null);
+    setSuccessMessage(null);
+    if (typeof prefill === "string") {
+      setMessage(prefill);
+    }
   };
 
   const handleSubmit = async () => {
@@ -54,22 +77,58 @@ export function SendFeedbackWidget({ mobileHidden = false }: Readonly<SendFeedba
     }
   };
 
+  if (hidden) {
+    return null;
+  }
+
   return (
     <>
-      <Button
-        type="button"
-        className={`fixed bottom-5 right-5 z-40 gap-2 rounded-full px-4 shadow-lg sm:bottom-6 sm:right-6 ${mobileHidden ? "hidden sm:inline-flex" : ""}`}
-        onClick={handleOpen}
-      >
-        <MessageSquarePlus className="h-4 w-4" />
-        Send Feedback
-      </Button>
+      {variant === "inline" ? (
+        <div className="space-y-3 rounded-xl border border-border bg-background p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">{title}</p>
+            <p className="text-sm text-foreground/75">{description}</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {quickActions.map((action) => (
+              <Button
+                key={action.label}
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => handleOpen(action.template)}
+              >
+                {action.label}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => handleOpen()}
+            >
+              {triggerLabel}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          className={`fixed bottom-5 right-5 z-40 gap-2 rounded-full px-4 shadow-lg sm:bottom-6 sm:right-6 ${mobileHidden ? "hidden sm:inline-flex" : ""}`}
+          onClick={() => handleOpen()}
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+          {triggerLabel}
+        </Button>
+      )}
 
       <AppModal
         isOpen={open}
         onClose={closeModal}
-        title="Send Feedback"
-        description="Found a bug? Something confusing? Have a feature idea? Tell us what happened or what you'd like to see in NoteLib. We read every message and use it to improve the app."
+        title={title}
+        description={description}
         descriptionClassName="whitespace-pre-line"
         actions={successMessage ? (
           <div className="flex justify-end">
@@ -87,7 +146,7 @@ export function SendFeedbackWidget({ mobileHidden = false }: Readonly<SendFeedba
               onClick={() => void handleSubmit()}
               disabled={submitting || message.trim().length === 0}
             >
-              {submitting ? "Sending..." : "Send Feedback"}
+              {submitting ? "Sending..." : triggerLabel}
             </Button>
           </div>
         )}
