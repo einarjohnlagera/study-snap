@@ -22,15 +22,18 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 
 ## Exam Mode behavior
 
-- Premium-capable Challenge Quiz sessions show `Board Exam Mode`, `Start Board Exam`, difficulty selection, and derived question count by selected difficulty
-- Free/recommended Challenge Quiz sessions keep `Start Challenge Quiz` and show Board Exam Mode as a locked Premium enhancement instead of blocking limited Challenge Quiz access
+- Challenge Quiz start screen shows two explicit mode options: `Challenge Quiz` and `Board Exam Mode`
+- Board Exam Mode is available on both Free and Premium plans and still consumes the standard Challenge Quiz quota
+- Board Exam Mode shows a dedicated `Board Exam setup` confirmation state with `Cancel` and `Start Exam`
+- Difficulty selection remains Premium-gated; when it is available, Board Exam Mode derives question count from the selected difficulty
+- Free users can still enter Board Exam Mode with recommended difficulty/question count and without a separate Premium lock
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
-- selected choice shows neutral exam-style highlight (blue border) only
+- selected choice shows neutral exam-style highlight only
 - question-number navigation during Board Exam Mode shows current/answered/unanswered states only and never correctness
-- after `Start Board Exam` / `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
-- after `Start Board Exam` / `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
+- after `Start Exam` / `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
+- after `Start Exam` / `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
 - double-clicking Start does not create duplicate Challenge Quiz start requests
-- after `Start Board Exam` / `Start Challenge Quiz` is clicked, a full-screen `Generating your quiz...` overlay appears and page interaction is blocked until generation resolves
+- after `Start Exam` / `Start Challenge Quiz` is clicked, a full-screen generation overlay appears and page interaction is blocked until generation resolves
 - Challenge Quiz generation refresh/status checks reuse existing `GENERATING` or `IN_PROGRESS` sessions and do not call the LLM again
 - if Challenge Quiz generation returns `FAILED`, the page shows a retryable failure state rather than starting an active quiz
 - "Answers are graded only after submission." hint is visible during the quiz
@@ -38,6 +41,7 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - Submit button appears only on the last question; Previous is disabled on the first question
 - timer resumes from persisted session state after refresh/reload instead of resetting
 - timer auto-submits when it hits 00:00 and shows "Time ran out." message on the Board Exam result screen
+- timer expiry in Board Exam Mode also shows the transient `Time's up. Submitting your exam...` state before the result screen renders
 
 ## Result screen
 
@@ -49,6 +53,7 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - "Review Answers" toggle reveals full answer review with correct/incorrect highlights
 - answer review uses the same stable choice order as the answering phase
 - result screen is readable on mobile with sections stacking cleanly
+- Board Exam result framing stays distinct from standard Challenge Quiz result framing while still reusing the shared Review Answers flow
 
 - Quick Review, Challenge Quiz, and Adaptive Practice each use distinct icons
 - Quick Review questions stay lightweight and aligned with the learner level

@@ -538,8 +538,11 @@ export type AdaptivePracticeCompleteRequest = {
   durationSeconds?: number;
 };
 
+export type ChallengeQuizMode = "challenge" | "board_exam";
+
 export type ChallengeQuizStartRequest = {
   difficulty?: "easy" | "medium" | "hard";
+  mode?: ChallengeQuizMode;
 };
 
 export type ChallengeQuizStartResponse = {
@@ -552,6 +555,7 @@ export type ChallengeQuizStartResponse = {
   usedThisMonth: number;
   monthlyLimit: number;
   difficultySelectionAvailable: boolean;
+  mode: ChallengeQuizMode;
   selectedDifficulty: "easy" | "medium" | "hard";
   quiz: QuizItem[];
   currentQuestionIndex: number;

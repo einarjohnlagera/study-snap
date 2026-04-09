@@ -15,6 +15,7 @@ public record ChallengeQuizStartResponse(
         int usedThisMonth,
         int monthlyLimit,
         boolean difficultySelectionAvailable,
+        String mode,
         String selectedDifficulty,
         List<QuizItem> quiz,
         int currentQuestionIndex,

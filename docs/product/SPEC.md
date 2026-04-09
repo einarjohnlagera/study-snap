@@ -710,13 +710,15 @@ Page responsibilities:
   - raw LLM output may use an `A`/`B`/`C`/`D` answer letter, but canonical stored quiz data must normalize to `question`, `choices`, `correctIndex`, `explanation`, and `concept`
   - runtime quiz rendering must derive `A` / `B` / `C` / `D` from displayed order only; letters are not part of canonical stored data
 
-### Challenge Quiz (Premium)
+### Challenge Quiz
 
 - Timed exam-style mode (10 minutes)
 - Generated from Study Pack summary + key concepts, plus learner-level and note-context metadata
-- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine for Premium-capable sessions.
-- Premium-capable sessions label the entry as `Board Exam Mode`, use `Start Board Exam`, support difficulty selection, derive question count from difficulty, and may request fullscreen/focus mode as a best-effort browser enhancement.
-- Free/recommended Challenge Quiz sessions keep limited Challenge Quiz access and show Board Exam Mode as a locked Premium enhancement rather than making Challenge Quiz itself Premium-only.
+- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine and is available as a distinct Challenge mode for both Free and Premium users in the current rollout stage.
+- The Challenge Quiz screen presents both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices.
+- Board Exam Mode uses a dedicated `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
+- Board Exam Mode may request fullscreen/focus mode as a best-effort browser enhancement.
+- Difficulty selection remains Premium-gated, but Board Exam Mode still runs for Free users with recommended difficulty/question count.
 - Difficulty and question count adapt by latest Quick Review score:
   - `<50`: 10 questions, easy-medium
   - `<80`: 12 questions, medium

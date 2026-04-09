@@ -8,7 +8,7 @@ type QuizChoiceListProps = {
   selectedChoiceIndex?: number | null;
   revealAnswer: boolean;
   onSelectChoice?: (choiceIndex: number) => void;
-  selectionStyle?: "default" | "exam";
+  selectionStyle?: "default" | "exam" | "board-exam";
 };
 
 export function QuizChoiceList({
@@ -52,9 +52,11 @@ export function QuizChoiceList({
                   : isSelected
                     ? isIncorrectSelection
                       ? "border-red-500/50 bg-red-500/10 text-foreground"
-                      : selectionStyle === "exam"
-                        ? "border-blue-600/70 bg-blue-500/15 text-foreground ring-1 ring-blue-500/35"
-                        : "border-foreground/30 bg-muted/60 text-foreground"
+                      : selectionStyle === "board-exam"
+                        ? "border-foreground/45 bg-foreground/[0.05] text-foreground ring-1 ring-foreground/15"
+                        : selectionStyle === "exam"
+                          ? "border-blue-600/70 bg-blue-500/15 text-foreground ring-1 ring-blue-500/35"
+                          : "border-foreground/30 bg-muted/60 text-foreground"
                     : "border-border text-foreground/75",
                 isInteractive ? "cursor-pointer" : "cursor-default",
               )}

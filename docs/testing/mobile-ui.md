@@ -40,7 +40,7 @@ Verify these cases on mobile-sized viewports:
 - Public Library and Public Profile note cards keep the note-content preview readable on mobile and keep `views` / `copies` on a compact metrics row that does not wrap awkwardly.
 - Quality badges (⭐ High Quality, 🔥 Popular) appear below the title and wrap cleanly without breaking the card layout on mobile — at most 2 badges are visible per card.
 - Challenge Quiz exam phase: answer choices are fully tappable, fill the card width, and show no correctness hints on mobile
-- Board Exam Mode start, timer, and question-number navigator remain readable and tappable on mobile without revealing correctness
+- Board Exam Mode mode-card entry, `Board Exam setup` confirmation, timer, and question-number navigator remain readable and tappable on mobile without revealing correctness
 - Challenge Quiz start screen disables difficulty and Start controls immediately after Start is tapped
 - Quick Review, Challenge Quiz, and Adaptive Practice active sessions show a tappable `Leave Quiz` action on mobile
 - the `Leave quiz?` modal remains readable on mobile and stacks `Stay` / `Leave Quiz` actions cleanly
