@@ -4,6 +4,12 @@
 
 ### New Features
 
+- **Pricing page + Premium positioning** — `/pricing` now presents a cleaner two-plan comparison for the current pre-launch stage:
+  - Free and Premium are the only visible plans
+  - Free highlights `10` Study Packs/month, `5` Challenge Quizzes/month, AI Summary + Key Concepts, Weak Concepts tracking, and `Board Exam Mode (Free for limited time)`
+  - Premium highlights higher limits, Adaptive Practice, Difficulty selection, and Board Exam Mode
+  - the comparison table now focuses on the core study features users actually choose between
+  - upgrade CTAs still route into the Premium waitlist flow instead of payment
 - **Post-Quiz UX Polish** — Unified quiz result UX across Quick Review, Challenge Quiz, and Adaptive Practice:
   - Removed all "Note" buttons from quiz screens; replaced with `← Back to Note` text link placed **below** action buttons (not grouped with them)
   - Quick Review confidence feedback: selecting a confidence level now replaces the option buttons with a styled badge — `🟢 Confident` (HIGH), `🟡 Improving` (MEDIUM), `🔴 Needs Practice` (LOW); "Thanks for the feedback." text removed
