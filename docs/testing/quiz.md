@@ -28,11 +28,21 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - Free users who choose `Practice Mode` skip difficulty selection entirely and start generation immediately
 - Board Exam Mode is available on both Free and Premium plans and still consumes the standard Challenge Quiz quota
 - Board Exam Mode shows a dedicated `Board Exam setup` confirmation state with `Cancel` and `Start Exam`
+- Board Exam setup includes an explicit explanation block covering:
+  - focused exam simulation framing
+  - timed session
+  - mixed difficulty questions
+  - no interruptions during the exam
+  - results shown after completion
+  - intentional limited navigation during the exam
+- tapping `Start Exam` first opens the `Start Board Exam Mode?` confirmation modal and generation does not begin until the user confirms
 - Board Exam Mode never shows difficulty selection in the UI and always uses mixed difficulty with the fixed Board Exam question count
 - Free users can still enter Board Exam Mode without a separate Premium lock or dead-end disabled controls
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
 - selected choice shows neutral exam-style highlight only
 - question-number navigation during Board Exam Mode shows current/answered/unanswered states only and never correctness
+- active Board Exam pages visibly reinforce context with `Board Exam Mode`, `Exam in progress`, and copy explaining that limited navigation is intentional
+- the one-time Board Exam focus tip can be dismissed and does not reappear for the same user after dismissal
 - after `Start Exam` / `Start Challenge Quiz` is clicked, difficulty buttons are disabled immediately
 - after `Start Exam` / `Start Challenge Quiz` is clicked, the Start button is disabled immediately and shows starting/loading copy
 - double-clicking Start does not create duplicate Challenge Quiz start requests
@@ -49,6 +59,8 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - timer expiry in Board Exam Mode also shows the transient `Time's up. Submitting your exam...` state before the result screen renders
 - if timeout submission fails, answer changes and question navigation stay locked and the page does not retry auto-submit on every later tick
 - if manual submit is already in flight when the timer expires, only one completion request is sent
+- choosing `Leave Exam` during Board Exam Mode opens `Leave exam?` with `Stay` and `Submit & Leave`
+- confirming `Submit & Leave` completes the current Board Exam once and then exits
 
 ## Result screen
 
@@ -61,6 +73,7 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - answer review uses the same stable choice order as the answering phase
 - result screen is readable on mobile with sections stacking cleanly
 - Board Exam result framing stays distinct from standard Challenge Quiz result framing while still reusing the shared Review Answers flow
+- Board Exam result uses formal wording such as `Exam Result` and `Performance`
 
 - Quick Review, Challenge Quiz, and Adaptive Practice each use distinct icons
 - Quick Review questions stay lightweight and aligned with the learner level

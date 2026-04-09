@@ -75,6 +75,7 @@ describe("ChallengeQuizPage", () => {
 
   function setupInProgressChallengeQuiz(mode: "challenge" | "board_exam" = "challenge") {
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       planType: "PREMIUM",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
@@ -134,6 +135,7 @@ describe("ChallengeQuizPage", () => {
 
   function setupChallengePrestart(difficultySelectionAvailable = true) {
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       planType: difficultySelectionAvailable ? "PREMIUM" : "FREE",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
@@ -186,6 +188,7 @@ describe("ChallengeQuizPage", () => {
     timerStartedAtEpochSeconds?: number;
   } = {}) {
     (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
       planType: "PREMIUM",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
@@ -319,10 +322,16 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(getModeCard("Board Exam Mode"));
 
     expect(await screen.findByRole("heading", { name: "Board Exam setup" })).toBeInTheDocument();
-    expect(screen.getByText("Simulate a focused exam session for Challenge Note. Results appear only after submission, and leaving may forfeit the attempt.")).toBeInTheDocument();
+    expect(screen.getByText("Prepare a stricter exam simulation for Challenge Note before you begin.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Board Exam Mode" })).toBeInTheDocument();
+    expect(screen.getByText("Simulate a real exam experience with a focused, distraction-free environment.")).toBeInTheDocument();
+    expect(screen.getByText("Timed session")).toBeInTheDocument();
+    expect(screen.getByText("Mixed difficulty questions")).toBeInTheDocument();
+    expect(screen.getByText("No interruptions during the exam")).toBeInTheDocument();
+    expect(screen.getByText("Results shown after completion")).toBeInTheDocument();
+    expect(screen.getByText("Navigation will be limited during the exam to help you stay focused.")).toBeInTheDocument();
     expect(screen.getByText("12 questions with mixed difficulty.")).toBeInTheDocument();
     expect(screen.getByText("Mixed and internally controlled for exam simulation.")).toBeInTheDocument();
-    expect(screen.getByText("Board Exam Mode rules")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "hard" })).not.toBeInTheDocument();
@@ -367,6 +376,8 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Board Exam Mode/i }));
     fireEvent.click(screen.getByRole("button", { name: "Start Exam" }));
+    expect(screen.getByRole("dialog", { name: "Start Board Exam Mode?" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Start Exam" })[1]!);
 
     await waitFor(() => {
       expect(startChallengeQuizSession).toHaveBeenCalledWith("note-1", { mode: "board_exam" });
@@ -378,6 +389,9 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
+    expect((await screen.findAllByText("Board Exam Mode")).length).toBeGreaterThan(0);
+    expect(screen.getByText("Exam in progress. Navigation is limited to help you stay focused.")).toBeInTheDocument();
+    expect(await screen.findByText("Board Exam Mode hides distractions to simulate a real test environment.")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
 
     expect(screen.queryByText(/Correct/i)).not.toBeInTheDocument();
@@ -388,6 +402,40 @@ describe("ChallengeQuizPage", () => {
 
     expect(screen.getByText("What protects the plant cell?")).toBeInTheDocument();
     expect(screen.getByText("1 answered")).toBeInTheDocument();
+  });
+
+  it("shows the Board Exam start confirmation modal before generation begins", async () => {
+    setupChallengePrestart(true);
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Board Exam Mode/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Start Exam" }));
+
+    expect(screen.getByRole("dialog", { name: "Start Board Exam Mode?" })).toBeInTheDocument();
+    expect(screen.getByText("You are about to start a board exam simulation.")).toBeInTheDocument();
+    expect(screen.getByText("You will not see results until the end, and navigation will be limited during the exam.")).toBeInTheDocument();
+    expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("shows the Board Exam focus tip once per user", async () => {
+    setupBoardExamSession();
+
+    const { unmount } = render(<ChallengeQuizPage />);
+
+    expect(await screen.findByText("Board Exam Mode hides distractions to simulate a real test environment.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Got it" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Board Exam Mode hides distractions to simulate a real test environment.")).not.toBeInTheDocument();
+    });
+
+    unmount();
+    setupBoardExamSession();
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByText("Exam in progress")).toBeInTheDocument();
+    expect(screen.queryByText("Board Exam Mode hides distractions to simulate a real test environment.")).not.toBeInTheDocument();
   });
 
   it("resumes Board Exam timer, question index, and answer state from session state", async () => {
@@ -441,7 +489,7 @@ describe("ChallengeQuizPage", () => {
         durationSeconds: 600,
       });
     });
-    expect(await screen.findByText("Board Exam Result")).toBeInTheDocument();
+    expect(await screen.findByText("Exam Result")).toBeInTheDocument();
     expect(screen.getByText("Time ran out. Your answers were submitted automatically.")).toBeInTheDocument();
 
     nowSpy.mockRestore();
@@ -613,6 +661,50 @@ describe("ChallengeQuizPage", () => {
       expect(forfeitChallengeQuizSession).toHaveBeenCalledWith("session-1");
     });
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
+  });
+
+  it("submits the active Board Exam before leaving", async () => {
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1_720_000_120_000);
+    setupBoardExamSession({
+      selectedChoices: { "0": 0 },
+      timerStartedAtEpochSeconds: 1_720_000_000,
+    });
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 2,
+      correctAnswers: 1,
+      scorePercentage: 50,
+      performanceLevel: "Fair",
+      conceptBreakdown: [
+        { concept: "Cell Biology", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 },
+        { concept: "Cell Structure", correctAnswers: 0, totalQuestions: 1, accuracyPercentage: 0 },
+      ],
+      weakConcepts: ["Cell Structure"],
+      durationSeconds: 120,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:02:00Z",
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Leave Exam" }));
+    expect(screen.getByRole("dialog", { name: "Leave exam?" })).toBeInTheDocument();
+    expect(screen.getByText("Your progress will be submitted and counted as complete.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit & Leave" }));
+
+    await waitFor(() => {
+      expect(completeChallengeQuizSession).toHaveBeenCalledWith("session-1", {
+        correctAnswers: 1,
+        totalQuestions: 2,
+        durationSeconds: 120,
+      });
+    });
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
+
+    nowSpy.mockRestore();
   });
 
   it("blocks route clicks during an active Challenge Quiz until confirmed", async () => {
@@ -838,7 +930,7 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
-    await screen.findByText("Board Exam Result");
+    await screen.findByText("Exam Result");
 
     expect(screen.queryByRole("button", { name: /^Note$/ })).not.toBeInTheDocument();
   });
@@ -920,9 +1012,10 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
-    await screen.findByText("Board Exam Result");
+    await screen.findByText("Exam Result");
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
+    expect(screen.getByText("Performance")).toBeInTheDocument();
     expect(screen.getByText("No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take Another Board Exam" })).toHaveClass("bg-blue-600");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
@@ -1005,7 +1098,7 @@ describe("ChallengeQuizPage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit Exam" }));
-    await screen.findByText("Board Exam Result");
+    await screen.findByText("Exam Result");
     fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
 
     const review = screen.getByLabelText("Answer review");

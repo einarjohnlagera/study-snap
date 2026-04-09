@@ -523,6 +523,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - While a quiz session is active, replace normal header back navigation with active-session text plus `Leave Quiz`; navigation away must open the shared `Leave quiz?` confirmation instead of leaving immediately.
 - The shared leave confirmation copy is `You are currently in an active quiz. Leaving will forfeit your progress.` with `Stay` and `Leave Quiz` actions.
 - Confirmed leaves mark the session `FORFEITED`; Challenge Quiz and Adaptive Practice forfeits must not refund quiz credits or mark the session completed.
+- Board Exam Mode is the exception to the generic leave-forfeit copy: it uses `Leave exam?` with `Stay` and `Submit & Leave`, and confirming the leave submits the current exam and counts it as completed.
 
 ### Challenge Quiz — Exam Mode Rule
 
@@ -530,10 +531,14 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Board Exam Mode is the explicit strict-exam presentation of the Challenge Quiz engine and must be available as a distinct Challenge mode for both Free and Premium users.
 - Challenge Quiz entry must present both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices rather than inferring Board Exam from billing or difficulty-selection capability.
 - Board Exam Mode must use a formal `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
+- Board Exam setup must also explain that the mode is a focused, distraction-free exam simulation, results are delayed until completion, and navigation will be limited intentionally during the session.
+- Tapping `Start Exam` must show a confirmation modal before quiz generation starts so users understand the stricter flow.
 - Board Exam Mode uses the same Challenge Quiz quota and credit rules as standard Challenge Quiz in the current product stage; do not create a separate billing gate for Board Exam Mode.
 - Difficulty selection may remain plan-gated, but Board Exam Mode itself must still work with recommended difficulty/question count when difficulty selection is unavailable.
 - Do not render "Correct" / "Incorrect" labels, green/red highlights, or explanations while the quiz is in progress.
 - Standard Challenge Quiz may keep a lighter practice-oriented answering UI, but Board Exam Mode must use a more formal neutral selected-answer state and cleaner hierarchy.
+- Board Exam running state should reinforce the mode visibly with `Board Exam Mode`, `Exam in progress`, and subtle copy that limited navigation is intentional.
+- A one-time, dismissible Board Exam focus tip may explain that distractions are hidden to simulate a real test environment.
 - Question-number navigation during Board Exam Mode may show current/answered/unanswered states, but must not reveal correctness.
 - Board Exam timers must use persisted session timing as the source of truth (`timerStartedAtEpochSeconds + timeLimitSeconds`) and survive refresh/reload without resetting or extending the exam.
 - Board Exam timer UI should surface calm warning states as time gets low, but once time expires it must lock answer changes/navigation immediately.
