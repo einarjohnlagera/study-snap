@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Trophy } from "lucide-react";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
+import { QuizFeedbackPanel } from "@/components/feedback/quiz-feedback-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -948,6 +949,11 @@ export default function QuickReviewPage() {
           {showAnswerReview ? (
             <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
           ) : null}
+          <QuizFeedbackPanel
+            quizLabel="Quick Review"
+            noteTitle={note.title}
+            section={showAnswerReview ? "review" : "results"}
+          />
         </Card>
       ) : note && phase === "retry-transition" ? (
         <Card className="space-y-4 p-4 sm:p-6">

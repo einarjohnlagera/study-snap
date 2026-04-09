@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
+import { QuizFeedbackPanel } from "@/components/feedback/quiz-feedback-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BackLink } from "@/components/ui/back-link";
@@ -1424,6 +1425,11 @@ export default function ChallengeQuizPage() {
           {showAnswerReview ? (
             <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
           ) : null}
+          <QuizFeedbackPanel
+            quizLabel={isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz"}
+            noteTitle={note?.title}
+            section={showAnswerReview ? "review" : "results"}
+          />
         </Card>
       ) : null}
 

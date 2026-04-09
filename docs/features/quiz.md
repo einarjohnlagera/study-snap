@@ -110,6 +110,10 @@ Shared ownership model:
   - no timer emphasis
   - no Question Navigator
   - compact top bar plus sticky bottom `Next` / `Finish` action during active questions
+- Feedback visibility during quiz flows is context-aware:
+  - active quiz states do not show the floating `Send Feedback` launcher so it cannot overlap choices, navigator, or next-step controls
+  - completed result and `Review Answers` states show an inline feedback panel instead
+  - the inline panel may offer quick actions such as `Report Question`, `Confusing Explanation`, and `Something is wrong`, all routed through the same feedback modal
 - quiz auto-submits if the timer reaches zero; user can also submit manually from the last question
 - if the timer expires during Board Exam Mode, show `Time's up. Submitting your exam...` while submission finishes
 - timer source of truth is persisted session timing: `timerStartedAtEpochSeconds + timeLimitSeconds`

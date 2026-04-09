@@ -50,6 +50,9 @@ Verify these cases on mobile-sized viewports:
 - collapsed mobile Question Navigator summary shows current question and answered count and expands cleanly without pushing controls unpredictably
 - mobile Quick Review has no Question Navigator and keeps explanation + next-step controls readable without extra header noise
 - in-progress mobile quiz actions sit in a sticky bottom bar so `Next`, `Previous`, `Submit`, or `Finish Quick Review` stays reachable in the thumb zone
+- the floating `Send Feedback` launcher is hidden on quiz routes so it never overlaps active-question controls on mobile
+- quiz result and `Review Answers` screens use an inline feedback panel instead of the floating launcher
+- inline quiz feedback actions (`Report Question`, `Confusing Explanation`, `Something is wrong`) remain tappable without covering result CTAs or review navigation
 - Challenge Quiz start screen disables difficulty and Start controls immediately after Start is tapped
 - Quick Review, Challenge Quiz, and Adaptive Practice active sessions show a tappable `Leave Quiz` action on mobile
 - the `Leave quiz?` modal remains readable on mobile and stacks `Stay` / `Leave Quiz` actions cleanly

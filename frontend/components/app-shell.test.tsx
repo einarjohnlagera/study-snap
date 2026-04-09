@@ -20,7 +20,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("next/image", () => ({
   __esModule: true,
-  default: ({ alt }: { alt: string }) => <img alt={alt} />,
+  default: ({ alt }: { alt: string }) => <span role="img" aria-label={alt} />,
 }));
 
 jest.mock("next/link", () => ({
@@ -162,7 +162,7 @@ describe("AppShell", () => {
       </AppShell>,
     );
 
-    expect(await screen.findByAltText("NoteLib")).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "NoteLib" })).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Library" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "My Library" })).not.toBeInTheDocument();
 
@@ -205,7 +205,21 @@ describe("AppShell", () => {
     );
 
     await waitFor(() => {
-      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ mobileHidden: true }));
+      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ mobileHidden: true, hidden: false }));
+    });
+  });
+
+  it("hides the floating feedback widget on quiz routes", async () => {
+    currentPathname = "/notes/note-1/challenge-quiz";
+
+    render(
+      <AppShell>
+        <div>Challenge Quiz content</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
     });
   });
 

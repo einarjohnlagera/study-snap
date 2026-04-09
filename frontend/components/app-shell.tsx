@@ -76,6 +76,14 @@ function shouldHideMobileFeedbackWidget(pathname: string): boolean {
   );
 }
 
+function shouldHideFeedbackWidget(pathname: string): boolean {
+  return (
+    pathname.includes("/quick-review")
+    || pathname.includes("/challenge-quiz")
+    || pathname.includes("/adaptive-practice")
+  );
+}
+
 function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/p/")) {
     return "Shared Study Pack";
@@ -607,7 +615,10 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       ) : null}
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
-      <SendFeedbackWidget mobileHidden={shouldHideMobileFeedbackWidget(pathname)} />
+      <SendFeedbackWidget
+        hidden={shouldHideFeedbackWidget(pathname)}
+        mobileHidden={shouldHideMobileFeedbackWidget(pathname)}
+      />
     </div>
   );
 }
