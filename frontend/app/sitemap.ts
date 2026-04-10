@@ -5,7 +5,7 @@ import { getPublicSubjectEntries, getServerPublicNotes } from "@/lib/server-publ
 import { absoluteUrl } from "@/lib/site-metadata";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  let publicNotes: any[];
+  let publicNotes: Awaited<ReturnType<typeof getServerPublicNotes>>;
   try {
     publicNotes = await getServerPublicNotes();
   } catch {
@@ -21,6 +21,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
     {
       url: absoluteUrl("/pricing"),
+      changeFrequency: "weekly" as const,
+      priority: 0.9,
+    },
+    {
+      url: absoluteUrl("/how-it-works"),
       changeFrequency: "weekly" as const,
       priority: 0.9,
     },

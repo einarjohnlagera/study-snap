@@ -64,6 +64,11 @@ describe("sitemap metadata route", () => {
         priority: 0.9,
       },
       {
+        url: "https://notelib.app/how-it-works",
+        changeFrequency: "weekly",
+        priority: 0.9,
+      },
+      {
         url: "https://notelib.app/learn",
         changeFrequency: "weekly",
         priority: 0.9,

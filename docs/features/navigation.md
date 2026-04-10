@@ -8,6 +8,7 @@ Keep in-app navigation predictable across private workspace, discovery, and publ
 
 - Shared public pages should reuse one navbar hierarchy across landing, learn, pricing, auth, and anonymous public-library flows.
 - Public nav links should stay visually grouped as navigation.
+- Public marketing nav should include `How it Works` as the dedicated product-walkthrough route.
 - Theme toggle should stay in the utility cluster, not between `Login` and `Get Started`.
 - `Login` is the secondary public action.
 - `Get Started` is the primary public CTA.
@@ -18,6 +19,14 @@ Keep in-app navigation predictable across private workspace, discovery, and publ
   - `Get Started`
 - Keep the theme toggle in the mobile header utility cluster instead of duplicating it inside the opened menu.
 - Do not duplicate the visible primary CTA between the public header and the opened mobile menu.
+
+Current public navigation order:
+
+- `Home`
+- `How it Works`
+- `Public Library`
+- `Learn`
+- `Pricing`
 
 ## Back Navigation Pattern
 

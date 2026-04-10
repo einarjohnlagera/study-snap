@@ -13,7 +13,10 @@ export function PublicFooter({ className }: Readonly<PublicFooterProps>) {
           <BrandFullLogo width={176} height={36} />
           <p>NoteLib helps students turn notes into study packs, summaries, and quizzes.</p>
         </div>
-        <nav aria-label="Legal and contact" className="flex flex-wrap items-center gap-4">
+        <nav aria-label="Public links and legal" className="flex flex-wrap items-center gap-4">
+          <Link href="/how-it-works" className="transition hover:text-foreground">
+            How it Works
+          </Link>
           <Link href="/privacy" className="transition hover:text-foreground">
             Privacy Policy
           </Link>

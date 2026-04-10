@@ -2,17 +2,16 @@ import type { Metadata } from "next";
 import {
   ArrowRight,
   BookOpen,
-  Brain,
   FileText,
   Library,
   Sparkles,
-  Target,
   Trophy,
 } from "lucide-react";
 import { AnalyticsPageViewTracker } from "@/components/analytics/page-view-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
 import { SimplePricingSection } from "@/components/billing/pricing-plans-section";
-import { BrandFullLogo, BrandProductIcon } from "@/components/branding/brand-assets";
+import { BrandFullLogo } from "@/components/branding/brand-assets";
+import { ProductScreenshotFrame } from "@/components/public/product-screenshot-frame";
 import { PublicFooter } from "@/components/public/public-footer";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { buttonVariants } from "@/components/ui/button";
@@ -73,25 +72,6 @@ const howItWorksSteps = [
   },
 ];
 
-const featureCards = [
-  {
-    title: "Study Packs",
-    description: "Generate summary, key concepts, and quiz-ready material from the notes you already keep.",
-    icon: Sparkles,
-  },
-  {
-    title: "Challenge Quiz",
-    description: "Run a flexible quiz session that helps you check understanding before the real exam.",
-    icon: Brain,
-  },
-  {
-    title: "Adaptive Practice",
-    description: "Premium weak-area follow-up that targets the concepts you keep missing.",
-    icon: Target,
-    badge: "Premium",
-  },
-];
-
 const differentiationRows = [
   {
     label: "Starts from your own material",
@@ -133,6 +113,31 @@ const targetUsers = [
   },
 ];
 
+const landingScreenshots = {
+  noteEditor: {
+    src: "/landing/feature-study-pack.jpg",
+    alt: "NoteLib note detail showing summary of the note",
+  },
+} as const;
+
+const valueSummaryCards = [
+  {
+    title: "From notes to structured study packs",
+    description: "Turn saved notes into summaries, key concepts, and quiz material without rebuilding your workflow from scratch.",
+    icon: Sparkles,
+  },
+  {
+    title: "Practice like a real exam",
+    description: "Use Challenge Quiz and Board Exam Mode for timed, focused self-testing that feels closer to real review conditions.",
+    icon: Trophy,
+  },
+  {
+    title: "Know exactly what to improve",
+    description: "Use results and weak-concept guidance to focus your next study session on what you still miss.",
+    icon: ArrowRight,
+  },
+] as const;
+
 function HeroSection() {
   return (
     <section className="relative overflow-hidden rounded-[2rem] border border-sky-500/20 bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.18),_transparent_30%),linear-gradient(135deg,_rgba(255,255,255,0.98),_rgba(239,246,255,0.96))] p-6 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.16),_transparent_30%),linear-gradient(135deg,_rgba(2,6,23,0.96),_rgba(15,23,42,0.94))] sm:p-8 lg:p-10">
@@ -149,11 +154,10 @@ function HeroSection() {
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Turn your notes into summaries, quizzes, and exam simulations
+              Turn your notes into summaries, key concepts, and quizzes
             </h1>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Save your notes once, then turn them into Study Packs, Challenge Quizzes, and board-style practice that
-              helps you learn through active recall instead of passive rereading.
+              NoteLib helps you study faster by transforming your notes into structured learning tools.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -166,10 +170,10 @@ function HeroSection() {
               Start for Free
             </TrackedLink>
             <TrackedLink
-              href="#how-it-works"
+              href="/how-it-works"
               className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
               eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_secondary", destination: "#how-it-works" }}
+              eventMetadata={{ placement: "hero_secondary", destination: "/how-it-works" }}
             >
               See how it works
             </TrackedLink>
@@ -196,54 +200,11 @@ function HeroSection() {
           </div>
         </div>
 
-        <Card className="overflow-hidden border-sky-500/20 bg-background/92 p-0 shadow-xl backdrop-blur">
-          <div className="border-b border-border bg-muted/30 px-5 py-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-              From note to exam practice
-            </p>
-            <p className="mt-1 text-sm text-foreground/75">
-              NoteLib keeps your study material in one place, then turns it into a review workflow when you are ready
-              to test yourself.
-            </p>
-          </div>
-          <div className="space-y-4 p-5">
-            <div className="rounded-2xl border border-border bg-background p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Saved note</p>
-                  <div className="space-y-2 text-sm text-foreground/80">
-                    <p className="font-medium text-foreground">Cardiovascular Physiology</p>
-                    <p>Lecture notes, reviewer highlights, and exam reminders stay in one reusable note.</p>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3">
-                  <BrandProductIcon size={72} className="h-14 w-14 sm:h-[72px] sm:w-[72px]" priority />
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Summary</span>
-              <ArrowRight className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Key Concepts</span>
-              <ArrowRight className="h-4 w-4 text-sky-600 dark:text-sky-400" />
-              <span className="rounded-full border border-border bg-muted/20 px-3 py-1.5">Challenge Quiz</span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Board Exam Mode</p>
-                <p className="mt-2 text-sm text-foreground/80">
-                  Stricter exam simulation with focused UI, delayed results, and timed practice.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-background p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Adaptive Practice</p>
-                <p className="mt-2 text-sm text-foreground/80">
-                  Premium weak-area follow-up that keeps drilling the concepts you miss.
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
+        <ProductScreenshotFrame
+          src={landingScreenshots.noteEditor.src}
+          alt={landingScreenshots.noteEditor.alt}
+          priority
+        />
       </div>
     </section>
   );
@@ -251,10 +212,21 @@ function HeroSection() {
 
 function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="space-y-5 scroll-mt-24">
-      <div className="space-y-2">
+    <section className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">How It Works</p>
         <h2 className="text-2xl font-semibold sm:text-3xl">Go from notes to self-testing in three steps</h2>
+        </div>
+        <TrackedLink
+          href="/how-it-works"
+          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+          eventType="LANDING_CTA_CLICKED"
+          eventMetadata={{ placement: "how_it_works_section", destination: "/how-it-works" }}
+        >
+          View the full walkthrough
+          <ArrowRight className="h-4 w-4" />
+        </TrackedLink>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         {howItWorksSteps.map((step, index) => (
@@ -276,65 +248,23 @@ function HowItWorksSection() {
   );
 }
 
-function FeaturesSection() {
+function ValueSummarySection() {
   return (
     <section className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Features</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Built for review, not just one-time AI output</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for quick understanding and repeated review</h2>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-        <Card className="space-y-5 border-amber-500/20 bg-[linear-gradient(135deg,_rgba(255,251,235,0.95),_rgba(255,255,255,0.98))] p-6 dark:bg-[linear-gradient(135deg,_rgba(69,26,3,0.22),_rgba(15,23,42,0.94))]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="grid gap-4 md:grid-cols-3">
+        {valueSummaryCards.map((item) => (
+          <Card key={item.title} className="space-y-4 p-5">
+            <item.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                <Trophy className="h-3.5 w-3.5" />
-                Board Exam Mode
-              </div>
-              <CardTitle className="text-2xl">Practice in a stricter exam-style environment</CardTitle>
-              <CardDescription className="max-w-2xl text-sm leading-relaxed sm:text-base">
-                Use mixed-difficulty, timed sessions with delayed results and a more focused interface when you want a
-                realistic exam simulation.
-              </CardDescription>
+              <CardTitle>{item.title}</CardTitle>
+              <CardDescription className="text-sm">{item.description}</CardDescription>
             </div>
-            <span className="inline-flex items-center rounded-full border border-amber-500/20 bg-background/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Free for a limited time
-            </span>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-border bg-background/90 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Mixed difficulty</p>
-              <p className="mt-2 text-sm text-foreground/80">A more realistic spread of questions for serious review sessions.</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-background/90 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Results at the end</p>
-              <p className="mt-2 text-sm text-foreground/80">Stay focused while answering instead of seeing feedback after every choice.</p>
-            </div>
-            <div className="rounded-2xl border border-border bg-background/90 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Exam-style flow</p>
-              <p className="mt-2 text-sm text-foreground/80">Cleaner in-session UI with timer pressure and limited distractions.</p>
-            </div>
-          </div>
-        </Card>
-
-        <div className="grid gap-4">
-          {featureCards.map((feature) => (
-            <Card key={feature.title} className="space-y-4 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <feature.icon className="h-5 w-5 text-sky-600 dark:text-sky-400" />
-                {feature.badge ? (
-                  <span className="inline-flex items-center rounded-full border border-border bg-muted/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-foreground/65">
-                    {feature.badge}
-                  </span>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                <CardTitle>{feature.title}</CardTitle>
-                <CardDescription className="text-sm">{feature.description}</CardDescription>
-              </div>
-            </Card>
-          ))}
-        </div>
+          </Card>
+        ))}
       </div>
     </section>
   );
@@ -472,7 +402,7 @@ export default function Home() {
       <AnalyticsPageViewTracker eventType="LANDING_PAGE_VIEWED" metadata={{ page: "landing" }} />
       <HeroSection />
       <HowItWorksSection />
-      <FeaturesSection />
+      <ValueSummarySection />
       <DifferentiationSection />
       <TargetUsersSection />
       <PricingPreviewSection />

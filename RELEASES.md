@@ -4,6 +4,15 @@
 
 ### New Features
 
+- **Dedicated How it Works page** — product walkthrough content now has its own public route at `/how-it-works`:
+  - the new page explains the full NoteLib flow with real screenshots for note editing, Study Pack generation, quiz practice, and results review
+  - `/how-it-works` also includes the simple 3-step overview, Board Exam Mode highlight, and a closing signup CTA
+  - the walkthrough reuses the shared optimized screenshots from `public/landing`
+- **Landing page screenshot integration** — the public homepage now shows real product UI instead of abstract product illustrations:
+  - hero now uses the real note-editor screenshot to ground the product story immediately
+  - the homepage walkthrough has been simplified so the detailed multi-screenshot explanation now lives on `/how-it-works`
+  - landing screenshots now share one polished treatment: rounded corners, soft shadows, preserved aspect ratios, and subtle hover scale
+  - the public navbar and footer now surface `How it Works` so deeper product guidance is easier to find
 - **Theme system refresh** — NoteLib now supports `Light`, `Dark`, and `System` theme modes as the first polish feature of `v0.9.0`:
   - `Settings > Preferences` now includes a dedicated theme selector instead of relying only on a utility toggle
   - `Settings` keeps the always-visible inline `Light` / `Dark` / `System` segmented selector for fast preference changes
