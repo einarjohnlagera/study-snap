@@ -23,6 +23,7 @@ Verify these cases on mobile-sized viewports:
 - after tapping Generate in Note Editor, mobile users are redirected to Note Detail instead of waiting on the editor
 - Note Detail `GENERATING` and `FAILED` Study Pack states stay readable on mobile, including `Retry Generate`
 - Study Pack generation loading messages are calm, short, and do not crowd the tab content on mobile
+- global `Send Feedback` launcher is hidden on pages with sticky or fixed bottom primary action bars, including Note Editor and in-progress quiz routes
 - global `Send Feedback` launcher does not overlap the mobile Note Editor CTA
 - mobile sticky CTA area stays compact and does not consume excessive vertical space
 - back navigation links (`← Library`, `← Note`, etc.) are compact and do not push the header too far down on mobile
@@ -56,6 +57,7 @@ Verify these cases on mobile-sized viewports:
 - mobile Quick Review has no Question Navigator and keeps explanation + next-step controls readable without extra header noise
 - in-progress mobile quiz actions sit in a sticky bottom bar so `Next`, `Previous`, `Submit`, or `Finish Quick Review` stays reachable in the thumb zone
 - the floating `Send Feedback` launcher is hidden on quiz routes so it never overlaps active-question controls on mobile
+- safe mobile pages without sticky bottom CTAs, such as Dashboard, Library, Profile, and Settings, still show the floating `Send Feedback` launcher
 - quiz result and `Review Answers` screens use an inline feedback panel instead of the floating launcher
 - inline quiz feedback actions (`Report Question`, `Confusing Explanation`, `Something is wrong`) remain tappable without covering result CTAs or review navigation
 - Challenge Quiz start screen disables difficulty and Start controls immediately after Start is tapped

@@ -36,7 +36,11 @@
   - `QUIZ_GENERATION_MOCK_DELAY_MS` can add a small local-only delay to test generation overlays and loading states more realistically
   - production remains on the real quiz-generation path unless the quiz-specific mock flag is explicitly overridden
 
-## v0.8.0 - Board Exam Mode + Public Library Discovery System (In Progress)
+### Fixes
+
+- **Feedback launcher sticky-CTA conflict fix** — the floating `Send Feedback` button is now hidden on routes with sticky or fixed bottom primary actions, including Note Editor and in-progress quiz flows, so it no longer overlaps `Generate`, `Next`, `Submit`, or similar bottom CTAs on mobile.
+
+## v0.8.0 – Board Exam Mode + Public Library Discovery System (In Progress)
 
 ### New Features
 
