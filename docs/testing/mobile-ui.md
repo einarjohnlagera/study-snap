@@ -5,6 +5,7 @@ Verify these cases on mobile-sized viewports:
 - major action buttons show icon + text, not icon-only
 - primary actions remain readable in both light and dark mode
 - switching between Light, Dark, and System themes in Settings feels smooth and does not flicker on mobile
+- shared motion stays subtle and fast on mobile; no transition should make the app feel delayed or decorative
 - reloading the app after changing theme preserves the selected Light/Dark/System mode on mobile
 - `System` theme follows the device theme on mobile when the OS appearance changes
 - related action groups stack cleanly when horizontal space is limited
@@ -51,6 +52,7 @@ Verify these cases on mobile-sized viewports:
 - mobile Challenge Quiz keeps the Question Navigator collapsed by default so the question and choices stay closer to the top of the screen
 - mobile Board Exam Mode keeps the Question Navigator collapsed by default for a less distracting exam surface
 - collapsed mobile Question Navigator summary shows current question and answered count and expands cleanly without pushing controls unpredictably
+- mobile Question Navigator expand/collapse animates smoothly without clipping, layout jumps, or lag before question jumping works
 - mobile Quick Review has no Question Navigator and keeps explanation + next-step controls readable without extra header noise
 - in-progress mobile quiz actions sit in a sticky bottom bar so `Next`, `Previous`, `Submit`, or `Finish Quick Review` stays reachable in the thumb zone
 - the floating `Send Feedback` launcher is hidden on quiz routes so it never overlaps active-question controls on mobile
@@ -67,6 +69,7 @@ Verify these cases on mobile-sized viewports:
 - Empty or blocked quiz edge states use lightweight `← Back to Note` links on mobile instead of full-width navigation buttons
 - Review Answers on Quick Review, Challenge Quiz, and Adaptive Practice stays readable on mobile: question text, answer choices, concept chip, selected/correct badges, explanation, and Previous/Next controls stack without horizontal overflow
 - Review Answers mobile visual states remain restrained: correct choice is green, incorrect selected choice is red, unselected distractors stay neutral, and badges remain readable in dark mode
+- quiz result and answer-review sections can fade in subtly, but answer selection and question-to-question flow should still feel immediate
 - Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile
 - Adaptive Practice result screen: "Generate New Set" is the primary action; "← Back to Note" appears below as a link
 - the avatar dropdown on mobile shows `My Profile`, `Settings`, and `Sign Out` with full text labels

@@ -767,7 +767,7 @@ export default function QuickReviewPage() {
       {loading || sessionInitializing ? (
         <QuickReviewLoading />
       ) : error ? (
-        <Card className="space-y-4 p-4 sm:p-6">
+        <Card className="motion-fade-enter space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">
             {isNotFound ? "Note not found" : "Could not start Quick Review"}
           </h1>
@@ -785,7 +785,7 @@ export default function QuickReviewPage() {
           </div>
         </Card>
       ) : note && totalQuestions === 0 ? (
-        <Card className="space-y-4 p-4 sm:p-6">
+        <Card className="motion-fade-enter space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">No quiz questions available</h1>
           <p className="text-sm text-foreground/75">
             This note does not have quiz questions yet. Generate a Study Pack to try Quick Review.

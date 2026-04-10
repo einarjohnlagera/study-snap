@@ -59,7 +59,7 @@ export function QuizAnswerReview({
   };
 
   return (
-    <Card className={cn("space-y-4 p-4 sm:p-6", className)} aria-label="Answer review">
+    <Card className={cn("motion-fade-enter space-y-4 p-4 sm:p-6", className)} aria-label="Answer review">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
           {title}
@@ -99,7 +99,11 @@ export function QuizAnswerReview({
       </div>
 
       {currentItem ? (
-        <div className="space-y-4 rounded-lg border border-border bg-background p-4">
+        <div
+          key={`${mode}-${currentItem.originalIndex}`}
+          data-testid="quiz-answer-review-current-item"
+          className="motion-fade-enter space-y-4 rounded-lg border border-border bg-background p-4"
+        >
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">

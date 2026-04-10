@@ -1179,7 +1179,7 @@ export default function ChallengeQuizPage() {
                 )}>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between gap-3 text-left"
+                    className="motion-pressable flex w-full items-center justify-between gap-3 rounded-md text-left"
                     onClick={() => setIsQuestionNavigatorCollapsed((current) => !current)}
                     aria-expanded={!isQuestionNavigatorCollapsed}
                     aria-controls="challenge-question-navigator-grid"
@@ -1196,43 +1196,48 @@ export default function ChallengeQuizPage() {
                       aria-hidden="true"
                     />
                   </button>
-                  {!isQuestionNavigatorCollapsed ? (
-                    <div
-                      id="challenge-question-navigator-grid"
-                      className="mt-3 grid grid-cols-5 gap-2 sm:grid-cols-8"
-                      aria-label="Question navigator"
-                    >
-                      {quiz.map((item, index) => {
-                        const isCurrentQuestion = index === currentIndex;
-                        const isAnswered = selectedChoices[index] != null;
-                        return (
-                          <button
-                            key={`${item.question}-${index}`}
-                            type="button"
-                            aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
-                            className={cn(
-                              "rounded-md border px-2 py-1.5 text-sm font-medium transition",
-                              isCurrentQuestion
-                                ? isBoardExamMode
-                                  ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
-                                  : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                                : isAnswered
-                                  ? "border-foreground/30 bg-muted/60 text-foreground"
-                                  : "border-border bg-background text-foreground/70",
-                            )}
-                            onClick={() => {
-                              syncProgressRef(index, selectedChoices);
-                              setCurrentIndex(index);
-                              persistProgress(index, selectedChoices);
-                            }}
-                            disabled={quizInteractionDisabled}
-                          >
-                            {index + 1}
-                          </button>
-                        );
-                      })}
+                  <div
+                    id="challenge-question-navigator-grid"
+                    data-testid="challenge-question-navigator-disclosure"
+                    className="motion-collapse mt-3"
+                    data-state={isQuestionNavigatorCollapsed ? "collapsed" : "expanded"}
+                    aria-hidden={isQuestionNavigatorCollapsed}
+                  >
+                    <div className="motion-collapse-inner">
+                      <div className="grid grid-cols-5 gap-2 sm:grid-cols-8" aria-label="Question navigator">
+                        {quiz.map((item, index) => {
+                          const isCurrentQuestion = index === currentIndex;
+                          const isAnswered = selectedChoices[index] != null;
+                          return (
+                            <button
+                              key={`${item.question}-${index}`}
+                              type="button"
+                              tabIndex={isQuestionNavigatorCollapsed ? -1 : 0}
+                              aria-label={`Go to question ${index + 1}${isAnswered ? " (answered)" : " (unanswered)"}`}
+                              className={cn(
+                                "motion-pressable rounded-md border px-2 py-1.5 text-sm font-medium",
+                                isCurrentQuestion
+                                  ? isBoardExamMode
+                                    ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
+                                    : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                  : isAnswered
+                                    ? "border-foreground/30 bg-muted/60 text-foreground"
+                                    : "border-border bg-background text-foreground/70",
+                              )}
+                              onClick={() => {
+                                syncProgressRef(index, selectedChoices);
+                                setCurrentIndex(index);
+                                persistProgress(index, selectedChoices);
+                              }}
+                              disabled={quizInteractionDisabled}
+                            >
+                              {index + 1}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  ) : null}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1290,7 +1295,7 @@ export default function ChallengeQuizPage() {
           </div>
         </div>
       ) : phase === "complete" && result ? (
-        <Card className={cn("space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
+        <Card className={cn("motion-fade-enter space-y-4 p-4 sm:p-6", isBoardExamMode ? "border-foreground/15 bg-card" : "")}>
           <p className={cn(
             "text-xs font-semibold uppercase tracking-wide",
             isBoardExamMode ? "text-foreground/70" : "text-blue-600 dark:text-blue-400",

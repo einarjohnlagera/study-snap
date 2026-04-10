@@ -18,6 +18,12 @@
   - theme choice persists locally and also syncs through the existing authenticated theme-preference API when available
   - initial theme classes are applied before the main UI renders to avoid flashing the wrong theme on load
   - theme changes now use subtle color-only transitions for background, text, and borders
+- **Motion system foundation** — NoteLib now uses a tighter shared motion language for polish without slowing study flows:
+  - shared motion tokens now live in the global CSS layer so durations and easing stay consistent
+  - cards and shared buttons now use lightweight surface and pressed-state motion utilities instead of one-off transition values
+  - the Challenge Quiz Question Navigator now uses a shared collapse/expand motion pattern instead of abrupt mount/unmount behavior
+  - Quick Review and Challenge / Board Exam result-review surfaces now use gentle fade-in entry motion for calmer state changes
+  - quiz-critical interactions such as answer selection, timer updates, and question progression intentionally avoid extra motion so focus and responsiveness stay intact
 
 ## v0.8.0 - Board Exam Mode + Public Library Discovery System (In Progress)
 

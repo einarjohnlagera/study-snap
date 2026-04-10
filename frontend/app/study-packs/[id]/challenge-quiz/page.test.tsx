@@ -437,11 +437,14 @@ describe("ChallengeQuizPage", () => {
 
     const topBar = await screen.findByTestId("challenge-quiz-top-bar");
     const actionBar = screen.getByTestId("challenge-quiz-action-bar");
+    const navigatorDisclosure = screen.getByTestId("challenge-question-navigator-disclosure");
 
     expect(topBar).toHaveClass("sticky");
     expect(topBar).toHaveTextContent("Challenge Quiz");
     expect(actionBar).toHaveClass("fixed");
     expect(await screen.findByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "true");
+    expect(navigatorDisclosure).toHaveAttribute("data-state", "expanded");
+    expect(navigatorDisclosure).toHaveClass("motion-collapse");
     expect(screen.getByRole("button", { name: "Go to question 1 (unanswered)" })).toBeInTheDocument();
   });
 
@@ -452,9 +455,11 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     const navigatorToggle = await screen.findByRole("button", { name: /Question Navigator/i });
+    const navigatorDisclosure = screen.getByTestId("challenge-question-navigator-disclosure");
     await waitFor(() => {
       expect(navigatorToggle).toHaveAttribute("aria-expanded", "false");
     });
+    expect(navigatorDisclosure).toHaveAttribute("data-state", "collapsed");
     expect(screen.getByText("Question Navigator · 1 of 1 · 0 answered")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Go to question 1 (unanswered)" })).not.toBeInTheDocument();
 
@@ -462,6 +467,7 @@ describe("ChallengeQuizPage", () => {
 
     expect(screen.getByRole("button", { name: "Go to question 1 (unanswered)" })).toBeInTheDocument();
     expect(navigatorToggle).toHaveAttribute("aria-expanded", "true");
+    expect(navigatorDisclosure).toHaveAttribute("data-state", "expanded");
   });
 
   it("keeps Board Exam answers neutral and allows question navigation", async () => {
@@ -471,11 +477,13 @@ describe("ChallengeQuizPage", () => {
 
     const topBar = await screen.findByTestId("challenge-quiz-top-bar");
     const actionBar = screen.getByTestId("challenge-quiz-action-bar");
+    const navigatorDisclosure = screen.getByTestId("challenge-question-navigator-disclosure");
 
     expect(topBar).toHaveTextContent("Board Exam Mode");
     expect(actionBar).toHaveClass("fixed");
     expect(await screen.findByText("Board Exam Mode hides distractions to simulate a real test environment.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Question Navigator/i })).toHaveAttribute("aria-expanded", "false");
+    expect(navigatorDisclosure).toHaveAttribute("data-state", "collapsed");
     fireEvent.click(await screen.findByRole("button", { name: /Nucleus/i }));
 
     expect(screen.queryByText(/Correct/i)).not.toBeInTheDocument();
@@ -487,6 +495,7 @@ describe("ChallengeQuizPage", () => {
 
     expect(screen.getByText("What protects the plant cell?")).toBeInTheDocument();
     expect(screen.getByText("Question Navigator · 2 of 2 · 1 answered")).toBeInTheDocument();
+    expect(navigatorDisclosure).toHaveAttribute("data-state", "expanded");
   });
 
   it("keeps the Board Exam navigator collapsed by default on mobile", async () => {
@@ -496,9 +505,11 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     const navigatorToggle = await screen.findByRole("button", { name: /Question Navigator/i });
+    const navigatorDisclosure = screen.getByTestId("challenge-question-navigator-disclosure");
     await waitFor(() => {
       expect(navigatorToggle).toHaveAttribute("aria-expanded", "false");
     });
+    expect(navigatorDisclosure).toHaveAttribute("data-state", "collapsed");
     expect(screen.queryByRole("button", { name: "Go to question 2 (unanswered)" })).not.toBeInTheDocument();
   });
 
