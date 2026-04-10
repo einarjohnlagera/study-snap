@@ -6,6 +6,8 @@ This document is the landing-page source of truth for the current public marketi
 
 Explain NoteLib in seconds, show why it is different from generic AI tools, and drive signups without feeling like a checkout page.
 
+`/how-it-works` is now the dedicated deep-dive walkthrough page. The landing page should stay faster to scan and should point users there when they want a fuller product explanation.
+
 Landing-page goals:
 
 - explain the product quickly
@@ -28,10 +30,11 @@ The public homepage may lead with summaries, quizzes, and exam simulations, but 
 
 Primary landing headline:
 
-`Turn your notes into summaries, quizzes, and exam simulations`
+`Turn your notes into summaries, key concepts, and quizzes`
 
 Supporting copy should explain the active-learning benefit:
 
+- `NoteLib helps you study faster by transforming your notes into structured learning tools.`
 - notes are saved first
 - Study Packs and quizzes are generated when review starts
 - active recall is the value, not passive rereading
@@ -39,19 +42,20 @@ Supporting copy should explain the active-learning benefit:
 Hero CTA rules:
 
 - primary CTA: `Start for Free`
-- secondary CTA: `See how it works`
+- secondary CTA: `See how it works` -> `/how-it-works`
 - supporting links may include demo access and Public Library discovery
 
 Board Exam Mode must be visible in the hero with:
 
 - `Board Exam Mode`
 - `Free for a limited time`
+- hero screenshot: `/landing/feature-study-pack.jpg`
 
 ## Required Landing Sections
 
 1. Hero
 2. How It Works
-3. Features
+3. Short feature/value summary
 4. Differentiation
 5. Target Users
 6. Pricing Preview
@@ -59,7 +63,7 @@ Board Exam Mode must be visible in the hero with:
 
 ## How It Works
 
-Use the tighter 3-step explanation:
+Landing should keep only the tighter 3-step explanation:
 
 1. `Add notes`
 2. `Generate study pack`
@@ -67,16 +71,51 @@ Use the tighter 3-step explanation:
 
 The third step should explicitly connect quiz practice and Board Exam Mode to active recall.
 
+The section should also include a clear CTA into `/how-it-works` for users who want the full visual walkthrough.
+
 ## Features
 
-Landing feature coverage should include:
+Landing should now keep screenshots minimal:
 
-- Study Packs
-- Challenge Quiz
-- Adaptive Practice (`Premium`)
-- Board Exam Mode
+- hero uses one main product screenshot only
+- the rest of the homepage should use short feature/value summaries instead of a full multi-screenshot walkthrough
+- detailed screenshot storytelling belongs on `/how-it-works`
 
-Board Exam Mode should receive the strongest visual emphasis among feature cards because it is a key differentiator in the current release.
+## Screenshot Styling Rules
+
+All public marketing screenshots should share one presentation pattern:
+
+- use `next/image`
+- keep the original aspect ratio
+- `rounded-2xl` / `16px` corner radius
+- soft modern shadow
+- `overflow-hidden`
+- subtle desktop hover scale only
+- below-the-fold screenshots should lazy load naturally
+- set explicit width and height to avoid layout shift
+
+Responsive rules:
+
+- mobile stacks image above text
+- desktop alternates image-left / image-right to keep the page balanced
+- do not add heavy overlays or aggressive motion
+
+## How It Works Page
+
+`/how-it-works` is the main walkthrough destination.
+
+It should include:
+
+1. hero / intro
+2. the same simple 3-step flow
+3. the full 4-image walkthrough:
+   - `/landing/feature-note-editor.jpg`
+   - `/landing/feature-study-pack.jpg`
+   - `/landing/feature-quiz.jpg`
+   - `/landing/feature-results.jpg`
+4. value-summary reinforcement
+5. Board Exam Mode highlight
+6. closing CTA
 
 ## Differentiation
 
@@ -130,6 +169,7 @@ Recommended secondary action:
 
 - Public navigation remains:
   - `Home`
+  - `How it Works`
   - `Public Library`
   - `Learn`
   - `Pricing`
