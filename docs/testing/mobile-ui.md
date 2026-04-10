@@ -75,6 +75,8 @@ Verify these cases on mobile-sized viewports:
 - Review Answers mobile summary stays easy to scan: correct count, total questions, percentage, performance, and weak-concept summary stack cleanly above the active question
 - Review Answers mobile filter and explanation controls (`All Questions`, `Incorrect Only`, `Expand All`, `Collapse All`, per-question explanation toggle) wrap cleanly and remain tappable without pushing content off-screen
 - Challenge Quiz mobile answer review footer keeps `Practice Weak Concepts` and `Review Study Pack` accessible without overlapping feedback or navigation controls
+- private Note Detail headers move `Edit` and `Delete` below long note titles on mobile instead of keeping actions inline with the title row
+- private Note Detail action rows remain inline from `sm` upward while long mobile titles wrap cleanly inside the card
 - quiz result and answer-review sections can fade in subtly, but answer selection and question-to-question flow should still feel immediate
 - Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile
 - Adaptive Practice result screen: "Generate New Set" is the primary action; "← Back to Note" appears below as a link

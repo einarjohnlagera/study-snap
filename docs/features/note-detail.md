@@ -21,10 +21,12 @@ Private Note Detail owns:
 
 Draft note actions:
 
-- `Edit` -> full editor
 - `Generate Study Pack`
-- `Make a Copy`
-- `Share`
+- secondary note actions live in the header `⋯` menu:
+  - `Edit` -> full editor
+  - `Delete`
+  - `Make a Copy`
+  - `Share`
 
 Generating note behavior:
 
@@ -41,12 +43,14 @@ Failed generation behavior:
 
 Study Pack Ready actions:
 
-- `Edit` -> inline metadata edit only
 - `Start Quick Review`
 - `Challenge Quiz`
 - `Adaptive Practice` when weak concepts exist
-- `Make a Copy`
-- `Share`
+- secondary note actions live in the header `⋯` menu:
+  - `Edit` -> inline metadata edit only
+  - `Delete`
+  - `Make a Copy`
+  - `Share`
 
 ## Note Detail Tabs
 

@@ -3,6 +3,8 @@ import { PrivateNoteDetailPageClient } from "./private-note-detail-page-client";
 import {
   createStudyPackFromNote,
   completeProductOnboarding,
+  copyNote,
+  deleteNote,
   getBillingPricing,
   getMyPlan,
   getChallengeQuizPerformanceSummary,
@@ -111,6 +113,8 @@ describe("PrivateNoteDetailPageClient", () => {
     (getAuthUser as jest.Mock).mockReset();
     (createStudyPackFromNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
+    (copyNote as jest.Mock).mockReset();
+    (deleteNote as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
@@ -197,6 +201,8 @@ describe("PrivateNoteDetailPageClient", () => {
       subject: "Biology",
       tags: ["cells"],
     });
+    (copyNote as jest.Mock).mockResolvedValue({ id: "note-copy-1" });
+    (deleteNote as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -210,10 +216,54 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     await screen.findByText("Test Note");
-    const editButton = screen.getByRole("button", { name: "Edit" });
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    const editButton = screen.getByRole("menuitem", { name: "Edit" });
     fireEvent.click(editButton);
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/edit");
+  });
+
+  it("shows a compact note actions menu for long mobile note headers", async () => {
+    const longTitle = "This is a very long note title that should wrap cleanly on mobile without pushing action buttons outside the header container";
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, title: longTitle, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    const title = await screen.findByRole("heading", { name: longTitle });
+    const menuTrigger = screen.getByRole("button", { name: "Open note actions" });
+    const menuAnchor = menuTrigger.parentElement;
+    const titleColumn = title.parentElement;
+
+    expect(title).toHaveClass("break-words");
+    expect(menuTrigger).toBeVisible();
+    expect(menuAnchor).toHaveClass("absolute", "right-4", "top-4", "sm:right-6", "sm:top-6");
+    expect(titleColumn).toHaveClass("pr-14", "sm:pr-16");
+
+    fireEvent.click(menuTrigger);
+
+    expect(screen.getByRole("menu", { name: "Note actions" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Make a Copy" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  it("closes the note actions menu on outside click", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    expect(screen.getByRole("menu", { name: "Note actions" })).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("menu", { name: "Note actions" })).not.toBeInTheDocument();
+    });
   });
 
   it("disables Generate Study Pack and visibility toggle for unverified users", async () => {
@@ -242,7 +292,8 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     await screen.findByText("Test Note");
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
 
     expect(pushMock).not.toHaveBeenCalledWith("/notes/note-1/edit");
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
@@ -264,7 +315,8 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     await screen.findByText("Test Note");
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Share" }));
 
     expect(screen.getByText("This note is private")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Make Public & Share" }));
@@ -272,6 +324,27 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(updateNoteVisibility).toHaveBeenCalledWith("note-1", "PUBLIC");
     expect(await screen.findByText("Share this note")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy Link" })).toBeInTheDocument();
+  });
+
+  it("supports Make a Copy and Delete from the note actions menu", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT", visibility: "PRIVATE" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await screen.findByText("Test Note");
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Make a Copy" }));
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-1");
+    });
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-copy-1?copied=1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Open note actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+
+    expect(screen.getByText("Delete this note?")).toBeInTheDocument();
   });
 
   it("lets free users start Challenge Quiz without showing the premium modal", async () => {

@@ -3,7 +3,7 @@
 import { BackLink } from "@/components/ui/back-link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
@@ -202,6 +202,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
+  const noteActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const latestSearchQueryRef = useRef(searchParams.toString());
   const autoGenerateHandledRef = useRef(false);
   const autoEditHandledRef = useRef(false);
@@ -224,6 +225,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [savingMetadata, setSavingMetadata] = useState(false);
 
   const [visibilityMenuOpen, setVisibilityMenuOpen] = useState(false);
+  const [noteActionsMenuOpen, setNoteActionsMenuOpen] = useState(false);
   const [showMakePublicConfirm, setShowMakePublicConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
@@ -439,6 +441,29 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     globalThis.addEventListener("mousedown", handleOutsideClick);
     return () => globalThis.removeEventListener("mousedown", handleOutsideClick);
   }, [visibilityMenuOpen]);
+
+  useEffect(() => {
+    if (!noteActionsMenuOpen) {
+      return;
+    }
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (noteActionsMenuRef.current && !noteActionsMenuRef.current.contains(target)) {
+        setNoteActionsMenuOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setNoteActionsMenuOpen(false);
+      }
+    };
+    globalThis.addEventListener("mousedown", handleOutsideClick);
+    globalThis.addEventListener("keydown", handleEscape);
+    return () => {
+      globalThis.removeEventListener("mousedown", handleOutsideClick);
+      globalThis.removeEventListener("keydown", handleEscape);
+    };
+  }, [noteActionsMenuOpen]);
 
   useEffect(() => {
     const created = searchParams.get("created") === "1";
@@ -778,6 +803,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note || copying) {
       return;
     }
+    setNoteActionsMenuOpen(false);
     setCopying(true);
     try {
       const copied = await copyNote(note.id);
@@ -812,6 +838,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note) {
       return;
     }
+    setNoteActionsMenuOpen(false);
     if (!isDraft) {
       setMetadataDraft({
         title: note.title ?? "",
@@ -962,6 +989,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note || sharing || isInlineMetadataEditMode) {
       return;
     }
+    setNoteActionsMenuOpen(false);
     setSharing(true);
     try {
       if (!isPublic) {
@@ -1072,9 +1100,72 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </div>
             </Card>
           ) : null}
-          <Card className="space-y-4 p-4 sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-3">
+          <Card className="relative space-y-4 p-4 sm:p-6">
+            {!isInlineMetadataEditMode ? (
+              <div className="absolute right-4 top-4 z-10 sm:right-6 sm:top-6" ref={noteActionsMenuRef}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-10 w-10 rounded-full border-border/80 bg-background/95 px-0 shadow-sm backdrop-blur-sm"
+                  aria-label="Open note actions"
+                  aria-haspopup="menu"
+                  aria-expanded={noteActionsMenuOpen}
+                  onClick={() => setNoteActionsMenuOpen((open) => !open)}
+                >
+                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                </Button>
+                {noteActionsMenuOpen ? (
+                  <div
+                    role="menu"
+                    aria-label="Note actions"
+                    className="absolute right-0 top-12 z-20 w-52 rounded-xl border border-border bg-background p-1.5 shadow-sm"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                      onClick={handleEdit}
+                      disabled={isGeneratingStudyPack}
+                    >
+                      <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                      onClick={() => void handleMakeCopy()}
+                      disabled={copying}
+                    >
+                      <ResponsiveActionContent action="copy" label={copying ? "Copying..." : "Make a Copy"} showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                      onClick={() => void handleCopyLink()}
+                      disabled={sharing}
+                    >
+                      <ResponsiveActionContent action="share" label={sharing ? "Sharing..." : "Share"} showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                      onClick={() => {
+                        setNoteActionsMenuOpen(false);
+                        setShowDeleteConfirm(true);
+                      }}
+                      disabled={deleting}
+                    >
+                      <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-3">
+              <div className={`min-w-0 flex-1 space-y-3 ${isInlineMetadataEditMode ? "" : "pr-14 sm:pr-16"}`}>
                 {isInlineMetadataEditMode ? (
                   <div className="space-y-2">
                     <label htmlFor="note-title-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
@@ -1090,7 +1181,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     />
                   </div>
                 ) : (
-                  <h1 className="text-2xl font-semibold sm:text-3xl">{title}</h1>
+                  <h1 className="break-words text-2xl font-semibold sm:text-3xl">{title}</h1>
                 )}
 
                 {hasCopyAttribution ? (
@@ -1164,28 +1255,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {isInlineMetadataEditMode ? (
-                  <>
-                    <ResponsiveActionButton type="button" variant="outline" size="sm" onClick={handleCancelMetadataEdit} disabled={savingMetadata} action="back" label="Cancel" showTextOnMobile />
-                    <ResponsiveActionButton type="button" size="sm" onClick={() => void handleSaveMetadata()} disabled={savingMetadata} action="save" label={savingMetadata ? "Saving..." : "Save"} />
-                  </>
-                ) : (
-                  <>
-                    <ResponsiveActionButton type="button" variant="outline" size="sm" onClick={handleEdit} disabled={isGeneratingStudyPack} action="edit" label="Edit" />
-                    <ResponsiveActionButton
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40"
-                      onClick={() => setShowDeleteConfirm(true)}
-                      disabled={deleting}
-                      action="delete"
-                      label="Delete"
-                    />
-                  </>
-                )}
-              </div>
+              {isInlineMetadataEditMode ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <ResponsiveActionButton type="button" variant="outline" size="sm" onClick={handleCancelMetadataEdit} disabled={savingMetadata} action="back" label="Cancel" showTextOnMobile />
+                  <ResponsiveActionButton type="button" size="sm" onClick={() => void handleSaveMetadata()} disabled={savingMetadata} action="save" label={savingMetadata ? "Saving..." : "Save"} />
+                </div>
+              ) : null}
             </div>
 
             {isInlineMetadataEditMode ? (
@@ -1299,7 +1374,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </p>
             ) : null}
             {!isInlineMetadataEditMode ? (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {isGeneratingStudyPack ? (
                     <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />
@@ -1321,10 +1396,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       ) : null}
                     </>
                   )}
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <ResponsiveActionButton type="button" variant="outline" onClick={() => void handleMakeCopy()} disabled={copying} action="copy" label={copying ? "Copying..." : "Make a Copy"} />
-                  <ResponsiveActionButton type="button" variant="outline" onClick={() => void handleCopyLink()} disabled={sharing} action="share" label={sharing ? "Sharing..." : "Share"} />
                 </div>
               </div>
             ) : null}
