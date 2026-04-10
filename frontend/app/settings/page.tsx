@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PremiumWaitlistModal } from "@/components/billing/premium-waitlist-modal";
+import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
@@ -417,9 +418,18 @@ export default function SettingsPage() {
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Preferences</h2>
             <p className="text-sm text-foreground/70">
-              Keep NoteLib aligned with the way you study. Learning Style guides future reminder cadence, and you can
-              turn reminder types on or off anytime.
+              Keep NoteLib aligned with the way you study. Theme, Learning Style, and reminder preferences can all be
+              adjusted here anytime.
             </p>
+            <div className="space-y-3 rounded-md border border-border bg-background p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Theme</p>
+                <p className="text-xs text-foreground/60">
+                  Choose Light, Dark, or System. System follows your device setting automatically.
+                </p>
+              </div>
+              <ThemeSelector />
+            </div>
             <div className="space-y-3 rounded-md border border-border bg-background p-4">
               <div className="space-y-1">
                 <p className="text-sm font-medium">Learning Style</p>

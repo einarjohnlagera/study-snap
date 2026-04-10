@@ -5,6 +5,7 @@ import { ThemePreferenceSync } from "@/components/theme-preference-sync";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
 import { DEFAULT_OG_IMAGE_ALT, DEFAULT_OG_IMAGE_URL, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
+import { THEME_CLASS_NAME_BY_MODE } from "@/lib/theme-preferences";
 
 const geistSans = localFont({
   src: "../node_modules/next/dist/next-devtools/server/font/geist-latin.woff2",
@@ -65,7 +66,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
       >
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          enableColorScheme
+          themes={["light", "dark"]}
+          value={THEME_CLASS_NAME_BY_MODE}
+        >
           <ThemePreferenceSync />
           <AppShell>{children}</AppShell>
         </ThemeProvider>

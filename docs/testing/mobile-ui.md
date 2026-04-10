@@ -4,6 +4,9 @@ Verify these cases on mobile-sized viewports:
 
 - major action buttons show icon + text, not icon-only
 - primary actions remain readable in both light and dark mode
+- switching between Light, Dark, and System themes in Settings feels smooth and does not flicker on mobile
+- reloading the app after changing theme preserves the selected Light/Dark/System mode on mobile
+- `System` theme follows the device theme on mobile when the OS appearance changes
 - related action groups stack cleanly when horizontal space is limited
 - public mobile navbar keeps theme toggle in the header utility group instead of inside the CTA stack
 - public mobile menu keeps nav links separate from `Login` and `Get Started`
@@ -67,6 +70,7 @@ Verify these cases on mobile-sized viewports:
 - Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile
 - Adaptive Practice result screen: "Generate New Set" is the primary action; "← Back to Note" appears below as a link
 - the avatar dropdown on mobile shows `My Profile`, `Settings`, and `Sign Out` with full text labels
+- the mobile Preferences card shows a clear `Light / Dark / System` theme selector without crowding the rest of Settings
 - `My Profile` in the avatar dropdown links to the user's public profile page
 - `Settings` in the avatar dropdown links to `/settings` (same as sidebar Settings)
 - the share modal for notes and profiles is readable on mobile — the `Shareable URL` field, `Copy Link`, and `Close` buttons all remain tappable
