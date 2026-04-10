@@ -38,11 +38,19 @@
 
 ### Fixes
 
+- **Private Note Detail action cleanup** — secondary note-management actions no longer compete with study actions inside the note header:
+  - inline `Edit`, `Delete`, `Make a Copy`, and `Share` controls were consolidated into a single top-right `⋯` context menu
+  - the `⋯` trigger is now anchored to the card corner on both mobile and desktop instead of sitting inside the metadata flow
+  - the note detail card now keeps primary study actions visually dominant while still exposing full note management
+  - the shared menu works on both mobile and desktop, closes on outside click, and avoids the old multi-row utility-button clutter
 - **Feedback launcher sticky-CTA conflict fix** — the floating `Send Feedback` button is now hidden on routes with sticky or fixed bottom primary actions, including Note Editor and in-progress quiz flows, so it no longer overlaps `Generate`, `Next`, `Submit`, or similar bottom CTAs on mobile.
 - **Feedback UX cleanup for core study flows** — feedback entry is now more intentional across learning surfaces:
   - core authenticated learning routes now use a subtle header feedback icon instead of the floating launcher
   - the floating launcher remains only on safe non-critical authenticated pages such as Dashboard, Library, Public Library, and Settings
   - quiz result screens now ask `Was this quiz helpful?` with lightweight `Yes` and `Give Feedback` actions before the deeper review feedback panel
+- **Mobile note header overflow fix** — long private note titles no longer push `Edit` / `Delete` outside the header card on small screens:
+  - mobile Note Detail now stacks the title above the action row
+  - `Edit` and `Delete` stay inline again from `sm` upward so desktop layout remains unchanged
 
 ## v0.8.0 – Board Exam Mode + Public Library Discovery System (In Progress)
 
