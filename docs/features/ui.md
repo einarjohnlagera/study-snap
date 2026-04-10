@@ -23,3 +23,50 @@ Current grouping:
 - `Login` and `Get Started`
 
 The separator should be visually subtle and should create spacing without drawing more attention than the actions themselves.
+
+## Motion Principles
+
+NoteLib motion should stay:
+
+- subtle
+- fast
+- purposeful
+- non-blocking
+
+Default motion guidance:
+
+- prefer `150ms` to `250ms`
+- prefer ease-out or ease-in-out timing
+- animate color, opacity, and small transform shifts first
+- avoid large movement, springy motion, or anything that slows study actions
+
+## Shared Motion Tokens
+
+Shared motion tokens live in `frontend/app/globals.css`.
+
+Current shared patterns:
+
+- `motion-surface` for calm surface transitions on cards and similar containers
+- `motion-pressable` for lightweight pressed-state feedback on shared controls
+- `motion-fade-enter` for non-critical section entry such as result and review surfaces
+- `motion-collapse` plus `motion-collapse-inner` for disclosure sections such as the quiz Question Navigator
+
+Use these shared classes instead of introducing one-off durations and easing values in feature components.
+
+## Intentional Motion Use
+
+Current high-value motion use includes:
+
+- theme color transitions
+- Question Navigator expand/collapse
+- shared button/control press feedback
+- non-critical quiz result and answer-review entry
+
+## Intentional Motion Avoidance
+
+Protect focused study flows by avoiding noticeable motion on:
+
+- answer selection when a delay would affect pacing
+- moving between quiz questions
+- quiz timers or countdown emphasis
+- any interaction where animation would compete with reading or recall

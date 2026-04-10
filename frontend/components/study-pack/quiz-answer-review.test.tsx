@@ -22,6 +22,8 @@ describe("QuizAnswerReview", () => {
   it("shows the selected answer, correct answer, explanation, and concept", () => {
     render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
 
+    expect(screen.getByLabelText("Answer review")).toHaveClass("motion-fade-enter");
+    expect(screen.getByTestId("quiz-answer-review-current-item")).toHaveClass("motion-fade-enter");
     expect(screen.getByText("What powers the cell?")).toBeInTheDocument();
     expect(screen.getByText("Cell organelles")).toBeInTheDocument();
     expect(screen.getByText("Nucleus")).toBeInTheDocument();
