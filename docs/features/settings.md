@@ -71,5 +71,7 @@ Public and authenticated headers may still keep a small theme utility control fo
 
 However:
 
-- the full theme selection experience belongs in `Settings`
-- `Settings` is the canonical place where users can choose `Light`, `Dark`, or `System`
+- the top-bar utility control and `Settings` must expose the same three theme options
+- the top-bar control should cycle `Dark -> Light -> System -> repeat`
+- the top-bar control should show the current mode through its icon and tooltip text such as `Theme: System`
+- `Settings` remains the canonical place for explicit theme selection and explanation copy

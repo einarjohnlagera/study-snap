@@ -12,12 +12,24 @@ export const THEME_OPTIONS: ReadonlyArray<{
   { mode: "system", label: "System" },
 ];
 
+export const THEME_LABEL_BY_MODE: Readonly<Record<ThemeMode, string>> = {
+  light: "Light",
+  dark: "Dark",
+  system: "System",
+};
+
+export const THEME_TOGGLE_CYCLE: ReadonlyArray<ThemeMode> = ["dark", "light", "system"];
+
 export const THEME_CLASS_NAME_BY_MODE = {
   light: "theme-light",
   dark: "theme-dark",
 } as const;
 
 export const THEME_TRANSITION_DURATION_MS = 220;
+
+export function getThemeModeLabel(themeMode: ThemeMode): string {
+  return THEME_LABEL_BY_MODE[themeMode];
+}
 
 export function normalizeThemeMode(themeMode: string | null | undefined): ThemeMode {
   if (themeMode === "light" || themeMode === "dark") {

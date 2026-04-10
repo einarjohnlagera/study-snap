@@ -6,6 +6,7 @@
 
 - **Theme system refresh** — NoteLib now supports `Light`, `Dark`, and `System` theme modes as the first polish feature of `v0.9.0`:
   - `Settings > Preferences` now includes a dedicated theme selector instead of relying only on a utility toggle
+  - the shared top-bar theme control now uses the same `Light`, `Dark`, and `System` modes, cycling `Dark -> Light -> System` with mode-specific icons and tooltips
   - `System` follows the device `prefers-color-scheme` setting and updates while the app is open
   - theme choice persists locally and also syncs through the existing authenticated theme-preference API when available
   - initial theme classes are applied before the main UI renders to avoid flashing the wrong theme on load
