@@ -16,6 +16,7 @@ public class StudySnapProperties {
     private final Settings settings = new Settings();
     private final Ocr ocr = new Ocr();
     private final Llm llm = new Llm();
+    private final QuizGeneration quizGeneration = new QuizGeneration();
     private final QuickReview quickReview = new QuickReview();
     private final Pricing pricing = new Pricing();
     private final Limits limits = new Limits();
@@ -68,6 +69,13 @@ public class StudySnapProperties {
         private String provider = "openai";
         private String apiKey = "";
         private String baseUrl = "https://api.openai.com/v1";
+    }
+
+    @Getter
+    @Setter
+    public static class QuizGeneration {
+        private String mode = "real";
+        private int mockDelayMs = 0;
     }
 
     @Getter

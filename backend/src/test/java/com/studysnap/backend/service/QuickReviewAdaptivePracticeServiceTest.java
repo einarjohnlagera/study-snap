@@ -1,16 +1,22 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
+import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.Feature;
+import com.studysnap.backend.entity.BillingCycle;
+import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.QuickReviewRound;
 import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ThemePreference;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -47,6 +53,8 @@ class QuickReviewAdaptivePracticeServiceTest {
     @Mock
     private ActivityEventRepository activityEventRepository;
     @Mock
+    private QuizGenerationService quizGenerationService;
+    @Mock
     private LlmStudyPackService llmStudyPackService;
     @Mock
     private ActivityTrackingService activityTrackingService;
@@ -73,7 +81,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 studyPackRepository,
                 quickReviewSessionRepository,
                 activityEventRepository,
-                llmStudyPackService,
+                quizGenerationService,
                 activityTrackingService,
                 subscriptionService,
                 featureGateService,
@@ -110,7 +118,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         verify(authService).requireEmailVerified(userId);
         verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
+        verify(quizGenerationService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
@@ -143,7 +151,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.quiz()).isEmpty();
         verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
-        verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
+        verify(quizGenerationService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(analyticsService, never()).trackEvent(any(), any(), any(), any());
     }
@@ -171,6 +179,116 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(session.getCompletedAt()).isNull();
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(activityTrackingService, never()).recordActivity(userId, ActivityType.STARTED_ADAPTIVE_PRACTICE, studyPackId);
+    }
+
+    @Test
+    void generateAdaptiveQuiz_mockModeCompletesSessionWithoutCallingRealLlm() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getQuizGeneration().setMode("mock");
+        QuickReviewAdaptivePracticeService mockModeAdaptivePracticeService = new QuickReviewAdaptivePracticeService(
+                studyPackRepository,
+                quickReviewSessionRepository,
+                activityEventRepository,
+                new QuizGenerationService(llmStudyPackService, properties),
+                activityTrackingService,
+                subscriptionService,
+                featureGateService,
+                properties,
+                userUsageService,
+                billingUsagePeriodService,
+                authService,
+                analyticsService,
+                aiRateLimitService
+        );
+        QuickReviewSessionEntity latestChallenge = new QuickReviewSessionEntity();
+        latestChallenge.setId(UUID.randomUUID());
+        latestChallenge.setUserId(userId);
+        latestChallenge.setStudyPackId(studyPackId);
+        latestChallenge.setNoteId(noteId);
+        latestChallenge.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        latestChallenge.setStatus(QuickReviewSessionStatus.COMPLETED);
+        latestChallenge.setCompletedAt(OffsetDateTime.now().minusMinutes(5));
+        latestChallenge.setSessionMetadata(Map.of("weakConcepts", List.of("Electrolyte Imbalance", "Fluid Shift")));
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.ADAPTIVE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.QUICK_REVIEW),
+                any()
+        )).thenReturn(List.of());
+        when(quickReviewSessionRepository.findByUserIdAndStudyPackIdAndSessionModeAndCompletedAtIsNotNullOrderByCompletedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(List.of(latestChallenge));
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.PREMIUM,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(activityEventRepository.countByUserIdAndActivityTypeAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(ActivityType.STARTED_ADAPTIVE_PRACTICE),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(authService.getMe(userId)).thenReturn(new MeResponse(
+                userId.toString(),
+                "user@example.com",
+                null,
+                "Test",
+                "User",
+                "Test User",
+                null,
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                true,
+                null,
+                null,
+                null,
+                null,
+                true,
+                true,
+                ThemePreference.SYSTEM,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                0L,
+                UserRole.USER,
+                UserStatus.ACTIVE,
+                PlanType.PREMIUM,
+                null
+        ));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        QuickReviewAdaptiveQuizResponse response = mockModeAdaptivePracticeService.generateAdaptiveQuiz(
+                studyPackId.toString(),
+                userId
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.weakConcepts()).containsExactly("Electrolyte Imbalance", "Fluid Shift");
+        assertThat(response.quiz()).hasSize(5);
+        verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
     }
 
     private StudyPackEntity buildStudyPack(UUID studyPackId, UUID noteId, UUID ownerUserId) {

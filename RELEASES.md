@@ -30,6 +30,11 @@
   - answer review now supports `All Questions` / `Incorrect Only` filtering alongside per-question explanation toggles and shared `Expand All` / `Collapse All` controls
   - explanation disclosure uses the shared lightweight motion system to avoid abrupt layout jumps
   - Challenge Quiz review now ends with clearer next-step actions such as `Practice Weak Concepts` and `Review Study Pack`
+- **Local quiz-generation mock mode** — local development can now exercise quiz UIs without burning real LLM tokens:
+  - `QUIZ_GENERATION_MODE=mock` stubs only Challenge Quiz, Adaptive Practice, and Board Exam generation while leaving Study Pack generation on the normal provider path
+  - mock mode still preserves normal quiz session creation, `GENERATING` / `IN_PROGRESS` flow, idempotent reuse, result handling, and review-answer compatibility
+  - `QUIZ_GENERATION_MOCK_DELAY_MS` can add a small local-only delay to test generation overlays and loading states more realistically
+  - production remains on the real quiz-generation path unless the quiz-specific mock flag is explicitly overridden
 
 ## v0.8.0 - Board Exam Mode + Public Library Discovery System (In Progress)
 

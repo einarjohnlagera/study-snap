@@ -57,6 +57,8 @@ class ChallengeQuizServiceTest {
     @Mock
     private QuickReviewSessionRepository quickReviewSessionRepository;
     @Mock
+    private QuizGenerationService quizGenerationService;
+    @Mock
     private LlmStudyPackService llmStudyPackService;
     @Mock
     private SubscriptionService subscriptionService;
@@ -82,7 +84,7 @@ class ChallengeQuizServiceTest {
         challengeQuizService = new ChallengeQuizService(
                 studyPackRepository,
                 quickReviewSessionRepository,
-                llmStudyPackService,
+                quizGenerationService,
                 subscriptionService,
                 featureGateService,
                 new StudySnapProperties(),
@@ -163,7 +165,7 @@ class ChallengeQuizServiceTest {
 
         verify(authService).requireEmailVerified(userId);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
-        verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
@@ -232,7 +234,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.quiz()).isEmpty();
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
-        verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+        verify(quizGenerationService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
     }
 
@@ -291,7 +293,7 @@ class ChallengeQuizServiceTest {
                 any()
         )).thenReturn(List.of(previousQuickReview));
         when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.BOARD_EXAM_REVIEW, "Nursing"));
-        when(llmStudyPackService.generateChallengeQuiz(
+        when(quizGenerationService.generateChallengeQuiz(
                 "Pack title",
                 "Summary",
                 List.of("Concept"),
@@ -360,7 +362,7 @@ class ChallengeQuizServiceTest {
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
-        when(llmStudyPackService.generateChallengeQuiz(
+        when(quizGenerationService.generateChallengeQuiz(
                 eq("Pack title"),
                 eq("Summary"),
                 eq(List.of("Concept")),
@@ -395,6 +397,71 @@ class ChallengeQuizServiceTest {
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
         assertThat(response.monthlyLimit()).isEqualTo(5);
         verify(featureGateService, never()).checkFeatureAccess(PlanType.FREE, Feature.DIFFICULTY_SELECTION);
+    }
+
+    @Test
+    void startSession_mockModeCompletesBoardExamGenerationWithoutCallingRealLlm() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        StudySnapProperties properties = new StudySnapProperties();
+        properties.getQuizGeneration().setMode("mock");
+        ChallengeQuizService mockModeChallengeQuizService = new ChallengeQuizService(
+                studyPackRepository,
+                quickReviewSessionRepository,
+                new QuizGenerationService(llmStudyPackService, properties),
+                subscriptionService,
+                featureGateService,
+                properties,
+                userUsageService,
+                billingUsagePeriodService,
+                authService,
+                analyticsService,
+                aiRateLimitService,
+                activityTrackingService
+        );
+
+        when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
+                eq(userId),
+                eq(studyPackId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any()
+        )).thenReturn(Optional.empty());
+        when(quickReviewSessionRepository.countByUserIdAndSessionModeAndStatusInAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
+                eq(userId),
+                eq(QuickReviewSessionMode.CHALLENGE),
+                any(),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class)
+        )).thenReturn(0L);
+        when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new BillingUsagePeriodService.UsagePeriod(
+                        PlanType.FREE,
+                        BillingCycle.MONTHLY,
+                        OffsetDateTime.now().minusDays(5),
+                        OffsetDateTime.now().plusDays(25),
+                        2026,
+                        3
+                ));
+        when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.BOARD_EXAM_REVIEW, "Nursing"));
+        when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChallengeQuizStartResponse response = mockModeChallengeQuizService.startSession(
+                studyPackId.toString(),
+                userId,
+                new ChallengeQuizStartRequest(null, "board_exam")
+        );
+
+        assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
+        assertThat(response.mode()).isEqualTo("board_exam");
+        assertThat(response.selectedDifficulty()).isEqualTo("mixed");
+        assertThat(response.quiz()).hasSize(12);
+        verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
     }
 
     private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {

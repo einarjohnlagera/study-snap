@@ -85,7 +85,7 @@ public class QuickReviewAdaptivePracticeService {
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final ActivityEventRepository activityEventRepository;
-    private final LlmStudyPackService llmStudyPackService;
+    private final QuizGenerationService quizGenerationService;
     private final ActivityTrackingService activityTrackingService;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
@@ -159,7 +159,7 @@ public class QuickReviewAdaptivePracticeService {
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         try {
-            List<QuizItem> generatedQuiz = llmStudyPackService.generateAdaptivePracticeQuiz(
+            List<QuizItem> generatedQuiz = quizGenerationService.generateAdaptivePracticeQuiz(
                 studyPack.getTitle(),
                 studyPack.getSummary(),
                 studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),

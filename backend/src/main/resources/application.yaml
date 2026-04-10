@@ -70,6 +70,9 @@ studysnap:
       provider: ${LLM_PROVIDER:openai}
       api-key: ${LLM_API_KEY:}
       base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+  quiz-generation:
+    mode: ${QUIZ_GENERATION_MODE:real}
+    mock-delay-ms: ${QUIZ_GENERATION_MOCK_DELAY_MS:0}
   quick-review:
     study-tip:
       enabled: ${QUICK_REVIEW_STUDY_TIP_ENABLED:false}
