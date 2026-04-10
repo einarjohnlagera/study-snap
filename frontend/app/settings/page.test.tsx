@@ -150,6 +150,18 @@ describe("Settings page cancellation flow", () => {
     });
   });
 
+  it("shows the theme selector in Preferences", async () => {
+    render(<SettingsPage />);
+
+    expect(await screen.findByText("Theme")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use Light theme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use Dark theme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use System theme" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Choose Light, Dark, or System. System follows your device setting automatically."),
+    ).toBeInTheDocument();
+  });
+
   it("opens the Premium coming soon modal and joins the waitlist from Settings", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...premiumProfile,

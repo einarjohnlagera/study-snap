@@ -27,7 +27,11 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    setMobileMenuOpen(false);
+    const frameId = globalThis.requestAnimationFrame(() => {
+      setMobileMenuOpen(false);
+    });
+
+    return () => globalThis.cancelAnimationFrame(frameId);
   }, [pathname]);
 
   return (
@@ -58,9 +62,13 @@ export function Navbar() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-3 border-l border-border pl-4">
+          <div className="h-6 w-px bg-border/70" aria-hidden="true" />
+
+          <div className="flex items-center">
             <ThemeToggle />
           </div>
+
+          <div className="h-6 w-px bg-border/70" aria-hidden="true" />
 
           <div className="flex items-center gap-2">
             <Link

@@ -1,7 +1,8 @@
 @import "tailwindcss";
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.theme-dark *, .dark *));
 
-:root {
+:root,
+.theme-light {
   --background: #ffffff;
   --foreground: #111827;
   --border: #e5e7eb;
@@ -15,13 +16,37 @@
   --font-mono: var(--font-geist-mono);
 }
 
+.theme-dark,
 .dark {
   --background: #030712;
   --foreground: #f3f4f6;
   --border: #1f2937;
 }
 
+html.theme-light,
+html.theme-dark {
+  background-color: var(--background);
+}
+
 body {
   @apply bg-background text-foreground;
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+body,
+body *,
+body *::before,
+body *::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 220ms;
+  transition-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  body *,
+  body *::before,
+  body *::after {
+    transition-duration: 0ms !important;
+  }
 }

@@ -6,6 +6,10 @@
 
 Preferences currently include:
 
+- `Theme`
+  - `Light`
+  - `Dark`
+  - `System` (default)
 - `Learning Style`
   - `Focused` -> Use NoteLib when you need it. No streaks or pressure.
   - `Consistency` -> Light encouragement to study regularly.
@@ -20,14 +24,18 @@ Preferences currently include:
 
 Preference values are stored on the user record and returned by `GET /auth/me`:
 
+- `themePreference`
 - `engagementMode`
 - `inactivityRemindersEnabled`
 - `weakConceptRemindersEnabled`
 
 Settings saves them through:
 
+- `POST /auth/preferences/theme`
 - `POST /auth/preferences/engagement-mode`
 - `POST /auth/preferences/study-reminders`
+
+`themePreference` also persists locally so NoteLib can apply the correct theme before the UI renders on the next load.
 
 ## Future Reminder Logic
 

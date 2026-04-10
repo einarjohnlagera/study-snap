@@ -1,5 +1,24 @@
 # RELEASES.md - NoteLib
 
+## v0.9.0 - Learning Experience & Product Polish (In Progress)
+
+### New Features
+
+- **Theme system refresh** — NoteLib now supports `Light`, `Dark`, and `System` theme modes as the first polish feature of `v0.9.0`:
+  - `Settings > Preferences` now includes a dedicated theme selector instead of relying only on a utility toggle
+  - `Settings` keeps the always-visible inline `Light` / `Dark` / `System` segmented selector for fast preference changes
+  - the shared top-bar theme control now uses a simpler responsive inline pattern:
+    - desktop shows a compact always-visible icon-only theme group with tooltips
+    - mobile keeps a compact trigger that expands an inline theme panel
+  - the top-bar `System` option now uses a monitor-style icon on desktop and a phone-style icon on mobile
+  - the mobile top-bar theme control no longer relies on the unstable popup rendering path and now expands cleanly without clipping into the header area
+  - the desktop top-bar theme control is now more compact, with tighter icon sizing and spacing while keeping the same theme actions
+  - the public header now uses a subtle separator between the theme utility group and the `Login` / `Get Started` actions
+  - `System` follows the device `prefers-color-scheme` setting and updates while the app is open
+  - theme choice persists locally and also syncs through the existing authenticated theme-preference API when available
+  - initial theme classes are applied before the main UI renders to avoid flashing the wrong theme on load
+  - theme changes now use subtle color-only transitions for background, text, and borders
+
 ## v0.8.0 - Board Exam Mode + Public Library Discovery System (In Progress)
 
 ### New Features

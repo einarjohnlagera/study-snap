@@ -11,10 +11,10 @@ export function ThemePreferenceSync() {
   useEffect(() => {
     const syncThemePreference = () => {
       const authUser = getAuthUser();
-      if (!authUser?.themePreference) {
+      if (!authUser) {
         return;
       }
-      setTheme(themePreferenceToMode(authUser.themePreference));
+      setTheme(themePreferenceToMode(authUser.themePreference ?? "SYSTEM"));
     };
 
     syncThemePreference();
