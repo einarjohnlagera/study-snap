@@ -39,6 +39,10 @@
 ### Fixes
 
 - **Feedback launcher sticky-CTA conflict fix** — the floating `Send Feedback` button is now hidden on routes with sticky or fixed bottom primary actions, including Note Editor and in-progress quiz flows, so it no longer overlaps `Generate`, `Next`, `Submit`, or similar bottom CTAs on mobile.
+- **Feedback UX cleanup for core study flows** — feedback entry is now more intentional across learning surfaces:
+  - core authenticated learning routes now use a subtle header feedback icon instead of the floating launcher
+  - the floating launcher remains only on safe non-critical authenticated pages such as Dashboard, Library, Public Library, and Settings
+  - quiz result screens now ask `Was this quiz helpful?` with lightweight `Yes` and `Give Feedback` actions before the deeper review feedback panel
 
 ## v0.8.0 – Board Exam Mode + Public Library Discovery System (In Progress)
 

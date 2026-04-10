@@ -252,8 +252,8 @@ describe("QuickReviewPage post-quiz UX", () => {
     await screen.findByText("Quick Review Complete");
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
-    expect(screen.getByText("Help improve this quiz")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Report Question" })).toBeInTheDocument();
+    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
 
   it("uses Back to Note as a text link in empty quiz edge states", async () => {

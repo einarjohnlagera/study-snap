@@ -328,8 +328,8 @@ describe("AdaptivePracticePage", () => {
     await screen.findByText("Adaptive Practice Complete");
 
     expect(screen.getByRole("link", { name: /Back to Note/i })).toBeInTheDocument();
-    expect(screen.getByText("Help improve this quiz")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Something is wrong" })).toBeInTheDocument();
+    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {

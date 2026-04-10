@@ -60,6 +60,14 @@ describe("SendFeedbackWidget", () => {
     expect(screen.queryByRole("button", { name: /Send Feedback/i })).not.toBeInTheDocument();
   });
 
+  it("renders an icon trigger variant for compact header entry", () => {
+    render(<SendFeedbackWidget variant="icon" triggerLabel="Send Feedback" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Send Feedback" }));
+
+    expect(screen.getByRole("dialog", { name: "Send Feedback" })).toBeInTheDocument();
+  });
+
   it("renders inline quiz feedback actions and prefills the modal", async () => {
     (submitFeedback as jest.Mock).mockResolvedValue({
       message: "Thanks! Your feedback helps improve NoteLib.",

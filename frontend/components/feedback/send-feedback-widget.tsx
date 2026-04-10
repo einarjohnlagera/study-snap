@@ -1,24 +1,29 @@
 "use client";
 
-import { MessageSquarePlus } from "lucide-react";
-import { useState } from "react";
+import { MessageSquare, MessageSquarePlus } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { submitFeedback } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 export type FeedbackQuickAction = {
   label: string;
-  template: string;
+  template?: string;
+  onClick?: () => void;
+  icon?: ReactNode;
+  variant?: "default" | "outline";
 };
 
 type SendFeedbackWidgetProps = {
   hidden?: boolean;
   mobileHidden?: boolean;
-  variant?: "floating" | "inline";
+  variant?: "floating" | "inline" | "icon";
   title?: string;
   description?: string;
   triggerLabel?: string;
   quickActions?: FeedbackQuickAction[];
+  iconButtonClassName?: string;
 };
 
 export function SendFeedbackWidget({
@@ -29,6 +34,7 @@ export function SendFeedbackWidget({
   description = "Found a bug? Something confusing? Have a feature idea? Tell us what happened or what you'd like to see in NoteLib. We read every message and use it to improve the app.",
   triggerLabel = "Send Feedback",
   quickActions = [],
+  iconButtonClassName,
 }: Readonly<SendFeedbackWidgetProps>) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -95,10 +101,17 @@ export function SendFeedbackWidget({
                 key={action.label}
                 type="button"
                 size="sm"
-                variant="outline"
+                variant={action.variant ?? "outline"}
                 className="w-full sm:w-auto"
-                onClick={() => handleOpen(action.template)}
+                onClick={() => {
+                  if (action.onClick) {
+                    action.onClick();
+                    return;
+                  }
+                  handleOpen(action.template);
+                }}
               >
+                {action.icon ? <span className="inline-flex items-center">{action.icon}</span> : null}
                 {action.label}
               </Button>
             ))}
@@ -113,6 +126,19 @@ export function SendFeedbackWidget({
             </Button>
           </div>
         </div>
+      ) : variant === "icon" ? (
+        <button
+          type="button"
+          className={cn(
+            "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/85 text-foreground/70 transition-colors hover:bg-muted/40 hover:text-foreground",
+            iconButtonClassName,
+          )}
+          onClick={() => handleOpen()}
+          aria-label={triggerLabel}
+          title={triggerLabel}
+        >
+          <MessageSquare className="h-4 w-4" />
+        </button>
       ) : (
         <Button
           type="button"
