@@ -6,12 +6,31 @@ Collect soft-launch feedback from authenticated users without sending them out o
 
 ## Flow
 
-- authenticated users can open `Send Feedback` from the in-app floating action button
+- authenticated users can open `Send Feedback` from one of two intentional entry points:
+  - a small header feedback icon on focused app routes such as Note Editor, Note Detail / Study Pack view, and quiz flows
+  - the floating launcher only on safe non-critical pages such as Dashboard, Library, Public Library, and Settings
 - feedback is submitted through `POST /api/feedback`
 - the request body contains only `message`
 - the frontend also sends the current page through `X-Page-Url`
 - successful submission should show:
   - `Thanks! Your feedback helps improve NoteLib.`
+
+## Placement Rules
+
+- core learning flows must stay distraction-free:
+  - New Note / Edit Note
+  - Study Pack / Note Detail view
+  - Quick Review, Challenge Quiz, Board Exam Mode, and Adaptive Practice
+  - quiz results and `Review Answers`
+- the floating launcher must not appear on those focused flows
+- quiz result screens should collect feedback inline with:
+  - prompt: `Was this quiz helpful?`
+  - actions: `Yes` and `Give Feedback`
+- quiz review sections may still show inline issue-reporting actions such as:
+  - `Report Question`
+  - `Confusing Explanation`
+  - `Something is wrong`
+- avoid page-specific offset hacks or overlap fixes for feedback; route-aware placement rules are the source of truth
 
 ## Stored Data
 

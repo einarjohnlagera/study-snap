@@ -67,10 +67,12 @@ function isProtectedAppRoute(pathname: string): boolean {
   );
 }
 
-function hasStickyBottomPrimaryActions(pathname: string): boolean {
+function isCoreLearningRoute(pathname: string): boolean {
   return (
     pathname === "/notes/new"
     || /^\/notes\/[^/]+\/edit$/.test(pathname)
+    || /^\/notes\/[^/]+$/.test(pathname)
+    || /^\/study-packs\/[^/]+$/.test(pathname)
     || pathname === "/study"
     || pathname.startsWith("/study/")
     || pathname.includes("/quick-review")
@@ -79,12 +81,17 @@ function hasStickyBottomPrimaryActions(pathname: string): boolean {
   );
 }
 
-function shouldHideMobileFeedbackWidget(pathname: string): boolean {
-  return hasStickyBottomPrimaryActions(pathname);
+function shouldShowFloatingFeedbackWidget(pathname: string): boolean {
+  return (
+    pathname.startsWith("/dashboard")
+    || pathname === "/library"
+    || pathname.startsWith("/library/public")
+    || pathname.startsWith("/settings")
+  );
 }
 
-function shouldHideFeedbackWidget(pathname: string): boolean {
-  return hasStickyBottomPrimaryActions(pathname);
+function shouldShowHeaderFeedbackWidget(pathname: string): boolean {
+  return !shouldShowFloatingFeedbackWidget(pathname) || isCoreLearningRoute(pathname);
 }
 
 function getPageTitle(pathname: string): string {
@@ -502,6 +509,13 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            {shouldShowHeaderFeedbackWidget(pathname || "") ? (
+              <SendFeedbackWidget
+                variant="icon"
+                triggerLabel="Send Feedback"
+                iconButtonClassName="border-border/80 bg-background/80"
+              />
+            ) : null}
             <div className="relative" ref={avatarMenuRef}>
               <button
                 type="button"
@@ -618,10 +632,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       ) : null}
 
       {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
-      <SendFeedbackWidget
-        hidden={shouldHideFeedbackWidget(pathname)}
-        mobileHidden={shouldHideMobileFeedbackWidget(pathname)}
-      />
+      {shouldShowFloatingFeedbackWidget(pathname || "") ? <SendFeedbackWidget /> : null}
     </div>
   );
 }

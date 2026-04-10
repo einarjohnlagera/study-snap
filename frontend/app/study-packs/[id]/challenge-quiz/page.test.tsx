@@ -1133,8 +1133,8 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("No weak concepts were identified in this exam. Review your answers or take another Board Exam when ready.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Take Another Board Exam" })).toHaveClass("bg-blue-600");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
-    expect(screen.getByText("Help improve this quiz")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confusing Explanation" })).toBeInTheDocument();
+    expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {

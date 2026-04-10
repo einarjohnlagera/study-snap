@@ -195,7 +195,7 @@ describe("AppShell", () => {
     });
   });
 
-  it("hides the floating feedback widget on note editor routes with sticky actions", async () => {
+  it("uses the header feedback icon on note editor routes", async () => {
     currentPathname = "/notes/new";
 
     render(
@@ -205,11 +205,16 @@ describe("AppShell", () => {
     );
 
     await waitFor(() => {
-      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
+      expect(
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => props && (props as { variant?: string }).variant === "icon"),
+      ).toBe(true);
+      expect(
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => Object.keys((props as Record<string, unknown>) ?? {}).length === 0),
+      ).toBe(false);
     });
   });
 
-  it("hides the floating feedback widget on quiz routes", async () => {
+  it("uses the header feedback icon on quiz routes", async () => {
     currentPathname = "/notes/note-1/challenge-quiz";
 
     render(
@@ -219,11 +224,16 @@ describe("AppShell", () => {
     );
 
     await waitFor(() => {
-      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
+      expect(
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => props && (props as { variant?: string }).variant === "icon"),
+      ).toBe(true);
+      expect(
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => Object.keys((props as Record<string, unknown>) ?? {}).length === 0),
+      ).toBe(false);
     });
   });
 
-  it("keeps the floating feedback widget visible on safe non-sticky routes", async () => {
+  it("keeps the floating feedback widget on safe dashboard routes", async () => {
     currentPathname = "/dashboard";
 
     render(
@@ -233,7 +243,12 @@ describe("AppShell", () => {
     );
 
     await waitFor(() => {
-      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ hidden: false, mobileHidden: false }));
+      expect(
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => Object.keys((props as Record<string, unknown>) ?? {}).length === 0),
+      ).toBe(true);
+      expect(
+        sendFeedbackWidgetMock.mock.calls.some(([props]) => props && (props as { variant?: string }).variant === "icon"),
+      ).toBe(false);
     });
   });
 

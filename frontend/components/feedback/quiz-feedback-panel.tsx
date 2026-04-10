@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { SendFeedbackWidget, type FeedbackQuickAction } from "@/components/feedback/send-feedback-widget";
 
 type QuizFeedbackPanelProps = {
@@ -31,6 +33,45 @@ export function QuizFeedbackPanel({
   noteTitle,
   section,
 }: Readonly<QuizFeedbackPanelProps>) {
+  const [helpfulAcknowledged, setHelpfulAcknowledged] = useState(false);
+
+  if (section === "results") {
+    const helpfulTemplate = [
+      "Feedback type: Quiz Feedback",
+      `Quiz: ${quizLabel}`,
+      "Context: Quiz Results",
+      noteTitle ? `Note: ${noteTitle}` : "Note: Unknown",
+      "",
+      "What happened?",
+    ].join("\n");
+
+    return (
+      <SendFeedbackWidget
+        variant="inline"
+        title="Was this quiz helpful?"
+        description={
+          helpfulAcknowledged
+            ? "Thanks. Your response helps us improve future quizzes."
+            : "Tell us whether this quiz felt useful, or send feedback if something felt off."
+        }
+        triggerLabel="Send Feedback"
+        quickActions={[
+          {
+            label: "Yes",
+            icon: <ThumbsUp className="h-4 w-4" />,
+            variant: helpfulAcknowledged ? "default" : "outline",
+            onClick: () => setHelpfulAcknowledged(true),
+          },
+          {
+            label: "Give Feedback",
+            icon: <ThumbsDown className="h-4 w-4" />,
+            template: helpfulTemplate,
+          },
+        ]}
+      />
+    );
+  }
+
   return (
     <SendFeedbackWidget
       variant="inline"
