@@ -1428,7 +1428,31 @@ export default function ChallengeQuizPage() {
             <BackLink href={noteDetailHref} label="Back to Note" />
           </div>
           {showAnswerReview ? (
-            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
+            <QuizAnswerReview
+              quiz={quiz}
+              selectedChoices={selectedChoices}
+              className="mt-2"
+              footer={(
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? (
+                    <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
+                      <Button type="button" className="w-full sm:w-auto">
+                        Practice Weak Concepts
+                      </Button>
+                    </Link>
+                  ) : null}
+                  <Link href={noteDetailHref} className="w-full sm:w-auto">
+                    <Button
+                      type="button"
+                      variant={result.weakConcepts.length > 0 && note?.adaptivePracticeAvailable ? "outline" : "default"}
+                      className="w-full sm:w-auto"
+                    >
+                      Review Study Pack
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            />
           ) : null}
           <QuizFeedbackPanel
             quizLabel={isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz"}

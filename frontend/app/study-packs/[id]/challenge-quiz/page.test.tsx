@@ -994,7 +994,7 @@ describe("ChallengeQuizPage", () => {
       quizCount: 0,
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
+      adaptivePracticeAvailable: true,
       difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
@@ -1076,7 +1076,7 @@ describe("ChallengeQuizPage", () => {
       quizCount: 0,
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
+      adaptivePracticeAvailable: true,
       difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
@@ -1164,7 +1164,7 @@ describe("ChallengeQuizPage", () => {
       quizCount: 0,
       quickReviewAvailable: true,
       challengeQuizAvailable: true,
-      adaptivePracticeAvailable: false,
+      adaptivePracticeAvailable: true,
       difficultySelectionAvailable: true,
     });
     (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
@@ -1218,12 +1218,23 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review Answers" }));
 
     const review = screen.getByLabelText("Answer review");
+    expect(review).toHaveTextContent("Performance");
+    expect(review).toHaveTextContent("Needs Improvement");
     expect(review).toHaveTextContent("What powers the cell?");
-    expect(review).toHaveTextContent("Cell Biology");
+    expect(review).toHaveTextContent("Concept: Cell Biology");
+    expect(review).toHaveTextContent("Incorrect");
+    expect(review).toHaveTextContent("Your Answer");
+    expect(review).toHaveTextContent(/Your Answer[\s\S]*Nucleus/);
+    expect(review).toHaveTextContent("Correct Answer");
+    expect(review).toHaveTextContent(/Correct Answer[\s\S]*Mitochondria/);
     expect(review).toHaveTextContent("Nucleus");
     expect(review).toHaveTextContent("Your answer");
     expect(review).toHaveTextContent("Mitochondria");
     expect(review).toHaveTextContent("Correct answer");
+    expect(screen.getByRole("button", { name: "Collapse Explanation" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Expand All" })).toBeInTheDocument();
+    expect(within(review).getByRole("link", { name: "Practice Weak Concepts" })).toHaveAttribute("href", "/notes/note-1/adaptive-practice");
+    expect(within(review).getByRole("link", { name: "Review Study Pack" })).toHaveAttribute("href", "/notes/note-1");
     expect(review).toHaveTextContent("Mitochondria produce ATP for the cell.");
     expect(screen.getByText("Found a confusing question or explanation while reviewing answers? Tell us what felt off.")).toBeInTheDocument();
   });

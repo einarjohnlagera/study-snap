@@ -24,13 +24,24 @@ describe("QuizAnswerReview", () => {
 
     expect(screen.getByLabelText("Answer review")).toHaveClass("motion-fade-enter");
     expect(screen.getByTestId("quiz-answer-review-current-item")).toHaveClass("motion-fade-enter");
+    expect(screen.getByText("Correct")).toBeInTheDocument();
+    expect(screen.getByText("Total Questions")).toBeInTheDocument();
+    expect(screen.getByText("Percentage")).toBeInTheDocument();
+    expect(screen.getByText("Performance")).toBeInTheDocument();
+    expect(screen.getByText("Fair")).toBeInTheDocument();
+    expect(screen.getByText("Weak Concepts")).toBeInTheDocument();
     expect(screen.getByText("What powers the cell?")).toBeInTheDocument();
-    expect(screen.getByText("Cell organelles")).toBeInTheDocument();
+    expect(screen.getByText("Concept: Cell organelles")).toBeInTheDocument();
+    expect(screen.getByText("Your Answer")).toBeInTheDocument();
+    expect(screen.getByLabelText("Answer review")).toHaveTextContent(/Your Answer[\s\S]*Nucleus/);
+    expect(screen.getByText("Correct Answer")).toBeInTheDocument();
+    expect(screen.getByLabelText("Answer review")).toHaveTextContent(/Correct Answer[\s\S]*Mitochondria/);
     expect(screen.getByText("Nucleus")).toBeInTheDocument();
     expect(screen.getByText("Mitochondria")).toBeInTheDocument();
     expect(screen.getByText("Your answer")).toBeInTheDocument();
     expect(screen.getByText("Correct answer")).toBeInTheDocument();
     expect(screen.getByText("Why this is correct")).toBeInTheDocument();
+    expect(screen.getByTestId("quiz-answer-review-explanation")).toHaveAttribute("data-state", "expanded");
     expect(screen.getByText("Mitochondria produce ATP for the cell.")).toBeInTheDocument();
   });
 
@@ -40,7 +51,7 @@ describe("QuizAnswerReview", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
 
     expect(screen.getByText("What carries genetic instructions?")).toBeInTheDocument();
-    expect(screen.getByText("Genetics")).toBeInTheDocument();
+    expect(screen.getByText("Concept: Genetics")).toBeInTheDocument();
     expect(screen.getByText("DNA stores hereditary information.")).toBeInTheDocument();
     expect(screen.getByText("DNA")).toBeInTheDocument();
     expect(screen.getByText("Your answer")).toBeInTheDocument();
@@ -55,11 +66,40 @@ describe("QuizAnswerReview", () => {
   it("can focus the review on incorrect answers only", () => {
     render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Incorrect only" }));
+    fireEvent.click(screen.getByRole("button", { name: "Incorrect Only" }));
 
     expect(screen.getByText("What powers the cell?")).toBeInTheDocument();
     expect(screen.queryByText("What carries genetic instructions?")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next Question" })).toBeDisabled();
+  });
+
+  it("supports per-question explanation collapse and global expand or collapse controls", () => {
+    render(<QuizAnswerReview quiz={reviewQuiz} selectedChoices={{ 0: 1, 1: 0 }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse Explanation" }));
+    expect(screen.getByTestId("quiz-answer-review-explanation")).toHaveAttribute("data-state", "collapsed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand All" }));
+    expect(screen.getByTestId("quiz-answer-review-explanation")).toHaveAttribute("data-state", "expanded");
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse All" }));
+    expect(screen.getByTestId("quiz-answer-review-explanation")).toHaveAttribute("data-state", "collapsed");
+
+    fireEvent.click(screen.getByRole("button", { name: "Next Question" }));
+    expect(screen.getByTestId("quiz-answer-review-explanation")).toHaveAttribute("data-state", "collapsed");
+  });
+
+  it("renders optional continue-learning footer actions", () => {
+    render(
+      <QuizAnswerReview
+        quiz={reviewQuiz}
+        selectedChoices={{ 0: 1, 1: 0 }}
+        footer={<button type="button">Review Study Pack</button>}
+      />,
+    );
+
+    expect(screen.getByText("Continue learning")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review Study Pack" })).toBeInTheDocument();
   });
 
   it("keeps review navigation controls mobile-stackable", () => {

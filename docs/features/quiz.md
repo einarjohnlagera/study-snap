@@ -287,16 +287,33 @@ These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Pr
 ### Review Answers
 - The result screen must expose a clear `Review Answers` action for post-assessment learning.
 - Review Answers uses the same shared review layout across Quick Review, Challenge Quiz, and Adaptive Practice.
-- The review layout shows one question at a time with Previous / Next navigation, plus an optional `Incorrect only` filter when mistakes exist.
+- The review layout shows one question at a time with Previous / Next navigation, plus an optional `All Questions` / `Incorrect Only` filter when mistakes exist.
+- Review Answers starts with a compact learning summary showing:
+  - correct count
+  - total questions
+  - percentage
+  - performance level
+  - weak-concept summary when applicable
 - Each reviewed question shows:
   - original question number and text
   - concept chip from the stored quiz item
+  - explicit result state (`Correct` / `Incorrect`)
+  - `Your Answer` summary row
+  - `Correct Answer` summary row
   - answer choices in stable displayed order
   - `Your answer` badge on the selected choice
   - `Correct answer` badge on the correct choice
   - visible `Why this is correct` explanation below the choices
 - Correct answers use restrained green styling, incorrect selected answers use restrained red styling, and neutral distractors stay visually quiet.
+- Explanations stay easy to access but can be collapsed per question.
+- Review Answers exposes shared explanation controls:
+  - per-question `Expand Explanation` / `Collapse Explanation`
+  - global `Expand All` / `Collapse All`
+- Explanation disclosure uses the shared lightweight collapse motion so toggling stays smooth without slowing the review flow.
 - Review Answers must use stored quiz/session data (`question`, `choices`, selected canonical choice indexes, `correctIndex`, `explanation`, `concept`) so the same component can later support completed-session history or export without depending on freshly completed page state only.
+- Challenge Quiz review adds inline follow-up actions at the end of the review surface:
+  - `Practice Weak Concepts` when Adaptive Practice is available and weak concepts exist
+  - `Review Study Pack` to return to the note-owned study material directly from review
 
 ### Confidence feedback (Quick Review only)
 - Once a confidence option is selected, the option buttons are replaced by a styled badge
