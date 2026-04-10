@@ -116,7 +116,7 @@ public class ChallengeQuizService {
 
     private final StudyPackRepository studyPackRepository;
     private final QuickReviewSessionRepository quickReviewSessionRepository;
-    private final LlmStudyPackService llmStudyPackService;
+    private final QuizGenerationService quizGenerationService;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
     private final StudySnapProperties properties;
@@ -166,7 +166,7 @@ public class ChallengeQuizService {
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
         try {
-            List<QuizItem> generatedQuiz = llmStudyPackService.generateChallengeQuiz(
+            List<QuizItem> generatedQuiz = quizGenerationService.generateChallengeQuiz(
                     studyPack.getTitle(),
                     studyPack.getSummary(),
                     getKeyConcepts(studyPack),

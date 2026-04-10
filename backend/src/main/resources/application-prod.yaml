@@ -12,6 +12,9 @@ logging:
 studysnap:
   ocr:
     provider: ${OCR_PROVIDER:google}
+  quiz-generation:
+    mode: ${QUIZ_GENERATION_MODE:real}
+    mock-delay-ms: ${QUIZ_GENERATION_MOCK_DELAY_MS:0}
   quick-review:
     study-tip:
       enabled: ${QUICK_REVIEW_STUDY_TIP_ENABLED:true}

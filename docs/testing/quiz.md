@@ -101,6 +101,13 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - Adaptive Practice double-click start attempts create only one generation request from the frontend.
 - backend Challenge Quiz and Adaptive Practice start tests cover `GENERATING` session reuse without a second LLM call.
 - backend Challenge Quiz and Adaptive Practice status tests should cover `GENERATING` -> poll, `IN_PROGRESS` -> resume, and `FAILED` -> retry.
+- local quiz UI testing may enable `QUIZ_GENERATION_MODE=mock` so Challenge Quiz, Board Exam Mode, and Adaptive Practice generate without calling the real LLM.
+- when `QUIZ_GENERATION_MODE=mock`, verify:
+  - the backend logs that quiz generation mock mode is active
+  - Challenge Quiz / Board Exam still create normal sessions and results
+  - Adaptive Practice still uses weak-concept-driven session flow
+  - no Study Pack or other non-quiz LLM flow changes behavior unintentionally
+- if loading overlays need extra time in local QA, set `QUIZ_GENERATION_MOCK_DELAY_MS` to a small value such as `600` and verify the same generation lock/guard states still appear
 - Note Detail `Summary` / `Quiz` controls render as tabs, not buttons
 - active Note Detail tab updates with underline state and `aria-selected`
 - `?tab=quiz` opens the quiz view directly

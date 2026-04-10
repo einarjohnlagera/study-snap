@@ -663,6 +663,8 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 - Quick Review comes from the Study Pack quiz generated during note generation and should stay lightweight, fast, and learner-level aware.
 - Challenge Quiz and Adaptive Practice use separate LLM generation flows and must receive learner-level context, defaulting to `COLLEGE` when the user has no saved learner level.
+- Local quiz UI development may use `QUIZ_GENERATION_MODE=mock` to stub Challenge Quiz, Adaptive Practice, and Board Exam generation without changing Study Pack generation or the default production LLM path.
+- Optional local loading-state testing may add `QUIZ_GENERATION_MOCK_DELAY_MS`, but the default quiz-generation mode must remain real unless explicitly overridden.
 - Quick Review must not use the Challenge/Adaptive LLM-generation hard lock or full-screen generation overlay because it does not run an LLM at quiz start.
 - Challenge Quiz and Adaptive Practice must reserve a `GENERATING` session before calling the LLM, then transition to `IN_PROGRESS` when the quiz payload is ready or `FAILED` when generation fails.
 - Challenge Quiz and Adaptive Practice start flows must be idempotent: return existing `GENERATING` sessions without another LLM call, return existing `IN_PROGRESS` quiz payloads without another LLM call, and allow retry only after `FAILED`.

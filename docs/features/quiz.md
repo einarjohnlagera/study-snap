@@ -251,6 +251,25 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 - Challenge Quiz and Adaptive Practice refresh/reload recovery uses the in-progress status endpoint: `GENERATING` continues polling, `IN_PROGRESS` resumes the quiz, and `FAILED` allows retry.
 - While LLM generation is active, the frontend disables all quiz controls, blocks app link clicks and browser back navigation, and uses the browser-native refresh warning.
 
+## Local Quiz Mock Mode
+
+- Local development may switch quiz generation to `mock` mode through `QUIZ_GENERATION_MODE=mock`.
+- Quiz mock mode applies only to:
+  - Challenge Quiz
+  - Adaptive Practice
+  - Board Exam Mode through the shared Challenge Quiz generation path
+- Quiz mock mode does **not** change Study Pack generation or other LLM-backed flows; those continue using the configured `LLM_PROVIDER`.
+- Optional artificial delay may be added with `QUIZ_GENERATION_MOCK_DELAY_MS` to exercise loading overlays without burning tokens.
+- Mock mode still keeps the real session flow:
+  - reserves `GENERATING`
+  - reuses existing `GENERATING` / `IN_PROGRESS` sessions idempotently
+  - returns `FAILED` only when the normal generation pipeline fails after the mock branch
+- Mock quiz payloads must stay compatible with the real runtime contract:
+  - same `QuizItem` DTO shape
+  - `question`, `choices`, `correctIndex`, `concept`, and `explanation` all present
+  - enough concept/explanation quality to exercise result screens, weak-concept follow-ups, and `Review Answers`
+- Default behavior remains real generation; production must not enter mock mode unless the quiz-generation flag is explicitly overridden.
+
 ## Active Session Lock and Forfeit Rules
 
 - Quick Review, Challenge Quiz, and Adaptive Practice must show a visible `Leave Quiz` action while a quiz session is active.
