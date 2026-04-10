@@ -42,7 +42,7 @@ Theme should be shown inside the `Preferences` card as a clear selector, not as 
 
 Recommended presentation:
 
-- segmented selector with `Light`, `Dark`, `System`
+- inline segmented selector with `Light`, `Dark`, `System`
 
 Supporting copy should explain:
 
@@ -72,6 +72,13 @@ Public and authenticated headers may still keep a small theme utility control fo
 However:
 
 - the top-bar utility control and `Settings` must expose the same three theme options
-- the top-bar control should cycle `Dark -> Light -> System -> repeat`
 - the top-bar control should show the current mode through its icon and tooltip text such as `Theme: System`
+- the top-bar should use a responsive inline control instead of a popup menu:
+  - desktop uses an always-visible compact inline theme group
+  - mobile uses a compact trigger that expands an inline theme panel from the header control
+- the desktop top-bar group should be icon-only and rely on tooltips for `Light`, `Dark`, and `System`
+- the top-bar `System` option should use a monitor-style icon on desktop and a phone-style icon on mobile so the behavior reads naturally on each device
+- the mobile expanded control should animate quickly and stay anchored to the trigger without breaking the header layout
+- the desktop inline group should stay compact and utility-like, with tighter icon and spacing treatment than the Settings selector
 - `Settings` remains the canonical place for explicit theme selection and explanation copy
+- `Settings` should keep the always-visible inline segmented selector so users can switch themes without opening another surface

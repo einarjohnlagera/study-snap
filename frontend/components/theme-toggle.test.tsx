@@ -36,28 +36,19 @@ describe("ThemeToggle", () => {
     });
   });
 
-  it("shows the current theme mode in the top-bar control", () => {
+  it("shows a compact always-visible desktop theme group", () => {
     getAuthUserMock.mockReturnValue(null);
 
     render(<ThemeToggle />);
 
-    const button = screen.getByRole("button", { name: "Theme: System" });
-    expect(button).toHaveAttribute("title", "Theme: System");
+    expect(screen.getByRole("group", { name: "Theme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Use Light theme" })).toHaveAttribute("title", "Light");
+    expect(screen.getByRole("button", { name: "Use Dark theme" })).toHaveAttribute("title", "Dark");
+    expect(screen.getByRole("button", { name: "Use System theme" })).toHaveAttribute("title", "System");
+    expect(screen.getByRole("button", { name: "Use System theme" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("cycles from system to dark for anonymous users without calling the API", () => {
-    getAuthUserMock.mockReturnValue(null);
-
-    render(<ThemeToggle />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Theme: System" }));
-
-    expect(setThemeMock).toHaveBeenCalledWith("dark");
-    expect(updateThemePreference).not.toHaveBeenCalled();
-    expect(patchAuthUser).not.toHaveBeenCalled();
-  });
-
-  it("cycles from dark to light for authenticated users and persists the preference", async () => {
+  it("persists desktop theme selection for authenticated users", async () => {
     useThemeMock.mockReturnValue({
       theme: "dark",
       resolvedTheme: "dark",
@@ -75,7 +66,7 @@ describe("ThemeToggle", () => {
 
     render(<ThemeToggle />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Theme: Dark" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use Light theme" }));
 
     expect(setThemeMock).toHaveBeenCalledWith("light");
     expect(patchAuthUser).toHaveBeenCalledWith({ themePreference: "LIGHT" });
@@ -84,19 +75,63 @@ describe("ThemeToggle", () => {
     });
   });
 
-  it("cycles from light back to system", () => {
+  it("shows a collapsed mobile trigger that expands the inline theme panel", () => {
+    getAuthUserMock.mockReturnValue(null);
+
+    render(<ThemeToggle />);
+
+    const trigger = screen.getByRole("button", { name: "Theme: System" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(trigger);
+
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getAllByRole("button", { name: "Use Light theme" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Use Dark theme" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Use System theme" })[1]).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("collapses the mobile panel after selecting a theme", async () => {
     useThemeMock.mockReturnValue({
       theme: "light",
       resolvedTheme: "light",
       systemTheme: "light",
       setTheme: setThemeMock,
     });
+    getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      themePreference: "LIGHT",
+    });
+    (updateThemePreference as jest.Mock).mockResolvedValue({
+      id: "user-1",
+      themePreference: "SYSTEM",
+    });
+
+    render(<ThemeToggle />);
+
+    const trigger = screen.getByRole("button", { name: "Theme: Light" });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getAllByRole("button", { name: "Use System theme" })[1]);
+
+    expect(setThemeMock).toHaveBeenCalledWith("system");
+    expect(patchAuthUser).toHaveBeenCalledWith({ themePreference: "SYSTEM" });
+    await waitFor(() => {
+      expect(updateThemePreference).toHaveBeenCalledWith({ themePreference: "SYSTEM" });
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+    });
+  });
+
+  it("collapses the mobile panel when clicking away", () => {
     getAuthUserMock.mockReturnValue(null);
 
     render(<ThemeToggle />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Theme: Light" }));
+    const trigger = screen.getByRole("button", { name: "Theme: System" });
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
 
-    expect(setThemeMock).toHaveBeenCalledWith("system");
+    fireEvent.mouseDown(document.body);
+
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
 });

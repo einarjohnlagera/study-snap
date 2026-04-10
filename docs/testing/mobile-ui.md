@@ -70,7 +70,10 @@ Verify these cases on mobile-sized viewports:
 - Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile
 - Adaptive Practice result screen: "Generate New Set" is the primary action; "← Back to Note" appears below as a link
 - the avatar dropdown on mobile shows `My Profile`, `Settings`, and `Sign Out` with full text labels
-- the mobile Preferences card shows a clear `Light / Dark / System` theme selector without crowding the rest of Settings
+- the mobile Preferences card keeps the inline `Light / Dark / System` theme selector readable without crowding the rest of Settings
+- the top-bar mobile theme control stays collapsed to a compact trigger by default and expands inline from that trigger when tapped
+- the expanded mobile theme control renders fully on screen, does not clip into the header area, and still shows all three theme options
+- the expanded mobile theme control collapses cleanly after selection or outside taps, stays icon-only in the header context, and uses a phone-style icon for `System`
 - `My Profile` in the avatar dropdown links to the user's public profile page
 - `Settings` in the avatar dropdown links to `/settings` (same as sidebar Settings)
 - the share modal for notes and profiles is readable on mobile — the `Shareable URL` field, `Copy Link`, and `Close` buttons all remain tappable
