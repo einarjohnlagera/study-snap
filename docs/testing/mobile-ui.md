@@ -69,6 +69,9 @@ Verify these cases on mobile-sized viewports:
 - Empty or blocked quiz edge states use lightweight `← Back to Note` links on mobile instead of full-width navigation buttons
 - Review Answers on Quick Review, Challenge Quiz, and Adaptive Practice stays readable on mobile: question text, answer choices, concept chip, selected/correct badges, explanation, and Previous/Next controls stack without horizontal overflow
 - Review Answers mobile visual states remain restrained: correct choice is green, incorrect selected choice is red, unselected distractors stay neutral, and badges remain readable in dark mode
+- Review Answers mobile summary stays easy to scan: correct count, total questions, percentage, performance, and weak-concept summary stack cleanly above the active question
+- Review Answers mobile filter and explanation controls (`All Questions`, `Incorrect Only`, `Expand All`, `Collapse All`, per-question explanation toggle) wrap cleanly and remain tappable without pushing content off-screen
+- Challenge Quiz mobile answer review footer keeps `Practice Weak Concepts` and `Review Study Pack` accessible without overlapping feedback or navigation controls
 - quiz result and answer-review sections can fade in subtly, but answer selection and question-to-question flow should still feel immediate
 - Quick Review result screen: confidence badges (🟢 Confident, 🟡 Improving, 🔴 Needs Practice) render inline and are readable on mobile
 - Adaptive Practice result screen: "Generate New Set" is the primary action; "← Back to Note" appears below as a link

@@ -24,6 +24,12 @@
   - the Challenge Quiz Question Navigator now uses a shared collapse/expand motion pattern instead of abrupt mount/unmount behavior
   - Quick Review and Challenge / Board Exam result-review surfaces now use gentle fade-in entry motion for calmer state changes
   - quiz-critical interactions such as answer selection, timer updates, and question progression intentionally avoid extra motion so focus and responsiveness stay intact
+- **Review Answers UX polish** — Challenge Quiz review is now clearer and more learning-focused without changing scoring or quiz generation:
+  - Review Answers now starts with a compact summary for correct count, total questions, percentage, performance level, and weak concepts
+  - each reviewed question now shows explicit `Correct` / `Incorrect` state plus `Your Answer` and `Correct Answer` summaries before the choice list
+  - answer review now supports `All Questions` / `Incorrect Only` filtering alongside per-question explanation toggles and shared `Expand All` / `Collapse All` controls
+  - explanation disclosure uses the shared lightweight motion system to avoid abrupt layout jumps
+  - Challenge Quiz review now ends with clearer next-step actions such as `Practice Weak Concepts` and `Review Study Pack`
 
 ## v0.8.0 - Board Exam Mode + Public Library Discovery System (In Progress)
 
