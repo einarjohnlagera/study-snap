@@ -195,7 +195,7 @@ describe("AppShell", () => {
     });
   });
 
-  it("hides the mobile feedback widget on note editor routes", async () => {
+  it("hides the floating feedback widget on note editor routes with sticky actions", async () => {
     currentPathname = "/notes/new";
 
     render(
@@ -205,7 +205,7 @@ describe("AppShell", () => {
     );
 
     await waitFor(() => {
-      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ mobileHidden: true, hidden: false }));
+      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
     });
   });
 
@@ -220,6 +220,20 @@ describe("AppShell", () => {
 
     await waitFor(() => {
       expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
+    });
+  });
+
+  it("keeps the floating feedback widget visible on safe non-sticky routes", async () => {
+    currentPathname = "/dashboard";
+
+    render(
+      <AppShell>
+        <div>Dashboard content</div>
+      </AppShell>,
+    );
+
+    await waitFor(() => {
+      expect(sendFeedbackWidgetMock).toHaveBeenCalledWith(expect.objectContaining({ hidden: false, mobileHidden: false }));
     });
   });
 

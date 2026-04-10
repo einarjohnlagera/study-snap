@@ -67,21 +67,24 @@ function isProtectedAppRoute(pathname: string): boolean {
   );
 }
 
-function shouldHideMobileFeedbackWidget(pathname: string): boolean {
+function hasStickyBottomPrimaryActions(pathname: string): boolean {
   return (
     pathname === "/notes/new"
     || /^\/notes\/[^/]+\/edit$/.test(pathname)
     || pathname === "/study"
     || pathname.startsWith("/study/")
-  );
-}
-
-function shouldHideFeedbackWidget(pathname: string): boolean {
-  return (
-    pathname.includes("/quick-review")
+    || pathname.includes("/quick-review")
     || pathname.includes("/challenge-quiz")
     || pathname.includes("/adaptive-practice")
   );
+}
+
+function shouldHideMobileFeedbackWidget(pathname: string): boolean {
+  return hasStickyBottomPrimaryActions(pathname);
+}
+
+function shouldHideFeedbackWidget(pathname: string): boolean {
+  return hasStickyBottomPrimaryActions(pathname);
 }
 
 function getPageTitle(pathname: string): string {
