@@ -4,6 +4,11 @@
 
 ### New Features
 
+- **Landing page Public Library preview** — the homepage now visually demonstrates the Public Library experience instead of relying on copy alone:
+  - added a dedicated Public Library section that explains browse-copy-study behavior in product terms
+  - inserted a screenshot preview block immediately after the Public Library intro card using `public/landing/feature-public-library.jpg`
+  - the preview keeps the image responsive, rounded, and lightly elevated so it reads clearly on both desktop and mobile
+
 - **Dedicated How it Works page** — product walkthrough content now has its own public route at `/how-it-works`:
   - the new page explains the full NoteLib flow with real screenshots for note editing, Study Pack generation, quiz practice, and results review
   - `/how-it-works` also includes the simple 3-step overview, Board Exam Mode highlight, and a closing signup CTA

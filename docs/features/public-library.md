@@ -9,6 +9,17 @@ Routes:
 - canonical: `/public/library`
 - authenticated shell entry: `/library/public`
 
+## Landing Page Preview
+
+Landing page should visually reinforce Public Library as a real discovery surface, not just describe it in copy.
+
+- Use `public/landing/feature-public-library.jpg` in the landing page Public Library section.
+- Place the screenshot block immediately after the Public Library intro card.
+- The preview block should use:
+  - title `See what you can explore`
+  - supporting copy `Browse notes by subject, discover popular topics, and copy them into your library.`
+- Keep the image responsive, full-width within its container, rounded, and lightly elevated so it reads as a polished product preview on both desktop and mobile.
+
 ## Discovery Mode vs Filter Mode
 
 Public Library has two display modes:

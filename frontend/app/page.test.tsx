@@ -38,17 +38,18 @@ describe("LandingPage", () => {
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Turn your notes into summaries, key concepts, and quizzes",
+        name: "Your notes, transformed into study tools.",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("NoteLib helps you study faster by transforming your notes into structured learning tools."),
+      screen.getByText("Build a notes library, browse what others share, and turn saved notes into summaries, key concepts, and quizzes when review starts."),
     ).toBeInTheDocument();
     expect(screen.getByText("Board Exam Mode · Free for a limited time")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
     expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "/how-it-works");
     expect(screen.getByRole("link", { name: "Try demo access" })).toHaveAttribute("href", "/demo");
-    expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
+    expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: "Browse Public Library" })[0]).toHaveAttribute("href", "/public/library");
     expect(screen.getByAltText("NoteLib note detail showing summary of the note")).toBeInTheDocument();
 
     expect(screen.getByText("How It Works")).toBeInTheDocument();
@@ -66,6 +67,14 @@ describe("LandingPage", () => {
     expect(screen.queryByAltText("NoteLib Study Pack view showing generated summary and key concepts")).not.toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib Board Exam Mode and Challenge Quiz in-progress screen")).not.toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib quiz results and weak concept review screen")).not.toBeInTheDocument();
+
+    expect(screen.getByText("Public Library")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Explore notes you can browse, copy, and study from" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "See what you can explore" })).toBeInTheDocument();
+    expect(screen.getByText("Browse notes by subject, discover popular topics, and copy them into your library.")).toBeInTheDocument();
+    expect(
+      screen.getByAltText("NoteLib Public Library preview showing note discovery cards and subject browsing"),
+    ).toBeInTheDocument();
 
     expect(screen.getByText("Why NoteLib")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "More useful than a generic AI answer box" })).toBeInTheDocument();
