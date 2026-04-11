@@ -369,6 +369,11 @@ Users can:
   - `View Note`
   - `Start Review`
 - `Start Review` is the primary CTA and `View Note` is the secondary CTA
+- `Continue` should remain a visible ghost/tertiary button rather than plain text
+- modal copy should stay concise:
+  - `This note is now in your library.`
+  - `Start reviewing now or continue exploring.`
+- modal actions should keep a clean responsive layout with stacked mobile buttons and no overflow
 - if the user already copied that public note, show `Already in your library` instead of offering duplicate copies
 - Public Library cards should avoid generic `Open` buttons because card click already owns detail navigation
 - see source badges on cards:

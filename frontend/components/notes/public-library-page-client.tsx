@@ -48,7 +48,7 @@ const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
 const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
 const COPY_SUCCESS_BODY_LINE_ONE = "This note is now in your library.";
-const COPY_SUCCESS_BODY_LINE_TWO = "You can start reviewing now or continue exploring.";
+const COPY_SUCCESS_BODY_LINE_TWO = "Start reviewing now or continue exploring.";
 const MODAL_CONTINUE_LABEL = "Continue";
 const MODAL_VIEW_NOTE_LABEL = "View Note";
 const MODAL_START_REVIEW_LABEL = "Start Review";
@@ -1049,15 +1049,19 @@ export function PublicLibraryPageClient() {
         isOpen={copySuccessState !== null}
         title={COPY_SUCCESS_MODAL_TITLE}
         onClose={() => setCopySuccessState(null)}
+        panelClassName="max-w-[460px] p-6 sm:p-7"
+        contentClassName="space-y-3"
+        actionsClassName="mt-6"
         actions={copySuccessState ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            <button
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <Button
               type="button"
-              className="inline-flex h-10 items-center justify-center rounded-lg px-2 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              variant="ghost"
+              className="w-full sm:w-auto"
               onClick={() => setCopySuccessState(null)}
             >
               {MODAL_CONTINUE_LABEL}
-            </button>
+            </Button>
             <ResponsiveActionButton
               type="button"
               variant="outline"
@@ -1079,7 +1083,7 @@ export function PublicLibraryPageClient() {
         ) : null}
       >
         {copySuccessState ? (
-          <div className="space-y-2 text-sm text-foreground/80">
+          <div className="space-y-3 text-sm text-foreground/80">
             <p>{COPY_SUCCESS_BODY_LINE_ONE}</p>
             <p>{COPY_SUCCESS_BODY_LINE_TWO}</p>
           </div>

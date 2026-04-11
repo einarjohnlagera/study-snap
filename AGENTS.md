@@ -453,7 +453,11 @@ Core loop:
 - Public Library copy UX should keep the existing copy endpoint but make public copies idempotent per user/source note.
 - Public Library cards may include a visible `Copy to My Library` CTA as the one allowed exception to the no-inline-card-actions rule on note cards.
 - If the current user already has that public note in their library, show `Already in your library` and optional `View Note` instead of offering another copy.
-- Successful Public Library copies should offer `Continue`, `View Note`, and `Start Review` follow-up actions, with `Start Review` as the primary CTA.
+- Successful Public Library copies should offer `Continue`, `View Note`, and `Start Review` follow-up actions, with:
+  - `Start Review` as the primary CTA
+  - `View Note` as the secondary CTA
+  - `Continue` as a visible ghost/tertiary button, not plain text
+- Public Library copy-success modals should use concise body copy, balanced spacing, and mobile-safe stacked action buttons so the modal stays readable without overflow.
 - Copied private notes should display attribution as `Copied from {title} in Public Library.` when source metadata exists.
 
 ### Card Interaction Rule

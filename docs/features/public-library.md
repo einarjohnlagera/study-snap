@@ -130,8 +130,14 @@ Interaction rules:
   - `View Note`
   - `Start Review`
 - `Start Review` is the primary CTA in the modal
+- `View Note` is the secondary CTA
+- `Continue` is a visible ghost/tertiary button, not plain text
 - `View Note` replaces generic `Open` wording for copied-note navigation
 - `Start Review` may route through copied-note generation first when the copied note is still a draft
+- modal body copy should stay short:
+  - `This note is now in your library.`
+  - `Start reviewing now or continue exploring.`
+- modal actions should use clean spacing and stack safely on mobile to avoid overflow
 - avoid generic navigation button labels like `Open` on Public Library cards; card click already owns detail navigation
 - do not place share/generate/delete/edit actions inside Public Library cards
 - use public note detail for the rest of the actions instead

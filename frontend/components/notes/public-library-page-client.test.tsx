@@ -290,16 +290,22 @@ describe("PublicLibraryPageClient", () => {
     const modal = within(dialog);
 
     expect(modal.getByText("This note is now in your library.")).toBeInTheDocument();
-    expect(modal.getByText("You can start reviewing now or continue exploring.")).toBeInTheDocument();
-    expect(modal.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(modal.getByText("Start reviewing now or continue exploring.")).toBeInTheDocument();
+    const continueButton = modal.getByRole("button", { name: "Continue" });
+    expect(continueButton).toBeInTheDocument();
+    expect(continueButton.className).toContain("bg-transparent");
+    expect(continueButton.className).toContain("hover:bg-muted/60");
     expect(modal.getByRole("button", { name: "View Note" })).toBeInTheDocument();
     expect(modal.getByRole("button", { name: "Start Review" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open in My Library" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
 
+    expect(dialog.className).toContain("p-6");
+    expect(dialog.className).toContain("sm:p-7");
     const actionRow = modal.getByRole("button", { name: "Start Review" }).parentElement;
     expect(actionRow?.className).toContain("flex-col");
     expect(actionRow?.className).toContain("sm:flex-row");
+    expect(actionRow?.className).toContain("gap-3");
 
     fireEvent.click(modal.getByRole("button", { name: "Start Review" }));
 
