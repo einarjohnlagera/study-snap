@@ -1,14 +1,18 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
 import { listPublicNotes, listSubjects } from "@/lib/api";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
+let currentPathname = "/public/library";
+let currentSearch = "";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
     push: pushMock,
   }),
+  usePathname: () => currentPathname,
+  useSearchParams: () => new URLSearchParams(currentSearch),
 }));
 
 jest.mock("@/lib/auth", () => ({
@@ -33,6 +37,9 @@ describe("PublicLibraryPageClient", () => {
     (listPublicNotes as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     currentAuthUser = { id: "user-1" };
+    currentPathname = "/public/library";
+    currentSearch = "";
+    window.history.replaceState({}, "", "/public/library");
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Physics"]);
   });
 
@@ -356,6 +363,176 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("High Engagement Note")).toBeInTheDocument();
     expect(screen.getByText("📚 Browse by Subject")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Biology" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "View More" }).length).toBeGreaterThan(0);
+  });
+
+  it("limits discovery sections and opens a section view from View More", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-1",
+        ownerUserId: "user-2",
+        title: "Featured One",
+        courseProgram: "Biology",
+        learnerLevel: "COLLEGE",
+        subject: "Biology",
+        tags: ["cells"],
+        contentPreview: "Preview one",
+        summaryPreview: "Summary one",
+        visibility: "PUBLIC",
+        studyPackId: "pack-1",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        copyCount: 10,
+        shareCount: 3,
+        viewCount: 20,
+        authorDisplayName: "Creator One",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-31T10:00:00Z",
+        updatedAt: "2026-03-31T10:00:00Z",
+      },
+      {
+        id: "note-2",
+        ownerUserId: "user-3",
+        title: "Featured Two",
+        courseProgram: "Chemistry",
+        learnerLevel: "COLLEGE",
+        subject: "Chemistry",
+        tags: ["atoms"],
+        contentPreview: "Preview two",
+        summaryPreview: "Summary two",
+        visibility: "PUBLIC",
+        studyPackId: "pack-2",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 2,
+        copyCount: 9,
+        shareCount: 2,
+        viewCount: 18,
+        authorDisplayName: "Creator Two",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-30T10:00:00Z",
+        updatedAt: "2026-03-30T10:00:00Z",
+      },
+      {
+        id: "note-3",
+        ownerUserId: "user-4",
+        title: "Featured Three",
+        courseProgram: "Physics",
+        learnerLevel: "COLLEGE",
+        subject: "Physics",
+        tags: ["motion"],
+        contentPreview: "Preview three",
+        summaryPreview: "Summary three",
+        visibility: "PUBLIC",
+        studyPackId: "pack-3",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 2,
+        copyCount: 8,
+        shareCount: 1,
+        viewCount: 17,
+        authorDisplayName: "Creator Three",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-29T10:00:00Z",
+        updatedAt: "2026-03-29T10:00:00Z",
+      },
+      {
+        id: "note-4",
+        ownerUserId: "user-5",
+        title: "Featured Four",
+        courseProgram: "Math",
+        learnerLevel: "COLLEGE",
+        subject: "Math",
+        tags: ["algebra"],
+        contentPreview: "Preview four",
+        summaryPreview: "Summary four",
+        visibility: "PUBLIC",
+        studyPackId: "pack-4",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 2,
+        copyCount: 7,
+        shareCount: 1,
+        viewCount: 16,
+        authorDisplayName: "Creator Four",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-28T10:00:00Z",
+        updatedAt: "2026-03-28T10:00:00Z",
+      },
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Featured One")).toBeInTheDocument();
+    const featuredSection = screen.getByRole("region", { name: /Featured Notes/ });
+    expect(within(featuredSection).getByText("Featured One")).toBeInTheDocument();
+    expect(within(featuredSection).getByText("Featured Two")).toBeInTheDocument();
+    expect(within(featuredSection).getByText("Featured Three")).toBeInTheDocument();
+    expect(within(featuredSection).queryByText("Featured Four")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "View More" })[0]);
+    expect(pushMock).toHaveBeenCalledWith("/public/library?view=featured");
+  });
+
+  it("renders a full section view when a discovery view query param is active", async () => {
+    currentSearch = "view=recent";
+    window.history.replaceState({}, "", "/public/library?view=recent");
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-1",
+        ownerUserId: "user-2",
+        title: "Newest Note",
+        courseProgram: "Biology",
+        learnerLevel: "COLLEGE",
+        subject: "Biology",
+        tags: ["cells"],
+        contentPreview: "Newest preview",
+        summaryPreview: "Newest summary",
+        visibility: "PUBLIC",
+        studyPackId: "pack-1",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        copyCount: 2,
+        shareCount: 0,
+        viewCount: 5,
+        authorDisplayName: "Creator One",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-31T10:00:00Z",
+        updatedAt: "2026-03-31T10:00:00Z",
+      },
+      {
+        id: "note-2",
+        ownerUserId: "user-3",
+        title: "Older Note",
+        courseProgram: "Chemistry",
+        learnerLevel: "COLLEGE",
+        subject: "Chemistry",
+        tags: ["atoms"],
+        contentPreview: "Older preview",
+        summaryPreview: "Older summary",
+        visibility: "PUBLIC",
+        studyPackId: "pack-2",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 2,
+        copyCount: 1,
+        shareCount: 0,
+        viewCount: 2,
+        authorDisplayName: "Creator Two",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-30T10:00:00Z",
+        updatedAt: "2026-03-30T10:00:00Z",
+      },
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText(/🆕 Recently Added/)).toBeInTheDocument();
+    expect(screen.getByText("Browse the newest public notes without the rest of the homepage sections competing for space.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to Discovery" })).toBeInTheDocument();
+    expect(screen.queryByText("📚 Browse by Subject")).not.toBeInTheDocument();
   });
 
   it("hides discovery sections and shows sorted list when sort is changed", async () => {

@@ -371,6 +371,19 @@ Core loop:
   - `By You`
   - `Official`
   - `Community`
+- Public Library is a curated discovery page first, not a flat generic list.
+- Discovery mode should preserve:
+  - `Featured Notes`
+  - `Most Popular`
+  - `Recently Added`
+  - `Browse by Subject`
+- Featured Notes should remain visually distinct from the rest of the Public Library sections.
+- Control Public Library density with section limits and per-section `View More`, not by removing previews, tags, subject badges, source labels, or engagement metadata.
+- Current discovery-home limits are:
+  - Featured Notes -> 3
+  - Most Popular -> 5
+  - Recently Added -> 5
+- `View More` may use the same Public Library route with section-specific state/query params as long as the curated discovery model remains intact.
 - Public Library should include the current user's own public notes, other users' public notes, and official NoteLib public/sample notes.
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes

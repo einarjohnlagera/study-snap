@@ -349,6 +349,17 @@ Public Library lists notes where `visibility=PUBLIC`, including the current user
 Users can:
 
 - browse public notes
+- use the curated Public Library discovery page with:
+  - `Featured Notes`
+  - `Most Popular`
+  - `Recently Added`
+  - `Browse by Subject`
+- keep featured content visually distinct rather than flattening discovery into one generic list
+- control density with section-level limits:
+  - Featured Notes -> 3
+  - Most Popular -> 5
+  - Recently Added -> 5
+- use `View More` for each discovery section to open the full section view without losing the Public Library page model
 - filter by search, course/program, learner level, subject, tags, and source
 - open read-only public note detail
 - copy a public note into Library (`Copy to Library`)
@@ -386,6 +397,7 @@ Users can:
 - `Note Preview` is the primary card preview; `Summary Preview` is secondary supporting context.
 - If a note has no generated summary yet, cards should show `No summary available yet.`
 - Public/Private card state should use a subtle globe/lock icon when needed instead of another large badge.
+- Public Library scalability should come from section limits and focused section views, not from removing subject/tags/previews/engagement metadata from cards.
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name

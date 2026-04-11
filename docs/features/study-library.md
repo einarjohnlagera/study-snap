@@ -53,10 +53,21 @@ Public Library lists notes where:
 Capabilities:
 
 - search, subject filter, and tag filter
+- curated discovery sections on the default Public Library page:
+  - `Featured Notes`
+  - `Most Popular`
+  - `Recently Added`
+- `Browse by Subject` appears above the curated note sections
+- discovery-home limits keep the page scannable:
+  - Featured Notes -> 3
+  - Most Popular -> 5
+  - Recently Added -> 5
+- each discovery section includes `View More`, which opens a focused section view on the same page instead of flattening Public Library into a generic list
 - open Public Note Detail (read-only)
 - `Copy to Library`
 - cards use the same shared preview stack as Library, including both note preview and summary preview
 - author labels use viewer-relative public identity rules (`By You`, `By NoteLib`, `By {Display Name}`)
+- Featured Notes should remain visually distinct from the other sections
 
 SEO public detail route:
 
