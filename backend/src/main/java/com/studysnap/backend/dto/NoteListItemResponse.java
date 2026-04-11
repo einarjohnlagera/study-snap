@@ -24,6 +24,8 @@ public record NoteListItemResponse(
         boolean isOfficialAuthor,
         boolean isCurrentUser,
         OffsetDateTime createdAt,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        String copiedFromNoteId,
+        boolean copiedFromPublic
 ) {
 }

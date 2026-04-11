@@ -362,7 +362,22 @@ Users can:
 - use `View More` for each discovery section to open the full section view without losing the Public Library page model
 - filter by search, course/program, learner level, subject, tags, and source
 - open read-only public note detail
-- copy a public note into Library (`Copy to Library`)
+- copy a public note into Library (`Copy to My Library`)
+- show the copy CTA directly on Public Library cards so users can copy without opening detail first
+- after a successful copy, show a confirmation state with:
+  - `View Note`
+  - `Start Review`
+- `Start Review` is the primary CTA and `View Note` is the secondary CTA
+- modal copy should stay concise:
+  - `You can start reviewing now or come back later from your library.`
+- modal/sheet should use a stronger success hierarchy with a subtle check indicator and larger title treatment
+- desktop should use a modal with a visible top-right close button; mobile should use a dismissible bottom sheet
+- desktop should right-align actions in the order `View Note`, `Start Review`
+- mobile should stack full-width actions with `Start Review` visually first
+- modal/sheet actions should keep a clean responsive layout with only `View Note` and `Start Review`, polished spacing, and no overflow
+- if the user already copied that public note, show only `View Note` as the remaining inline action instead of offering duplicate copies
+- Public Library cards should avoid generic `Open` buttons because card click already owns detail navigation
+- Public Library copied-state UI should avoid redundant ownership/status badges when the action state already communicates the same information
 - see source badges on cards:
   - `By You` for their own public notes
   - `By NoteLib` plus an `Official` badge for the official NoteLib account
@@ -374,7 +389,7 @@ Users can:
 - Public Library author labels should link to `/public/profile/{userId}`.
 - Public note detail should change the primary action by ownership:
   - owner -> `Open Note`
-  - non-owner -> `Make a Copy`
+  - non-owner -> `Copy to My Library`
 - Public note detail header should show `Subject • Author` using the same viewer-relative author label.
 - Public note detail author label should link to `/public/profile/{userId}`.
 - Public subject pages should reuse the existing `/public/library/{subject}` route and show:
@@ -399,6 +414,7 @@ Users can:
 - Public/Private card state should use a subtle globe/lock icon when needed instead of another large badge.
 - Public Library scalability should come from section limits and focused section views, not from removing subject/tags/previews/engagement metadata from cards.
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
+- Copied private notes should show attribution as `Copied from {title} in Public Library.` with a link back to the original public note when available.
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name
   - Bio (or `This user hasn't added a bio yet.` when blank)

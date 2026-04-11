@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 type AppModalProps = {
   isOpen: boolean;
-  title: string;
+  title: ReactNode;
   description?: string;
   onClose: () => void;
   children?: ReactNode;
@@ -14,6 +14,10 @@ type AppModalProps = {
   contentClassName?: string;
   actionsClassName?: string;
   descriptionClassName?: string;
+  headerActions?: ReactNode;
+  enableSwipeToClose?: boolean;
+  titleClassName?: string;
+  titleIcon?: ReactNode;
 };
 
 function getFocusableElements(container: HTMLDivElement | null): HTMLElement[] {
@@ -45,10 +49,25 @@ export function AppModal({
   contentClassName,
   actionsClassName,
   descriptionClassName,
+  headerActions,
+  enableSwipeToClose = false,
+  titleClassName,
+  titleIcon,
 }: Readonly<AppModalProps>) {
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const [touchOffsetY, setTouchOffsetY] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTouchOffsetY(0);
+      touchStartYRef.current = null;
+      touchStartXRef.current = null;
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -123,7 +142,7 @@ export function AppModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4"
+      className="motion-fade-enter fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4"
       onMouseDown={(event) => {
         event.stopPropagation();
         if (event.target === event.currentTarget) {
@@ -141,25 +160,72 @@ export function AppModal({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`w-[90%] max-w-[420px] rounded-xl border border-border bg-background p-4 shadow-xl dark:bg-zinc-900 sm:p-5 ${panelClassName ?? ""}`}
+        className={`motion-modal-enter w-[90%] max-w-[420px] rounded-xl border border-border bg-background p-4 shadow-xl transition-transform duration-200 dark:bg-zinc-900 sm:p-5 ${panelClassName ?? ""}`}
+        style={touchOffsetY > 0 ? { transform: `translateY(${touchOffsetY}px)` } : undefined}
         onMouseDown={(event) => {
           event.stopPropagation();
         }}
         onClick={(event) => {
           event.stopPropagation();
         }}
+        onTouchStart={(event) => {
+          if (!enableSwipeToClose) {
+            return;
+          }
+          touchStartYRef.current = event.touches[0]?.clientY ?? null;
+          touchStartXRef.current = event.touches[0]?.clientX ?? null;
+        }}
+        onTouchMove={(event) => {
+          if (!enableSwipeToClose || touchStartYRef.current === null || touchStartXRef.current === null) {
+            return;
+          }
+          const currentY = event.touches[0]?.clientY ?? touchStartYRef.current;
+          const currentX = event.touches[0]?.clientX ?? touchStartXRef.current;
+          const deltaY = currentY - touchStartYRef.current;
+          const deltaX = currentX - touchStartXRef.current;
+          if (deltaY <= 0 || Math.abs(deltaX) > deltaY) {
+            setTouchOffsetY(0);
+            return;
+          }
+          setTouchOffsetY(deltaY);
+        }}
+        onTouchEnd={() => {
+          if (!enableSwipeToClose) {
+            return;
+          }
+          if (touchOffsetY > 80) {
+            onClose();
+          }
+          setTouchOffsetY(0);
+          touchStartYRef.current = null;
+          touchStartXRef.current = null;
+        }}
       >
-        <div className={`space-y-2 ${headerClassName ?? ""}`}>
-          <h2 id={titleId} className="text-lg font-semibold text-foreground">
-            {title}
-          </h2>
-          {description ? (
-            <p
-              id={descriptionId}
-              className={`text-sm leading-relaxed text-foreground/80 ${descriptionClassName ?? ""}`}
-            >
-              {description}
-            </p>
+        <div className={`flex items-start justify-between gap-4 ${headerClassName ?? ""}`}>
+          <div className="min-w-0 space-y-2">
+            <div className="flex items-start gap-3">
+              {titleIcon ? (
+                <div className="shrink-0 pt-0.5">
+                  {titleIcon}
+                </div>
+              ) : null}
+              <h2 id={titleId} className={`text-lg font-semibold text-foreground ${titleClassName ?? ""}`}>
+                {title}
+              </h2>
+            </div>
+            {description ? (
+              <p
+                id={descriptionId}
+                className={`text-sm leading-relaxed text-foreground/80 ${descriptionClassName ?? ""}`}
+              >
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {headerActions ? (
+            <div className="shrink-0">
+              {headerActions}
+            </div>
           ) : null}
         </div>
         {children ? <div className={`mt-4 ${contentClassName ?? ""}`}>{children}</div> : null}

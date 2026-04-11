@@ -742,6 +742,8 @@ export type NoteListItemResponse = {
   isCurrentUser: boolean;
   createdAt: string;
   updatedAt: string;
+  copiedFromNoteId?: string | null;
+  copiedFromPublic?: boolean;
 };
 
 export type PublicNoteDetailResponse = {

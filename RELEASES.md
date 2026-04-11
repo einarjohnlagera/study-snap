@@ -47,6 +47,11 @@
 
 ### Fixes
 
+- **Public Library copy-flow cleanup** — public note copying now behaves consistently across discovery and detail surfaces:
+  - Public Library cards now remove the redundant copied-status badge and rely on action state instead: `Copy to My Library` before copy, `View Note` after copy
+  - repeated copies of the same public note by the same user now reuse the existing copied note instead of creating duplicate drafts
+  - successful public copies now use a more polished success surface with stronger title hierarchy, subtle success iconography, right-aligned desktop actions, and cleaner mobile sheet spacing
+  - copied private notes now show `Copied from {title} in Public Library.` attribution when source metadata exists
 - **Private Note Detail action cleanup** — secondary note-management actions no longer compete with study actions inside the note header:
   - inline `Edit`, `Delete`, `Make a Copy`, and `Share` controls were consolidated into a single top-right `⋯` context menu
   - the `⋯` trigger is now anchored to the card corner on both mobile and desktop instead of sitting inside the metadata flow

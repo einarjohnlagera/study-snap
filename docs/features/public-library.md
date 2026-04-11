@@ -119,9 +119,31 @@ Public Library note cards reuse the shared note-card layout:
 Interaction rules:
 
 - whole card opens the canonical public note route
-- cards are preview/navigation only
-- do not place copy/share/generate/delete/edit actions inside the card
-- use public note detail for actions instead
+- keep the card itself clickable for navigation
+- Public Library cards may include one inline secondary CTA at the bottom: `Copy to My Library`
+- the inline copy CTA must stop card navigation when clicked
+- if the viewer already copied that note, replace the copy CTA with optional `View Note`
+- copied state should be conveyed by the available action, not by an extra `In Library` badge
+- a successful card copy should show a confirmation modal with:
+  - `View Note`
+  - `Start Review`
+- `Start Review` is the primary CTA in the modal
+- `View Note` is the secondary CTA
+- `View Note` replaces generic `Open` wording for copied-note navigation
+- `Start Review` may route through copied-note generation first when the copied note is still a draft
+- modal body copy should stay short:
+  - `You can start reviewing now or come back later from your library.`
+- modal/sheet header should feel success-oriented but minimal:
+  - subtle check-style success indicator
+  - stronger title hierarchy
+- desktop should use a modal with a visible top-right close button
+- mobile should use a dismissible bottom sheet instead of a centered modal
+- desktop should right-align actions in the order `View Note`, `Start Review`
+- mobile should stack full-width actions with the primary CTA visually first
+- modal/sheet actions should use clean spacing and subtle depth so the surface feels polished without becoming heavy
+- avoid generic navigation button labels like `Open` on Public Library cards; card click already owns detail navigation
+- do not place share/generate/delete/edit actions inside Public Library cards
+- use public note detail for the rest of the actions instead
 
 Discovery guidance:
 
@@ -141,3 +163,4 @@ Rules:
 - include a subtle `View Full Notes →` CTA inside the `Summary` view so visitors can quickly inspect the original note
 - `Full Notes` should render the complete original note body so visitors can judge whether the note is worth copying
 - keep the page read-only and copy-first; tabs are for review, not management
+- non-owner primary CTA should use `Copy to My Library`

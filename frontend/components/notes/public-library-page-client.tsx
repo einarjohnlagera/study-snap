@@ -3,18 +3,22 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AppModal } from "@/components/ui/app-modal";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
 import { PageHeader } from "@/components/page-header";
 import { LibraryToolbar } from "@/components/notes/library-toolbar";
 import { LibrarySheetModal } from "@/components/notes/library-sheet-modal";
 import { NoteStateBadge } from "@/components/notes/note-state-badge";
 import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
+import { PublicLibraryCopyAction } from "@/components/notes/public-library-copy-action";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import {
   type LearnerLevel,
+  listNotes,
   listPublicNotes,
   listSubjects,
   type NoteListItemResponse,
@@ -34,6 +38,7 @@ import {
   getPopularNotes,
   getRecentNotes,
 } from "@/lib/public-library-discovery";
+import { buildCopiedNotePath } from "@/lib/public-note-copy";
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -42,6 +47,12 @@ const PUBLIC_LIBRARY_VIEW_PARAM = "view";
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
+const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
+const COPY_SUCCESS_BODY_LINE_ONE = "You can start reviewing now or come back later from your library.";
+const MODAL_VIEW_NOTE_LABEL = "View Note";
+const MODAL_START_REVIEW_LABEL = "Start Review";
+const MOBILE_SUCCESS_SHEET_MEDIA_QUERY = "(max-width: 639px)";
+const CLOSE_MODAL_LABEL = "Close copied to your library";
 
 type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
 
@@ -153,12 +164,21 @@ interface PublicNoteCardProps {
   item: NoteListItemResponse;
   currentUserId: string | null;
   onNavigate: (path: string) => void;
+  existingCopyNoteId?: string | null;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
 }
 
-function PublicNoteCard({ item, currentUserId, onNavigate }: PublicNoteCardProps) {
+function PublicNoteCard({
+  item,
+  currentUserId,
+  onNavigate,
+  existingCopyNoteId = null,
+  onCopySuccess,
+}: Readonly<PublicNoteCardProps>) {
   const itemTags = normalizeTags(item.tags);
   const authorBadge = resolveAuthorBadge(item, currentUserId);
   const path = buildPublicLibraryNotePath({ subject: item.subject, title: item.title });
+  const isOwner = item.ownerUserId === currentUserId || item.isCurrentUser;
 
   return (
     <Card
@@ -190,24 +210,35 @@ function PublicNoteCard({ item, currentUserId, onNavigate }: PublicNoteCardProps
           />
         )}
         footer={(
-          <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
-            {item.ownerUserId ? (
-              <Link
-                href={buildPublicProfilePath(item.ownerUserId)}
-                onClick={(event) => event.stopPropagation()}
-                onKeyDown={(event) => event.stopPropagation()}
-                className={`font-medium hover:underline ${authorBadge.className}`}
-              >
-                {authorBadge.label}
-              </Link>
-            ) : (
-              <span className={authorBadge.className}>{authorBadge.label}</span>
-            )}
-            {authorBadge.showOfficialBadge ? (
-              <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-300">
-                Official
-              </span>
-            ) : null}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/65">
+              {item.ownerUserId ? (
+                <Link
+                  href={buildPublicProfilePath(item.ownerUserId)}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  className={`font-medium hover:underline ${authorBadge.className}`}
+                >
+                  {authorBadge.label}
+                </Link>
+              ) : (
+                <span className={authorBadge.className}>{authorBadge.label}</span>
+              )}
+              {authorBadge.showOfficialBadge ? (
+                <span className="inline-flex items-center rounded-full border border-blue-500/35 bg-blue-500/10 px-2 py-1 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+                  Official
+                </span>
+              ) : null}
+            </div>
+            <PublicLibraryCopyAction
+              noteId={item.id}
+              isOwner={isOwner}
+              existingCopyNoteId={existingCopyNoteId}
+              onCopySuccess={({ copiedNoteId }) => onCopySuccess({
+                copiedNoteId,
+                sourceNoteId: item.id,
+              })}
+            />
           </div>
         )}
       />
@@ -222,6 +253,8 @@ interface PublicLibraryDiscoverySectionProps {
   currentUserId: string | null;
   onNavigate: (path: string) => void;
   onViewMore: () => void;
+  copiedNoteIdsBySourceId: Record<string, string>;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
 }
 
 function PublicLibraryDiscoverySection({
@@ -231,7 +264,9 @@ function PublicLibraryDiscoverySection({
   currentUserId,
   onNavigate,
   onViewMore,
-}: PublicLibraryDiscoverySectionProps) {
+  copiedNoteIdsBySourceId,
+  onCopySuccess,
+}: Readonly<PublicLibraryDiscoverySectionProps>) {
   if (items.length === 0) {
     return null;
   }
@@ -261,6 +296,8 @@ function PublicLibraryDiscoverySection({
             item={item}
             currentUserId={currentUserId}
             onNavigate={onNavigate}
+            existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
+            onCopySuccess={onCopySuccess}
           />
         ))}
       </div>
@@ -273,6 +310,7 @@ export function PublicLibraryPageClient() {
   const pathname = usePathname();
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
+  const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCourseProgram, setSelectedCourseProgram] = useState<string>(ALL_COURSE_PROGRAMS);
   const [selectedLearnerLevel, setSelectedLearnerLevel] = useState<string>(ALL_LEARNER_LEVELS);
@@ -286,11 +324,15 @@ export function PublicLibraryPageClient() {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copySuccessState, setCopySuccessState] = useState<{
+    copiedNoteId: string;
+  } | null>(null);
+  const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
   const [activeDiscoveryViewState, setActiveDiscoveryViewState] = useState<PublicLibraryDiscoveryView | null>(() => {
-    if (typeof window === "undefined") {
+    if (globalThis.window === undefined) {
       return null;
     }
-    return resolveDiscoveryView(new URLSearchParams(window.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM));
+    return resolveDiscoveryView(new URLSearchParams(globalThis.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM));
   });
 
   const loadNotes = useCallback(async () => {
@@ -328,6 +370,57 @@ export function PublicLibraryPageClient() {
     return () => {
       globalThis.removeEventListener("studysnap-auth-change", syncAuth);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(MOBILE_SUCCESS_SHEET_MEDIA_QUERY);
+    const syncMatches = () => {
+      setIsMobileSuccessSheet(mediaQuery.matches);
+    };
+
+    syncMatches();
+    mediaQuery.addEventListener("change", syncMatches);
+    return () => {
+      mediaQuery.removeEventListener("change", syncMatches);
+    };
+  }, []);
+
+  const loadCopiedNotes = useCallback(async () => {
+    if (!currentUserId) {
+      setCopiedNoteIdsBySourceId({});
+      return;
+    }
+
+    try {
+      const mine = await listNotes();
+      const next: Record<string, string> = {};
+      for (const item of mine) {
+        if (item.copiedFromPublic && item.copiedFromNoteId) {
+          next[item.copiedFromNoteId] = item.id;
+        }
+      }
+      setCopiedNoteIdsBySourceId(next);
+    } catch {
+      setCopiedNoteIdsBySourceId({});
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    void loadCopiedNotes();
+  }, [loadCopiedNotes]);
+
+  const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceNoteId: string }) => {
+    setCopiedNoteIdsBySourceId((previous) => ({
+      ...previous,
+      [payload.sourceNoteId]: payload.copiedNoteId,
+    }));
+    setCopySuccessState({
+      copiedNoteId: payload.copiedNoteId,
+    });
   }, []);
 
   const derivedSubjects = useMemo(() => {
@@ -645,18 +738,18 @@ export function PublicLibraryPageClient() {
   useEffect(() => {
     const syncDiscoveryViewFromLocation = () => {
       setActiveDiscoveryViewState(
-        resolveDiscoveryView(new URLSearchParams(window.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM)),
+        resolveDiscoveryView(new URLSearchParams(globalThis.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM)),
       );
     };
 
-    if (typeof window === "undefined") {
+    if (globalThis.window === undefined) {
       return undefined;
     }
 
     syncDiscoveryViewFromLocation();
-    window.addEventListener("popstate", syncDiscoveryViewFromLocation);
+    globalThis.addEventListener("popstate", syncDiscoveryViewFromLocation);
     return () => {
-      window.removeEventListener("popstate", syncDiscoveryViewFromLocation);
+      globalThis.removeEventListener("popstate", syncDiscoveryViewFromLocation);
     };
   }, []);
 
@@ -723,6 +816,8 @@ export function PublicLibraryPageClient() {
                     item={item}
                     currentUserId={currentUserId}
                     onNavigate={(path) => router.push(path)}
+                    existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
+                    onCopySuccess={handleCopySuccess}
                   />
                 ))}
               </div>
@@ -762,6 +857,8 @@ export function PublicLibraryPageClient() {
                   currentUserId={currentUserId}
                   onNavigate={(path) => router.push(path)}
                   onViewMore={() => openDiscoveryView("featured")}
+                  copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
+                  onCopySuccess={handleCopySuccess}
                 />
               ) : null}
 
@@ -772,6 +869,8 @@ export function PublicLibraryPageClient() {
                   currentUserId={currentUserId}
                   onNavigate={(path) => router.push(path)}
                   onViewMore={() => openDiscoveryView("popular")}
+                  copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
+                  onCopySuccess={handleCopySuccess}
                 />
               ) : null}
 
@@ -782,6 +881,8 @@ export function PublicLibraryPageClient() {
                   currentUserId={currentUserId}
                   onNavigate={(path) => router.push(path)}
                   onViewMore={() => openDiscoveryView("recent")}
+                  copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
+                  onCopySuccess={handleCopySuccess}
                 />
               ) : null}
             </div>
@@ -801,6 +902,8 @@ export function PublicLibraryPageClient() {
                   item={item}
                   currentUserId={currentUserId}
                   onNavigate={(path) => router.push(path)}
+                  existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
+                  onCopySuccess={handleCopySuccess}
                 />
               ))}
             </div>
@@ -960,6 +1063,67 @@ export function PublicLibraryPageClient() {
           })}
         </div>
       </LibrarySheetModal>
+
+      <AppModal
+        isOpen={copySuccessState !== null}
+        title={COPY_SUCCESS_MODAL_TITLE}
+        onClose={() => setCopySuccessState(null)}
+        titleClassName="text-xl font-semibold tracking-tight sm:text-[1.4rem]"
+        titleIcon={(
+          <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300">
+            <CheckCircle2 className="h-[18px] w-[18px]" aria-hidden="true" />
+          </div>
+        )}
+        panelClassName={isMobileSuccessSheet
+          ? "w-full max-w-full self-end rounded-b-none rounded-t-[28px] border-b-0 px-5 pt-4 pb-5 shadow-[0_-18px_50px_rgba(3,7,18,0.22)] sm:w-[90%] sm:max-w-[400px] sm:self-auto sm:rounded-b-[28px] sm:border-b sm:px-6 sm:pt-5 sm:pb-6"
+          : "max-w-[400px] rounded-[28px] p-6 shadow-[0_24px_60px_rgba(3,7,18,0.16)] sm:p-7"}
+        contentClassName="space-y-3"
+        actionsClassName="mt-5"
+        headerClassName={isMobileSuccessSheet ? "gap-3" : "gap-4"}
+        headerActions={(
+          <button
+            type="button"
+            aria-label={CLOSE_MODAL_LABEL}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-background/90 text-foreground/60 transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            onClick={() => setCopySuccessState(null)}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+        enableSwipeToClose={isMobileSuccessSheet}
+        actions={copySuccessState ? (
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <ResponsiveActionButton
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              action="library"
+              label={MODAL_VIEW_NOTE_LABEL}
+              onClick={() => router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "library"))}
+              showTextOnMobile
+            />
+            <ResponsiveActionButton
+              type="button"
+              className="w-full sm:w-auto"
+              action="quickReview"
+              label={MODAL_START_REVIEW_LABEL}
+              onClick={() => router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "quick-review"))}
+              showTextOnMobile
+            />
+          </div>
+        ) : null}
+      >
+        {copySuccessState ? (
+          <div className="space-y-3 text-sm leading-relaxed text-foreground/78">
+            {isMobileSuccessSheet ? (
+              <div className="mb-4">
+                <div className="mx-auto h-1.5 w-12 rounded-full bg-foreground/15" aria-hidden="true" />
+              </div>
+            ) : null}
+            <p>{COPY_SUCCESS_BODY_LINE_ONE}</p>
+          </div>
+        ) : null}
+      </AppModal>
     </main>
   );
 }

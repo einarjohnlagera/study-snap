@@ -406,11 +406,11 @@ Core loop:
   - `This display name is reserved. Please choose another name.`
 - Public note detail should switch its primary CTA by ownership:
   - owner -> `Open Note`
-  - non-owner -> `Make a Copy`
+  - non-owner -> `Copy to My Library`
 - Public note detail header should show `Subject • Author` using the same viewer-relative label logic as library cards.
 - Public note detail is read/copy/share only:
   - owner -> `Open Note`, `Share`
-  - non-owner -> `Make a Copy`, `Share`
+  - non-owner -> `Copy to My Library`, `Share`
 - Public note detail should not expose edit, delete, generation, or study actions; generation remains a Note Editor responsibility and quizzes remain on study surfaces.
 - Public and private note detail should both expose `Summary`, `Key Concepts`, `Quiz`, and `Full Notes` so the original note stays easy to inspect.
 - Keep `Summary` as the default tab; `Full Notes` is for reading the complete original note body, not a collapsed preview.
@@ -450,12 +450,27 @@ Core loop:
 - `sitemap.xml` must include only public SEO-safe routes: `/`, `/privacy`, `/terms`, `/public/library`, canonical public subject URLs, and canonical public note URLs.
 - Private notes must never be exposed through the public SEO route.
 - Copying a public note must preserve attribution via `copiedFromNoteId` and `copiedFromUserId`.
+- Public Library copy UX should keep the existing copy endpoint but make public copies idempotent per user/source note.
+- Public Library cards may include a visible `Copy to My Library` CTA as the one allowed exception to the no-inline-card-actions rule on note cards.
+- If the current user already has that public note in their library, remove `Copy to My Library` and show only `View Note` as the remaining inline action.
+- Successful Public Library copies should offer `View Note` and `Start Review` follow-up actions, with:
+  - `Start Review` as the primary CTA
+  - `View Note` as the secondary CTA
+- Public Library copy-success feedback should use:
+  - a desktop modal with a visible top-right close button
+  - a mobile bottom sheet with tap-outside and swipe-down dismissal
+  - a success-leading visual treatment with stronger title hierarchy and a subtle check indicator
+  - concise body copy (`You can start reviewing now or come back later from your library.`)
+  - desktop action alignment of `View Note` then `Start Review`, right-aligned
+  - mobile action stacking with full-width buttons and `Start Review` visually first
+  - compact spacing and softened depth so the surface feels product-grade without becoming heavy
+- Copied private notes should display attribution as `Copied from {title} in Public Library.` when source metadata exists.
 
 ### Card Interaction Rule
 
 - Library cards, Public Library cards, and Public Profile cards must use a consistent interaction model.
 - The whole card should be clickable to open the detail page.
-- Do not add inline action buttons or note-card context menus to note cards.
+- Do not add inline action buttons or note-card context menus to note cards, except for the Public Library `Copy to My Library` CTA and copied-state `View Note` action at the bottom of the card.
 - Note cards are preview/navigation surfaces only; note actions belong in Note Detail.
 
 ### Design System — Icons and Buttons
@@ -1071,3 +1086,37 @@ Discovery mode layout order (no active filters):
 4. 🆕 Recently Added — top 6 by createdAt (excludes Featured + Popular)
 
 Backend subject filtering: `GET /notes/public?subject=<value>` — case-insensitive, server-side.
+
+## UI / UX Responsiveness Guidelines
+
+All UI implementations must be responsive and mobile-friendly by default.
+
+### Requirements
+
+- Components must work across:
+  - desktop
+  - tablet
+  - mobile
+
+- Avoid layout issues such as:
+  - overflowing buttons or text
+  - broken flex/grid layouts
+  - elements exceeding container width
+
+- Use responsive patterns:
+  - flexible layouts (flex/grid with gap)
+  - wrapping where necessary
+  - stacked layouts on smaller screens
+
+- Modal and card components must:
+  - adapt to smaller widths
+  - maintain readable spacing
+  - prevent action button overflow
+
+- Button labels must be concise to support smaller screens
+
+### Principle
+
+Design for mobile-first or mobile-safe behavior, even when implementing desktop UI.
+
+UI should feel clean, usable, and visually stable across screen sizes.

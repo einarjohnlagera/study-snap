@@ -5,24 +5,21 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent } from "@/lib/api";
+import {
+  buildCopiedNotePath,
+  buildPublicCopyIntentQuery,
+  type PublicCopyRedirectTarget,
+} from "@/lib/public-note-copy";
 
 type PublicSeoCopyCtaProps = {
   noteId: string;
   label?: string;
-  redirectTarget?: "library" | "generate";
+  redirectTarget?: PublicCopyRedirectTarget;
 };
-
-function buildCopiedNotePath(noteId: string, redirectTarget: "library" | "generate") {
-  const next = new URLSearchParams({ copied: "1" });
-  if (redirectTarget === "generate") {
-    next.set("generate", "1");
-  }
-  return `/notes/${noteId}?${next.toString()}`;
-}
 
 export function PublicSeoCopyCta({
   noteId,
-  label = "Make a Copy and Generate Your Own Study Pack",
+  label = "Copy to My Library",
   redirectTarget = "library",
 }: Readonly<PublicSeoCopyCtaProps>) {
   const router = useRouter();
@@ -32,12 +29,20 @@ export function PublicSeoCopyCta({
   const [copyError, setCopyError] = useState<string | null>(null);
   const copyHandledRef = useRef(false);
 
+  const resolveRequestedRedirectTarget = (): PublicCopyRedirectTarget => {
+    const intent = searchParams.get("intent");
+    if (intent === "generate" || intent === "quick-review") {
+      return intent;
+    }
+    return redirectTarget;
+  };
+
   useEffect(() => {
     const shouldAutoCopy = searchParams.get("copy") === "1";
     if (!shouldAutoCopy || copyHandledRef.current || !getAuthUser()) {
       return;
     }
-    const requestedRedirectTarget = searchParams.get("intent") === "generate" ? "generate" : redirectTarget;
+    const requestedRedirectTarget = resolveRequestedRedirectTarget();
 
     let cancelled = false;
     const runCopy = async () => {
@@ -76,7 +81,7 @@ export function PublicSeoCopyCta({
       },
     });
     if (!getAuthUser()) {
-      router.push(buildLoginPath({ redirectTo: `${pathname}?copy=1&intent=${redirectTarget}` }));
+      router.push(buildLoginPath({ redirectTo: `${pathname}?${buildPublicCopyIntentQuery(redirectTarget)}` }));
       return;
     }
 
