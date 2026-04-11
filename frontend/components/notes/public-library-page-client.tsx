@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
@@ -38,6 +38,12 @@ import {
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 const ALL_LEARNER_LEVELS = "__ALL_LEARNER_LEVELS__";
+const PUBLIC_LIBRARY_VIEW_PARAM = "view";
+const FEATURED_NOTES_LIMIT = 3;
+const POPULAR_NOTES_LIMIT = 5;
+const RECENT_NOTES_LIMIT = 5;
+
+type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
 
 type PublicLibrarySortOption =
   | "NEWEST"
@@ -54,6 +60,24 @@ const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
   TITLE_ASC: "Title A-Z",
 };
 
+const DISCOVERY_SECTION_COPY: Record<PublicLibraryDiscoveryView, {
+  title: string;
+  description: string;
+}> = {
+  featured: {
+    title: "🔥 Featured Notes",
+    description: "Browse the full featured ranking without losing the Public Library discovery layout.",
+  },
+  popular: {
+    title: "📈 Most Popular",
+    description: "Browse the most copied and most viewed public notes in one dedicated section view.",
+  },
+  recent: {
+    title: "🆕 Recently Added",
+    description: "Browse the newest public notes without the rest of the homepage sections competing for space.",
+  },
+};
+
 function normalizeTags(tags: string[] | null | undefined): string[] {
   if (!Array.isArray(tags)) {
     return [];
@@ -61,6 +85,13 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
   return tags
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag && tag.length > 0));
+}
+
+function resolveDiscoveryView(value: string | null): PublicLibraryDiscoveryView | null {
+  if (value === "featured" || value === "popular" || value === "recent") {
+    return value;
+  }
+  return null;
 }
 
 function countActivePublicFilterGroups({
@@ -184,8 +215,62 @@ function PublicNoteCard({ item, currentUserId, onNavigate }: PublicNoteCardProps
   );
 }
 
+interface PublicLibraryDiscoverySectionProps {
+  title: string;
+  description?: string;
+  items: NoteListItemResponse[];
+  currentUserId: string | null;
+  onNavigate: (path: string) => void;
+  onViewMore: () => void;
+}
+
+function PublicLibraryDiscoverySection({
+  title,
+  description,
+  items,
+  currentUserId,
+  onNavigate,
+  onViewMore,
+}: PublicLibraryDiscoverySectionProps) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <section aria-label={title} className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold">{title}</h2>
+          {description ? (
+            <p className="text-xs text-foreground/55">{description}</p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={onViewMore}
+          className="shrink-0 text-sm font-medium text-blue-700 transition-colors hover:text-blue-800 hover:underline dark:text-blue-300 dark:hover:text-blue-200"
+        >
+          View More
+        </button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {items.map((item) => (
+          <PublicNoteCard
+            key={item.id}
+            item={item}
+            currentUserId={currentUserId}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function PublicLibraryPageClient() {
   const router = useRouter();
+  const pathname = usePathname();
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -201,6 +286,12 @@ export function PublicLibraryPageClient() {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeDiscoveryViewState, setActiveDiscoveryViewState] = useState<PublicLibraryDiscoveryView | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return resolveDiscoveryView(new URLSearchParams(window.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM));
+  });
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -346,20 +437,49 @@ export function PublicLibraryPageClient() {
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
+  const activeDiscoveryView = activeDiscoveryViewState;
 
   // Discovery mode: no active search/filter and default sort → show discovery sections
   const isDiscoveryMode = !hasActiveFilters && selectedSort === "NEWEST";
+  const isSectionView = isDiscoveryMode && activeDiscoveryView !== null;
 
-  const featuredNotes = useMemo(() => getFeaturedNotes(items), [items]);
-  const popularNotes = useMemo(() => {
+  const featuredRankedNotes = useMemo(
+    () => getFeaturedNotes(items, items.length),
+    [items],
+  );
+  const featuredNotes = useMemo(
+    () => featuredRankedNotes.slice(0, FEATURED_NOTES_LIMIT),
+    [featuredRankedNotes],
+  );
+  const popularRankedNotes = useMemo(() => {
     const featuredIds = new Set(featuredNotes.map((n) => n.id));
-    return getPopularNotes(excludeById(items, featuredIds));
+    return getPopularNotes(excludeById(items, featuredIds), items.length);
   }, [items, featuredNotes]);
-  const recentNotes = useMemo(() => {
+  const popularNotes = useMemo(
+    () => popularRankedNotes.slice(0, POPULAR_NOTES_LIMIT),
+    [popularRankedNotes],
+  );
+  const recentRankedNotes = useMemo(() => {
     const usedIds = new Set([...featuredNotes, ...popularNotes].map((n) => n.id));
-    return getRecentNotes(excludeById(items, usedIds));
+    return getRecentNotes(excludeById(items, usedIds), items.length);
   }, [items, featuredNotes, popularNotes]);
+  const recentNotes = useMemo(
+    () => recentRankedNotes.slice(0, RECENT_NOTES_LIMIT),
+    [recentRankedNotes],
+  );
   const browseSubjects = useMemo(() => getBrowseSubjects(items), [items]);
+  const sectionViewItems = useMemo(() => {
+    switch (activeDiscoveryView) {
+      case "featured":
+        return featuredRankedNotes;
+      case "popular":
+        return popularRankedNotes;
+      case "recent":
+        return recentRankedNotes;
+      default:
+        return [];
+    }
+  }, [activeDiscoveryView, featuredRankedNotes, popularRankedNotes, recentRankedNotes]);
 
   const filteredItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -512,6 +632,33 @@ export function PublicLibraryPageClient() {
       </Button>
     </div>
   ) : null;
+  const openDiscoveryView = useCallback((view: PublicLibraryDiscoveryView) => {
+    setActiveDiscoveryViewState(view);
+    router.push(`${pathname}?${PUBLIC_LIBRARY_VIEW_PARAM}=${view}`);
+  }, [pathname, router]);
+  const clearDiscoveryView = useCallback(() => {
+    setActiveDiscoveryViewState(null);
+    router.push(pathname);
+  }, [pathname, router]);
+  const activeSectionCopy = activeDiscoveryView === null ? null : DISCOVERY_SECTION_COPY[activeDiscoveryView];
+
+  useEffect(() => {
+    const syncDiscoveryViewFromLocation = () => {
+      setActiveDiscoveryViewState(
+        resolveDiscoveryView(new URLSearchParams(window.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM)),
+      );
+    };
+
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    syncDiscoveryViewFromLocation();
+    window.addEventListener("popstate", syncDiscoveryViewFromLocation);
+    return () => {
+      window.removeEventListener("popstate", syncDiscoveryViewFromLocation);
+    };
+  }, []);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -552,8 +699,36 @@ export function PublicLibraryPageClient() {
             activeFilterSummary={activeFilterSummary}
           />
 
-          {isDiscoveryMode ? (
-            <div className="space-y-8">
+          {isSectionView && activeSectionCopy ? (
+            <div className="space-y-6">
+              <Card className="space-y-3 border-blue-500/20 bg-blue-500/5 p-4 sm:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                      Curated Discovery
+                    </p>
+                    <h2 className="text-lg font-semibold sm:text-xl">{activeSectionCopy.title}</h2>
+                    <p className="text-sm text-foreground/75">{activeSectionCopy.description}</p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={clearDiscoveryView}>
+                    Back to Discovery
+                  </Button>
+                </div>
+              </Card>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {sectionViewItems.map((item) => (
+                  <PublicNoteCard
+                    key={item.id}
+                    item={item}
+                    currentUserId={currentUserId}
+                    onNavigate={(path) => router.push(path)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : isDiscoveryMode ? (
+            <div className="space-y-10">
               {items.length === 0 ? (
                 <Card className="space-y-3 p-4 sm:p-6">
                   <h2 className="text-base font-semibold sm:text-lg">No public notes yet.</h2>
@@ -580,54 +755,34 @@ export function PublicLibraryPageClient() {
               ) : null}
 
               {featuredNotes.length > 0 ? (
-                <section aria-label="Featured Notes">
-                  <div className="mb-3">
-                    <h2 className="text-base font-semibold">🔥 Featured Notes</h2>
-                    <p className="mt-0.5 text-xs text-foreground/55">High-engagement notes worth studying</p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {featuredNotes.map((item) => (
-                      <PublicNoteCard
-                        key={item.id}
-                        item={item}
-                        currentUserId={currentUserId}
-                        onNavigate={(path) => router.push(path)}
-                      />
-                    ))}
-                  </div>
-                </section>
+                <PublicLibraryDiscoverySection
+                  title="🔥 Featured Notes"
+                  description="High-engagement notes worth studying"
+                  items={featuredNotes}
+                  currentUserId={currentUserId}
+                  onNavigate={(path) => router.push(path)}
+                  onViewMore={() => openDiscoveryView("featured")}
+                />
               ) : null}
 
               {popularNotes.length > 0 ? (
-                <section aria-label="Most Popular">
-                  <h2 className="mb-3 text-base font-semibold">📈 Most Popular</h2>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {popularNotes.map((item) => (
-                      <PublicNoteCard
-                        key={item.id}
-                        item={item}
-                        currentUserId={currentUserId}
-                        onNavigate={(path) => router.push(path)}
-                      />
-                    ))}
-                  </div>
-                </section>
+                <PublicLibraryDiscoverySection
+                  title="📈 Most Popular"
+                  items={popularNotes}
+                  currentUserId={currentUserId}
+                  onNavigate={(path) => router.push(path)}
+                  onViewMore={() => openDiscoveryView("popular")}
+                />
               ) : null}
 
               {recentNotes.length > 0 ? (
-                <section aria-label="Recently Added">
-                  <h2 className="mb-3 text-base font-semibold">🆕 Recently Added</h2>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {recentNotes.map((item) => (
-                      <PublicNoteCard
-                        key={item.id}
-                        item={item}
-                        currentUserId={currentUserId}
-                        onNavigate={(path) => router.push(path)}
-                      />
-                    ))}
-                  </div>
-                </section>
+                <PublicLibraryDiscoverySection
+                  title="🆕 Recently Added"
+                  items={recentNotes}
+                  currentUserId={currentUserId}
+                  onNavigate={(path) => router.push(path)}
+                  onViewMore={() => openDiscoveryView("recent")}
+                />
               ) : null}
             </div>
           ) : sortedItems.length === 0 ? (

@@ -15,9 +15,10 @@ Public Library has two display modes:
 
 **Discovery mode** (default, no active search/filters/sort changes):
 - 📚 Browse by Subject — clickable subject chips sorted by note count (top 8)
-- 🔥 Featured Notes — top 6 by weighted engagement score
-- 📈 Most Popular — top 6 by copies, then views (excluding Featured notes)
-- 🆕 Recently Added — top 6 by createdAt (excluding Featured and Popular)
+- 🔥 Featured Notes — top 3 by weighted engagement score
+- 📈 Most Popular — top 5 by copies, then views (excluding Featured notes)
+- 🆕 Recently Added — top 5 by createdAt (excluding Featured and Popular)
+- each section includes `View More`, which opens a focused section view on the same page (`?view=featured|popular|recent`)
 
 **Filter mode** (when any search, filter, or sort is active):
 - Standard sorted/filtered list of all matching public notes
@@ -37,15 +38,15 @@ score = (viewCount × 0.4) + (copyCount × 0.5) + (shareCount × 0.1)
 ```
 
 - Tiebreak: newest `createdAt` first
-- Limit: 6 notes per section
+- Discovery-home limit: 3 notes in `Featured Notes`
 - No AI required — pure signal-based ranking
 
 ## Deduplication Across Sections
 
 Sections never repeat the same note:
-- Featured: top 6 by score from all public notes
-- Most Popular: top 6 by copies from notes NOT in Featured
-- Recently Added: top 6 by createdAt from notes NOT in Featured or Popular
+- Featured: top 3 by score from all public notes
+- Most Popular: top 5 by copies from notes NOT in Featured
+- Recently Added: top 5 by createdAt from notes NOT in Featured or Popular
 
 ## Layout
 
@@ -57,12 +58,20 @@ When no active filters (discovery mode):
 4. 📈 Most Popular section (hidden if empty)
 5. 🆕 Recently Added section (hidden if empty)
 
+When a section-specific `View More` action is opened:
+
+1. `Search` toolbar remains visible at the top
+2. the page shows a focused section header and `Back to Discovery`
+3. only that section's full ranked list is rendered
+4. active search/filter/sort still falls back to the normal full results view
+
 When filters active (filter mode):
 
 1. `Search` toolbar + filter summary + `Filter` + `Sort` controls
 2. Sorted/filtered note list (or empty state)
 
 On mobile, `Filter` and `Sort` should open a bottom-sheet or modal instead of staying always visible.
+Density improvements should come from tighter section limits and focused section views, not by stripping metadata from cards.
 
 ## Filters
 
@@ -105,6 +114,7 @@ Public Library note cards reuse the shared note-card layout:
 - `Summary Preview`
 - Tags
 - subtle metrics row for `views` and `copies` when available
+- featured content should remain visually special through stronger section framing instead of being flattened into a plain list
 
 Interaction rules:
 
@@ -118,6 +128,7 @@ Discovery guidance:
 - prioritize original note preview over generated summary when scanning cards
 - keep `views` and `copies` subtle so they help note selection without turning into badge clutter
 - use `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` as student-friendly discovery labels
+- preserve card richness while improving scalability: limit the number of cards shown per section first, then offer `View More`
 
 ## Public Note Detail
 
