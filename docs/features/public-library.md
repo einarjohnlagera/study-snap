@@ -124,11 +124,15 @@ Interaction rules:
 - the inline copy CTA must stop card navigation when clicked
 - if the viewer already copied that note, replace the copy CTA with:
   - `Already in your library`
-  - `Open in My Library`
+  - optional `View Note`
 - a successful card copy should show a confirmation modal with:
-  - `Open in My Library`
-  - `Start Quick Review`
-- `Start Quick Review` may route through copied-note generation first when the copied note is still a draft
+  - `Continue`
+  - `View Note`
+  - `Start Review`
+- `Start Review` is the primary CTA in the modal
+- `View Note` replaces generic `Open` wording for copied-note navigation
+- `Start Review` may route through copied-note generation first when the copied note is still a draft
+- avoid generic navigation button labels like `Open` on Public Library cards; card click already owns detail navigation
 - do not place share/generate/delete/edit actions inside Public Library cards
 - use public note detail for the rest of the actions instead
 

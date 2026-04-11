@@ -365,9 +365,12 @@ Users can:
 - copy a public note into Library (`Copy to My Library`)
 - show the copy CTA directly on Public Library cards so users can copy without opening detail first
 - after a successful copy, show a confirmation state with:
-  - `Open in My Library`
-  - `Start Quick Review`
+  - `Continue`
+  - `View Note`
+  - `Start Review`
+- `Start Review` is the primary CTA and `View Note` is the secondary CTA
 - if the user already copied that public note, show `Already in your library` instead of offering duplicate copies
+- Public Library cards should avoid generic `Open` buttons because card click already owns detail navigation
 - see source badges on cards:
   - `By You` for their own public notes
   - `By NoteLib` plus an `Official` badge for the official NoteLib account

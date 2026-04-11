@@ -8,17 +8,22 @@ import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent } from "@/lib/api";
 import { buildCopiedNotePath, buildPublicCopyIntentQuery } from "@/lib/public-note-copy";
 
+const COPY_BUTTON_LABEL = "Copy to My Library";
+const COPY_LOADING_LABEL = "Copying to My Library...";
+const VIEW_NOTE_BUTTON_LABEL = "View Note";
+const ALREADY_IN_LIBRARY_LABEL = "Already in your library";
+const COPY_ERROR_MESSAGE = "Could not copy note.";
+const CARD_COPY_SURFACE = "public_library_card";
+
 type PublicLibraryCopyActionProps = {
   noteId: string;
-  noteTitle: string;
   isOwner: boolean;
   existingCopyNoteId?: string | null;
-  onCopySuccess: (payload: { copiedNoteId: string; sourceTitle: string }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string }) => void;
 };
 
 export function PublicLibraryCopyAction({
   noteId,
-  noteTitle,
   isOwner,
   existingCopyNoteId = null,
   onCopySuccess,
@@ -40,11 +45,6 @@ export function PublicLibraryCopyAction({
     router.push(buildCopiedNotePath(existingCopyNoteId ?? noteId, "library"));
   };
 
-  const handleOpenOwnerNote = (event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    router.push(`/notes/${noteId}`);
-  };
-
   const handleCopy = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
 
@@ -57,7 +57,7 @@ export function PublicLibraryCopyAction({
       entityId: noteId,
       metadata: {
         path: redirectTo,
-        surface: "public_library_card",
+        surface: CARD_COPY_SURFACE,
       },
     });
 
@@ -70,9 +70,9 @@ export function PublicLibraryCopyAction({
     setCopyError(null);
     try {
       const copied = await copyNote(noteId);
-      onCopySuccess({ copiedNoteId: copied.id, sourceTitle: noteTitle });
+      onCopySuccess({ copiedNoteId: copied.id });
     } catch (error) {
-      setCopyError(error instanceof Error ? error.message : "Could not copy note.");
+      setCopyError(error instanceof Error ? error.message : COPY_ERROR_MESSAGE);
       setCopying(false);
       return;
     }
@@ -81,31 +81,21 @@ export function PublicLibraryCopyAction({
   };
 
   if (isOwner) {
-    return (
-      <ResponsiveActionButton
-        type="button"
-        variant="outline"
-        className="w-full sm:w-auto"
-        action="open"
-        label="Open Note"
-        onClick={handleOpenOwnerNote}
-        showTextOnMobile
-      />
-    );
+    return null;
   }
 
   if (existingCopyNoteId) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-2" onClick={(event) => event.stopPropagation()}>
         <div className="inline-flex items-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-          Already in your library
+          {ALREADY_IN_LIBRARY_LABEL}
         </div>
         <ResponsiveActionButton
           type="button"
           variant="outline"
           className="w-full sm:w-auto"
-          action="open"
-          label="Open in My Library"
+          action="library"
+          label={VIEW_NOTE_BUTTON_LABEL}
           onClick={handleOpenExisting}
           showTextOnMobile
         />
@@ -119,7 +109,7 @@ export function PublicLibraryCopyAction({
         type="button"
         className="w-full sm:w-auto"
         action="copy"
-        label={copying ? "Copying to My Library..." : "Copy to My Library"}
+        label={copying ? COPY_LOADING_LABEL : COPY_BUTTON_LABEL}
         onClick={(event) => void handleCopy(event)}
         disabled={copying}
         showTextOnMobile

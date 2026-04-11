@@ -46,6 +46,12 @@ const PUBLIC_LIBRARY_VIEW_PARAM = "view";
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
+const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
+const COPY_SUCCESS_BODY_LINE_ONE = "This note is now in your library.";
+const COPY_SUCCESS_BODY_LINE_TWO = "You can start reviewing now or continue exploring.";
+const MODAL_CONTINUE_LABEL = "Continue";
+const MODAL_VIEW_NOTE_LABEL = "View Note";
+const MODAL_START_REVIEW_LABEL = "Start Review";
 
 type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
 
@@ -158,7 +164,7 @@ interface PublicNoteCardProps {
   currentUserId: string | null;
   onNavigate: (path: string) => void;
   existingCopyNoteId?: string | null;
-  onCopySuccess: (payload: { copiedNoteId: string; sourceTitle: string; sourceNoteId: string }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
 }
 
 function PublicNoteCard({
@@ -171,7 +177,6 @@ function PublicNoteCard({
   const itemTags = normalizeTags(item.tags);
   const authorBadge = resolveAuthorBadge(item, currentUserId);
   const path = buildPublicLibraryNotePath({ subject: item.subject, title: item.title });
-  const noteTitle = item.title?.trim() || "Untitled note";
   const isOwner = item.ownerUserId === currentUserId || item.isCurrentUser;
 
   return (
@@ -226,12 +231,10 @@ function PublicNoteCard({
             </div>
             <PublicLibraryCopyAction
               noteId={item.id}
-              noteTitle={noteTitle}
               isOwner={isOwner}
               existingCopyNoteId={existingCopyNoteId}
-              onCopySuccess={({ copiedNoteId, sourceTitle }) => onCopySuccess({
+              onCopySuccess={({ copiedNoteId }) => onCopySuccess({
                 copiedNoteId,
-                sourceTitle,
                 sourceNoteId: item.id,
               })}
             />
@@ -250,7 +253,7 @@ interface PublicLibraryDiscoverySectionProps {
   onNavigate: (path: string) => void;
   onViewMore: () => void;
   copiedNoteIdsBySourceId: Record<string, string>;
-  onCopySuccess: (payload: { copiedNoteId: string; sourceTitle: string; sourceNoteId: string }) => void;
+  onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
 }
 
 function PublicLibraryDiscoverySection({
@@ -322,7 +325,6 @@ export function PublicLibraryPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [copySuccessState, setCopySuccessState] = useState<{
     copiedNoteId: string;
-    sourceTitle: string;
   } | null>(null);
   const [activeDiscoveryViewState, setActiveDiscoveryViewState] = useState<PublicLibraryDiscoveryView | null>(() => {
     if (globalThis.window === undefined) {
@@ -392,14 +394,13 @@ export function PublicLibraryPageClient() {
     void loadCopiedNotes();
   }, [loadCopiedNotes]);
 
-  const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceTitle: string; sourceNoteId: string }) => {
+  const handleCopySuccess = useCallback((payload: { copiedNoteId: string; sourceNoteId: string }) => {
     setCopiedNoteIdsBySourceId((previous) => ({
       ...previous,
       [payload.sourceNoteId]: payload.copiedNoteId,
     }));
     setCopySuccessState({
       copiedNoteId: payload.copiedNoteId,
-      sourceTitle: payload.sourceTitle,
     });
   }, []);
 
@@ -1046,25 +1047,31 @@ export function PublicLibraryPageClient() {
 
       <AppModal
         isOpen={copySuccessState !== null}
-        title="Copied to My Library"
+        title={COPY_SUCCESS_MODAL_TITLE}
         onClose={() => setCopySuccessState(null)}
         actions={copySuccessState ? (
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setCopySuccessState(null)}>
-              Keep Browsing
-            </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            <button
+              type="button"
+              className="inline-flex h-10 items-center justify-center rounded-lg px-2 text-sm font-medium text-foreground/70 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              onClick={() => setCopySuccessState(null)}
+            >
+              {MODAL_CONTINUE_LABEL}
+            </button>
             <ResponsiveActionButton
               type="button"
               variant="outline"
-              action="open"
-              label="Open in My Library"
+              className="w-full sm:w-auto"
+              action="library"
+              label={MODAL_VIEW_NOTE_LABEL}
               onClick={() => router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "library"))}
               showTextOnMobile
             />
             <ResponsiveActionButton
               type="button"
+              className="w-full sm:w-auto"
               action="quickReview"
-              label="Start Quick Review"
+              label={MODAL_START_REVIEW_LABEL}
               onClick={() => router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "quick-review"))}
               showTextOnMobile
             />
@@ -1073,13 +1080,8 @@ export function PublicLibraryPageClient() {
       >
         {copySuccessState ? (
           <div className="space-y-2 text-sm text-foreground/80">
-            <p>
-              <span className="font-medium">{copySuccessState.sourceTitle}</span> is now in your library.
-            </p>
-            <p>
-              Open it in your workspace or jump straight into Quick Review. If the copied note still needs a Study Pack,
-              NoteLib will generate it first.
-            </p>
+            <p>{COPY_SUCCESS_BODY_LINE_ONE}</p>
+            <p>{COPY_SUCCESS_BODY_LINE_TWO}</p>
           </div>
         ) : null}
       </AppModal>

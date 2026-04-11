@@ -452,15 +452,15 @@ Core loop:
 - Copying a public note must preserve attribution via `copiedFromNoteId` and `copiedFromUserId`.
 - Public Library copy UX should keep the existing copy endpoint but make public copies idempotent per user/source note.
 - Public Library cards may include a visible `Copy to My Library` CTA as the one allowed exception to the no-inline-card-actions rule on note cards.
-- If the current user already has that public note in their library, show `Already in your library` and `Open in My Library` instead of offering another copy.
-- Successful Public Library copies should offer `Open in My Library` and `Start Quick Review` follow-up actions.
+- If the current user already has that public note in their library, show `Already in your library` and optional `View Note` instead of offering another copy.
+- Successful Public Library copies should offer `Continue`, `View Note`, and `Start Review` follow-up actions, with `Start Review` as the primary CTA.
 - Copied private notes should display attribution as `Copied from {title} in Public Library.` when source metadata exists.
 
 ### Card Interaction Rule
 
 - Library cards, Public Library cards, and Public Profile cards must use a consistent interaction model.
 - The whole card should be clickable to open the detail page.
-- Do not add inline action buttons or note-card context menus to note cards, except for the Public Library `Copy to My Library` CTA at the bottom of the card.
+- Do not add inline action buttons or note-card context menus to note cards, except for the Public Library `Copy to My Library` CTA and copied-state `View Note` action at the bottom of the card.
 - Note cards are preview/navigation surfaces only; note actions belong in Note Detail.
 
 ### Design System — Icons and Buttons

@@ -48,9 +48,9 @@
 ### Fixes
 
 - **Public Library copy-flow cleanup** — public note copying now behaves consistently across discovery and detail surfaces:
-  - Public Library cards now use `Copy to My Library` directly and switch to `Already in your library` plus `Open in My Library` when that source note was already copied
+  - Public Library cards now use `Copy to My Library` directly and switch to `Already in your library` plus optional `View Note` when that source note was already copied
   - repeated copies of the same public note by the same user now reuse the existing copied note instead of creating duplicate drafts
-  - successful public copies now offer clearer follow-up actions, including `Open in My Library` and `Start Quick Review`
+  - successful public copies now use a shorter action hierarchy: `Continue`, `View Note`, and primary `Start Review`
   - copied private notes now show `Copied from {title} in Public Library.` attribution when source metadata exists
 - **Private Note Detail action cleanup** — secondary note-management actions no longer compete with study actions inside the note header:
   - inline `Edit`, `Delete`, `Make a Copy`, and `Share` controls were consolidated into a single top-right `⋯` context menu

@@ -66,7 +66,8 @@ Capabilities:
 - open Public Note Detail (read-only)
 - `Copy to My Library`
 - Public Library cards may expose the copy CTA directly so discovery can flow into copy without opening detail first
-- duplicate public copies should resolve to `Already in your library` plus `Open in My Library` instead of creating another draft
+- duplicate public copies should resolve to `Already in your library` plus optional `View Note` instead of creating another draft
+- copy-success feedback should use a short action hierarchy: `Continue`, `View Note`, and primary `Start Review`
 - cards use the same shared preview stack as Library, including both note preview and summary preview
 - author labels use viewer-relative public identity rules (`By You`, `By NoteLib`, `By {Display Name}`)
 - Featured Notes should remain visually distinct from the other sections
@@ -150,7 +151,7 @@ Use:
 - `Public Library`
 - `New Note`
 - `Make a Copy`
-- `Copy to Library`
+- `Copy to My Library`
 - `Generate Study Pack`
 
 ## Dialog Consistency
