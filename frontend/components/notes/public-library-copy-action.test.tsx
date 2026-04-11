@@ -49,7 +49,7 @@ describe("PublicLibraryCopyAction", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("shows the copied-state badge and View Note action without generic open labels", () => {
+  it("shows only the copied-note action without rendering status text in the action area", () => {
     render(
       <PublicLibraryCopyAction
         noteId="note-2"
@@ -59,8 +59,9 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    expect(screen.getByText("Already in your library")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View Note" })).toBeInTheDocument();
+    expect(screen.queryByText("Already in your library")).not.toBeInTheDocument();
+    expect(screen.queryByText("In Library")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open in My Library" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "View Note" }));

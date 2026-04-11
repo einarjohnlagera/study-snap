@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -47,11 +48,11 @@ const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
 const COPY_SUCCESS_MODAL_TITLE = "Copied to your library";
-const COPY_SUCCESS_BODY_LINE_ONE = "This note is now in your library.";
-const COPY_SUCCESS_BODY_LINE_TWO = "Start reviewing now or continue exploring.";
-const MODAL_CONTINUE_LABEL = "Continue";
+const COPY_SUCCESS_BODY_LINE_ONE = "You can start reviewing now or come back later from your library.";
 const MODAL_VIEW_NOTE_LABEL = "View Note";
 const MODAL_START_REVIEW_LABEL = "Start Review";
+const MOBILE_SUCCESS_SHEET_MEDIA_QUERY = "(max-width: 639px)";
+const CLOSE_MODAL_LABEL = "Close copied to your library";
 
 type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
 
@@ -326,6 +327,7 @@ export function PublicLibraryPageClient() {
   const [copySuccessState, setCopySuccessState] = useState<{
     copiedNoteId: string;
   } | null>(null);
+  const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
   const [activeDiscoveryViewState, setActiveDiscoveryViewState] = useState<PublicLibraryDiscoveryView | null>(() => {
     if (globalThis.window === undefined) {
       return null;
@@ -367,6 +369,23 @@ export function PublicLibraryPageClient() {
     globalThis.addEventListener("studysnap-auth-change", syncAuth);
     return () => {
       globalThis.removeEventListener("studysnap-auth-change", syncAuth);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(MOBILE_SUCCESS_SHEET_MEDIA_QUERY);
+    const syncMatches = () => {
+      setIsMobileSuccessSheet(mediaQuery.matches);
+    };
+
+    syncMatches();
+    mediaQuery.addEventListener("change", syncMatches);
+    return () => {
+      mediaQuery.removeEventListener("change", syncMatches);
     };
   }, []);
 
@@ -1049,19 +1068,31 @@ export function PublicLibraryPageClient() {
         isOpen={copySuccessState !== null}
         title={COPY_SUCCESS_MODAL_TITLE}
         onClose={() => setCopySuccessState(null)}
-        panelClassName="max-w-[460px] p-6 sm:p-7"
+        titleClassName="text-xl font-semibold tracking-tight sm:text-[1.4rem]"
+        titleIcon={(
+          <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300">
+            <CheckCircle2 className="h-[18px] w-[18px]" aria-hidden="true" />
+          </div>
+        )}
+        panelClassName={isMobileSuccessSheet
+          ? "w-full max-w-full self-end rounded-b-none rounded-t-[28px] border-b-0 px-5 pt-4 pb-5 shadow-[0_-18px_50px_rgba(3,7,18,0.22)] sm:w-[90%] sm:max-w-[400px] sm:self-auto sm:rounded-b-[28px] sm:border-b sm:px-6 sm:pt-5 sm:pb-6"
+          : "max-w-[400px] rounded-[28px] p-6 shadow-[0_24px_60px_rgba(3,7,18,0.16)] sm:p-7"}
         contentClassName="space-y-3"
-        actionsClassName="mt-6"
+        actionsClassName="mt-5"
+        headerClassName={isMobileSuccessSheet ? "gap-3" : "gap-4"}
+        headerActions={(
+          <button
+            type="button"
+            aria-label={CLOSE_MODAL_LABEL}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-background/90 text-foreground/60 transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            onClick={() => setCopySuccessState(null)}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
+        enableSwipeToClose={isMobileSuccessSheet}
         actions={copySuccessState ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full sm:w-auto"
-              onClick={() => setCopySuccessState(null)}
-            >
-              {MODAL_CONTINUE_LABEL}
-            </Button>
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
             <ResponsiveActionButton
               type="button"
               variant="outline"
@@ -1083,9 +1114,13 @@ export function PublicLibraryPageClient() {
         ) : null}
       >
         {copySuccessState ? (
-          <div className="space-y-3 text-sm text-foreground/80">
+          <div className="space-y-3 text-sm leading-relaxed text-foreground/78">
+            {isMobileSuccessSheet ? (
+              <div className="mb-4">
+                <div className="mx-auto h-1.5 w-12 rounded-full bg-foreground/15" aria-hidden="true" />
+              </div>
+            ) : null}
             <p>{COPY_SUCCESS_BODY_LINE_ONE}</p>
-            <p>{COPY_SUCCESS_BODY_LINE_TWO}</p>
           </div>
         ) : null}
       </AppModal>

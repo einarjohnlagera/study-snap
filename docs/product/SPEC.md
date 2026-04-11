@@ -365,17 +365,19 @@ Users can:
 - copy a public note into Library (`Copy to My Library`)
 - show the copy CTA directly on Public Library cards so users can copy without opening detail first
 - after a successful copy, show a confirmation state with:
-  - `Continue`
   - `View Note`
   - `Start Review`
 - `Start Review` is the primary CTA and `View Note` is the secondary CTA
-- `Continue` should remain a visible ghost/tertiary button rather than plain text
 - modal copy should stay concise:
-  - `This note is now in your library.`
-  - `Start reviewing now or continue exploring.`
-- modal actions should keep a clean responsive layout with stacked mobile buttons and no overflow
-- if the user already copied that public note, show `Already in your library` instead of offering duplicate copies
+  - `You can start reviewing now or come back later from your library.`
+- modal/sheet should use a stronger success hierarchy with a subtle check indicator and larger title treatment
+- desktop should use a modal with a visible top-right close button; mobile should use a dismissible bottom sheet
+- desktop should right-align actions in the order `View Note`, `Start Review`
+- mobile should stack full-width actions with `Start Review` visually first
+- modal/sheet actions should keep a clean responsive layout with only `View Note` and `Start Review`, polished spacing, and no overflow
+- if the user already copied that public note, show only `View Note` as the remaining inline action instead of offering duplicate copies
 - Public Library cards should avoid generic `Open` buttons because card click already owns detail navigation
+- Public Library copied-state UI should avoid redundant ownership/status badges when the action state already communicates the same information
 - see source badges on cards:
   - `By You` for their own public notes
   - `By NoteLib` plus an `Official` badge for the official NoteLib account

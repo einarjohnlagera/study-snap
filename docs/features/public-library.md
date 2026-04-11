@@ -122,22 +122,25 @@ Interaction rules:
 - keep the card itself clickable for navigation
 - Public Library cards may include one inline secondary CTA at the bottom: `Copy to My Library`
 - the inline copy CTA must stop card navigation when clicked
-- if the viewer already copied that note, replace the copy CTA with:
-  - `Already in your library`
-  - optional `View Note`
+- if the viewer already copied that note, replace the copy CTA with optional `View Note`
+- copied state should be conveyed by the available action, not by an extra `In Library` badge
 - a successful card copy should show a confirmation modal with:
-  - `Continue`
   - `View Note`
   - `Start Review`
 - `Start Review` is the primary CTA in the modal
 - `View Note` is the secondary CTA
-- `Continue` is a visible ghost/tertiary button, not plain text
 - `View Note` replaces generic `Open` wording for copied-note navigation
 - `Start Review` may route through copied-note generation first when the copied note is still a draft
 - modal body copy should stay short:
-  - `This note is now in your library.`
-  - `Start reviewing now or continue exploring.`
-- modal actions should use clean spacing and stack safely on mobile to avoid overflow
+  - `You can start reviewing now or come back later from your library.`
+- modal/sheet header should feel success-oriented but minimal:
+  - subtle check-style success indicator
+  - stronger title hierarchy
+- desktop should use a modal with a visible top-right close button
+- mobile should use a dismissible bottom sheet instead of a centered modal
+- desktop should right-align actions in the order `View Note`, `Start Review`
+- mobile should stack full-width actions with the primary CTA visually first
+- modal/sheet actions should use clean spacing and subtle depth so the surface feels polished without becoming heavy
 - avoid generic navigation button labels like `Open` on Public Library cards; card click already owns detail navigation
 - do not place share/generate/delete/edit actions inside Public Library cards
 - use public note detail for the rest of the actions instead

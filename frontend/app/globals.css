@@ -81,6 +81,22 @@ body *::after {
   }
 }
 
+.motion-modal-enter {
+  animation: motion-modal-enter var(--motion-duration-base) var(--motion-ease-emphasized);
+}
+
+@keyframes motion-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .motion-collapse {
   display: grid;
   grid-template-rows: 1fr;
@@ -125,6 +141,10 @@ body *::after {
   }
 
   .motion-fade-enter {
+    animation: none !important;
+  }
+
+  .motion-modal-enter {
     animation: none !important;
   }
 
