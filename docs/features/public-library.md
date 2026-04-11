@@ -119,9 +119,18 @@ Public Library note cards reuse the shared note-card layout:
 Interaction rules:
 
 - whole card opens the canonical public note route
-- cards are preview/navigation only
-- do not place copy/share/generate/delete/edit actions inside the card
-- use public note detail for actions instead
+- keep the card itself clickable for navigation
+- Public Library cards may include one inline secondary CTA at the bottom: `Copy to My Library`
+- the inline copy CTA must stop card navigation when clicked
+- if the viewer already copied that note, replace the copy CTA with:
+  - `Already in your library`
+  - `Open in My Library`
+- a successful card copy should show a confirmation modal with:
+  - `Open in My Library`
+  - `Start Quick Review`
+- `Start Quick Review` may route through copied-note generation first when the copied note is still a draft
+- do not place share/generate/delete/edit actions inside Public Library cards
+- use public note detail for the rest of the actions instead
 
 Discovery guidance:
 
@@ -141,3 +150,4 @@ Rules:
 - include a subtle `View Full Notes →` CTA inside the `Summary` view so visitors can quickly inspect the original note
 - `Full Notes` should render the complete original note body so visitors can judge whether the note is worth copying
 - keep the page read-only and copy-first; tabs are for review, not management
+- non-owner primary CTA should use `Copy to My Library`

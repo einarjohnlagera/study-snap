@@ -35,13 +35,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.Comparator;
 
 @Service
 @Transactional
@@ -163,6 +164,14 @@ public class NoteService {
         if (!isOwner && resolveVisibility(source) != NoteVisibility.PUBLIC) {
             throw new NoteNotFoundException();
         }
+        if (!isOwner) {
+            Optional<NoteEntity> existingCopy = noteRepository
+                    .findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, source.getId());
+            if (existingCopy.isPresent()) {
+                StudyPackEntity existingStudyPack = findLinkedStudyPack(existingCopy.get().getId());
+                return mapToResponse(existingCopy.get(), existingStudyPack);
+            }
+        }
 
         NoteEntity copy = new NoteEntity();
         copy.setId(UUID.randomUUID());
@@ -228,16 +237,6 @@ public class NoteService {
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
         List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
         return toListItems(notes, ownerUserId);
-    }
-
-    @Transactional(readOnly = true)
-    public List<NoteListItemResponse> listPublic(UUID viewerUserId) {
-        return listPublic(viewerUserId, null, null);
-    }
-
-    @Transactional(readOnly = true)
-    public List<NoteListItemResponse> listPublic(UUID viewerUserId, String sort) {
-        return listPublic(viewerUserId, sort, null);
     }
 
     @Transactional(readOnly = true)
@@ -498,7 +497,9 @@ public class NoteService {
                 isOfficialAuthor,
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getCreatedAt(),
-                note.getUpdatedAt()
+                note.getUpdatedAt(),
+                note.getCopiedFromNoteId() == null ? null : note.getCopiedFromNoteId().toString(),
+                Boolean.TRUE.equals(note.getCopiedFromPublic())
         );
     }
 

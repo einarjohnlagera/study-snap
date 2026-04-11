@@ -185,7 +185,9 @@ class PublicNotesScoringUtilsTest {
                 false,
                 false,
                 createdAt,
-                createdAt
+                createdAt,
+                null,
+                false
         );
     }
 }

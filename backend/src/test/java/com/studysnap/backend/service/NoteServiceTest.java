@@ -280,6 +280,38 @@ class NoteServiceTest {
     }
 
     @Test
+    void copyPublicNote_returnsExistingCopyInsteadOfCreatingDuplicate() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID sourceOwnerUserId = UUID.randomUUID();
+        UUID sourceNoteId = UUID.randomUUID();
+        UUID existingCopyId = UUID.randomUUID();
+
+        NoteEntity source = buildNote(sourceNoteId, sourceOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "source content");
+        source.setTitle("Public source");
+        NoteEntity existingCopy = buildNote(existingCopyId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "copied content");
+        existingCopy.setCopiedFromNoteId(sourceNoteId);
+        existingCopy.setCopiedFromUserId(sourceOwnerUserId);
+        existingCopy.setCopiedFromTitle("Public source");
+        existingCopy.setCopiedFromPublic(Boolean.TRUE);
+        StudyPackEntity existingStudyPack = new StudyPackEntity();
+        existingStudyPack.setId(UUID.randomUUID());
+        existingStudyPack.setNoteId(existingCopyId);
+        existingStudyPack.setSummary("Existing summary");
+
+        when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
+        when(noteRepository.findByOwnerUserIdAndCopiedFromNoteIdAndCopiedFromPublicTrue(ownerUserId, sourceNoteId))
+                .thenReturn(Optional.of(existingCopy));
+        when(studyPackRepository.findByNoteId(existingCopyId)).thenReturn(Optional.of(existingStudyPack));
+
+        NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), ownerUserId);
+
+        assertThat(copied.id()).isEqualTo(existingCopyId.toString());
+        assertThat(copied.summary()).isEqualTo("Existing summary");
+        verify(noteRepository, never()).save(any(NoteEntity.class));
+        verify(analyticsService, never()).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.PUBLIC_NOTE_COPIED), eq(sourceNoteId), any());
+    }
+
+    @Test
     void copyNote_normalizesCourseProgramFormatting() {
         UUID ownerUserId = UUID.randomUUID();
         UUID sourceNoteId = UUID.randomUUID();
@@ -447,6 +479,8 @@ class NoteServiceTest {
         assertThat(response.getFirst().copyCount()).isZero();
         assertThat(response.getFirst().shareCount()).isZero();
         assertThat(response.getFirst().viewCount()).isZero();
+        assertThat(response.getFirst().copiedFromNoteId()).isNull();
+        assertThat(response.getFirst().copiedFromPublic()).isFalse();
         assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
         assertThat(response.get(1).courseProgram()).isEqualTo("Chemistry");
         assertThat(response.get(1).learnerLevel()).isEqualTo("PROFESSIONAL");

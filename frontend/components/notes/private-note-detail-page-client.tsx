@@ -78,6 +78,7 @@ import {
   STUDY_PACK_GENERATION_POLL_INTERVAL_MS,
   resolveStudyPackGenerationMessage,
 } from "@/lib/study-pack-generation";
+import { PUBLIC_NOTE_COPY_QUERY_PARAMS } from "@/lib/public-note-copy";
 import Link from "next/link";
 
 function stateChip(status: NoteStudyPackStatus) {
@@ -206,6 +207,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const latestSearchQueryRef = useRef(searchParams.toString());
   const autoGenerateHandledRef = useRef(false);
   const autoEditHandledRef = useRef(false);
+  const autoQuickReviewHandledRef = useRef(false);
   const awaitingGeneratedMetadataSuggestionRef = useRef(false);
   const suggestedStudyPackIdRef = useRef<string | null>(null);
 
@@ -720,14 +722,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   ]);
 
   useEffect(() => {
-    const shouldAutoGenerate = searchParams.get("generate") === "1";
+    const shouldAutoGenerate = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate) === "1";
     if (!shouldAutoGenerate || autoGenerateHandledRef.current || !note || !canGenerateStudyPack) {
       return;
     }
 
     autoGenerateHandledRef.current = true;
     const next = new URLSearchParams(searchParams.toString());
-    next.delete("generate");
+    next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.generate);
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
     void handleGenerate();
   }, [canGenerateStudyPack, handleGenerate, note, pathname, router, searchParams]);
@@ -929,6 +931,25 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setError(message);
     }
   };
+
+  useEffect(() => {
+    const shouldAutoStartQuickReview = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview) === "1";
+    if (
+      !shouldAutoStartQuickReview
+      || autoQuickReviewHandledRef.current
+      || !note
+      || !isStudyPackReady
+      || !note.quickReviewAvailable
+    ) {
+      return;
+    }
+
+    autoQuickReviewHandledRef.current = true;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview);
+    router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
+    void handleStartQuickReview();
+  }, [handleStartQuickReview, isStudyPackReady, note, pathname, router, searchParams]);
 
   const dismissFirstStudyGuide = useCallback(async () => {
     const authUser = getAuthUser();
@@ -1186,7 +1207,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
                 {hasCopyAttribution ? (
                   <p className="text-xs text-foreground/70">
-                    Source: Public Library - {copiedSourceTitle}
+                    Copied from {copiedSourceTitle} in Public Library.
                     {note.copiedFromPublic && note.copiedFromNoteId ? (
                       <>
                         {" "}

@@ -64,7 +64,9 @@ Capabilities:
   - Recently Added -> 5
 - each discovery section includes `View More`, which opens a focused section view on the same page instead of flattening Public Library into a generic list
 - open Public Note Detail (read-only)
-- `Copy to Library`
+- `Copy to My Library`
+- Public Library cards may expose the copy CTA directly so discovery can flow into copy without opening detail first
+- duplicate public copies should resolve to `Already in your library` plus `Open in My Library` instead of creating another draft
 - cards use the same shared preview stack as Library, including both note preview and summary preview
 - author labels use viewer-relative public identity rules (`By You`, `By NoteLib`, `By {Display Name}`)
 - Featured Notes should remain visually distinct from the other sections
@@ -103,7 +105,7 @@ Structured data rules:
 Both flows use the same copy rules:
 
 - **Make a Copy** (own note)
-- **Copy to Library** (public note)
+- **Copy to My Library** (public note)
 
 Copy includes only:
 
@@ -126,6 +128,7 @@ Result:
 - new Draft note owned by the current user
 - redirect to unified Note Detail page
 - if copied from a public note, preserve attribution via `copiedFromNoteId` and `copiedFromUserId`
+- copied notes should show `Copied from {title} in Public Library.` on Note Detail when attribution is available
 
 ## Dashboard Guardrails
 

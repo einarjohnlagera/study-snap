@@ -225,7 +225,9 @@ class NoteControllerTest {
                         false,
                         true,
                         OffsetDateTime.now(),
-                        OffsetDateTime.now()
+                        OffsetDateTime.now(),
+                        null,
+                        false
                 )
         );
         when(noteService.listPublic(userId, null, null)).thenReturn(expected);

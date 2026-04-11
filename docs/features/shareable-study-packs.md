@@ -33,13 +33,14 @@ Private note share UX:
 
 Public content can be copied into Library using:
 
-- `Copy to Library`
+- `Copy to My Library`
 
 Copy behavior:
 
 - copy only `title`, `subject`, `tags`, `content`
 - do not copy generated outputs or performance/session history
 - result is a new Draft note in current user ownership
+- repeated copies of the same public note by the same user should reuse the existing copied note instead of creating duplicates
 - copy must not trigger new LLM generation
 - preserve public-source attribution with `copiedFromNoteId` and `copiedFromUserId`
 

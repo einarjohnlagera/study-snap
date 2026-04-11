@@ -362,7 +362,12 @@ Users can:
 - use `View More` for each discovery section to open the full section view without losing the Public Library page model
 - filter by search, course/program, learner level, subject, tags, and source
 - open read-only public note detail
-- copy a public note into Library (`Copy to Library`)
+- copy a public note into Library (`Copy to My Library`)
+- show the copy CTA directly on Public Library cards so users can copy without opening detail first
+- after a successful copy, show a confirmation state with:
+  - `Open in My Library`
+  - `Start Quick Review`
+- if the user already copied that public note, show `Already in your library` instead of offering duplicate copies
 - see source badges on cards:
   - `By You` for their own public notes
   - `By NoteLib` plus an `Official` badge for the official NoteLib account
@@ -374,7 +379,7 @@ Users can:
 - Public Library author labels should link to `/public/profile/{userId}`.
 - Public note detail should change the primary action by ownership:
   - owner -> `Open Note`
-  - non-owner -> `Make a Copy`
+  - non-owner -> `Copy to My Library`
 - Public note detail header should show `Subject • Author` using the same viewer-relative author label.
 - Public note detail author label should link to `/public/profile/{userId}`.
 - Public subject pages should reuse the existing `/public/library/{subject}` route and show:
@@ -399,6 +404,7 @@ Users can:
 - Public/Private card state should use a subtle globe/lock icon when needed instead of another large badge.
 - Public Library scalability should come from section limits and focused section views, not from removing subject/tags/previews/engagement metadata from cards.
 - Public note detail is read/copy/share only and should not show edit, delete, or study actions.
+- Copied private notes should show attribution as `Copied from {title} in Public Library.` with a link back to the original public note when available.
 - Public Profiles should use `/public/profile/{userId}` in V1 and show:
   - Display Name
   - Bio (or `This user hasn't added a bio yet.` when blank)

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
-import { listPublicNotes, listSubjects } from "@/lib/api";
+import { copyNote, listNotes, listPublicNotes, listSubjects } from "@/lib/api";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
@@ -20,8 +20,11 @@ jest.mock("@/lib/auth", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  copyNote: jest.fn(),
+  listNotes: jest.fn(),
   listPublicNotes: jest.fn(),
   listSubjects: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 describe("PublicLibraryPageClient", () => {
@@ -34,16 +37,19 @@ describe("PublicLibraryPageClient", () => {
 
   beforeEach(() => {
     pushMock.mockReset();
+    (copyNote as jest.Mock).mockReset();
+    (listNotes as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     currentAuthUser = { id: "user-1" };
     currentPathname = "/public/library";
     currentSearch = "";
     window.history.replaceState({}, "", "/public/library");
+    (listNotes as jest.Mock).mockResolvedValue([]);
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Physics"]);
   });
 
-  it("shows viewer-relative author badges and keeps cards action-free", async () => {
+  it("shows viewer-relative author badges and card-level copy/open actions", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-1",
@@ -131,6 +137,8 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("8 views")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Copy to My Library" })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Open Note" })).toBeInTheDocument();
   });
 
   it("updates the author badge when auth state hydrates after mount", async () => {
@@ -171,6 +179,113 @@ describe("PublicLibraryPageClient", () => {
     });
 
     expect(await screen.findByText("By You")).toBeInTheDocument();
+  });
+
+  it("shows an already-copied state and opens the existing note from the card", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-2",
+        ownerUserId: "user-2",
+        title: "Community Note",
+        courseProgram: "Engineering",
+        learnerLevel: "COLLEGE",
+        subject: "Physics",
+        tags: ["motion"],
+        contentPreview: "Community preview",
+        summaryPreview: "Community summary",
+        visibility: "PUBLIC",
+        studyPackId: "pack-3",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 2,
+        copyCount: 0,
+        shareCount: 1,
+        viewCount: 4,
+        authorDisplayName: "Study Buddy",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-28T08:00:00Z",
+        updatedAt: "2026-03-31T08:00:00Z",
+      },
+    ]);
+    (listNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "copied-note-7",
+        ownerUserId: "user-1",
+        title: "Copied Community Note",
+        courseProgram: "Engineering",
+        learnerLevel: "COLLEGE",
+        subject: "Physics",
+        tags: ["motion"],
+        contentPreview: "Copied preview",
+        summaryPreview: "",
+        visibility: "PRIVATE",
+        studyPackId: null,
+        studyPackStatus: "DRAFT",
+        quizCount: 0,
+        copyCount: 0,
+        shareCount: 0,
+        viewCount: 0,
+        authorDisplayName: "You",
+        isOfficialAuthor: false,
+        isCurrentUser: true,
+        createdAt: "2026-03-30T08:00:00Z",
+        updatedAt: "2026-03-31T08:00:00Z",
+        copiedFromNoteId: "note-2",
+        copiedFromPublic: true,
+      },
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Already in your library")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open in My Library" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-7?copied=1");
+    expect(copyNote).not.toHaveBeenCalled();
+  });
+
+  it("copies from the card and shows post-copy actions", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      {
+        id: "note-9",
+        ownerUserId: "user-2",
+        title: "Cell Notes",
+        courseProgram: "Nursing",
+        learnerLevel: "COLLEGE",
+        subject: "Biology",
+        tags: ["cells"],
+        contentPreview: "Cell note preview",
+        summaryPreview: "Cell summary preview",
+        visibility: "PUBLIC",
+        studyPackId: "pack-9",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 3,
+        copyCount: 4,
+        shareCount: 1,
+        viewCount: 9,
+        authorDisplayName: "Study Buddy",
+        isOfficialAuthor: false,
+        isCurrentUser: false,
+        createdAt: "2026-03-30T08:00:00Z",
+        updatedAt: "2026-03-31T08:00:00Z",
+      },
+    ]);
+    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9" });
+
+    render(<PublicLibraryPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy to My Library" }));
+
+    await waitFor(() => {
+      expect(copyNote).toHaveBeenCalledWith("note-9");
+    });
+    expect(await screen.findByText("Copied to My Library")).toBeInTheDocument();
+    expect(screen.getByText(/is now in your library\./)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start Quick Review" }));
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-9?copied=1&generate=1&startQuickReview=1");
   });
 
   it("sorts public notes by most viewed from the shared sort sheet", async () => {

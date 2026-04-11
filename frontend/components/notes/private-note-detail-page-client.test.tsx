@@ -417,6 +417,26 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1", { scroll: false });
   });
 
+  it("starts Quick Review automatically after copied-note generation finishes when requested", async () => {
+    searchParamValues = { startQuickReview: "1" };
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+    });
+    (startQuickReviewSession as jest.Mock).mockResolvedValue({ sessionId: "qr-1" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    await waitFor(() => {
+      expect(startQuickReviewSession).toHaveBeenCalledWith("note-1");
+    });
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1", { scroll: false });
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/quick-review?sessionId=qr-1");
+  });
+
   it("shows a first-study success banner after the first Study Pack is ready", async () => {
     window.localStorage.setItem("notelib-first-study-onboarding:user-1", JSON.stringify({ step: "study-pack-ready" }));
     (getAuthUser as jest.Mock).mockReturnValue({
