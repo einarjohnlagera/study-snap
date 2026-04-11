@@ -39,6 +39,7 @@ Build your notes library, then turn notes into summaries and quizzes when you ar
 - Support students, board exam reviewees, and teachers with one shared workflow
 - Public Library is a public discovery surface, not a paid-plan feature
 - Learn page reinforces active recall as the study method behind the product
+- Landing page now presents the Public Library with a framed screenshot preview using `public/landing/feature-public-library.jpg` in a balanced text-and-product layout, so users can immediately see the note-discovery experience without the image overpowering the page.
 
 ## Brand Assets
 

@@ -118,6 +118,10 @@ const landingScreenshots = {
     src: "/landing/feature-study-pack.jpg",
     alt: "NoteLib note detail showing summary of the note",
   },
+  publicLibrary: {
+    src: "/landing/feature-public-library.jpg",
+    alt: "NoteLib Public Library preview showing note discovery cards and subject browsing",
+  },
 } as const;
 
 const valueSummaryCards = [
@@ -154,10 +158,10 @@ function HeroSection() {
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Turn your notes into summaries, key concepts, and quizzes
+              Your notes, transformed into study tools.
             </h1>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              NoteLib helps you study faster by transforming your notes into structured learning tools.
+              Build a notes library, browse what others share, and turn saved notes into summaries, key concepts, and quizzes when review starts.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -205,6 +209,63 @@ function HeroSection() {
           alt={landingScreenshots.noteEditor.alt}
           priority
         />
+      </div>
+    </section>
+  );
+}
+
+function PublicLibrarySection() {
+  return (
+    <section className="space-y-5 sm:space-y-6">
+      <div className="rounded-[2rem] border border-border/80 bg-[linear-gradient(135deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.9))] p-5 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(15,23,42,0.92),_rgba(15,23,42,0.82))] sm:p-6 lg:p-8">
+        <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Public Library</p>
+              <h2 className="text-2xl font-semibold sm:text-3xl">Explore notes worth studying</h2>
+              <p className="max-w-xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+                Browse public notes by subject, discover popular topics, and copy useful notes into your own library to study them your way.
+              </p>
+            </div>
+            <ul className="space-y-2 text-sm text-foreground/75">
+              {[
+                "Discover curated public notes",
+                "Copy notes into your own library",
+                "Turn them into summaries, concepts, and quizzes",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-3">
+                  <span className="mt-1 inline-flex h-2 w-2 shrink-0 rounded-full bg-sky-500" aria-hidden="true" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <TrackedLink
+              href="/public/library"
+              className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+              eventType="LANDING_CTA_CLICKED"
+              eventMetadata={{ placement: "public_library_section", destination: "/public/library" }}
+            >
+              Browse Public Library
+              <ArrowRight className="h-4 w-4" />
+            </TrackedLink>
+          </div>
+
+          <div className="w-full lg:justify-self-end">
+            <div className="mx-auto w-full max-w-xl rounded-[1.75rem] border border-border/80 bg-background/80 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:p-4">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-500/15 bg-sky-500/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                <Library className="h-3.5 w-3.5" />
+                Live product preview
+              </div>
+              <ProductScreenshotFrame
+                src={landingScreenshots.publicLibrary.src}
+                alt={landingScreenshots.publicLibrary.alt}
+                className="rounded-[1.35rem] border border-border/70 bg-muted/20 shadow-[0_14px_28px_rgba(15,23,42,0.08)]"
+                imageClassName="max-h-[320px] object-contain object-top sm:max-h-[360px] lg:max-h-[400px]"
+                sizes="(min-width: 1280px) 520px, (min-width: 1024px) 46vw, (min-width: 768px) 88vw, 100vw"
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -403,6 +464,7 @@ export default function Home() {
       <HeroSection />
       <HowItWorksSection />
       <ValueSummarySection />
+      <PublicLibrarySection />
       <DifferentiationSection />
       <TargetUsersSection />
       <PricingPreviewSection />
