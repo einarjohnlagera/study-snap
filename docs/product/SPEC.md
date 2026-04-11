@@ -201,8 +201,10 @@ Public landing content:
   - `Generate Study Pack`
   - `Review & Practice`
 - Public Library should be promoted as a first-class discovery route with CTA `Browse Public Library`
-- Landing page should include a dedicated Public Library visual preview block immediately after the Public Library intro card.
+- Landing page should include a dedicated Public Library feature section that pairs discovery copy with a framed screenshot preview instead of a large standalone image block.
 - The visual preview should use `public/landing/feature-public-library.jpg` to show note browsing, subject discovery, and copy-to-library intent with less reliance on explanatory text.
+- On desktop, the Public Library section should use a responsive two-column layout with text on the left and the framed screenshot preview on the right; on mobile, it should stack text first and screenshot second.
+- The screenshot preview should stay constrained with a max-height, rounded container, subtle border, and soft depth so it feels like a polished product preview rather than a full-width banner.
 - Study Method should connect NoteLib to active recall and link to `/learn`
 - Final CTA should include:
   - `Get Started`

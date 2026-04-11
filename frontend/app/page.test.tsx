@@ -69,9 +69,12 @@ describe("LandingPage", () => {
     expect(screen.queryByAltText("NoteLib quiz results and weak concept review screen")).not.toBeInTheDocument();
 
     expect(screen.getByText("Public Library")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Explore notes you can browse, copy, and study from" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "See what you can explore" })).toBeInTheDocument();
-    expect(screen.getByText("Browse notes by subject, discover popular topics, and copy them into your library.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Explore notes worth studying" })).toBeInTheDocument();
+    expect(screen.getByText("Browse public notes by subject, discover popular topics, and copy useful notes into your own library to study them your way.")).toBeInTheDocument();
+    expect(screen.getByText("Live product preview")).toBeInTheDocument();
+    expect(screen.getByText("Discover curated public notes")).toBeInTheDocument();
+    expect(screen.getByText("Copy notes into your own library")).toBeInTheDocument();
+    expect(screen.getByText("Turn them into summaries, concepts, and quizzes")).toBeInTheDocument();
     expect(
       screen.getByAltText("NoteLib Public Library preview showing note discovery cards and subject browsing"),
     ).toBeInTheDocument();

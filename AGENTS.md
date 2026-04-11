@@ -120,6 +120,7 @@ Core loop:
 - Keep the home page focused on hero, how-it-works, features, Free vs Premium pricing, demo access, and signup CTA.
 - Demo access must be available without signup.
 - Public Library should be treated as a public discovery feature and must remain accessible without login.
+- The landing page Public Library feature section should pair discovery copy with a framed screenshot preview using `public/landing/feature-public-library.jpg` in a responsive text-left / preview-right layout; keep the screenshot constrained so it supports the section instead of dominating it.
 - Pricing shown on marketing surfaces must still come from backend-owned pricing APIs or shared pricing components.
 - Landing page metadata should position NoteLib as a note-to-study-pack product, not a generic AI assistant.
 - Landing page title, meta description, and Open Graph metadata must stay aligned with the notes-library-first positioning.

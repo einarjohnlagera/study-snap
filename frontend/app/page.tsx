@@ -216,48 +216,55 @@ function HeroSection() {
 
 function PublicLibrarySection() {
   return (
-    <section className="space-y-8 sm:space-y-10">
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Public Library</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Explore notes you can browse, copy, and study from</h2>
-      </div>
+    <section className="space-y-5 sm:space-y-6">
+      <div className="rounded-[2rem] border border-border/80 bg-[linear-gradient(135deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.9))] p-5 shadow-sm dark:bg-[linear-gradient(135deg,_rgba(15,23,42,0.92),_rgba(15,23,42,0.82))] sm:p-6 lg:p-8">
+        <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Public Library</p>
+              <h2 className="text-2xl font-semibold sm:text-3xl">Explore notes worth studying</h2>
+              <p className="max-w-xl text-sm leading-relaxed text-foreground/75 sm:text-base">
+                Browse public notes by subject, discover popular topics, and copy useful notes into your own library to study them your way.
+              </p>
+            </div>
+            <ul className="space-y-2 text-sm text-foreground/75">
+              {[
+                "Discover curated public notes",
+                "Copy notes into your own library",
+                "Turn them into summaries, concepts, and quizzes",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-3">
+                  <span className="mt-1 inline-flex h-2 w-2 shrink-0 rounded-full bg-sky-500" aria-hidden="true" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+            <TrackedLink
+              href="/public/library"
+              className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
+              eventType="LANDING_CTA_CLICKED"
+              eventMetadata={{ placement: "public_library_section", destination: "/public/library" }}
+            >
+              Browse Public Library
+              <ArrowRight className="h-4 w-4" />
+            </TrackedLink>
+          </div>
 
-      <Card className="space-y-4 p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-            <Library className="h-5 w-5" />
+          <div className="w-full lg:justify-self-end">
+            <div className="mx-auto w-full max-w-xl rounded-[1.75rem] border border-border/80 bg-background/80 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:p-4">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-500/15 bg-sky-500/8 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                <Library className="h-3.5 w-3.5" />
+                Live product preview
+              </div>
+              <ProductScreenshotFrame
+                src={landingScreenshots.publicLibrary.src}
+                alt={landingScreenshots.publicLibrary.alt}
+                className="rounded-[1.35rem] border border-border/70 bg-muted/20 shadow-[0_14px_28px_rgba(15,23,42,0.08)]"
+                imageClassName="max-h-[320px] object-contain object-top sm:max-h-[360px] lg:max-h-[400px]"
+                sizes="(min-width: 1280px) 520px, (min-width: 1024px) 46vw, (min-width: 768px) 88vw, 100vw"
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <CardTitle>Public notes make the library feel real from day one</CardTitle>
-            <CardDescription className="max-w-3xl text-sm leading-relaxed">
-              Browse shared notes by topic, discover what other students are reviewing, and copy useful notes into your own library when you want to study from them.
-            </CardDescription>
-          </div>
-        </div>
-        <TrackedLink
-          href="/public/library"
-          className="inline-flex items-center gap-2 text-sm font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
-          eventType="LANDING_CTA_CLICKED"
-          eventMetadata={{ placement: "public_library_section", destination: "/public/library" }}
-        >
-          Browse Public Library
-          <ArrowRight className="h-4 w-4" />
-        </TrackedLink>
-      </Card>
-
-      <div className="rounded-[1.75rem] border border-border/80 bg-[linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(241,245,249,0.92))] p-4 shadow-sm dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.9),_rgba(15,23,42,0.78))] sm:p-6">
-        <div className="mx-auto max-w-4xl space-y-5 sm:space-y-6">
-          <div className="space-y-2 text-center">
-            <h3 className="text-xl font-semibold sm:text-2xl">See what you can explore</h3>
-            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Browse notes by subject, discover popular topics, and copy them into your library.
-            </p>
-          </div>
-          <ProductScreenshotFrame
-            src={landingScreenshots.publicLibrary.src}
-            alt={landingScreenshots.publicLibrary.alt}
-            sizes="(min-width: 1280px) 960px, (min-width: 768px) 88vw, 100vw"
-          />
         </div>
       </div>
     </section>

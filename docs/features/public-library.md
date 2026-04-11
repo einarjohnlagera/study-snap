@@ -14,11 +14,15 @@ Routes:
 Landing page should visually reinforce Public Library as a real discovery surface, not just describe it in copy.
 
 - Use `public/landing/feature-public-library.jpg` in the landing page Public Library section.
-- Place the screenshot block immediately after the Public Library intro card.
-- The preview block should use:
-  - title `See what you can explore`
-  - supporting copy `Browse notes by subject, discover popular topics, and copy them into your library.`
-- Keep the image responsive, full-width within its container, rounded, and lightly elevated so it reads as a polished product preview on both desktop and mobile.
+- Use a responsive two-column feature layout on desktop with supporting copy on the left and the screenshot preview on the right.
+- On mobile, stack the content with text first and the screenshot second.
+- The section should use:
+  - eyebrow `Public Library`
+  - title `Explore notes worth studying`
+  - supporting copy `Browse public notes by subject, discover popular topics, and copy useful notes into your own library to study them your way.`
+  - lightweight support bullets for discovery, copying, and turning saved notes into summaries, concepts, and quizzes
+- Present the screenshot inside a framed product-preview container with rounded corners, subtle border, background surface, and constrained height so it feels polished without dominating the section.
+- An optional `Live product preview` label may sit above the screenshot when it helps anchor the image as real UI.
 
 ## Discovery Mode vs Filter Mode
 
