@@ -4,6 +4,15 @@
 
 ### New Features
 
+- **Library filtering and search upgrade** — the private Library now behaves more like a structured study workspace:
+  - keeps search as the primary entry, filtering Library notes in real time by title and tags
+  - uses subject-first horizontal scroll chips with single-select `All` default so the main filter stays fast and lightweight
+  - limits tags to a compact `Popular Tags` rail with `+ More` progressive disclosure instead of exposing the full tag list by default
+  - opens searchable subject and tag selectors in the shared bottom-sheet/modal pattern, with sticky search, `Apply`, and `Clear` actions
+  - tag selector now shows selected tags in a dedicated top section so users can quickly deselect without rescanning the full list
+  - Library multi-select tags now use OR logic by default so combining tags from different notes broadens results instead of creating false empty states
+  - notes missing an explicit subject still derive a temporary fallback subject from existing metadata so subject grouping works consistently
+
 - **Landing page Public Library preview** — the homepage now visually demonstrates the Public Library experience instead of relying on copy alone:
   - refined the section into a responsive text-and-preview layout so the screenshot supports the message instead of dominating the page
   - uses `public/landing/feature-public-library.jpg` inside a framed product-preview container with constrained height, rounded corners, and subtle depth

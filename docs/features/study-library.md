@@ -17,13 +17,38 @@ Library contains all notes owned by the current user:
 
 - includes `PRIVATE` and `PUBLIC` notes
 - cards show subject, title, note preview, summary preview, tags, state, and updated date
+- if a note has no explicit subject yet, Library should derive a temporary fallback subject from existing metadata so the note still participates in subject grouping
 - note preview comes from original note content
 - summary preview comes from generated Study Pack summary, or `No summary available yet.` when the note is still a draft
-- supports search, subject filter, tag filter, sorting, and pagination
+- supports:
+  - real-time search over title and tags
+  - single-select subject chips with `All` as the default
+  - limited `Popular Tags` chips that combine with search and subject
+  - full tag multi-select through a progressive-disclosure selector
+  - OR logic within the tag group so selecting multiple tags shows notes that match any selected tag
+  - sorting and pagination
+- Library filter layout should keep:
+  - search bar first
+  - subject chips second
+  - popular tags rail third
+- subject and popular-tag chips should use horizontal scroll on one line instead of wrapping into tall chip grids
+- Library should not expose the full subject/tag lists by default
+- a `+ More` chip should open the full selector:
+  - subjects -> searchable single-select list
+  - tags -> searchable multi-select list
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
+- tag selector should surface currently selected tags near the top so users can quickly deselect them
+- selector ordering may prioritize recent use first, then frequency, then alphabetical order
+- tag OR matching should reduce false `No study packs found` states during normal browsing
 - opening a card navigates to the unified Note Detail page
 - card interaction is consistent with Dashboard/Public Library:
   - click card to open note
   - use top-right card menu for tertiary actions (`Make a Copy`, `Delete`)
+- empty filtered state should show:
+  - `No study packs found`
+  - `Try adjusting your filters`
 
 State badges:
 

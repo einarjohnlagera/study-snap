@@ -24,7 +24,16 @@ Core loop:
 ## Implementation Workflow Rules
 
 - After every completed prompt/task that results in code or doc changes, always include a suggested commit message in the final response.
-- Keep the suggested commit message aligned with the repo's current style: concise subject line plus 3-5 high-signal bullets when useful.
+- Format the suggested commit message as a copy-friendly plain-text block:
+  - first line: `type: concise subject`
+  - following lines: flat `- ` bullets with 3-5 high-signal changes when useful
+- Example:
+  - `polish: refine Library filters with subject-first UX`
+  - `- replace wrapped tag chips with a compact popular-tags rail`
+  - `- keep subjects in a single horizontal scroll lane above the note grid`
+  - `- add + More tag selection via shared mobile sheet / desktop modal`
+  - `- preserve real-time title-and-tag search plus existing note navigation`
+  - `- update Library docs and release notes for progressive tag disclosure`
 
 ## Backend Code Quality Rules
 
@@ -356,14 +365,24 @@ Core loop:
   - notes list
 - Current library filtering and sorting stay frontend-side over loaded note-list payloads.
 - Backend note-list payloads must expose the metadata needed for library filtering/sorting, including note `courseProgram`, `createdAt`, `updatedAt`, and public-note owner `learnerLevel` when applicable.
-- Private Library filters should support:
-  - `Course / Program`
+- Private Library should expose its primary organization controls inline above the note list in this order:
+  - `Search`
   - `Subject`
-  - `Tags`
-  - `Study Pack Ready`
-  - `Draft`
-  - `Public`
-  - `Private`
+  - `Popular Tags`
+- Private Library search should match note `title` and `tags` in real time.
+- Private Library subject filtering should be single-select with `All` as the default chip and should use a one-line horizontal scroll rail rather than wrapping.
+- Private Library should keep a `+ More` chip at the end of the subject rail so users can open the full searchable subject selector without adding vertical clutter.
+- Private Library should not expose the full tag list by default; show only a limited `Popular Tags` rail plus a `+ More` control.
+- Private Library `+ More` should open the shared selector surface:
+  - subjects -> searchable single-select list
+  - tags -> searchable multi-select list with a selected-tags quick-deselect section near the top
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
+- Selector option ordering may prioritize recent use first, then frequency, then alphabetical order.
+- Private Library tag filtering should remain multi-select, use OR logic within the tag group by default, and combine with search + subject on the loaded note list.
+- Rationale: OR matching makes tag browsing feel broader and avoids false empty states when users combine tags from different notes.
+- Notes without an explicit subject may derive a temporary fallback subject from existing saved metadata so Library grouping/filtering still works.
 - Public Library filters should support:
   - `Course / Program`
   - `Learner Level` when public note results expose it
