@@ -24,7 +24,16 @@ Core loop:
 ## Implementation Workflow Rules
 
 - After every completed prompt/task that results in code or doc changes, always include a suggested commit message in the final response.
-- Keep the suggested commit message aligned with the repo's current style: concise subject line plus 3-5 high-signal bullets when useful.
+- Format the suggested commit message as a copy-friendly plain-text block:
+  - first line: `type: concise subject`
+  - following lines: flat `- ` bullets with 3-5 high-signal changes when useful
+- Example:
+  - `polish: refine Library filters with subject-first UX`
+  - `- replace wrapped tag chips with a compact popular-tags rail`
+  - `- keep subjects in a single horizontal scroll lane above the note grid`
+  - `- add + More tag selection via shared mobile sheet / desktop modal`
+  - `- preserve real-time title-and-tag search plus existing note navigation`
+  - `- update Library docs and release notes for progressive tag disclosure`
 
 ## Backend Code Quality Rules
 
