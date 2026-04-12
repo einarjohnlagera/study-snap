@@ -339,11 +339,20 @@ Users can:
   - subject chips second
   - a compact `Popular Tags` rail third
 - subject chips should stay on one horizontal scroll line instead of wrapping into multiple rows
+- add a `+ More` chip at the end of the subject rail so the full subject list stays accessible without increasing page height
 - do not expose the full tag list by default; show only a limited `Popular Tags` set and a `+ More` control
-- `+ More` should open the shared tag selector surface:
+- `+ More` should open the shared selector surface:
+  - subjects -> single-select list with search
+  - tags -> multi-select list with search
   - mobile -> bottom sheet
   - desktop -> modal/sheet
   - actions -> `Apply`, `Clear`
+- selector search inputs should filter their lists in real time
+- tag selector should show currently selected tags in a quick-deselect section near the top
+- selector option ordering may prioritize:
+  - recently used
+  - frequency
+  - alphabetical
 - derive a temporary fallback subject from existing note metadata when a note has no explicit subject so subject grouping still works
 - open by clicking card/title
 - start Quick Review for Study Pack Ready notes

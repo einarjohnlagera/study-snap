@@ -27,7 +27,7 @@ jest.mock("@/lib/api", () => ({
 describe("Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
-    (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry"]);
+    (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Pharmacy"]);
     (listNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-42",
@@ -118,6 +118,25 @@ describe("Library page", () => {
     expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
   });
 
+  it("filters subjects from the searchable subject selector", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[0]);
+    expect(screen.getByRole("heading", { name: "Select subject" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Search subjects..."), {
+      target: { value: "pha" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Pharmacy" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
   it("searches library notes by title and tags in real time", async () => {
     render(<LibraryPage />);
 
@@ -132,19 +151,23 @@ describe("Library page", () => {
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
   });
 
-  it("shows limited popular tags and applies hidden tags from the selector sheet", async () => {
+  it("searches tags inside the selector and supports quick deselect from selected tags", async () => {
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
 
-    expect(screen.getByRole("button", { name: "cells" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "review" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "mitochondria" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "+ More" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
-
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
     expect(screen.getByRole("heading", { name: "Select tags" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "mito" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "mitochondria" }));
+    expect(screen.getByText("Selected tags")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "mitochondria" })[0]);
+    expect(screen.queryByText("Selected tags")).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "mitochondria" }));
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
@@ -160,7 +183,7 @@ describe("Library page", () => {
     await screen.findByText("Cell Respiration");
 
     fireEvent.click(screen.getByRole("button", { name: "Biology" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
     fireEvent.click(screen.getAllByRole("button", { name: "review" }).at(-1) as HTMLElement);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 

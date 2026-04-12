@@ -31,11 +31,15 @@ Library contains all notes owned by the current user:
   - subject chips second
   - popular tags rail third
 - subject and popular-tag chips should use horizontal scroll on one line instead of wrapping into tall chip grids
-- Library should not expose the full tag list by default
-- a `+ More` chip should open the full tag selector:
+- Library should not expose the full subject/tag lists by default
+- a `+ More` chip should open the full selector:
+  - subjects -> searchable single-select list
+  - tags -> searchable multi-select list
   - mobile -> bottom sheet
   - desktop -> modal/sheet
   - actions -> `Apply`, `Clear`
+- tag selector should surface currently selected tags near the top so users can quickly deselect them
+- selector ordering may prioritize recent use first, then frequency, then alphabetical order
 - opening a card navigates to the unified Note Detail page
 - card interaction is consistent with Dashboard/Public Library:
   - click card to open note

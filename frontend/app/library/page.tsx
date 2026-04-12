@@ -38,7 +38,9 @@ const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 const SUBJECT_FALLBACK = "General";
 const POPULAR_TAG_LIMIT = 5;
 const MORE_TAGS_LABEL = "+ More";
+const MORE_SUBJECTS_LABEL = "+ More";
 const TAG_SELECTOR_TITLE = "Select tags";
+const SUBJECT_SELECTOR_TITLE = "Select subject";
 const SORT_LABELS: Record<LibrarySortOption, string> = {
   RECENTLY_UPDATED: "Recently Updated",
   RECENTLY_REVIEWED: "Recently Reviewed",
@@ -123,6 +125,46 @@ function getScrollRailClassName() {
   return "flex flex-nowrap gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 }
 
+function updateRecentValues(previous: string[], values: string[]) {
+  const next = [...previous];
+  for (const value of values) {
+    const existingIndex = next.indexOf(value);
+    if (existingIndex >= 0) {
+      next.splice(existingIndex, 1);
+    }
+    next.unshift(value);
+  }
+  return next.slice(0, 8);
+}
+
+function buildPriorityComparator(recentValues: string[], counts: Map<string, number>) {
+  return (left: string, right: string) => {
+    const leftRecentIndex = recentValues.indexOf(left);
+    const rightRecentIndex = recentValues.indexOf(right);
+    const leftIsRecent = leftRecentIndex >= 0;
+    const rightIsRecent = rightRecentIndex >= 0;
+
+    if (leftIsRecent || rightIsRecent) {
+      if (leftIsRecent && rightIsRecent && leftRecentIndex !== rightRecentIndex) {
+        return leftRecentIndex - rightRecentIndex;
+      }
+      if (leftIsRecent) {
+        return -1;
+      }
+      if (rightIsRecent) {
+        return 1;
+      }
+    }
+
+    const countDiff = (counts.get(right) ?? 0) - (counts.get(left) ?? 0);
+    if (countDiff !== 0) {
+      return countDiff;
+    }
+
+    return left.localeCompare(right);
+  };
+}
+
 function LibraryLoading() {
   return (
     <div className="space-y-4">
@@ -149,6 +191,7 @@ export default function LibraryPage() {
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSubject, setSelectedSubject] = useState<string>(ALL_SUBJECTS);
+  const [subjectDraft, setSubjectDraft] = useState<string>(ALL_SUBJECTS);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagDraft, setTagDraft] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<LibrarySortOption>("RECENTLY_UPDATED");
@@ -159,6 +202,11 @@ export default function LibraryPage() {
   const [visibleCount, setVisibleCount] = useState(LIBRARY_PAGE_SIZE);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [tagSelectorOpen, setTagSelectorOpen] = useState(false);
+  const [subjectSelectorOpen, setSubjectSelectorOpen] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
+  const [recentTags, setRecentTags] = useState<string[]>([]);
+  const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
 
   const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
     if (notes.length === 0) {
@@ -240,6 +288,15 @@ export default function LibraryPage() {
     ).sort((left, right) => left.localeCompare(right));
   }, [derivedSubjects, subjectSuggestions]);
 
+  const subjectCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      const subject = getLibrarySubject(item);
+      counts.set(subject, (counts.get(subject) ?? 0) + 1);
+    }
+    return counts;
+  }, [items]);
+
   const tagCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
@@ -251,21 +308,17 @@ export default function LibraryPage() {
   }, [items]);
 
   const availableTags = useMemo(() => {
-    return Array.from(tagCounts.entries())
-      .sort((left, right) => {
-        if (right[1] !== left[1]) {
-          return right[1] - left[1];
-        }
-        return left[0].localeCompare(right[0]);
-      })
-      .map(([tag]) => tag);
+    return Array.from(tagCounts.keys());
   }, [tagCounts]);
 
   useEffect(() => {
     if (selectedSubject !== ALL_SUBJECTS && !availableSubjects.includes(selectedSubject)) {
       setSelectedSubject(ALL_SUBJECTS);
     }
-  }, [availableSubjects, selectedSubject]);
+    if (subjectDraft !== ALL_SUBJECTS && !availableSubjects.includes(subjectDraft)) {
+      setSubjectDraft(ALL_SUBJECTS);
+    }
+  }, [availableSubjects, selectedSubject, subjectDraft]);
 
   useEffect(() => {
     setSelectedTags((previous) => previous.filter((tag) => availableTags.includes(tag)));
@@ -275,8 +328,16 @@ export default function LibraryPage() {
   useEffect(() => {
     if (tagSelectorOpen) {
       setTagDraft(selectedTags);
+      setTagSearchQuery("");
     }
   }, [selectedTags, tagSelectorOpen]);
+
+  useEffect(() => {
+    if (subjectSelectorOpen) {
+      setSubjectDraft(selectedSubject);
+      setSubjectSearchQuery("");
+    }
+  }, [selectedSubject, subjectSelectorOpen]);
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
@@ -285,8 +346,11 @@ export default function LibraryPage() {
   const clearFilters = useCallback(() => {
     setSearchQuery("");
     setSelectedSubject(ALL_SUBJECTS);
+    setSubjectDraft(ALL_SUBJECTS);
     setSelectedTags([]);
     setTagDraft([]);
+    setSubjectSearchQuery("");
+    setTagSearchQuery("");
   }, []);
 
   const toggleDraftTag = useCallback((tag: string) => {
@@ -297,19 +361,50 @@ export default function LibraryPage() {
     ));
   }, []);
 
+  const subjectPriorityComparator = useMemo(
+    () => buildPriorityComparator(recentSubjects, subjectCounts),
+    [recentSubjects, subjectCounts],
+  );
+  const tagPriorityComparator = useMemo(
+    () => buildPriorityComparator(recentTags, tagCounts),
+    [recentTags, tagCounts],
+  );
+
+  const displayedSubjects = useMemo(() => {
+    return [...availableSubjects].sort(subjectPriorityComparator);
+  }, [availableSubjects, subjectPriorityComparator]);
+
+  const filteredModalSubjects = useMemo(() => {
+    const query = subjectSearchQuery.trim().toLowerCase();
+    return displayedSubjects.filter((subject) => (
+      query.length === 0 || subject.toLowerCase().includes(query)
+    ));
+  }, [displayedSubjects, subjectSearchQuery]);
+
+  const displayedTags = useMemo(() => {
+    return [...availableTags].sort(tagPriorityComparator);
+  }, [availableTags, tagPriorityComparator]);
+
+  const filteredModalTags = useMemo(() => {
+    const query = tagSearchQuery.trim().toLowerCase();
+    return displayedTags.filter((tag) => (
+      query.length === 0 || tag.toLowerCase().includes(query)
+    ));
+  }, [displayedTags, tagSearchQuery]);
+
   const visiblePopularTags = useMemo(() => {
     const ordered = [
       ...selectedTags,
-      ...availableTags.filter((tag) => !selectedTags.includes(tag)),
+      ...displayedTags.filter((tag) => !selectedTags.includes(tag)),
     ];
-    const visibleLimit = Math.max(POPULAR_TAG_LIMIT, selectedTags.length);
-    return ordered.slice(0, visibleLimit);
-  }, [availableTags, selectedTags]);
+    const deduped = Array.from(new Set(ordered));
+    return deduped.slice(0, Math.max(POPULAR_TAG_LIMIT, selectedTags.length));
+  }, [displayedTags, selectedTags]);
 
   const remainingTagCount = useMemo(() => {
     const visible = new Set(visiblePopularTags);
-    return availableTags.filter((tag) => !visible.has(tag)).length;
-  }, [availableTags, visiblePopularTags]);
+    return displayedTags.filter((tag) => !visible.has(tag)).length;
+  }, [displayedTags, visiblePopularTags]);
 
   const hasActiveFilters = searchQuery.trim().length > 0
     || selectedSubject !== ALL_SUBJECTS
@@ -460,17 +555,27 @@ export default function LibraryPage() {
                 >
                   All
                 </button>
-                {availableSubjects.map((subject) => (
+                {displayedSubjects.map((subject) => (
                   <button
                     key={subject}
                     type="button"
                     className={getFilterChipClassName(selectedSubject === subject)}
-                    onClick={() => setSelectedSubject(subject)}
+                    onClick={() => {
+                      setSelectedSubject(subject);
+                      setRecentSubjects((previous) => updateRecentValues(previous, [subject]));
+                    }}
                     aria-pressed={selectedSubject === subject}
                   >
                     {subject}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  className={getFilterChipClassName(false)}
+                  onClick={() => setSubjectSelectorOpen(true)}
+                >
+                  {MORE_SUBJECTS_LABEL}
+                </button>
               </div>
             </div>
 
@@ -498,11 +603,15 @@ export default function LibraryPage() {
                       type="button"
                       className={getFilterChipClassName(selectedTags.includes(tag))}
                       onClick={() => {
-                        setSelectedTags((previous) => (
-                          previous.includes(tag)
+                        setSelectedTags((previous) => {
+                          const next = previous.includes(tag)
                             ? previous.filter((selectedTag) => selectedTag !== tag)
-                            : [...previous, tag]
-                        ));
+                            : [...previous, tag];
+                          if (!previous.includes(tag)) {
+                            setRecentTags((recentPrevious) => updateRecentValues(recentPrevious, [tag]));
+                          }
+                          return next;
+                        });
                       }}
                       aria-pressed={selectedTags.includes(tag)}
                     >
@@ -616,6 +725,80 @@ export default function LibraryPage() {
       )}
 
       <LibrarySheetModal
+        isOpen={subjectSelectorOpen}
+        title={SUBJECT_SELECTOR_TITLE}
+        onClose={() => setSubjectSelectorOpen(false)}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setSubjectDraft(ALL_SUBJECTS)}>
+              Clear
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setSelectedSubject(subjectDraft);
+                if (subjectDraft !== ALL_SUBJECTS) {
+                  setRecentSubjects((previous) => updateRecentValues(previous, [subjectDraft]));
+                }
+                setSubjectSelectorOpen(false);
+              }}
+            >
+              Apply
+            </Button>
+          </div>
+        )}
+      >
+        <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
+          <input
+            type="search"
+            value={subjectSearchQuery}
+            onChange={(event) => setSubjectSearchQuery(event.target.value)}
+            placeholder="Search subjects..."
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+          />
+          {subjectDraft !== ALL_SUBJECTS ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected subject</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={getFilterChipClassName(true)}
+                  onClick={() => setSubjectDraft(ALL_SUBJECTS)}
+                >
+                  {subjectDraft}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+        {filteredModalSubjects.length === 0 ? (
+          <p className="text-sm text-foreground/65">No subjects match your search.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={getFilterChipClassName(subjectDraft === ALL_SUBJECTS)}
+              onClick={() => setSubjectDraft(ALL_SUBJECTS)}
+              aria-pressed={subjectDraft === ALL_SUBJECTS}
+            >
+              All
+            </button>
+            {filteredModalSubjects.map((subject) => (
+              <button
+                key={subject}
+                type="button"
+                className={getFilterChipClassName(subjectDraft === subject)}
+                onClick={() => setSubjectDraft(subject)}
+                aria-pressed={subjectDraft === subject}
+              >
+                {subject}
+              </button>
+            ))}
+          </div>
+        )}
+      </LibrarySheetModal>
+
+      <LibrarySheetModal
         isOpen={tagSelectorOpen}
         title={TAG_SELECTOR_TITLE}
         onClose={() => setTagSelectorOpen(false)}
@@ -628,6 +811,9 @@ export default function LibraryPage() {
               type="button"
               onClick={() => {
                 setSelectedTags(tagDraft);
+                if (tagDraft.length > 0) {
+                  setRecentTags((previous) => updateRecentValues(previous, [...tagDraft].reverse()));
+                }
                 setTagSelectorOpen(false);
               }}
             >
@@ -636,28 +822,58 @@ export default function LibraryPage() {
           </div>
         )}
       >
-        <div className="space-y-3">
-          <p className="text-sm text-foreground/70">
-            Choose the tags you want to combine with search and subject filters.
-          </p>
-          {availableTags.length === 0 ? (
-            <p className="text-sm text-foreground/65">No tags available yet.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {availableTags.map((tag) => (
+        <div className="sticky top-0 z-10 space-y-3 bg-background pb-3">
+          <input
+            type="search"
+            value={tagSearchQuery}
+            onChange={(event) => setTagSearchQuery(event.target.value)}
+            placeholder="Search tags..."
+            className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+          />
+          {tagDraft.length > 0 ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-foreground/55">Selected tags</p>
                 <button
-                  key={tag}
                   type="button"
-                  className={getFilterChipClassName(tagDraft.includes(tag))}
-                  onClick={() => toggleDraftTag(tag)}
-                  aria-pressed={tagDraft.includes(tag)}
+                  className="text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                  onClick={() => setTagDraft([])}
                 >
-                  {tag}
+                  Clear all
                 </button>
-              ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {tagDraft.map((tag) => (
+                  <button
+                    key={`selected-${tag}`}
+                    type="button"
+                    className={getFilterChipClassName(true)}
+                    onClick={() => toggleDraftTag(tag)}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
+          ) : null}
         </div>
+        {filteredModalTags.length === 0 ? (
+          <p className="text-sm text-foreground/65">No tags match your search.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {filteredModalTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className={getFilterChipClassName(tagDraft.includes(tag))}
+                onClick={() => toggleDraftTag(tag)}
+                aria-pressed={tagDraft.includes(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
       </LibrarySheetModal>
 
       <LibrarySheetModal

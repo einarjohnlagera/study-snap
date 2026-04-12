@@ -371,11 +371,15 @@ Core loop:
   - `Popular Tags`
 - Private Library search should match note `title` and `tags` in real time.
 - Private Library subject filtering should be single-select with `All` as the default chip and should use a one-line horizontal scroll rail rather than wrapping.
+- Private Library should keep a `+ More` chip at the end of the subject rail so users can open the full searchable subject selector without adding vertical clutter.
 - Private Library should not expose the full tag list by default; show only a limited `Popular Tags` rail plus a `+ More` control.
-- Private Library `+ More` should open the shared tag selector surface:
+- Private Library `+ More` should open the shared selector surface:
+  - subjects -> searchable single-select list
+  - tags -> searchable multi-select list with a selected-tags quick-deselect section near the top
   - mobile -> bottom sheet
   - desktop -> modal/sheet
   - actions -> `Apply`, `Clear`
+- Selector option ordering may prioritize recent use first, then frequency, then alphabetical order.
 - Private Library tag filtering should remain multi-select and combine with search + subject on the loaded note list.
 - Notes without an explicit subject may derive a temporary fallback subject from existing saved metadata so Library grouping/filtering still works.
 - Public Library filters should support:
