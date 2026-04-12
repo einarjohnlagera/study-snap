@@ -421,7 +421,7 @@ export default function LibraryPage() {
         || itemTitle.toLowerCase().includes(query)
         || itemTags.some((tag) => tag.toLowerCase().includes(query));
       const subjectMatch = selectedSubject === ALL_SUBJECTS || itemSubject === selectedSubject;
-      const tagMatch = selectedTags.length === 0 || selectedTags.every((selectedTag) => itemTags.includes(selectedTag));
+      const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
 
       return searchMatch && subjectMatch && tagMatch;
     });

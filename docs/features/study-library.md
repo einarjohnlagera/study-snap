@@ -25,6 +25,7 @@ Library contains all notes owned by the current user:
   - single-select subject chips with `All` as the default
   - limited `Popular Tags` chips that combine with search and subject
   - full tag multi-select through a progressive-disclosure selector
+  - OR logic within the tag group so selecting multiple tags shows notes that match any selected tag
   - sorting and pagination
 - Library filter layout should keep:
   - search bar first
@@ -40,6 +41,7 @@ Library contains all notes owned by the current user:
   - actions -> `Apply`, `Clear`
 - tag selector should surface currently selected tags near the top so users can quickly deselect them
 - selector ordering may prioritize recent use first, then frequency, then alphabetical order
+- tag OR matching should reduce false `No study packs found` states during normal browsing
 - opening a card navigates to the unified Note Detail page
 - card interaction is consistent with Dashboard/Public Library:
   - click card to open note

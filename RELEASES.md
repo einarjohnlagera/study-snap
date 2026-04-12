@@ -10,6 +10,7 @@
   - limits tags to a compact `Popular Tags` rail with `+ More` progressive disclosure instead of exposing the full tag list by default
   - opens searchable subject and tag selectors in the shared bottom-sheet/modal pattern, with sticky search, `Apply`, and `Clear` actions
   - tag selector now shows selected tags in a dedicated top section so users can quickly deselect without rescanning the full list
+  - Library multi-select tags now use OR logic by default so combining tags from different notes broadens results instead of creating false empty states
   - notes missing an explicit subject still derive a temporary fallback subject from existing metadata so subject grouping works consistently
 
 - **Landing page Public Library preview** — the homepage now visually demonstrates the Public Library experience instead of relying on copy alone:

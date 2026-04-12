@@ -331,7 +331,7 @@ Users can:
 - view their saved notes
 - search by title and tags in real time
 - filter by subject (single select, `All subjects` default)
-- filter by tags (multi-select AND matching)
+- filter by tags (multi-select OR matching)
 - combine search + subject + tag filters on the loaded note list
 - sort by `Recently Updated`, `Recently Reviewed`, `Newest`, `Title (A-Z)`, `Title (Z-A)`, and `Oldest`
 - keep the primary filter UI inline above the note grid with:
@@ -348,6 +348,7 @@ Users can:
   - desktop -> modal/sheet
   - actions -> `Apply`, `Clear`
 - selector search inputs should filter their lists in real time
+- multi-select tags should use OR logic by default so selecting multiple tags broadens browsing instead of creating false empty states
 - tag selector should show currently selected tags in a quick-deselect section near the top
 - selector option ordering may prioritize:
   - recently used

@@ -151,6 +151,103 @@ describe("Library page", () => {
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
   });
 
+  it("filters notes by a single selected tag", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "energy" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "energy" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+  });
+
+  it("uses OR logic for multiple tags from the same note", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "math" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "math" }).at(-1) as HTMLElement);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "med" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "medication" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
+  it("uses OR logic for multiple tags from different notes", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "energy" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "energy" }).at(-1) as HTMLElement);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "exam" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "exam" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+  });
+
+  it("combines subject and tag filters while keeping subject restrictive", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getByRole("button", { name: "Biology" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "cells" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "cells" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+  });
+
+  it("combines search and tag filters while keeping search restrictive", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "dosage" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "review" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "review" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
   it("searches tags inside the selector and supports quick deselect from selected tags", async () => {
     render(<LibraryPage />);
 
@@ -184,6 +281,9 @@ describe("Library page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Biology" }));
     fireEvent.click(screen.getAllByRole("button", { name: "+ More" })[1]);
+    fireEvent.change(screen.getByPlaceholderText("Search tags..."), {
+      target: { value: "review" },
+    });
     fireEvent.click(screen.getAllByRole("button", { name: "review" }).at(-1) as HTMLElement);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 

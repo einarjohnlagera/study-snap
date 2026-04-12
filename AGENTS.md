@@ -380,7 +380,8 @@ Core loop:
   - desktop -> modal/sheet
   - actions -> `Apply`, `Clear`
 - Selector option ordering may prioritize recent use first, then frequency, then alphabetical order.
-- Private Library tag filtering should remain multi-select and combine with search + subject on the loaded note list.
+- Private Library tag filtering should remain multi-select, use OR logic within the tag group by default, and combine with search + subject on the loaded note list.
+- Rationale: OR matching makes tag browsing feel broader and avoids false empty states when users combine tags from different notes.
 - Notes without an explicit subject may derive a temporary fallback subject from existing saved metadata so Library grouping/filtering still works.
 - Public Library filters should support:
   - `Course / Program`
