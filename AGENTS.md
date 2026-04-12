@@ -356,14 +356,19 @@ Core loop:
   - notes list
 - Current library filtering and sorting stay frontend-side over loaded note-list payloads.
 - Backend note-list payloads must expose the metadata needed for library filtering/sorting, including note `courseProgram`, `createdAt`, `updatedAt`, and public-note owner `learnerLevel` when applicable.
-- Private Library filters should support:
-  - `Course / Program`
+- Private Library should expose its primary organization controls inline above the note list in this order:
+  - `Search`
   - `Subject`
-  - `Tags`
-  - `Study Pack Ready`
-  - `Draft`
-  - `Public`
-  - `Private`
+  - `Popular Tags`
+- Private Library search should match note `title` and `tags` in real time.
+- Private Library subject filtering should be single-select with `All` as the default chip and should use a one-line horizontal scroll rail rather than wrapping.
+- Private Library should not expose the full tag list by default; show only a limited `Popular Tags` rail plus a `+ More` control.
+- Private Library `+ More` should open the shared tag selector surface:
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
+- Private Library tag filtering should remain multi-select and combine with search + subject on the loaded note list.
+- Notes without an explicit subject may derive a temporary fallback subject from existing saved metadata so Library grouping/filtering still works.
 - Public Library filters should support:
   - `Course / Program`
   - `Learner Level` when public note results expose it

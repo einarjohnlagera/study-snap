@@ -35,7 +35,7 @@ describe("Library page", () => {
         courseProgram: "Nursing",
         learnerLevel: "COLLEGE",
         subject: "Biology",
-        tags: ["cells"],
+        tags: ["cells", "energy", "mitochondria"],
         contentPreview: "ATP production in mitochondria...",
         summaryPreview: "Mitochondria convert glucose into usable ATP energy.",
         visibility: "PRIVATE",
@@ -51,7 +51,7 @@ describe("Library page", () => {
         courseProgram: "Chemistry",
         learnerLevel: "COLLEGE",
         subject: "Chemistry",
-        tags: ["review"],
+        tags: ["review", "exam", "cells"],
         contentPreview: "Generated chemistry review preview...",
         summaryPreview: "Generated chemistry summary preview.",
         visibility: "PUBLIC",
@@ -60,6 +60,22 @@ describe("Library page", () => {
         quizCount: 3,
         createdAt: "2026-03-21T10:00:00Z",
         updatedAt: "2026-03-22T10:00:00Z",
+      },
+      {
+        id: "note-77",
+        title: "Dosage Calculations",
+        courseProgram: "Pharmacy",
+        learnerLevel: "COLLEGE",
+        subject: null,
+        tags: ["math", "medication", "review"],
+        contentPreview: "Medication dosage formulas and unit conversions...",
+        summaryPreview: "Practice dosage conversion steps for common prescriptions.",
+        visibility: "PRIVATE",
+        studyPackId: "pack-77",
+        studyPackStatus: "STUDY_PACK_READY",
+        quizCount: 4,
+        createdAt: "2026-03-18T10:00:00Z",
+        updatedAt: "2026-03-23T10:00:00Z",
       },
     ]);
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
@@ -88,19 +104,72 @@ describe("Library page", () => {
     });
   });
 
-  it("filters notes from the shared filter sheet", async () => {
+  it("filters notes by horizontal subject chips", async () => {
     render(<LibraryPage />);
 
     expect(await screen.findByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
-    fireEvent.change(screen.getByLabelText("Course / Program"), {
-      target: { value: "Chemistry" },
+    fireEvent.click(screen.getByRole("button", { name: "Biology" }));
+
+    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+  });
+
+  it("searches library notes by title and tags in real time", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.change(screen.getByLabelText("Search"), {
+      target: { value: "review" },
     });
-    fireEvent.click(screen.getByLabelText("Study Pack Ready"));
 
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
+  it("shows limited popular tags and applies hidden tags from the selector sheet", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    expect(screen.getByRole("button", { name: "cells" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "review" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "mitochondria" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "+ More" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
+
+    expect(screen.getByRole("heading", { name: "Select tags" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "mitochondria" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByRole("button", { name: "mitochondria" })).toBeInTheDocument();
+    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+    expect(screen.queryByText("Zygote Review")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
+  });
+
+  it("shows the empty filtered state and clears filters back to results", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getByRole("button", { name: "Biology" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "review" }).at(-1) as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByText("No study packs found")).toBeInTheDocument();
+    expect(screen.getByText("Try adjusting your filters")).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
+
+    expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
   });
 
@@ -112,7 +181,16 @@ describe("Library page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Title (Z-A)" }));
 
     const cardTitles = Array.from(container.querySelectorAll("h3")).map((element) => element.textContent);
-    expect(cardTitles.slice(0, 2)).toEqual(["Zygote Review", "Cell Respiration"]);
+    expect(cardTitles.slice(0, 3)).toEqual(["Zygote Review", "Dosage Calculations", "Cell Respiration"]);
+  });
+
+  it("shows the derived subject fallback when a note has no explicit subject", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Dosage Calculations");
+
+    expect(screen.getByRole("button", { name: "Pharmacy" })).toBeInTheDocument();
+    expect(screen.getAllByText("Pharmacy")).not.toHaveLength(0);
   });
 
   it("shows create-note and demo actions when the library is empty", async () => {

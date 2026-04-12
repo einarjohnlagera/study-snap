@@ -146,6 +146,13 @@ Page responsibilities:
 - Profile = identity
 - Settings = app preferences
 
+Library organization:
+
+- search matches note titles and tags in real time
+- subject filtering is exposed as single-select chips with `All` as the default
+- tag filtering is exposed as multi-select chips and combines with search + subject on the loaded note list
+- notes without an explicit subject temporarily derive their filter/display subject from existing metadata so the Library remains groupable
+
 ## Personalized Dashboard
 
 - Dashboard presentation adapts to `Profile Type` without changing the shared core system.

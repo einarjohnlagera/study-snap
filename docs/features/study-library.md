@@ -17,13 +17,32 @@ Library contains all notes owned by the current user:
 
 - includes `PRIVATE` and `PUBLIC` notes
 - cards show subject, title, note preview, summary preview, tags, state, and updated date
+- if a note has no explicit subject yet, Library should derive a temporary fallback subject from existing metadata so the note still participates in subject grouping
 - note preview comes from original note content
 - summary preview comes from generated Study Pack summary, or `No summary available yet.` when the note is still a draft
-- supports search, subject filter, tag filter, sorting, and pagination
+- supports:
+  - real-time search over title and tags
+  - single-select subject chips with `All` as the default
+  - limited `Popular Tags` chips that combine with search and subject
+  - full tag multi-select through a progressive-disclosure selector
+  - sorting and pagination
+- Library filter layout should keep:
+  - search bar first
+  - subject chips second
+  - popular tags rail third
+- subject and popular-tag chips should use horizontal scroll on one line instead of wrapping into tall chip grids
+- Library should not expose the full tag list by default
+- a `+ More` chip should open the full tag selector:
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
 - opening a card navigates to the unified Note Detail page
 - card interaction is consistent with Dashboard/Public Library:
   - click card to open note
   - use top-right card menu for tertiary actions (`Make a Copy`, `Delete`)
+- empty filtered state should show:
+  - `No study packs found`
+  - `Try adjusting your filters`
 
 State badges:
 

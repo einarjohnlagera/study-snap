@@ -329,14 +329,22 @@ Library is the user's private workspace for managing and revisiting their own no
 Users can:
 
 - view their saved notes
-- search by title/tags/content preview/course metadata
-- filter by course/program (single select, `All course/programs` default)
+- search by title and tags in real time
 - filter by subject (single select, `All subjects` default)
-- filter by tags (multi-select OR matching)
-- filter by Study Pack status (`Study Pack Ready`, `Draft`)
-- filter by visibility (`Public`, `Private`)
+- filter by tags (multi-select AND matching)
 - combine search + subject + tag filters on the loaded note list
 - sort by `Recently Updated`, `Recently Reviewed`, `Newest`, `Title (A-Z)`, `Title (Z-A)`, and `Oldest`
+- keep the primary filter UI inline above the note grid with:
+  - search first
+  - subject chips second
+  - a compact `Popular Tags` rail third
+- subject chips should stay on one horizontal scroll line instead of wrapping into multiple rows
+- do not expose the full tag list by default; show only a limited `Popular Tags` set and a `+ More` control
+- `+ More` should open the shared tag selector surface:
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
+- derive a temporary fallback subject from existing note metadata when a note has no explicit subject so subject grouping still works
 - open by clicking card/title
 - start Quick Review for Study Pack Ready notes
 - manage note visibility (`Make Public` / `Make Private`)
@@ -345,6 +353,9 @@ Users can:
 - empty-state actions should include:
   - `Create Your First Note`
   - `Try Demo`
+- no-result state should show:
+  - `No study packs found`
+  - `Try adjusting your filters`
 
 ### Public Library
 
