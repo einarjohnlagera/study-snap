@@ -11,131 +11,92 @@ import static org.assertj.core.api.Assertions.within;
 
 class PublicNotesScoringUtilsTest {
 
-    // --- computeScore ---
-
     @Test
-    void computeScore_weightsFormula_copiesPointSixViewsPointFour() {
-        NoteListItemResponse note = makeNote("id", 10L, 10L, 0L, OffsetDateTime.now());
-        // (10 * 0.6) + (10 * 0.4) = 6.0 + 4.0 = 10.0
-        assertThat(PublicNotesScoringUtils.computeScore(note)).isCloseTo(10.0, within(0.001));
-    }
+    void computeScore_usesViewsPlusCopiesTimesThree() {
+        NoteListItemResponse note = makeNote("id", 4L, 7L, OffsetDateTime.now());
 
-    @Test
-    void computeScore_copiesWeightedHigherThanViews() {
-        NoteListItemResponse highCopies = makeNote("a", 10L, 0L, 0L, OffsetDateTime.now());
-        NoteListItemResponse highViews = makeNote("b", 0L, 10L, 0L, OffsetDateTime.now());
-        // highCopies: 6.0, highViews: 4.0
-        assertThat(PublicNotesScoringUtils.computeScore(highCopies))
-                .isGreaterThan(PublicNotesScoringUtils.computeScore(highViews));
+        assertThat(PublicNotesScoringUtils.computeScore(note)).isCloseTo(19.0, within(0.001));
     }
 
     @Test
     void computeScore_treatsNullCountsAsZero() {
-        NoteListItemResponse note = makeNote("id", null, null, null, OffsetDateTime.now());
+        NoteListItemResponse note = makeNote("id", null, null, OffsetDateTime.now());
+
         assertThat(PublicNotesScoringUtils.computeScore(note)).isZero();
     }
 
     @Test
-    void computeScore_zeroCountsProduceZeroScore() {
-        NoteListItemResponse note = makeNote("id", 0L, 0L, 0L, OffsetDateTime.now());
-        assertThat(PublicNotesScoringUtils.computeScore(note)).isZero();
-    }
+    void isFeaturedEligible_requiresStudyReadySummaryQuizAndPreview() {
+        assertThat(PublicNotesScoringUtils.isFeaturedEligible(
+                makeNote("eligible", 2L, 5L, OffsetDateTime.now())
+        )).isTrue();
 
-    // --- sortByFeatured ---
-
-    @Test
-    void sortByFeatured_sortsHighestScoreFirst() {
-        OffsetDateTime now = OffsetDateTime.now();
-        NoteListItemResponse low = makeNote("low", 1L, 1L, 0L, now.minusDays(1));
-        NoteListItemResponse high = makeNote("high", 10L, 10L, 0L, now);
-
-        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByFeatured(List.of(low, high));
-
-        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("high", "low");
+        assertThat(PublicNotesScoringUtils.isFeaturedEligible(
+                makeNote("missing-summary", 2L, 5L, OffsetDateTime.now(), "PUBLIC", "STUDY_PACK_READY", "preview", " ", 2)
+        )).isFalse();
+        assertThat(PublicNotesScoringUtils.isFeaturedEligible(
+                makeNote("missing-quiz", 2L, 5L, OffsetDateTime.now(), "PUBLIC", "STUDY_PACK_READY", "preview", "summary", 0)
+        )).isFalse();
+        assertThat(PublicNotesScoringUtils.isFeaturedEligible(
+                makeNote("draft", 2L, 5L, OffsetDateTime.now(), "PUBLIC", "DRAFT", "preview", "summary", 2)
+        )).isFalse();
     }
 
     @Test
-    void sortByFeatured_tiebreaksByNewestCreatedAt() {
+    void sortByFeatured_filtersIneligibleNotesAndAppliesTieBreakers() {
         OffsetDateTime base = OffsetDateTime.now();
-        NoteListItemResponse older = makeNote("older", 5L, 5L, 0L, base.minusDays(2));
-        NoteListItemResponse newer = makeNote("newer", 5L, 5L, 0L, base.minusDays(1));
+        NoteListItemResponse moreCopies = makeNote("moreCopies", 3L, 5L, base.minusDays(3));
+        NoteListItemResponse moreViews = makeNote("moreViews", 1L, 11L, base.minusDays(2));
+        NoteListItemResponse newer = makeNote("newer", 2L, 8L, base.minusDays(1));
+        NoteListItemResponse ineligible = makeNote(
+                "ineligible",
+                20L,
+                100L,
+                base,
+                "PUBLIC",
+                "DRAFT",
+                "preview",
+                "summary",
+                0
+        );
 
-        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByFeatured(List.of(older, newer));
+        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByFeatured(
+                List.of(newer, ineligible, moreViews, moreCopies)
+        );
 
-        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("newer", "older");
+        assertThat(sorted).extracting(NoteListItemResponse::id)
+                .containsExactly("moreCopies", "newer", "moreViews");
     }
 
     @Test
-    void sortByFeatured_emptyListReturnsEmpty() {
-        assertThat(PublicNotesScoringUtils.sortByFeatured(List.of())).isEmpty();
+    void isPopular_acceptsCopiesOrViewsThreshold() {
+        assertThat(PublicNotesScoringUtils.isPopular(makeNote("copies", 3L, 0L, OffsetDateTime.now()))).isTrue();
+        assertThat(PublicNotesScoringUtils.isPopular(makeNote("views", 0L, 20L, OffsetDateTime.now()))).isTrue();
+        assertThat(PublicNotesScoringUtils.isPopular(makeNote("below", 2L, 19L, OffsetDateTime.now()))).isFalse();
     }
 
     @Test
-    void sortByFeatured_singleItemReturnsSingleItem() {
-        NoteListItemResponse note = makeNote("only", 3L, 2L, 0L, OffsetDateTime.now());
-        assertThat(PublicNotesScoringUtils.sortByFeatured(List.of(note)))
-                .extracting(NoteListItemResponse::id).containsExactly("only");
-    }
-
-    // --- sortByPopular ---
-
-    @Test
-    void sortByPopular_sortsByCopyCountDescFirst() {
-        OffsetDateTime now = OffsetDateTime.now();
-        NoteListItemResponse fewerCopies = makeNote("fewer", 2L, 100L, 0L, now);
-        NoteListItemResponse moreCopies = makeNote("more", 20L, 1L, 0L, now);
-
-        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByPopular(List.of(fewerCopies, moreCopies));
-
-        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("more", "fewer");
-    }
-
-    @Test
-    void sortByPopular_tiebreaksByViewCountDesc() {
-        OffsetDateTime now = OffsetDateTime.now();
-        NoteListItemResponse fewerViews = makeNote("fewerViews", 5L, 3L, 0L, now);
-        NoteListItemResponse moreViews = makeNote("moreViews", 5L, 10L, 0L, now);
-
-        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByPopular(List.of(fewerViews, moreViews));
-
-        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("moreViews", "fewerViews");
-    }
-
-    @Test
-    void sortByPopular_tiebreaksByNewestCreatedAtWhenCopiesAndViewsEqual() {
+    void sortByPopular_filtersBelowThresholdAndSortsByCopiesViewsThenCreatedAt() {
         OffsetDateTime base = OffsetDateTime.now();
-        NoteListItemResponse older = makeNote("older", 5L, 5L, 0L, base.minusDays(2));
-        NoteListItemResponse newer = makeNote("newer", 5L, 5L, 0L, base.minusDays(1));
+        NoteListItemResponse moreCopies = makeNote("moreCopies", 7L, 1L, base.minusDays(3));
+        NoteListItemResponse moreViews = makeNote("moreViews", 3L, 30L, base.minusDays(2));
+        NoteListItemResponse newer = makeNote("newer", 3L, 30L, base.minusDays(1));
+        NoteListItemResponse belowThreshold = makeNote("below", 2L, 19L, base);
 
-        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByPopular(List.of(older, newer));
+        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByPopular(
+                List.of(newer, belowThreshold, moreViews, moreCopies)
+        );
 
-        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("newer", "older");
+        assertThat(sorted).extracting(NoteListItemResponse::id)
+                .containsExactly("moreCopies", "newer", "moreViews");
     }
-
-    @Test
-    void sortByPopular_treatsNullCountsAsZero() {
-        OffsetDateTime now = OffsetDateTime.now();
-        NoteListItemResponse nullCounts = makeNote("null", null, null, null, now.minusDays(1));
-        NoteListItemResponse withCopies = makeNote("withCopies", 1L, 0L, 0L, now);
-
-        List<NoteListItemResponse> sorted = PublicNotesScoringUtils.sortByPopular(List.of(nullCounts, withCopies));
-
-        assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("withCopies", "null");
-    }
-
-    @Test
-    void sortByPopular_emptyListReturnsEmpty() {
-        assertThat(PublicNotesScoringUtils.sortByPopular(List.of())).isEmpty();
-    }
-
-    // --- sortByRecent ---
 
     @Test
     void sortByRecent_sortsNewestFirst() {
         OffsetDateTime base = OffsetDateTime.now();
-        NoteListItemResponse oldest = makeNote("oldest", 0L, 0L, 0L, base.minusDays(3));
-        NoteListItemResponse middle = makeNote("middle", 0L, 0L, 0L, base.minusDays(2));
-        NoteListItemResponse newest = makeNote("newest", 0L, 0L, 0L, base.minusDays(1));
+        NoteListItemResponse oldest = makeNote("oldest", 0L, 0L, base.minusDays(3));
+        NoteListItemResponse middle = makeNote("middle", 0L, 0L, base.minusDays(2));
+        NoteListItemResponse newest = makeNote("newest", 0L, 0L, base.minusDays(1));
 
         List<NoteListItemResponse> sorted =
                 PublicNotesScoringUtils.sortByRecent(List.of(oldest, newest, middle));
@@ -143,26 +104,20 @@ class PublicNotesScoringUtilsTest {
         assertThat(sorted).extracting(NoteListItemResponse::id).containsExactly("newest", "middle", "oldest");
     }
 
-    @Test
-    void sortByRecent_emptyListReturnsEmpty() {
-        assertThat(PublicNotesScoringUtils.sortByRecent(List.of())).isEmpty();
+    private NoteListItemResponse makeNote(String id, Long copyCount, Long viewCount, OffsetDateTime createdAt) {
+        return makeNote(id, copyCount, viewCount, createdAt, "PUBLIC", "STUDY_PACK_READY", "preview", "summary", 2);
     }
-
-    @Test
-    void sortByRecent_singleItemReturnsSingleItem() {
-        NoteListItemResponse note = makeNote("only", 0L, 0L, 0L, OffsetDateTime.now());
-        assertThat(PublicNotesScoringUtils.sortByRecent(List.of(note)))
-                .extracting(NoteListItemResponse::id).containsExactly("only");
-    }
-
-    // --- helpers ---
 
     private NoteListItemResponse makeNote(
             String id,
             Long copyCount,
             Long viewCount,
-            Long shareCount,
-            OffsetDateTime createdAt
+            OffsetDateTime createdAt,
+            String visibility,
+            String studyPackStatus,
+            String contentPreview,
+            String summaryPreview,
+            Integer quizCount
     ) {
         return new NoteListItemResponse(
                 id,
@@ -172,14 +127,14 @@ class PublicNotesScoringUtilsTest {
                 null,
                 "Subject",
                 List.of(),
-                "preview",
-                null,
-                "PUBLIC",
-                null,
-                "GENERATED",
-                0,
+                contentPreview,
+                summaryPreview,
+                visibility,
+                "study-pack-id",
+                studyPackStatus,
+                quizCount,
                 copyCount,
-                shareCount,
+                0L,
                 viewCount,
                 "Author",
                 false,

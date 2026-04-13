@@ -61,6 +61,11 @@
 
 ### Fixes
 
+- **Public Library ranking audit + v1 alignment** — discovery ranking now follows one explainable rule set instead of split formulas:
+  - audited the existing frontend and backend ranking paths and preserved the current discovery-first layout plus section dedupe
+  - Featured Notes now rank only study-ready public notes with meaningful summary, quiz content, and note preview using `views + (copies * 3)`
+  - Most Popular now requires real social proof (`copies >= 3` or `views >= 20`) and the Popular badge threshold now matches that rule
+  - Recently Added remains freshness-based with `createdAt DESC`
 - **Public Library copy-flow cleanup** — public note copying now behaves consistently across discovery and detail surfaces:
   - Public Library now keeps search first, moves subject and tag browsing into compact horizontal rails, and uses searchable `+ More` selectors so filtering scales without vertical clutter
   - Public Library multi-select tags now use OR logic by default so combining tags broadens results instead of creating false empty states

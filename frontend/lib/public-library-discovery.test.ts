@@ -2,12 +2,15 @@ import type { NoteListItemResponse } from "@/lib/api";
 import {
   BROWSE_SUBJECTS_LIMIT,
   DISCOVERY_SECTION_LIMIT,
+  PUBLIC_LIBRARY_RANKING,
   computeDiscoveryScore,
   excludeById,
   getBrowseSubjects,
   getFeaturedNotes,
   getPopularNotes,
   getRecentNotes,
+  isFeaturedEligible,
+  isPopularNote,
 } from "@/lib/public-library-discovery";
 
 // Minimal note factory for discovery tests
@@ -21,12 +24,12 @@ function makeNote(
     learnerLevel: null,
     subject: null,
     tags: [],
-    contentPreview: "",
-    summaryPreview: "",
+    contentPreview: "Content preview",
+    summaryPreview: "Summary preview",
     visibility: "PUBLIC",
     studyPackId: null,
-    studyPackStatus: "DRAFT",
-    quizCount: null,
+    studyPackStatus: "STUDY_PACK_READY",
+    quizCount: 2,
     copyCount: 0,
     shareCount: 0,
     viewCount: 0,
@@ -41,43 +44,139 @@ function makeNote(
 
 describe("computeDiscoveryScore", () => {
   it("returns 0 for a note with no engagement", () => {
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, shareCount: 0 })).toBe(0);
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0 })).toBe(0);
   });
 
-  it("weights copies highest (0.5), then views (0.4), then shares (0.1)", () => {
-    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 0, shareCount: 0 })).toBeCloseTo(4.0);
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 10, shareCount: 0 })).toBeCloseTo(5.0);
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, shareCount: 10 })).toBeCloseTo(1.0);
+  it("weights copies at 3x views", () => {
+    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 0 })).toBe(10);
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 10 })).toBe(
+      10 * PUBLIC_LIBRARY_RANKING.FEATURED_COPY_WEIGHT,
+    );
   });
 
-  it("combines all signals correctly", () => {
-    // 10 views × 0.4 + 5 copies × 0.5 + 2 shares × 0.1 = 4 + 2.5 + 0.2 = 6.7
-    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 5, shareCount: 2 })).toBeCloseTo(6.7);
+  it("combines views and copies correctly", () => {
+    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 5 })).toBe(25);
   });
 
   it("treats null counts as 0", () => {
-    expect(computeDiscoveryScore({ viewCount: null, copyCount: null, shareCount: null })).toBe(0);
+    expect(computeDiscoveryScore({ viewCount: null, copyCount: null })).toBe(0);
+  });
+});
+
+describe("isFeaturedEligible", () => {
+  it("requires a public study-pack-ready note with summary, quiz content, and note preview", () => {
+    expect(
+      isFeaturedEligible(
+        makeNote({
+          id: "eligible",
+          summaryPreview: "Strong summary",
+          quizCount: 2,
+          contentPreview: "Meaningful preview",
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects notes missing study-ready quality signals", () => {
+    expect(
+      isFeaturedEligible(
+        makeNote({
+          id: "draft",
+          studyPackStatus: "DRAFT",
+          summaryPreview: "Summary",
+          quizCount: 2,
+          contentPreview: "Preview",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isFeaturedEligible(
+        makeNote({
+          id: "no-summary",
+          summaryPreview: "   ",
+          quizCount: 2,
+          contentPreview: "Preview",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isFeaturedEligible(
+        makeNote({
+          id: "no-quiz",
+          summaryPreview: "Summary",
+          quizCount: 0,
+          contentPreview: "Preview",
+        }),
+      ),
+    ).toBe(false);
   });
 });
 
 describe("getFeaturedNotes", () => {
-  it("returns notes sorted by discovery score descending", () => {
-    const highScore = makeNote({ id: "high", viewCount: 20, copyCount: 10, shareCount: 5 });
-    const midScore = makeNote({ id: "mid", viewCount: 5, copyCount: 2, shareCount: 1 });
-    const lowScore = makeNote({ id: "low", viewCount: 0, copyCount: 0, shareCount: 0 });
+  it("returns only eligible notes sorted by Featured score descending", () => {
+    const highScore = makeNote({
+      id: "high",
+      viewCount: 20,
+      copyCount: 10,
+      summaryPreview: "High summary",
+      quizCount: 4,
+      contentPreview: "High preview",
+    });
+    const midScore = makeNote({
+      id: "mid",
+      viewCount: 5,
+      copyCount: 2,
+      summaryPreview: "Mid summary",
+      quizCount: 2,
+      contentPreview: "Mid preview",
+    });
+    const ineligible = makeNote({
+      id: "draft",
+      studyPackStatus: "DRAFT",
+      viewCount: 100,
+      copyCount: 100,
+      summaryPreview: "",
+      quizCount: 0,
+      contentPreview: "Draft preview",
+    });
 
-    const result = getFeaturedNotes([lowScore, midScore, highScore]);
+    const result = getFeaturedNotes([ineligible, midScore, highScore]);
 
-    expect(result.map((n) => n.id)).toEqual(["high", "mid", "low"]);
+    expect(result.map((n) => n.id)).toEqual(["high", "mid"]);
   });
 
-  it("tiebreaks by newest createdAt when scores are equal", () => {
-    const older = makeNote({ id: "older", viewCount: 5, createdAt: "2026-01-01T00:00:00Z" });
-    const newer = makeNote({ id: "newer", viewCount: 5, createdAt: "2026-03-01T00:00:00Z" });
+  it("tiebreaks by copies, then views, then createdAt when scores are equal", () => {
+    const newer = makeNote({
+      id: "newer",
+      viewCount: 8,
+      copyCount: 2,
+      createdAt: "2026-03-01T00:00:00Z",
+      summaryPreview: "Summary",
+      quizCount: 2,
+      contentPreview: "Preview",
+    });
+    const moreCopies = makeNote({
+      id: "more-copies",
+      viewCount: 5,
+      copyCount: 3,
+      createdAt: "2026-01-01T00:00:00Z",
+      summaryPreview: "Summary",
+      quizCount: 2,
+      contentPreview: "Preview",
+    });
+    const moreViews = makeNote({
+      id: "more-views",
+      viewCount: 11,
+      copyCount: 1,
+      createdAt: "2026-02-01T00:00:00Z",
+      summaryPreview: "Summary",
+      quizCount: 2,
+      contentPreview: "Preview",
+    });
 
-    const result = getFeaturedNotes([older, newer]);
+    const result = getFeaturedNotes([newer, moreViews, moreCopies]);
 
-    expect(result.map((n) => n.id)).toEqual(["newer", "older"]);
+    expect(result.map((n) => n.id)).toEqual(["more-copies", "newer", "more-views"]);
   });
 
   it("limits to the specified count", () => {
@@ -109,9 +208,24 @@ describe("getFeaturedNotes", () => {
 });
 
 describe("getPopularNotes", () => {
+  it("keeps only notes that meet the Popular threshold", () => {
+    const byCopies = makeNote({ id: "by-copies", copyCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_COPIES });
+    const byViews = makeNote({ id: "by-views", viewCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_VIEWS });
+    const belowThreshold = makeNote({
+      id: "below-threshold",
+      copyCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_COPIES - 1,
+      viewCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_VIEWS - 1,
+    });
+
+    expect(getPopularNotes([byCopies, byViews, belowThreshold]).map((note) => note.id)).toEqual([
+      "by-copies",
+      "by-views",
+    ]);
+  });
+
   it("sorts by copy count descending", () => {
     const mostCopied = makeNote({ id: "most-copied", copyCount: 15, viewCount: 1 });
-    const leastCopied = makeNote({ id: "least-copied", copyCount: 2, viewCount: 50 });
+    const leastCopied = makeNote({ id: "least-copied", copyCount: 3, viewCount: 50 });
 
     const result = getPopularNotes([leastCopied, mostCopied]);
 
@@ -144,6 +258,22 @@ describe("getPopularNotes", () => {
 
   it("returns an empty array for an empty input", () => {
     expect(getPopularNotes([])).toEqual([]);
+  });
+});
+
+describe("isPopularNote", () => {
+  it("returns true when a note meets either the copy or view threshold", () => {
+    expect(isPopularNote({ copyCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_COPIES, viewCount: 0 })).toBe(true);
+    expect(isPopularNote({ copyCount: 0, viewCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_VIEWS })).toBe(true);
+  });
+
+  it("returns false when a note misses both thresholds", () => {
+    expect(
+      isPopularNote({
+        copyCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_COPIES - 1,
+        viewCount: PUBLIC_LIBRARY_RANKING.POPULAR_MIN_VIEWS - 1,
+      }),
+    ).toBe(false);
   });
 });
 

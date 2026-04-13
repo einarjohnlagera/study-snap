@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
+import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
@@ -554,9 +555,12 @@ class NoteServiceTest {
         NoteCopyCountProjection lowCopies = mockCopyCount(lowScoreId, 1L);
         PublicNoteEventCountProjection highViews = mockEventCount(highScoreId, 5L);
         PublicNoteEventCountProjection lowViews = mockEventCount(lowScoreId, 1L);
+        StudyPackEntity highScorePack = buildStudyPack(highScoreId, "High summary");
+        StudyPackEntity lowScorePack = buildStudyPack(lowScoreId, "Low summary");
 
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(lowScore, highScore));
+        when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(highScorePack, lowScorePack));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
                 .thenReturn(List.of(highCopies, lowCopies));
         when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
@@ -589,9 +593,12 @@ class NoteServiceTest {
         NoteCopyCountProjection newerCopies = mockCopyCount(newerNoteId, 5L);
         PublicNoteEventCountProjection olderViews = mockEventCount(olderNoteId, 5L);
         PublicNoteEventCountProjection newerViews = mockEventCount(newerNoteId, 5L);
+        StudyPackEntity olderPack = buildStudyPack(olderNoteId, "Older summary");
+        StudyPackEntity newerPack = buildStudyPack(newerNoteId, "Newer summary");
 
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(olderNote, newerNote));
+        when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(olderPack, newerPack));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
                 .thenReturn(List.of(olderCopies, newerCopies));
         when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
@@ -602,6 +609,40 @@ class NoteServiceTest {
         var result = noteService.listPublic(null, "featured", null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("NewerNote", "OlderNote");
+    }
+
+    @Test
+    void listPublic_withSortFeatured_excludesNotesWithoutMeaningfulSummary() {
+        UUID ownerId = UUID.randomUUID();
+        UUID eligibleId = UUID.randomUUID();
+        UUID noSummaryId = UUID.randomUUID();
+
+        NoteEntity eligible = buildNote(eligibleId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "eligible");
+        eligible.setTitle("Eligible");
+        NoteEntity noSummary = buildNote(noSummaryId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "no-summary");
+        noSummary.setTitle("NoSummary");
+
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        NoteCopyCountProjection eligibleCopies = mockCopyCount(eligibleId, 2L);
+        NoteCopyCountProjection noSummaryCopies = mockCopyCount(noSummaryId, 20L);
+        PublicNoteEventCountProjection eligibleViews = mockEventCount(eligibleId, 4L);
+        PublicNoteEventCountProjection noSummaryViews = mockEventCount(noSummaryId, 50L);
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(eligible, noSummary));
+        when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(
+                buildStudyPack(eligibleId, "Eligible summary"),
+                buildStudyPack(noSummaryId, "   ")
+        ));
+        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
+                .thenReturn(List.of(eligibleCopies, noSummaryCopies));
+        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
+                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
+                .thenReturn(List.of(eligibleViews, noSummaryViews));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, "featured", null);
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Eligible");
     }
 
     @Test
@@ -627,6 +668,36 @@ class NoteServiceTest {
         var result = noteService.listPublic(null, "popular", null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("ManyCopies", "FewCopies");
+    }
+
+    @Test
+    void listPublic_withSortPopular_filtersOutNotesBelowThreshold() {
+        UUID ownerId = UUID.randomUUID();
+        UUID popularId = UUID.randomUUID();
+        UUID belowThresholdId = UUID.randomUUID();
+
+        NoteEntity popular = buildNote(popularId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "popular");
+        popular.setTitle("Popular");
+        NoteEntity belowThreshold = buildNote(belowThresholdId, ownerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "below");
+        belowThreshold.setTitle("BelowThreshold");
+
+        UserEntity owner = buildUser(ownerId, "user@example.com");
+        NoteCopyCountProjection popularCopies = mockCopyCount(popularId, 3L);
+        NoteCopyCountProjection belowCopies = mockCopyCount(belowThresholdId, 2L);
+        PublicNoteEventCountProjection popularViews = mockEventCount(popularId, 5L);
+        PublicNoteEventCountProjection belowViews = mockEventCount(belowThresholdId, 19L);
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(popular, belowThreshold));
+        when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
+                .thenReturn(List.of(popularCopies, belowCopies));
+        when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
+                eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
+                .thenReturn(List.of(popularViews, belowViews));
+        when(userRepository.findAllById(any())).thenReturn(List.of(owner));
+
+        var result = noteService.listPublic(null, "popular", null);
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Popular");
     }
 
     @Test
@@ -711,6 +782,15 @@ class NoteServiceTest {
         when(proj.getNoteId()).thenReturn(noteId);
         when(proj.getTotalCount()).thenReturn(count);
         return proj;
+    }
+
+    private StudyPackEntity buildStudyPack(UUID noteId, String summary) {
+        StudyPackEntity studyPack = new StudyPackEntity();
+        studyPack.setId(UUID.randomUUID());
+        studyPack.setNoteId(noteId);
+        studyPack.setSummary(summary);
+        studyPack.setQuiz(List.of(new QuizItem("Question", List.of("A", "B"), 0, "Concept", "Explanation")));
+        return studyPack;
     }
 
     private UserEntity buildUser(UUID userId, String email) {
