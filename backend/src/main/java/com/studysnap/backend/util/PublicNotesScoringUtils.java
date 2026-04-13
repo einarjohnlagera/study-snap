@@ -7,49 +7,80 @@ import java.util.List;
 
 /**
  * Utility methods for ranking public notes in discovery mode.
- * All sorting is computed in-memory from existing engagement signals — no DB persistence.
+ * All sorting is computed in-memory from existing engagement signals.
  */
 public final class PublicNotesScoringUtils {
+    private static final int FEATURED_COPY_WEIGHT = 3;
+    private static final int FEATURED_VIEW_WEIGHT = 1;
+    private static final long POPULAR_MIN_COPIES = 3L;
+    private static final long POPULAR_MIN_VIEWS = 20L;
+    private static final String FEATURED_READY_STATUS = "STUDY_PACK_READY";
 
     private PublicNotesScoringUtils() {}
 
     /**
-     * Weighted engagement score for a note.
-     * score = (copies × 0.6) + (views × 0.4)
+     * v1 Featured score for a note.
+     * score = views + (copies × 3)
      */
     public static double computeScore(NoteListItemResponse note) {
-        long copies = note.copyCount() == null ? 0 : note.copyCount();
-        long views = note.viewCount() == null ? 0 : note.viewCount();
-        return (copies * 0.6) + (views * 0.4);
+        long copies = metricValue(note.copyCount());
+        long views = metricValue(note.viewCount());
+        return (copies * FEATURED_COPY_WEIGHT) + (views * FEATURED_VIEW_WEIGHT);
+    }
+
+    public static boolean isFeaturedEligible(NoteListItemResponse note) {
+        return "PUBLIC".equals(note.visibility())
+                && FEATURED_READY_STATUS.equals(note.studyPackStatus())
+                && hasMeaningfulText(note.summaryPreview())
+                && note.quizCount() != null
+                && note.quizCount() > 0
+                && hasMeaningfulText(note.contentPreview());
+    }
+
+    public static boolean isPopular(NoteListItemResponse note) {
+        return metricValue(note.copyCount()) >= POPULAR_MIN_COPIES
+                || metricValue(note.viewCount()) >= POPULAR_MIN_VIEWS;
     }
 
     /**
-     * Sort by score desc, tiebreak by newest createdAt desc.
+     * Filter to Featured-eligible notes, then sort by score desc,
+     * copies desc, views desc, and newest createdAt desc.
      */
     public static List<NoteListItemResponse> sortByFeatured(List<NoteListItemResponse> notes) {
+        Comparator<NoteListItemResponse> byCopies =
+                Comparator.comparing(n -> metricValue(n.copyCount()),
+                        Comparator.reverseOrder());
+        Comparator<NoteListItemResponse> byViews =
+                Comparator.comparing(n -> metricValue(n.viewCount()),
+                        Comparator.reverseOrder());
+        Comparator<NoteListItemResponse> byCreatedAt =
+                Comparator.comparing(NoteListItemResponse::createdAt, Comparator.nullsLast(Comparator.reverseOrder()));
         return notes.stream()
+                .filter(PublicNotesScoringUtils::isFeaturedEligible)
                 .sorted(
                         Comparator.comparingDouble(PublicNotesScoringUtils::computeScore).reversed()
-                                .thenComparing(Comparator.comparing(NoteListItemResponse::createdAt,
-                                        Comparator.nullsLast(Comparator.reverseOrder()))
-                                )
+                                .thenComparing(byCopies)
+                                .thenComparing(byViews)
+                                .thenComparing(byCreatedAt)
                 )
                 .toList();
     }
 
     /**
-     * Sort by copy count desc, then view count desc, then newest createdAt desc.
+     * Filter to Popular-eligible notes, then sort by copy count desc,
+     * view count desc, and newest createdAt desc.
      */
     public static List<NoteListItemResponse> sortByPopular(List<NoteListItemResponse> notes) {
         Comparator<NoteListItemResponse> byCopies =
-                Comparator.<NoteListItemResponse, Long>comparing(n -> n.copyCount() == null ? 0L : n.copyCount(),
+                Comparator.comparing(n -> metricValue(n.copyCount()),
                         Comparator.reverseOrder());
         Comparator<NoteListItemResponse> byViews =
-                Comparator.<NoteListItemResponse, Long>comparing(n -> n.viewCount() == null ? 0L : n.viewCount(),
+                Comparator.comparing(n -> metricValue(n.viewCount()),
                         Comparator.reverseOrder());
         Comparator<NoteListItemResponse> byCreatedAt =
                 Comparator.comparing(NoteListItemResponse::createdAt, Comparator.nullsLast(Comparator.reverseOrder()));
         return notes.stream()
+                .filter(PublicNotesScoringUtils::isPopular)
                 .sorted(byCopies.thenComparing(byViews).thenComparing(byCreatedAt))
                 .toList();
     }
@@ -62,5 +93,13 @@ public final class PublicNotesScoringUtils {
                 .sorted(Comparator.comparing(NoteListItemResponse::createdAt,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+    }
+
+    private static long metricValue(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    private static boolean hasMeaningfulText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

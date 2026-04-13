@@ -29,8 +29,8 @@ Landing page should visually reinforce Public Library as a real discovery surfac
 Public Library has two display modes:
 
 **Discovery mode** (default, no active search/filters/sort changes):
-- 🔥 Featured Notes — top 3 by weighted engagement score
-- 📈 Most Popular — top 5 by copies, then views (excluding Featured notes)
+- 🔥 Featured Notes — top 3 study-ready notes by quality + engagement
+- 📈 Most Popular — top 5 notes meeting the social-proof threshold, ordered by copies then views (excluding Featured notes)
 - 🆕 Recently Added — top 5 by createdAt (excluding Featured and Popular)
 - each section includes `View More`, which opens a focused section view on the same page (`?view=featured|popular|recent`)
 - subjects and popular tags remain available in the always-visible top browsing rails instead of a separate discovery block
@@ -44,23 +44,71 @@ Switching from discovery to filter mode:
 - Changing sort from Newest → filter mode
 - Clicking a subject chip or tag chip in the top rails → applies filter → filter mode
 
+## Ranking Audit Summary
+
+Current audit findings:
+
+- views and copies are already persisted and available in both frontend and backend ranking paths
+- Recent already uses `createdAt DESC`
+- discovery ranking existed in both frontend and backend, but the formulas were inconsistent before this alignment
+- the Public Library page already had clean section-deduping worth preserving
+
+## Ranking Philosophy
+
+- Featured = quality + engagement
+- Popular = social proof
+- Recent = freshness
+
 ## Featured Notes Ranking
 
-Featured notes are ranked using a weighted composite score computed entirely from existing engagement signals:
+Featured notes are selected only from notes that are actually worth studying now:
 
-```
-score = (viewCount × 0.4) + (copyCount × 0.5) + (shareCount × 0.1)
+- `visibility = PUBLIC`
+- `studyPackStatus = STUDY_PACK_READY`
+- meaningful summary preview exists
+- quiz/generated study content exists
+- note preview is not empty
+
+Featured notes are then ranked using a simple engagement score:
+
+```text
+score = viewCount + (copyCount * 3)
 ```
 
-- Tiebreak: newest `createdAt` first
+- Tiebreaks:
+  - `copyCount DESC`
+  - `viewCount DESC`
+  - `createdAt DESC`
 - Discovery-home limit: 3 notes in `Featured Notes`
-- No AI required — pure signal-based ranking
+
+## Most Popular Ranking
+
+Popular is a thresholded social-proof section, not just a generic sort.
+
+A note qualifies as Popular when:
+
+- `viewCount >= 20`
+- or `copyCount >= 3`
+
+Popular ordering:
+
+- `copyCount DESC`
+- `viewCount DESC`
+- `createdAt DESC`
+
+The Popular badge uses the same threshold so the card label and the section logic stay aligned.
+
+## Recently Added Ranking
+
+Recent remains intentionally simple:
+
+- `createdAt DESC`
 
 ## Deduplication Across Sections
 
 Sections never repeat the same note:
-- Featured: top 3 by score from all public notes
-- Most Popular: top 5 by copies from notes NOT in Featured
+- Featured: top 3 eligible notes by score from all public notes
+- Most Popular: top 5 threshold-qualified notes from notes NOT in Featured
 - Recently Added: top 5 by createdAt from notes NOT in Featured or Popular
 
 ## Layout

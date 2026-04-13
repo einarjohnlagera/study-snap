@@ -386,6 +386,32 @@ Users can:
   - Featured Notes -> 3
   - Most Popular -> 5
   - Recently Added -> 5
+- keep Public Library ranking explainable and stable:
+  - Featured = quality + engagement
+  - Popular = social proof
+  - Recent = freshness
+- rank Featured from eligible study-ready public notes only:
+  - must be `STUDY_PACK_READY`
+  - must have a meaningful summary preview
+  - must have quiz/generated study content
+  - must have non-empty note preview/content
+- Featured score formula:
+  - `viewCount + (copyCount * 3)`
+- Featured tie-breakers:
+  - `copyCount DESC`
+  - `viewCount DESC`
+  - `createdAt DESC`
+- qualify `Most Popular` using real social-proof thresholds instead of a plain sort:
+  - `copyCount >= 3` or `viewCount >= 20`
+- order `Most Popular` by:
+  - `copyCount DESC`
+  - `viewCount DESC`
+  - `createdAt DESC`
+- order `Recently Added` by:
+  - `createdAt DESC`
+- preserve the existing clean section dedupe:
+  - Popular excludes Featured results
+  - Recent excludes Featured and Popular results
 - use `View More` for each discovery section to open the full section view without losing the Public Library page model
 - filter by search, course/program, learner level, subject, tags, and source
 - open read-only public note detail

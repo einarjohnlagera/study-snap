@@ -1117,11 +1117,41 @@ Discovery mode layout order (no active filters):
 1. Search toolbar with `Filter` and `Sort`
 2. one-line `Subjects` rail with `All` and `+ More`
 3. one-line `Popular Tags` rail with `+ More`
-4. 🔥 Featured Notes — top 3 by engagement score
-5. 📈 Most Popular — top 5 by copies (excludes Featured)
+4. 🔥 Featured Notes — top 3 eligible notes by quality + engagement
+5. 📈 Most Popular — top 5 threshold-qualified notes by copies, then views (excludes Featured)
 6. 🆕 Recently Added — top 5 by createdAt (excludes Featured + Popular)
 
 Backend subject filtering: `GET /notes/public?subject=<value>` — case-insensitive, server-side.
+
+Public Library ranking philosophy:
+- Featured = quality + engagement
+- Popular = social proof
+- Recent = freshness
+
+Ranking rules:
+- Featured eligibility requires:
+  - `visibility = PUBLIC`
+  - `studyPackStatus = STUDY_PACK_READY`
+  - meaningful summary preview
+  - quiz/generated study content
+  - non-empty note preview/content
+- Featured score:
+  - `viewCount + (copyCount * 3)`
+- Featured tie-breakers:
+  - `copyCount DESC`
+  - `viewCount DESC`
+  - `createdAt DESC`
+- Popular threshold:
+  - `copyCount >= 3` or `viewCount >= 20`
+- Popular ordering:
+  - `copyCount DESC`
+  - `viewCount DESC`
+  - `createdAt DESC`
+- Recent ordering:
+  - `createdAt DESC`
+- Preserve the current clean discovery dedupe:
+  - Popular excludes Featured
+  - Recent excludes Featured and Popular
 
 ## UI / UX Responsiveness Guidelines
 
