@@ -29,11 +29,11 @@ Landing page should visually reinforce Public Library as a real discovery surfac
 Public Library has two display modes:
 
 **Discovery mode** (default, no active search/filters/sort changes):
-- 📚 Browse by Subject — clickable subject chips sorted by note count (top 8)
 - 🔥 Featured Notes — top 3 by weighted engagement score
 - 📈 Most Popular — top 5 by copies, then views (excluding Featured notes)
 - 🆕 Recently Added — top 5 by createdAt (excluding Featured and Popular)
 - each section includes `View More`, which opens a focused section view on the same page (`?view=featured|popular|recent`)
+- subjects and popular tags remain available in the always-visible top browsing rails instead of a separate discovery block
 
 **Filter mode** (when any search, filter, or sort is active):
 - Standard sorted/filtered list of all matching public notes
@@ -42,7 +42,7 @@ Switching from discovery to filter mode:
 - Typing in search → filter mode
 - Selecting any filter (Course, Learner Level, Subject, Tags, Source) → filter mode
 - Changing sort from Newest → filter mode
-- Clicking a Browse by Subject chip → applies subject filter → filter mode
+- Clicking a subject chip or tag chip in the top rails → applies filter → filter mode
 
 ## Featured Notes Ranking
 
@@ -68,10 +68,11 @@ Sections never repeat the same note:
 When no active filters (discovery mode):
 
 1. `Search` toolbar + `Filter` + `Sort` controls (always visible)
-2. 📚 Browse by Subject chips (hidden if no subjects, max 8)
-3. 🔥 Featured Notes section (hidden if empty)
-4. 📈 Most Popular section (hidden if empty)
-5. 🆕 Recently Added section (hidden if empty)
+2. one-line horizontal `Subjects` rail with `All` and `+ More`
+3. one-line horizontal `Popular Tags` rail with limited chips and `+ More`
+4. 🔥 Featured Notes section (hidden if empty)
+5. 📈 Most Popular section (hidden if empty)
+6. 🆕 Recently Added section (hidden if empty)
 
 When a section-specific `View More` action is opened:
 
@@ -82,7 +83,7 @@ When a section-specific `View More` action is opened:
 
 When filters active (filter mode):
 
-1. `Search` toolbar + filter summary + `Filter` + `Sort` controls
+1. `Search` toolbar + browsing rails + filter summary + `Filter` + `Sort` controls
 2. Sorted/filtered note list (or empty state)
 
 On mobile, `Filter` and `Sort` should open a bottom-sheet or modal instead of staying always visible.
@@ -99,6 +100,19 @@ Public Library filters:
 - `By You`
 - `Official`
 - `Community`
+
+Public Library browsing rails:
+
+- `Subjects` stays single-select with `All` as the default
+- `Popular Tags` stays multi-select and should use OR logic within the tag group
+- both rails should stay on one horizontal scroll line instead of wrapping
+- each rail should end with `+ More` when the inline list is truncated
+- `+ More` opens the shared selector surface:
+  - subjects -> searchable single-select list
+  - tags -> searchable multi-select list with selected tags surfaced at the top
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
 
 ## Backend Subject Filtering
 
@@ -125,9 +139,9 @@ Public Library note cards reuse the shared note-card layout:
 - Title
 - Study Pack Ready badge (green) — below title when applicable
 - Quality badges (High Quality, Popular) — below title alongside state badge
-- `Note Preview`
-- `Summary Preview`
-- Tags
+- `Note Preview` (compact, line-clamped)
+- `Summary Preview` (compact, line-clamped)
+- limited Tags (`3-4` visible plus overflow count)
 - subtle metrics row for `views` and `copies` when available
 - featured content should remain visually special through stronger section framing instead of being flattened into a plain list
 
@@ -135,9 +149,14 @@ Interaction rules:
 
 - whole card opens the canonical public note route
 - keep the card itself clickable for navigation
-- Public Library cards may include one inline secondary CTA at the bottom: `Copy to My Library`
-- the inline copy CTA must stop card navigation when clicked
-- if the viewer already copied that note, replace the copy CTA with optional `View Note`
+- Public Library cards may include one inline secondary CTA at the bottom-right: `Save`
+- the inline save CTA must stop card navigation when clicked
+- the CTA should stay subtle:
+  - icon + short label
+  - outline / ghost weight
+  - never full width
+- guest clicks on `Save` should open an auth prompt modal instead of redirecting immediately
+- if the viewer already copied that note, replace the save CTA with muted `Saved`
 - copied state should be conveyed by the available action, not by an extra `In Library` badge
 - a successful card copy should show a confirmation modal with:
   - `View Note`
@@ -157,6 +176,7 @@ Interaction rules:
 - mobile should stack full-width actions with the primary CTA visually first
 - modal/sheet actions should use clean spacing and subtle depth so the surface feels polished without becoming heavy
 - avoid generic navigation button labels like `Open` on Public Library cards; card click already owns detail navigation
+- card footer should align author metadata left and save state/action right
 - do not place share/generate/delete/edit actions inside Public Library cards
 - use public note detail for the rest of the actions instead
 
