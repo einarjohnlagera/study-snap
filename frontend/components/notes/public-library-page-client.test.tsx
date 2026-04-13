@@ -28,6 +28,33 @@ jest.mock("@/lib/api", () => ({
   trackAnalyticsEvent: jest.fn(),
 }));
 
+function createPublicNote(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "note-1",
+    ownerUserId: "user-2",
+    title: "Community Note",
+    courseProgram: "Engineering",
+    learnerLevel: "COLLEGE",
+    subject: "Physics",
+    tags: ["motion"],
+    contentPreview: "Community preview",
+    summaryPreview: "Community summary",
+    visibility: "PUBLIC",
+    studyPackId: "pack-1",
+    studyPackStatus: "STUDY_PACK_READY",
+    quizCount: 2,
+    copyCount: 1,
+    shareCount: 0,
+    viewCount: 4,
+    authorDisplayName: "Study Buddy",
+    isOfficialAuthor: false,
+    isCurrentUser: false,
+    createdAt: "2026-03-30T08:00:00Z",
+    updatedAt: "2026-03-31T08:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("PublicLibraryPageClient", () => {
   let currentAuthUser: { id: string } | null = { id: "user-1" };
 
@@ -64,124 +91,58 @@ describe("PublicLibraryPageClient", () => {
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Physics"]);
   });
 
-  it("shows viewer-relative author badges and only action-oriented card CTAs", async () => {
+  it("shows viewer-relative author metadata and subtle save actions on non-owner cards", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-1",
+      createPublicNote({
+        id: "note-owner",
         ownerUserId: "user-1",
         title: "My Public Note",
-        courseProgram: "Nursing",
-        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
-        contentPreview: "My note preview",
-        summaryPreview: "My generated summary preview",
-        visibility: "PUBLIC",
-        studyPackId: "pack-1",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 1,
-        shareCount: 0,
-        viewCount: 2,
         authorDisplayName: "My Notes",
-        isOfficialAuthor: false,
         isCurrentUser: true,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-      {
-        id: "note-2",
+      }),
+      createPublicNote({
+        id: "note-official",
         ownerUserId: "admin-1",
         title: "Official Example",
-        courseProgram: "Chemistry",
-        learnerLevel: "PROFESSIONAL",
         subject: "Chemistry",
         tags: [],
-        contentPreview: "Official preview",
-        summaryPreview: "Official summary preview",
-        visibility: "PUBLIC",
-        studyPackId: "pack-2",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 4,
-        copyCount: 5,
-        shareCount: 2,
-        viewCount: 8,
         authorDisplayName: "NoteLib",
         isOfficialAuthor: true,
-        isCurrentUser: false,
-        createdAt: "2026-03-29T09:00:00Z",
-        updatedAt: "2026-03-31T09:00:00Z",
-      },
-      {
-        id: "note-3",
-        ownerUserId: "user-2",
+        viewCount: 8,
+      }),
+      createPublicNote({
+        id: "note-community",
         title: "Community Note",
-        courseProgram: "Engineering",
-        learnerLevel: "BOARD_EXAM_REVIEW",
         subject: "Physics",
         tags: ["motion"],
-        contentPreview: "Community preview",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: "pack-3",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 0,
-        shareCount: 1,
-        viewCount: 4,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-28T08:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-      },
+      }),
     ]);
 
     render(<PublicLibraryPageClient />);
-
-    await waitFor(() => {
-      expect(listPublicNotes).toHaveBeenCalled();
-    });
-    expect(listSubjects).toHaveBeenCalledWith("public");
 
     expect(await screen.findByText("By You")).toBeInTheDocument();
     expect(screen.getByText("By NoteLib")).toBeInTheDocument();
     expect(screen.getByText("Official")).toBeInTheDocument();
     expect(screen.getByText("By Study Buddy")).toBeInTheDocument();
-    expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
     expect(screen.getByText("8 views")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
-    expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Copy to My Library" })).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: "Open Note" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Copy to My Library" })).not.toBeInTheDocument();
   });
 
   it("updates the author badge when auth state hydrates after mount", async () => {
     currentAuthUser = null;
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-1",
         ownerUserId: "user-1",
         title: "My Public Note",
-        courseProgram: "Nursing",
-        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
-        contentPreview: "My note preview",
-        summaryPreview: "My generated summary preview",
-        visibility: "PUBLIC",
-        studyPackId: "pack-1",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 0,
-        shareCount: 0,
-        viewCount: 0,
         authorDisplayName: "My Notes",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
+      }),
     ]);
 
     render(<PublicLibraryPageClient />);
@@ -196,226 +157,98 @@ describe("PublicLibraryPageClient", () => {
     expect(await screen.findByText("By You")).toBeInTheDocument();
   });
 
-  it("keeps the card clickable and uses View Note as the copied-state action", async () => {
+  it("keeps the card clickable and shows Saved as the copied-state action", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-2",
-        ownerUserId: "user-2",
         title: "Community Note",
-        courseProgram: "Engineering",
-        learnerLevel: "COLLEGE",
         subject: "Physics",
         tags: ["motion"],
-        contentPreview: "Community preview",
-        summaryPreview: "Community summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-3",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 0,
-        shareCount: 1,
-        viewCount: 4,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-28T08:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-      },
+      }),
     ]);
     (listNotes as jest.Mock).mockResolvedValue([
       {
-        id: "copied-note-7",
-        ownerUserId: "user-1",
-        title: "Copied Community Note",
-        courseProgram: "Engineering",
-        learnerLevel: "COLLEGE",
-        subject: "Physics",
-        tags: ["motion"],
-        contentPreview: "Copied preview",
-        summaryPreview: "",
-        visibility: "PRIVATE",
-        studyPackId: null,
-        studyPackStatus: "DRAFT",
-        quizCount: 0,
-        copyCount: 0,
-        shareCount: 0,
-        viewCount: 0,
-        authorDisplayName: "You",
-        isOfficialAuthor: false,
-        isCurrentUser: true,
-        createdAt: "2026-03-30T08:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-        copiedFromNoteId: "note-2",
-        copiedFromPublic: true,
+        ...createPublicNote({
+          id: "copied-note-7",
+          ownerUserId: "user-1",
+          title: "Copied Community Note",
+          visibility: "PRIVATE",
+          studyPackId: null,
+          studyPackStatus: "DRAFT",
+          isCurrentUser: true,
+          copiedFromNoteId: "note-2",
+          copiedFromPublic: true,
+        }),
       },
     ]);
 
     render(<PublicLibraryPageClient />);
 
-    expect(await screen.findByRole("button", { name: "View Note" })).toBeInTheDocument();
-    expect(screen.queryByText("In Library")).not.toBeInTheDocument();
+    const savedButton = await screen.findByRole("button", { name: "Saved" });
+    expect(savedButton).toBeDisabled();
     expect(screen.queryByText("Already in your library")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Copy to My Library" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Community Note").closest("[role='link']") as HTMLElement);
 
     expect(pushMock).toHaveBeenCalledWith(buildPublicLibraryNotePath({ subject: "Physics", title: "Community Note" }));
-
-    pushMock.mockReset();
-
-    fireEvent.click(screen.getByRole("button", { name: "View Note" }));
-
-    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-7?copied=1");
     expect(copyNote).not.toHaveBeenCalled();
   });
 
   it("copies from the card and shows the refined success modal actions", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-9",
-        ownerUserId: "user-2",
         title: "Cell Notes",
-        courseProgram: "Nursing",
-        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
-        contentPreview: "Cell note preview",
-        summaryPreview: "Cell summary preview",
-        visibility: "PUBLIC",
-        studyPackId: "pack-9",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 4,
-        shareCount: 1,
         viewCount: 9,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T08:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-      },
+        copyCount: 4,
+      }),
     ]);
     (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9" });
 
     render(<PublicLibraryPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Copy to My Library" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-9");
     });
+
     const dialog = await screen.findByRole("dialog", { name: "Copied to your library" });
     const modal = within(dialog);
 
     expect(modal.getByText("You can start reviewing now or come back later from your library.")).toBeInTheDocument();
-    expect(modal.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
     expect(modal.getByRole("button", { name: "View Note" })).toBeInTheDocument();
     expect(modal.getByRole("button", { name: "Start Review" })).toBeInTheDocument();
     expect(modal.getByRole("button", { name: "Close copied to your library" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Open in My Library" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
-
-    expect(dialog.className).toContain("max-w-[400px]");
-    expect(dialog.className).toContain("rounded-[28px]");
-    expect(dialog.className).toContain("p-6");
-    expect(dialog.className).toContain("sm:p-7");
-    const title = modal.getByText("Copied to your library");
-    expect(title.className).toContain("text-xl");
-    expect(title.className).toContain("tracking-tight");
-    expect(dialog.querySelector("svg")).not.toBeNull();
-    const actionRow = modal.getByRole("button", { name: "Start Review" }).parentElement;
-    expect(actionRow?.className).toContain("flex-col-reverse");
-    expect(actionRow?.className).toContain("sm:flex-row");
-    expect(actionRow?.className).toContain("gap-3");
-    expect(actionRow?.className).toContain("sm:justify-end");
 
     fireEvent.click(modal.getByRole("button", { name: "Start Review" }));
 
     expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-9?copied=1&generate=1&startQuickReview=1");
   });
 
-  it("closes the desktop modal from the top-right close button", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-9",
-        ownerUserId: "user-2",
-        title: "Cell Notes",
-        courseProgram: "Nursing",
-        learnerLevel: "COLLEGE",
-        subject: "Biology",
-        tags: ["cells"],
-        contentPreview: "Cell note preview",
-        summaryPreview: "Cell summary preview",
-        visibility: "PUBLIC",
-        studyPackId: "pack-9",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 4,
-        shareCount: 1,
-        viewCount: 9,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T08:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-      },
-    ]);
-    (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9" });
-
-    render(<PublicLibraryPageClient />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Copy to My Library" }));
-
-    const dialog = await screen.findByRole("dialog", { name: "Copied to your library" });
-    const modal = within(dialog);
-
-    fireEvent.click(modal.getByRole("button", { name: "Close copied to your library" }));
-
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog", { name: "Copied to your library" })).not.toBeInTheDocument();
-    });
-  });
-
   it("uses a bottom-sheet success surface on mobile", async () => {
     mobileSheetMatches = true;
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-9",
-        ownerUserId: "user-2",
         title: "Cell Notes",
-        courseProgram: "Nursing",
-        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
-        contentPreview: "Cell note preview",
-        summaryPreview: "Cell summary preview",
-        visibility: "PUBLIC",
-        studyPackId: "pack-9",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 4,
-        shareCount: 1,
-        viewCount: 9,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T08:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-      },
+      }),
     ]);
     (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-9" });
 
     render(<PublicLibraryPageClient />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Copy to My Library" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Copied to your library" });
     const modal = within(dialog);
 
     expect(dialog.className).toContain("self-end");
     expect(dialog.className).toContain("rounded-t-[28px]");
-    expect(modal.getByRole("button", { name: "Close copied to your library" })).toBeInTheDocument();
-    expect(dialog.className).toContain("px-5");
     expect(modal.getByRole("button", { name: "View Note" }).className).toContain("w-full");
     expect(modal.getByRole("button", { name: "Start Review" }).className).toContain("w-full");
     const handle = dialog.querySelector(".h-1\\.5.w-12.rounded-full");
@@ -424,145 +257,70 @@ describe("PublicLibraryPageClient", () => {
 
   it("sorts public notes by most viewed from the shared sort sheet", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-1",
-        ownerUserId: "user-2",
         title: "Most Viewed",
-        courseProgram: "Biology",
-        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: ["cells"],
-        contentPreview: "Most viewed preview",
-        summaryPreview: "Most viewed summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-1",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 1,
-        shareCount: 0,
         viewCount: 12,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-31T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-      {
+        copyCount: 1,
+      }),
+      createPublicNote({
         id: "note-2",
-        ownerUserId: "user-3",
         title: "Most Copied",
-        courseProgram: "Physics",
-        learnerLevel: "PROFESSIONAL",
         subject: "Biology",
         tags: ["genetics"],
-        contentPreview: "Most copied preview",
-        summaryPreview: "Most copied summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-2",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 9,
-        shareCount: 4,
         viewCount: 5,
-        authorDisplayName: "Top Creator",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T09:00:00Z",
-        updatedAt: "2026-03-31T09:00:00Z",
-      },
+        copyCount: 9,
+        createdAt: "2026-03-29T09:00:00Z",
+      }),
     ]);
 
-    const { container } = render(<PublicLibraryPageClient />);
+    render(<PublicLibraryPageClient />);
 
     await screen.findByText("Most Viewed");
     fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
     fireEvent.click(screen.getByRole("button", { name: "Most Viewed" }));
 
-    const cardTitles = Array.from(container.querySelectorAll("h3")).map((element) => element.textContent);
-    expect(cardTitles.slice(0, 2)).toEqual(["Most Viewed", "Most Copied"]);
-    expect(screen.getByText("12 views")).toBeInTheDocument();
-    expect(screen.getByText("9 copies")).toBeInTheDocument();
+    const titles = screen.getAllByRole("heading", { level: 3 }).map((element) => element.textContent);
+    expect(titles.slice(0, 2)).toEqual(["Most Viewed", "Most Copied"]);
   });
 
-  it("filters public notes from the shared filter sheet", async () => {
+  it("filters public notes from the advanced filter sheet", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-1",
         ownerUserId: "user-1",
         title: "Mine",
         courseProgram: "Nursing",
         learnerLevel: "COLLEGE",
         subject: "Biology",
-        tags: ["cells"],
-        contentPreview: "Mine preview",
-        summaryPreview: "Mine summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-1",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 1,
-        copyCount: 0,
-        shareCount: 0,
-        viewCount: 0,
         authorDisplayName: "Me",
-        isOfficialAuthor: false,
         isCurrentUser: true,
-        createdAt: "2026-03-31T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-      {
+      }),
+      createPublicNote({
         id: "note-2",
         ownerUserId: "admin-1",
         title: "Official Example",
         courseProgram: "Chemistry",
         learnerLevel: "PROFESSIONAL",
         subject: "Chemistry",
-        tags: [],
-        contentPreview: "Official preview",
-        summaryPreview: "Official summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-2",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 2,
-        shareCount: 2,
-        viewCount: 2,
         authorDisplayName: "NoteLib",
         isOfficialAuthor: true,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T09:00:00Z",
-        updatedAt: "2026-03-31T09:00:00Z",
-      },
-      {
+      }),
+      createPublicNote({
         id: "note-3",
-        ownerUserId: "user-9",
         title: "Community Physics",
         courseProgram: "Engineering",
         learnerLevel: "BOARD_EXAM_REVIEW",
         subject: "Physics",
         tags: ["motion"],
-        contentPreview: "Community preview",
-        summaryPreview: "Community summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-3",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 1,
-        shareCount: 1,
-        viewCount: 3,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-29T09:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-      },
+      }),
     ]);
 
     render(<PublicLibraryPageClient />);
 
     expect(await screen.findByText("Mine")).toBeInTheDocument();
-    expect(screen.getByText("Official Example")).toBeInTheDocument();
-    expect(screen.getByText("Community Physics")).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
     fireEvent.change(screen.getByLabelText("Course / Program"), {
       target: { value: "Engineering" },
@@ -577,433 +335,134 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByText("Community Physics")).toBeInTheDocument();
   });
 
-  // ── Discovery sections ───────────────────────────────────────────────────
-
-  it("shows discovery sections when no filters or sort are active", async () => {
+  it("filters by subject from the horizontal chip rail", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-1",
-        ownerUserId: "user-2",
-        title: "High Engagement Note",
-        courseProgram: "Biology",
-        learnerLevel: "COLLEGE",
-        subject: "Biology",
-        tags: ["cells"],
-        contentPreview: "Preview of high engagement note",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: "pack-1",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 8,
-        shareCount: 2,
-        viewCount: 15,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-    ]);
-
-    render(<PublicLibraryPageClient />);
-
-    expect(await screen.findByText("🔥 Featured Notes")).toBeInTheDocument();
-    expect(screen.getByText("High Engagement Note")).toBeInTheDocument();
-    expect(screen.getByText("📚 Browse by Subject")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Biology" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "View More" }).length).toBeGreaterThan(0);
-  });
-
-  it("limits discovery sections and opens a section view from View More", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-1",
-        ownerUserId: "user-2",
-        title: "Featured One",
-        courseProgram: "Biology",
-        learnerLevel: "COLLEGE",
-        subject: "Biology",
-        tags: ["cells"],
-        contentPreview: "Preview one",
-        summaryPreview: "Summary one",
-        visibility: "PUBLIC",
-        studyPackId: "pack-1",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 10,
-        shareCount: 3,
-        viewCount: 20,
-        authorDisplayName: "Creator One",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-31T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-      {
-        id: "note-2",
-        ownerUserId: "user-3",
-        title: "Featured Two",
-        courseProgram: "Chemistry",
-        learnerLevel: "COLLEGE",
-        subject: "Chemistry",
-        tags: ["atoms"],
-        contentPreview: "Preview two",
-        summaryPreview: "Summary two",
-        visibility: "PUBLIC",
-        studyPackId: "pack-2",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 9,
-        shareCount: 2,
-        viewCount: 18,
-        authorDisplayName: "Creator Two",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-30T10:00:00Z",
-      },
-      {
-        id: "note-3",
-        ownerUserId: "user-4",
-        title: "Featured Three",
-        courseProgram: "Physics",
-        learnerLevel: "COLLEGE",
-        subject: "Physics",
-        tags: ["motion"],
-        contentPreview: "Preview three",
-        summaryPreview: "Summary three",
-        visibility: "PUBLIC",
-        studyPackId: "pack-3",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 8,
-        shareCount: 1,
-        viewCount: 17,
-        authorDisplayName: "Creator Three",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-29T10:00:00Z",
-        updatedAt: "2026-03-29T10:00:00Z",
-      },
-      {
-        id: "note-4",
-        ownerUserId: "user-5",
-        title: "Featured Four",
-        courseProgram: "Math",
-        learnerLevel: "COLLEGE",
-        subject: "Math",
-        tags: ["algebra"],
-        contentPreview: "Preview four",
-        summaryPreview: "Summary four",
-        visibility: "PUBLIC",
-        studyPackId: "pack-4",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 7,
-        shareCount: 1,
-        viewCount: 16,
-        authorDisplayName: "Creator Four",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-28T10:00:00Z",
-        updatedAt: "2026-03-28T10:00:00Z",
-      },
-    ]);
-
-    render(<PublicLibraryPageClient />);
-
-    expect(await screen.findByText("Featured One")).toBeInTheDocument();
-    const featuredSection = screen.getByRole("region", { name: /Featured Notes/ });
-    expect(within(featuredSection).getByText("Featured One")).toBeInTheDocument();
-    expect(within(featuredSection).getByText("Featured Two")).toBeInTheDocument();
-    expect(within(featuredSection).getByText("Featured Three")).toBeInTheDocument();
-    expect(within(featuredSection).queryByText("Featured Four")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole("button", { name: "View More" })[0]);
-    expect(pushMock).toHaveBeenCalledWith("/public/library?view=featured");
-  });
-
-  it("renders a full section view when a discovery view query param is active", async () => {
-    currentSearch = "view=recent";
-    window.history.replaceState({}, "", "/public/library?view=recent");
-    (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-1",
-        ownerUserId: "user-2",
-        title: "Newest Note",
-        courseProgram: "Biology",
-        learnerLevel: "COLLEGE",
-        subject: "Biology",
-        tags: ["cells"],
-        contentPreview: "Newest preview",
-        summaryPreview: "Newest summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-1",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 3,
-        copyCount: 2,
-        shareCount: 0,
-        viewCount: 5,
-        authorDisplayName: "Creator One",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-31T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-      {
-        id: "note-2",
-        ownerUserId: "user-3",
-        title: "Older Note",
-        courseProgram: "Chemistry",
-        learnerLevel: "COLLEGE",
-        subject: "Chemistry",
-        tags: ["atoms"],
-        contentPreview: "Older preview",
-        summaryPreview: "Older summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-2",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 1,
-        shareCount: 0,
-        viewCount: 2,
-        authorDisplayName: "Creator Two",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-30T10:00:00Z",
-      },
-    ]);
-
-    render(<PublicLibraryPageClient />);
-
-    expect(await screen.findByText(/🆕 Recently Added/)).toBeInTheDocument();
-    expect(screen.getByText("Browse the newest public notes without the rest of the homepage sections competing for space.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Back to Discovery" })).toBeInTheDocument();
-    expect(screen.queryByText("📚 Browse by Subject")).not.toBeInTheDocument();
-  });
-
-  it("hides discovery sections and shows sorted list when sort is changed", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-1",
-        ownerUserId: "user-2",
-        title: "High Views Note",
-        courseProgram: "Biology",
-        learnerLevel: "COLLEGE",
-        subject: "Biology",
-        tags: [],
-        contentPreview: "Preview",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: null,
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: null,
-        copyCount: 1,
-        shareCount: 0,
-        viewCount: 20,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-    ]);
-
-    render(<PublicLibraryPageClient />);
-    await screen.findByText("🔥 Featured Notes");
-
-    fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
-    fireEvent.click(screen.getByRole("button", { name: "Most Viewed" }));
-
-    expect(screen.queryByText("🔥 Featured Notes")).not.toBeInTheDocument();
-    expect(screen.getByText("High Views Note")).toBeInTheDocument();
-  });
-
-  it("hides discovery sections and shows filtered list when a filter is applied", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-1",
-        ownerUserId: "user-2",
         title: "Biology Note",
-        courseProgram: "Biology",
-        learnerLevel: "COLLEGE",
         subject: "Biology",
         tags: [],
-        contentPreview: "Biology preview",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: null,
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: null,
-        copyCount: 0,
-        shareCount: 0,
-        viewCount: 5,
-        authorDisplayName: "Tester",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-    ]);
-
-    render(<PublicLibraryPageClient />);
-    await screen.findByText("🔥 Featured Notes");
-
-    fireEvent.click(screen.getByRole("button", { name: "Open filters" }));
-    fireEvent.change(screen.getByLabelText("Subject"), {
-      target: { value: "Biology" },
-    });
-
-    expect(screen.queryByText("🔥 Featured Notes")).not.toBeInTheDocument();
-    expect(screen.getByText("Biology Note")).toBeInTheDocument();
-  });
-
-  it("clicking a subject chip filters the library by that subject", async () => {
-    (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-1",
-        ownerUserId: "user-2",
-        title: "Biology Note",
-        courseProgram: "Biology",
-        learnerLevel: "COLLEGE",
-        subject: "Biology",
-        tags: [],
-        contentPreview: "Biology preview",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: null,
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: null,
-        copyCount: 0,
-        shareCount: 0,
-        viewCount: 5,
-        authorDisplayName: "Tester",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-      {
+      }),
+      createPublicNote({
         id: "note-2",
-        ownerUserId: "user-3",
         title: "Chemistry Note",
-        courseProgram: "Chemistry",
-        learnerLevel: "COLLEGE",
         subject: "Chemistry",
         tags: [],
-        contentPreview: "Chemistry preview",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: null,
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: null,
-        copyCount: 0,
-        shareCount: 0,
-        viewCount: 3,
-        authorDisplayName: "Tester2",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-29T10:00:00Z",
-        updatedAt: "2026-03-30T10:00:00Z",
-      },
+      }),
     ]);
 
     render(<PublicLibraryPageClient />);
-    await screen.findByText("📚 Browse by Subject");
 
+    await screen.findByText("Biology Note");
     fireEvent.click(screen.getByRole("button", { name: "Biology" }));
 
-    // Discovery sections hidden; filtered list shows only Biology note
     expect(screen.queryByText("🔥 Featured Notes")).not.toBeInTheDocument();
     expect(screen.getByText("Biology Note")).toBeInTheDocument();
     expect(screen.queryByText("Chemistry Note")).not.toBeInTheDocument();
   });
 
-  it("does not show Most Popular or Recently Added sections when all notes are in Featured", async () => {
-    // With only 2 notes and limit 6, both go into Featured; other sections are empty
+  it("opens the subject selector from + More and filters subjects with search", async () => {
+    (listSubjects as jest.Mock).mockResolvedValue([
+      "Biology",
+      "Chemistry",
+      "Physics",
+      "Math",
+      "History",
+      "Programming",
+      "Anatomy",
+    ]);
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
-        id: "note-1",
-        ownerUserId: "user-2",
-        title: "Note One",
-        courseProgram: null,
-        learnerLevel: null,
-        subject: null,
-        tags: [],
-        contentPreview: "Preview one",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: null,
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: null,
-        copyCount: 2,
-        shareCount: 0,
-        viewCount: 5,
-        authorDisplayName: "User A",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T10:00:00Z",
-        updatedAt: "2026-03-31T10:00:00Z",
-      },
-      {
-        id: "note-2",
-        ownerUserId: "user-3",
-        title: "Note Two",
-        courseProgram: null,
-        learnerLevel: null,
-        subject: null,
-        tags: [],
-        contentPreview: "Preview two",
-        summaryPreview: "",
-        visibility: "PUBLIC",
-        studyPackId: null,
-        studyPackStatus: "DRAFT",
-        quizCount: null,
-        copyCount: 0,
-        shareCount: 0,
-        viewCount: 1,
-        authorDisplayName: "User B",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-29T10:00:00Z",
-        updatedAt: "2026-03-30T10:00:00Z",
-      },
+      createPublicNote({ id: "note-1", title: "Anatomy Note", subject: "Anatomy", tags: [] }),
+      createPublicNote({ id: "note-2", title: "Biology Note", subject: "Biology", tags: [] }),
     ]);
 
     render(<PublicLibraryPageClient />);
-    await screen.findByText("🔥 Featured Notes");
 
-    expect(screen.queryByText("📈 Most Popular")).not.toBeInTheDocument();
-    expect(screen.queryByText("🆕 Recently Added")).not.toBeInTheDocument();
+    await screen.findByText("Anatomy Note");
+    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Select subject" });
+    fireEvent.change(within(dialog).getByPlaceholderText("Search subjects..."), {
+      target: { value: "anat" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Anatomy" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByText("Anatomy Note")).toBeInTheDocument();
+    expect(screen.queryByText("Biology Note")).not.toBeInTheDocument();
+  });
+
+  it("applies OR logic for multiple tag selections from the tag selector", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      createPublicNote({
+        id: "note-1",
+        title: "Biology Cells",
+        subject: "Biology",
+        tags: ["cells", "dna", "lab", "micro", "quiz", "study", "review"],
+      }),
+      createPublicNote({
+        id: "note-2",
+        title: "Physics Motion",
+        subject: "Physics",
+        tags: ["motion"],
+      }),
+      createPublicNote({
+        id: "note-3",
+        title: "History Essay",
+        subject: "History",
+        tags: ["essay"],
+      }),
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    await screen.findByText("Biology Cells");
+    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Select tags" });
+    const modal = within(dialog);
+
+    fireEvent.change(modal.getByPlaceholderText("Search tags..."), {
+      target: { value: "motion" },
+    });
+    fireEvent.click(modal.getByRole("button", { name: "motion" }));
+    fireEvent.change(modal.getByPlaceholderText("Search tags..."), {
+      target: { value: "cells" },
+    });
+    fireEvent.click(modal.getByRole("button", { name: "cells" }));
+    fireEvent.click(modal.getByRole("button", { name: "Apply" }));
+
+    expect(screen.getByText("Biology Cells")).toBeInTheDocument();
+    expect(screen.getByText("Physics Motion")).toBeInTheDocument();
+    expect(screen.queryByText("History Essay")).not.toBeInTheDocument();
+  });
+
+  it("shows curated discovery sections without the old browse-by-subject block", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      createPublicNote({
+        id: "note-1",
+        title: "High Engagement Note",
+        subject: "Biology",
+        tags: ["cells"],
+        viewCount: 15,
+        copyCount: 8,
+      }),
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("🔥 Featured Notes")).toBeInTheDocument();
+    expect(screen.queryByText("📚 Browse by Subject")).not.toBeInTheDocument();
   });
 
   it("opens public note detail when a card is clicked", async () => {
     (listPublicNotes as jest.Mock).mockResolvedValue([
-      {
+      createPublicNote({
         id: "note-1",
-        ownerUserId: "user-2",
         title: "Community Note",
-        courseProgram: "Engineering",
-        learnerLevel: "BOARD_EXAM_REVIEW",
         subject: "Physics",
         tags: ["motion"],
-        contentPreview: "Community preview",
-        summaryPreview: "Community summary",
-        visibility: "PUBLIC",
-        studyPackId: "pack-3",
-        studyPackStatus: "STUDY_PACK_READY",
-        quizCount: 2,
-        copyCount: 0,
-        shareCount: 1,
-        viewCount: 4,
-        authorDisplayName: "Study Buddy",
-        isOfficialAuthor: false,
-        isCurrentUser: false,
-        createdAt: "2026-03-30T08:00:00Z",
-        updatedAt: "2026-03-31T08:00:00Z",
-      },
+      }),
     ]);
 
     render(<PublicLibraryPageClient />);

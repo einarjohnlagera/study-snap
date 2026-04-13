@@ -391,12 +391,20 @@ Core loop:
   - `By You`
   - `Official`
   - `Community`
+- Public Library should keep search first, then one-line horizontal rails for `Subjects` and `Popular Tags` before the note grid.
+- Public Library subject filtering should stay single-select with `All` as the default and use a `+ More` chip to open the full searchable selector.
+- Public Library tag filtering should stay multi-select, use OR logic within the tag group by default, and expose only a limited `Popular Tags` rail plus a `+ More` selector.
+- Public Library `+ More` should reuse the shared selector surface:
+  - subjects -> searchable single-select list
+  - tags -> searchable multi-select list with selected tags surfaced near the top
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
 - Public Library is a curated discovery page first, not a flat generic list.
 - Discovery mode should preserve:
   - `Featured Notes`
   - `Most Popular`
   - `Recently Added`
-  - `Browse by Subject`
 - Featured Notes should remain visually distinct from the rest of the Public Library sections.
 - Control Public Library density with section limits and per-section `View More`, not by removing previews, tags, subject badges, source labels, or engagement metadata.
 - Current discovery-home limits are:
@@ -471,8 +479,14 @@ Core loop:
 - Private notes must never be exposed through the public SEO route.
 - Copying a public note must preserve attribution via `copiedFromNoteId` and `copiedFromUserId`.
 - Public Library copy UX should keep the existing copy endpoint but make public copies idempotent per user/source note.
-- Public Library cards may include a visible `Copy to My Library` CTA as the one allowed exception to the no-inline-card-actions rule on note cards.
-- If the current user already has that public note in their library, remove `Copy to My Library` and show only `View Note` as the remaining inline action.
+- Public Library cards may include a subtle inline `Save` CTA as the one allowed exception to the no-inline-card-actions rule on note cards.
+- Public Library card CTAs should stay compact:
+  - icon + short label
+  - outline / ghost weight
+  - never full width
+  - aligned with author metadata in the footer row rather than taking over the full card width
+- Guests clicking `Save` should see an auth prompt modal before auth navigation.
+- If the current user already has that public note in their library, replace `Save` with muted `Saved` instead of showing another navigation button inside the card.
 - Successful Public Library copies should offer `View Note` and `Start Review` follow-up actions, with:
   - `Start Review` as the primary CTA
   - `View Note` as the secondary CTA
@@ -490,7 +504,7 @@ Core loop:
 
 - Library cards, Public Library cards, and Public Profile cards must use a consistent interaction model.
 - The whole card should be clickable to open the detail page.
-- Do not add inline action buttons or note-card context menus to note cards, except for the Public Library `Copy to My Library` CTA and copied-state `View Note` action at the bottom of the card.
+- Do not add inline action buttons or note-card context menus to note cards, except for the Public Library `Save` / `Saved` CTA in the footer row.
 - Note cards are preview/navigation surfaces only; note actions belong in Note Detail.
 
 ### Design System — Icons and Buttons
@@ -1100,10 +1114,12 @@ Sanitizer classes live in `backend/.../util/SubjectSanitizer.java` and `KeyConce
 ## Public Library Discovery
 
 Discovery mode layout order (no active filters):
-1. 📚 Browse by Subject — top 8 subjects by note count (appears ABOVE note sections)
-2. 🔥 Featured Notes — top 6 by engagement score
-3. 📈 Most Popular — top 6 by copies (excludes Featured)
-4. 🆕 Recently Added — top 6 by createdAt (excludes Featured + Popular)
+1. Search toolbar with `Filter` and `Sort`
+2. one-line `Subjects` rail with `All` and `+ More`
+3. one-line `Popular Tags` rail with `+ More`
+4. 🔥 Featured Notes — top 3 by engagement score
+5. 📈 Most Popular — top 5 by copies (excludes Featured)
+6. 🆕 Recently Added — top 5 by createdAt (excludes Featured + Popular)
 
 Backend subject filtering: `GET /notes/public?subject=<value>` — case-insensitive, server-side.
 

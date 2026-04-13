@@ -78,21 +78,24 @@ Public Library lists notes where:
 Capabilities:
 
 - search, subject filter, and tag filter
+- search remains the primary entry point; subject chips come next; `Popular Tags` stays third
+- subject chips and popular tags should stay on one horizontal scroll line instead of wrapping into tall chip grids
+- both rails should expose a `+ More` control that opens the shared searchable selector surface
 - curated discovery sections on the default Public Library page:
   - `Featured Notes`
   - `Most Popular`
   - `Recently Added`
-- `Browse by Subject` appears above the curated note sections
 - discovery-home limits keep the page scannable:
   - Featured Notes -> 3
   - Most Popular -> 5
   - Recently Added -> 5
 - each discovery section includes `View More`, which opens a focused section view on the same page instead of flattening Public Library into a generic list
 - open Public Note Detail (read-only)
-- `Copy to My Library`
-- Public Library cards may expose the copy CTA directly so discovery can flow into copy without opening detail first
-- duplicate public copies should resolve to `Already in your library` plus optional `View Note` instead of creating another draft
-- copy-success feedback should use a short action hierarchy: `Continue`, `View Note`, and primary `Start Review`
+- Public Library cards may expose a subtle inline `Save` CTA directly so discovery can flow into copy without opening detail first
+- guests clicking `Save` should see an auth prompt modal instead of an immediate redirect
+- duplicate public copies should resolve to a muted `Saved` card action instead of creating another draft
+- tag filtering in Public Library should use OR logic within the tag group, the same as private Library
+- copy-success feedback should use a short action hierarchy: `View Note` and primary `Start Review`
 - cards use the same shared preview stack as Library, including both note preview and summary preview
 - author labels use viewer-relative public identity rules (`By You`, `By NoteLib`, `By {Display Name}`)
 - Featured Notes should remain visually distinct from the other sections

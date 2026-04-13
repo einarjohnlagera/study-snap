@@ -59,14 +59,12 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "View Note" })).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Saved" });
+    expect(button).toBeInTheDocument();
+    expect(button).toBeDisabled();
     expect(screen.queryByText("Already in your library")).not.toBeInTheDocument();
     expect(screen.queryByText("In Library")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Open in My Library" })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "View Note" }));
-
-    expect(pushMock).toHaveBeenCalledWith("/notes/copied-note-2?copied=1");
   });
 
   it("copies the note for authenticated users", async () => {
@@ -82,7 +80,7 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy to My Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-3");
@@ -90,7 +88,7 @@ describe("PublicLibraryCopyAction", () => {
     });
   });
 
-  it("redirects anonymous users to login before copying", () => {
+  it("opens an auth modal for anonymous users before copying", () => {
     (getAuthUser as jest.Mock).mockReturnValue(null);
 
     render(
@@ -101,10 +99,38 @@ describe("PublicLibraryCopyAction", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy to My Library" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("dialog", { name: "Save this note" })).toBeInTheDocument();
+    expect(screen.getByText("Create an account or log in to save notes to your library.")).toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("routes auth-modal actions to login or signup with the copy intent redirect", () => {
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+
+    render(
+      <PublicLibraryCopyAction
+        noteId="note-5"
+        isOwner={false}
+        onCopySuccess={jest.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log In" }));
 
     expect(pushMock).toHaveBeenCalledWith(
       "/login?redirect=%2Fpublic%2Flibrary%3Fcopy%3D1%26intent%3Dlibrary",
+    );
+
+    pushMock.mockReset();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign Up" }));
+
+    expect(pushMock).toHaveBeenCalledWith(
+      "/signup?redirect=%2Fpublic%2Flibrary%3Fcopy%3D1%26intent%3Dlibrary",
     );
   });
 });

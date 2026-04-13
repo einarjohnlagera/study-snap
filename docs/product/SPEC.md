@@ -378,7 +378,9 @@ Users can:
   - `Featured Notes`
   - `Most Popular`
   - `Recently Added`
-  - `Browse by Subject`
+- keep search first, then lightweight browsing rails for:
+  - `Subjects`
+  - `Popular Tags`
 - keep featured content visually distinct rather than flattening discovery into one generic list
 - control density with section-level limits:
   - Featured Notes -> 3
@@ -387,8 +389,15 @@ Users can:
 - use `View More` for each discovery section to open the full section view without losing the Public Library page model
 - filter by search, course/program, learner level, subject, tags, and source
 - open read-only public note detail
-- copy a public note into Library (`Copy to My Library`)
-- show the copy CTA directly on Public Library cards so users can copy without opening detail first
+- copy a public note into Library from a subtle inline `Save` CTA on the card
+- keep subject chips and popular tags on one horizontal scroll lane instead of wrapping into tall grids
+- expose the full subject/tag lists through shared searchable selector surfaces:
+  - subjects -> single-select searchable list
+  - tags -> multi-select searchable list with selected-tag quick deselect near the top
+  - mobile -> bottom sheet
+  - desktop -> modal/sheet
+  - actions -> `Apply`, `Clear`
+- keep tag matching OR-based within the tag group so selecting multiple tags broadens note discovery
 - after a successful copy, show a confirmation state with:
   - `View Note`
   - `Start Review`
@@ -400,9 +409,11 @@ Users can:
 - desktop should right-align actions in the order `View Note`, `Start Review`
 - mobile should stack full-width actions with `Start Review` visually first
 - modal/sheet actions should keep a clean responsive layout with only `View Note` and `Start Review`, polished spacing, and no overflow
-- if the user already copied that public note, show only `View Note` as the remaining inline action instead of offering duplicate copies
+- if the user already copied that public note, show a muted `Saved` action state on the card instead of offering duplicate copies
+- guests clicking `Save` should open an auth prompt modal instead of immediately navigating away without context
 - Public Library cards should avoid generic `Open` buttons because card click already owns detail navigation
 - Public Library copied-state UI should avoid redundant ownership/status badges when the action state already communicates the same information
+- Public Library card footers should keep author metadata on the left and the subtle save action on the right for compact mobile scanability
 - see source badges on cards:
   - `By You` for their own public notes
   - `By NoteLib` plus an `Official` badge for the official NoteLib account

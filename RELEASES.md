@@ -62,7 +62,10 @@
 ### Fixes
 
 - **Public Library copy-flow cleanup** — public note copying now behaves consistently across discovery and detail surfaces:
-  - Public Library cards now remove the redundant copied-status badge and rely on action state instead: `Copy to My Library` before copy, `View Note` after copy
+  - Public Library now keeps search first, moves subject and tag browsing into compact horizontal rails, and uses searchable `+ More` selectors so filtering scales without vertical clutter
+  - Public Library multi-select tags now use OR logic by default so combining tags broadens results instead of creating false empty states
+  - Public Library cards now use a smaller inline `Save` action with iconography, guest auth prompt modal, and muted `Saved` state instead of the old full-width copy CTA
+  - mobile card presentation is tighter and more scan-friendly, with compact preview spacing, limited tags, and metadata plus action aligned in one footer row
   - repeated copies of the same public note by the same user now reuse the existing copied note instead of creating duplicate drafts
   - successful public copies now use a more polished success surface with stronger title hierarchy, subtle success iconography, right-aligned desktop actions, and cleaner mobile sheet spacing
   - copied private notes now show `Copied from {title} in Public Library.` attribution when source metadata exists

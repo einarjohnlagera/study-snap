@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Copy, Eye } from "lucide-react";
 import { SubjectBadge } from "@/components/notes/subject-badge";
+import { cn } from "@/lib/utils";
 
 type SharedNoteCardProps = {
   title: string | null;
@@ -15,6 +16,10 @@ type SharedNoteCardProps = {
   metadataBadges?: ReactNode;
   titleTrailing?: ReactNode;
   footer?: ReactNode;
+  tagDisplayLimit?: number;
+  notePreviewLines?: 2 | 3;
+  summaryPreviewLines?: 2 | 3;
+  showPreviewLabels?: boolean;
 };
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
@@ -49,10 +54,16 @@ export function SharedNoteCard({
   metadataBadges,
   titleTrailing,
   footer,
+  tagDisplayLimit,
+  notePreviewLines = 3,
+  summaryPreviewLines = 2,
+  showPreviewLabels = true,
 }: Readonly<SharedNoteCardProps>) {
   const normalizedTags = normalizeTags(tags);
   const normalizedCourseProgram = courseProgram?.trim() || null;
   const hasDiscoveryMetrics = typeof viewCount === "number" || typeof copyCount === "number";
+  const visibleTags = tagDisplayLimit ? normalizedTags.slice(0, tagDisplayLimit) : normalizedTags;
+  const hiddenTagCount = Math.max(0, normalizedTags.length - visibleTags.length);
 
   return (
     <div className="flex h-full min-w-0 flex-col justify-between gap-4">
@@ -88,20 +99,30 @@ export function SharedNoteCard({
           ) : null}
 
           <div className="space-y-3">
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                Note Preview
-              </p>
-              <p className="line-clamp-3 text-sm leading-relaxed text-foreground/85">
+            <div className={showPreviewLabels ? "space-y-1" : "space-y-0"}>
+              {showPreviewLabels ? (
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
+                  Note Preview
+                </p>
+              ) : null}
+              <p className={cn(
+                "text-sm leading-relaxed text-foreground/85",
+                notePreviewLines === 2 ? "line-clamp-2" : "line-clamp-3",
+              )}>
                 {resolveNotePreview(contentPreview)}
               </p>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
-                Summary Preview
-              </p>
-              <p className="line-clamp-2 text-sm leading-relaxed text-foreground/65">
+            <div className={showPreviewLabels ? "space-y-1" : "space-y-0"}>
+              {showPreviewLabels ? (
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">
+                  Summary Preview
+                </p>
+              ) : null}
+              <p className={cn(
+                "text-sm leading-relaxed text-foreground/65",
+                summaryPreviewLines === 3 ? "line-clamp-3" : "line-clamp-2",
+              )}>
                 {resolveSummaryPreview(summaryPreview)}
               </p>
             </div>
@@ -112,14 +133,21 @@ export function SharedNoteCard({
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           {normalizedTags.length > 0 ? (
-            normalizedTags.map((tag) => (
+            <>
+              {visibleTags.map((tag) => (
               <span
                 key={`${title ?? "note"}-${tag}`}
                 className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/75"
               >
                 {tag}
               </span>
-            ))
+              ))}
+              {hiddenTagCount > 0 ? (
+                <span className="rounded-full border border-border bg-background px-2 py-1 text-xs text-foreground/60">
+                  +{hiddenTagCount}
+                </span>
+              ) : null}
+            </>
           ) : (
             <span className="rounded-full border border-dashed border-border px-2 py-1 text-xs text-foreground/55">
               No tags

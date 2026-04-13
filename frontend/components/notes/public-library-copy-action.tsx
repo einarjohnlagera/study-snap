@@ -3,16 +3,22 @@
 import type { MouseEvent } from "react";
 import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ResponsiveActionButton } from "@/components/ui/action-button";
+import { Check, Save } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AppModal } from "@/components/ui/app-modal";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
 import { copyNote, trackAnalyticsEvent } from "@/lib/api";
-import { buildCopiedNotePath, buildPublicCopyIntentQuery } from "@/lib/public-note-copy";
+import { buildPublicCopyIntentQuery } from "@/lib/public-note-copy";
 
-const COPY_BUTTON_LABEL = "Copy to My Library";
-const COPY_LOADING_LABEL = "Copying to My Library...";
-const VIEW_NOTE_BUTTON_LABEL = "View Note";
+const SAVE_BUTTON_LABEL = "Save";
+const SAVE_LOADING_LABEL = "Saving...";
+const SAVED_BUTTON_LABEL = "Saved";
 const COPY_ERROR_MESSAGE = "Could not copy note.";
 const CARD_COPY_SURFACE = "public_library_card";
+const AUTH_MODAL_TITLE = "Save this note";
+const AUTH_MODAL_BODY = "Create an account or log in to save notes to your library.";
+const AUTH_LOGIN_LABEL = "Log In";
+const AUTH_SIGNUP_LABEL = "Sign Up";
 
 type PublicLibraryCopyActionProps = {
   noteId: string;
@@ -31,6 +37,7 @@ export function PublicLibraryCopyAction({
   const pathname = usePathname();
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const redirectTo = useMemo(() => {
     if (globalThis.window === undefined) {
@@ -39,10 +46,10 @@ export function PublicLibraryCopyAction({
     return `${pathname}${globalThis.location.search}`;
   }, [pathname]);
 
-  const handleOpenExisting = (event: MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-    router.push(buildCopiedNotePath(existingCopyNoteId ?? noteId, "library"));
-  };
+  const authRedirectTarget = useMemo(
+    () => `${redirectTo}${redirectTo.includes("?") ? "&" : "?"}${buildPublicCopyIntentQuery("library")}`,
+    [redirectTo],
+  );
 
   const handleCopy = async (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -61,7 +68,7 @@ export function PublicLibraryCopyAction({
     });
 
     if (!getAuthUser()) {
-      router.push(buildLoginPath({ redirectTo: `${redirectTo}${redirectTo.includes("?") ? "&" : "?"}${buildPublicCopyIntentQuery("library")}` }));
+      setAuthModalOpen(true);
       return;
     }
 
@@ -85,34 +92,70 @@ export function PublicLibraryCopyAction({
 
   if (existingCopyNoteId) {
     return (
-      <div onClick={(event) => event.stopPropagation()}>
-        <ResponsiveActionButton
+      <span
+        className="inline-flex"
+        onClick={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <Button
           type="button"
-          variant="outline"
-          className="w-full sm:w-auto"
-          action="library"
-          label={VIEW_NOTE_BUTTON_LABEL}
-          onClick={handleOpenExisting}
-          showTextOnMobile
-        />
-      </div>
+          size="sm"
+          variant="ghost"
+          disabled
+          className="h-9 gap-1.5 rounded-full px-3 text-foreground/55"
+        >
+          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+          <span>{SAVED_BUTTON_LABEL}</span>
+        </Button>
+      </span>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <ResponsiveActionButton
+    <div className="flex flex-col items-end gap-1">
+      <Button
         type="button"
-        className="w-full sm:w-auto"
-        action="copy"
-        label={copying ? COPY_LOADING_LABEL : COPY_BUTTON_LABEL}
+        size="sm"
+        variant="outline"
+        className="h-9 gap-1.5 rounded-full px-3 shadow-sm shadow-black/[0.02]"
         onClick={(event) => void handleCopy(event)}
         disabled={copying}
-        showTextOnMobile
-      />
+      >
+        <Save className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{copying ? SAVE_LOADING_LABEL : SAVE_BUTTON_LABEL}</span>
+      </Button>
       {copyError ? (
         <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p>
       ) : null}
+      <AppModal
+        isOpen={authModalOpen}
+        title={AUTH_MODAL_TITLE}
+        description={AUTH_MODAL_BODY}
+        onClose={() => setAuthModalOpen(false)}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAuthModalOpen(false);
+                router.push(buildLoginPath({ redirectTo: authRedirectTarget }));
+              }}
+            >
+              {AUTH_LOGIN_LABEL}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setAuthModalOpen(false);
+                router.push(`/signup?redirect=${encodeURIComponent(authRedirectTarget)}`);
+              }}
+            >
+              {AUTH_SIGNUP_LABEL}
+            </Button>
+          </div>
+        )}
+      />
     </div>
   );
 }
