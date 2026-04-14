@@ -108,4 +108,22 @@ describe("QuizAnswerReview", () => {
     expect(screen.getByRole("button", { name: "Previous Question" })).toHaveClass("w-full", "sm:w-auto");
     expect(screen.getByRole("button", { name: "Next Question" })).toHaveClass("w-full", "sm:w-auto");
   });
+
+  it("keeps long question and explanation text readable on small screens", () => {
+    render(
+      <QuizAnswerReview
+        quiz={[{
+          question: "What does pneumonoultramicroscopicsilicovolcanoconiosis indicate in a respiratory system review session?",
+          choices: ["A", "B", "C", "D"],
+          correctIndex: 0,
+          concept: "Respiratory system",
+          explanation: "Supercalifragilisticexpialidocious-style terminology should still wrap instead of forcing horizontal scrolling in the review page.",
+        }]}
+        selectedChoices={{ 0: 1 }}
+      />,
+    );
+
+    expect(screen.getByText(/pneumonoultramicroscopicsilicovolcanoconiosis/i)).toHaveClass("break-words");
+    expect(screen.getByText(/Supercalifragilisticexpialidocious-style terminology/i)).toHaveClass("break-words");
+  });
 });

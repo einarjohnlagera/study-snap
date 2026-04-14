@@ -502,7 +502,8 @@ Core loop:
 - Study Pack-ready Note Detail should keep quiz history on the note page:
   - show `Recent Sessions` below `Performance Overview`
   - merge completed Quick Review and Challenge Quiz attempts in reverse-chronological order
-  - open review inline on Note Detail instead of routing to a detached history screen
+  - desktop opens session review inline on Note Detail, auto-scrolls to the selected review, and keeps the active session visibly selected
+  - mobile opens a dedicated session-review page with a clear back path to Note Detail instead of compressing the full review inline
   - use stored session data only for answer review and concept breakdown; do not call LLMs for session history or review
   - allow graceful fallback summaries for older sessions that do not have full stored quiz detail
   - weak concepts in session review use the same `< 60%` accuracy threshold as other study surfaces

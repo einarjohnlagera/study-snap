@@ -235,7 +235,7 @@ export function QuizAnswerReview({
                   {currentItem.isCorrect ? "Correct" : "Incorrect"}
                 </span>
               </div>
-              <h3 className="text-base font-semibold leading-relaxed sm:text-lg">
+              <h3 className="break-words text-base font-semibold leading-relaxed sm:text-lg">
                 {currentItem.item.question}
               </h3>
             </div>
@@ -254,11 +254,11 @@ export function QuizAnswerReview({
             </div>
             <div className="space-y-1">
               <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">Your Answer</p>
-              <p className="text-sm text-foreground">{selectedAnswerSummary}</p>
+              <p className="break-words text-sm text-foreground">{selectedAnswerSummary}</p>
             </div>
             <div className="space-y-1">
               <p className="text-xs font-medium uppercase tracking-wide text-foreground/60">Correct Answer</p>
-              <p className="text-sm text-foreground">{correctAnswerSummary}</p>
+              <p className="break-words text-sm text-foreground">{correctAnswerSummary}</p>
             </div>
           </div>
 
@@ -342,7 +342,7 @@ export function QuizAnswerReview({
               <div className="motion-collapse-inner">
                 <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3 text-sm text-foreground/80">
                   <p className="font-medium text-foreground">Explanation</p>
-                  <p className="leading-relaxed">
+                  <p className="break-words leading-relaxed">
                     {currentItem.item.explanation?.trim() || "No explanation available for this question."}
                   </p>
                 </div>

@@ -114,11 +114,30 @@ describe("QuizSessionHistory", () => {
       />,
     );
 
-    expect(screen.getByText("Session Review")).toBeInTheDocument();
+    expect(screen.getAllByText("Session Review")).toHaveLength(2);
     expect(screen.getByText("What powers the cell?")).toBeInTheDocument();
     expect(screen.getByText("Concept: Cells")).toBeInTheDocument();
     expect(screen.getAllByText("Incorrect")).toHaveLength(2);
     expect(screen.getByText("Weak Concepts")).toBeInTheDocument();
+  });
+
+  it("marks the selected session as currently reviewing", () => {
+    render(
+      <QuizSessionHistory
+        sessions={historyItems}
+        activeSessionId="quick-1"
+        activeReview={activeReview}
+        loadingReview={false}
+        reviewError={null}
+        onSelectSession={jest.fn()}
+      />,
+    );
+
+    const activeButton = screen.getByRole("button", { name: /Quick Review/i });
+
+    expect(activeButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByText("Currently reviewing")).not.toHaveLength(0);
+    expect(screen.getByText("Currently reviewing this session.")).toBeInTheDocument();
   });
 
   it("degrades gracefully when a legacy session lacks quiz detail", () => {

@@ -86,6 +86,13 @@ import {
   type RecentQuizSessionHistoryItem,
 } from "@/lib/quiz-session-history";
 import {
+  buildNoteDetailPathWithSessionReview,
+  buildNoteSessionReviewPath,
+  MOBILE_SESSION_REVIEW_MEDIA_QUERY,
+  NOTE_SESSION_REVIEW_QUERY_PARAMS,
+  resolveRequestedNoteSessionReview,
+} from "@/lib/note-session-review";
+import {
   STUDY_PACK_GENERATION_MESSAGE_ROTATION_MS,
   STUDY_PACK_GENERATION_POLL_INTERVAL_MS,
   resolveStudyPackGenerationMessage,
@@ -216,6 +223,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const searchParams = useSearchParams();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const noteActionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const sessionReviewSectionRef = useRef<HTMLDivElement | null>(null);
   const latestSearchQueryRef = useRef(searchParams.toString());
   const autoGenerateHandledRef = useRef(false);
   const autoEditHandledRef = useRef(false);
@@ -265,6 +273,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [isPremiumPlan, setIsPremiumPlan] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">("STUDENT");
+  const [isMobileSessionReview, setIsMobileSessionReview] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
@@ -386,13 +395,64 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     [challengeRecentSessions, quickRecentSessions],
   );
 
-  const handleSelectSessionReview = useCallback(async (session: RecentQuizSessionHistoryItem) => {
+  const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
+  const requestedSessionReview = useMemo(
+    () => resolveRequestedNoteSessionReview(
+      searchParams.get(NOTE_SESSION_REVIEW_QUERY_PARAMS.sessionId),
+      searchParams.get(NOTE_SESSION_REVIEW_QUERY_PARAMS.sessionMode),
+    ),
+    [searchParams],
+  );
+
+  const syncSelectedSessionReviewInUrl = useCallback((session: RecentQuizSessionHistoryItem) => {
     if (!note) {
       return;
     }
+    const next = buildNoteDetailPathWithSessionReview(
+      note.id,
+      activeStudyPackTab,
+      session.sessionId,
+      session.sessionMode,
+    );
+    router.replace(next, { scroll: false });
+  }, [activeStudyPackTab, note, router]);
+
+  const scrollToSessionReviewSection = useCallback(() => {
+    globalThis.requestAnimationFrame(() => {
+      sessionReviewSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, []);
+
+  const loadInlineSessionReview = useCallback(async (
+    session: RecentQuizSessionHistoryItem,
+    options: { scrollToReview?: boolean; syncUrl?: boolean } = {},
+  ) => {
+    if (!note) {
+      return;
+    }
+    if (options.syncUrl !== false) {
+      syncSelectedSessionReviewInUrl(session);
+    }
+    if (
+      activeSessionReviewId === session.sessionId
+      && activeSessionReview?.sessionId === session.sessionId
+      && !sessionReviewError
+    ) {
+      if (options.scrollToReview !== false) {
+        scrollToSessionReviewSection();
+      }
+      return;
+    }
     setActiveSessionReviewId(session.sessionId);
+    setActiveSessionReview(null);
     setSessionReviewError(null);
     setLoadingSessionReview(true);
+    if (options.scrollToReview !== false) {
+      scrollToSessionReviewSection();
+    }
     try {
       const review = session.sessionMode === "CHALLENGE"
         ? await getChallengeQuizSessionReview(note.id, session.sessionId)
@@ -404,7 +464,25 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setLoadingSessionReview(false);
     }
-  }, [note]);
+  }, [
+    activeSessionReview,
+    activeSessionReviewId,
+    note,
+    scrollToSessionReviewSection,
+    sessionReviewError,
+    syncSelectedSessionReviewInUrl,
+  ]);
+
+  const handleSelectSessionReview = useCallback(async (session: RecentQuizSessionHistoryItem) => {
+    if (!note) {
+      return;
+    }
+    if (isMobileSessionReview) {
+      router.push(buildNoteSessionReviewPath(note.id, session.sessionId, session.sessionMode, activeStudyPackTab));
+      return;
+    }
+    await loadInlineSessionReview(session);
+  }, [activeStudyPackTab, isMobileSessionReview, loadInlineSessionReview, note, router]);
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -445,6 +523,58 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+    const mediaQuery = window.matchMedia(MOBILE_SESSION_REVIEW_MEDIA_QUERY);
+    const syncMatches = () => {
+      setIsMobileSessionReview(mediaQuery.matches);
+    };
+    syncMatches();
+    mediaQuery.addEventListener("change", syncMatches);
+    return () => {
+      mediaQuery.removeEventListener("change", syncMatches);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!requestedSessionReview) {
+      return;
+    }
+
+    setActiveSessionReviewId(requestedSessionReview.sessionId);
+    if (isMobileSessionReview) {
+      setActiveSessionReview(null);
+      setSessionReviewError(null);
+      setLoadingSessionReview(false);
+      return;
+    }
+
+    const matchingSession = recentQuizSessions.find((session) => (
+      session.sessionId === requestedSessionReview.sessionId
+      && session.sessionMode === requestedSessionReview.sessionMode
+    ));
+    if (!matchingSession) {
+      return;
+    }
+    if (
+      activeSessionReviewId === matchingSession.sessionId
+      && (activeSessionReview?.sessionId === matchingSession.sessionId || loadingSessionReview)
+    ) {
+      return;
+    }
+    void loadInlineSessionReview(matchingSession, { scrollToReview: false, syncUrl: false });
+  }, [
+    activeSessionReview,
+    activeSessionReviewId,
+    isMobileSessionReview,
+    loadInlineSessionReview,
+    loadingSessionReview,
+    recentQuizSessions,
+    requestedSessionReview,
+  ]);
 
   useEffect(() => {
     if (!toast) {
@@ -597,7 +727,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     : false;
   const showFirstStudyPackSuccessBanner = firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
-  const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
   const availableCourseProgramSuggestions = useMemo(
     () => mergeCourseProgramSuggestions(
       COURSE_PROGRAM_SUGGESTIONS,
@@ -976,7 +1105,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   };
 
-  const handleStartQuickReview = async () => {
+  const handleStartQuickReview = useCallback(async () => {
     if (!note) {
       return;
     }
@@ -989,7 +1118,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       const message = err instanceof Error ? err.message : "Could not start Quick Review.";
       setError(message);
     }
-  };
+  }, [note, router]);
 
   useEffect(() => {
     const shouldAutoStartQuickReview = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview) === "1";
@@ -1604,6 +1733,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               activeReview={activeSessionReview}
               loadingReview={loadingSessionReview}
               reviewError={sessionReviewError}
+              showInlineReview={!isMobileSessionReview}
+              reviewSectionRef={sessionReviewSectionRef}
               onSelectSession={handleSelectSessionReview}
             />
           ) : null}

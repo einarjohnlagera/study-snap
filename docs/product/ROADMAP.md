@@ -97,9 +97,15 @@ Core routes:
 - `/library`
 - `/library/public`
 - `/notes/{id}`
+- `/notes/{id}/sessions/{sessionId}` for dedicated mobile session review
 - `/public/library/{subject}`
 - `/public/library/{subject}/{slug}`
 - `/public/profile/{userId}`
+
+Current session-review UX:
+
+- desktop keeps session review inline on Note Detail and auto-scrolls to the selected review
+- mobile opens a dedicated session-review page so answer-by-answer review has enough width and focus
 
 ## Future Directions
 
