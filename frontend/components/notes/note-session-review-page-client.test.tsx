@@ -8,13 +8,11 @@ import {
 import { exportQuizSessionReviewDocument } from "@/lib/quiz-session-export";
 
 const pushMock = jest.fn();
+const routerMock = { push: pushMock, replace: jest.fn() };
 let currentSearch = "mode=quick-review&tab=quiz";
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: pushMock,
-    replace: jest.fn(),
-  }),
+  useRouter: () => routerMock,
   useSearchParams: () => new URLSearchParams(currentSearch),
 }));
 
@@ -110,50 +108,63 @@ describe("NoteSessionReviewPageClient", () => {
     expect(getChallengeQuizSessionReview).not.toHaveBeenCalled();
   });
 
-  it("exports the session review as a PDF with clear feedback", async () => {
-    (getQuickReviewSessionReview as jest.Mock).mockResolvedValue({
-      sessionId: "quick-1",
-      studyPackId: "sp-1",
-      sessionMode: "QUICK_REVIEW",
-      status: "COMPLETED",
-      totalQuestions: 1,
-      correctAnswers: 0,
-      scorePercentage: 0,
-      retryCount: 1,
-      durationSeconds: 120,
-      weakConcepts: ["Respiratory system"],
-      conceptBreakdown: [
-        {
-          concept: "Respiratory system",
-          correctAnswers: 0,
-          totalQuestions: 1,
-          accuracyPercentage: 0,
-        },
-      ],
-      quiz: [
-        {
-          question: "What does pneumonoultramicroscopicsilicovolcanoconiosis indicate in a respiratory system review session?",
-          choices: ["A", "B", "C", "D"],
-          correctIndex: 0,
-          concept: "Respiratory system",
-          explanation: "Supercalifragilisticexpialidocious-style terminology should still wrap instead of forcing horizontal scrolling in the review page.",
-        },
-      ],
-      selectedChoices: { 0: 1 },
-      createdAt: "2026-04-11T10:00:00Z",
-      completedAt: "2026-04-11T10:05:00Z",
+  const RESPIRATORY_REVIEW = {
+    sessionId: "quick-1",
+    studyPackId: "sp-1",
+    sessionMode: "QUICK_REVIEW" as const,
+    status: "COMPLETED" as const,
+    totalQuestions: 1,
+    correctAnswers: 0,
+    scorePercentage: 0,
+    retryCount: 1,
+    durationSeconds: 120,
+    weakConcepts: ["Respiratory system"],
+    conceptBreakdown: [
+      {
+        concept: "Respiratory system",
+        correctAnswers: 0,
+        totalQuestions: 1,
+        accuracyPercentage: 0,
+      },
+    ],
+    quiz: [
+      {
+        question: "What does pneumonoultramicroscopicsilicovolcanoconiosis indicate in a respiratory system review session?",
+        choices: ["A", "B", "C", "D"],
+        correctIndex: 0,
+        concept: "Respiratory system",
+        explanation: "Supercalifragilisticexpialidocious-style terminology should still wrap instead of forcing horizontal scrolling in the review page.",
+      },
+    ],
+    selectedChoices: { 0: 1 },
+    createdAt: "2026-04-11T10:00:00Z",
+    completedAt: "2026-04-11T10:05:00Z",
+  };
+
+  it("shows a Full Quiz and Mistakes Only option when Export is clicked", async () => {
+    (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
+
+    render(<NoteSessionReviewPageClient noteId="note-1" sessionId="quick-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Export" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Full Quiz" })).toBeInTheDocument();
     });
+    expect(screen.getByRole("button", { name: "Mistakes Only" })).toBeInTheDocument();
+  });
+
+  it("exports the full quiz PDF with clear feedback when Full Quiz is selected", async () => {
+    (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
     (exportQuizSessionReviewDocument as jest.Mock).mockResolvedValue({ filename: "notelib-quiz-respiratory-notes-2026-04-14.pdf" });
 
     render(<NoteSessionReviewPageClient noteId="note-1" sessionId="quick-1" />);
 
-    expect(await screen.findByRole("heading", { name: "Focused review" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Export" }));
     await waitFor(() => {
-      expect(getQuickReviewSessionReview).toHaveBeenCalledWith("note-1", "quick-1");
+      expect(screen.getByRole("button", { name: "Full Quiz" })).toBeInTheDocument();
     });
-    expect(await screen.findByText("Respiratory Notes")).toBeInTheDocument();
-    const exportButton = screen.getByRole("button", { name: "Export" });
-    fireEvent.click(exportButton);
+    fireEvent.click(screen.getByRole("button", { name: "Full Quiz" }));
 
     await waitFor(() => {
       expect(screen.getByText("Exporting PDF...")).toBeInTheDocument();
@@ -162,6 +173,31 @@ describe("NoteSessionReviewPageClient", () => {
     await waitFor(() => {
       expect(exportQuizSessionReviewDocument).toHaveBeenCalledWith(expect.objectContaining({
         format: "pdf",
+        exportType: "full",
+        noteTitle: "Respiratory Notes",
+        noteSubject: "Pulmonology",
+        quizTypeLabel: "Quick Review",
+      }));
+    });
+    expect(screen.getByText("PDF ready")).toBeInTheDocument();
+  });
+
+  it("exports a mistakes-only PDF with clear feedback when Mistakes Only is selected", async () => {
+    (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
+    (exportQuizSessionReviewDocument as jest.Mock).mockResolvedValue({ filename: "notelib-mistakes-respiratory-notes-2026-04-14.pdf" });
+
+    render(<NoteSessionReviewPageClient noteId="note-1" sessionId="quick-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Export" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Mistakes Only" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Mistakes Only" }));
+
+    await waitFor(() => {
+      expect(exportQuizSessionReviewDocument).toHaveBeenCalledWith(expect.objectContaining({
+        format: "pdf",
+        exportType: "mistakes-only",
         noteTitle: "Respiratory Notes",
         noteSubject: "Pulmonology",
         quizTypeLabel: "Quick Review",

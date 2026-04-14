@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { FileText } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, FileText } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -40,8 +40,10 @@ export function NoteSessionReviewPageClient({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const sessionMode = useMemo(
     () => fromNoteSessionReviewRouteMode(searchParams.get(NOTE_SESSION_REVIEW_QUERY_PARAMS.routeMode)),
@@ -113,11 +115,27 @@ export function NoteSessionReviewPageClient({
     };
   }, [noteId, router, sessionId, sessionMode]);
 
-  const handleExport = async () => {
+  useEffect(() => {
+    if (!exportMenuOpen) {
+      return undefined;
+    }
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [exportMenuOpen]);
+
+  const handleExport = async (exportType: "full" | "mistakes-only") => {
     if (!review || exporting) {
       return;
     }
 
+    setExportMenuOpen(false);
     setExporting(true);
     setToastTone("info");
     setToastMessage("Exporting PDF...");
@@ -128,6 +146,7 @@ export function NoteSessionReviewPageClient({
       });
       await exportQuizSessionReviewDocument({
         format: "pdf",
+        exportType,
         noteTitle: note?.title,
         noteSubject: note?.subject,
         quizTypeLabel,
@@ -189,17 +208,38 @@ export function NoteSessionReviewPageClient({
                 </p>
               </div>
               <div className="flex flex-col items-start gap-3 sm:items-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => void handleExport()}
-                  disabled={exporting}
-                >
-                  <FileText className="h-4 w-4" aria-hidden="true" />
-                  <span>{exporting ? "Exporting..." : "Export"}</span>
-                </Button>
+                <div className="relative" ref={exportMenuRef}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setExportMenuOpen((prev) => !prev)}
+                    disabled={exporting}
+                  >
+                    <FileText className="h-4 w-4" aria-hidden="true" />
+                    <span>{exporting ? "Exporting..." : "Export"}</span>
+                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
+                  </Button>
+                  {exportMenuOpen ? (
+                    <div className="absolute right-0 top-full z-10 mt-1 min-w-[148px] rounded-md border border-border bg-background shadow-md">
+                      <button
+                        type="button"
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-muted/50"
+                        onClick={() => void handleExport("full")}
+                      >
+                        Full Quiz
+                      </button>
+                      <button
+                        type="button"
+                        className="w-full px-4 py-2 text-left text-sm hover:bg-muted/50"
+                        onClick={() => void handleExport("mistakes-only")}
+                      >
+                        Mistakes Only
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/70">
                     {quizTypeLabel}

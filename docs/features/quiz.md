@@ -213,13 +213,17 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 
 - Session Review pages are the primary export entry point for completed quiz sessions.
 - The export action should sit in the top-right of the Session Review header card as a secondary action.
-- v1 export behavior:
-  - click `Export`
-  - generate PDF directly
-  - auto-download the file
+- Export behavior:
+  - click `Export` to open a minimal dropdown with two options:
+    - `Full Quiz` — exports all questions
+    - `Mistakes Only` — exports only questions the user answered incorrectly
+  - selected option generates and auto-downloads the PDF immediately
 - feedback should stay lightweight:
   - `Exporting PDF...`
   - `PDF ready`
+
+### Full Quiz PDF
+
 - PDF content structure:
   - NoteLib header treatment
   - note title
@@ -227,6 +231,22 @@ Use distinct icons for each mode and keep the action mapping consistent across p
   - generated date
   - session summary with score, percentage, performance level, and weak concepts
   - question-by-question review with choices, user answer, correct answer, explanation, and concept when available
+- filename: `notelib-quiz-[title]-[date].pdf`
+
+### Mistakes Only PDF
+
+- Includes only questions where the user's answer was incorrect
+- PDF content structure:
+  - same header as Full Quiz (NoteLib, note title, quiz type, generated date)
+  - `Mistakes Review` section with mistake count (e.g. `3/10 incorrect`), accuracy percentage, and weak concepts derived from incorrect answers only
+  - `Incorrect Answers` section with each question, all choices, correct answer highlighted in green, user's wrong answer marked in red, full explanation (always included), and concept label
+  - question numbers reference original position in the quiz for cross-reference
+- edge case: if the user answered everything correctly, the PDF shows `Perfect Score!` and `You answered all questions correctly.` — never generates an empty document
+- filename: `notelib-mistakes-[title]-[date].pdf`
+- filtering uses session data only — does not call the LLM
+
+### General Rules
+
 - styling rules:
   - printable reviewer / exam-paper feel
   - mostly black/white output

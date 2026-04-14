@@ -1059,6 +1059,16 @@ Rules:
 - `Focus Areas` should surface top weak concepts for all users, but Adaptive Practice CTA remains Premium-gated through the shared soft paywall for Free users.
 - Keep destructive actions (delete) in Note Detail/Library with explicit confirmation.
 
+## Context Usage Rule
+Always read and follow AGENTS.md, SPEC.md, and related feature docs before implementing any task.
+Assume these files are the source of truth for architecture and UX decisions.
+
+- docs/architecture for the architecture overview
+- docs/features for the context of every feature
+- docs/product for the spec and roadmap of the app
+- docs/testing for the context of testing of every feature
+- docs/ui for the ui design context
+
 ## Documentation Source of Truth
 
 Primary docs:
