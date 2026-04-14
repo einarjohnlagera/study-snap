@@ -759,6 +759,7 @@ export type NoteListItemResponse = {
   studyPackStatus: NoteStudyPackStatus;
   quizCount: number | null;
   copyCount: number | null;
+  likeCount: number | null;
   shareCount: number | null;
   viewCount: number | null;
   authorDisplayName: string;
@@ -768,6 +769,12 @@ export type NoteListItemResponse = {
   updatedAt: string;
   copiedFromNoteId?: string | null;
   copiedFromPublic?: boolean;
+  likedByCurrentUser: boolean;
+};
+
+export type PublicNoteLikeResponse = {
+  liked: boolean;
+  likeCount: number;
 };
 
 export type PublicNoteDetailResponse = {
@@ -2120,6 +2127,18 @@ export async function listPublicNotes(params?: { subject?: string }): Promise<No
     headers: buildAuthHeaders(),
   });
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load public notes.");
+}
+
+export async function togglePublicNoteLike(noteId: string): Promise<PublicNoteLikeResponse> {
+  const response = await fetchWithAuth(
+    `/notes/public/${noteId}/like`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<PublicNoteLikeResponse>(response, "Could not update note like.");
 }
 
 export async function listSubjects(scope: SubjectSuggestionScope = "public"): Promise<string[]> {

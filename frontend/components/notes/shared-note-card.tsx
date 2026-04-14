@@ -15,6 +15,7 @@ type SharedNoteCardProps = {
   stateBadge?: ReactNode;
   metadataBadges?: ReactNode;
   titleTrailing?: ReactNode;
+  metricsTrailing?: ReactNode;
   footer?: ReactNode;
   tagDisplayLimit?: number;
   notePreviewLines?: 2 | 3;
@@ -53,6 +54,7 @@ export function SharedNoteCard({
   stateBadge,
   metadataBadges,
   titleTrailing,
+  metricsTrailing,
   footer,
   tagDisplayLimit,
   notePreviewLines = 3,
@@ -62,6 +64,7 @@ export function SharedNoteCard({
   const normalizedTags = normalizeTags(tags);
   const normalizedCourseProgram = courseProgram?.trim() || null;
   const hasDiscoveryMetrics = typeof viewCount === "number" || typeof copyCount === "number";
+  const hasMetricsRow = hasDiscoveryMetrics || Boolean(metricsTrailing);
   const visibleTags = tagDisplayLimit ? normalizedTags.slice(0, tagDisplayLimit) : normalizedTags;
   const hiddenTagCount = Math.max(0, normalizedTags.length - visibleTags.length);
 
@@ -155,19 +158,26 @@ export function SharedNoteCard({
           )}
         </div>
 
-        {hasDiscoveryMetrics ? (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-foreground/60">
-            {typeof viewCount === "number" ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{viewCount.toLocaleString()} {viewCount === 1 ? "view" : "views"}</span>
-              </span>
-            ) : null}
-            {typeof copyCount === "number" ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{copyCount.toLocaleString()} {copyCount === 1 ? "copy" : "copies"}</span>
-              </span>
+        {hasMetricsRow ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-foreground/60">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              {typeof viewCount === "number" ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{viewCount.toLocaleString()} {viewCount === 1 ? "view" : "views"}</span>
+                </span>
+              ) : null}
+              {typeof copyCount === "number" ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>{copyCount.toLocaleString()} {copyCount === 1 ? "copy" : "copies"}</span>
+                </span>
+              ) : null}
+            </div>
+            {metricsTrailing ? (
+              <div className="shrink-0" onClick={(event) => event.stopPropagation()}>
+                {metricsTrailing}
+              </div>
             ) : null}
           </div>
         ) : null}

@@ -4,6 +4,7 @@ import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
@@ -219,6 +220,7 @@ class NoteControllerTest {
                         "STUDY_PACK_READY",
                         4,
                         2L,
+                        0L,
                         1L,
                         5L,
                         "My Notes",
@@ -227,6 +229,7 @@ class NoteControllerTest {
                         OffsetDateTime.now(),
                         OffsetDateTime.now(),
                         null,
+                        false,
                         false
                 )
         );
@@ -236,5 +239,18 @@ class NoteControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(noteService).listPublic(userId, null, null);
+    }
+
+    @Test
+    void togglePublicNoteLike_delegatesToService() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        PublicNoteLikeResponse expected = new PublicNoteLikeResponse(true, 12L);
+        when(noteService.togglePublicNoteLike("note-1", userId)).thenReturn(expected);
+
+        PublicNoteLikeResponse response = noteController.togglePublicNoteLike("note-1", user);
+
+        assertThat(response).isEqualTo(expected);
+        verify(noteService).togglePublicNoteLike("note-1", userId);
     }
 }

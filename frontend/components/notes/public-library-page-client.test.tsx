@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicLibraryPageClient } from "./public-library-page-client";
-import { copyNote, listNotes, listPublicNotes, listSubjects } from "@/lib/api";
+import { copyNote, listNotes, listPublicNotes, listSubjects, togglePublicNoteLike } from "@/lib/api";
 import { buildPublicLibraryNotePath } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
@@ -25,6 +25,7 @@ jest.mock("@/lib/api", () => ({
   listNotes: jest.fn(),
   listPublicNotes: jest.fn(),
   listSubjects: jest.fn(),
+  togglePublicNoteLike: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
 
@@ -44,6 +45,7 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
     studyPackStatus: "STUDY_PACK_READY",
     quizCount: 2,
     copyCount: 1,
+    likeCount: 0,
     shareCount: 0,
     viewCount: 4,
     authorDisplayName: "Study Buddy",
@@ -51,6 +53,7 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
     isCurrentUser: false,
     createdAt: "2026-03-30T08:00:00Z",
     updatedAt: "2026-03-31T08:00:00Z",
+    likedByCurrentUser: false,
     ...overrides,
   };
 }
@@ -82,6 +85,7 @@ describe("PublicLibraryPageClient", () => {
     (listNotes as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
+    (togglePublicNoteLike as jest.Mock).mockReset();
     currentAuthUser = { id: "user-1" };
     currentPathname = "/public/library";
     currentSearch = "";
@@ -130,6 +134,29 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
     expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Copy to My Library" })).not.toBeInTheDocument();
+  });
+
+  it("updates the card like count when a user likes a public note", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      createPublicNote({
+        id: "note-community",
+        title: "Community Note",
+        likeCount: 2,
+      }),
+    ]);
+    (togglePublicNoteLike as jest.Mock).mockResolvedValue({ liked: true, likeCount: 3 });
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Community Note")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Like note" }));
+
+    await waitFor(() => {
+      expect(togglePublicNoteLike).toHaveBeenCalledWith("note-community");
+    });
+
+    expect(screen.getByRole("button", { name: "Unlike note" })).toHaveTextContent("3");
   });
 
   it("updates the author badge when auth state hydrates after mount", async () => {

@@ -13,6 +13,7 @@ import { LibrarySheetModal } from "@/components/notes/library-sheet-modal";
 import { NoteStateBadge } from "@/components/notes/note-state-badge";
 import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
 import { PublicLibraryCopyAction } from "@/components/notes/public-library-copy-action";
+import { PublicLibraryLikeAction } from "@/components/notes/public-library-like-action";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -224,6 +225,7 @@ interface PublicNoteCardProps {
   onNavigate: (path: string) => void;
   existingCopyNoteId?: string | null;
   onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
+  onLikeSuccess: (payload: { noteId: string; liked: boolean; likeCount: number }) => void;
 }
 
 function PublicNoteCard({
@@ -232,6 +234,7 @@ function PublicNoteCard({
   onNavigate,
   existingCopyNoteId = null,
   onCopySuccess,
+  onLikeSuccess,
 }: Readonly<PublicNoteCardProps>) {
   const itemTags = normalizeTags(item.tags);
   const authorBadge = resolveAuthorBadge(item, currentUserId);
@@ -260,10 +263,23 @@ function PublicNoteCard({
         summaryPreview={item.summaryPreview}
         copyCount={typeof item.copyCount === "number" && item.copyCount > 0 ? item.copyCount : null}
         viewCount={typeof item.viewCount === "number" && item.viewCount > 0 ? item.viewCount : null}
+        metricsTrailing={(
+          <PublicLibraryLikeAction
+            noteId={item.id}
+            likeCount={item.likeCount ?? 0}
+            liked={item.likedByCurrentUser}
+            onLikeSuccess={({ liked, likeCount }) => onLikeSuccess({
+              noteId: item.id,
+              liked,
+              likeCount,
+            })}
+          />
+        )}
         stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
         metadataBadges={(
           <NoteQualityBadges
             copyCount={item.copyCount}
+            likeCount={item.likeCount}
             viewCount={item.viewCount}
           />
         )}
@@ -319,6 +335,7 @@ interface PublicLibraryDiscoverySectionProps {
   onViewMore: () => void;
   copiedNoteIdsBySourceId: Record<string, string>;
   onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
+  onLikeSuccess: (payload: { noteId: string; liked: boolean; likeCount: number }) => void;
 }
 
 function PublicLibraryDiscoverySection({
@@ -330,6 +347,7 @@ function PublicLibraryDiscoverySection({
   onViewMore,
   copiedNoteIdsBySourceId,
   onCopySuccess,
+  onLikeSuccess,
 }: Readonly<PublicLibraryDiscoverySectionProps>) {
   if (items.length === 0) {
     return null;
@@ -362,6 +380,7 @@ function PublicLibraryDiscoverySection({
             onNavigate={onNavigate}
             existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
             onCopySuccess={onCopySuccess}
+            onLikeSuccess={onLikeSuccess}
           />
         ))}
       </div>
@@ -444,11 +463,11 @@ export function PublicLibraryPageClient() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (globalThis.window === undefined || typeof globalThis.matchMedia !== "function") {
       return;
     }
 
-    const mediaQuery = window.matchMedia(MOBILE_SUCCESS_SHEET_MEDIA_QUERY);
+    const mediaQuery = globalThis.matchMedia(MOBILE_SUCCESS_SHEET_MEDIA_QUERY);
     const syncMatches = () => {
       setIsMobileSuccessSheet(mediaQuery.matches);
     };
@@ -492,6 +511,18 @@ export function PublicLibraryPageClient() {
     setCopySuccessState({
       copiedNoteId: payload.copiedNoteId,
     });
+  }, []);
+
+  const handleLikeSuccess = useCallback((payload: { noteId: string; liked: boolean; likeCount: number }) => {
+    setItems((previous) => previous.map((item) => (
+      item.id === payload.noteId
+        ? {
+            ...item,
+            likeCount: payload.likeCount,
+            likedByCurrentUser: payload.liked,
+          }
+        : item
+    )));
   }, []);
 
   const derivedSubjects = useMemo(() => {
@@ -1129,6 +1160,7 @@ export function PublicLibraryPageClient() {
                     onNavigate={(path) => router.push(path)}
                     existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
                     onCopySuccess={handleCopySuccess}
+                    onLikeSuccess={handleLikeSuccess}
                   />
                 ))}
               </div>
@@ -1152,6 +1184,7 @@ export function PublicLibraryPageClient() {
                   onViewMore={() => openDiscoveryView("featured")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
+                  onLikeSuccess={handleLikeSuccess}
                 />
               ) : null}
 
@@ -1164,6 +1197,7 @@ export function PublicLibraryPageClient() {
                   onViewMore={() => openDiscoveryView("popular")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
+                  onLikeSuccess={handleLikeSuccess}
                 />
               ) : null}
 
@@ -1176,6 +1210,7 @@ export function PublicLibraryPageClient() {
                   onViewMore={() => openDiscoveryView("recent")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
+                  onLikeSuccess={handleLikeSuccess}
                 />
               ) : null}
             </div>
@@ -1197,6 +1232,7 @@ export function PublicLibraryPageClient() {
                   onNavigate={(path) => router.push(path)}
                   existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
                   onCopySuccess={handleCopySuccess}
+                  onLikeSuccess={handleLikeSuccess}
                 />
               ))}
             </div>

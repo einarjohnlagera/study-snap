@@ -27,6 +27,12 @@
   - uses `public/landing/feature-public-library.jpg` inside a framed product-preview container with constrained height, rounded corners, and subtle depth
   - keeps the preview balanced across desktop and mobile with text-first stacking on small screens
 
+- **Public Library evaluation signals** — public notes now expose a lightweight like system so note quality is easier to judge without turning discovery into a social feed:
+  - authenticated users can toggle one like per public note, with likes stored per user-note pair and duplicate likes prevented server-side
+  - Public Library cards now show a subtle heart count beside the existing view/copy signals, and guests who tap like see an auth prompt modal instead of a silent failure
+  - Featured ranking now uses `viewCount + (copyCount * 3) + (likeCount * 2)` while Most Popular keeps copies first, views second, and uses likes as the next tie-breaker
+  - public note cards can now show a lightweight `❤️ Well liked` badge when a note reaches the like threshold, keeping the evaluation model simple and student-facing
+
 - **Dedicated How it Works page** — product walkthrough content now has its own public route at `/how-it-works`:
   - the new page explains the full NoteLib flow with real screenshots for note editing, Study Pack generation, quiz practice, and results review
   - `/how-it-works` also includes the simple 3-step overview, Board Exam Mode highlight, and a closing signup CTA
@@ -72,7 +78,7 @@
 
 - **Public Library ranking audit + v1 alignment** — discovery ranking now follows one explainable rule set instead of split formulas:
   - audited the existing frontend and backend ranking paths and preserved the current discovery-first layout plus section dedupe
-  - Featured Notes now rank only study-ready public notes with meaningful summary, quiz content, and note preview using `views + (copies * 3)`
+  - Featured Notes now rank only study-ready public notes with meaningful summary, quiz content, and note preview using `views + (copies * 3) + (likes * 2)`
   - Most Popular now requires real social proof (`copies >= 3` or `views >= 20`) and the Popular badge threshold now matches that rule
   - Recently Added remains freshness-based with `createdAt DESC`
 - **Public Library copy-flow cleanup** — public note copying now behaves consistently across discovery and detail surfaces:

@@ -3,6 +3,7 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
@@ -324,6 +325,15 @@ public class NoteController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return noteService.getPublicById(id, user == null ? null : user.userId());
+    }
+
+    @PostMapping("/public/{id}/like")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public PublicNoteLikeResponse togglePublicNoteLike(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        return noteService.togglePublicNoteLike(id, user.userId());
     }
 
     @GetMapping("/public/seo/{subject}/{slug}")

@@ -3,30 +3,36 @@ import { computeQualityBadges, type QualityBadgeDef } from "@/lib/note-quality-b
 const BADGE_STYLES: Record<QualityBadgeDef["kind"], string> = {
   "high-quality":
     "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  "well-liked":
+    "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300",
   popular:
     "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
 };
 
 const BADGE_ICONS: Record<QualityBadgeDef["kind"], string> = {
   "high-quality": "⭐",
+  "well-liked": "❤️",
   popular: "🔥",
 };
 
 /**
- * Renders quality signal badges (High Quality, Popular) for a public note
- * card. Renders nothing when the note doesn't qualify for any badge.
+ * Renders lightweight quality signal badges (High Quality, Well liked,
+ * Popular) for a public note card. Renders nothing when the note doesn't
+ * qualify for any badge.
  *
  * Use on public-facing surfaces only (Public Library, Public Profile, subject
  * pages). Do NOT use on private Library cards — they have no public metrics.
  */
 export function NoteQualityBadges({
   copyCount,
+  likeCount,
   viewCount,
 }: Readonly<{
   copyCount?: number | null;
+  likeCount?: number | null;
   viewCount?: number | null;
 }>) {
-  const badges = computeQualityBadges({ copyCount, viewCount });
+  const badges = computeQualityBadges({ copyCount, likeCount, viewCount });
 
   if (badges.length === 0) {
     return null;

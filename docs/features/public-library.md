@@ -58,6 +58,7 @@ Current audit findings:
 - Featured = quality + engagement
 - Popular = social proof
 - Recent = freshness
+- evaluation should stay lightweight and trustworthy: simple signals > complex social systems
 
 ## Featured Notes Ranking
 
@@ -72,7 +73,7 @@ Featured notes are selected only from notes that are actually worth studying now
 Featured notes are then ranked using a simple engagement score:
 
 ```text
-score = viewCount + (copyCount * 3)
+score = viewCount + (copyCount * 3) + (likeCount * 2)
 ```
 
 - Tiebreaks:
@@ -94,9 +95,21 @@ Popular ordering:
 
 - `copyCount DESC`
 - `viewCount DESC`
+- `likeCount DESC`
 - `createdAt DESC`
 
 The Popular badge uses the same threshold so the card label and the section logic stay aligned.
+
+## Like System
+
+Public Library uses likes as the lightweight evaluation layer for public notes.
+
+- authenticated users can like or unlike a public note
+- one user = one like per note
+- likes should stay anonymous; do not show usernames, follower patterns, or comments
+- guests tapping like should see an auth prompt modal instead of a silent failure
+- note cards should show the heart count subtly near the existing views/copies metrics
+- a note may show `❤️ Well liked` when `likeCount >= 10`
 
 ## Recently Added Ranking
 
@@ -186,11 +199,11 @@ Public Library note cards reuse the shared note-card layout:
 - TOP ROW: Subject badge (blue) + Course/Program badge (neutral/gray) — above title
 - Title
 - Study Pack Ready badge (green) — below title when applicable
-- Quality badges (High Quality, Popular) — below title alongside state badge
+- Quality badges (High Quality, Well liked, Popular) — below title alongside state badge
 - `Note Preview` (compact, line-clamped)
 - `Summary Preview` (compact, line-clamped)
 - limited Tags (`3-4` visible plus overflow count)
-- subtle metrics row for `views` and `copies` when available
+- subtle metrics row for `views`, `copies`, and `likes`, with the heart control staying visually secondary
 - featured content should remain visually special through stronger section framing instead of being flattened into a plain list
 
 Interaction rules:
@@ -198,12 +211,15 @@ Interaction rules:
 - whole card opens the canonical public note route
 - keep the card itself clickable for navigation
 - Public Library cards may include one inline secondary CTA at the bottom-right: `Save`
+- Public Library cards may also include a subtle inline heart toggle in the metrics row
 - the inline save CTA must stop card navigation when clicked
+- the inline heart toggle must stop card navigation when clicked
 - the CTA should stay subtle:
   - icon + short label
   - outline / ghost weight
   - never full width
 - guest clicks on `Save` should open an auth prompt modal instead of redirecting immediately
+- guest clicks on the heart toggle should open an auth prompt modal instead of silently failing
 - if the viewer already copied that note, replace the save CTA with muted `Saved`
 - copied state should be conveyed by the available action, not by an extra `In Library` badge
 - a successful card copy should show a confirmation modal with:
@@ -231,7 +247,7 @@ Interaction rules:
 Discovery guidance:
 
 - prioritize original note preview over generated summary when scanning cards
-- keep `views` and `copies` subtle so they help note selection without turning into badge clutter
+- keep `views`, `copies`, and `likes` subtle so they help note selection without turning into badge clutter
 - use `Newest`, `Most Copied`, `Most Viewed`, and `Title A-Z` as student-friendly discovery labels
 - preserve card richness while improving scalability: limit the number of cards shown per section first, then offer `View More`
 

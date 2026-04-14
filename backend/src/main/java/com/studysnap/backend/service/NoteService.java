@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
+import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
@@ -10,6 +11,7 @@ import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
@@ -18,6 +20,8 @@ import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
+import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
+import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -36,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,6 +75,7 @@ public class NoteService {
 
     private final NoteRepository noteRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
+    private final PublicNoteLikeRepository publicNoteLikeRepository;
     private final StudyPackRepository studyPackRepository;
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
@@ -210,6 +216,26 @@ public class NoteService {
         return mapToResponse(saved, null);
     }
 
+    public PublicNoteLikeResponse togglePublicNoteLike(String id, UUID userId) {
+        UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
+        noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)
+                .orElseThrow(NoteNotFoundException::new);
+
+        Optional<PublicNoteLikeEntity> existingLike = publicNoteLikeRepository.findByNoteIdAndUserId(noteId, userId);
+        if (existingLike.isPresent()) {
+            publicNoteLikeRepository.delete(existingLike.get());
+            return new PublicNoteLikeResponse(false, countLikes(noteId));
+        }
+
+        PublicNoteLikeEntity like = new PublicNoteLikeEntity();
+        like.setId(UUID.randomUUID());
+        like.setNoteId(noteId);
+        like.setUserId(userId);
+        like.setCreatedAt(OffsetDateTime.now());
+        publicNoteLikeRepository.save(like);
+        return new PublicNoteLikeResponse(true, countLikes(noteId));
+    }
+
     public void deleteById(String id, UUID ownerUserId) {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
@@ -331,8 +357,10 @@ public class NoteService {
                 .distinct()
                 .toList();
         Map<UUID, Long> copyCountsByNoteId = loadCopyCounts(noteIds);
+        Map<UUID, Long> likeCountsByNoteId = loadLikeCounts(noteIds);
         Map<UUID, Long> shareCountsByNoteId = loadPublicEventCounts(noteIds, AnalyticsEventType.PUBLIC_NOTE_SHARED);
         Map<UUID, Long> viewCountsByNoteId = loadPublicEventCounts(noteIds, AnalyticsEventType.PUBLIC_NOTE_VIEWED);
+        HashSet<UUID> likedNoteIds = loadLikedNoteIds(noteIds, viewerUserId);
         Map<UUID, StudyPackEntity> studyPackByNoteId = new HashMap<>();
         for (StudyPackEntity studyPack : studyPackRepository.findByNoteIdIn(noteIds)) {
             if (studyPack.getNoteId() != null) {
@@ -349,10 +377,12 @@ public class NoteService {
                         note,
                         studyPackByNoteId.get(note.getId()),
                         copyCountsByNoteId.getOrDefault(note.getId(), 0L),
+                        likeCountsByNoteId.getOrDefault(note.getId(), 0L),
                         shareCountsByNoteId.getOrDefault(note.getId(), 0L),
                         viewCountsByNoteId.getOrDefault(note.getId(), 0L),
                         ownerById.get(note.getOwnerUserId()),
-                        viewerUserId
+                        viewerUserId,
+                        likedNoteIds.contains(note.getId())
                 ))
                 .toList();
     }
@@ -375,6 +405,27 @@ public class NoteService {
             }
         }
         return countsByNoteId;
+    }
+
+    private Map<UUID, Long> loadLikeCounts(List<UUID> noteIds) {
+        Map<UUID, Long> countsByNoteId = new HashMap<>();
+        for (PublicNoteLikeCountProjection projection : publicNoteLikeRepository.countLikesByNoteIds(noteIds)) {
+            if (projection.getNoteId() != null) {
+                countsByNoteId.put(projection.getNoteId(), projection.getLikeCount());
+            }
+        }
+        return countsByNoteId;
+    }
+
+    private HashSet<UUID> loadLikedNoteIds(List<UUID> noteIds, UUID viewerUserId) {
+        if (viewerUserId == null) {
+            return new HashSet<>();
+        }
+        return new HashSet<>(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(viewerUserId, noteIds));
+    }
+
+    private long countLikes(UUID noteId) {
+        return loadLikeCounts(List.of(noteId)).getOrDefault(noteId, 0L);
     }
 
     private String normalizeRequiredContent(String rawContent) {
@@ -470,10 +521,12 @@ public class NoteService {
             NoteEntity note,
             StudyPackEntity studyPack,
             long copyCount,
+            long likeCount,
             long shareCount,
             long viewCount,
             UserEntity owner,
-            UUID viewerUserId
+            UUID viewerUserId,
+            boolean likedByCurrentUser
     ) {
         boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new NoteListItemResponse(
@@ -491,6 +544,7 @@ public class NoteService {
                 resolveStudyPackStatus(note, studyPack),
                 studyPack == null || studyPack.getQuiz() == null ? null : studyPack.getQuiz().size(),
                 copyCount,
+                likeCount,
                 shareCount,
                 viewCount,
                 resolvePublicAuthorName(owner),
@@ -499,7 +553,8 @@ public class NoteService {
                 note.getCreatedAt(),
                 note.getUpdatedAt(),
                 note.getCopiedFromNoteId() == null ? null : note.getCopiedFromNoteId().toString(),
-                Boolean.TRUE.equals(note.getCopiedFromPublic())
+                Boolean.TRUE.equals(note.getCopiedFromPublic()),
+                likedByCurrentUser
         );
     }
 

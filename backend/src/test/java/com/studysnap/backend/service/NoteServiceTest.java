@@ -13,10 +13,13 @@ import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
+import com.studysnap.backend.repository.PublicNoteLikeRepository;
 import com.studysnap.backend.repository.PublicNoteEventCountProjection;
 import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -50,6 +53,8 @@ class NoteServiceTest {
     @Mock
     private AnalyticsEventRepository analyticsEventRepository;
     @Mock
+    private PublicNoteLikeRepository publicNoteLikeRepository;
+    @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
     private UserRepository userRepository;
@@ -67,6 +72,7 @@ class NoteServiceTest {
         noteService = new NoteService(
                 noteRepository,
                 analyticsEventRepository,
+                publicNoteLikeRepository,
                 studyPackRepository,
                 userRepository,
                 subscriptionService,
@@ -78,6 +84,8 @@ class NoteServiceTest {
         lenient().when(noteRepository.findCourseProgramValuesByOwnerUserId(any())).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
         lenient().when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any())).thenReturn(List.of());
+        lenient().when(publicNoteLikeRepository.countLikesByNoteIds(any())).thenReturn(List.of());
+        lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());
         lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(), any())).thenReturn(List.of());
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.ADAPTIVE_QUIZ))).thenReturn(false);
@@ -478,10 +486,12 @@ class NoteServiceTest {
         assertThat(response.getFirst().isOfficialAuthor()).isFalse();
         assertThat(response.getFirst().isCurrentUser()).isTrue();
         assertThat(response.getFirst().copyCount()).isZero();
+        assertThat(response.getFirst().likeCount()).isZero();
         assertThat(response.getFirst().shareCount()).isZero();
         assertThat(response.getFirst().viewCount()).isZero();
         assertThat(response.getFirst().copiedFromNoteId()).isNull();
         assertThat(response.getFirst().copiedFromPublic()).isFalse();
+        assertThat(response.getFirst().likedByCurrentUser()).isFalse();
         assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
         assertThat(response.get(1).courseProgram()).isEqualTo("Chemistry");
         assertThat(response.get(1).learnerLevel()).isEqualTo("PROFESSIONAL");
@@ -491,8 +501,81 @@ class NoteServiceTest {
         assertThat(response.get(1).isOfficialAuthor()).isTrue();
         assertThat(response.get(1).isCurrentUser()).isFalse();
         assertThat(response.get(1).copyCount()).isZero();
+        assertThat(response.get(1).likeCount()).isZero();
         assertThat(response.get(1).shareCount()).isZero();
         assertThat(response.get(1).viewCount()).isZero();
+        assertThat(response.get(1).likedByCurrentUser()).isFalse();
+    }
+
+    @Test
+    void listPublic_includesLikeCountsAndViewerLikeState() {
+        UUID viewerUserId = UUID.randomUUID();
+        UUID ownerUserId = UUID.randomUUID();
+        UUID likedNoteId = UUID.randomUUID();
+        UUID plainNoteId = UUID.randomUUID();
+
+        NoteEntity likedNote = buildNote(likedNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "liked content");
+        likedNote.setTitle("Liked note");
+        NoteEntity plainNote = buildNote(plainNoteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "plain content");
+        plainNote.setTitle("Plain note");
+        UserEntity owner = buildUser(ownerUserId, "owner@example.com");
+        PublicNoteLikeCountProjection likedNoteLikes = mockLikeCount(likedNoteId, 12L);
+
+        when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
+                .thenReturn(List.of(likedNote, plainNote));
+        when(userRepository.findAllById(List.of(ownerUserId))).thenReturn(List.of(owner));
+        when(publicNoteLikeRepository.countLikesByNoteIds(List.of(likedNoteId, plainNoteId)))
+                .thenReturn(List.of(likedNoteLikes));
+        when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(viewerUserId, List.of(likedNoteId, plainNoteId)))
+                .thenReturn(List.of(likedNoteId));
+
+        var response = noteService.listPublic(viewerUserId, null, null);
+
+        assertThat(response).extracting(NoteListItemResponse::likeCount).containsExactly(12L, 0L);
+        assertThat(response).extracting(NoteListItemResponse::likedByCurrentUser).containsExactly(true, false);
+    }
+
+    @Test
+    void togglePublicNoteLike_createsLikeWhenMissing() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, UUID.randomUUID(), NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        PublicNoteLikeCountProjection noteLikes = mockLikeCount(noteId, 1L);
+
+        when(noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(note));
+        when(publicNoteLikeRepository.findByNoteIdAndUserId(noteId, userId)).thenReturn(Optional.empty());
+        when(publicNoteLikeRepository.countLikesByNoteIds(List.of(noteId))).thenReturn(List.of(noteLikes));
+
+        var response = noteService.togglePublicNoteLike(noteId.toString(), userId);
+
+        ArgumentCaptor<PublicNoteLikeEntity> captor = ArgumentCaptor.forClass(PublicNoteLikeEntity.class);
+        verify(publicNoteLikeRepository).save(captor.capture());
+        assertThat(captor.getValue().getNoteId()).isEqualTo(noteId);
+        assertThat(captor.getValue().getUserId()).isEqualTo(userId);
+        assertThat(response.liked()).isTrue();
+        assertThat(response.likeCount()).isEqualTo(1L);
+    }
+
+    @Test
+    void togglePublicNoteLike_removesExistingLikeWhenPresent() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, UUID.randomUUID(), NoteStatus.GENERATED, NoteVisibility.PUBLIC, "content");
+        PublicNoteLikeEntity existingLike = new PublicNoteLikeEntity();
+        existingLike.setId(UUID.randomUUID());
+        existingLike.setNoteId(noteId);
+        existingLike.setUserId(userId);
+
+        when(noteRepository.findByIdAndVisibility(noteId, NoteVisibility.PUBLIC)).thenReturn(Optional.of(note));
+        when(publicNoteLikeRepository.findByNoteIdAndUserId(noteId, userId)).thenReturn(Optional.of(existingLike));
+        when(publicNoteLikeRepository.countLikesByNoteIds(List.of(noteId))).thenReturn(List.of());
+
+        var response = noteService.togglePublicNoteLike(noteId.toString(), userId);
+
+        verify(publicNoteLikeRepository).delete(existingLike);
+        verify(publicNoteLikeRepository, never()).save(any(PublicNoteLikeEntity.class));
+        assertThat(response.liked()).isFalse();
+        assertThat(response.likeCount()).isZero();
     }
 
     @Test
@@ -549,10 +632,10 @@ class NoteServiceTest {
         lowScore.setCreatedAt(base.minusDays(2));
 
         UserEntity owner = buildUser(ownerId, "user@example.com");
-        // highScore: 10 copies * 0.6 + 5 views * 0.4 = 8.0
-        // lowScore:  1 copy  * 0.6 + 1 view  * 0.4 = 1.0
         NoteCopyCountProjection highCopies = mockCopyCount(highScoreId, 10L);
         NoteCopyCountProjection lowCopies = mockCopyCount(lowScoreId, 1L);
+        PublicNoteLikeCountProjection highLikes = mockLikeCount(highScoreId, 3L);
+        PublicNoteLikeCountProjection lowLikes = mockLikeCount(lowScoreId, 0L);
         PublicNoteEventCountProjection highViews = mockEventCount(highScoreId, 5L);
         PublicNoteEventCountProjection lowViews = mockEventCount(lowScoreId, 1L);
         StudyPackEntity highScorePack = buildStudyPack(highScoreId, "High summary");
@@ -563,6 +646,8 @@ class NoteServiceTest {
         when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(highScorePack, lowScorePack));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
                 .thenReturn(List.of(highCopies, lowCopies));
+        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
+                .thenReturn(List.of(highLikes, lowLikes));
         when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
                 eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
                 .thenReturn(List.of(highViews, lowViews));
@@ -588,9 +673,10 @@ class NoteServiceTest {
         newerNote.setCreatedAt(base.minusDays(1));
 
         UserEntity owner = buildUser(ownerId, "user@example.com");
-        // Both have 5 copies and 5 views → same score; newer wins by tiebreak
         NoteCopyCountProjection olderCopies = mockCopyCount(olderNoteId, 5L);
         NoteCopyCountProjection newerCopies = mockCopyCount(newerNoteId, 5L);
+        PublicNoteLikeCountProjection olderLikes = mockLikeCount(olderNoteId, 0L);
+        PublicNoteLikeCountProjection newerLikes = mockLikeCount(newerNoteId, 0L);
         PublicNoteEventCountProjection olderViews = mockEventCount(olderNoteId, 5L);
         PublicNoteEventCountProjection newerViews = mockEventCount(newerNoteId, 5L);
         StudyPackEntity olderPack = buildStudyPack(olderNoteId, "Older summary");
@@ -601,6 +687,8 @@ class NoteServiceTest {
         when(studyPackRepository.findByNoteIdIn(any())).thenReturn(List.of(olderPack, newerPack));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
                 .thenReturn(List.of(olderCopies, newerCopies));
+        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
+                .thenReturn(List.of(olderLikes, newerLikes));
         when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
                 eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
                 .thenReturn(List.of(olderViews, newerViews));
@@ -625,6 +713,8 @@ class NoteServiceTest {
         UserEntity owner = buildUser(ownerId, "user@example.com");
         NoteCopyCountProjection eligibleCopies = mockCopyCount(eligibleId, 2L);
         NoteCopyCountProjection noSummaryCopies = mockCopyCount(noSummaryId, 20L);
+        PublicNoteLikeCountProjection eligibleLikes = mockLikeCount(eligibleId, 0L);
+        PublicNoteLikeCountProjection noSummaryLikes = mockLikeCount(noSummaryId, 10L);
         PublicNoteEventCountProjection eligibleViews = mockEventCount(eligibleId, 4L);
         PublicNoteEventCountProjection noSummaryViews = mockEventCount(noSummaryId, 50L);
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
@@ -635,6 +725,8 @@ class NoteServiceTest {
         ));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
                 .thenReturn(List.of(eligibleCopies, noSummaryCopies));
+        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
+                .thenReturn(List.of(eligibleLikes, noSummaryLikes));
         when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
                 eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
                 .thenReturn(List.of(eligibleViews, noSummaryViews));
@@ -659,10 +751,14 @@ class NoteServiceTest {
         UserEntity owner = buildUser(ownerId, "user@example.com");
         NoteCopyCountProjection manyCopies = mockCopyCount(manyId, 50L);
         NoteCopyCountProjection fewCopies = mockCopyCount(fewId, 3L);
+        PublicNoteLikeCountProjection manyLikes = mockLikeCount(manyId, 2L);
+        PublicNoteLikeCountProjection fewLikes = mockLikeCount(fewId, 8L);
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(few, many));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
                 .thenReturn(List.of(manyCopies, fewCopies));
+        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
+                .thenReturn(List.of(manyLikes, fewLikes));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
         var result = noteService.listPublic(null, "popular", null);
@@ -684,12 +780,16 @@ class NoteServiceTest {
         UserEntity owner = buildUser(ownerId, "user@example.com");
         NoteCopyCountProjection popularCopies = mockCopyCount(popularId, 3L);
         NoteCopyCountProjection belowCopies = mockCopyCount(belowThresholdId, 2L);
+        PublicNoteLikeCountProjection popularLikes = mockLikeCount(popularId, 4L);
+        PublicNoteLikeCountProjection belowLikes = mockLikeCount(belowThresholdId, 12L);
         PublicNoteEventCountProjection popularViews = mockEventCount(popularId, 5L);
         PublicNoteEventCountProjection belowViews = mockEventCount(belowThresholdId, 19L);
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC))
                 .thenReturn(List.of(popular, belowThreshold));
         when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any()))
                 .thenReturn(List.of(popularCopies, belowCopies));
+        when(publicNoteLikeRepository.countLikesByNoteIds(any()))
+                .thenReturn(List.of(popularLikes, belowLikes));
         when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(
                 eq(AnalyticsEventType.PUBLIC_NOTE_VIEWED), any()))
                 .thenReturn(List.of(popularViews, belowViews));
@@ -774,6 +874,13 @@ class NoteServiceTest {
         NoteCopyCountProjection proj = mock(NoteCopyCountProjection.class);
         when(proj.getNoteId()).thenReturn(noteId);
         when(proj.getCopyCount()).thenReturn(count);
+        return proj;
+    }
+
+    private PublicNoteLikeCountProjection mockLikeCount(UUID noteId, long count) {
+        PublicNoteLikeCountProjection proj = mock(PublicNoteLikeCountProjection.class);
+        when(proj.getNoteId()).thenReturn(noteId);
+        when(proj.getLikeCount()).thenReturn(count);
         return proj;
     }
 
