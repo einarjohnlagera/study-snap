@@ -4,6 +4,12 @@
 
 ### New Features
 
+- **Quiz session history + review** — Note Detail now keeps completed quiz history tied to the note so past practice is reviewable instead of disposable:
+  - adds a `Recent Sessions` section below `Performance Overview` on Study Pack-ready notes, combining Quick Review and Challenge Quiz attempts in reverse-chronological order
+  - lets users open a completed session inline to review question-by-question answers, explanations, and correctness using stored session data only
+  - derives concept breakdown and weak concepts from persisted quiz/session state, keeping the weak-concept threshold aligned at `< 60%`
+  - older sessions without enough stored quiz detail degrade gracefully with concept summary and weak-concept feedback instead of failing the page
+
 - **Library filtering and search upgrade** — the private Library now behaves more like a structured study workspace:
   - keeps search as the primary entry, filtering Library notes in real time by title and tags
   - uses subject-first horizontal scroll chips with single-select `All` default so the main filter stays fast and lightweight

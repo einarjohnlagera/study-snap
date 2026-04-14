@@ -8,11 +8,15 @@ import {
   getBillingPricing,
   getMyPlan,
   getChallengeQuizPerformanceSummary,
+  getChallengeQuizSessionReview,
   getMe,
   getNote,
   getMyStudyPack,
   getQuickReviewPerformanceSummary,
+  getQuickReviewSessionReview,
+  listRecentChallengeQuizSessions,
   listCoursePrograms,
+  listRecentQuickReviewSessions,
   listSubjects,
   joinPremiumWaitlist,
   startQuickReviewSession,
@@ -60,10 +64,13 @@ jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn(),
   getMyPlan: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
+  getChallengeQuizSessionReview: jest.fn(),
   getMe: jest.fn(),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   listCoursePrograms: jest.fn(),
+  listRecentChallengeQuizSessions: jest.fn(),
+  listRecentQuickReviewSessions: jest.fn(),
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: () => false,
   joinPremiumWaitlist: jest.fn(),
@@ -71,6 +78,7 @@ jest.mock("@/lib/api", () => ({
   updateNote: jest.fn(),
   updateNoteVisibility: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
+  getQuickReviewSessionReview: jest.fn(),
   startQuickReviewSession: jest.fn(),
 }));
 
@@ -118,10 +126,14 @@ describe("PrivateNoteDetailPageClient", () => {
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
+    (getChallengeQuizSessionReview as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getMyStudyPack as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (getQuickReviewSessionReview as jest.Mock).mockReset();
+    (listRecentChallengeQuizSessions as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
+    (listRecentQuickReviewSessions as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
     (joinPremiumWaitlist as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
@@ -170,10 +182,45 @@ describe("PrivateNoteDetailPageClient", () => {
       latestPerformanceLevel: "Good",
       latestWeakConcepts: ["Cells"],
     });
+    (getChallengeQuizSessionReview as jest.Mock).mockResolvedValue({
+      sessionId: "challenge-1",
+      studyPackId: "sp-1",
+      sessionMode: "CHALLENGE",
+      status: "COMPLETED",
+      totalQuestions: 10,
+      correctAnswers: 8,
+      scorePercentage: 80,
+      retryCount: 0,
+      durationSeconds: 120,
+      weakConcepts: ["Cells"],
+      conceptBreakdown: [],
+      quiz: [],
+      selectedChoices: {},
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:30:00Z",
+    });
     (getMe as jest.Mock).mockResolvedValue({
       learnerLevel: "COLLEGE",
       courseProgram: "Nursing",
     });
+    (getQuickReviewSessionReview as jest.Mock).mockResolvedValue({
+      sessionId: "quick-1",
+      studyPackId: "sp-1",
+      sessionMode: "QUICK_REVIEW",
+      status: "COMPLETED",
+      totalQuestions: 10,
+      correctAnswers: 8,
+      scorePercentage: 80,
+      retryCount: 1,
+      durationSeconds: 120,
+      weakConcepts: ["Cells"],
+      conceptBreakdown: [],
+      quiz: [],
+      selectedChoices: {},
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:30:00Z",
+    });
+    (listRecentChallengeQuizSessions as jest.Mock).mockResolvedValue([]);
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
       currency: "PHP",
@@ -201,6 +248,7 @@ describe("PrivateNoteDetailPageClient", () => {
       subject: "Biology",
       tags: ["cells"],
     });
+    (listRecentQuickReviewSessions as jest.Mock).mockResolvedValue([]);
     (copyNote as jest.Mock).mockResolvedValue({ id: "note-copy-1" });
     (deleteNote as jest.Mock).mockResolvedValue(undefined);
   });
@@ -305,6 +353,91 @@ describe("PrivateNoteDetailPageClient", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
+  });
+
+  it("shows recent quiz sessions and loads the selected session review inline", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+    });
+    (listRecentQuickReviewSessions as jest.Mock).mockResolvedValue([
+      {
+        id: "quick-1",
+        studyPackId: "sp-1",
+        totalQuestions: 10,
+        correctAnswers: 8,
+        scorePercentage: 80,
+        retryCount: 1,
+        durationSeconds: 120,
+        weakConcepts: ["Cells"],
+        createdAt: "2026-04-11T10:00:00Z",
+        completedAt: "2026-04-11T10:05:00Z",
+      },
+    ]);
+    (listRecentChallengeQuizSessions as jest.Mock).mockResolvedValue([
+      {
+        sessionId: "challenge-1",
+        totalQuestions: 12,
+        correctAnswers: 9,
+        scorePercentage: 75,
+        performanceLevel: "Good",
+        conceptBreakdown: [],
+        weakConcepts: ["Genetics"],
+        createdAt: "2026-04-10T10:00:00Z",
+        completedAt: "2026-04-10T10:12:00Z",
+      },
+    ]);
+    (getQuickReviewSessionReview as jest.Mock).mockResolvedValue({
+      sessionId: "quick-1",
+      studyPackId: "sp-1",
+      sessionMode: "QUICK_REVIEW",
+      status: "COMPLETED",
+      totalQuestions: 10,
+      correctAnswers: 8,
+      scorePercentage: 80,
+      retryCount: 1,
+      durationSeconds: 120,
+      weakConcepts: ["Cells"],
+      conceptBreakdown: [
+        {
+          concept: "Cells",
+          correctAnswers: 1,
+          totalQuestions: 2,
+          accuracyPercentage: 50,
+        },
+      ],
+      quiz: [
+        {
+          question: "Which organelle produces ATP?",
+          choices: ["Mitochondria", "Nucleus", "Ribosome", "Golgi body"],
+          correctIndex: 0,
+          concept: "Cells",
+          explanation: "Mitochondria are the main ATP producers.",
+        },
+      ],
+      selectedChoices: { 0: 1 },
+      createdAt: "2026-04-11T10:00:00Z",
+      completedAt: "2026-04-11T10:05:00Z",
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Recent Sessions")).toBeInTheDocument();
+    const quickReviewSessionButton = screen.getAllByText("Quick Review")
+      .map((element) => element.closest("button"))
+      .find((button) => button !== null);
+    expect(quickReviewSessionButton).not.toBeNull();
+
+    fireEvent.click(quickReviewSessionButton as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(getQuickReviewSessionReview).toHaveBeenCalledWith("note-1", "quick-1");
+    });
+    expect(await screen.findByText("Which organelle produces ATP?")).toBeInTheDocument();
   });
 
   it("shows private-share modal and then opens share-link modal after making note public", async () => {

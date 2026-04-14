@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
@@ -462,6 +463,119 @@ class ChallengeQuizServiceTest {
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
         assertThat(response.quiz()).hasSize(12);
         verify(llmStudyPackService, never()).generateChallengeQuiz(any(), any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void getSessionReview_returnsStoredQuizAndDerivesConceptBreakdownWhenMetadataMissing() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+        session.setTotalQuestions(3);
+        session.setCorrectAnswers(2);
+        session.setScorePercentage(BigDecimal.valueOf(66.67));
+        session.setRetryCount(0);
+        session.setCreatedAt(OffsetDateTime.now().minusMinutes(12));
+        session.setCompletedAt(OffsetDateTime.now().minusMinutes(2));
+        session.setSessionMetadata(null);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                List.of(
+                        new QuizItem("Question 1", List.of("A", "B", "C", "D"), "A", "Cells", "Explanation 1"),
+                        new QuizItem("Question 2", List.of("A", "B", "C", "D"), "B", "Cells", "Explanation 2"),
+                        new QuizItem("Question 3", List.of("A", "B", "C", "D"), "D", "Genetics", "Explanation 3")
+                ),
+                Map.of(
+                        "selectedChoices",
+                        Map.of(
+                                "0", "A",
+                                "1", "A",
+                                "2", "D"
+                        )
+                )
+        ));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+
+        QuizSessionReviewResponse response = challengeQuizService.getSessionReview(
+                studyPackId.toString(),
+                sessionId.toString(),
+                userId
+        );
+
+        assertThat(response.quiz()).hasSize(3);
+        assertThat(response.selectedChoices()).containsEntry(0, 0).containsEntry(1, 0).containsEntry(2, 3);
+        assertThat(response.conceptBreakdown())
+                .extracting(stat -> stat.concept() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
+                .containsExactly("Cells:1/2", "Genetics:1/1");
+        assertThat(response.weakConcepts()).containsExactly("Cells");
+    }
+
+    @Test
+    void getSessionReview_prefersPersistedConceptBreakdownAndWeakConceptsWhenAvailable() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setNoteId(noteId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.COMPLETED);
+        session.setTotalQuestions(1);
+        session.setCorrectAnswers(0);
+        session.setScorePercentage(BigDecimal.ZERO);
+        session.setRetryCount(0);
+        session.setCreatedAt(OffsetDateTime.now().minusMinutes(8));
+        session.setCompletedAt(OffsetDateTime.now().minusMinutes(1));
+        session.setSessionMetadata(Map.of(
+                "conceptBreakdown",
+                List.of(Map.of(
+                        "concept", "Respiration",
+                        "correctAnswers", 0,
+                        "totalQuestions", 1,
+                        "accuracyPercentage", 0
+                )),
+                "weakConcepts",
+                List.of("Respiration")
+        ));
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                List.of(new QuizItem("Question 1", List.of("A", "B", "C", "D"), "A", "Respiration", "Explanation")),
+                Map.of("selectedChoices", Map.of("0", "B"))
+        ));
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                sessionId,
+                userId,
+                QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+
+        QuizSessionReviewResponse response = challengeQuizService.getSessionReview(
+                studyPackId.toString(),
+                sessionId.toString(),
+                userId
+        );
+
+        assertThat(response.conceptBreakdown())
+                .extracting(stat -> stat.concept() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
+                .containsExactly("Respiration:0/1");
+        assertThat(response.weakConcepts()).containsExactly("Respiration");
     }
 
     private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {

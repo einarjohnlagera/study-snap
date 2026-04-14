@@ -539,6 +539,7 @@ export type AdaptivePracticeCompleteRequest = {
 };
 
 export type ChallengeQuizMode = "challenge" | "board_exam";
+export type QuizSessionMode = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE";
 
 export type ChallengeQuizStartRequest = {
   difficulty?: "easy" | "medium" | "hard";
@@ -606,6 +607,29 @@ export type ChallengeQuizSessionSummaryResponse = {
     accuracyPercentage: number;
   }[];
   weakConcepts: string[];
+  createdAt: string;
+  completedAt: string | null;
+};
+
+export type QuizSessionReviewResponse = {
+  sessionId: string;
+  studyPackId: string;
+  sessionMode: QuizSessionMode;
+  status: QuizSessionStatus;
+  totalQuestions: number;
+  correctAnswers: number;
+  scorePercentage: number;
+  retryCount: number;
+  durationSeconds: number | null;
+  weakConcepts: string[];
+  conceptBreakdown: {
+    concept: string;
+    correctAnswers: number;
+    totalQuestions: number;
+    accuracyPercentage: number;
+  }[];
+  quiz: QuizItem[];
+  selectedChoices: Record<string, number>;
   createdAt: string;
   completedAt: string | null;
 };
@@ -1641,6 +1665,24 @@ export async function getQuickReviewPerformanceSummary(
   );
 }
 
+export async function getQuickReviewSessionReview(
+  noteId: string,
+  sessionId: string,
+): Promise<QuizSessionReviewResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/quick-review/sessions/${sessionId}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuizSessionReviewResponse>(
+    response,
+    "Could not load Quick Review session review.",
+  );
+}
+
 export async function generateQuickReviewStudyTip(
   noteId: string,
   request: QuickReviewStudyTipRequest,
@@ -1843,6 +1885,24 @@ export async function getChallengeQuizPerformanceSummary(
   return parseApiResponse<ChallengeQuizPerformanceSummaryResponse>(
     response,
     "Could not load Challenge Quiz performance summary.",
+  );
+}
+
+export async function getChallengeQuizSessionReview(
+  noteId: string,
+  sessionId: string,
+): Promise<QuizSessionReviewResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/challenge-quiz/sessions/${sessionId}`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<QuizSessionReviewResponse>(
+    response,
+    "Could not load Challenge Quiz session review.",
   );
 }
 

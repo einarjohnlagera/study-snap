@@ -499,6 +499,13 @@ Core loop:
   - mobile action stacking with full-width buttons and `Start Review` visually first
   - compact spacing and softened depth so the surface feels product-grade without becoming heavy
 - Copied private notes should display attribution as `Copied from {title} in Public Library.` when source metadata exists.
+- Study Pack-ready Note Detail should keep quiz history on the note page:
+  - show `Recent Sessions` below `Performance Overview`
+  - merge completed Quick Review and Challenge Quiz attempts in reverse-chronological order
+  - open review inline on Note Detail instead of routing to a detached history screen
+  - use stored session data only for answer review and concept breakdown; do not call LLMs for session history or review
+  - allow graceful fallback summaries for older sessions that do not have full stored quiz detail
+  - weak concepts in session review use the same `< 60%` accuracy threshold as other study surfaces
 
 ### Card Interaction Rule
 
