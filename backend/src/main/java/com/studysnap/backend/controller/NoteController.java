@@ -9,6 +9,7 @@ import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
 import com.studysnap.backend.dto.QuickReviewStudyTipRequest;
 import com.studysnap.backend.dto.QuickReviewStudyTipResponse;
+import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
@@ -177,6 +178,18 @@ public class NoteController {
         return quickReviewSessionService.getPerformanceSummary(studyPackId, userId);
     }
 
+    @GetMapping("/{id}/quick-review/sessions/{sessionId}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuizSessionReviewResponse getQuickReviewSessionReview(
+            @PathVariable String id,
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
+        return quickReviewSessionService.getSessionReview(studyPackId, sessionId, userId);
+    }
+
     @PostMapping("/{id}/quick-review/study-tip")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public QuickReviewStudyTipResponse generateQuickReviewStudyTip(
@@ -235,6 +248,18 @@ public class NoteController {
         UUID userId = user.userId();
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return challengeQuizService.getPerformanceSummary(studyPackId, userId);
+    }
+
+    @GetMapping("/{id}/challenge-quiz/sessions/{sessionId}")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public QuizSessionReviewResponse getChallengeQuizSessionReview(
+            @PathVariable String id,
+            @PathVariable String sessionId,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
+        return challengeQuizService.getSessionReview(studyPackId, sessionId, userId);
     }
 
     @PostMapping("/{id}/adaptive-practice/start")

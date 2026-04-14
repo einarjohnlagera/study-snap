@@ -68,6 +68,14 @@ Note Detail edit behavior:
 - Study Pack Ready notes: `Edit` stays on Note Detail and enables inline metadata edit (`title`, `subject`, `tags`) only
 - During inline metadata edit mode, share/visibility/study actions are hidden until `Cancel` or `Save`
 
+Note Detail study history:
+
+- Study Pack-ready notes should show `Performance Overview` followed by `Recent Sessions`
+- Recent Sessions should combine completed Quick Review and Challenge Quiz attempts for that note
+- selecting a session should expand an inline mobile-friendly review surface on the same page
+- review should favor stacked cards and wrapped text over dense tables so question review stays readable on mobile
+- older sessions without full stored quiz detail should still render a graceful fallback summary instead of breaking the note page
+
 ## Public Library
 
 Public Library lists notes where:

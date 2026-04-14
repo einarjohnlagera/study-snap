@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @UtilityClass
 public class QuizSessionStateUtils {
@@ -19,6 +20,7 @@ public class QuizSessionStateUtils {
     private static final String ANSWER_KEY = "answer";
     private static final String CONCEPT_KEY = "concept";
     private static final String EXPLANATION_KEY = "explanation";
+    private static final String SELECTED_CHOICES_KEY = "selectedChoices";
 
     public Map<String, Object> withQuiz(List<QuizItem> quiz, Map<String, Object> baseState) {
         Map<String, Object> state = new LinkedHashMap<>();
@@ -77,6 +79,37 @@ public class QuizSessionStateUtils {
         return quiz;
     }
 
+    public Map<Integer, Integer> extractSelectedChoiceIndexes(Map<String, Object> sessionState, List<QuizItem> quiz) {
+        if (sessionState == null || sessionState.isEmpty()) {
+            return Map.of();
+        }
+        Object raw = sessionState.get(SELECTED_CHOICES_KEY);
+        if (!(raw instanceof Map<?, ?> rawMap) || rawMap.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, Integer> selectedChoices = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            Object key = entry.getKey();
+            if (!(key instanceof String keyString)) {
+                continue;
+            }
+            try {
+                int questionIndex = Integer.parseInt(keyString);
+                if (questionIndex < 0 || questionIndex >= quiz.size()) {
+                    continue;
+                }
+                Integer selectedChoiceIndex = resolveSelectedChoiceIndex(entry.getValue(), quiz.get(questionIndex));
+                if (selectedChoiceIndex != null) {
+                    selectedChoices.put(questionIndex, selectedChoiceIndex);
+                }
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid question index keys.
+            }
+        }
+        return selectedChoices.isEmpty() ? Map.of() : Map.copyOf(selectedChoices);
+    }
+
     private List<Map<String, Object>> serializeQuiz(List<QuizItem> quiz) {
         if (quiz == null || quiz.isEmpty()) {
             return List.of();
@@ -114,6 +147,24 @@ public class QuizSessionStateUtils {
                     }
                 } catch (NumberFormatException ignored) {
                     // Ignore invalid numeric payloads and keep checking fallbacks.
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer resolveSelectedChoiceIndex(Object rawValue, QuizItem item) {
+        if (item == null || item.choices() == null || item.choices().isEmpty()) {
+            return null;
+        }
+        if (rawValue instanceof Number number) {
+            int selectedChoiceIndex = number.intValue();
+            return selectedChoiceIndex >= 0 && selectedChoiceIndex < item.choices().size() ? selectedChoiceIndex : null;
+        }
+        if (rawValue instanceof String selectedChoice) {
+            for (int index = 0; index < item.choices().size(); index++) {
+                if (Objects.equals(item.choices().get(index), selectedChoice)) {
+                    return index;
                 }
             }
         }

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { DeleteConfirmationModal } from "@/components/notes/delete-confirmation-modal";
+import { QuizSessionHistory } from "@/components/notes/quiz-session-history";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
@@ -36,23 +37,30 @@ import {
   createStudyPackFromNote,
   deleteNote,
   getChallengeQuizPerformanceSummary,
+  getChallengeQuizSessionReview,
   getMe,
   getMyStudyPack,
   getNote,
   getQuickReviewPerformanceSummary,
+  getQuickReviewSessionReview,
   isEmailNotVerifiedError,
+  listRecentChallengeQuizSessions,
   listCoursePrograms,
+  listRecentQuickReviewSessions,
   listSubjects,
   trackAnalyticsEvent,
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
+  type ChallengeQuizSessionSummaryResponse,
   type ChallengeQuizPerformanceSummaryResponse,
   type LearnerLevel,
   type NoteResponse,
   type NoteStudyPackStatus,
   type NoteVisibility,
+  type QuizSessionReviewResponse,
   type QuickReviewPerformanceSummaryResponse,
+  type QuickReviewSessionSummaryResponse,
 } from "@/lib/api";
 import {
   clearFirstStudyOnboardingStep,
@@ -73,6 +81,10 @@ import {
   type NoteDetailTab,
 } from "@/lib/note-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
+import {
+  buildRecentQuizSessionHistory,
+  type RecentQuizSessionHistoryItem,
+} from "@/lib/quiz-session-history";
 import {
   STUDY_PACK_GENERATION_MESSAGE_ROTATION_MS,
   STUDY_PACK_GENERATION_POLL_INTERVAL_MS,
@@ -214,6 +226,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [quickSummary, setQuickSummary] = useState<QuickReviewPerformanceSummaryResponse | null>(null);
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
+  const [quickRecentSessions, setQuickRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
+  const [challengeRecentSessions, setChallengeRecentSessions] = useState<ChallengeQuizSessionSummaryResponse[]>([]);
+  const [activeSessionReviewId, setActiveSessionReviewId] = useState<string | null>(null);
+  const [activeSessionReview, setActiveSessionReview] = useState<QuizSessionReviewResponse | null>(null);
+  const [sessionReviewError, setSessionReviewError] = useState<string | null>(null);
+  const [loadingSessionReview, setLoadingSessionReview] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -310,20 +328,30 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     try {
       const loadedNote = await getNote(normalizedRouteId);
       setNote(loadedNote);
+      setActiveSessionReviewId(null);
+      setActiveSessionReview(null);
+      setSessionReviewError(null);
+      setLoadingSessionReview(false);
       void maybeShowGeneratedMetadataSuggestion(loadedNote);
 
       if (!loadedNote.quickReviewAvailable) {
         setQuickSummary(null);
         setChallengeSummary(null);
+        setQuickRecentSessions([]);
+        setChallengeRecentSessions([]);
         return;
       }
 
-      const [quick, challenge] = await Promise.allSettled([
+      const [quick, challenge, quickRecent, challengeRecent] = await Promise.allSettled([
         getQuickReviewPerformanceSummary(loadedNote.id),
         getChallengeQuizPerformanceSummary(loadedNote.id),
+        listRecentQuickReviewSessions(loadedNote.id),
+        listRecentChallengeQuizSessions(loadedNote.id),
       ]);
       setQuickSummary(quick.status === "fulfilled" ? quick.value : null);
       setChallengeSummary(challenge.status === "fulfilled" ? challenge.value : null);
+      setQuickRecentSessions(quickRecent.status === "fulfilled" ? quickRecent.value : []);
+      setChallengeRecentSessions(challengeRecent.status === "fulfilled" ? challengeRecent.value : []);
     } catch (err) {
       if (pathname.startsWith("/study-packs/")) {
         const byStudyPack = await getMyStudyPack(normalizedRouteId).catch(() => null);
@@ -338,6 +366,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setNote(null);
       setQuickSummary(null);
       setChallengeSummary(null);
+      setQuickRecentSessions([]);
+      setChallengeRecentSessions([]);
+      setActiveSessionReviewId(null);
+      setActiveSessionReview(null);
+      setSessionReviewError(null);
+      setLoadingSessionReview(false);
     } finally {
       setLoading(false);
     }
@@ -346,6 +380,31 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   useEffect(() => {
     void loadDetail();
   }, [loadDetail]);
+
+  const recentQuizSessions = useMemo<RecentQuizSessionHistoryItem[]>(
+    () => buildRecentQuizSessionHistory(quickRecentSessions, challengeRecentSessions),
+    [challengeRecentSessions, quickRecentSessions],
+  );
+
+  const handleSelectSessionReview = useCallback(async (session: RecentQuizSessionHistoryItem) => {
+    if (!note) {
+      return;
+    }
+    setActiveSessionReviewId(session.sessionId);
+    setSessionReviewError(null);
+    setLoadingSessionReview(true);
+    try {
+      const review = session.sessionMode === "CHALLENGE"
+        ? await getChallengeQuizSessionReview(note.id, session.sessionId)
+        : await getQuickReviewSessionReview(note.id, session.sessionId);
+      setActiveSessionReview(review);
+    } catch (err) {
+      setActiveSessionReview(null);
+      setSessionReviewError(err instanceof Error ? err.message : "Could not load this session review.");
+    } finally {
+      setLoadingSessionReview(false);
+    }
+  }, [note]);
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -1537,6 +1596,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </div>
             )}
           </Card>
+
+          {!isGeneratingStudyPack && !hasGenerationFailed && !isDraft ? (
+            <QuizSessionHistory
+              sessions={recentQuizSessions}
+              activeSessionId={activeSessionReviewId}
+              activeReview={activeSessionReview}
+              loadingReview={loadingSessionReview}
+              reviewError={sessionReviewError}
+              onSelectSession={handleSelectSessionReview}
+            />
+          ) : null}
         </div>
       ) : null}
 

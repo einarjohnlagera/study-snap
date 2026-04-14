@@ -78,6 +78,8 @@ This separation allows:
 - analytics
 - future spaced repetition
 
+Quick Review review history should stay on Note Detail so the note remains the user's study home for the topic.
+
 ---
 
 ## Session States
@@ -257,7 +259,41 @@ After completion, results include an optional confidence prompt:
 - options:
   - `Very confident` -> `HIGH`
   - `Somewhat confident` -> `MEDIUM`
-  - `Not confident` -> `LOW`
+- `Not confident` -> `LOW`
+
+## Recent Sessions and Session Review
+
+Note Detail should surface a `Recent Sessions` section beneath `Performance Overview` for Study Pack-ready notes.
+
+Session list behavior:
+
+- merge completed Quick Review and Challenge Quiz attempts into one chronological list
+- sort by most recent completion first
+- each row should show:
+  - mode
+  - score percentage
+  - score summary (`correct / total`)
+  - completed date/time
+  - retry count when relevant
+
+Session review behavior:
+
+- opening a Quick Review session should render inline review on Note Detail
+- review should reuse stored selections plus the note's persisted Study Pack quiz
+- answer review should show:
+  - question text
+  - selected answer
+  - correct answer
+  - explanation
+  - concept
+  - correctness state
+- concept breakdown should be derived from stored selections and question concepts
+- weak concepts in session review use the shared threshold:
+  - accuracy `< 60%`
+
+Graceful fallback:
+
+- if an older session lacks enough stored question detail for answer-by-answer review, Note Detail should still show the concept summary and weak concepts without crashing the review surface
 - confidence selection is optional and does not block completion
 - after selection, UI shows `Thanks for the feedback.`
 - confidence is stored as nullable `confidence_level` on the Quick Review session

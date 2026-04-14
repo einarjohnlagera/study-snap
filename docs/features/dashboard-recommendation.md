@@ -164,6 +164,12 @@ Empty state:
 
 - prompt user to complete first Quick Review
 
+Session-history alignment:
+
+- dashboard recommendations may point users back to Note Detail, but detailed answer review lives on the note's `Recent Sessions` section
+- recommendation logic should continue using persisted quiz-session data only; do not generate review history or concept summaries through LLM calls
+- weak-concept continuity should stay aligned with note-level review surfaces so users see the same `< 60%` weak-concept threshold across dashboard follow-ups and session review
+
 ## Recommendation Guardrails
 
 - Keep copy calm and non-judgmental.

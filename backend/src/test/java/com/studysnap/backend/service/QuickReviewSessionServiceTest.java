@@ -4,6 +4,8 @@ import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
+import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
@@ -303,6 +305,80 @@ class QuickReviewSessionServiceTest {
     }
 
     @Test
+    void getSessionReview_derivesConceptBreakdownAndWeakConceptsFromStoredSelections() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = StudyPackEntityBuilder.aStudyPack()
+                .withId(studyPackId)
+                .withOwnerUserId(userId)
+                .withQuiz(List.of(
+                        new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Cells", "Explanation 1"),
+                        new QuizItem("Q2", List.of("A", "B", "C", "D"), "B", "Cells", "Explanation 2"),
+                        new QuizItem("Q3", List.of("A", "B", "C", "D"), "D", "Genetics", "Explanation 3")
+                ))
+                .build();
+        QuickReviewSessionEntity session = QuickReviewSessionEntityBuilder.aCompletedSession()
+                .withId(sessionId)
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withSessionMode(QuickReviewSessionMode.QUICK_REVIEW)
+                .withSessionMetadata(null)
+                .withSessionState(Map.of(
+                        "selectedChoices",
+                        Map.of(
+                                "0", 0,
+                                "1", 0,
+                                "2", 3
+                        )
+                ))
+                .build();
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuizSessionReviewResponse response = quickReviewSessionService.getSessionReview(
+                studyPackId.toString(),
+                sessionId.toString(),
+                userId
+        );
+
+        assertThat(response.selectedChoices()).containsEntry(0, 0).containsEntry(1, 0).containsEntry(2, 3);
+        assertThat(response.quiz()).hasSize(3);
+        assertThat(response.conceptBreakdown())
+                .extracting(stat -> stat.concept() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
+                .containsExactly("Cells:1/2", "Genetics:1/1");
+        assertThat(response.weakConcepts()).containsExactly("Cells");
+    }
+
+    @Test
+    void getSessionReview_prefersPersistedWeakConceptsWhenAvailable() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, userId, 2);
+        QuickReviewSessionEntity session = QuickReviewSessionEntityBuilder.aCompletedSession()
+                .withId(sessionId)
+                .withUserId(userId)
+                .withStudyPackId(studyPackId)
+                .withSessionMode(QuickReviewSessionMode.QUICK_REVIEW)
+                .withSessionMetadata(Map.of("weakConcepts", List.of("Membranes")))
+                .withSessionState(Map.of("selectedChoices", Map.of("0", 0)))
+                .build();
+
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
+
+        QuizSessionReviewResponse response = quickReviewSessionService.getSessionReview(
+                studyPackId.toString(),
+                sessionId.toString(),
+                userId
+        );
+
+        assertThat(response.weakConcepts()).containsExactly("Membranes");
+    }
+
+    @Test
     void completeSession_rejectsInvalidResultWhenCorrectAnswersExceedTotal() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -398,7 +474,7 @@ class QuickReviewSessionServiceTest {
 
         verify(quickReviewSessionRepository, times(1)).save(any(QuickReviewSessionEntity.class));
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
-        assertThat(response.currentQuestionIndex()).isEqualTo(0);
+        assertThat(response.currentQuestionIndex()).isZero();
         assertThat(response.currentRound()).isEqualTo(QuickReviewRound.INITIAL);
     }
 
@@ -562,8 +638,9 @@ class QuickReviewSessionServiceTest {
 
         when(quickReviewSessionRepository.findByIdAndUserId(sessionId, userId)).thenReturn(Optional.of(session));
 
+        String id = sessionId.toString();
         assertThatThrownBy(() -> quickReviewSessionService.saveConfidenceLevel(
-                sessionId.toString(),
+                id,
                 userId,
                 QuickReviewConfidenceLevel.HIGH
         ))

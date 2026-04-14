@@ -70,9 +70,10 @@ This supports iterative learning and avoids accidental overwrites.
 4. NoteLib redirects the user to Note Detail while generation runs asynchronously.
 5. Note Detail shows `Generating`, then either `Study Pack Ready` or `Failed`.
 6. User reviews with Quick Review, Challenge Quiz, and Adaptive Practice when the Study Pack is ready.
-7. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
-8. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
-9. Public notes can be copied into Library as new Draft notes.
+7. Note Detail keeps recent completed quiz sessions so users can reopen a past attempt, review answers, and inspect concept performance over time.
+8. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
+9. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
+10. Public notes can be copied into Library as new Draft notes.
 
 ## Architecture Overview
 
@@ -249,6 +250,27 @@ Usage rules:
   - marketing visual accents
   - Open Graph illustration
 - do not use the product icon as the navbar logo or favicon
+
+### Quiz Session History and Review
+
+Purpose:
+
+- make quiz progress persistent and reviewable at the note level
+- help users understand mistakes, not just see a final score
+- strengthen the note -> Study Pack -> quiz -> improvement loop
+
+Rules:
+
+- Note Detail should show a `Recent Sessions` section for Study Pack-ready notes beneath `Performance Overview`
+- Recent Sessions should merge completed Quick Review and Challenge Quiz attempts, ordered by `completedAt DESC`
+- selecting a session should open an inline review surface on Note Detail rather than sending users into a separate admin-like history page
+- session review must use stored session data only; do not call LLM services for history, concept breakdown, or answer review
+- Quick Review session review may reuse the note's persisted Study Pack quiz because NoteLib does not overwrite generated content on the same note
+- Challenge Quiz session review should use the stored session quiz snapshot from session state
+- answer review should show question text, selected answer, correct answer, explanation, concept, and correctness state when data exists
+- concept breakdown should be derived from stored question-to-concept mappings and persisted answers
+- weak concepts in session review use the same threshold as other review features: accuracy below `60%`
+- older/legacy sessions with incomplete stored quiz detail must still render safely with a graceful fallback summary instead of breaking Note Detail
 
 Favicon requirements:
 

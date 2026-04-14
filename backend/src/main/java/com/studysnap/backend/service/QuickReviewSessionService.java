@@ -2,6 +2,8 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuickReviewSessionCompleteRequest;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
+import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.QuickReviewSessionProgressRequest;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
@@ -21,6 +23,8 @@ import com.studysnap.backend.exception.QuickReviewSessionNotFoundException;
 import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.util.QuizSessionReviewUtils;
+import com.studysnap.backend.util.QuizSessionStateUtils;
 import com.studysnap.backend.util.UuidParsingUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -45,6 +49,8 @@ public class QuickReviewSessionService {
     private static final String QUICK_REVIEW_SESSION_NOT_IN_PROGRESS_MESSAGE = "Quick Review session is already completed.";
     private static final String QUICK_REVIEW_SESSION_ALREADY_ENDED_MESSAGE = "Quick Review session has already ended.";
     private static final String QUICK_REVIEW_SESSION_FORFEITED_MESSAGE = "Quick Review session forfeited.";
+    private static final String SESSION_REVIEW_NOT_AVAILABLE_CODE = "SESSION_REVIEW_NOT_AVAILABLE";
+    private static final String QUICK_REVIEW_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE = "Quick Review session review is only available after completion.";
 
     private final QuickReviewSessionRepository quickReviewSessionRepository;
     private final StudyPackRepository studyPackRepository;
@@ -234,6 +240,58 @@ public class QuickReviewSessionService {
         QuickReviewSessionEntity saved = quickReviewSessionRepository.save(session);
         PlanType planType = subscriptionService.resolvePlan(userId);
         return toResponse(saved, planType);
+    }
+
+    @Transactional(readOnly = true)
+    public QuizSessionReviewResponse getSessionReview(String studyPackIdRaw, String sessionIdRaw, UUID userId) {
+        UUID studyPackId = UuidParsingUtils.parseUuidOrThrow(studyPackIdRaw, StudyPackNotFoundException::new);
+        StudyPackEntity studyPack = studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)
+                .orElseThrow(StudyPackNotFoundException::new);
+        UUID sessionId = UuidParsingUtils.parseUuidOrThrow(sessionIdRaw, QuickReviewSessionNotFoundException::new);
+        QuickReviewSessionEntity session = quickReviewSessionRepository.findByIdAndUserIdAndSessionMode(
+                        sessionId,
+                        userId,
+                        QuickReviewSessionMode.QUICK_REVIEW
+                )
+                .orElseThrow(QuickReviewSessionNotFoundException::new);
+
+        if (!studyPackId.equals(session.getStudyPackId())) {
+            throw new QuickReviewSessionNotFoundException();
+        }
+        if (session.getCompletedAt() == null) {
+            throw new AppException(
+                    SESSION_REVIEW_NOT_AVAILABLE_CODE,
+                    QUICK_REVIEW_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+
+        List<QuizItem> quiz = studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz();
+        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        List<com.studysnap.backend.dto.ChallengeQuizConceptStatResponse> conceptBreakdown =
+                QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices);
+        List<String> weakConcepts = extractWeakConcepts(session);
+        if (weakConcepts.isEmpty()) {
+            weakConcepts = QuizSessionReviewUtils.computeWeakConcepts(conceptBreakdown);
+        }
+
+        return new QuizSessionReviewResponse(
+                session.getId().toString(),
+                session.getStudyPackId().toString(),
+                session.getSessionMode().name(),
+                session.getStatus(),
+                session.getTotalQuestions() == null ? 0 : session.getTotalQuestions(),
+                session.getCorrectAnswers() == null ? 0 : session.getCorrectAnswers(),
+                session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage(),
+                session.getRetryCount() == null ? 0 : session.getRetryCount(),
+                session.getDurationSeconds(),
+                weakConcepts,
+                conceptBreakdown,
+                quiz,
+                selectedChoices,
+                session.getCreatedAt(),
+                session.getCompletedAt()
+        );
     }
 
     @Transactional(readOnly = true)

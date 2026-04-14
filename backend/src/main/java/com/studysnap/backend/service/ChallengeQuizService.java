@@ -11,6 +11,7 @@ import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.ActivityType;
@@ -21,6 +22,7 @@ import com.studysnap.backend.entity.QuickReviewSessionEntity;
 import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
+import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.ChallengeQuizGenerationFailedException;
 import com.studysnap.backend.exception.ChallengeQuizNotAvailableException;
 import com.studysnap.backend.exception.ChallengeQuizSessionNotFoundException;
@@ -35,6 +37,7 @@ import com.studysnap.backend.repository.StudyPackRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
+import com.studysnap.backend.util.QuizSessionReviewUtils;
 import com.studysnap.backend.util.QuizSessionStateUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -86,6 +89,8 @@ public class ChallengeQuizService {
     private static final String ANALYTICS_METADATA_MODE = "mode";
     private static final String CHALLENGE_QUIZ_SESSION_ALREADY_ENDED_MESSAGE = "Challenge Quiz session has already ended.";
     private static final String CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE = "Challenge Quiz session forfeited.";
+    private static final String SESSION_REVIEW_NOT_AVAILABLE_CODE = "SESSION_REVIEW_NOT_AVAILABLE";
+    private static final String CHALLENGE_QUIZ_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE = "Challenge Quiz session review is only available after completion.";
     private static final String MODE_CHALLENGE = "challenge";
     private static final String MODE_BOARD_EXAM = "board_exam";
     private static final List<QuickReviewSessionStatus> ACTIVE_GENERATION_STATUSES = List.of(
@@ -306,7 +311,7 @@ public class ChallengeQuizService {
         }
 
         List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
-        Map<Integer, Integer> selectedChoices = extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
         ChallengeStatistics statistics = computeStatistics(
                 quiz,
                 selectedChoices,
@@ -357,6 +362,52 @@ public class ChallengeQuizService {
         markSessionForfeited(session);
         quickReviewSessionRepository.save(session);
         return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE);
+    }
+
+    @Transactional(readOnly = true)
+    public QuizSessionReviewResponse getSessionReview(String studyPackIdRaw, String sessionIdRaw, UUID userId) {
+        UUID studyPackId = parseStudyPackId(studyPackIdRaw);
+        findOwnedStudyPackOrThrow(studyPackId, userId);
+        QuickReviewSessionEntity session = findChallengeSessionOrThrow(parseSessionId(sessionIdRaw), userId);
+        if (!studyPackId.equals(session.getStudyPackId())) {
+            throw new ChallengeQuizSessionNotFoundException();
+        }
+        if (session.getCompletedAt() == null) {
+            throw new AppException(
+                    SESSION_REVIEW_NOT_AVAILABLE_CODE,
+                    CHALLENGE_QUIZ_SESSION_REVIEW_NOT_AVAILABLE_MESSAGE,
+                    org.springframework.http.HttpStatus.BAD_REQUEST
+            );
+        }
+
+        List<QuizItem> quiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        Map<Integer, Integer> selectedChoices = QuizSessionStateUtils.extractSelectedChoiceIndexes(session.getSessionState(), quiz);
+        List<ChallengeQuizConceptStatResponse> conceptBreakdown = extractConceptBreakdown(session);
+        if (conceptBreakdown.isEmpty()) {
+            conceptBreakdown = QuizSessionReviewUtils.computeConceptBreakdown(quiz, selectedChoices);
+        }
+        List<String> weakConcepts = extractWeakConcepts(session);
+        if (weakConcepts.isEmpty()) {
+            weakConcepts = QuizSessionReviewUtils.computeWeakConcepts(conceptBreakdown);
+        }
+
+        return new QuizSessionReviewResponse(
+                session.getId().toString(),
+                session.getStudyPackId().toString(),
+                session.getSessionMode().name(),
+                session.getStatus(),
+                session.getTotalQuestions() == null ? 0 : session.getTotalQuestions(),
+                session.getCorrectAnswers() == null ? 0 : session.getCorrectAnswers(),
+                session.getScorePercentage() == null ? BigDecimal.ZERO : session.getScorePercentage(),
+                session.getRetryCount() == null ? 0 : session.getRetryCount(),
+                session.getDurationSeconds(),
+                weakConcepts,
+                conceptBreakdown,
+                quiz,
+                selectedChoices,
+                session.getCreatedAt(),
+                session.getCompletedAt()
+        );
     }
 
     private int assertChallengeQuizQuotaAvailable(UUID userId, PlanType planType) {
@@ -601,58 +652,6 @@ public class ChallengeQuizService {
         }
         nextState.put(SESSION_STATE_COMPLETED, true);
         return nextState;
-    }
-
-    private Map<Integer, Integer> extractSelectedChoiceIndexes(Map<String, Object> sessionState, List<QuizItem> quiz) {
-        if (sessionState == null || sessionState.isEmpty()) {
-            return Map.of();
-        }
-        Object raw = sessionState.get(SESSION_STATE_SELECTED_CHOICES);
-        if (!(raw instanceof Map<?, ?> rawMap) || rawMap.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<Integer, Integer> selectedChoices = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
-            Object key = entry.getKey();
-            if (!(key instanceof String keyString)) {
-                continue;
-            }
-            try {
-                int questionIndex = Integer.parseInt(keyString);
-                if (questionIndex >= 0) {
-                    Integer selectedChoiceIndex = resolveSelectedChoiceIndex(entry.getValue(), questionIndex, quiz);
-                    if (selectedChoiceIndex != null) {
-                        selectedChoices.put(questionIndex, selectedChoiceIndex);
-                    }
-                }
-            } catch (NumberFormatException ignored) {
-                // Ignore invalid question index keys.
-            }
-        }
-        return selectedChoices;
-    }
-
-    private Integer resolveSelectedChoiceIndex(Object rawValue, int questionIndex, List<QuizItem> quiz) {
-        if (questionIndex < 0 || questionIndex >= quiz.size()) {
-            return null;
-        }
-        QuizItem item = quiz.get(questionIndex);
-        if (item == null || item.choices() == null || item.choices().isEmpty()) {
-            return null;
-        }
-        if (rawValue instanceof Number number) {
-            int selectedChoiceIndex = number.intValue();
-            return selectedChoiceIndex >= 0 && selectedChoiceIndex < item.choices().size() ? selectedChoiceIndex : null;
-        }
-        if (rawValue instanceof String selectedChoice) {
-            for (int index = 0; index < item.choices().size(); index++) {
-                if (Objects.equals(item.choices().get(index), selectedChoice)) {
-                    return index;
-                }
-            }
-        }
-        return null;
     }
 
     private List<String> extractWeakConcepts(QuickReviewSessionEntity session) {
