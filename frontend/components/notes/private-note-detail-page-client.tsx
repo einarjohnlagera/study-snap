@@ -37,12 +37,10 @@ import {
   createStudyPackFromNote,
   deleteNote,
   getChallengeQuizPerformanceSummary,
-  getChallengeQuizSessionReview,
   getMe,
   getMyStudyPack,
   getNote,
   getQuickReviewPerformanceSummary,
-  getQuickReviewSessionReview,
   isEmailNotVerifiedError,
   listRecentChallengeQuizSessions,
   listCoursePrograms,
@@ -58,7 +56,6 @@ import {
   type NoteResponse,
   type NoteStudyPackStatus,
   type NoteVisibility,
-  type QuizSessionReviewResponse,
   type QuickReviewPerformanceSummaryResponse,
   type QuickReviewSessionSummaryResponse,
 } from "@/lib/api";
@@ -85,6 +82,9 @@ import {
   buildRecentQuizSessionHistory,
   type RecentQuizSessionHistoryItem,
 } from "@/lib/quiz-session-history";
+import {
+  buildNoteSessionReviewPath,
+} from "@/lib/note-session-review";
 import {
   STUDY_PACK_GENERATION_MESSAGE_ROTATION_MS,
   STUDY_PACK_GENERATION_POLL_INTERVAL_MS,
@@ -228,10 +228,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [challengeSummary, setChallengeSummary] = useState<ChallengeQuizPerformanceSummaryResponse | null>(null);
   const [quickRecentSessions, setQuickRecentSessions] = useState<QuickReviewSessionSummaryResponse[]>([]);
   const [challengeRecentSessions, setChallengeRecentSessions] = useState<ChallengeQuizSessionSummaryResponse[]>([]);
-  const [activeSessionReviewId, setActiveSessionReviewId] = useState<string | null>(null);
-  const [activeSessionReview, setActiveSessionReview] = useState<QuizSessionReviewResponse | null>(null);
-  const [sessionReviewError, setSessionReviewError] = useState<string | null>(null);
-  const [loadingSessionReview, setLoadingSessionReview] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -328,10 +324,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     try {
       const loadedNote = await getNote(normalizedRouteId);
       setNote(loadedNote);
-      setActiveSessionReviewId(null);
-      setActiveSessionReview(null);
-      setSessionReviewError(null);
-      setLoadingSessionReview(false);
       void maybeShowGeneratedMetadataSuggestion(loadedNote);
 
       if (!loadedNote.quickReviewAvailable) {
@@ -368,10 +360,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setChallengeSummary(null);
       setQuickRecentSessions([]);
       setChallengeRecentSessions([]);
-      setActiveSessionReviewId(null);
-      setActiveSessionReview(null);
-      setSessionReviewError(null);
-      setLoadingSessionReview(false);
     } finally {
       setLoading(false);
     }
@@ -386,25 +374,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     [challengeRecentSessions, quickRecentSessions],
   );
 
-  const handleSelectSessionReview = useCallback(async (session: RecentQuizSessionHistoryItem) => {
+  const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
+  const handleSelectSessionReview = useCallback((session: RecentQuizSessionHistoryItem) => {
     if (!note) {
       return;
     }
-    setActiveSessionReviewId(session.sessionId);
-    setSessionReviewError(null);
-    setLoadingSessionReview(true);
-    try {
-      const review = session.sessionMode === "CHALLENGE"
-        ? await getChallengeQuizSessionReview(note.id, session.sessionId)
-        : await getQuickReviewSessionReview(note.id, session.sessionId);
-      setActiveSessionReview(review);
-    } catch (err) {
-      setActiveSessionReview(null);
-      setSessionReviewError(err instanceof Error ? err.message : "Could not load this session review.");
-    } finally {
-      setLoadingSessionReview(false);
-    }
-  }, [note]);
+    router.push(buildNoteSessionReviewPath(note.id, session.sessionId, session.sessionMode, activeStudyPackTab));
+  }, [activeStudyPackTab, note, router]);
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -597,7 +573,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     : false;
   const showFirstStudyPackSuccessBanner = firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
-  const activeStudyPackTab = normalizeNoteDetailTab(searchParams.get("tab"));
   const availableCourseProgramSuggestions = useMemo(
     () => mergeCourseProgramSuggestions(
       COURSE_PROGRAM_SUGGESTIONS,
@@ -976,7 +951,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
   };
 
-  const handleStartQuickReview = async () => {
+  const handleStartQuickReview = useCallback(async () => {
     if (!note) {
       return;
     }
@@ -989,7 +964,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       const message = err instanceof Error ? err.message : "Could not start Quick Review.";
       setError(message);
     }
-  };
+  }, [note, router]);
 
   useEffect(() => {
     const shouldAutoStartQuickReview = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview) === "1";
@@ -1600,10 +1575,6 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
           {!isGeneratingStudyPack && !hasGenerationFailed && !isDraft ? (
             <QuizSessionHistory
               sessions={recentQuizSessions}
-              activeSessionId={activeSessionReviewId}
-              activeReview={activeSessionReview}
-              loadingReview={loadingSessionReview}
-              reviewError={sessionReviewError}
               onSelectSession={handleSelectSessionReview}
             />
           ) : null}

@@ -355,7 +355,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
   });
 
-  it("shows recent quiz sessions and loads the selected session review inline", async () => {
+  it("navigates to the dedicated session review page from Recent Sessions on note detail", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -434,10 +434,49 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(quickReviewSessionButton as HTMLButtonElement);
 
-    await waitFor(() => {
-      expect(getQuickReviewSessionReview).toHaveBeenCalledWith("note-1", "quick-1");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/sessions/quick-1?mode=quick-review&tab=summary");
+    expect(getQuickReviewSessionReview).not.toHaveBeenCalled();
+    expect(screen.queryByText("Currently reviewing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading session review...")).not.toBeInTheDocument();
+  });
+
+  it("keeps the same dedicated session review route behavior on smaller screens", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
     });
-    expect(await screen.findByText("Which organelle produces ATP?")).toBeInTheDocument();
+    (listRecentQuickReviewSessions as jest.Mock).mockResolvedValue([
+      {
+        id: "quick-1",
+        studyPackId: "sp-1",
+        totalQuestions: 10,
+        correctAnswers: 8,
+        scorePercentage: 80,
+        retryCount: 1,
+        durationSeconds: 120,
+        weakConcepts: ["Cells"],
+        createdAt: "2026-04-11T10:00:00Z",
+        completedAt: "2026-04-11T10:05:00Z",
+      },
+    ]);
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByText("Recent Sessions")).toBeInTheDocument();
+    const quickReviewSessionButton = screen.getAllByText("Quick Review")
+      .map((element) => element.closest("button"))
+      .find((button) => button !== null);
+    expect(quickReviewSessionButton).not.toBeNull();
+
+    fireEvent.click(quickReviewSessionButton as HTMLButtonElement);
+
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/sessions/quick-1?mode=quick-review&tab=summary");
+    expect(getQuickReviewSessionReview).not.toHaveBeenCalled();
+    expect(screen.queryByText("Loading session review...")).not.toBeInTheDocument();
   });
 
   it("shows private-share modal and then opens share-link modal after making note public", async () => {

@@ -166,7 +166,7 @@ Empty state:
 
 Session-history alignment:
 
-- dashboard recommendations may point users back to Note Detail, but detailed answer review lives on the note's `Recent Sessions` section
+- dashboard recommendations may point users back to Note Detail, but detailed answer review now lives on the dedicated note session-review page reached from `Recent Sessions`
 - recommendation logic should continue using persisted quiz-session data only; do not generate review history or concept summaries through LLM calls
 - weak-concept continuity should stay aligned with note-level review surfaces so users see the same `< 60%` weak-concept threshold across dashboard follow-ups and session review
 

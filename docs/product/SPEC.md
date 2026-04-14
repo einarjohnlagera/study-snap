@@ -263,7 +263,8 @@ Rules:
 
 - Note Detail should show a `Recent Sessions` section for Study Pack-ready notes beneath `Performance Overview`
 - Recent Sessions should merge completed Quick Review and Challenge Quiz attempts, ordered by `completedAt DESC`
-- selecting a session should open an inline review surface on Note Detail rather than sending users into a separate admin-like history page
+- `Recent Sessions` is the entry point into session review from Note Detail
+- opening a session should route to one dedicated session-review page on both desktop and mobile, with a clear back path to Note Detail
 - session review must use stored session data only; do not call LLM services for history, concept breakdown, or answer review
 - Quick Review session review may reuse the note's persisted Study Pack quiz because NoteLib does not overwrite generated content on the same note
 - Challenge Quiz session review should use the stored session quiz snapshot from session state
