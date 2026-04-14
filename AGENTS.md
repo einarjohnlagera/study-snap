@@ -479,13 +479,14 @@ Core loop:
 - Private notes must never be exposed through the public SEO route.
 - Copying a public note must preserve attribution via `copiedFromNoteId` and `copiedFromUserId`.
 - Public Library copy UX should keep the existing copy endpoint but make public copies idempotent per user/source note.
-- Public Library cards may include a subtle inline `Save` CTA as the one allowed exception to the no-inline-card-actions rule on note cards.
+- Public Library cards may include subtle inline `Save` plus lightweight heart/like controls as the allowed exception to the no-inline-card-actions rule on note cards.
 - Public Library card CTAs should stay compact:
   - icon + short label
   - outline / ghost weight
   - never full width
   - aligned with author metadata in the footer row rather than taking over the full card width
 - Guests clicking `Save` should see an auth prompt modal before auth navigation.
+- Guests clicking the heart/like control should see an auth prompt modal before auth navigation.
 - If the current user already has that public note in their library, replace `Save` with muted `Saved` instead of showing another navigation button inside the card.
 - Successful Public Library copies should offer `View Note` and `Start Review` follow-up actions, with:
   - `Start Review` as the primary CTA
@@ -626,17 +627,18 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
 - Note cards must use a shared layout and component across note-list pages; Public Library may add subtle discovery metadata such as views and copies, but the base card structure must remain consistent.
+- Note cards must use a shared layout and component across note-list pages; Public Library may add subtle discovery metadata such as views, copies, and likes, but the base card structure must remain consistent.
 - Shared note-card content order is:
   - TOP ROW: Subject badge + Course/Program badge (neutral/gray) — above title
   - Title (with optional private-library visibility icon `Globe`/`Lock` trailing)
   - Study Pack Ready badge (green) — below title, only when applicable
-  - Quality badges (High Quality, Popular) — below title alongside stateBadge
+  - Quality badges (High Quality, Well liked, Popular) — below title alongside stateBadge
   - `Note Preview`
   - `Summary Preview`
   - Tags
-  - subtle discovery metrics row (`views`, `copies`) when that surface has them
+  - subtle discovery metrics row (`views`, `copies`, `likes`) when that surface has them
 - `SharedNoteCard` props: `courseProgram` (neutral gray badge above title), `stateBadge` (Study Pack Ready, rendered below title), `metadataBadges` (quality badges)
-- The "New" badge has been removed; quality badges are High Quality and Popular only
+- The "New" badge has been removed; quality badges are High Quality, Well liked, and Popular only
 - `Note Preview` comes from note content and `Summary Preview` comes from generated Study Pack summary.
 - `Note Preview` should read as the primary preview and `Summary Preview` should stay secondary.
 - If no generated summary exists, show `No summary available yet.`
@@ -1126,7 +1128,7 @@ Discovery mode layout order (no active filters):
 2. one-line `Subjects` rail with `All` and `+ More`
 3. one-line `Popular Tags` rail with `+ More`
 4. 🔥 Featured Notes — top 3 eligible notes by quality + engagement
-5. 📈 Most Popular — top 5 threshold-qualified notes by copies, then views (excludes Featured)
+5. 📈 Most Popular — top 5 threshold-qualified notes by copies, then views, then likes (excludes Featured)
 6. 🆕 Recently Added — top 5 by createdAt (excludes Featured + Popular)
 
 Backend subject filtering: `GET /notes/public?subject=<value>` — case-insensitive, server-side.
@@ -1135,6 +1137,7 @@ Public Library ranking philosophy:
 - Featured = quality + engagement
 - Popular = social proof
 - Recent = freshness
+- Evaluation should stay lightweight: simple signals > complex social systems.
 
 Ranking rules:
 - Featured eligibility requires:
@@ -1144,16 +1147,21 @@ Ranking rules:
   - quiz/generated study content
   - non-empty note preview/content
 - Featured score:
-  - `viewCount + (copyCount * 3)`
+  - `viewCount + (copyCount * 3) + (likeCount * 2)`
 - Featured tie-breakers:
   - `copyCount DESC`
   - `viewCount DESC`
   - `createdAt DESC`
+- Likes:
+  - authenticated users can toggle one like per public note
+  - guests clicking like must see an auth modal instead of a silent failure
+  - `Well liked` badge threshold is `likeCount >= 10`
 - Popular threshold:
   - `copyCount >= 3` or `viewCount >= 20`
 - Popular ordering:
   - `copyCount DESC`
   - `viewCount DESC`
+  - `likeCount DESC`
   - `createdAt DESC`
 - Recent ordering:
   - `createdAt DESC`

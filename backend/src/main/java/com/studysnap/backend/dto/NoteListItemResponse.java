@@ -18,6 +18,7 @@ public record NoteListItemResponse(
         String studyPackStatus,
         Integer quizCount,
         Long copyCount,
+        Long likeCount,
         Long shareCount,
         Long viewCount,
         String authorDisplayName,
@@ -26,6 +27,7 @@ public record NoteListItemResponse(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         String copiedFromNoteId,
-        boolean copiedFromPublic
+        boolean copiedFromPublic,
+        boolean likedByCurrentUser
 ) {
 }

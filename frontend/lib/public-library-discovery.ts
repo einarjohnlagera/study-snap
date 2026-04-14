@@ -6,6 +6,7 @@ export const BROWSE_SUBJECTS_LIMIT = 8;
 export const PUBLIC_LIBRARY_RANKING = {
   FEATURED_READY_STATUS: "STUDY_PACK_READY",
   FEATURED_COPY_WEIGHT: 3,
+  FEATURED_LIKE_WEIGHT: 2,
   POPULAR_MIN_COPIES: 3,
   POPULAR_MIN_VIEWS: 20,
 } as const;
@@ -47,14 +48,17 @@ export function isPopularNote(
 
 /**
  * Compute the v1 Featured score from engagement signals.
- * Formula: views + (copies × 3)
+ * Formula: views + (copies × 3) + (likes × 2)
  */
 export function computeDiscoveryScore(
-  note: Pick<NoteListItemResponse, "viewCount" | "copyCount">,
+  note: Pick<NoteListItemResponse, "viewCount" | "copyCount" | "likeCount">,
 ): number {
   const views = note.viewCount ?? 0;
   const copies = note.copyCount ?? 0;
-  return views + copies * PUBLIC_LIBRARY_RANKING.FEATURED_COPY_WEIGHT;
+  const likes = note.likeCount ?? 0;
+  return views
+    + copies * PUBLIC_LIBRARY_RANKING.FEATURED_COPY_WEIGHT
+    + likes * PUBLIC_LIBRARY_RANKING.FEATURED_LIKE_WEIGHT;
 }
 
 /**
@@ -87,7 +91,7 @@ export function getFeaturedNotes(
 
 /**
  * Return top N Popular notes that meet the social-proof threshold.
- * Ordering: copies desc, views desc, createdAt desc.
+ * Ordering: copies desc, views desc, likes desc, createdAt desc.
  */
 export function getPopularNotes(
   notes: NoteListItemResponse[],
@@ -100,6 +104,8 @@ export function getPopularNotes(
       if (copyDiff !== 0) return copyDiff;
       const viewDiff = (b.viewCount ?? 0) - (a.viewCount ?? 0);
       if (viewDiff !== 0) return viewDiff;
+      const likeDiff = (b.likeCount ?? 0) - (a.likeCount ?? 0);
+      if (likeDiff !== 0) return likeDiff;
       return compareCreatedAtDesc(a, b);
     })
     .slice(0, limit);

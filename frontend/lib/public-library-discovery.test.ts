@@ -31,6 +31,7 @@ function makeNote(
     studyPackStatus: "STUDY_PACK_READY",
     quizCount: 2,
     copyCount: 0,
+    likeCount: 0,
     shareCount: 0,
     viewCount: 0,
     authorDisplayName: "Tester",
@@ -38,28 +39,32 @@ function makeNote(
     isCurrentUser: false,
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
+    likedByCurrentUser: false,
     ...overrides,
   };
 }
 
 describe("computeDiscoveryScore", () => {
   it("returns 0 for a note with no engagement", () => {
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0 })).toBe(0);
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, likeCount: 0 })).toBe(0);
   });
 
-  it("weights copies at 3x views", () => {
-    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 0 })).toBe(10);
-    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 10 })).toBe(
+  it("weights copies at 3x views and likes at 2x views", () => {
+    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 0, likeCount: 0 })).toBe(10);
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 10, likeCount: 0 })).toBe(
       10 * PUBLIC_LIBRARY_RANKING.FEATURED_COPY_WEIGHT,
+    );
+    expect(computeDiscoveryScore({ viewCount: 0, copyCount: 0, likeCount: 10 })).toBe(
+      10 * PUBLIC_LIBRARY_RANKING.FEATURED_LIKE_WEIGHT,
     );
   });
 
-  it("combines views and copies correctly", () => {
-    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 5 })).toBe(25);
+  it("combines views, copies, and likes correctly", () => {
+    expect(computeDiscoveryScore({ viewCount: 10, copyCount: 5, likeCount: 4 })).toBe(33);
   });
 
   it("treats null counts as 0", () => {
-    expect(computeDiscoveryScore({ viewCount: null, copyCount: null })).toBe(0);
+    expect(computeDiscoveryScore({ viewCount: null, copyCount: null, likeCount: null })).toBe(0);
   });
 });
 
@@ -239,6 +244,15 @@ describe("getPopularNotes", () => {
     const result = getPopularNotes([lessViewed, moreViewed]);
 
     expect(result[0].id).toBe("more-viewed");
+  });
+
+  it("uses likes as tertiary sort when copies and views are equal", () => {
+    const moreLiked = makeNote({ id: "more-liked", copyCount: 5, viewCount: 20, likeCount: 12 });
+    const lessLiked = makeNote({ id: "less-liked", copyCount: 5, viewCount: 20, likeCount: 2 });
+
+    const result = getPopularNotes([lessLiked, moreLiked]);
+
+    expect(result[0].id).toBe("more-liked");
   });
 
   it("uses newest createdAt as tertiary tiebreak", () => {

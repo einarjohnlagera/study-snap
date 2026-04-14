@@ -11,6 +11,7 @@ import java.util.List;
  */
 public final class PublicNotesScoringUtils {
     private static final int FEATURED_COPY_WEIGHT = 3;
+    private static final int FEATURED_LIKE_WEIGHT = 2;
     private static final int FEATURED_VIEW_WEIGHT = 1;
     private static final long POPULAR_MIN_COPIES = 3L;
     private static final long POPULAR_MIN_VIEWS = 20L;
@@ -20,12 +21,13 @@ public final class PublicNotesScoringUtils {
 
     /**
      * v1 Featured score for a note.
-     * score = views + (copies × 3)
+     * score = views + (copies × 3) + (likes × 2)
      */
     public static double computeScore(NoteListItemResponse note) {
         long copies = metricValue(note.copyCount());
+        long likes = metricValue(note.likeCount());
         long views = metricValue(note.viewCount());
-        return (copies * FEATURED_COPY_WEIGHT) + (views * FEATURED_VIEW_WEIGHT);
+        return (copies * FEATURED_COPY_WEIGHT) + (likes * FEATURED_LIKE_WEIGHT) + (views * FEATURED_VIEW_WEIGHT);
     }
 
     public static boolean isFeaturedEligible(NoteListItemResponse note) {
@@ -77,11 +79,14 @@ public final class PublicNotesScoringUtils {
         Comparator<NoteListItemResponse> byViews =
                 Comparator.comparing(n -> metricValue(n.viewCount()),
                         Comparator.reverseOrder());
+        Comparator<NoteListItemResponse> byLikes =
+                Comparator.comparing(n -> metricValue(n.likeCount()),
+                        Comparator.reverseOrder());
         Comparator<NoteListItemResponse> byCreatedAt =
                 Comparator.comparing(NoteListItemResponse::createdAt, Comparator.nullsLast(Comparator.reverseOrder()));
         return notes.stream()
                 .filter(PublicNotesScoringUtils::isPopular)
-                .sorted(byCopies.thenComparing(byViews).thenComparing(byCreatedAt))
+                .sorted(byCopies.thenComparing(byViews).thenComparing(byLikes).thenComparing(byCreatedAt))
                 .toList();
     }
 

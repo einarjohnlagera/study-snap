@@ -413,13 +413,18 @@ Users can:
   - Featured = quality + engagement
   - Popular = social proof
   - Recent = freshness
+  - simple signals > complex social systems
 - rank Featured from eligible study-ready public notes only:
   - must be `STUDY_PACK_READY`
   - must have a meaningful summary preview
   - must have quiz/generated study content
   - must have non-empty note preview/content
+- allow authenticated users to like a public note as a lightweight quality signal:
+  - one user = one like per public note
+  - like toggles on repeated tap/click
+  - guests clicking like should see an auth prompt modal instead of a silent failure
 - Featured score formula:
-  - `viewCount + (copyCount * 3)`
+  - `viewCount + (copyCount * 3) + (likeCount * 2)`
 - Featured tie-breakers:
   - `copyCount DESC`
   - `viewCount DESC`
@@ -429,6 +434,7 @@ Users can:
 - order `Most Popular` by:
   - `copyCount DESC`
   - `viewCount DESC`
+  - `likeCount DESC`
   - `createdAt DESC`
 - order `Recently Added` by:
   - `createdAt DESC`
@@ -439,6 +445,7 @@ Users can:
 - filter by search, course/program, learner level, subject, tags, and source
 - open read-only public note detail
 - copy a public note into Library from a subtle inline `Save` CTA on the card
+- like a public note from a subtle inline heart action on the card
 - keep subject chips and popular tags on one horizontal scroll lane instead of wrapping into tall grids
 - expose the full subject/tag lists through shared searchable selector surfaces:
   - subjects -> single-select searchable list
@@ -460,9 +467,15 @@ Users can:
 - modal/sheet actions should keep a clean responsive layout with only `View Note` and `Start Review`, polished spacing, and no overflow
 - if the user already copied that public note, show a muted `Saved` action state on the card instead of offering duplicate copies
 - guests clicking `Save` should open an auth prompt modal instead of immediately navigating away without context
+- guests clicking the heart/like action should open an auth prompt modal instead of silently failing
 - Public Library cards should avoid generic `Open` buttons because card click already owns detail navigation
 - Public Library copied-state UI should avoid redundant ownership/status badges when the action state already communicates the same information
 - Public Library card footers should keep author metadata on the left and the subtle save action on the right for compact mobile scanability
+- Public Library cards should keep the heart/like count subtle near the existing view/copy metrics so evaluation stays informative but not dominant
+- Public Library quality badges may include:
+  - `High Quality`
+  - `Well liked`
+  - `Popular`
 - see source badges on cards:
   - `By You` for their own public notes
   - `By NoteLib` plus an `Official` badge for the official NoteLib account
