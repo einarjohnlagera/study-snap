@@ -31,7 +31,6 @@ const routerMock = {
   push: pushMock,
   replace: replaceMock,
 };
-let mobileSessionReviewMatches = false;
 let searchParamValues: Record<string, string> = {};
 function createSearchParamsMock() {
   return {
@@ -111,26 +110,9 @@ const baseNote = {
 };
 
 describe("PrivateNoteDetailPageClient", () => {
-  beforeAll(() => {
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: jest.fn((query: string) => ({
-        matches: query === "(max-width: 767px)" ? mobileSessionReviewMatches : false,
-        media: query,
-        onchange: null,
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        dispatchEvent: jest.fn(),
-      })),
-    });
-  });
-
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
-    mobileSessionReviewMatches = false;
     searchParamValues = {};
     searchParamsMock = createSearchParamsMock();
     window.localStorage.clear();
@@ -373,7 +355,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
   });
 
-  it("shows recent quiz sessions, selects the correct desktop session, and scrolls to the inline review", async () => {
+  it("navigates to the dedicated session review page from Recent Sessions on note detail", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -441,11 +423,6 @@ describe("PrivateNoteDetailPageClient", () => {
       createdAt: "2026-04-11T10:00:00Z",
       completedAt: "2026-04-11T10:05:00Z",
     });
-    const scrollIntoViewMock = jest.fn();
-    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-      configurable: true,
-      value: scrollIntoViewMock,
-    });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
@@ -457,19 +434,13 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(quickReviewSessionButton as HTMLButtonElement);
 
-    await waitFor(() => {
-      expect(getQuickReviewSessionReview).toHaveBeenCalledWith("note-1", "quick-1");
-    });
-    await waitFor(() => {
-      expect(scrollIntoViewMock).toHaveBeenCalled();
-    });
-    expect(quickReviewSessionButton).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getAllByText("Currently reviewing")).not.toHaveLength(0);
-    expect(await screen.findByText("Which organelle produces ATP?")).toBeInTheDocument();
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/sessions/quick-1?mode=quick-review&tab=summary");
+    expect(getQuickReviewSessionReview).not.toHaveBeenCalled();
+    expect(screen.queryByText("Currently reviewing")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading session review...")).not.toBeInTheDocument();
   });
 
-  it("navigates to the dedicated mobile session review page instead of opening inline review", async () => {
-    mobileSessionReviewMatches = true;
+  it("keeps the same dedicated session review route behavior on smaller screens", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,

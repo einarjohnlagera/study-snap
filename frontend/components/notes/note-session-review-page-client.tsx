@@ -6,15 +6,17 @@ import { BackLink } from "@/components/ui/back-link";
 import { Card } from "@/components/ui/card";
 import { QuizSessionReviewContent } from "@/components/notes/quiz-session-review-content";
 import {
+  getNote,
   getChallengeQuizSessionReview,
   getQuickReviewSessionReview,
+  type NoteResponse,
   type QuizSessionReviewResponse,
 } from "@/lib/api";
+import { normalizeNoteDetailTab } from "@/lib/note-entry";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
-  buildNoteDetailPathWithSessionReview,
+  buildNoteSessionReviewBackPath,
   fromNoteSessionReviewRouteMode,
-  normalizeNoteSessionReviewTab,
   NOTE_SESSION_REVIEW_QUERY_PARAMS,
 } from "@/lib/note-session-review";
 
@@ -29,6 +31,7 @@ export function NoteSessionReviewPageClient({
 }: Readonly<NoteSessionReviewPageClientProps>) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [note, setNote] = useState<NoteResponse | null>(null);
   const [review, setReview] = useState<QuizSessionReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,15 +41,10 @@ export function NoteSessionReviewPageClient({
     [searchParams],
   );
   const noteTab = useMemo(
-    () => normalizeNoteSessionReviewTab(searchParams.get("tab")),
+    () => normalizeNoteDetailTab(searchParams.get("tab")),
     [searchParams],
   );
-  const backHref = useMemo(() => {
-    if (!sessionMode) {
-      return `/notes/${noteId}`;
-    }
-    return buildNoteDetailPathWithSessionReview(noteId, noteTab, sessionId, sessionMode);
-  }, [noteId, noteTab, sessionId, sessionMode]);
+  const backHref = useMemo(() => buildNoteSessionReviewBackPath(noteId, noteTab), [noteId, noteTab]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -62,16 +60,21 @@ export function NoteSessionReviewPageClient({
     setLoading(true);
     setError(null);
     setReview(null);
+    setNote(null);
 
     const loadReview = async () => {
       try {
-        const nextReview = sessionMode === "CHALLENGE"
-          ? await getChallengeQuizSessionReview(noteId, sessionId)
-          : await getQuickReviewSessionReview(noteId, sessionId);
+        const [nextReview, nextNote] = await Promise.all([
+          sessionMode === "CHALLENGE"
+            ? getChallengeQuizSessionReview(noteId, sessionId)
+            : getQuickReviewSessionReview(noteId, sessionId),
+          getNote(noteId),
+        ]);
         if (!active) {
           return;
         }
         setReview(nextReview);
+        setNote(nextNote);
       } catch (err) {
         if (!active) {
           return;
@@ -100,7 +103,7 @@ export function NoteSessionReviewPageClient({
         </p>
         <h1 className="text-2xl font-semibold text-foreground">Focused review</h1>
         <p className="text-sm leading-relaxed text-foreground/75">
-          Review your answers, weak concepts, and explanations without the tighter Note Detail layout.
+          Review your answers, weak concepts, and explanations in one dedicated page.
         </p>
       </div>
 
@@ -121,7 +124,35 @@ export function NoteSessionReviewPageClient({
       ) : null}
 
       {!loading && review ? (
-        <QuizSessionReviewContent review={review} title="Session Review" />
+        <div className="space-y-4">
+          <Card className="space-y-3 p-4 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                  {note?.subject?.trim() || "Study Session"}
+                </p>
+                <h2 className="text-xl font-semibold text-foreground sm:text-2xl">
+                  {note?.title?.trim() || "Untitled note"}
+                </h2>
+                <p className="text-sm leading-relaxed text-foreground/75">
+                  {sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review"} session for this note.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/70">
+                  {sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review"}
+                </span>
+                {note?.courseProgram?.trim() ? (
+                  <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground/70">
+                    {note.courseProgram}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </Card>
+
+          <QuizSessionReviewContent review={review} title="Session Review" />
+        </div>
       ) : null}
     </div>
   );

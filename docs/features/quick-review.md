@@ -278,8 +278,8 @@ Session list behavior:
 
 Session review behavior:
 
-- desktop opening a Quick Review session should render inline review on Note Detail, auto-scroll to the review section, and keep the selected session visibly marked in `Recent Sessions`
-- mobile opening a Quick Review session should route to a dedicated session-review page with a clear back path to Note Detail
+- opening a Quick Review session from `Recent Sessions` should route to a dedicated session-review page on both desktop and mobile
+- `Recent Sessions` remains the entry point on Note Detail, but the dedicated page becomes the single source of truth for answer review
 - review should reuse stored selections plus the note's persisted Study Pack quiz
 - answer review should show:
   - question text

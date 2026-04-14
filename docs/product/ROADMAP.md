@@ -97,15 +97,15 @@ Core routes:
 - `/library`
 - `/library/public`
 - `/notes/{id}`
-- `/notes/{id}/sessions/{sessionId}` for dedicated mobile session review
+- `/notes/{id}/sessions/{sessionId}` for session review
 - `/public/library/{subject}`
 - `/public/library/{subject}/{slug}`
 - `/public/profile/{userId}`
 
 Current session-review UX:
 
-- desktop keeps session review inline on Note Detail and auto-scrolls to the selected review
-- mobile opens a dedicated session-review page so answer-by-answer review has enough width and focus
+- desktop and mobile both open the same dedicated session-review page from `Recent Sessions`
+- Note Detail stays the entry point for history, while the dedicated review page owns focused answer review
 
 ## Future Directions
 

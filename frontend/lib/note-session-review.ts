@@ -1,15 +1,10 @@
 import type { QuizSessionMode } from "@/lib/api";
 import {
   buildNoteDetailPathWithTab,
-  normalizeNoteDetailTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
 
-export const MOBILE_SESSION_REVIEW_MEDIA_QUERY = "(max-width: 767px)";
-
 export const NOTE_SESSION_REVIEW_QUERY_PARAMS = {
-  sessionId: "sessionId",
-  sessionMode: "sessionMode",
   routeMode: "mode",
 } as const;
 
@@ -68,33 +63,9 @@ export function buildNoteSessionReviewPath(
   return `/notes/${noteId}/sessions/${sessionId}?${searchParams.toString()}`;
 }
 
-export function buildNoteDetailPathWithSessionReview(
+export function buildNoteSessionReviewBackPath(
   noteId: string,
   tab: NoteDetailTab,
-  sessionId: string,
-  sessionMode: NoteSessionReviewMode,
 ): string {
-  const searchParams = new URLSearchParams({
-    [NOTE_SESSION_REVIEW_QUERY_PARAMS.sessionId]: sessionId,
-    [NOTE_SESSION_REVIEW_QUERY_PARAMS.sessionMode]: sessionMode,
-  });
-  return buildNoteDetailPathWithTab(noteId, tab, searchParams);
-}
-
-export function resolveRequestedNoteSessionReview(
-  sessionIdValue: string | string[] | null | undefined,
-  sessionModeValue: string | string[] | null | undefined,
-): { sessionId: string; sessionMode: NoteSessionReviewMode } | null {
-  const sessionId = normalizeSingleValue(sessionIdValue)?.trim() ?? "";
-  const sessionMode = normalizeNoteSessionReviewMode(sessionModeValue);
-  if (!sessionId || !sessionMode) {
-    return null;
-  }
-  return { sessionId, sessionMode };
-}
-
-export function normalizeNoteSessionReviewTab(
-  value: string | string[] | null | undefined,
-): NoteDetailTab {
-  return normalizeNoteDetailTab(value);
+  return buildNoteDetailPathWithTab(noteId, tab);
 }

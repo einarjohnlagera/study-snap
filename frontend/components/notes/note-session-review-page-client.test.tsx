@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { NoteSessionReviewPageClient } from "./note-session-review-page-client";
 import {
+  getNote,
   getChallengeQuizSessionReview,
   getQuickReviewSessionReview,
 } from "@/lib/api";
@@ -21,6 +22,7 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  getNote: jest.fn(),
   getChallengeQuizSessionReview: jest.fn(),
   getQuickReviewSessionReview: jest.fn(),
 }));
@@ -29,11 +31,18 @@ describe("NoteSessionReviewPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
     currentSearch = "mode=quick-review&tab=quiz";
+    (getNote as jest.Mock).mockReset();
     (getChallengeQuizSessionReview as jest.Mock).mockReset();
     (getQuickReviewSessionReview as jest.Mock).mockReset();
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Respiratory Notes",
+      subject: "Pulmonology",
+      courseProgram: "Medicine",
+    });
   });
 
-  it("renders the dedicated mobile-friendly session review page with a note back path", async () => {
+  it("renders the dedicated session review page with note context and a note back path", async () => {
     (getQuickReviewSessionReview as jest.Mock).mockResolvedValue({
       sessionId: "quick-1",
       studyPackId: "sp-1",
@@ -73,10 +82,14 @@ describe("NoteSessionReviewPageClient", () => {
     await waitFor(() => {
       expect(getQuickReviewSessionReview).toHaveBeenCalledWith("note-1", "quick-1");
     });
+    expect(getNote).toHaveBeenCalledWith("note-1");
     expect(screen.getByRole("link", { name: "Note" })).toHaveAttribute(
       "href",
-      "/notes/note-1?sessionId=quick-1&sessionMode=QUICK_REVIEW&tab=quiz",
+      "/notes/note-1?tab=quiz",
     );
+    expect(screen.getByText("Respiratory Notes")).toBeInTheDocument();
+    expect(screen.getByText("Pulmonology")).toBeInTheDocument();
+    expect(screen.getAllByText("Quick Review")).not.toHaveLength(0);
     expect(screen.getByText(/pneumonoultramicroscopicsilicovolcanoconiosis/i)).toBeInTheDocument();
     expect(screen.getByText(/Supercalifragilisticexpialidocious-style terminology/i)).toBeInTheDocument();
   });

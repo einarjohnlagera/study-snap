@@ -72,8 +72,8 @@ Note Detail study history:
 
 - Study Pack-ready notes should show `Performance Overview` followed by `Recent Sessions`
 - Recent Sessions should combine completed Quick Review and Challenge Quiz attempts for that note
-- desktop session selection should keep review inline on Note Detail, auto-scroll to the selected review section, and clearly mark the active session row as currently reviewing
-- mobile session selection should open a dedicated session-review page so question review uses the full available width instead of the deeper Note Detail card stack
+- selecting a session should open a dedicated session-review page on both desktop and mobile
+- Note Detail should keep the session list as the entry point into review, but should no longer embed the full session review below the list
 - mobile review should favor stacked cards and wrapped text over dense tables so question review stays readable on small screens
 - older sessions without full stored quiz detail should still render a graceful fallback summary instead of breaking the note page
 

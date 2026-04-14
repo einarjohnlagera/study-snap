@@ -6,8 +6,9 @@
 
 - **Quiz session history + review** — Note Detail now keeps completed quiz history tied to the note so past practice is reviewable instead of disposable:
   - adds a `Recent Sessions` section below `Performance Overview` on Study Pack-ready notes, combining Quick Review and Challenge Quiz attempts in reverse-chronological order
-  - desktop `Review session` now auto-scrolls to the selected inline review and keeps the active Recent Session visibly marked as the current review target
-  - mobile `Review session` now opens a dedicated session-review page so score summary, weak concepts, questions, and explanations use the full available width instead of the tighter Note Detail nesting
+  - `Review session` now opens one dedicated session-review page on both desktop and mobile for a clearer and more stable interaction model
+  - removes the fragile desktop inline review and auto-scroll behavior in favor of one consistent route from `Recent Sessions`
+  - the dedicated review page gives score summary, weak concepts, questions, and explanations enough width to stay readable across screen sizes
   - lets users open a completed session using stored session data only for question-by-question answers, explanations, and correctness
   - derives concept breakdown and weak concepts from persisted quiz/session state, keeping the weak-concept threshold aligned at `< 60%`
   - older sessions without enough stored quiz detail degrade gracefully with concept summary and weak-concept feedback instead of failing the page

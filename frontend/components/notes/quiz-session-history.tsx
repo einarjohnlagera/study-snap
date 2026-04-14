@@ -1,9 +1,6 @@
 "use client";
 
-import type { RefObject } from "react";
 import { Card } from "@/components/ui/card";
-import { QuizSessionReviewContent } from "@/components/notes/quiz-session-review-content";
-import type { QuizSessionReviewResponse } from "@/lib/api";
 import {
   type RecentQuizSessionHistoryItem,
   getQuizSessionModeLabel,
@@ -11,12 +8,6 @@ import {
 
 type QuizSessionHistoryProps = {
   sessions: RecentQuizSessionHistoryItem[];
-  activeSessionId: string | null;
-  activeReview: QuizSessionReviewResponse | null;
-  loadingReview: boolean;
-  reviewError: string | null;
-  showInlineReview?: boolean;
-  reviewSectionRef?: RefObject<HTMLDivElement | null>;
   onSelectSession: (session: RecentQuizSessionHistoryItem) => void;
 };
 
@@ -38,12 +29,6 @@ function formatCompletedAt(value: string | null): string {
 
 export function QuizSessionHistory({
   sessions,
-  activeSessionId,
-  activeReview,
-  loadingReview,
-  reviewError,
-  showInlineReview = true,
-  reviewSectionRef,
   onSelectSession,
 }: QuizSessionHistoryProps) {
   return (
@@ -62,89 +47,44 @@ export function QuizSessionHistory({
         </div>
       ) : (
         <div className="space-y-2">
-          {sessions.map((session) => {
-            const isActive = session.sessionId === activeSessionId;
-            return (
-              <button
-                key={`${session.sessionMode}-${session.sessionId}`}
-                type="button"
-                onClick={() => onSelectSession(session)}
-                aria-pressed={isActive}
-                className={`w-full rounded-2xl border px-4 py-3 text-left transition-colors ${
-                  isActive
-                    ? "border-blue-500/50 bg-blue-500/10 shadow-sm ring-1 ring-blue-500/20"
-                    : "border-border bg-background hover:bg-muted/30"
-                }`}
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/70">
-                        {getQuizSessionModeLabel(session.sessionMode)}
+          {sessions.map((session) => (
+            <button
+              key={`${session.sessionMode}-${session.sessionId}`}
+              type="button"
+              onClick={() => onSelectSession(session)}
+              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-muted/30"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground/70">
+                      {getQuizSessionModeLabel(session.sessionMode)}
+                    </span>
+                    {session.performanceLevel ? (
+                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground/70">
+                        {session.performanceLevel}
                       </span>
-                      {session.performanceLevel ? (
-                        <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-foreground/70">
-                          {session.performanceLevel}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="text-sm font-medium text-foreground">
-                      {Math.round(session.scorePercentage)}% • {session.correctAnswers}/{session.totalQuestions} • {formatCompletedAt(session.completedAt)}
-                    </p>
-                    <p className="text-xs text-foreground/65">
-                      {session.sessionMode === "QUICK_REVIEW" && session.retryCount > 0
-                        ? `Retry attempts: ${session.retryCount}`
-                        : session.weakConcepts.length > 0
-                          ? `${session.weakConcepts.length} weak concept${session.weakConcepts.length === 1 ? "" : "s"} flagged`
-                          : "No weak concepts flagged"}
-                    </p>
-                    {isActive ? (
-                      <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                        Currently reviewing this session.
-                      </p>
                     ) : null}
                   </div>
-                  <span
-                    className={`self-start rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      isActive
-                        ? "border border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                        : "text-blue-700 dark:text-blue-300"
-                    }`}
-                  >
-                    {isActive ? "Currently reviewing" : "Review session"}
-                  </span>
+                  <p className="text-sm font-medium text-foreground">
+                    {Math.round(session.scorePercentage)}% • {session.correctAnswers}/{session.totalQuestions} • {formatCompletedAt(session.completedAt)}
+                  </p>
+                  <p className="text-xs text-foreground/65">
+                    {session.sessionMode === "QUICK_REVIEW" && session.retryCount > 0
+                      ? `Retry attempts: ${session.retryCount}`
+                      : session.weakConcepts.length > 0
+                        ? `${session.weakConcepts.length} weak concept${session.weakConcepts.length === 1 ? "" : "s"} flagged`
+                        : "No weak concepts flagged"}
+                  </p>
                 </div>
-              </button>
-            );
-          })}
+                <span className="self-start rounded-full px-2.5 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                  Review session
+                </span>
+              </div>
+            </button>
+          ))}
         </div>
       )}
-
-      {showInlineReview && loadingReview ? (
-        <div className="space-y-2 rounded-2xl border border-border bg-background px-4 py-4">
-          <p className="text-sm font-medium text-foreground">Loading session review...</p>
-          <div className="h-4 w-2/3 animate-pulse rounded bg-foreground/10" />
-          <div className="h-4 w-full animate-pulse rounded bg-foreground/10" />
-        </div>
-      ) : null}
-
-      {showInlineReview && reviewError ? (
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm text-red-700 dark:text-red-300">
-          {reviewError}
-        </div>
-      ) : null}
-
-      {showInlineReview && !loadingReview && !reviewError && sessions.length > 0 && !activeReview ? (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-5 text-sm text-foreground/70">
-          Select a session to review answers and concept performance.
-        </div>
-      ) : null}
-
-      {showInlineReview && !loadingReview && activeReview ? (
-        <div ref={reviewSectionRef} className="scroll-mt-24">
-          <QuizSessionReviewContent review={activeReview} />
-        </div>
-      ) : null}
     </Card>
   );
 }
