@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { FileText } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackLink } from "@/components/ui/back-link";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ToastMessage } from "@/components/ui/toast-message";
 import { QuizSessionReviewContent } from "@/components/notes/quiz-session-review-content";
 import {
   getNote,
@@ -14,6 +17,7 @@ import {
 } from "@/lib/api";
 import { normalizeNoteDetailTab } from "@/lib/note-entry";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { exportQuizSessionReviewDocument } from "@/lib/quiz-session-export";
 import {
   buildNoteSessionReviewBackPath,
   fromNoteSessionReviewRouteMode,
@@ -35,6 +39,9 @@ export function NoteSessionReviewPageClient({
   const [review, setReview] = useState<QuizSessionReviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
 
   const sessionMode = useMemo(
     () => fromNoteSessionReviewRouteMode(searchParams.get(NOTE_SESSION_REVIEW_QUERY_PARAMS.routeMode)),
@@ -45,6 +52,19 @@ export function NoteSessionReviewPageClient({
     [searchParams],
   );
   const backHref = useMemo(() => buildNoteSessionReviewBackPath(noteId, noteTab), [noteId, noteTab]);
+  const quizTypeLabel = sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review";
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return undefined;
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      setToastMessage(null);
+    }, 2200);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [toastMessage]);
 
   useEffect(() => {
     if (!requireAuthenticatedOnboardedUser(router)) {
@@ -93,6 +113,36 @@ export function NoteSessionReviewPageClient({
     };
   }, [noteId, router, sessionId, sessionMode]);
 
+  const handleExport = async () => {
+    if (!review || exporting) {
+      return;
+    }
+
+    setExporting(true);
+    setToastTone("info");
+    setToastMessage("Exporting PDF...");
+
+    try {
+      await new Promise<void>((resolve) => {
+        globalThis.setTimeout(() => resolve(), 0);
+      });
+      await exportQuizSessionReviewDocument({
+        format: "pdf",
+        noteTitle: note?.title,
+        noteSubject: note?.subject,
+        quizTypeLabel,
+        review,
+      });
+      setToastTone("success");
+      setToastMessage("PDF ready");
+    } catch (exportError) {
+      setToastTone("error");
+      setToastMessage(exportError instanceof Error ? exportError.message : "Could not export PDF.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-4 sm:px-6 sm:py-6">
       <BackLink href={backHref} label="Note" />
@@ -135,18 +185,31 @@ export function NoteSessionReviewPageClient({
                   {note?.title?.trim() || "Untitled note"}
                 </h2>
                 <p className="text-sm leading-relaxed text-foreground/75">
-                  {sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review"} session for this note.
+                  {quizTypeLabel} session for this note.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/70">
-                  {sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review"}
-                </span>
-                {note?.courseProgram?.trim() ? (
-                  <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground/70">
-                    {note.courseProgram}
+              <div className="flex flex-col items-start gap-3 sm:items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => void handleExport()}
+                  disabled={exporting}
+                >
+                  <FileText className="h-4 w-4" aria-hidden="true" />
+                  <span>{exporting ? "Exporting..." : "Export"}</span>
+                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/70">
+                    {quizTypeLabel}
                   </span>
-                ) : null}
+                  {note?.courseProgram?.trim() ? (
+                    <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground/70">
+                      {note.courseProgram}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
           </Card>
@@ -154,6 +217,8 @@ export function NoteSessionReviewPageClient({
           <QuizSessionReviewContent review={review} title="Session Review" />
         </div>
       ) : null}
+
+      {toastMessage ? <ToastMessage message={toastMessage} tone={toastTone} /> : null}
     </div>
   );
 }
