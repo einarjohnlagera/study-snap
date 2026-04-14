@@ -1194,3 +1194,48 @@ All UI implementations must be responsive and mobile-friendly by default.
 Design for mobile-first or mobile-safe behavior, even when implementing desktop UI.
 
 UI should feel clean, usable, and visually stable across screen sizes.
+
+## Prompting Mode Guidelines
+
+Use two prompt modes depending on the type of task.
+
+### 1. Long Prompt Mode
+Use Long Prompt Mode when:
+- implementing a new feature
+- doing a non-trivial refactor
+- changing data flow, persistence, routing, or architecture
+- updating multiple related docs/specs
+- the task has higher risk or more ambiguity
+
+Long prompts should usually include:
+- TASK
+- GOAL
+- CONTEXT
+- implementation scope
+- audit step if needed
+- documentation updates
+- testing expectations
+- success criteria
+
+### 2. Short Prompt Mode
+Use Short Prompt Mode when:
+- polishing UI
+- fixing small bugs
+- making follow-up refinements
+- improving copy, spacing, labels, or interaction details
+- the implementation is incremental and low-risk
+
+Short prompts should usually include only:
+- TASK
+- GOAL
+- short context
+- implementation bullets
+- essential docs/tests only if relevant
+- success criteria
+
+### Rule
+Explicitly state the prompt mode in every prompt:
+- Prompt mode: Long
+- Prompt mode: Short
+
+Default to Short Prompt Mode for incremental follow-ups unless the task clearly introduces a new feature or broader architectural change.
