@@ -113,14 +113,14 @@ export function Navbar() {
             aria-label="Close mobile navigation"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="absolute inset-x-4 top-full z-40 mt-3 rounded-2xl border border-border bg-background p-3 shadow-lg md:hidden">
+          <div className="motion-dropdown-panel absolute inset-x-4 top-full z-40 mt-3 rounded-2xl border border-border bg-background p-3 shadow-lg md:hidden">
             <div className="flex flex-col gap-1">
               {PUBLIC_NAV.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   aria-current={isActivePublicRoute(pathname, item.href) ? "page" : undefined}
-                  className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`motion-lift rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isActivePublicRoute(pathname, item.href)
                       ? "bg-blue-600/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200"
                       : "text-foreground/85 hover:bg-muted/50 hover:text-foreground active:bg-muted/70"

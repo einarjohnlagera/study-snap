@@ -104,6 +104,13 @@
   - core authenticated learning routes now use a subtle header feedback icon instead of the floating launcher
   - the floating launcher remains only on safe non-critical authenticated pages such as Dashboard, Library, Public Library, and Settings
   - quiz result screens now ask `Was this quiz helpful?` with lightweight `Yes` and `Give Feedback` actions before the deeper review feedback panel
+- **Unified animation and interaction system** — all UI interactions now follow one consistent timing, easing, and feedback language across the app:
+  - `--motion-duration-fast` tuned to 150ms so all quick interactions stay within the 120–180ms spec
+  - new `motion-dropdown-panel` CSS utility animates all dropdown and context menus with a fade-in + 6px slide-down entry (150ms ease-emphasized) — applied to the note actions menu, visibility menus, export menu, avatar menu, combobox listbox, and mobile nav panel
+  - new `motion-lift` CSS utility adds a subtle 1px hover lift (`translateY(-1px)`) to small interactive elements, correctly suppressed during press and for disabled elements — applied to all dropdown/context menu items across the app
+  - `motion-pressable motion-lift` applied to filter chips (Public Library) and the like badge for press scale + hover lift on pill-shaped interactive elements
+  - theme selector unselected buttons gain `motion-lift` hover lift for consistent feel within the control
+  - `prefers-reduced-motion` block covers all new utilities so users with motion sensitivity see zero animation
 - **Interactive element feedback polish** — tap and hover feedback is now consistent across all interactive surfaces so nothing feels unresponsive on touch or desktop:
   - all three `Button` variants (`default`, `outline`, `ghost`) now carry explicit `transition-colors` and `active:` pressed states
   - destructive confirm button in Delete modal gets a red `active:` state consistent with the danger intent

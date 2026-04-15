@@ -34,7 +34,7 @@ export function ThemeSelector() {
             <button
               key={option.mode}
               type="button"
-              className={`min-w-[5.5rem] rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              className={`motion-lift min-w-[5.5rem] rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                 isSelected
                   ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500"
                   : "bg-background text-foreground/80 hover:bg-background/80 hover:text-foreground active:bg-muted/60"
