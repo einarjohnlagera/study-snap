@@ -198,7 +198,7 @@ function NavLinks({
         className={`block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
           active
             ? "bg-blue-600/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200"
-            : "text-foreground/80 hover:bg-muted/70 hover:text-foreground"
+            : "text-foreground/80 hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
         }`}
       >
         <span className="inline-flex items-center gap-2">

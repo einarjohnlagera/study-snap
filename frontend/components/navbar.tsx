@@ -123,7 +123,7 @@ export function Navbar() {
                   className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isActivePublicRoute(pathname, item.href)
                       ? "bg-blue-600/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200"
-                      : "text-foreground/85 hover:bg-muted/50 hover:text-foreground"
+                      : "text-foreground/85 hover:bg-muted/50 hover:text-foreground active:bg-muted/70"
                   }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >

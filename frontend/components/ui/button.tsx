@@ -16,11 +16,11 @@ const buttonVariants = ({
   cn(
     "motion-pressable inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
     variant === "default" &&
-      "bg-blue-600 text-white shadow-sm hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600",
+      "bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 dark:bg-blue-500 dark:hover:bg-blue-600 dark:active:bg-blue-700",
     variant === "outline" &&
-      "border border-border bg-background text-foreground hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800",
+      "border border-border bg-background text-foreground transition-colors hover:bg-gray-50 active:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:active:bg-gray-700",
     variant === "ghost" &&
-      "bg-transparent text-foreground/75 hover:bg-muted/60 hover:text-foreground dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100",
+      "bg-transparent text-foreground/75 transition-colors hover:bg-muted/60 hover:text-foreground active:bg-muted/80 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 dark:active:bg-gray-700",
     size === "default" && "h-10 px-4 py-2",
     size === "sm" && "h-9 px-3",
     className,
