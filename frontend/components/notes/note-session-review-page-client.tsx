@@ -17,7 +17,8 @@ import {
 } from "@/lib/api";
 import { normalizeNoteDetailTab } from "@/lib/note-entry";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
-import { exportQuizSessionReviewDocument } from "@/lib/quiz-session-export";
+import { exportQuizSessionReviewDocument, hasExportableContent } from "@/lib/quiz-session-export";
+import { getAuthUser } from "@/lib/auth";
 import {
   buildNoteSessionReviewBackPath,
   fromNoteSessionReviewRouteMode,
@@ -130,12 +131,31 @@ export function NoteSessionReviewPageClient({
     };
   }, [exportMenuOpen]);
 
-  const handleExport = async (exportType: "full" | "mistakes-only" | "weak-concepts") => {
+  const adaptivePracticeExportEnabled = review?.sessionMode === "ADAPTIVE";
+  const adaptiveDisabledReason = (() => {
+    const isPremium = getAuthUser()?.planType === "PREMIUM";
+    return isPremium
+      ? "No adaptive practice yet — complete a session to generate one"
+      : "Adaptive Practice is available after completing a session (Premium feature)";
+  })();
+
+  const handleExport = async (exportType: "full" | "mistakes-only" | "weak-concepts" | "adaptive-practice") => {
     if (!review || exporting) {
       return;
     }
 
     setExportMenuOpen(false);
+
+    if (!hasExportableContent(exportType, review)) {
+      setToastTone("info");
+      setToastMessage(
+        exportType === "mistakes-only"
+          ? "No mistakes to export — you got everything right!"
+          : "No weak concepts identified in this session.",
+      );
+      return;
+    }
+
     setExporting(true);
     setToastTone("info");
     setToastMessage("Exporting PDF...");
@@ -257,6 +277,23 @@ export function NoteSessionReviewPageClient({
                         >
                           <span className="block text-sm font-medium text-foreground">Weak Concepts</span>
                           <span className="block text-xs text-foreground/55 sm:hidden">Questions from areas needing practice</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`w-full rounded-lg px-3 py-3 text-left sm:rounded sm:py-2 ${
+                            adaptivePracticeExportEnabled
+                              ? "motion-lift transition-colors hover:bg-highlight active:bg-highlight-strong"
+                              : "cursor-not-allowed opacity-50"
+                          }`}
+                          onClick={adaptivePracticeExportEnabled ? () => void handleExport("adaptive-practice") : undefined}
+                          disabled={!adaptivePracticeExportEnabled}
+                        >
+                          <span className="block text-sm font-medium text-foreground">Adaptive Practice</span>
+                          <span className="block text-xs text-foreground/55">
+                            {adaptivePracticeExportEnabled
+                              ? "Adaptive practice session review"
+                              : adaptiveDisabledReason}
+                          </span>
                         </button>
                       </div>
                       {/* Mobile cancel */}
