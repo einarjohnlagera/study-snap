@@ -83,11 +83,14 @@
 
 ### Fixes
 
-- **Public Library ranking audit + v1 alignment** — discovery ranking now follows one explainable rule set instead of split formulas:
-  - audited the existing frontend and backend ranking paths and preserved the current discovery-first layout plus section dedupe
+- **Public Library evaluation system audit + trust signal refinements** — audited all evaluation signals, ranking logic, and metric display against the intended philosophy; preserved all working logic and refined only what was inconsistent:
+  - audited views/copies/likes display, badge system, discovery ranking, and zero-value handling — all core logic preserved with no threshold or formula changes
+  - confirmed zero-value rules: views and copies already hidden at 0 on cards; like count now also hidden at 0 so the heart button shows only when engagement exists, aligning all three metrics under one rule
+  - resolved emoji ambiguity: Featured Notes section uses ⭐ (quality signal, aligns with High Quality badge) and Most Popular section uses 🔥 (social proof signal, aligns with Popular badge) — previously both used 🔥
   - Featured Notes now rank only study-ready public notes with meaningful summary, quiz content, and note preview using `views + (copies * 3) + (likes * 2)`
   - Most Popular now requires real social proof (`copies >= 3` or `views >= 20`) and the Popular badge threshold now matches that rule
   - Recently Added remains freshness-based with `createdAt DESC`
+  - badge priority rules (High Quality > Well liked > Popular, max 2 per card) confirmed correct and unchanged
 - **Public Library copy-flow cleanup** — public note copying now behaves consistently across discovery and detail surfaces:
   - Public Library now keeps search first, moves subject and tag browsing into compact horizontal rails, and uses searchable `+ More` selectors so filtering scales without vertical clutter
   - Public Library multi-select tags now use OR logic by default so combining tags broadens results instead of creating false empty states

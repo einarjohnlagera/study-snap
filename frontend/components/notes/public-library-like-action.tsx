@@ -83,7 +83,7 @@ export function PublicLibraryLikeAction({
         )}
       >
         <Heart className={cn("h-3.5 w-3.5", liked && "fill-current")} aria-hidden="true" />
-        <span>{likeCount.toLocaleString()}</span>
+        {likeCount > 0 ? <span>{likeCount.toLocaleString()}</span> : null}
       </button>
       {error ? (
         <p className="text-xs text-red-600 dark:text-red-400">{error}</p>
