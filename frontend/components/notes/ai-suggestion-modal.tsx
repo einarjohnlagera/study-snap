@@ -85,7 +85,7 @@ function RadioOption({
         checked
           ? "border-blue-500 bg-blue-500/10 text-foreground"
           : "border-border bg-background text-foreground/85"
-      } ${disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:border-blue-300 hover:bg-muted/35 active:bg-muted/50"}`}
+      } ${disabled ? "cursor-not-allowed opacity-55" : "cursor-pointer hover:border-blue-300 hover:bg-highlight active:bg-highlight-strong"}`}
     >
       <input
         type="radio"

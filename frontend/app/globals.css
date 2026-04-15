@@ -6,6 +6,9 @@
   --background: #ffffff;
   --foreground: #111827;
   --border: #e5e7eb;
+  --muted: #e5e7eb;
+  --highlight: rgb(37 99 235 / 0.08);
+  --highlight-strong: rgb(37 99 235 / 0.15);
   --motion-duration-fast: 150ms;
   --motion-duration-base: 220ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -17,6 +20,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-highlight: var(--highlight);
+  --color-highlight-strong: var(--highlight-strong);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -26,6 +32,9 @@
   --background: #030712;
   --foreground: #f3f4f6;
   --border: #1f2937;
+  --muted: #374151;
+  --highlight: rgb(59 130 246 / 0.08);
+  --highlight-strong: rgb(59 130 246 / 0.15);
 }
 
 html.theme-light,

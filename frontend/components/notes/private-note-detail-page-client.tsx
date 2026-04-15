@@ -1179,7 +1179,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <button
                       type="button"
                       role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
                       onClick={handleEdit}
                       disabled={isGeneratingStudyPack}
                     >
@@ -1188,7 +1188,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <button
                       type="button"
                       role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
                       onClick={() => void handleMakeCopy()}
                       disabled={copying}
                     >
@@ -1197,7 +1197,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <button
                       type="button"
                       role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
+                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
                       onClick={() => void handleCopyLink()}
                       disabled={sharing}
                     >
@@ -1285,7 +1285,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         <div className="motion-dropdown-panel absolute left-0 top-8 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
                           <button
                             type="button"
-                            className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
+                            className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong"
                             onClick={() => handleSelectVisibility("PRIVATE")}
                           >
                             <p className="text-sm font-medium">
@@ -1295,7 +1295,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                           </button>
                           <button
                             type="button"
-                            className={`w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 ${!isEmailVerified ? "cursor-not-allowed opacity-60" : ""}`}
+                            className={`w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong ${!isEmailVerified ? "cursor-not-allowed opacity-60" : ""}`}
                             onClick={() => handleSelectVisibility("PUBLIC")}
                             disabled={!isEmailVerified}
                           >

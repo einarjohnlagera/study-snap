@@ -47,7 +47,7 @@ function DesktopThemeButton({
         "inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors",
         isSelected
           ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500"
-          : "text-foreground/70 hover:bg-muted/60 hover:text-foreground",
+          : "text-foreground/70 hover:bg-highlight hover:text-foreground",
       )}
       onClick={() => onSelect(mode)}
     >
@@ -83,7 +83,7 @@ function MobileThemeButton({
         "inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
         isSelected
           ? "bg-blue-600 text-white shadow-sm dark:bg-blue-500"
-          : "text-foreground/80 hover:bg-muted/60 hover:text-foreground",
+          : "text-foreground/80 hover:bg-highlight hover:text-foreground",
       )}
       onClick={() => onSelect(mode)}
     >
@@ -170,7 +170,7 @@ export function ThemeToggle() {
       <div ref={mobileControlRef} className="relative md:hidden">
         <button
           type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/85 transition-colors hover:bg-muted/40"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/85 transition-colors hover:bg-highlight"
           aria-label={tooltipLabel}
           aria-expanded={mobileExpanded}
           title={tooltipLabel}

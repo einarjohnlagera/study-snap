@@ -454,7 +454,7 @@ export function PublicProfilePageClient({
                       <div className="motion-dropdown-panel absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
                         <button
                           type="button"
-                          className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
+                          className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong"
                           onClick={() => void handleToggleVisibility()}
                           disabled={!profile.publicProfileVisible}
                         >
@@ -465,7 +465,7 @@ export function PublicProfilePageClient({
                         </button>
                         <button
                           type="button"
-                          className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
+                          className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-highlight active:bg-highlight-strong"
                           onClick={() => void handleToggleVisibility()}
                           disabled={profile.publicProfileVisible}
                         >
@@ -605,7 +605,7 @@ export function PublicProfilePageClient({
                     router.push(buildPublicLibraryNotePathFromSlug({ subject: note.subject, slug: note.slug }));
                   }
                 }}
-                className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
+                className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6"
               >
                 <SharedNoteCard
                   title={note.title}

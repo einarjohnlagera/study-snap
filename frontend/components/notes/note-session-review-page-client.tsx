@@ -236,7 +236,7 @@ export function NoteSessionReviewPageClient({
                       <div className="p-2 sm:p-1">
                         <button
                           type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 sm:rounded sm:py-2"
+                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-highlight active:bg-highlight-strong sm:rounded sm:py-2"
                           onClick={() => void handleExport("full")}
                         >
                           <span className="block text-sm font-medium text-foreground">Full Review</span>
@@ -244,7 +244,7 @@ export function NoteSessionReviewPageClient({
                         </button>
                         <button
                           type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 sm:rounded sm:py-2"
+                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-highlight active:bg-highlight-strong sm:rounded sm:py-2"
                           onClick={() => void handleExport("mistakes-only")}
                         >
                           <span className="block text-sm font-medium text-foreground">Mistakes</span>
@@ -252,7 +252,7 @@ export function NoteSessionReviewPageClient({
                         </button>
                         <button
                           type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 sm:rounded sm:py-2"
+                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-highlight active:bg-highlight-strong sm:rounded sm:py-2"
                           onClick={() => void handleExport("weak-concepts")}
                         >
                           <span className="block text-sm font-medium text-foreground">Weak Concepts</span>
@@ -263,7 +263,7 @@ export function NoteSessionReviewPageClient({
                       <div className="border-t border-border p-2 sm:hidden">
                         <button
                           type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-2.5 text-center text-sm font-medium text-foreground/60 transition-colors hover:bg-muted/60 active:bg-muted/70"
+                          className="motion-lift w-full rounded-lg px-3 py-2.5 text-center text-sm font-medium text-foreground/60 transition-colors hover:bg-highlight active:bg-highlight-strong"
                           onClick={() => setExportMenuOpen(false)}
                         >
                           Cancel

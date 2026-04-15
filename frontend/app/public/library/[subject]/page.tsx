@@ -115,7 +115,7 @@ export default async function PublicLibrarySubjectPage({ params }: Readonly<Publ
                 href={buildPublicLibraryNotePath({ subject: note.subject, title: note.title })}
                 className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
               >
-                <Card className="flex h-full flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
+                <Card className="flex h-full flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6">
                   <SharedNoteCard
                     title={note.title}
                     courseProgram={note.courseProgram?.trim() || null}

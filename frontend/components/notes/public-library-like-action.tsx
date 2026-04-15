@@ -78,7 +78,7 @@ export function PublicLibraryLikeAction({
           "motion-pressable motion-lift inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
           liked
             ? "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300"
-            : "border-border bg-background text-foreground/65 hover:bg-muted/60 active:bg-muted/70",
+            : "border-border bg-background text-foreground/65 hover:bg-highlight active:bg-highlight-strong",
           pending && "opacity-70",
         )}
       >

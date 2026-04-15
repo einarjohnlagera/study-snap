@@ -117,7 +117,7 @@ function getFilterChipClassName(isSelected: boolean) {
   return `shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
     isSelected
       ? "border-blue-600 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500 dark:text-slate-950"
-      : "border-border bg-background text-foreground/75 hover:bg-muted/60"
+      : "border-border bg-background text-foreground/75 hover:bg-highlight"
   }`;
 }
 
@@ -679,7 +679,7 @@ export default function LibraryPage() {
                         router.push(`/notes/${item.id}?from=library`);
                       }
                     }}
-                    className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6"
+                    className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6"
                   >
                     <SharedNoteCard
                       title={item.title}
@@ -891,7 +891,7 @@ export default function LibraryPage() {
                 className={`w-full rounded-lg border px-3 py-3 text-left text-sm transition-colors ${
                   isSelected
                     ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "border-border bg-background hover:bg-muted/50"
+                    : "border-border bg-background hover:bg-highlight"
                 }`}
                 onClick={() => {
                   setSortBy(value);

@@ -113,15 +113,18 @@
   - `motion-pressable motion-lift` applied to filter chips (Public Library) and the like badge for press scale + hover lift on pill-shaped interactive elements
   - theme selector unselected buttons gain `motion-lift` hover lift for consistent feel within the control
   - `prefers-reduced-motion` block covers all new utilities so users with motion sensitivity see zero animation
+- **Theme-aware highlight and interaction system** — all hover, active, and selected states now use primary-color-tinted tokens instead of opaque grey values, giving a consistent blue-tinted interaction language that adapts cleanly to light and dark themes:
+  - new `--highlight` token (`rgb(37 99 235 / 0.08)` light, `rgb(59 130 246 / 0.08)` dark) drives all hover highlight states; `--highlight-strong` (`0.15` opacity) drives active/pressed states and selected chip fills
+  - new `--muted` token (`#e5e7eb` light, `#374151` dark) registered in `@theme inline` so `bg-muted/*` utilities now generate CSS where previously they were silently invisible
+  - all `hover:bg-muted/*` and `active:bg-muted/*` classes across every component replaced with `hover:bg-highlight` / `active:bg-highlight-strong`; replaced in 17 files covering sidebar, avatar menu, navbar, filter chips, export menus, context menus, dropdown lists, session history, card hovers, visibility menus, theme toggles, combobox options, and the feedback widget
+  - `Button` `outline` and `ghost` variants now use `hover:bg-highlight` / `active:bg-highlight-strong` and drop the explicit `dark:hover:bg-gray-*` overrides since the token already handles dark mode
+  - active sidebar nav links use `bg-highlight-strong` instead of a hardcoded `bg-blue-600/15 dark:bg-blue-500/20`; active public navbar links use `bg-highlight` instead of `bg-blue-600/10 dark:bg-blue-500/15`
 - **Interactive element feedback polish** — tap and hover feedback is now consistent across all interactive surfaces so nothing feels unresponsive on touch or desktop:
   - all three `Button` variants (`default`, `outline`, `ghost`) now carry explicit `transition-colors` and `active:` pressed states
   - destructive confirm button in Delete modal gets a red `active:` state consistent with the danger intent
-  - AI Suggestion modal radio labels now show a muted `active:` press highlight alongside the existing hover
-  - Public Library Like badge (`unlike` state) now has an `active:bg-muted/70` tap state matching other badge interactions
-  - Theme selector unselected buttons now show `active:bg-muted/60` on tap
-  - Public Library filter chips now carry `active:bg-muted/70`, source filter labels gain `transition-colors` and `active:bg-muted/60`, and sort sheet options gain `active:bg-muted/60`
-  - Mobile nav links in the public Navbar now have `active:bg-muted/70` tap feedback
-  - Sidebar nav links in the authenticated shell gain `active:bg-muted/80` for consistent in-app navigation feedback
+  - AI Suggestion modal radio labels now show a highlight `active:` press state alongside the existing hover
+  - Public Library Like badge (`unlike` state) has a tap state matching other badge interactions
+  - Theme selector, filter chips, source filter labels, sort sheet options, and mobile nav links all carry consistent tap feedback
 - **Mobile note header overflow fix** — long private note titles no longer push `Edit` / `Delete` outside the header card on small screens:
   - mobile Note Detail now stacks the title above the action row
   - `Edit` and `Delete` stay inline again from `sm` upward so desktop layout remains unchanged

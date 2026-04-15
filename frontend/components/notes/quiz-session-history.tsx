@@ -52,7 +52,7 @@ export function QuizSessionHistory({
               key={`${session.sessionMode}-${session.sessionId}`}
               type="button"
               onClick={() => onSelectSession(session)}
-              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-muted/30"
+              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-highlight"
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1">
