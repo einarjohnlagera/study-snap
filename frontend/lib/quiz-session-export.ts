@@ -12,7 +12,7 @@ type QuizSessionExportFormat = "pdf";
 
 type QuizSessionExportInput = {
   format?: QuizSessionExportFormat;
-  exportType?: "full" | "mistakes-only" | "weak-concepts";
+  exportType?: "full" | "mistakes-only" | "weak-concepts" | "adaptive-practice";
   noteTitle: string | null | undefined;
   noteSubject: string | null | undefined;
   quizTypeLabel: string;
@@ -63,6 +63,7 @@ const PDF_SECTION_GAP = 16;
 const PDF_QUESTION_GAP = 18;
 const PDF_ACCENT_GREEN: [number, number, number] = [0.1, 0.5, 0.22];
 const PDF_ACCENT_RED: [number, number, number] = [0.7, 0.16, 0.16];
+const PDF_ACCENT_BLUE: [number, number, number] = [0.14, 0.36, 0.84];
 const PDF_MUTED_TEXT: [number, number, number] = [0.33, 0.33, 0.33];
 const PDF_LIGHT_STROKE: [number, number, number] = [0.82, 0.82, 0.82];
 const PDF_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
@@ -70,6 +71,7 @@ const PDF_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "long",
   day: "numeric",
 });
+const FILENAME_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function formatPdfDate(date: Date): string {
   return PDF_DATE_FORMATTER.format(date);
@@ -166,7 +168,9 @@ function sanitizeFilenameSegment(value: string): string {
 }
 
 function formatFilenameDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const month = FILENAME_MONTHS[date.getUTCMonth()];
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${month}-${day}`;
 }
 
 function buildQuestionReviewItems(review: QuizSessionReviewResponse): ReviewedQuestionItem[] {
@@ -196,6 +200,164 @@ function buildQuestionReviewItems(review: QuizSessionReviewResponse): ReviewedQu
   });
 }
 
+// ─── Shared PDF layout helpers ───────────────────────────────────────────────
+
+function buildSharedPdfHeader(
+  builder: SimplePdfDocumentBuilder,
+  noteTitle: string,
+  noteSubject: string | null,
+  quizTypeLabel: string,
+  review: QuizSessionReviewResponse,
+): void {
+  builder.addParagraph("NoteLib", {
+    font: "bold",
+    fontSize: 10,
+    color: PDF_MUTED_TEXT,
+  }, { spacingAfter: 10 });
+
+  builder.addParagraph(noteTitle, {
+    font: "bold",
+    fontSize: 22,
+  }, { spacingAfter: 6 });
+
+  if (noteSubject) {
+    builder.addParagraph(noteSubject, {
+      font: "regular",
+      fontSize: 11,
+      color: PDF_MUTED_TEXT,
+    }, { spacingAfter: 3 });
+  }
+
+  builder.addParagraph(`Quiz type: ${quizTypeLabel}`, {
+    font: "regular",
+    fontSize: 11,
+    color: PDF_MUTED_TEXT,
+  }, { spacingAfter: 2 });
+
+  const rawDate = review.completedAt ?? review.createdAt;
+  builder.addParagraph(
+    `Date taken: ${formatPdfDate(new Date(rawDate))}`,
+    { font: "regular", fontSize: 11, color: PDF_MUTED_TEXT },
+    { spacingAfter: PDF_SECTION_GAP },
+  );
+
+  builder.drawDivider();
+}
+
+function buildSharedQuestionBlock(
+  builder: SimplePdfDocumentBuilder,
+  item: ReviewedQuestionItem,
+): void {
+  builder.ensureSpace(84);
+
+  builder.addParagraph(`Question ${item.index + 1}`, {
+    font: "bold",
+    fontSize: 13,
+  }, { spacingAfter: 6 });
+
+  builder.addParagraph(item.question, {
+    font: "bold",
+    fontSize: 12,
+  }, { spacingAfter: 6 });
+
+  for (const choiceItem of item.choices) {
+    const annotations: string[] = [];
+    if (choiceItem.isSelected) {
+      annotations.push("Your answer");
+    }
+    if (choiceItem.isCorrect) {
+      annotations.push("Correct answer");
+    }
+    const suffix = annotations.length > 0 ? ` (${annotations.join(", ")})` : "";
+    builder.addParagraph(
+      `${choiceItem.choice.label}. ${choiceItem.choice.text}${suffix}`,
+      {
+        font: choiceItem.isCorrect || choiceItem.isSelected ? "bold" : "regular",
+        fontSize: 11,
+        color: choiceItem.isCorrect
+          ? PDF_ACCENT_GREEN
+          : choiceItem.isSelected && !choiceItem.isCorrect
+            ? PDF_ACCENT_RED
+            : [0, 0, 0],
+      },
+      {
+        x: PDF_SIDE_MARGIN + 14,
+        width: PDF_CONTENT_WIDTH - 14,
+        spacingAfter: 3,
+      },
+    );
+  }
+
+  builder.addParagraph(
+    item.selectedChoice
+      ? `Your answer: ${item.selectedChoice.label} (${item.isCorrect ? "Correct" : "Incorrect"})`
+      : "Your answer: Not answered",
+    {
+      font: "regular",
+      fontSize: 10.5,
+      color: item.isCorrect ? PDF_ACCENT_GREEN : PDF_ACCENT_RED,
+    },
+    {
+      x: PDF_SIDE_MARGIN + 10,
+      width: PDF_CONTENT_WIDTH - 10,
+      spacingAfter: 2,
+    },
+  );
+
+  builder.addParagraph(
+    item.correctChoice
+      ? `Correct answer: ${item.correctChoice.label}`
+      : "Correct answer: Unavailable",
+    {
+      font: "regular",
+      fontSize: 10.5,
+      color: PDF_ACCENT_GREEN,
+    },
+    {
+      x: PDF_SIDE_MARGIN + 10,
+      width: PDF_CONTENT_WIDTH - 10,
+      spacingAfter: 2,
+    },
+  );
+
+  if (item.concept) {
+    builder.addParagraph(`Concept: ${item.concept}`, {
+      font: "regular",
+      fontSize: 10.5,
+      color: PDF_MUTED_TEXT,
+    }, {
+      x: PDF_SIDE_MARGIN + 10,
+      width: PDF_CONTENT_WIDTH - 10,
+      spacingAfter: 4,
+    });
+  }
+
+  if (item.explanation) {
+    builder.addParagraph("Explanation", {
+      font: "bold",
+      fontSize: 10.5,
+      color: PDF_MUTED_TEXT,
+    }, {
+      x: PDF_SIDE_MARGIN + 10,
+      spacingAfter: 2,
+    });
+    builder.addParagraph(item.explanation, {
+      font: "regular",
+      fontSize: 10,
+      color: PDF_MUTED_TEXT,
+    }, {
+      x: PDF_SIDE_MARGIN + 10,
+      width: PDF_CONTENT_WIDTH - 10,
+      spacingAfter: 8,
+    });
+  }
+
+  builder.drawDivider();
+  builder.addSpacer(PDF_QUESTION_GAP - 8);
+}
+
+// ─── Export command builders ──────────────────────────────────────────────────
+
 function buildPdfCommands(
   review: QuizSessionReviewResponse,
   noteTitle: string,
@@ -209,38 +371,7 @@ function buildPdfCommands(
   const questionItems = buildQuestionReviewItems(review);
   const builder = new SimplePdfDocumentBuilder();
 
-  builder.addParagraph("NoteLib", {
-    font: "bold",
-    fontSize: 12,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: 8 });
-
-  builder.addParagraph(noteTitle, {
-    font: "bold",
-    fontSize: 22,
-  }, { spacingAfter: 6 });
-
-  if (noteSubject) {
-    builder.addParagraph(noteSubject, {
-      font: "regular",
-      fontSize: 11,
-      color: PDF_MUTED_TEXT,
-    }, { spacingAfter: 2 });
-  }
-
-  builder.addParagraph(`Quiz type: ${quizTypeLabel}`, {
-    font: "regular",
-    fontSize: 11,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: 2 });
-
-  builder.addParagraph(`Date generated: ${formatPdfDate(exportedAt)}`, {
-    font: "regular",
-    fontSize: 11,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: PDF_SECTION_GAP });
-
-  builder.drawDivider();
+  buildSharedPdfHeader(builder, noteTitle, noteSubject, quizTypeLabel, review);
 
   builder.addParagraph("Session Summary", {
     font: "bold",
@@ -261,10 +392,7 @@ function buildPdfCommands(
   }, { spacingAfter: 2 });
   builder.addParagraph(
     `Weak concepts: ${review.weakConcepts.length > 0 ? review.weakConcepts.join(", ") : "None identified"}`,
-    {
-      font: "regular",
-      fontSize: 11,
-    },
+    { font: "regular", fontSize: 11 },
     { spacingAfter: PDF_SECTION_GAP },
   );
 
@@ -283,115 +411,10 @@ function buildPdfCommands(
   }
 
   for (const item of questionItems) {
-    builder.ensureSpace(84);
-    builder.addParagraph(`Question ${item.index + 1}`, {
-      font: "bold",
-      fontSize: 13,
-    }, { spacingAfter: 6 });
-    builder.addParagraph(item.question, {
-      font: "bold",
-      fontSize: 12,
-    }, { spacingAfter: 6 });
-
-    for (const choiceItem of item.choices) {
-      const annotations: string[] = [];
-      if (choiceItem.isSelected) {
-        annotations.push("Your answer");
-      }
-      if (choiceItem.isCorrect) {
-        annotations.push("Correct answer");
-      }
-      const suffix = annotations.length > 0 ? ` (${annotations.join(", ")})` : "";
-      builder.addParagraph(
-        `${choiceItem.choice.label}. ${choiceItem.choice.text}${suffix}`,
-        {
-          font: choiceItem.isCorrect || choiceItem.isSelected ? "bold" : "regular",
-          fontSize: 11,
-          color: choiceItem.isCorrect
-            ? PDF_ACCENT_GREEN
-            : choiceItem.isSelected && !choiceItem.isCorrect
-              ? PDF_ACCENT_RED
-              : [0, 0, 0],
-        },
-        {
-          x: PDF_SIDE_MARGIN + 14,
-          width: PDF_CONTENT_WIDTH - 14,
-          spacingAfter: 3,
-        },
-      );
-    }
-
-    builder.addParagraph(
-      item.selectedChoice
-        ? `Your answer: ${item.selectedChoice.label} (${item.isCorrect ? "Correct" : "Incorrect"})`
-        : "Your answer: Not answered",
-      {
-        font: "regular",
-        fontSize: 10.5,
-        color: item.isCorrect ? PDF_ACCENT_GREEN : PDF_ACCENT_RED,
-      },
-      {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 2,
-      },
-    );
-
-    builder.addParagraph(
-      item.correctChoice
-        ? `Correct answer: ${item.correctChoice.label}`
-        : "Correct answer: Unavailable",
-      {
-        font: "regular",
-        fontSize: 10.5,
-        color: PDF_ACCENT_GREEN,
-      },
-      {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 2,
-      },
-    );
-
-    if (item.concept) {
-      builder.addParagraph(`Concept: ${item.concept}`, {
-        font: "regular",
-        fontSize: 10.5,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 4,
-      });
-    }
-
-    if (item.explanation) {
-      builder.addParagraph("Explanation", {
-        font: "bold",
-        fontSize: 10.5,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        spacingAfter: 2,
-      });
-      builder.addParagraph(item.explanation, {
-        font: "regular",
-        fontSize: 10,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 8,
-      });
-    }
-
-    builder.drawDivider();
-    builder.addSpacer(PDF_QUESTION_GAP - 8);
+    buildSharedQuestionBlock(builder, item);
   }
 
-  return builder.buildPages({
-    footerText: "Generated by NoteLib",
-  });
+  return builder.buildPages({ footerText: "Generated by NoteLib" });
 }
 
 function buildMistakesPdfCommands(
@@ -410,38 +433,7 @@ function buildMistakesPdfCommands(
   ];
   const builder = new SimplePdfDocumentBuilder();
 
-  builder.addParagraph("NoteLib", {
-    font: "bold",
-    fontSize: 12,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: 8 });
-
-  builder.addParagraph(noteTitle, {
-    font: "bold",
-    fontSize: 22,
-  }, { spacingAfter: 6 });
-
-  if (noteSubject) {
-    builder.addParagraph(noteSubject, {
-      font: "regular",
-      fontSize: 11,
-      color: PDF_MUTED_TEXT,
-    }, { spacingAfter: 2 });
-  }
-
-  builder.addParagraph(`Quiz type: ${quizTypeLabel}`, {
-    font: "regular",
-    fontSize: 11,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: 2 });
-
-  builder.addParagraph(`Date generated: ${formatPdfDate(exportedAt)}`, {
-    font: "regular",
-    fontSize: 11,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: PDF_SECTION_GAP });
-
-  builder.drawDivider();
+  buildSharedPdfHeader(builder, noteTitle, noteSubject, quizTypeLabel, review);
 
   builder.addParagraph("Mistakes Review", {
     font: "bold",
@@ -460,10 +452,7 @@ function buildMistakesPdfCommands(
 
   builder.addParagraph(
     `Weak concepts: ${mistakeWeakConcepts.length > 0 ? mistakeWeakConcepts.join(", ") : "None identified"}`,
-    {
-      font: "regular",
-      fontSize: 11,
-    },
+    { font: "regular", fontSize: 11 },
     { spacingAfter: PDF_SECTION_GAP },
   );
 
@@ -488,110 +477,7 @@ function buildMistakesPdfCommands(
   }, { spacingAfter: 10 });
 
   for (const item of mistakeItems) {
-    builder.ensureSpace(84);
-    builder.addParagraph(`Question ${item.index + 1}`, {
-      font: "bold",
-      fontSize: 13,
-    }, { spacingAfter: 6 });
-    builder.addParagraph(item.question, {
-      font: "bold",
-      fontSize: 12,
-    }, { spacingAfter: 6 });
-
-    for (const choiceItem of item.choices) {
-      const annotations: string[] = [];
-      if (choiceItem.isSelected) {
-        annotations.push("Your answer");
-      }
-      if (choiceItem.isCorrect) {
-        annotations.push("Correct answer");
-      }
-      const suffix = annotations.length > 0 ? ` (${annotations.join(", ")})` : "";
-      builder.addParagraph(
-        `${choiceItem.choice.label}. ${choiceItem.choice.text}${suffix}`,
-        {
-          font: choiceItem.isCorrect || choiceItem.isSelected ? "bold" : "regular",
-          fontSize: 11,
-          color: choiceItem.isCorrect
-            ? PDF_ACCENT_GREEN
-            : choiceItem.isSelected && !choiceItem.isCorrect
-              ? PDF_ACCENT_RED
-              : [0, 0, 0],
-        },
-        {
-          x: PDF_SIDE_MARGIN + 14,
-          width: PDF_CONTENT_WIDTH - 14,
-          spacingAfter: 3,
-        },
-      );
-    }
-
-    builder.addParagraph(
-      item.selectedChoice
-        ? `Your answer: ${item.selectedChoice.label} (Incorrect)`
-        : "Your answer: Not answered",
-      {
-        font: "regular",
-        fontSize: 10.5,
-        color: PDF_ACCENT_RED,
-      },
-      {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 2,
-      },
-    );
-
-    builder.addParagraph(
-      item.correctChoice
-        ? `Correct answer: ${item.correctChoice.label}`
-        : "Correct answer: Unavailable",
-      {
-        font: "regular",
-        fontSize: 10.5,
-        color: PDF_ACCENT_GREEN,
-      },
-      {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 2,
-      },
-    );
-
-    if (item.concept) {
-      builder.addParagraph(`Concept: ${item.concept}`, {
-        font: "regular",
-        fontSize: 10.5,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 4,
-      });
-    }
-
-    if (item.explanation) {
-      builder.addParagraph("Explanation", {
-        font: "bold",
-        fontSize: 10.5,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        spacingAfter: 2,
-      });
-      builder.addParagraph(item.explanation, {
-        font: "regular",
-        fontSize: 10,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 8,
-      });
-    }
-
-    builder.drawDivider();
-    builder.addSpacer(PDF_QUESTION_GAP - 8);
+    buildSharedQuestionBlock(builder, item);
   }
 
   return builder.buildPages({ footerText: "Generated by NoteLib" });
@@ -611,38 +497,7 @@ function buildWeakConceptsPdfCommands(
   );
   const builder = new SimplePdfDocumentBuilder();
 
-  builder.addParagraph("NoteLib", {
-    font: "bold",
-    fontSize: 12,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: 8 });
-
-  builder.addParagraph(noteTitle, {
-    font: "bold",
-    fontSize: 22,
-  }, { spacingAfter: 6 });
-
-  if (noteSubject) {
-    builder.addParagraph(noteSubject, {
-      font: "regular",
-      fontSize: 11,
-      color: PDF_MUTED_TEXT,
-    }, { spacingAfter: 2 });
-  }
-
-  builder.addParagraph(`Quiz type: ${quizTypeLabel}`, {
-    font: "regular",
-    fontSize: 11,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: 2 });
-
-  builder.addParagraph(`Date generated: ${formatPdfDate(exportedAt)}`, {
-    font: "regular",
-    fontSize: 11,
-    color: PDF_MUTED_TEXT,
-  }, { spacingAfter: PDF_SECTION_GAP });
-
-  builder.drawDivider();
+  buildSharedPdfHeader(builder, noteTitle, noteSubject, quizTypeLabel, review);
 
   builder.addParagraph("Weak Concepts Review", {
     font: "bold",
@@ -684,120 +539,94 @@ function buildWeakConceptsPdfCommands(
     return builder.buildPages({ footerText: "Generated by NoteLib" });
   }
 
-  builder.addParagraph("Questions from Weak Areas", {
-    font: "bold",
-    fontSize: 15,
-  }, { spacingAfter: 10 });
+  // Group questions by weak concept for clarity
+  for (const concept of review.weakConcepts) {
+    const conceptQuestions = weakConceptItems.filter((item) => item.concept === concept);
 
-  for (const item of weakConceptItems) {
-    builder.ensureSpace(84);
-    builder.addParagraph(`Question ${item.index + 1}`, {
+    builder.ensureSpace(40);
+    builder.addParagraph(concept, {
       font: "bold",
       fontSize: 13,
-    }, { spacingAfter: 6 });
-    builder.addParagraph(item.question, {
-      font: "bold",
-      fontSize: 12,
+      color: PDF_ACCENT_BLUE,
     }, { spacingAfter: 6 });
 
-    for (const choiceItem of item.choices) {
-      const annotations: string[] = [];
-      if (choiceItem.isSelected) {
-        annotations.push("Your answer");
-      }
-      if (choiceItem.isCorrect) {
-        annotations.push("Correct answer");
-      }
-      const suffix = annotations.length > 0 ? ` (${annotations.join(", ")})` : "";
-      builder.addParagraph(
-        `${choiceItem.choice.label}. ${choiceItem.choice.text}${suffix}`,
-        {
-          font: choiceItem.isCorrect || choiceItem.isSelected ? "bold" : "regular",
-          fontSize: 11,
-          color: choiceItem.isCorrect
-            ? PDF_ACCENT_GREEN
-            : choiceItem.isSelected && !choiceItem.isCorrect
-              ? PDF_ACCENT_RED
-              : [0, 0, 0],
-        },
-        {
-          x: PDF_SIDE_MARGIN + 14,
-          width: PDF_CONTENT_WIDTH - 14,
-          spacingAfter: 3,
-        },
-      );
+    if (conceptQuestions.length === 0) {
+      builder.addParagraph("No questions found for this concept.", {
+        font: "regular",
+        fontSize: 11,
+        color: PDF_MUTED_TEXT,
+      }, { spacingAfter: 12 });
+      continue;
     }
 
-    builder.addParagraph(
-      item.selectedChoice
-        ? `Your answer: ${item.selectedChoice.label} (${item.isCorrect ? "Correct" : "Incorrect"})`
-        : "Your answer: Not answered",
-      {
-        font: "regular",
-        fontSize: 10.5,
-        color: item.isCorrect ? PDF_ACCENT_GREEN : PDF_ACCENT_RED,
-      },
-      {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 2,
-      },
-    );
-
-    builder.addParagraph(
-      item.correctChoice
-        ? `Correct answer: ${item.correctChoice.label}`
-        : "Correct answer: Unavailable",
-      {
-        font: "regular",
-        fontSize: 10.5,
-        color: PDF_ACCENT_GREEN,
-      },
-      {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 2,
-      },
-    );
-
-    if (item.concept) {
-      builder.addParagraph(`Concept: ${item.concept}`, {
-        font: "regular",
-        fontSize: 10.5,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 4,
-      });
+    for (const item of conceptQuestions) {
+      buildSharedQuestionBlock(builder, item);
     }
-
-    if (item.explanation) {
-      builder.addParagraph("Explanation", {
-        font: "bold",
-        fontSize: 10.5,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        spacingAfter: 2,
-      });
-      builder.addParagraph(item.explanation, {
-        font: "regular",
-        fontSize: 10,
-        color: PDF_MUTED_TEXT,
-      }, {
-        x: PDF_SIDE_MARGIN + 10,
-        width: PDF_CONTENT_WIDTH - 10,
-        spacingAfter: 8,
-      });
-    }
-
-    builder.drawDivider();
-    builder.addSpacer(PDF_QUESTION_GAP - 8);
   }
 
   return builder.buildPages({ footerText: "Generated by NoteLib" });
 }
+
+function buildAdaptivePracticePdfCommands(
+  review: QuizSessionReviewResponse,
+  noteTitle: string,
+  noteSubject: string | null,
+  quizTypeLabel: string,
+  exportedAt: Date,
+): string[] {
+  const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
+  const score = computeScore(review.quiz, selectedChoices);
+  const performanceLevel = mapPerformanceLevel(score.scorePercentage);
+  const questionItems = buildQuestionReviewItems(review);
+  const builder = new SimplePdfDocumentBuilder();
+
+  buildSharedPdfHeader(builder, noteTitle, noteSubject, quizTypeLabel, review);
+
+  builder.addParagraph("Adaptive Practice Review", {
+    font: "bold",
+    fontSize: 15,
+  }, { spacingAfter: 8 });
+
+  builder.addParagraph(`Score: ${score.correctAnswers}/${score.totalQuestions}`, {
+    font: "regular",
+    fontSize: 11,
+  }, { spacingAfter: 2 });
+  builder.addParagraph(`Percentage: ${score.scorePercentage}%`, {
+    font: "regular",
+    fontSize: 11,
+  }, { spacingAfter: 2 });
+  builder.addParagraph(`Performance: ${performanceLevel}`, {
+    font: "regular",
+    fontSize: 11,
+  }, { spacingAfter: 2 });
+  builder.addParagraph(
+    `Weak concepts: ${review.weakConcepts.length > 0 ? review.weakConcepts.join(", ") : "None identified"}`,
+    { font: "regular", fontSize: 11 },
+    { spacingAfter: PDF_SECTION_GAP },
+  );
+
+  builder.drawDivider();
+  builder.addParagraph("Questions", {
+    font: "bold",
+    fontSize: 15,
+  }, { spacingAfter: 10 });
+
+  if (questionItems.length === 0) {
+    builder.addParagraph("Detailed per-question review is unavailable for this session.", {
+      font: "regular",
+      fontSize: 11,
+      color: PDF_MUTED_TEXT,
+    }, { spacingAfter: PDF_SECTION_GAP });
+  }
+
+  for (const item of questionItems) {
+    buildSharedQuestionBlock(builder, item);
+  }
+
+  return builder.buildPages({ footerText: "Generated by NoteLib" });
+}
+
+// ─── PDF document builder ─────────────────────────────────────────────────────
 
 class SimplePdfDocumentBuilder {
   private pages: string[][] = [[]];
@@ -925,27 +754,58 @@ function drawPdfLine(
   ].join("\n");
 }
 
+// ─── Public API ───────────────────────────────────────────────────────────────
+
 export function buildQuizSessionExportFilename(noteTitle: string | null | undefined, exportedAt: Date): string {
-  return `notelib-quiz-${sanitizeFilenameSegment(noteTitle || "untitled-note")}-${formatFilenameDate(exportedAt)}.pdf`;
+  return `${sanitizeFilenameSegment(noteTitle || "untitled-note")}_full-quiz_${formatFilenameDate(exportedAt)}.pdf`;
 }
 
 export function buildMistakesOnlyExportFilename(noteTitle: string | null | undefined, exportedAt: Date): string {
-  return `notelib-mistakes-${sanitizeFilenameSegment(noteTitle || "untitled-note")}-${formatFilenameDate(exportedAt)}.pdf`;
+  return `${sanitizeFilenameSegment(noteTitle || "untitled-note")}_mistakes_${formatFilenameDate(exportedAt)}.pdf`;
 }
 
 export function buildWeakConceptsExportFilename(noteTitle: string | null | undefined, exportedAt: Date): string {
-  return `notelib-weak-concepts-${sanitizeFilenameSegment(noteTitle || "untitled-note")}-${formatFilenameDate(exportedAt)}.pdf`;
+  return `${sanitizeFilenameSegment(noteTitle || "untitled-note")}_weak-concepts_${formatFilenameDate(exportedAt)}.pdf`;
+}
+
+export function buildAdaptivePracticeExportFilename(noteTitle: string | null | undefined, exportedAt: Date): string {
+  return `${sanitizeFilenameSegment(noteTitle || "untitled-note")}_adaptive-practice_${formatFilenameDate(exportedAt)}.pdf`;
+}
+
+/**
+ * Returns false when the requested export type would produce no meaningful
+ * content, allowing the caller to show a user-friendly message and skip PDF
+ * generation.
+ */
+export function hasExportableContent(
+  exportType: "full" | "mistakes-only" | "weak-concepts" | "adaptive-practice",
+  review: QuizSessionReviewResponse,
+): boolean {
+  if (exportType === "mistakes-only") {
+    const selectedChoices = toSelectedChoiceIndexRecord(review.selectedChoices, review.quiz);
+    return review.quiz.some(
+      (item, index) => !isQuizSelectionCorrect(item, selectedChoices[index] ?? null),
+    );
+  }
+  if (exportType === "weak-concepts") {
+    return review.weakConcepts.length > 0;
+  }
+  // "full" and "adaptive-practice" always have content
+  return true;
 }
 
 export function buildQuizSessionPdf(input: QuizSessionExportInput): Uint8Array {
   const exportedAt = input.exportedAt ?? new Date();
   const noteTitle = normalizePdfText(input.noteTitle) || "Untitled note";
   const noteSubject = normalizePdfText(input.noteSubject) || null;
+
   const pageContents = input.exportType === "mistakes-only"
     ? buildMistakesPdfCommands(input.review, noteTitle, noteSubject, input.quizTypeLabel, exportedAt)
     : input.exportType === "weak-concepts"
       ? buildWeakConceptsPdfCommands(input.review, noteTitle, noteSubject, input.quizTypeLabel, exportedAt)
-      : buildPdfCommands(input.review, noteTitle, noteSubject, input.quizTypeLabel, exportedAt);
+      : input.exportType === "adaptive-practice"
+        ? buildAdaptivePracticePdfCommands(input.review, noteTitle, noteSubject, input.quizTypeLabel, exportedAt)
+        : buildPdfCommands(input.review, noteTitle, noteSubject, input.quizTypeLabel, exportedAt);
 
   const objects: string[] = [];
   objects.push("<< /Type /Catalog /Pages 2 0 R >>",
@@ -1002,7 +862,9 @@ export async function exportQuizSessionReviewDocument(input: QuizSessionExportIn
     ? buildMistakesOnlyExportFilename(input.noteTitle, exportedAt)
     : input.exportType === "weak-concepts"
       ? buildWeakConceptsExportFilename(input.noteTitle, exportedAt)
-      : buildQuizSessionExportFilename(input.noteTitle, exportedAt);
+      : input.exportType === "adaptive-practice"
+        ? buildAdaptivePracticeExportFilename(input.noteTitle, exportedAt)
+        : buildQuizSessionExportFilename(input.noteTitle, exportedAt);
   const pdfBuffer = pdfBytes.buffer.slice(
     pdfBytes.byteOffset,
     pdfBytes.byteOffset + pdfBytes.byteLength,

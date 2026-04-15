@@ -3,8 +3,10 @@ import {
   buildMistakesOnlyExportFilename,
   buildQuizSessionExportFilename,
   buildWeakConceptsExportFilename,
+  buildAdaptivePracticeExportFilename,
   buildQuizSessionPdf,
   exportQuizSessionReviewDocument,
+  hasExportableContent,
 } from "@/lib/quiz-session-export";
 
 if (!global.TextEncoder) {
@@ -54,19 +56,19 @@ const BASE_REVIEW = {
 describe("buildQuizSessionExportFilename", () => {
   it("builds a stable pdf filename for the exported quiz", () => {
     expect(buildQuizSessionExportFilename("Photosynthesis Notes", new Date("2026-04-14T08:00:00Z")))
-      .toBe("notelib-quiz-photosynthesis-notes-2026-04-14.pdf");
+      .toBe("photosynthesis-notes_full-quiz_Apr-14.pdf");
   });
 });
 
 describe("buildMistakesOnlyExportFilename", () => {
-  it("builds a stable mistakes-only pdf filename with the notelib-mistakes prefix", () => {
+  it("builds a stable mistakes-only pdf filename", () => {
     expect(buildMistakesOnlyExportFilename("Photosynthesis Notes", new Date("2026-04-14T08:00:00Z")))
-      .toBe("notelib-mistakes-photosynthesis-notes-2026-04-14.pdf");
+      .toBe("photosynthesis-notes_mistakes_Apr-14.pdf");
   });
 });
 
 describe("buildQuizSessionPdf", () => {
-  it("generates a pdf with summary, answers, and footer branding", () => {
+  it("generates a pdf with summary, answers, footer branding, and date taken", () => {
     const pdfBytes = buildQuizSessionPdf({
       noteTitle: "Photosynthesis Notes",
       noteSubject: "Biology",
@@ -80,6 +82,7 @@ describe("buildQuizSessionPdf", () => {
     expect(pdfText.startsWith("%PDF-1.4")).toBe(true);
     expect(pdfText).toContain("Photosynthesis Notes");
     expect(pdfText).toContain("Quiz type: Quick Review");
+    expect(pdfText).toContain("Date taken:");
     expect(pdfText).toContain("Score: 1/2");
     expect(pdfText).toContain("What is photosynthesis?");
     expect(pdfText).toContain("Your answer:");
@@ -191,7 +194,7 @@ describe("buildQuizSessionPdf - mistakes-only", () => {
       exportedAt: new Date("2026-04-14T08:00:00Z"),
     });
 
-    expect(result.filename).toBe("notelib-mistakes-photosynthesis-notes-2026-04-14.pdf");
+    expect(result.filename).toBe("photosynthesis-notes_mistakes_Apr-14.pdf");
 
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
@@ -202,9 +205,16 @@ describe("buildQuizSessionPdf - mistakes-only", () => {
 });
 
 describe("buildWeakConceptsExportFilename", () => {
-  it("builds a stable weak-concepts pdf filename with the notelib-weak-concepts prefix", () => {
+  it("builds a stable weak-concepts pdf filename", () => {
     expect(buildWeakConceptsExportFilename("Photosynthesis Notes", new Date("2026-04-14T08:00:00Z")))
-      .toBe("notelib-weak-concepts-photosynthesis-notes-2026-04-14.pdf");
+      .toBe("photosynthesis-notes_weak-concepts_Apr-14.pdf");
+  });
+});
+
+describe("buildAdaptivePracticeExportFilename", () => {
+  it("builds a stable adaptive-practice pdf filename", () => {
+    expect(buildAdaptivePracticeExportFilename("Photosynthesis Notes", new Date("2026-04-14T08:00:00Z")))
+      .toBe("photosynthesis-notes_adaptive-practice_Apr-14.pdf");
   });
 });
 
@@ -266,7 +276,7 @@ describe("buildQuizSessionPdf - weak-concepts", () => {
       exportedAt: new Date("2026-04-14T08:00:00Z"),
     });
 
-    expect(result.filename).toBe("notelib-weak-concepts-photosynthesis-notes-2026-04-14.pdf");
+    expect(result.filename).toBe("photosynthesis-notes_weak-concepts_Apr-14.pdf");
 
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
@@ -304,7 +314,7 @@ describe("exportQuizSessionReviewDocument", () => {
       exportedAt: new Date("2026-04-14T08:00:00Z"),
     });
 
-    expect(result.filename).toBe("notelib-quiz-photosynthesis-notes-2026-04-14.pdf");
+    expect(result.filename).toBe("photosynthesis-notes_full-quiz_Apr-14.pdf");
     expect(createObjectUrlSpy).toHaveBeenCalled();
     expect(appendChildSpy).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
@@ -325,5 +335,105 @@ describe("exportQuizSessionReviewDocument", () => {
       value: originalRevokeObjectURL,
     });
     jest.useRealTimers();
+  });
+});
+
+describe("buildQuizSessionPdf - adaptive-practice", () => {
+  it("generates an adaptive practice pdf with the Adaptive Practice Review header", () => {
+    const adaptiveReview = {
+      ...BASE_REVIEW,
+      sessionMode: "ADAPTIVE" as const,
+    };
+
+    const pdfText = Buffer.from(buildQuizSessionPdf({
+      noteTitle: "Photosynthesis Notes",
+      noteSubject: "Biology",
+      quizTypeLabel: "Adaptive Practice",
+      exportType: "adaptive-practice",
+      review: adaptiveReview,
+      exportedAt: new Date("2026-04-14T08:00:00Z"),
+    })).toString("utf8");
+
+    expect(pdfText).toContain("Adaptive Practice Review");
+    expect(pdfText).toContain("Quiz type: Adaptive Practice");
+    expect(pdfText).toContain("Score: 1/2");
+    expect(pdfText).toContain("What is photosynthesis?");
+    expect(pdfText).toContain("Generated by NoteLib");
+  });
+
+  it("uses the adaptive-practice filename when exportType is adaptive-practice", async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: jest.fn().mockReturnValue("blob:adaptive-export") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: jest.fn() });
+    jest.spyOn(document.body, "appendChild");
+    jest.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    jest.useFakeTimers();
+
+    const result = await exportQuizSessionReviewDocument({
+      noteTitle: "Photosynthesis Notes",
+      noteSubject: "Biology",
+      quizTypeLabel: "Adaptive Practice",
+      exportType: "adaptive-practice",
+      review: BASE_REVIEW,
+      exportedAt: new Date("2026-04-14T08:00:00Z"),
+    });
+
+    expect(result.filename).toBe("photosynthesis-notes_adaptive-practice_Apr-14.pdf");
+
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, writable: true, value: originalCreateObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, writable: true, value: originalRevokeObjectURL });
+  });
+});
+
+describe("buildQuizSessionPdf - weak-concepts grouped by concept", () => {
+  it("renders each weak concept as its own section header in the PDF", () => {
+    const pdfText = Buffer.from(buildQuizSessionPdf({
+      noteTitle: "Photosynthesis Notes",
+      noteSubject: "Biology",
+      quizTypeLabel: "Quick Review",
+      exportType: "weak-concepts",
+      review: BASE_REVIEW,
+      exportedAt: new Date("2026-04-14T08:00:00Z"),
+    })).toString("utf8");
+
+    // Concept "Photosynthesis" is the weak concept — should appear as a section header
+    expect(pdfText).toContain("Photosynthesis");
+    // Q1 (concept = Photosynthesis) should appear under it
+    expect(pdfText).toContain("What is photosynthesis?");
+    // Q2 (concept = Cell biology, not weak) should not appear
+    expect(pdfText).not.toContain("Which organelle is central to photosynthesis?");
+  });
+});
+
+describe("hasExportableContent", () => {
+  it("returns true for full export regardless of content", () => {
+    expect(hasExportableContent("full", BASE_REVIEW)).toBe(true);
+  });
+
+  it("returns true for adaptive-practice regardless of content", () => {
+    expect(hasExportableContent("adaptive-practice", BASE_REVIEW)).toBe(true);
+  });
+
+  it("returns true for mistakes-only when there are incorrect answers", () => {
+    // BASE_REVIEW: Q1 selected=1, correct=2 (wrong); Q2 selected=1, correct=1 (right)
+    expect(hasExportableContent("mistakes-only", BASE_REVIEW)).toBe(true);
+  });
+
+  it("returns false for mistakes-only when all answers are correct", () => {
+    const allCorrect = { ...BASE_REVIEW, selectedChoices: { 0: 2, 1: 1 } };
+    expect(hasExportableContent("mistakes-only", allCorrect)).toBe(false);
+  });
+
+  it("returns true for weak-concepts when weakConcepts is non-empty", () => {
+    expect(hasExportableContent("weak-concepts", BASE_REVIEW)).toBe(true);
+  });
+
+  it("returns false for weak-concepts when weakConcepts is empty", () => {
+    const noWeak = { ...BASE_REVIEW, weakConcepts: [] };
+    expect(hasExportableContent("weak-concepts", noWeak)).toBe(false);
   });
 });
