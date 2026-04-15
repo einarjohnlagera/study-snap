@@ -454,7 +454,7 @@ export function PublicProfilePageClient({
                       <div className="absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
                         <button
                           type="button"
-                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          className="w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
                           onClick={() => void handleToggleVisibility()}
                           disabled={!profile.publicProfileVisible}
                         >
@@ -465,7 +465,7 @@ export function PublicProfilePageClient({
                         </button>
                         <button
                           type="button"
-                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          className="w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
                           onClick={() => void handleToggleVisibility()}
                           disabled={profile.publicProfileVisible}
                         >

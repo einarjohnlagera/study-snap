@@ -1179,7 +1179,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
                       onClick={handleEdit}
                       disabled={isGeneratingStudyPack}
                     >
@@ -1188,7 +1188,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
                       onClick={() => void handleMakeCopy()}
                       disabled={copying}
                     >
@@ -1197,7 +1197,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
                       onClick={() => void handleCopyLink()}
                       disabled={sharing}
                     >
@@ -1206,7 +1206,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
                       onClick={() => {
                         setNoteActionsMenuOpen(false);
                         setShowDeleteConfirm(true);
@@ -1285,7 +1285,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         <div className="absolute left-0 top-8 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
                           <button
                             type="button"
-                            className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                            className="w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
                             onClick={() => handleSelectVisibility("PRIVATE")}
                           >
                             <p className="text-sm font-medium">
@@ -1295,7 +1295,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                           </button>
                           <button
                             type="button"
-                            className={`w-full rounded px-3 py-2 text-left hover:bg-muted/60 ${!isEmailVerified ? "cursor-not-allowed opacity-60" : ""}`}
+                            className={`w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 ${!isEmailVerified ? "cursor-not-allowed opacity-60" : ""}`}
                             onClick={() => handleSelectVisibility("PUBLIC")}
                             disabled={!isEmailVerified}
                           >

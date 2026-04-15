@@ -209,7 +209,7 @@ export function SuggestionCombobox({
                   type="button"
                   role="option"
                   aria-selected={isSelected}
-                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                  className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
                   onClick={() => {
                   onChange(option.value);
                   setInputValue(option.label);
@@ -225,7 +225,7 @@ export function SuggestionCombobox({
             {showCreateOption ? (
               <button
                 type="button"
-                className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60"
+                className="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
                 onClick={() => {
                   onChange(trimmedInput);
                   setInputValue(trimmedInput);

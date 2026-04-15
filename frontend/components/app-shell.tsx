@@ -530,7 +530,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   {user.id ? (
                     <Link
                       href={buildPublicProfilePath(user.id)}
-                      className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                      className="block rounded px-3 py-2 text-sm text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
                     >
                       <span className="inline-flex items-center gap-2">
                         <ResponsiveActionContent action="profile" label="My Profile" showTextOnMobile />
@@ -539,7 +539,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   ) : null}
                   <Link
                     href="/settings"
-                    className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                    className="block rounded px-3 py-2 text-sm text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
                   >
                     <span className="inline-flex items-center gap-2">
                       <ResponsiveActionContent action="settings" label="Settings" showTextOnMobile />
@@ -548,7 +548,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   <button
                     type="button"
                     onClick={() => void handleSignOut()}
-                    className="block w-full rounded px-3 py-2 text-left text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                    className="block w-full rounded px-3 py-2 text-left text-sm text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
                     disabled={signingOut}
                   >
                     <span className="inline-flex items-center gap-2">
