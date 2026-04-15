@@ -213,16 +213,20 @@ Use distinct icons for each mode and keep the action mapping consistent across p
 
 - Session Review pages are the primary export entry point for completed quiz sessions.
 - The export action should sit in the top-right of the Session Review header card as a secondary action.
-- Export behavior:
-  - click `Export` to open a minimal dropdown with two options:
-    - `Full Quiz` — exports all questions
-    - `Mistakes Only` — exports only questions the user answered incorrectly
+- Export UX:
+  - click `Export` (icon + label) to open a structured export menu
+  - desktop: compact grouped dropdown with group label `Review Materials` and three options
+  - mobile: bottom sheet with title `Export`, subtitle `Choose what to export`, large tap targets, and a `Cancel` action
+  - both show the same three options under `Review Materials`:
+    - `Full Review` — exports all questions
+    - `Mistakes` — exports only incorrect answers
+    - `Weak Concepts` — exports questions from areas that need practice
   - selected option generates and auto-downloads the PDF immediately
 - feedback should stay lightweight:
   - `Exporting PDF...`
   - `PDF ready`
 
-### Full Quiz PDF
+### Full Review PDF
 
 - PDF content structure:
   - NoteLib header treatment
@@ -233,17 +237,28 @@ Use distinct icons for each mode and keep the action mapping consistent across p
   - question-by-question review with choices, user answer, correct answer, explanation, and concept when available
 - filename: `notelib-quiz-[title]-[date].pdf`
 
-### Mistakes Only PDF
+### Mistakes PDF
 
 - Includes only questions where the user's answer was incorrect
 - PDF content structure:
-  - same header as Full Quiz (NoteLib, note title, quiz type, generated date)
+  - same header (NoteLib, note title, quiz type, generated date)
   - `Mistakes Review` section with mistake count (e.g. `3/10 incorrect`), accuracy percentage, and weak concepts derived from incorrect answers only
   - `Incorrect Answers` section with each question, all choices, correct answer highlighted in green, user's wrong answer marked in red, full explanation (always included), and concept label
   - question numbers reference original position in the quiz for cross-reference
 - edge case: if the user answered everything correctly, the PDF shows `Perfect Score!` and `You answered all questions correctly.` — never generates an empty document
 - filename: `notelib-mistakes-[title]-[date].pdf`
+
+### Weak Concepts PDF
+
+- Includes only questions whose concept matches one of the session's identified weak concepts
+- PDF content structure:
+  - same header (NoteLib, note title, quiz type, generated date)
+  - `Weak Concepts Review` section with weak concept list and matching question count
+  - `Questions from Weak Areas` section with each matching question, all choices, correct/incorrect highlighting, and full explanation
+- edge case: if no weak concepts were identified, PDF shows `No weak concepts identified.` and a positive message — never an empty document
+- question numbers reference original quiz position
 - filtering uses session data only — does not call the LLM
+- filename: `notelib-weak-concepts-[title]-[date].pdf`
 
 ### General Rules
 

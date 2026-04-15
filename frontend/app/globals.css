@@ -91,6 +91,29 @@ body *::after {
   }
 }
 
+/* Responsive export panel: dropdown on sm+, bottom sheet on mobile */
+.motion-export-panel {
+  animation: motion-dropdown-panel var(--motion-duration-fast) var(--motion-ease-emphasized);
+}
+
+@media (max-width: 639px) {
+  .motion-export-panel {
+    animation: motion-sheet-enter 220ms var(--motion-ease-emphasized);
+  }
+}
+
+@keyframes motion-sheet-enter {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .motion-fade-enter {
   animation: motion-fade-enter var(--motion-duration-base) var(--motion-ease-emphasized);
 }
@@ -167,6 +190,7 @@ body *::after {
   }
 
   .motion-dropdown-panel,
+  .motion-export-panel,
   .motion-fade-enter,
   .motion-modal-enter {
     animation: none !important;

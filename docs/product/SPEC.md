@@ -489,22 +489,25 @@ Users can:
 ### Quiz Session Review Export
 
 - dedicated Session Review pages should expose a secondary `Export` action in the header card
-- the button label stays `Export` with icon + text on both desktop and mobile
-- clicking `Export` opens a minimal dropdown with two options:
-  - `Full Quiz` — exports all questions
-  - `Mistakes Only` — exports only questions the user answered incorrectly
+- the button label stays `Export` with icon + chevron on both desktop and mobile
+- clicking `Export` opens a structured export menu with three options grouped under `Review Materials`:
+  - `Full Review` — exports all questions
+  - `Mistakes` — exports only questions the user answered incorrectly
+  - `Weak Concepts` — exports questions from identified weak concept areas
+- desktop shows the options as a compact grouped dropdown positioned below the trigger
+- mobile shows the options in a bottom sheet with title `Export`, subtitle `Choose what to export`, large tap targets, and a `Cancel` action
 - export feedback should stay non-blocking:
   - while generating -> `Exporting PDF...`
   - after success -> `PDF ready`
 - exported quiz PDFs must use stored session-review data only and must not call the LLM
 
-#### Full Quiz PDF
+#### Full Review PDF
 
 - includes all questions with choices, user answer, correct answer, explanation, and concept
 - filename: `notelib-quiz-{note-title}-{yyyy-mm-dd}.pdf`
 - content includes: note title, quiz type, generated date, score summary, percentage, performance level, weak concepts
 
-#### Mistakes Only PDF
+#### Mistakes PDF
 
 - includes only questions where the user answered incorrectly
 - section title: `Mistakes Review`; subsection title: `Incorrect Answers`
@@ -514,7 +517,16 @@ Users can:
 - edge case: if user answered everything correctly, PDF shows `Perfect Score!` and `You answered all questions correctly.` — never an empty document
 - filename: `notelib-mistakes-{note-title}-{yyyy-mm-dd}.pdf`
 
-#### PDF Styling Rules (both types)
+#### Weak Concepts PDF
+
+- includes only questions whose concept matches one of the session's identified weak concepts
+- section title: `Weak Concepts Review`; subsection title: `Questions from Weak Areas`
+- summary shows the list of weak concepts and matching question count
+- edge case: if no weak concepts were identified, PDF shows a positive message — never an empty document
+- question numbers reference original quiz position
+- filename: `notelib-weak-concepts-{note-title}-{yyyy-mm-dd}.pdf`
+
+#### PDF Styling Rules (all types)
 
 - exported PDFs should feel like printable study material rather than UI screenshots:
   - mostly black/white
