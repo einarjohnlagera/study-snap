@@ -141,7 +141,7 @@ describe("NoteSessionReviewPageClient", () => {
     completedAt: "2026-04-11T10:05:00Z",
   };
 
-  it("shows a Full Quiz and Mistakes Only option when Export is clicked", async () => {
+  it("shows Full Review, Mistakes, and Weak Concepts options when Export is clicked", async () => {
     (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
 
     render(<NoteSessionReviewPageClient noteId="note-1" sessionId="quick-1" />);
@@ -149,12 +149,13 @@ describe("NoteSessionReviewPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Export" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Full Quiz" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Full Review" }).length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getByRole("button", { name: "Mistakes Only" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Mistakes" }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByRole("button", { name: "Weak Concepts" }).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("exports the full quiz PDF with clear feedback when Full Quiz is selected", async () => {
+  it("exports the full review PDF with clear feedback when Full Review is selected", async () => {
     (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
     (exportQuizSessionReviewDocument as jest.Mock).mockResolvedValue({ filename: "notelib-quiz-respiratory-notes-2026-04-14.pdf" });
 
@@ -162,9 +163,9 @@ describe("NoteSessionReviewPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Export" }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Full Quiz" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Full Review" }).length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Full Quiz" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Full Review" })[0]);
 
     await waitFor(() => {
       expect(screen.getByText("Exporting PDF...")).toBeInTheDocument();
@@ -182,7 +183,7 @@ describe("NoteSessionReviewPageClient", () => {
     expect(screen.getByText("PDF ready")).toBeInTheDocument();
   });
 
-  it("exports a mistakes-only PDF with clear feedback when Mistakes Only is selected", async () => {
+  it("exports a mistakes-only PDF with clear feedback when Mistakes is selected", async () => {
     (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
     (exportQuizSessionReviewDocument as jest.Mock).mockResolvedValue({ filename: "notelib-mistakes-respiratory-notes-2026-04-14.pdf" });
 
@@ -190,14 +191,38 @@ describe("NoteSessionReviewPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Export" }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Mistakes Only" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Mistakes" }).length).toBeGreaterThanOrEqual(1);
     });
-    fireEvent.click(screen.getByRole("button", { name: "Mistakes Only" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Mistakes" })[0]);
 
     await waitFor(() => {
       expect(exportQuizSessionReviewDocument).toHaveBeenCalledWith(expect.objectContaining({
         format: "pdf",
         exportType: "mistakes-only",
+        noteTitle: "Respiratory Notes",
+        noteSubject: "Pulmonology",
+        quizTypeLabel: "Quick Review",
+      }));
+    });
+    expect(screen.getByText("PDF ready")).toBeInTheDocument();
+  });
+
+  it("exports a weak concepts PDF with clear feedback when Weak Concepts is selected", async () => {
+    (getQuickReviewSessionReview as jest.Mock).mockResolvedValue(RESPIRATORY_REVIEW);
+    (exportQuizSessionReviewDocument as jest.Mock).mockResolvedValue({ filename: "notelib-weak-concepts-respiratory-notes-2026-04-14.pdf" });
+
+    render(<NoteSessionReviewPageClient noteId="note-1" sessionId="quick-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Export" }));
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: "Weak Concepts" }).length).toBeGreaterThanOrEqual(1);
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Weak Concepts" })[0]);
+
+    await waitFor(() => {
+      expect(exportQuizSessionReviewDocument).toHaveBeenCalledWith(expect.objectContaining({
+        format: "pdf",
+        exportType: "weak-concepts",
         noteTitle: "Respiratory Notes",
         noteSubject: "Pulmonology",
         quizTypeLabel: "Quick Review",

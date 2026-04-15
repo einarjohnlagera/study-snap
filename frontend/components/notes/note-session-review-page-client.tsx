@@ -130,7 +130,7 @@ export function NoteSessionReviewPageClient({
     };
   }, [exportMenuOpen]);
 
-  const handleExport = async (exportType: "full" | "mistakes-only") => {
+  const handleExport = async (exportType: "full" | "mistakes-only" | "weak-concepts") => {
     if (!review || exporting) {
       return;
     }
@@ -222,21 +222,53 @@ export function NoteSessionReviewPageClient({
                     <ChevronDown className="h-3 w-3" aria-hidden="true" />
                   </Button>
                   {exportMenuOpen ? (
-                    <div className="motion-dropdown-panel absolute right-0 top-full z-10 mt-1 min-w-37 rounded-md border border-border bg-background p-1 shadow-md">
-                      <button
-                        type="button"
-                        className="motion-lift w-full rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
-                        onClick={() => void handleExport("full")}
-                      >
-                        Full Quiz
-                      </button>
-                      <button
-                        type="button"
-                        className="motion-lift w-full rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
-                        onClick={() => void handleExport("mistakes-only")}
-                      >
-                        Mistakes Only
-                      </button>
+                    <div className="motion-export-panel fixed inset-x-4 bottom-4 z-50 overflow-hidden rounded-2xl border border-border bg-background shadow-xl sm:absolute sm:bottom-auto sm:inset-x-auto sm:right-0 sm:top-full sm:mt-1 sm:min-w-50 sm:rounded-md sm:shadow-md">
+                      {/* Mobile header */}
+                      <div className="border-b border-border px-4 py-3 sm:hidden">
+                        <p className="text-sm font-semibold text-foreground">Export</p>
+                        <p className="text-xs text-foreground/60">Choose what to export</p>
+                      </div>
+                      {/* Desktop group label */}
+                      <p className="hidden px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/50 sm:block">
+                        Review Materials
+                      </p>
+                      {/* Options */}
+                      <div className="p-2 sm:p-1">
+                        <button
+                          type="button"
+                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 sm:rounded sm:py-2"
+                          onClick={() => void handleExport("full")}
+                        >
+                          <span className="block text-sm font-medium text-foreground">Full Review</span>
+                          <span className="block text-xs text-foreground/55 sm:hidden">All questions with answers and explanations</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 sm:rounded sm:py-2"
+                          onClick={() => void handleExport("mistakes-only")}
+                        >
+                          <span className="block text-sm font-medium text-foreground">Mistakes</span>
+                          <span className="block text-xs text-foreground/55 sm:hidden">Incorrect answers only</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-muted/60 active:bg-muted/70 sm:rounded sm:py-2"
+                          onClick={() => void handleExport("weak-concepts")}
+                        >
+                          <span className="block text-sm font-medium text-foreground">Weak Concepts</span>
+                          <span className="block text-xs text-foreground/55 sm:hidden">Questions from areas needing practice</span>
+                        </button>
+                      </div>
+                      {/* Mobile cancel */}
+                      <div className="border-t border-border p-2 sm:hidden">
+                        <button
+                          type="button"
+                          className="motion-lift w-full rounded-lg px-3 py-2.5 text-center text-sm font-medium text-foreground/60 transition-colors hover:bg-muted/60 active:bg-muted/70"
+                          onClick={() => setExportMenuOpen(false)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   ) : null}
                 </div>
