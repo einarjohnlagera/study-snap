@@ -83,11 +83,11 @@ const DISCOVERY_SECTION_COPY: Record<PublicLibraryDiscoveryView, {
   description: string;
 }> = {
   featured: {
-    title: "🔥 Featured Notes",
+    title: "⭐ Featured Notes",
     description: "Browse the full featured ranking without losing the Public Library discovery layout.",
   },
   popular: {
-    title: "📈 Most Popular",
+    title: "🔥 Most Popular",
     description: "Browse the most copied and most viewed public notes in one dedicated section view.",
   },
   recent: {
@@ -1176,7 +1176,7 @@ export function PublicLibraryPageClient() {
 
               {featuredNotes.length > 0 ? (
                 <PublicLibraryDiscoverySection
-                  title="🔥 Featured Notes"
+                  title="⭐ Featured Notes"
                   description="High-engagement notes worth studying"
                   items={featuredNotes}
                   currentUserId={currentUserId}
@@ -1190,7 +1190,7 @@ export function PublicLibraryPageClient() {
 
               {popularNotes.length > 0 ? (
                 <PublicLibraryDiscoverySection
-                  title="📈 Most Popular"
+                  title="🔥 Most Popular"
                   items={popularNotes}
                   currentUserId={currentUserId}
                   onNavigate={(path) => router.push(path)}
