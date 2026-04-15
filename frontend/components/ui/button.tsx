@@ -18,9 +18,9 @@ const buttonVariants = ({
     variant === "default" &&
       "bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 dark:bg-blue-500 dark:hover:bg-blue-600 dark:active:bg-blue-700",
     variant === "outline" &&
-      "border border-border bg-background text-foreground transition-colors hover:bg-gray-50 active:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:active:bg-gray-700",
+      "border border-border bg-background text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong dark:border-gray-600 dark:text-gray-200",
     variant === "ghost" &&
-      "bg-transparent text-foreground/75 transition-colors hover:bg-muted/60 hover:text-foreground active:bg-muted/80 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100 dark:active:bg-gray-700",
+      "bg-transparent text-foreground/75 transition-colors hover:bg-highlight hover:text-foreground active:bg-highlight-strong dark:text-gray-300 dark:hover:text-gray-100",
     size === "default" && "h-10 px-4 py-2",
     size === "sm" && "h-9 px-3",
     className,

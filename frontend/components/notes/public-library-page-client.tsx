@@ -138,7 +138,7 @@ function getFilterChipClassName(isSelected: boolean) {
   return `motion-pressable motion-lift shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
     isSelected
       ? "border-blue-600 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500 dark:text-slate-950"
-      : "border-border bg-background text-foreground/75 hover:bg-muted/60 active:bg-muted/70"
+      : "border-border bg-background text-foreground/75 hover:bg-highlight active:bg-highlight-strong"
   }`;
 }
 
@@ -252,7 +252,7 @@ function PublicNoteCard({
           onNavigate(path);
         }
       }}
-      className="flex h-full cursor-pointer flex-col justify-between space-y-3 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-5"
+      className="flex h-full cursor-pointer flex-col justify-between space-y-3 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-5"
     >
       <SharedNoteCard
         title={item.title}
@@ -1301,7 +1301,7 @@ export function PublicLibraryPageClient() {
               { value: "OFFICIAL" as const, label: "Official" },
               { value: "COMMUNITY" as const, label: "Community" },
             ]).map((option) => (
-              <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm transition-colors hover:bg-muted/50 active:bg-muted/60">
+              <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm transition-colors hover:bg-highlight active:bg-highlight-strong">
                 <input
                   type="checkbox"
                   checked={selectedSourceFilters.includes(option.value)}
@@ -1484,7 +1484,7 @@ export function PublicLibraryPageClient() {
                 className={`w-full rounded-lg border px-3 py-3 text-left text-sm transition-colors ${
                   isSelected
                     ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "border-border bg-background hover:bg-muted/50 active:bg-muted/60"
+                    : "border-border bg-background hover:bg-highlight active:bg-highlight-strong"
                 }`}
                 onClick={() => {
                   setSelectedSort(value);
@@ -1518,7 +1518,7 @@ export function PublicLibraryPageClient() {
           <button
             type="button"
             aria-label={CLOSE_MODAL_LABEL}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-background/90 text-foreground/60 transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-background/90 text-foreground/60 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
             onClick={() => setCopySuccessState(null)}
           >
             <X className="h-4 w-4" aria-hidden="true" />

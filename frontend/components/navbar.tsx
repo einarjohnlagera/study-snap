@@ -94,7 +94,7 @@ export function Navbar() {
             <ThemeToggle />
             <button
               type="button"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted/50"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-highlight"
               aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen((open) => !open)}
@@ -122,8 +122,8 @@ export function Navbar() {
                   aria-current={isActivePublicRoute(pathname, item.href) ? "page" : undefined}
                   className={`motion-lift rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isActivePublicRoute(pathname, item.href)
-                      ? "bg-blue-600/10 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200"
-                      : "text-foreground/85 hover:bg-muted/50 hover:text-foreground active:bg-muted/70"
+                      ? "bg-highlight text-blue-700 dark:text-blue-200"
+                      : "text-foreground/85 hover:bg-highlight hover:text-foreground active:bg-highlight-strong"
                   }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >

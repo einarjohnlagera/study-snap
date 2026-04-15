@@ -78,7 +78,7 @@ export function StudyPackGrid({
       <div className="grid gap-4 md:grid-cols-2">
         {notes.map((item) => (
           <Link key={item.id} href={`/notes/${item.id}?from=dashboard`} className="block">
-            <Card className="h-full space-y-3 p-4 transition-colors hover:bg-muted/40 hover:shadow-md sm:p-6">
+            <Card className="h-full space-y-3 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6">
               <div className="space-y-2">
                 <h3 className="text-base font-semibold sm:text-lg">
                   {item.title?.trim() || "Untitled note"}

@@ -130,7 +130,7 @@ export function SendFeedbackWidget({
         <button
           type="button"
           className={cn(
-            "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/85 text-foreground/70 transition-colors hover:bg-muted/40 hover:text-foreground",
+            "inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/85 text-foreground/70 transition-colors hover:bg-highlight hover:text-foreground",
             iconButtonClassName,
           )}
           onClick={() => handleOpen()}
