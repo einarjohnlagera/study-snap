@@ -34,6 +34,13 @@
   - uses `public/landing/feature-public-library.jpg` inside a framed product-preview container with constrained height, rounded corners, and subtle depth
   - keeps the preview balanced across desktop and mobile with text-first stacking on small screens
 
+- **Best Quiz Sessions on Profile** — the Profile page now shows a curated "Best Sessions" card with the user's top-scoring quiz attempts across all notes:
+  - sessions ranked by score percentage DESC, correct answers DESC, then recency DESC so the user's strongest attempts appear first
+  - each item shows the note title, quiz mode badge (Quick Review / Challenge Quiz), score percentage, correct/total count, date, and a `Top Score` or `⭐ Perfect` achievement badge when applicable
+  - clicking any session opens the dedicated Session Review page for that attempt with full answer review, explanations, and weak-concept breakdown
+  - empty state shown when no sessions exist with a prompt to start a quiz
+  - backend: `GET /dashboard/best-sessions?limit=N` returns up to 10 sessions enriched with note titles; includes only QUICK_REVIEW and CHALLENGE modes since those support session review navigation
+
 - **Public Library evaluation signals** — public notes now expose a lightweight like system so note quality is easier to judge without turning discovery into a social feed:
   - authenticated users can toggle one like per public note, with likes stored per user-note pair and duplicate likes prevented server-side
   - Public Library cards now show a subtle heart count beside the existing view/copy signals, and guests who tap like see an auth prompt modal instead of a silent failure

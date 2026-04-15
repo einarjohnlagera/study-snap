@@ -383,7 +383,7 @@ describe("PublicLibraryPageClient", () => {
     await screen.findByText("Biology Note");
     fireEvent.click(screen.getByRole("button", { name: "Biology" }));
 
-    expect(screen.queryByText("🔥 Featured Notes")).not.toBeInTheDocument();
+    expect(screen.queryByText("⭐ Featured Notes")).not.toBeInTheDocument();
     expect(screen.getByText("Biology Note")).toBeInTheDocument();
     expect(screen.queryByText("Chemistry Note")).not.toBeInTheDocument();
   });
@@ -478,7 +478,7 @@ describe("PublicLibraryPageClient", () => {
 
     render(<PublicLibraryPageClient />);
 
-    expect(await screen.findByText("🔥 Featured Notes")).toBeInTheDocument();
+    expect(await screen.findByText("⭐ Featured Notes")).toBeInTheDocument();
     expect(screen.queryByText("📚 Browse by Subject")).not.toBeInTheDocument();
   });
 

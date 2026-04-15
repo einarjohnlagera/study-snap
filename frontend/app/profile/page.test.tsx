@@ -22,6 +22,7 @@ jest.mock("@/lib/route-guards", () => ({
 jest.mock("@/lib/api", () => ({
   completeOnboardingProfileType: jest.fn(),
   getMe: jest.fn(),
+  getUserBestQuizSessions: jest.fn().mockResolvedValue([]),
   listCoursePrograms: jest.fn(),
   updateUserProfile: jest.fn(),
 }));
