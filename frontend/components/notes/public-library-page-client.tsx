@@ -135,10 +135,10 @@ function countActivePublicFilterGroups({
 }
 
 function getFilterChipClassName(isSelected: boolean) {
-  return `shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+  return `motion-pressable motion-lift shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
     isSelected
       ? "border-blue-600 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500 dark:text-slate-950"
-      : "border-border bg-background text-foreground/75 hover:bg-muted/60"
+      : "border-border bg-background text-foreground/75 hover:bg-muted/60 active:bg-muted/70"
   }`;
 }
 
@@ -998,7 +998,7 @@ export function PublicLibraryPageClient() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full sm:min-w-[120px]"
+                  className="w-full sm:min-w-30"
                   onClick={() => setFilterSheetOpen(true)}
                   aria-label="Open filters"
                 >
@@ -1016,7 +1016,7 @@ export function PublicLibraryPageClient() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full sm:min-w-[120px]"
+                  className="w-full sm:min-w-30"
                   onClick={() => setSortSheetOpen(true)}
                   aria-label="Open sorting"
                 >
@@ -1301,7 +1301,7 @@ export function PublicLibraryPageClient() {
               { value: "OFFICIAL" as const, label: "Official" },
               { value: "COMMUNITY" as const, label: "Community" },
             ]).map((option) => (
-              <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50">
+              <label key={option.value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm transition-colors hover:bg-muted/50 active:bg-muted/60">
                 <input
                   type="checkbox"
                   checked={selectedSourceFilters.includes(option.value)}
@@ -1484,7 +1484,7 @@ export function PublicLibraryPageClient() {
                 className={`w-full rounded-lg border px-3 py-3 text-left text-sm transition-colors ${
                   isSelected
                     ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-200"
-                    : "border-border bg-background hover:bg-muted/50"
+                    : "border-border bg-background hover:bg-muted/50 active:bg-muted/60"
                 }`}
                 onClick={() => {
                   setSelectedSort(value);
@@ -1505,7 +1505,7 @@ export function PublicLibraryPageClient() {
         titleClassName="text-xl font-semibold tracking-tight sm:text-[1.4rem]"
         titleIcon={(
           <div className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-300">
-            <CheckCircle2 className="h-[18px] w-[18px]" aria-hidden="true" />
+            <CheckCircle2 className="h-4.5 w-4.5" aria-hidden="true" />
           </div>
         )}
         panelClassName={isMobileSuccessSheet

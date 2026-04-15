@@ -6,7 +6,7 @@
   --background: #ffffff;
   --foreground: #111827;
   --border: #e5e7eb;
-  --motion-duration-fast: 160ms;
+  --motion-duration-fast: 150ms;
   --motion-duration-base: 220ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
@@ -63,6 +63,32 @@ body *::after {
 .motion-pressable:active {
   transform: scale(var(--motion-press-scale));
   opacity: 0.96;
+}
+
+.motion-lift {
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-duration: var(--motion-duration-fast);
+  transition-timing-function: var(--motion-ease-standard);
+}
+
+.motion-lift:hover:not(:active):not([disabled]) {
+  transform: translateY(-1px);
+}
+
+.motion-dropdown-panel {
+  animation: motion-dropdown-panel var(--motion-duration-fast) var(--motion-ease-emphasized);
+}
+
+@keyframes motion-dropdown-panel {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .motion-fade-enter {
@@ -140,10 +166,8 @@ body *::after {
     transition-duration: 0ms !important;
   }
 
-  .motion-fade-enter {
-    animation: none !important;
-  }
-
+  .motion-dropdown-panel,
+  .motion-fade-enter,
   .motion-modal-enter {
     animation: none !important;
   }
@@ -151,5 +175,9 @@ body *::after {
   .motion-pressable:active {
     transform: none;
     opacity: 1;
+  }
+
+  .motion-lift:hover {
+    transform: none !important;
   }
 }

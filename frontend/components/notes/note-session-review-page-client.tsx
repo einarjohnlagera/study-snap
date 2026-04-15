@@ -222,17 +222,17 @@ export function NoteSessionReviewPageClient({
                     <ChevronDown className="h-3 w-3" aria-hidden="true" />
                   </Button>
                   {exportMenuOpen ? (
-                    <div className="absolute right-0 top-full z-10 mt-1 min-w-[148px] rounded-md border border-border bg-background shadow-md">
+                    <div className="motion-dropdown-panel absolute right-0 top-full z-10 mt-1 min-w-37 rounded-md border border-border bg-background p-1 shadow-md">
                       <button
                         type="button"
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-muted/50"
+                        className="motion-lift w-full rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
                         onClick={() => void handleExport("full")}
                       >
                         Full Quiz
                       </button>
                       <button
                         type="button"
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-muted/50"
+                        className="motion-lift w-full rounded px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted/60 active:bg-muted/70"
                         onClick={() => void handleExport("mistakes-only")}
                       >
                         Mistakes Only

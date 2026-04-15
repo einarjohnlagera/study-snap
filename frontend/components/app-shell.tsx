@@ -198,7 +198,7 @@ function NavLinks({
         className={`block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors ${
           active
             ? "bg-blue-600/15 text-blue-700 dark:bg-blue-500/20 dark:text-blue-200"
-            : "text-foreground/80 hover:bg-muted/70 hover:text-foreground"
+            : "text-foreground/80 hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
         }`}
       >
         <span className="inline-flex items-center gap-2">
@@ -526,11 +526,11 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                 {avatarLetter}
               </button>
               {avatarMenuOpen ? (
-                <div className="absolute right-0 top-11 w-52 rounded-md border border-border bg-background p-1 shadow-sm">
+                <div className="motion-dropdown-panel absolute right-0 top-11 w-52 rounded-md border border-border bg-background p-1 shadow-sm">
                   {user.id ? (
                     <Link
                       href={buildPublicProfilePath(user.id)}
-                      className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                      className="motion-lift block rounded px-3 py-2 text-sm text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
                     >
                       <span className="inline-flex items-center gap-2">
                         <ResponsiveActionContent action="profile" label="My Profile" showTextOnMobile />
@@ -539,7 +539,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   ) : null}
                   <Link
                     href="/settings"
-                    className="block rounded px-3 py-2 text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                    className="motion-lift block rounded px-3 py-2 text-sm text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
                   >
                     <span className="inline-flex items-center gap-2">
                       <ResponsiveActionContent action="settings" label="Settings" showTextOnMobile />
@@ -548,7 +548,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   <button
                     type="button"
                     onClick={() => void handleSignOut()}
-                    className="block w-full rounded px-3 py-2 text-left text-sm text-foreground/85 hover:bg-muted/70 hover:text-foreground"
+                    className="motion-lift block w-full rounded px-3 py-2 text-left text-sm text-foreground/85 transition-colors hover:bg-muted/70 hover:text-foreground active:bg-muted/80"
                     disabled={signingOut}
                   >
                     <span className="inline-flex items-center gap-2">

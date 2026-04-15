@@ -104,6 +104,22 @@
   - core authenticated learning routes now use a subtle header feedback icon instead of the floating launcher
   - the floating launcher remains only on safe non-critical authenticated pages such as Dashboard, Library, Public Library, and Settings
   - quiz result screens now ask `Was this quiz helpful?` with lightweight `Yes` and `Give Feedback` actions before the deeper review feedback panel
+- **Unified animation and interaction system** — all UI interactions now follow one consistent timing, easing, and feedback language across the app:
+  - `--motion-duration-fast` tuned to 150ms so all quick interactions stay within the 120–180ms spec
+  - new `motion-dropdown-panel` CSS utility animates all dropdown and context menus with a fade-in + 6px slide-down entry (150ms ease-emphasized) — applied to the note actions menu, visibility menus, export menu, avatar menu, combobox listbox, and mobile nav panel
+  - new `motion-lift` CSS utility adds a subtle 1px hover lift (`translateY(-1px)`) to small interactive elements, correctly suppressed during press and for disabled elements — applied to all dropdown/context menu items across the app
+  - `motion-pressable motion-lift` applied to filter chips (Public Library) and the like badge for press scale + hover lift on pill-shaped interactive elements
+  - theme selector unselected buttons gain `motion-lift` hover lift for consistent feel within the control
+  - `prefers-reduced-motion` block covers all new utilities so users with motion sensitivity see zero animation
+- **Interactive element feedback polish** — tap and hover feedback is now consistent across all interactive surfaces so nothing feels unresponsive on touch or desktop:
+  - all three `Button` variants (`default`, `outline`, `ghost`) now carry explicit `transition-colors` and `active:` pressed states
+  - destructive confirm button in Delete modal gets a red `active:` state consistent with the danger intent
+  - AI Suggestion modal radio labels now show a muted `active:` press highlight alongside the existing hover
+  - Public Library Like badge (`unlike` state) now has an `active:bg-muted/70` tap state matching other badge interactions
+  - Theme selector unselected buttons now show `active:bg-muted/60` on tap
+  - Public Library filter chips now carry `active:bg-muted/70`, source filter labels gain `transition-colors` and `active:bg-muted/60`, and sort sheet options gain `active:bg-muted/60`
+  - Mobile nav links in the public Navbar now have `active:bg-muted/70` tap feedback
+  - Sidebar nav links in the authenticated shell gain `active:bg-muted/80` for consistent in-app navigation feedback
 - **Mobile note header overflow fix** — long private note titles no longer push `Edit` / `Delete` outside the header card on small screens:
   - mobile Note Detail now stacks the title above the action row
   - `Edit` and `Delete` stay inline again from `sm` upward so desktop layout remains unchanged

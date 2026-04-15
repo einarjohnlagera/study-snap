@@ -451,10 +451,10 @@ export function PublicProfilePageClient({
                       <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                     </button>
                     {visibilityMenuOpen ? (
-                      <div className="absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
+                      <div className="motion-dropdown-panel absolute left-0 top-9 z-20 w-64 rounded-md border border-border bg-background p-1 shadow-sm">
                         <button
                           type="button"
-                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
                           onClick={() => void handleToggleVisibility()}
                           disabled={!profile.publicProfileVisible}
                         >
@@ -465,7 +465,7 @@ export function PublicProfilePageClient({
                         </button>
                         <button
                           type="button"
-                          className="w-full rounded px-3 py-2 text-left hover:bg-muted/60"
+                          className="motion-lift w-full rounded px-3 py-2 text-left transition-colors hover:bg-muted/60 active:bg-muted/70"
                           onClick={() => void handleToggleVisibility()}
                           disabled={profile.publicProfileVisible}
                         >
