@@ -24,6 +24,7 @@ import {
 import { BackLink } from "@/components/ui/back-link";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
+import { ProfileBestSessions } from "@/components/profile/profile-best-sessions";
 
 type IdentityForm = {
   firstName: string;
@@ -509,6 +510,8 @@ export default function ProfilePage() {
               />
             </div>
           </Card>
+
+          <ProfileBestSessions />
         </div>
       ) : null}
     </main>

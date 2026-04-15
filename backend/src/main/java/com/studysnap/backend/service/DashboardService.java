@@ -1,5 +1,6 @@
 package com.studysnap.backend.service;
 
+import com.studysnap.backend.dto.BestQuizSessionResponse;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
@@ -981,5 +982,47 @@ public class DashboardService {
             String subject,
             String courseProgram
     ) {
+    }
+
+    private static final Set<QuickReviewSessionMode> REVIEWABLE_SESSION_MODES = EnumSet.of(
+            QuickReviewSessionMode.QUICK_REVIEW,
+            QuickReviewSessionMode.CHALLENGE
+    );
+
+    /**
+     * Return the user's top-scoring completed quiz sessions, ranked by
+     * score percentage DESC, correct answers DESC, completedAt DESC.
+     * Only QUICK_REVIEW and CHALLENGE sessions are included since those
+     * are the two modes that support session review navigation.
+     */
+    public List<BestQuizSessionResponse> getBestQuizSessions(UUID userId, int limit) {
+        List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository.findBestSessionsByUserId(
+                userId,
+                REVIEWABLE_SESSION_MODES,
+                PageRequest.of(0, limit)
+        );
+
+        Set<UUID> noteIds = new LinkedHashSet<>();
+        for (QuickReviewSessionEntity s : sessions) {
+            noteIds.add(s.getNoteId());
+        }
+
+        Map<UUID, String> noteTitlesById = new HashMap<>();
+        for (var note : noteRepository.findAllById(noteIds)) {
+            noteTitlesById.put(note.getId(), note.getTitle());
+        }
+
+        return sessions.stream()
+                .map(s -> new BestQuizSessionResponse(
+                        s.getId(),
+                        s.getNoteId(),
+                        noteTitlesById.getOrDefault(s.getNoteId(), null),
+                        s.getSessionMode().name(),
+                        s.getTotalQuestions(),
+                        s.getCorrectAnswers() != null ? s.getCorrectAnswers() : 0,
+                        s.getScorePercentage(),
+                        s.getCompletedAt()
+                ))
+                .toList();
     }
 }

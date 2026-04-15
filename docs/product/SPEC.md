@@ -692,6 +692,13 @@ Users can:
   - an `Identity` card with `firstName`, `lastName`, `displayName`, and `email`
   - a `Learning Profile` card with required `learnerLevel`, required `courseProgram`, and optional `bio`
   - a `Profile Type` card with the profile-type selector
+  - a `Best Sessions` card showing the user's top-performing quiz attempts across all notes:
+    - ranks sessions by score percentage DESC, correct answers DESC, then recency DESC
+    - shows note title, quiz mode (Quick Review / Challenge Quiz), score percentage, correct/total count, date, and achievement badges (`Top Score` ≥ 80%, `⭐ Perfect` = 100%)
+    - each item navigates to the dedicated Session Review page for that attempt
+    - only includes QUICK_REVIEW and CHALLENGE modes since those support session review
+    - empty state prompts the user to start a quiz
+    - purpose: motivation, progress visibility, and quick access to high-quality past sessions
 - `Profile` save actions should be section-specific:
   - `Save Identity` only saves identity fields
   - `Save Learning Profile` only saves learner-level, course/program, and bio fields

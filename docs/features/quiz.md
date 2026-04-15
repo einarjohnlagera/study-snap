@@ -425,3 +425,33 @@ Board Exam Mode now makes the Challenge Quiz engine feel like a strict board-exa
 - weak concepts feed into the Adaptive Practice flow
 - `lib/challenge-quiz-results.ts` provides pure, independently tested result computation utilities
 - Adaptive Practice `completionMessage` uses `mapPerformanceLevel` for consistent 4-tier feedback
+
+## Best Quiz Sessions (v0.9.0)
+
+The Profile page shows a curated "Best Sessions" section with the user's top-performing quiz attempts.
+
+### What qualifies as a "best" session
+
+- Only completed QUICK_REVIEW and CHALLENGE sessions are included (ADAPTIVE is excluded since it has no session review route)
+- Sessions with no `scorePercentage` recorded are excluded
+
+### Ranking logic
+
+1. `scorePercentage` DESC — highest score first
+2. `correctAnswers` DESC — tiebreaker when percentages are equal (relevant when question counts differ)
+3. `completedAt` DESC — newest session wins when both score and correct count are equal
+
+### Display
+
+- up to 5 sessions shown (configurable, backend enforces max 10)
+- each item shows: note title, quiz mode badge, score percentage, correct/total, date
+- achievement badges: `⭐ Perfect` for 100%, `Top Score` for ≥ 80%
+- clicking an item opens the dedicated Session Review page for that session
+- empty state prompts user to start a quiz
+
+### Backend
+
+- `GET /dashboard/best-sessions?limit=N` — authenticated endpoint under `DashboardController`
+- `DashboardService.getBestQuizSessions(userId, limit)` fetches sessions via `QuickReviewSessionRepository.findBestSessionsByUserId` (JPQL query ordered by score/count/date), then enriches with note titles from `NoteRepository`
+- note titles looked up in a single batch using `findAllById` to avoid N+1 queries
+

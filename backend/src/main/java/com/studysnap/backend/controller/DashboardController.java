@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.BestQuizSessionResponse;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
@@ -12,8 +13,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -61,5 +64,14 @@ public class DashboardController {
     ) {
         UUID userId = user.userId();
         return dashboardService.getOverview(userId);
+    }
+
+    @GetMapping("/best-sessions")
+    public List<BestQuizSessionResponse> getBestQuizSessions(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestParam(defaultValue = "5") int limit
+    ) {
+        UUID userId = user.userId();
+        return dashboardService.getBestQuizSessions(userId, Math.min(limit, 10));
     }
 }
