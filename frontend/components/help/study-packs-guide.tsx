@@ -67,7 +67,7 @@ export function StudyPacksGuide() {
         return (
           <div key={section.title} className="flex items-start gap-3">
             <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
-              <Icon className="h-3.5 w-3.5 text-foreground/60" aria-hidden="true" />
+              <Icon className="h-4 w-4 text-foreground/60" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
