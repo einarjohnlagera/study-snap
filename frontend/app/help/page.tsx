@@ -8,19 +8,20 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
 import { GettingStartedGuide } from "@/components/help/getting-started-guide";
+import { CreatingNotesGuide } from "@/components/help/creating-notes-guide";
+import { StudyPacksGuide } from "@/components/help/study-packs-guide";
+import { ExportSharingGuide } from "@/components/help/export-sharing-guide";
 import { StudentGuide } from "@/components/help/student-guide";
 import { TeacherGuide } from "@/components/help/teacher-guide";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import type { LucideIcon } from "lucide-react";
-
-type HelpQA = { question: string; answer: string };
 
 type HelpCard = {
   id: string;
   icon: LucideIcon;
   title: string;
   description: string;
-  items: HelpQA[];
+  modalDescription?: string;
 };
 
 const HELP_CARDS: HelpCard[] = [
@@ -29,118 +30,59 @@ const HELP_CARDS: HelpCard[] = [
     icon: Lightbulb,
     title: "Getting Started",
     description: "What NoteLib is and how to begin your first study session.",
-    items: [
-      {
-        question: "What is NoteLib?",
-        answer:
-          "NoteLib turns your notes into structured study outputs. You create a note, generate a Study Pack, then practice with Quick Review, Challenge Quiz, and Adaptive Practice.",
-      },
-      {
-        question: "How do I create a note?",
-        answer:
-          'Go to Library and click "New Note", or click "Create Note" from the Dashboard. You can type, paste, or upload content. Save the note first, then generate a Study Pack.',
-      },
-      {
-        question: "What is a Study Pack?",
-        answer:
-          'A Study Pack is AI-generated content attached to your note: a summary, key concepts, and a practice quiz. Click "Generate Study Pack" on any saved note to create one.',
-      },
-    ],
   },
   {
     id: "creating-notes",
     icon: FileText,
     title: "Creating Notes",
     description: "How to write, organize, and manage notes effectively.",
-    items: [
-      {
-        question: "What should I put in a note?",
-        answer:
-          "Paste or type your study material — lecture notes, textbook excerpts, reviewer content, or anything you want to study from. The more complete your note, the better the generated quiz and summary.",
-      },
-      {
-        question: "What do Subject and Course / Program do?",
-        answer:
-          "Subject helps you organize and filter notes in your Library. Course / Program helps NoteLib tailor content and recommendations to your field of study.",
-      },
-      {
-        question: "Can I edit a note after generating a Study Pack?",
-        answer:
-          'Note content is locked after generation to preserve the Study Pack. You can still update the title, subject, course/program, and tags. To improve the note content, use "Make a Copy", edit the copy, and generate a new Study Pack.',
-      },
-    ],
   },
   {
     id: "study-packs-quizzes",
     icon: BookOpen,
     title: "Study Packs & Quizzes",
     description: "Summaries, key concepts, and the three quiz modes explained.",
-    items: [
-      {
-        question: "What is the Summary tab?",
-        answer:
-          "The Summary is an AI-generated overview of your note, condensed into key points to help you recall the main ideas at a glance.",
-      },
-      {
-        question: "What are Key Concepts?",
-        answer:
-          "Key Concepts are the most important ideas extracted from your note, organized for quick review and reference.",
-      },
-      {
-        question: "What is Quick Review?",
-        answer:
-          "Quick Review uses your saved practice questions in a low-pressure session. Questions you miss are shown again in a retry round.",
-      },
-      {
-        question: "What is Challenge Quiz?",
-        answer:
-          "Challenge Quiz generates new timed questions to simulate test conditions. It has difficulty levels (Easy, Medium, Hard) and tracks your best score per note.",
-      },
-      {
-        question: "What is Adaptive Practice?",
-        answer:
-          "Adaptive Practice focuses on concepts you missed in Challenge Quiz. It targets your weak areas with questions built from your recent performance. Available on the Premium plan.",
-      },
-    ],
   },
   {
     id: "export-sharing",
     icon: Download,
     title: "Export & Sharing",
     description: "Download quiz sessions as PDFs and share notes publicly.",
-    items: [
-      {
-        question: "Can I export a quiz session?",
-        answer:
-          "Yes. On any Session Review page, use the Export button to download a PDF. You can export the Full Review (all questions), Mistakes Only (incorrect answers), or Weak Concepts (questions from identified weak areas).",
-      },
-      {
-        question: "What format are exported files?",
-        answer:
-          "Exports are PDF files named with the note title and date, such as notelib-quiz-biology-2026-04-16.pdf. They include question text, answers, explanations, and a score summary.",
-      },
-      {
-        question: "How do I share a note publicly?",
-        answer:
-          "On the note detail page, use the visibility toggle to set the note to Public. It will then appear in the Public Library for other students to view and copy.",
-      },
-    ],
   },
   {
     id: "student-guide",
     icon: User,
     title: "Student Guide",
     description: "A step-by-step study workflow to get the most out of NoteLib.",
-    items: [],
+    modalDescription: "Study smarter using notes.",
   },
   {
     id: "teacher-guide",
     icon: GraduationCap,
     title: "Teacher Guide",
     description: "Turn your lesson materials into study packs and exportable quiz content.",
-    items: [],
+    modalDescription: "Use your lesson materials to build review-ready study content faster.",
   },
 ];
+
+function GuideContent({ cardId }: { cardId: string }) {
+  switch (cardId) {
+    case "getting-started":
+      return <GettingStartedGuide />;
+    case "creating-notes":
+      return <CreatingNotesGuide />;
+    case "study-packs-quizzes":
+      return <StudyPacksGuide />;
+    case "export-sharing":
+      return <ExportSharingGuide />;
+    case "student-guide":
+      return <StudentGuide />;
+    case "teacher-guide":
+      return <TeacherGuide />;
+    default:
+      return null;
+  }
+}
 
 export default function HelpPage() {
   const router = useRouter();
@@ -190,7 +132,6 @@ export default function HelpPage() {
             </button>
           );
         })}
-
       </div>
 
       {/* Contact / support footer */}
@@ -216,32 +157,11 @@ export default function HelpPage() {
         <AppModal
           isOpen={openCardId !== null}
           title={openCard.title}
-          description={
-            openCard.id === "student-guide"
-              ? "Study smarter using notes."
-              : openCard.id === "teacher-guide"
-                ? "Use your lesson materials to build review-ready study content faster."
-                : undefined
-          }
+          description={openCard.modalDescription}
           onClose={() => setOpenCardId(null)}
           panelClassName="sm:max-w-lg"
         >
-          {openCard.id === "getting-started" ? (
-            <GettingStartedGuide />
-          ) : openCard.id === "student-guide" ? (
-            <StudentGuide />
-          ) : openCard.id === "teacher-guide" ? (
-            <TeacherGuide />
-          ) : (
-            <div className="space-y-5">
-              {openCard.items.map((item) => (
-                <div key={item.question} className="space-y-1">
-                  <p className="text-sm font-medium text-foreground">{item.question}</p>
-                  <p className="text-sm text-foreground/70">{item.answer}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          <GuideContent cardId={openCard.id} />
         </AppModal>
       ) : null}
     </main>
