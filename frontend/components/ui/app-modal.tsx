@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { X } from "lucide-react";
 
 type AppModalProps = {
   isOpen: boolean;
@@ -160,7 +161,7 @@ export function AppModal({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
-        className={`motion-modal-enter w-[90%] max-w-[420px] rounded-xl border border-border bg-background p-4 shadow-xl transition-transform duration-200 dark:bg-zinc-900 sm:p-5 ${panelClassName ?? ""}`}
+        className={`motion-modal-enter flex w-[90%] max-w-[420px] flex-col overflow-hidden max-h-[90dvh] rounded-xl border border-border bg-background p-4 shadow-xl transition-transform duration-200 dark:bg-zinc-900 sm:p-5 ${panelClassName ?? ""}`}
         style={touchOffsetY > 0 ? { transform: `translateY(${touchOffsetY}px)` } : undefined}
         onMouseDown={(event) => {
           event.stopPropagation();
@@ -201,7 +202,7 @@ export function AppModal({
           touchStartXRef.current = null;
         }}
       >
-        <div className={`flex items-start justify-between gap-4 ${headerClassName ?? ""}`}>
+        <div className={`flex shrink-0 items-start justify-between gap-4 ${headerClassName ?? ""}`}>
           <div className="min-w-0 space-y-2">
             <div className="flex items-start gap-3">
               {titleIcon ? (
@@ -222,14 +223,20 @@ export function AppModal({
               </p>
             ) : null}
           </div>
-          {headerActions ? (
-            <div className="shrink-0">
-              {headerActions}
-            </div>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {headerActions}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded p-1 text-foreground/50 transition-colors hover:bg-highlight hover:text-foreground"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        {children ? <div className={`mt-4 ${contentClassName ?? ""}`}>{children}</div> : null}
-        {actions ? <div className={`mt-5 ${actionsClassName ?? ""}`}>{actions}</div> : null}
+        {children ? <div className={`mt-4 flex-1 overflow-y-auto min-h-0 ${contentClassName ?? ""}`}>{children}</div> : null}
+        {actions ? <div className={`mt-5 shrink-0 ${actionsClassName ?? ""}`}>{actions}</div> : null}
       </div>
     </div>
   );

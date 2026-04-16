@@ -12,6 +12,7 @@
   - Help Center page at `/help` refactored into a card-based layout matching the Learn page design: six topic cards (Getting Started, Creating Notes, Study Packs & Quizzes, Performance & Insights, Export & Sharing, Profile & Settings) plus a Student Guide card linking to `/learn` and a support footer; clicking any topic opens a modal with detailed Q&A without leaving the page
   - Help is accessible from the avatar dropdown menu (next to Settings) and from a "Help Center" link in the Settings page header
   - `"help"` added as a new `ActionIconName` using the `HelpCircle` icon from Lucide
+  - **AppModal scroll and close usability** — modal panels that contain long content (Student Guide, Getting Started) are now fully accessible without scrolling the page: panel is capped at `90dvh` with `overflow-hidden flex-col`, the content area scrolls independently with `overflow-y-auto`, and header/actions stay fixed; an always-visible X close button is rendered in the top-right corner of every modal, regardless of whether `headerActions` are provided, making it easy to dismiss on both desktop and mobile
 
 - **Quiz session history + review** — Note Detail now keeps completed quiz history tied to the note so past practice is reviewable instead of disposable:
   - adds a `Recent Sessions` section below `Performance Overview` on Study Pack-ready notes, combining Quick Review and Challenge Quiz attempts in reverse-chronological order
