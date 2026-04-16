@@ -1429,6 +1429,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 Generating locks this note to preserve its Study Pack. Need changes later? Use Make a Copy.
               </p>
             ) : null}
+            {isDraft && !isGeneratingStudyPack && !hasGenerationFailed && !isInlineMetadataEditMode ? (
+              <GuidanceTip
+                tipId="note-detail-generate-study-pack"
+                message="Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note."
+              />
+            ) : null}
             {!isInlineMetadataEditMode ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <div className="flex flex-col gap-2 sm:flex-row">
