@@ -1298,6 +1298,9 @@ Rules:
 
 Active nudges:
 - `note-detail-try-quiz` — shown in Performance Overview when a Study Pack is ready but the user has zero Quick Review and zero Challenge Quiz attempts; message: "Try Quick Review or Challenge Quiz to start tracking your performance on this note."
+- `note-detail-generate-study-pack` — shown below the draft hint text when a note is in DRAFT state and not currently generating; message: "Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note."
+- `sessions-export-hint` — shown in the Recent Sessions empty state (Study Pack ready, zero sessions); message: "Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing."
+- `public-library-intro` — shown on first visit to the Public Library below the page header; message: "Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included."
 
 ### Layer 3 — Help Center (`/help`)
 
@@ -1309,6 +1312,62 @@ A structured static reference page accessible from the avatar dropdown and the S
 - Do not block or gate any user action behind a tip
 - Do not repeat dismissed tips (localStorage-persisted)
 - Micro guidance text must fit one line; if it doesn't, cut it
+
+## UI System
+
+### Card Hierarchy
+
+NoteLib uses four card levels. Each level has a defined purpose and consistent visual treatment.
+
+**1. Primary Action Cards**
+Used for: Dashboard action sections (Continue Studying, Quick Review, Practice Challenge Quiz), welcome card, billing prompts.
+Treatment: `p-4 sm:p-6`, `border border-border shadow-sm`. May contain a primary `ResponsiveActionButton`.
+
+**2. Secondary Info Cards**
+Used for: Help page card grid, guidance/support footer cards, Settings billing card.
+Treatment: `p-5 sm:p-6` (slightly more padding for icon+title layout), `border border-border shadow-sm`, `hover:bg-highlight` on interactive cards.
+
+**3. Content Cards**
+Used for: Note/Study Pack cards in Library, Public Library note cards, Session Review card, Dashboard stats cards.
+Treatment: `p-4 sm:p-6`, `border border-border shadow-sm`, metadata-friendly (supports tags, dates, scores without visual noise).
+
+**4. Inner Utility Cards**
+Used for: Step cards inside guide modals, performance sub-boxes, empty state dashed boxes.
+Treatment: `rounded-xl border border-border bg-muted/20 p-3` (compact, flat, visually subordinate to parent card).
+
+Hierarchy rule: Primary > Secondary > Content > Inner Utility. Do not apply Primary elevation to informational content.
+
+---
+
+### Icon System
+
+**Icon sizes:**
+- Standard action icons (buttons, menus): `h-4 w-4`
+- Navigation icons (app shell sidebar): `h-4 w-4`, muted color
+- Status/metadata icons (views, likes, badges): `h-3.5 w-3.5` or `h-3 w-3`, quieter color
+
+**Icon containers:**
+NoteLib uses two types of contained icon contexts:
+
+1. **Page-level icon badge** (Help card grid): `h-8 w-8 rounded-lg border border-border bg-muted/40` with `h-4 w-4` icon inside. Used on full-page cards to add visual weight.
+
+2. **Modal section icon badge** (guide modal sections): `h-7 w-7 rounded-lg border border-border bg-muted/40` with `h-4 w-4` icon inside. Slightly smaller to stay subordinate inside a constrained modal panel.
+
+3. **Step number circle** (step-based guide modals): `h-7 w-7 rounded-full bg-blue-600` with white number text. Intentionally different shape and color to signal ordered sequence.
+
+**Icon container rules:**
+- Do not mix `rounded-full` and `rounded-lg` in the same list unless intentionally distinguishing sequence (step circles) from category (section icons)
+- Icon size inside a container is always `h-4 w-4` regardless of container size
+- Inline action icons (outside containers) always `h-4 w-4` with `gap-2` spacing from label
+- Do not add containers to navigation or inline action icons
+
+**Stroke weight / color:**
+- All icons use default Lucide stroke weight (1.5)
+- Container icons: `text-foreground/60`
+- Action icons: inherit button/link text color
+- Navigation icons: `text-foreground/70` or `text-muted-foreground`
+
+---
 
 ## Non-Goals (Current Scope)
 
