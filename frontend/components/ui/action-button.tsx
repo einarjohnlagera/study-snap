@@ -7,6 +7,7 @@ import {
   BookOpen,
   Copy,
   Globe,
+  HelpCircle,
   House,
   Link2,
   LogOut,
@@ -37,6 +38,7 @@ export type ActionIconName =
   | "edit"
   | "library"
   | "admin"
+  | "help"
   | "open"
   | "private"
   | "profile"
@@ -61,6 +63,7 @@ const ACTION_ICONS: Record<ActionIconName, LucideIcon> = {
   edit: Pencil,
   library: BookOpen,
   admin: Shield,
+  help: HelpCircle,
   open: ArrowUpRight,
   private: Lock,
   profile: User,

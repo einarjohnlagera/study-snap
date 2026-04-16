@@ -479,6 +479,7 @@ export default function ProfilePage() {
                   }
                   errorText={learningProfileErrors.courseProgram ?? null}
                 />
+                <p className="text-xs text-foreground/60">Used to tailor content and quiz recommendations to your field.</p>
               </label>
               <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Bio</span>

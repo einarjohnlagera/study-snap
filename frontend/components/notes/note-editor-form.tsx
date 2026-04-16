@@ -282,6 +282,7 @@ export function NoteEditorForm({
                 onChange={onSubjectChange}
                 disabled={isCopying}
               />
+              <p className="text-xs text-foreground/60">Helps organize notes and filter by topic in your Library.</p>
             </div>
             <div className="space-y-2">
               <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program (optional)</label>
@@ -294,6 +295,7 @@ export function NoteEditorForm({
                 disabled={isCopying}
                 context="note"
               />
+              <p className="text-xs text-foreground/60">Used to personalize content and quiz recommendations.</p>
             </div>
           </div>
 

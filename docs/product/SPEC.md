@@ -1273,6 +1273,43 @@ Profile private confirm: `This profile is private` / `You need to make this prof
 
 Share modals across the app must reuse the same `AppModal` component with title, `Shareable URL` field, `Copy Link`, and `Close` layout. Do not use toast-only or inline-only share feedback as the primary share confirmation.
 
+## Guidance System
+
+NoteLib uses a three-layer guidance model to help users understand features without overwhelming them.
+
+### Layer 1 — Micro Guidance (always visible)
+
+Short one-line descriptions added near form fields and action buttons. Never blocking, never dismissible — just informational text in `text-xs text-foreground/60`.
+
+Locations:
+- Note editor: Subject field → "Helps organize notes and filter by topic in your Library."
+- Note editor: Course / Program field → "Used to personalize content and quiz recommendations."
+- Profile: Course / Program field → "Used to tailor content and quiz recommendations to your field."
+- Note detail: below quiz action buttons → "Quick Review uses saved questions · Challenge Quiz generates new timed questions"
+
+### Layer 2 — Smart Nudges (contextual, dismissible)
+
+The `GuidanceTip` component renders a subtle blue info strip that appears once and disappears after the user clicks the × button. State is stored in `localStorage` with key prefix `notelib-guidance-dismissed-{tipId}` so the tip never reappears after dismissal.
+
+Rules:
+- rendered only when the relevant condition is true (not speculatively)
+- at most one tip per card/section
+- never blocks actions or overlaps other UI
+
+Active nudges:
+- `note-detail-try-quiz` — shown in Performance Overview when a Study Pack is ready but the user has zero Quick Review and zero Challenge Quiz attempts; message: "Try Quick Review or Challenge Quiz to start tracking your performance on this note."
+
+### Layer 3 — Help Center (`/help`)
+
+A structured static reference page accessible from the avatar dropdown and the Settings page header. Six sections: Getting Started, Creating Notes, Study Packs, Quiz Types, Performance Tracking, Exporting Quizzes. Each section has short Q&A pairs — no long paragraphs, no blocking modals.
+
+### Anti-drift rules
+
+- Do not add more than one GuidanceTip per card/section
+- Do not block or gate any user action behind a tip
+- Do not repeat dismissed tips (localStorage-persisted)
+- Micro guidance text must fit one line; if it doesn't, cut it
+
 ## Non-Goals (Current Scope)
 
 Not included unless explicitly requested:
