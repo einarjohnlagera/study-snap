@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, BarChart2, Download, FileText, Lightbulb, Settings, User } from "lucide-react";
+import { ArrowRight, BookOpen, BarChart2, Download, FileText, GraduationCap, Lightbulb, Settings, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
 import { GettingStartedGuide } from "@/components/help/getting-started-guide";
 import { StudentGuide } from "@/components/help/student-guide";
+import { TeacherGuide } from "@/components/help/teacher-guide";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import type { LucideIcon } from "lucide-react";
 
@@ -178,6 +179,13 @@ const HELP_CARDS: HelpCard[] = [
     description: "A step-by-step study workflow to get the most out of NoteLib.",
     items: [],
   },
+  {
+    id: "teacher-guide",
+    icon: GraduationCap,
+    title: "Teacher Guide",
+    description: "Turn your lesson materials into study packs and exportable quiz content.",
+    items: [],
+  },
 ];
 
 export default function HelpPage() {
@@ -254,7 +262,13 @@ export default function HelpPage() {
         <AppModal
           isOpen={openCardId !== null}
           title={openCard.title}
-          description={openCard.id === "student-guide" ? "Study smarter using notes." : undefined}
+          description={
+            openCard.id === "student-guide"
+              ? "Study smarter using notes."
+              : openCard.id === "teacher-guide"
+                ? "Use your lesson materials to build review-ready study content faster."
+                : undefined
+          }
           onClose={() => setOpenCardId(null)}
           panelClassName="sm:max-w-lg"
         >
@@ -262,6 +276,8 @@ export default function HelpPage() {
             <GettingStartedGuide />
           ) : openCard.id === "student-guide" ? (
             <StudentGuide />
+          ) : openCard.id === "teacher-guide" ? (
+            <TeacherGuide />
           ) : (
             <div className="space-y-5">
               {openCard.items.map((item) => (
