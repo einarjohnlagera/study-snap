@@ -147,17 +147,4 @@ public interface QuickReviewSessionRepository extends JpaRepository<QuickReviewS
             """)
     java.math.BigDecimal findBestScorePercentageByUserIdAndStudyPackId(UUID userId, UUID studyPackId);
 
-    @Query("""
-            select q from QuickReviewSessionEntity q
-            where q.userId = :userId
-              and q.sessionMode in :sessionModes
-              and q.completedAt is not null
-              and q.scorePercentage is not null
-            order by q.scorePercentage desc, q.correctAnswers desc, q.completedAt desc
-            """)
-    List<QuickReviewSessionEntity> findBestSessionsByUserId(
-            UUID userId,
-            Collection<QuickReviewSessionMode> sessionModes,
-            Pageable pageable
-    );
 }
