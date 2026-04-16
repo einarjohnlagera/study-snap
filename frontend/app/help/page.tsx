@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ArrowRight, BookOpen, BarChart2, Download, FileText, GraduationCap, Lightbulb, Settings, User } from "lucide-react";
+import { ArrowRight, BookOpen, Download, FileText, GraduationCap, Lightbulb, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -104,29 +104,6 @@ const HELP_CARDS: HelpCard[] = [
     ],
   },
   {
-    id: "performance",
-    icon: BarChart2,
-    title: "Performance & Insights",
-    description: "Tracking scores, weak concepts, and your progress over time.",
-    items: [
-      {
-        question: "Where can I see my quiz results?",
-        answer:
-          "Each note's detail page shows a Performance Overview with attempt counts and scores for Quick Review and Challenge Quiz. The Profile page shows your top-performing notes grouped by best score.",
-      },
-      {
-        question: "What are Weak Concepts?",
-        answer:
-          "Weak Concepts are topics where your Challenge Quiz accuracy was below 60%. They appear on your Dashboard and note detail page to guide your next study session.",
-      },
-      {
-        question: "What is the Strongest Notes section on the Dashboard?",
-        answer:
-          'Strongest Notes shows the top 3 notes by your best quiz score. Click any note to review the session, or click "View all" to see your full performance breakdown on the Profile page.',
-      },
-    ],
-  },
-  {
     id: "export-sharing",
     icon: Download,
     title: "Export & Sharing",
@@ -146,29 +123,6 @@ const HELP_CARDS: HelpCard[] = [
         question: "How do I share a note publicly?",
         answer:
           "On the note detail page, use the visibility toggle to set the note to Public. It will then appear in the Public Library for other students to view and copy.",
-      },
-    ],
-  },
-  {
-    id: "profile-settings",
-    icon: Settings,
-    title: "Profile & Settings",
-    description: "Account preferences, learner level, theme, and plan details.",
-    items: [
-      {
-        question: "What does Learner Level do?",
-        answer:
-          "Learner Level adjusts quiz difficulty and content recommendations based on your current study stage. You can update it anytime from your Profile page.",
-      },
-      {
-        question: "Where do I change my theme?",
-        answer:
-          'Go to Settings > Preferences. You can choose Light, Dark, or System. System follows your device setting automatically.',
-      },
-      {
-        question: "Where can I see my plan and usage?",
-        answer:
-          "Settings > Plan & Billing shows your current plan, Study Pack usage for the month, and reset date. The Dashboard also shows a usage summary card.",
       },
     ],
   },

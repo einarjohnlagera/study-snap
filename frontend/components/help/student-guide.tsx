@@ -74,7 +74,7 @@ export function StudentGuide() {
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white dark:bg-blue-500">
                     {step.number}
                   </span>
-                  {!isLast ? <span className="mt-1 h-full w-px bg-border" /> : null}
+                  {!isLast ? <span className="mt-1.5 flex-1 w-px bg-border" /> : null}
                 </div>
                 <div className="mb-1 min-w-0 flex-1 rounded-xl border border-border bg-muted/20 p-3">
                   <div className="mb-1.5 flex items-center gap-2">

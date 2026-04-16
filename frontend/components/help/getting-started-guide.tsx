@@ -50,7 +50,7 @@ export function GettingStartedGuide() {
                   {step.number}
                 </span>
                 {!isLast ? (
-                  <span className="mt-1 h-full w-px bg-border" />
+                  <span className="mt-1.5 flex-1 w-px bg-border" />
                 ) : null}
               </div>
 
