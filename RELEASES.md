@@ -9,7 +9,7 @@
   - quiz mode description line added below the Study Pack action buttons on Note Detail explaining the difference between Quick Review and Challenge Quiz
   - `GuidanceTip` component: a subtle, dismissible one-time tip strip backed by `localStorage` — fades in on first visit, dismissed permanently with a single click
   - first-time-quiz nudge on Note Detail Performance Overview: when a Study Pack is ready but no quiz sessions exist, a tip prompts the user to try Quick Review or Challenge Quiz
-  - Help Center page at `/help` with six structured sections: Getting Started, Creating Notes, Study Packs, Quiz Types, Performance Tracking, and Exporting Quizzes
+  - Help Center page at `/help` refactored into a card-based layout matching the Learn page design: six topic cards (Getting Started, Creating Notes, Study Packs & Quizzes, Performance & Insights, Export & Sharing, Profile & Settings) plus a Student Guide card linking to `/learn` and a support footer; clicking any topic opens a modal with detailed Q&A without leaving the page
   - Help is accessible from the avatar dropdown menu (next to Settings) and from a "Help Center" link in the Settings page header
   - `"help"` added as a new `ActionIconName` using the `HelpCircle` icon from Lucide
 
