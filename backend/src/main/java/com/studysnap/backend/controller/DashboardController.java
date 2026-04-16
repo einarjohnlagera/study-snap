@@ -1,6 +1,6 @@
 package com.studysnap.backend.controller;
 
-import com.studysnap.backend.dto.BestQuizSessionResponse;
+import com.studysnap.backend.dto.NotePerformanceSummaryResponse;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
 import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
@@ -66,12 +66,11 @@ public class DashboardController {
         return dashboardService.getOverview(userId);
     }
 
-    @GetMapping("/best-sessions")
-    public List<BestQuizSessionResponse> getBestQuizSessions(
+    @GetMapping("/note-performance")
+    public List<NotePerformanceSummaryResponse> getNotePerformanceSummary(
             @AuthenticationPrincipal AuthenticatedUser user,
             @RequestParam(defaultValue = "5") int limit
     ) {
-        UUID userId = user.userId();
-        return dashboardService.getBestQuizSessions(userId, Math.min(limit, 10));
+        return dashboardService.getNotePerformanceSummary(user.userId(), Math.min(limit, 10));
     }
 }

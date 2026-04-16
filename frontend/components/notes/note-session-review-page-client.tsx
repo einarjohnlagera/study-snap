@@ -20,9 +20,11 @@ import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { exportQuizSessionReviewDocument, hasExportableContent } from "@/lib/quiz-session-export";
 import { getAuthUser } from "@/lib/auth";
 import {
+  buildNoteSessionReviewBackLabel,
   buildNoteSessionReviewBackPath,
   fromNoteSessionReviewRouteMode,
   NOTE_SESSION_REVIEW_QUERY_PARAMS,
+  type NoteSessionReviewSource,
 } from "@/lib/note-session-review";
 
 type NoteSessionReviewPageClientProps = {
@@ -54,7 +56,12 @@ export function NoteSessionReviewPageClient({
     () => normalizeNoteDetailTab(searchParams.get("tab")),
     [searchParams],
   );
-  const backHref = useMemo(() => buildNoteSessionReviewBackPath(noteId, noteTab), [noteId, noteTab]);
+  const source = useMemo(
+    () => (searchParams.get("source") as NoteSessionReviewSource | null) ?? null,
+    [searchParams],
+  );
+  const backHref = useMemo(() => buildNoteSessionReviewBackPath(noteId, noteTab, source), [noteId, noteTab, source]);
+  const backLabel = useMemo(() => buildNoteSessionReviewBackLabel(source), [source]);
   const quizTypeLabel = sessionMode === "CHALLENGE" ? "Challenge Quiz" : "Quick Review";
 
   useEffect(() => {
@@ -184,7 +191,7 @@ export function NoteSessionReviewPageClient({
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-4 sm:px-6 sm:py-6">
-      <BackLink href={backHref} label="Note" />
+      <BackLink href={backHref} label={backLabel} />
 
       <div className="space-y-1">
         <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">

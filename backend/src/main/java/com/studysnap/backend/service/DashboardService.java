@@ -1,6 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.studysnap.backend.dto.BestQuizSessionResponse;
 import com.studysnap.backend.dto.ContinueStudyingReason;
 import com.studysnap.backend.dto.ContinueStudyingResumeState;
 import com.studysnap.backend.dto.ContinueStudyingResponse;
@@ -11,6 +10,7 @@ import com.studysnap.backend.dto.DashboardOverviewResponse;
 import com.studysnap.backend.dto.DashboardPerformanceSummaryResponse;
 import com.studysnap.backend.dto.DashboardWeeklyActivityResponse;
 import com.studysnap.backend.dto.MasterySnapshotResponse;
+import com.studysnap.backend.dto.NotePerformanceSummaryResponse;
 import com.studysnap.backend.dto.StudyEngagementResponse;
 import com.studysnap.backend.dto.TodayFocusResponse;
 import com.studysnap.backend.dto.TodayFocusType;
@@ -990,38 +990,92 @@ public class DashboardService {
     );
 
     /**
-     * Return the user's top-scoring completed quiz sessions, ranked by
-     * score percentage DESC, correct answers DESC, completedAt DESC.
+     * Return performance stats grouped by note, sorted by best score DESC.
      * Only QUICK_REVIEW and CHALLENGE sessions are included since those
      * are the two modes that support session review navigation.
      */
-    public List<BestQuizSessionResponse> getBestQuizSessions(UUID userId, int limit) {
-        List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository.findBestSessionsByUserId(
-                userId,
-                REVIEWABLE_SESSION_MODES,
-                PageRequest.of(0, limit)
-        );
+    public List<NotePerformanceSummaryResponse> getNotePerformanceSummary(UUID userId, int limit) {
+        List<QuickReviewSessionEntity> sessions = quickReviewSessionRepository
+                .findByUserIdAndSessionModeInAndCompletedAtIsNotNullOrderByCompletedAtDesc(userId, REVIEWABLE_SESSION_MODES);
 
-        Set<UUID> noteIds = new LinkedHashSet<>();
-        for (QuickReviewSessionEntity s : sessions) {
-            noteIds.add(s.getNoteId());
+        if (sessions.isEmpty()) {
+            return List.of();
         }
 
+        record NoteStat(
+                UUID noteId,
+                BigDecimal bestScore,
+                BigDecimal averageScore,
+                int attemptCount,
+                OffsetDateTime lastAttemptedAt,
+                UUID bestSessionId,
+                String bestSessionMode
+        ) {}
+
+        Map<UUID, List<QuickReviewSessionEntity>> byNote = new LinkedHashMap<>();
+        for (QuickReviewSessionEntity s : sessions) {
+            byNote.computeIfAbsent(s.getNoteId(), k -> new ArrayList<>()).add(s);
+        }
+
+        List<NoteStat> stats = new ArrayList<>();
+        for (var entry : byNote.entrySet()) {
+            UUID noteId = entry.getKey();
+            List<QuickReviewSessionEntity> noteSessions = entry.getValue();
+
+            BigDecimal bestScore = null;
+            UUID bestSessionId = null;
+            String bestSessionMode = null;
+            OffsetDateTime lastAttemptedAt = null;
+            BigDecimal totalScore = BigDecimal.ZERO;
+            int validScoreCount = 0;
+
+            for (QuickReviewSessionEntity s : noteSessions) {
+                if (s.getScorePercentage() != null) {
+                    if (bestScore == null || s.getScorePercentage().compareTo(bestScore) > 0) {
+                        bestScore = s.getScorePercentage();
+                        bestSessionId = s.getId();
+                        bestSessionMode = s.getSessionMode().name();
+                    }
+                    totalScore = totalScore.add(s.getScorePercentage());
+                    validScoreCount++;
+                }
+                if (s.getCompletedAt() != null && (lastAttemptedAt == null || s.getCompletedAt().isAfter(lastAttemptedAt))) {
+                    lastAttemptedAt = s.getCompletedAt();
+                }
+            }
+
+            BigDecimal averageScore = validScoreCount > 0
+                    ? totalScore.divide(BigDecimal.valueOf(validScoreCount), 2, RoundingMode.HALF_UP)
+                    : null;
+
+            stats.add(new NoteStat(noteId, bestScore, averageScore, noteSessions.size(), lastAttemptedAt, bestSessionId, bestSessionMode));
+        }
+
+        stats.sort(Comparator.<NoteStat, BigDecimal>comparing(
+                        NoteStat::bestScore, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(NoteStat::lastAttemptedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+
+        List<NoteStat> topStats = stats.stream().limit(limit).toList();
+
+        Set<UUID> noteIds = new LinkedHashSet<>();
+        for (NoteStat stat : topStats) {
+            noteIds.add(stat.noteId());
+        }
         Map<UUID, String> noteTitlesById = new HashMap<>();
         for (var note : noteRepository.findAllById(noteIds)) {
             noteTitlesById.put(note.getId(), note.getTitle());
         }
 
-        return sessions.stream()
-                .map(s -> new BestQuizSessionResponse(
-                        s.getId(),
-                        s.getNoteId(),
-                        noteTitlesById.getOrDefault(s.getNoteId(), null),
-                        s.getSessionMode().name(),
-                        s.getTotalQuestions(),
-                        s.getCorrectAnswers() != null ? s.getCorrectAnswers() : 0,
-                        s.getScorePercentage(),
-                        s.getCompletedAt()
+        return topStats.stream()
+                .map(stat -> new NotePerformanceSummaryResponse(
+                        stat.noteId(),
+                        noteTitlesById.getOrDefault(stat.noteId(), null),
+                        stat.bestScore(),
+                        stat.averageScore(),
+                        stat.attemptCount(),
+                        stat.lastAttemptedAt(),
+                        stat.bestSessionId(),
+                        stat.bestSessionMode()
                 ))
                 .toList();
     }

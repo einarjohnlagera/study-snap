@@ -37,6 +37,7 @@ import { DashboardEmpty } from "./dashboard-empty";
 import { DashboardError } from "./dashboard-error";
 import { FreePlanUpgradeCard } from "./free-plan-upgrade-card";
 import { DashboardActionCard } from "./dashboard-action-card";
+import { DashboardStrongestNotes } from "./dashboard-strongest-notes";
 import { AppModal } from "@/components/ui/app-modal";
 import {
   clearFirstStudyOnboardingStep,
@@ -365,6 +366,7 @@ export default function DashboardPage() {
                   viewAllLabel="View All in Library"
                 />
               )}
+              <DashboardStrongestNotes />
               <DashboardActionCard
                 title="Quick Review"
                 description="Use Quick Review to reinforce what you just studied and keep recall active."

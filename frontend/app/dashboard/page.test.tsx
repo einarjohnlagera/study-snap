@@ -35,6 +35,7 @@ jest.mock("@/lib/api", () => ({
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
   getMe: jest.fn(),
+  getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   joinPremiumWaitlist: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
   listNotes: jest.fn(),

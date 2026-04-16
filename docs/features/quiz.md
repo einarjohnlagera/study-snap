@@ -426,32 +426,48 @@ Board Exam Mode now makes the Challenge Quiz engine feel like a strict board-exa
 - `lib/challenge-quiz-results.ts` provides pure, independently tested result computation utilities
 - Adaptive Practice `completionMessage` uses `mapPerformanceLevel` for consistent 4-tier feedback
 
-## Best Quiz Sessions (v0.9.0)
+## Performance by Note (v0.9.0)
 
-The Profile page shows a curated "Best Sessions" section with the user's top-performing quiz attempts.
+The Profile page and Dashboard show note-grouped quiz performance so users can see how well they know each note, not just individual session scores.
 
-### What qualifies as a "best" session
+### What sessions are included
 
 - Only completed QUICK_REVIEW and CHALLENGE sessions are included (ADAPTIVE is excluded since it has no session review route)
-- Sessions with no `scorePercentage` recorded are excluded
+- Sessions with no `scorePercentage` recorded are excluded from score computation but still count toward `attemptCount`
 
-### Ranking logic
+### Grouping logic
 
-1. `scorePercentage` DESC — highest score first
-2. `correctAnswers` DESC — tiebreaker when percentages are equal (relevant when question counts differ)
-3. `completedAt` DESC — newest session wins when both score and correct count are equal
+Sessions are grouped by `noteId` in the service layer. For each note:
 
-### Display
+1. `bestScore` — highest `scorePercentage` across all sessions for that note
+2. `averageScore` — mean of all recorded `scorePercentage` values, rounded to 2 decimal places
+3. `attemptCount` — total number of completed sessions for that note
+4. `lastAttemptedAt` — most recent `completedAt` among all sessions for that note
+5. `bestSessionId` / `bestSessionMode` — the session that produced `bestScore` (used for navigation)
 
-- up to 5 sessions shown (configurable, backend enforces max 10)
-- each item shows: note title, quiz mode badge, score percentage, correct/total, date
-- achievement badges: `⭐ Perfect` for 100%, `Top Score` for ≥ 80%
-- clicking an item opens the dedicated Session Review page for that session
-- empty state prompts user to start a quiz
+Notes are sorted by `bestScore` DESC, then `lastAttemptedAt` DESC as a tiebreaker.
+
+### Display — Profile
+
+- up to 5 notes shown (configurable, backend enforces max 10)
+- each item shows: `⭐ Perfect` / `Top Score` badge, note title, best score %, average score % (when available), attempt count, last attempted date
+- clicking a note opens the Session Review page for the best session on that note, with back navigation returning to `/profile`
+
+### Display — Dashboard (Strongest Notes)
+
+- up to 3 notes shown in the Student dashboard after the "Recent Notes" section
+- each item shows: note title and best score %, with attempt count as subtext
+- "View all" link navigates to `/profile`
+- clicking a note opens Session Review with back navigation returning to `/dashboard`
+
+### Source-aware back navigation
+
+`buildNoteSessionReviewPath` accepts an optional `source` param (`"profile"` | `"dashboard"`). The Session Review page reads `source` from the URL and sets the back link accordingly: `"← Profile"`, `"← Dashboard"`, or `"← Note"` (default).
 
 ### Backend
 
-- `GET /dashboard/best-sessions?limit=N` — authenticated endpoint under `DashboardController`
-- `DashboardService.getBestQuizSessions(userId, limit)` fetches sessions via `QuickReviewSessionRepository.findBestSessionsByUserId` (JPQL query ordered by score/count/date), then enriches with note titles from `NoteRepository`
+- `GET /dashboard/note-performance?limit=N` — authenticated endpoint under `DashboardController`
+- `DashboardService.getNotePerformanceSummary(userId, limit)` fetches all completed QUICK_REVIEW + CHALLENGE sessions, groups by `noteId` in Java, computes per-note stats, sorts by best score DESC, then enriches the top `limit` notes with titles from `NoteRepository`
 - note titles looked up in a single batch using `findAllById` to avoid N+1 queries
+- returns `NotePerformanceSummaryResponse` (noteId, noteTitle, bestScore, averageScore, attemptCount, lastAttemptedAt, bestSessionId, bestSessionMode)
 

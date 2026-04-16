@@ -34,12 +34,13 @@
   - uses `public/landing/feature-public-library.jpg` inside a framed product-preview container with constrained height, rounded corners, and subtle depth
   - keeps the preview balanced across desktop and mobile with text-first stacking on small screens
 
-- **Best Quiz Sessions on Profile** — the Profile page now shows a curated "Best Sessions" card with the user's top-scoring quiz attempts across all notes:
-  - sessions ranked by score percentage DESC, correct answers DESC, then recency DESC so the user's strongest attempts appear first
-  - each item shows the note title, quiz mode badge (Quick Review / Challenge Quiz), score percentage, correct/total count, date, and a `Top Score` or `⭐ Perfect` achievement badge when applicable
-  - clicking any session opens the dedicated Session Review page for that attempt with full answer review, explanations, and weak-concept breakdown
-  - empty state shown when no sessions exist with a prompt to start a quiz
-  - backend: `GET /dashboard/best-sessions?limit=N` returns up to 10 sessions enriched with note titles; includes only QUICK_REVIEW and CHALLENGE modes since those support session review navigation
+- **Performance by Note on Profile and Dashboard** — replaced the flat "Best Sessions" list with a note-grouped performance view that shows how well the user knows each note:
+  - Profile "Top Performance by Note" card groups all QUICK_REVIEW and CHALLENGE sessions by note, computing best score, average score, attempt count, and last attempted date per note; sorted by best score DESC
+  - each row shows `⭐ Perfect` (100%) or `Top Score` (≥80%) badge, note title, best/average percentages, attempt count, and last attempted date
+  - clicking any note opens the Session Review page for the best session on that note, with back navigation returning to the Profile page
+  - Dashboard "Strongest Notes" section shows the top 3 notes by best score with a "View all" link to the Profile page; back navigation from those sessions returns to the Dashboard
+  - Session Review back link is now source-aware: navigating from Profile shows "← Profile", from Dashboard shows "← Dashboard", from the note page shows "← Note"
+  - backend: `GET /dashboard/note-performance?limit=N` replaces `/dashboard/best-sessions`; groups sessions by noteId in service layer, returns `NotePerformanceSummaryResponse` with bestScore, averageScore, attemptCount, lastAttemptedAt, bestSessionId, bestSessionMode, and noteTitle
 
 - **Public Library evaluation signals** — public notes now expose a lightweight like system so note quality is easier to judge without turning discovery into a social feed:
   - authenticated users can toggle one like per public note, with likes stored per user-note pair and duplicate likes prevented server-side

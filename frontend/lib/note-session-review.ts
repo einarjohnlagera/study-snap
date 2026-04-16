@@ -50,22 +50,37 @@ export function fromNoteSessionReviewRouteMode(
   return null;
 }
 
+export type NoteSessionReviewSource = "profile" | "dashboard";
+
 export function buildNoteSessionReviewPath(
   noteId: string,
   sessionId: string,
   sessionMode: NoteSessionReviewMode,
   tab: NoteDetailTab,
+  source?: NoteSessionReviewSource,
 ): string {
-  const searchParams = new URLSearchParams({
+  const params: Record<string, string> = {
     [NOTE_SESSION_REVIEW_QUERY_PARAMS.routeMode]: toNoteSessionReviewRouteMode(sessionMode),
     tab,
-  });
-  return `/notes/${noteId}/sessions/${sessionId}?${searchParams.toString()}`;
+  };
+  if (source) {
+    params.source = source;
+  }
+  return `/notes/${noteId}/sessions/${sessionId}?${new URLSearchParams(params).toString()}`;
 }
 
 export function buildNoteSessionReviewBackPath(
   noteId: string,
   tab: NoteDetailTab,
+  source?: NoteSessionReviewSource | null,
 ): string {
+  if (source === "profile") return "/profile";
+  if (source === "dashboard") return "/dashboard";
   return buildNoteDetailPathWithTab(noteId, tab);
+}
+
+export function buildNoteSessionReviewBackLabel(source?: NoteSessionReviewSource | null): string {
+  if (source === "profile") return "Profile";
+  if (source === "dashboard") return "Dashboard";
+  return "Note";
 }

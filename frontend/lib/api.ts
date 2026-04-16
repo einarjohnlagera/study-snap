@@ -541,15 +541,15 @@ export type AdaptivePracticeCompleteRequest = {
 export type ChallengeQuizMode = "challenge" | "board_exam";
 export type QuizSessionMode = "QUICK_REVIEW" | "CHALLENGE" | "ADAPTIVE";
 
-export type BestQuizSessionResponse = {
-  sessionId: string;
+export type NotePerformanceSummaryResponse = {
   noteId: string;
   noteTitle: string | null;
-  sessionMode: Extract<QuizSessionMode, "QUICK_REVIEW" | "CHALLENGE">;
-  totalQuestions: number;
-  correctAnswers: number;
-  scorePercentage: number;
-  completedAt: string;
+  bestScore: number;
+  averageScore: number | null;
+  attemptCount: number;
+  lastAttemptedAt: string;
+  bestSessionId: string;
+  bestSessionMode: Extract<QuizSessionMode, "QUICK_REVIEW" | "CHALLENGE">;
 };
 
 export type ChallengeQuizStartRequest = {
@@ -1948,16 +1948,16 @@ export async function getDashboardOverview(): Promise<DashboardOverviewResponse>
   return parseApiResponse<DashboardOverviewResponse>(response, "Could not load dashboard overview.");
 }
 
-export async function getUserBestQuizSessions(limit = 5): Promise<BestQuizSessionResponse[]> {
+export async function getUserNotePerformanceSummary(limit = 5): Promise<NotePerformanceSummaryResponse[]> {
   const response = await fetchWithAuth(
-    `/dashboard/best-sessions?limit=${limit}`,
+    `/dashboard/note-performance?limit=${limit}`,
     {
       method: "GET",
       headers: buildAuthHeaders(),
     },
     true,
   );
-  return parseApiResponse<BestQuizSessionResponse[]>(response, "Could not load best quiz sessions.");
+  return parseApiResponse<NotePerformanceSummaryResponse[]>(response, "Could not load note performance summary.");
 }
 
 export async function getStudyEngagement(): Promise<StudyEngagementResponse> {
