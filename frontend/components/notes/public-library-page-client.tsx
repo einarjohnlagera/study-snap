@@ -15,6 +15,7 @@ import { NoteQualityBadges } from "@/components/notes/note-quality-badge";
 import { PublicLibraryCopyAction } from "@/components/notes/public-library-copy-action";
 import { PublicLibraryLikeAction } from "@/components/notes/public-library-like-action";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { getAuthUser } from "@/lib/auth";
 import {
   type LearnerLevel,
@@ -958,6 +959,11 @@ export function PublicLibraryPageClient() {
         title="Public Library"
         description="Explore public notes from you, the community, and official NoteLib examples. Copy a note into your library when you want to study it in your own workspace."
         brandLogo
+      />
+
+      <GuidanceTip
+        tipId="public-library-intro"
+        message="Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included."
       />
 
       {loading ? (

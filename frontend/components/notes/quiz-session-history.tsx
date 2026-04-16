@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 import {
   type RecentQuizSessionHistoryItem,
   getQuizSessionModeLabel,
@@ -41,9 +42,15 @@ export function QuizSessionHistory({
       </div>
 
       {sessions.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-5 text-sm text-foreground/70">
-          <p className="font-medium text-foreground">No completed quiz sessions yet.</p>
-          <p className="mt-1">Start a quiz to begin tracking your progress.</p>
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-5 text-sm text-foreground/70">
+            <p className="font-medium text-foreground">No completed quiz sessions yet.</p>
+            <p className="mt-1">Start a quiz to begin tracking your progress.</p>
+          </div>
+          <GuidanceTip
+            tipId="sessions-export-hint"
+            message="Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing."
+          />
         </div>
       ) : (
         <div className="space-y-2">
