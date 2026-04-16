@@ -8,6 +8,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
 import { GettingStartedGuide } from "@/components/help/getting-started-guide";
+import { StudentGuide } from "@/components/help/student-guide";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import type { LucideIcon } from "lucide-react";
 
@@ -170,6 +171,13 @@ const HELP_CARDS: HelpCard[] = [
       },
     ],
   },
+  {
+    id: "student-guide",
+    icon: User,
+    title: "Student Guide",
+    description: "A step-by-step study workflow to get the most out of NoteLib.",
+    items: [],
+  },
 ];
 
 export default function HelpPage() {
@@ -221,24 +229,6 @@ export default function HelpPage() {
           );
         })}
 
-        {/* Student Guide — links to Learn page */}
-        <Link href="/learn" className="group w-full text-left">
-          <Card className="flex h-full flex-col gap-4 p-5 transition-colors hover:bg-highlight sm:p-6">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
-                <User className="h-4 w-4 text-foreground/70" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 space-y-1">
-                <CardTitle className="text-sm">Student Guide</CardTitle>
-                <CardDescription className="text-xs leading-relaxed">In-depth guides for students, board exam reviewees, and exam prep.</CardDescription>
-              </div>
-            </div>
-            <div className="mt-auto flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400">
-              Browse guides
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-            </div>
-          </Card>
-        </Link>
       </div>
 
       {/* Contact / support footer */}
@@ -264,11 +254,14 @@ export default function HelpPage() {
         <AppModal
           isOpen={openCardId !== null}
           title={openCard.title}
+          description={openCard.id === "student-guide" ? "Study smarter using notes." : undefined}
           onClose={() => setOpenCardId(null)}
           panelClassName="sm:max-w-lg"
         >
           {openCard.id === "getting-started" ? (
             <GettingStartedGuide />
+          ) : openCard.id === "student-guide" ? (
+            <StudentGuide />
           ) : (
             <div className="space-y-5">
               {openCard.items.map((item) => (
