@@ -1,6 +1,7 @@
 "use client";
 
 import { BackLink } from "@/components/ui/back-link";
+import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, MoreHorizontal } from "lucide-react";
@@ -1451,6 +1452,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       ) : null}
                     </>
                   )}
+                  {!isGeneratingStudyPack && !canGenerateStudyPack ? (
+                    <p className="w-full text-xs text-foreground/60 sm:w-auto sm:self-center">
+                      Quick Review uses saved questions &bull; Challenge Quiz generates new timed questions
+                    </p>
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -1557,6 +1563,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             ) : isDraft ? (
               <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
             ) : (
+              <>
+                {(quickSummary?.attempts ?? 0) === 0 && (challengeSummary?.attempts ?? 0) === 0 ? (
+                  <GuidanceTip
+                    tipId="note-detail-try-quiz"
+                    message="Try Quick Review or Challenge Quiz to start tracking your performance on this note."
+                  />
+                ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-md border border-border bg-background p-3">
                   <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
@@ -1569,6 +1582,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
                 </div>
               </div>
+              </>
             )}
           </Card>
 

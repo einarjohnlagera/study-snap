@@ -4,6 +4,15 @@
 
 ### New Features
 
+- **In-App Guidance System** — lightweight contextual guidance helps users understand features without blocking or overwhelming:
+  - micro-guidance text added to key form fields: Subject and Course / Program on the note editor explain what each field does; Course / Program on the Profile page explains how it affects recommendations
+  - quiz mode description line added below the Study Pack action buttons on Note Detail explaining the difference between Quick Review and Challenge Quiz
+  - `GuidanceTip` component: a subtle, dismissible one-time tip strip backed by `localStorage` — fades in on first visit, dismissed permanently with a single click
+  - first-time-quiz nudge on Note Detail Performance Overview: when a Study Pack is ready but no quiz sessions exist, a tip prompts the user to try Quick Review or Challenge Quiz
+  - Help Center page at `/help` with six structured sections: Getting Started, Creating Notes, Study Packs, Quiz Types, Performance Tracking, and Exporting Quizzes
+  - Help is accessible from the avatar dropdown menu (next to Settings) and from a "Help Center" link in the Settings page header
+  - `"help"` added as a new `ActionIconName` using the `HelpCircle` icon from Lucide
+
 - **Quiz session history + review** — Note Detail now keeps completed quiz history tied to the note so past practice is reviewable instead of disposable:
   - adds a `Recent Sessions` section below `Performance Overview` on Study Pack-ready notes, combining Quick Review and Challenge Quiz attempts in reverse-chronological order
   - `Review session` now opens one dedicated session-review page on both desktop and mobile for a clearer and more stable interaction model

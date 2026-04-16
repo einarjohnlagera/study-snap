@@ -413,6 +413,14 @@ export default function SettingsPage() {
             eyebrow="SETTINGS"
             title="Configuration"
             description="Manage account settings, plan and billing details, and learning preferences."
+            actions={
+              <a
+                href="/help"
+                className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Help Center
+              </a>
+            }
           />
 
           <Card className="space-y-4 p-4 sm:p-6">

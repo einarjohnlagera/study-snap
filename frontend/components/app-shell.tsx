@@ -167,7 +167,7 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "admin" | "dashboard" | "library" | "profile" | "publicLibrary" | "settings";
+  action: "admin" | "dashboard" | "help" | "library" | "profile" | "publicLibrary" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
@@ -381,6 +381,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     const nav: NavLinkItem[] = [
       { href: profileHref, label: "Profile", action: "profile" },
       { href: "/settings", label: "Settings", action: "settings" },
+      { href: "/help", label: "Help", action: "help" },
     ];
     if (user.role === "ADMIN") {
       nav.push({ href: "/admin", label: "Admin", action: "admin" as const });
@@ -543,6 +544,14 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                   >
                     <span className="inline-flex items-center gap-2">
                       <ResponsiveActionContent action="settings" label="Settings" showTextOnMobile />
+                    </span>
+                  </Link>
+                  <Link
+                    href="/help"
+                    className="motion-lift block rounded px-3 py-2 text-sm text-foreground/85 transition-colors hover:bg-highlight hover:text-foreground active:bg-highlight-strong"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <ResponsiveActionContent action="help" label="Help" showTextOnMobile />
                     </span>
                   </Link>
                   <button
