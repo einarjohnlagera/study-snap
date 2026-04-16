@@ -11,6 +11,8 @@ import {
   type AuthUser,
 } from "./auth";
 
+const SESSION_EXPIRED_STORAGE_KEY = "notelib-session-expired-user-id";
+
 const verifiedUser: AuthUser = {
   id: "user-1",
   email: "note@example.com",
@@ -37,6 +39,7 @@ const secondVerifiedUser: AuthUser = {
 describe("auth redirect helpers", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     window.history.replaceState({}, "", "/login");
   });
 
@@ -69,6 +72,54 @@ describe("auth redirect helpers", () => {
     );
 
     expect(destination).toBe("/dashboard");
+  });
+
+  it("restores session-expiry redirect for the same user who was logged out", () => {
+    window.sessionStorage.setItem(SESSION_EXPIRED_STORAGE_KEY, verifiedUser.id);
+
+    const destination = resolvePostLoginDestination(
+      verifiedUser,
+      { search: `?redirect=%2Fnotes%2F123&reason=${LOGIN_REASON_SESSION_EXPIRED}` },
+    );
+
+    expect(destination).toBe("/notes/123");
+  });
+
+  it("redirects to dashboard when a different user logs in after session expiry", () => {
+    window.sessionStorage.setItem(SESSION_EXPIRED_STORAGE_KEY, verifiedUser.id);
+
+    const destination = resolvePostLoginDestination(
+      secondVerifiedUser,
+      { search: `?redirect=%2Fnotes%2F123&reason=${LOGIN_REASON_SESSION_EXPIRED}` },
+    );
+
+    expect(destination).toBe("/dashboard");
+  });
+
+  it("redirects to dashboard on session expiry when no expired user ID was stored", () => {
+    // sessionStorage is empty — no stored user ID (e.g. sessionStorage unavailable or cleared)
+    const destination = resolvePostLoginDestination(
+      verifiedUser,
+      { search: `?redirect=%2Fnotes%2F123&reason=${LOGIN_REASON_SESSION_EXPIRED}` },
+    );
+
+    expect(destination).toBe("/dashboard");
+  });
+
+  it("clears the stored expired user ID when the user successfully logs in", () => {
+    window.sessionStorage.setItem(SESSION_EXPIRED_STORAGE_KEY, verifiedUser.id);
+
+    setAuthUser(verifiedUser);
+
+    expect(window.sessionStorage.getItem(SESSION_EXPIRED_STORAGE_KEY)).toBeNull();
+  });
+
+  it("stores the expired user ID in sessionStorage when a session expires", () => {
+    setAuthUser(verifiedUser);
+
+    handleUnauthorizedSession();
+
+    expect(window.sessionStorage.getItem(SESSION_EXPIRED_STORAGE_KEY)).toBe(verifiedUser.id);
   });
 
   it("ignores auth-page redirect targets", () => {

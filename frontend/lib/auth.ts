@@ -33,8 +33,26 @@ export type LoginReason =
   | typeof LOGIN_REASON_LOGGED_OUT
   | typeof LOGIN_REASON_AUTH_REQUIRED;
 
+const SESSION_EXPIRED_USER_KEY = "notelib-session-expired-user-id";
+
 let hasTriggeredSessionExpiryRedirect = false;
 let hasManualLogoutRedirectIntent = false;
+
+function getSessionExpiredUserId(): string | null {
+  try {
+    return globalThis.sessionStorage?.getItem(SESSION_EXPIRED_USER_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSessionExpiredUserId(): void {
+  try {
+    globalThis.sessionStorage?.removeItem(SESSION_EXPIRED_USER_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 function emitAuthChangeEvent(): void {
   if (globalThis.window === undefined) {
@@ -102,6 +120,7 @@ export function setAuthUser(user: AuthUser): void {
   }
   hasTriggeredSessionExpiryRedirect = false;
   hasManualLogoutRedirectIntent = false;
+  clearSessionExpiredUserId();
   globalThis.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   emitAuthChangeEvent();
 }
@@ -134,6 +153,10 @@ export function beginManualLogoutRedirect(): void {
   }
   hasTriggeredSessionExpiryRedirect = false;
   hasManualLogoutRedirectIntent = true;
+}
+
+export function isManualLogoutInProgress(): boolean {
+  return hasManualLogoutRedirectIntent;
 }
 
 export function getCurrentUserId(): string | null {
@@ -175,7 +198,20 @@ export function resolvePostLoginDestination(
   if (loginReason === LOGIN_REASON_LOGGED_OUT) {
     return "/dashboard";
   }
+
   const redirectTarget = getSafeRedirectPath(params.get(LOGIN_REDIRECT_QUERY_KEY));
+
+  if (loginReason === LOGIN_REASON_SESSION_EXPIRED) {
+    // Only restore the session-expiry redirect for the exact user whose session expired.
+    // If a different user logs in on the same device they land on the dashboard rather than
+    // a resource they may not own.
+    const expiredUserId = getSessionExpiredUserId();
+    if (expiredUserId && authUser?.id === expiredUserId && redirectTarget && !isAuthRoutePath(redirectTarget)) {
+      return redirectTarget;
+    }
+    return "/dashboard";
+  }
+
   if (redirectTarget && !isAuthRoutePath(redirectTarget)) {
     return redirectTarget;
   }
@@ -202,8 +238,16 @@ export function handleUnauthorizedSession(): void {
   }
 
   hasTriggeredSessionExpiryRedirect = true;
+  const expiredUserId = getCurrentUserId();
   const redirectTo = getCurrentPathWithQuery();
   clearAuthUser({ preserveSessionExpiryGuard: true });
+  if (expiredUserId) {
+    try {
+      globalThis.sessionStorage?.setItem(SESSION_EXPIRED_USER_KEY, expiredUserId);
+    } catch {
+      // ignore — if sessionStorage is unavailable the redirect will fall back to dashboard
+    }
+  }
   globalThis.location.replace(
     buildLoginPath({
       redirectTo,
