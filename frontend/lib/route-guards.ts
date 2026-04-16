@@ -2,6 +2,7 @@ import {
   buildLoginPath,
   getAuthUser,
   getCurrentPathWithQuery,
+  isManualLogoutInProgress,
   LOGIN_REASON_AUTH_REQUIRED,
   needsOnboarding,
 } from "./auth";
@@ -11,6 +12,11 @@ type RouterLike = {
 };
 
 export function redirectToLoginWithCurrentDestination(router: RouterLike): void {
+  if (isManualLogoutInProgress()) {
+    // Manual logout is in progress — the logout handler owns the navigation to /login.
+    // Bail out to prevent the auth-change event from overwriting the clean logout redirect.
+    return;
+  }
   router.replace(
     buildLoginPath({
       redirectTo: getCurrentPathWithQuery(),

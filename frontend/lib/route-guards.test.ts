@@ -1,10 +1,11 @@
-import { requireAuthenticatedOnboardedUser, requireVerifiedOnboardedUser } from "./route-guards";
-import { buildLoginPath, getAuthUser } from "./auth";
+import { redirectToLoginWithCurrentDestination, requireAuthenticatedOnboardedUser, requireVerifiedOnboardedUser } from "./route-guards";
+import { buildLoginPath, getAuthUser, isManualLogoutInProgress } from "./auth";
 
 jest.mock("./auth", () => ({
   buildLoginPath: jest.fn(() => "/login"),
   getAuthUser: jest.fn(),
   getCurrentPathWithQuery: jest.fn(() => "/dashboard"),
+  isManualLogoutInProgress: jest.fn(() => false),
   LOGIN_REASON_AUTH_REQUIRED: "auth_required",
   needsOnboarding: jest.fn((authUser) => Boolean(authUser?.emailVerifiedAt) && authUser?.onboardingCompletedAt === null),
 }));
@@ -17,6 +18,7 @@ describe("route guards", () => {
     (buildLoginPath as jest.Mock).mockReset();
     (buildLoginPath as jest.Mock).mockReturnValue("/login");
     (getAuthUser as jest.Mock).mockReset();
+    (isManualLogoutInProgress as jest.Mock).mockReturnValue(false);
   });
 
   it("redirects logged-out users to login with an auth-required reason", () => {
@@ -49,6 +51,15 @@ describe("route guards", () => {
     });
 
     expect(requireVerifiedOnboardedUser(router)).toBe(true);
+    expect(router.replace).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect when manual logout is in progress", () => {
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+    (isManualLogoutInProgress as jest.Mock).mockReturnValue(true);
+
+    redirectToLoginWithCurrentDestination(router);
+
     expect(router.replace).not.toHaveBeenCalled();
   });
 });

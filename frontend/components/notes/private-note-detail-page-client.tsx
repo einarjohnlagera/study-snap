@@ -1156,72 +1156,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               </div>
             </Card>
           ) : null}
-          <Card className="relative space-y-4 p-4 sm:p-6">
-            {!isInlineMetadataEditMode ? (
-              <div className="absolute right-4 top-4 z-10 sm:right-6 sm:top-6" ref={noteActionsMenuRef}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-10 w-10 rounded-full border-border/80 bg-background/95 px-0 shadow-sm backdrop-blur-sm"
-                  aria-label="Open note actions"
-                  aria-haspopup="menu"
-                  aria-expanded={noteActionsMenuOpen}
-                  onClick={() => setNoteActionsMenuOpen((open) => !open)}
-                >
-                  <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-                </Button>
-                {noteActionsMenuOpen ? (
-                  <div
-                    role="menu"
-                    aria-label="Note actions"
-                    className="motion-dropdown-panel absolute right-0 top-12 z-20 w-52 rounded-xl border border-border bg-background p-1.5 shadow-sm"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={handleEdit}
-                      disabled={isGeneratingStudyPack}
-                    >
-                      <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={() => void handleMakeCopy()}
-                      disabled={copying}
-                    >
-                      <ResponsiveActionContent action="copy" label={copying ? "Copying..." : "Make a Copy"} showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                      onClick={() => void handleCopyLink()}
-                      disabled={sharing}
-                    >
-                      <ResponsiveActionContent action="share" label={sharing ? "Sharing..." : "Share"} showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
-                      onClick={() => {
-                        setNoteActionsMenuOpen(false);
-                        setShowDeleteConfirm(true);
-                      }}
-                      disabled={deleting}
-                    >
-                      <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+          <Card className="space-y-4 p-4 sm:p-6">
             <div className="flex flex-col gap-3">
-              <div className={`min-w-0 flex-1 space-y-3 ${isInlineMetadataEditMode ? "" : "pr-14 sm:pr-16"}`}>
+              <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1 space-y-3">
                 {isInlineMetadataEditMode ? (
                   <div className="space-y-2">
                     <label htmlFor="note-title-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
@@ -1310,6 +1248,70 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     </div>
                   )}
                 </div>
+              </div>
+                {!isInlineMetadataEditMode ? (
+                  <div className="relative shrink-0 self-start" ref={noteActionsMenuRef}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 w-10 rounded-full border-border/80 bg-background/95 px-0 shadow-sm backdrop-blur-sm"
+                      aria-label="Open note actions"
+                      aria-haspopup="menu"
+                      aria-expanded={noteActionsMenuOpen}
+                      onClick={() => setNoteActionsMenuOpen((open) => !open)}
+                    >
+                      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                    {noteActionsMenuOpen ? (
+                      <div
+                        role="menu"
+                        aria-label="Note actions"
+                        className="motion-dropdown-panel absolute right-0 top-12 z-20 w-52 rounded-xl border border-border bg-background p-1.5 shadow-sm"
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                          onClick={handleEdit}
+                          disabled={isGeneratingStudyPack}
+                        >
+                          <ResponsiveActionContent action="edit" label="Edit" showTextOnMobile iconClassName="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                          onClick={() => void handleMakeCopy()}
+                          disabled={copying}
+                        >
+                          <ResponsiveActionContent action="copy" label={copying ? "Copying..." : "Make a Copy"} showTextOnMobile iconClassName="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                          onClick={() => void handleCopyLink()}
+                          disabled={sharing}
+                        >
+                          <ResponsiveActionContent action="share" label={sharing ? "Sharing..." : "Share"} showTextOnMobile iconClassName="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="motion-lift flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 active:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/40 dark:active:bg-red-950/60"
+                          onClick={() => {
+                            setNoteActionsMenuOpen(false);
+                            setShowDeleteConfirm(true);
+                          }}
+                          disabled={deleting}
+                        >
+                          <ResponsiveActionContent action="delete" label="Delete" showTextOnMobile iconClassName="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               {isInlineMetadataEditMode ? (
                 <div className="flex flex-wrap items-center gap-2">
