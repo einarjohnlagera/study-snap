@@ -1367,6 +1367,47 @@ NoteLib uses two types of contained icon contexts:
 - Action icons: inherit button/link text color
 - Navigation icons: `text-foreground/70` or `text-muted-foreground`
 
+### Design Tokens
+
+NoteLib uses **Tailwind v4 with CSS custom properties** for design tokens. Tokens are defined in `app/globals.css` and mapped to Tailwind utilities via `@theme inline {}`.
+
+**Color tokens (semantic):**
+
+| CSS variable | Light value | Dark value | Tailwind utility |
+|---|---|---|---|
+| `--background` | `#ffffff` | `#030712` | `bg-background`, `text-background` |
+| `--foreground` | `#111827` | `#f3f4f6` | `text-foreground` |
+| `--border` | `#e5e7eb` | `#1f2937` | `border-border` |
+| `--muted` | `#e5e7eb` | `#374151` | `bg-muted` |
+| `--highlight` | `blue-600/8%` | `blue-500/8%` | `bg-highlight` |
+| `--highlight-strong` | `blue-600/15%` | `blue-500/15%` | `bg-highlight-strong` |
+| `--primary` | `#2563eb` (blue-600) | `#3b82f6` (blue-500) | `bg-primary`, `text-primary` |
+| `--primary-hover` | `#1d4ed8` (blue-700) | `#2563eb` (blue-600) | `bg-primary-hover` |
+| `--primary-active` | `#1e40af` (blue-800) | `#1d4ed8` (blue-700) | `bg-primary-active` |
+| `--surface-alt` | `#f9fafb` (gray-50) | `gray-950/40%` | `bg-surface-alt` |
+
+**Motion tokens:**
+
+| CSS variable | Value | Used by |
+|---|---|---|
+| `--motion-duration-fast` | `150ms` | `.motion-pressable` |
+| `--motion-duration-base` | `220ms` | `.motion-surface`, global body transition |
+| `--motion-ease-standard` | `cubic-bezier(0.2, 0, 0, 1)` | surface transitions |
+| `--motion-ease-emphasized` | `cubic-bezier(0.16, 1, 0.3, 1)` | modal/dropdown entry |
+| `--motion-press-scale` | `0.985` | `.motion-pressable:active` |
+
+**Radius / spacing / shadow:**
+Not custom tokens — Tailwind's default scale is the token:
+- Radius: `rounded-lg` (buttons, inputs), `rounded-xl` (cards, chips, modals)
+- Spacing: `p-4 sm:p-6` (primary/content cards), `p-5 sm:p-6` (secondary info cards), `p-3` (inner utility cards)
+- Shadow: `shadow-sm` (cards)
+
+**Token rules:**
+- Always use `bg-primary` / `hover:bg-primary-hover` / `active:bg-primary-active` for primary brand color — never `blue-600` directly
+- Always use `bg-surface-alt` for card surface backgrounds — never `bg-gray-50 dark:bg-gray-950/40`
+- Tokens are theme-ready: dark mode switching is handled by CSS var substitution, not `dark:` Tailwind prefixes
+- Adding a new theme (e.g., high-contrast, sepia) means adding a new CSS class that overrides the custom properties — no component changes required
+
 ---
 
 ## Non-Goals (Current Scope)

@@ -9,6 +9,10 @@
   --muted: #e5e7eb;
   --highlight: rgb(37 99 235 / 0.08);
   --highlight-strong: rgb(37 99 235 / 0.15);
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-active: #1e40af;
+  --surface-alt: #f9fafb;
   --motion-duration-fast: 150ms;
   --motion-duration-base: 220ms;
   --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
@@ -23,6 +27,10 @@
   --color-muted: var(--muted);
   --color-highlight: var(--highlight);
   --color-highlight-strong: var(--highlight-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-surface-alt: var(--surface-alt);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -35,6 +43,10 @@
   --muted: #374151;
   --highlight: rgb(59 130 246 / 0.08);
   --highlight-strong: rgb(59 130 246 / 0.15);
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-active: #1d4ed8;
+  --surface-alt: rgb(3 7 18 / 0.4);
 }
 
 html.theme-light,

@@ -46,7 +46,7 @@ export function GettingStartedGuide() {
             <li key={step.number} className="flex gap-3">
               {/* Left: step indicator + connector */}
               <div className="flex flex-col items-center">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white dark:bg-blue-500">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">
                   {step.number}
                 </span>
                 {!isLast ? (

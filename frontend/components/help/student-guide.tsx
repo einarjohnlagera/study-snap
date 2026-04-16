@@ -71,7 +71,7 @@ export function StudentGuide() {
             return (
               <li key={step.number} className="flex gap-3">
                 <div className="flex flex-col items-center">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white dark:bg-blue-500">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-white">
                     {step.number}
                   </span>
                   {!isLast ? <span className="mt-1.5 flex-1 w-px bg-border" /> : null}
