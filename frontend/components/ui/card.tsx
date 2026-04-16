@@ -5,7 +5,7 @@ function Card({ className, ...props }: Readonly<React.HTMLAttributes<HTMLDivElem
   return (
     <div
       className={cn(
-        "motion-surface rounded-xl border border-border bg-gray-50 p-6 shadow-sm dark:bg-gray-950/40",
+        "motion-surface rounded-xl border border-border bg-surface-alt p-6 shadow-sm",
         className,
       )}
       {...props}

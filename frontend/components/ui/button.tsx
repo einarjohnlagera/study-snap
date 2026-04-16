@@ -14,9 +14,9 @@ const buttonVariants = ({
   className?: string;
 }) =>
   cn(
-    "motion-pressable inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+    "motion-pressable inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
     variant === "default" &&
-      "bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 dark:bg-blue-500 dark:hover:bg-blue-600 dark:active:bg-blue-700",
+      "bg-primary text-white shadow-sm transition-colors hover:bg-primary-hover active:bg-primary-active",
     variant === "outline" &&
       "border border-border bg-background text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong dark:border-gray-600 dark:text-gray-200",
     variant === "ghost" &&
