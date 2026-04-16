@@ -167,7 +167,7 @@ function getPageTitle(pathname: string): string {
 type NavLinkItem = {
   href: string;
   label: string;
-  action: "admin" | "dashboard" | "library" | "profile" | "publicLibrary" | "settings";
+  action: "admin" | "dashboard" | "help" | "library" | "profile" | "publicLibrary" | "settings";
 };
 
 const MAIN_NAV: NavLinkItem[] = [
