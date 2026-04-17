@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
@@ -122,24 +123,22 @@ function ProfileTypeSwitchModal({
       onClose={onCancel}
       actions={(
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <ResponsiveActionButton
+          <Button
             type="button"
             variant="outline"
             className="w-full sm:w-auto"
             onClick={onCancel}
-            action="back"
-            label="Cancel"
-            showTextOnMobile
-          />
-          <ResponsiveActionButton
+          >
+            Cancel
+          </Button>
+          <Button
             type="button"
             className="w-full sm:w-auto"
             onClick={onConfirm}
             disabled={saving}
-            action="save"
-            label={saving ? "Saving..." : "Confirm"}
-            showTextOnMobile
-          />
+          >
+            {saving ? "Switching..." : "Switch"}
+          </Button>
         </div>
       )}
     >
