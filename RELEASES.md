@@ -1,5 +1,41 @@
 # RELEASES.md - NoteLib
 
+## v0.10.0 - Profile Type System & Teacher Flow Phase 1 (In Progress)
+
+### New Features
+
+- **Profile Type System** — formalises the three active profile types (Student, Board Taker, Teacher) with a controlled availability model:
+  - `PROFESSIONAL` and `PARENT` are now visible in the Profile Type card but not selectable — they show a "Coming Soon" badge and remain disabled until the personas are ready
+  - active types (Student, Board Taker, Teacher) use a visual card-list selector with radio indicator and one-line description instead of a plain `<select>`
+
+- **Profile switching confirmation modal** — switching to a different profile type now requires a confirmation step:
+  - modal copy is mode-specific (not generic) and explains what changes with the new mode
+  - modal always includes "You can switch back anytime."
+  - on confirm: saves the new type and shows a post-switch toast that auto-dismisses after 4 seconds
+  - on cancel: closes without saving — selected UI state stays but no API call is made
+  - toast copy is mode-specific (e.g. "You're now in Board Taker mode — focused for exam prep.")
+
+- **Mode system (`frontend/lib/profile-mode.ts`)** — introduces a clean mode layer above profile types so shared components branch on mode, not on profile name:
+  - `ProfileMode`: `"LEARNING"` (Student, Board Taker) or `"CREATOR"` (Teacher)
+  - `SessionMode`: `"LEARNING"` (scored, default for Learning mode) or `"PREVIEW"` (unscored, default for Creator mode)
+  - `resolveProfileMode()` and `resolveDefaultSessionMode()` are the canonical resolution functions
+  - `ACTIVE_PROFILE_TYPES` and `DISABLED_PROFILE_TYPES` constants centralise availability rules
+  - `getProfileTypeSwitchContent()` returns mode-specific confirmation copy for each active type
+
+- **Quiz session mode for Teacher (Creator mode)** — Challenge Quiz prestart now shows a session mode toggle for Creator mode users:
+  - "Preview" (default for Teacher) — quiz runs normally but scores are not recorded in performance history
+  - "Take Quiz (scored)" — full scoring; Teacher opts in explicitly
+  - toggle appears only for Creator mode users, above the Challenge Quiz / Board Exam Mode choice
+  - results screen shows "Preview mode — scores were not recorded" when preview was selected
+  - `sessionMode` field added to `ChallengeQuizStartRequest` so the backend can eventually enforce the distinction
+
+### Documentation
+
+- `docs/product/SPEC.md`: added Profile Type System section with mode table, quiz session mode rules, profile switching UX spec, disabled-type behaviour, and mode resolution API
+- `docs/product/ROADMAP.md`: added Public Library persona filtering as a future direction
+
+---
+
 ## v0.9.0 - Learning Experience & Product Polish (In Progress)
 
 ### New Features

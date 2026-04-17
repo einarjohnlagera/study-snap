@@ -1,11 +1,14 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { SuggestionCombobox } from "@/components/ui/suggestion-combobox";
+import { AppModal } from "@/components/ui/app-modal";
+import { ToastMessage } from "@/components/ui/toast-message";
 import {
   completeOnboardingProfileType,
   getMe,
@@ -21,6 +24,11 @@ import {
   LEARNER_LEVEL_OPTIONS,
   mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
+import {
+  DISABLED_PROFILE_TYPES,
+  getProfileTypeSwitchContent,
+  isActiveProfileTypeForSwitch,
+} from "@/lib/profile-mode";
 import { BackLink } from "@/components/ui/back-link";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
@@ -44,12 +52,41 @@ type LearningProfileErrors = {
   courseProgram?: string;
 };
 
-const PROFILE_TYPE_OPTIONS: Array<{ value: ProfileType; label: string }> = [
-  { value: "STUDENT", label: "Student" },
-  { value: "BOARD_EXAM", label: "Board Exam" },
-  { value: "TEACHER", label: "Teacher" },
-  { value: "PARENT", label: "Parent" },
-  { value: "PROFESSIONAL", label: "Professional" },
+type ProfileTypeOption = {
+  value: ProfileType;
+  label: string;
+  description: string;
+  disabled?: boolean;
+};
+
+const PROFILE_TYPE_OPTIONS: ProfileTypeOption[] = [
+  {
+    value: "STUDENT",
+    label: "Student",
+    description: "Active learning, quiz tracking, and study recall.",
+  },
+  {
+    value: "BOARD_EXAM",
+    label: "Board Taker",
+    description: "Exam prep focus with performance tracking and weak-concept review.",
+  },
+  {
+    value: "TEACHER",
+    label: "Teacher",
+    description: "Create and export quiz materials from your notes.",
+  },
+  {
+    value: "PARENT",
+    label: "Parent",
+    description: "Student support and learning oversight.",
+    disabled: true,
+  },
+  {
+    value: "PROFESSIONAL",
+    label: "Professional",
+    description: "Interview prep and applied knowledge review.",
+    disabled: true,
+  },
 ];
 
 function ProfileLoading() {
@@ -59,6 +96,59 @@ function ProfileLoading() {
       <div className="h-6 w-48 animate-pulse rounded bg-foreground/10" />
       <div className="h-4 w-64 animate-pulse rounded bg-foreground/10" />
     </Card>
+  );
+}
+
+type ProfileTypeSwitchModalProps = {
+  pendingProfileType: ProfileType | null;
+  saving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function ProfileTypeSwitchModal({
+  pendingProfileType,
+  saving,
+  onCancel,
+  onConfirm,
+}: ProfileTypeSwitchModalProps) {
+  if (!pendingProfileType || !isActiveProfileTypeForSwitch(pendingProfileType)) {
+    return null;
+  }
+  const content = getProfileTypeSwitchContent(pendingProfileType);
+  return (
+    <AppModal
+      isOpen={true}
+      title={content.title}
+      onClose={onCancel}
+      actions={(
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="w-full sm:w-auto"
+            onClick={onConfirm}
+            disabled={saving}
+          >
+            {saving ? "Switching..." : "Switch"}
+          </Button>
+        </div>
+      )}
+    >
+      <div className="space-y-3">
+        {content.body.map((line) => (
+          <p key={line} className="text-sm text-foreground/80">{line}</p>
+        ))}
+        <p className="text-xs text-foreground/60">{content.note}</p>
+      </div>
+    </AppModal>
   );
 }
 
@@ -83,6 +173,9 @@ export default function ProfilePage() {
   const [savingProfileType, setSavingProfileType] = useState(false);
   const [profileTypeMessage, setProfileTypeMessage] = useState<string | null>(null);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType | "">("");
+  const [pendingProfileType, setPendingProfileType] = useState<ProfileType | null>(null);
+  const [profileTypeSwitchToast, setProfileTypeSwitchToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [savingLearningProfile, setSavingLearningProfile] = useState(false);
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
   const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
@@ -138,6 +231,15 @@ export default function ProfilePage() {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    const ref = toastTimerRef;
+    return () => {
+      if (ref.current) {
+        clearTimeout(ref.current);
+      }
+    };
+  }, []);
 
   const resolvedDisplayName = useMemo(() => {
     if (!profile) {
@@ -285,7 +387,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSaveProfileType = async () => {
+  const handleSaveProfileType = () => {
     if (savingProfileType || !selectedProfileType || !profile) {
       return;
     }
@@ -293,14 +395,35 @@ export default function ProfilePage() {
       setProfileTypeMessage("Profile type is already up to date.");
       return;
     }
-
-    setSavingProfileType(true);
+    if (!isActiveProfileTypeForSwitch(selectedProfileType)) {
+      return;
+    }
+    // Show the confirmation modal before committing the switch.
+    setPendingProfileType(selectedProfileType);
     setProfileTypeMessage(null);
+  };
+
+  const handleConfirmProfileTypeSwitch = async () => {
+    if (!pendingProfileType || !isActiveProfileTypeForSwitch(pendingProfileType)) {
+      return;
+    }
+    setSavingProfileType(true);
+    const targetType = pendingProfileType;
+    setPendingProfileType(null);
     try {
-      const updatedProfile = await completeOnboardingProfileType({ profileType: selectedProfileType });
+      const updatedProfile = await completeOnboardingProfileType({ profileType: targetType });
       setProfile(updatedProfile);
-      setSelectedProfileType(updatedProfile.profileType ?? selectedProfileType);
-      setProfileTypeMessage("Profile type updated successfully.");
+      setSelectedProfileType(updatedProfile.profileType ?? targetType);
+
+      // Show a mode-specific success toast.
+      const content = getProfileTypeSwitchContent(targetType);
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+      setProfileTypeSwitchToast(content.toast);
+      toastTimerRef.current = setTimeout(() => {
+        setProfileTypeSwitchToast(null);
+      }, 4000);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not update profile type.";
       setProfileTypeMessage(message);
@@ -406,24 +529,57 @@ export default function ProfilePage() {
 
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Profile Type</h2>
-            <div className="space-y-3 rounded-md border border-border bg-background p-3">
-              <label className="block space-y-2">
-                <span className="text-xs uppercase tracking-wide text-foreground/60">Current Profile Type</span>
-                <select
-                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
-                  value={selectedProfileType}
-                  onChange={(event) => {
-                    setProfileTypeMessage(null);
-                    setSelectedProfileType(event.target.value as ProfileType);
-                  }}
-                >
-                  {PROFILE_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="space-y-2">
+              {PROFILE_TYPE_OPTIONS.map((option) => {
+                const isDisabled = option.disabled === true || (DISABLED_PROFILE_TYPES as readonly string[]).includes(option.value);
+                const isSelected = selectedProfileType === option.value;
+                if (isDisabled) {
+                  return (
+                    <div
+                      key={option.value}
+                      className="flex cursor-not-allowed items-start gap-3 rounded-xl border border-border bg-muted/10 px-4 py-3 opacity-50"
+                      aria-disabled="true"
+                    >
+                      <div className="mt-1 h-4 w-4 shrink-0 rounded-full border-2 border-border" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">{option.label}</span>
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/60">
+                            Coming Soon
+                          </span>
+                        </div>
+                        <p className="text-xs text-foreground/60">{option.description}</p>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-highlight ${
+                      isSelected
+                        ? "border-primary bg-primary/5 dark:bg-primary/10"
+                        : "border-border bg-background"
+                    }`}
+                    onClick={() => {
+                      setProfileTypeMessage(null);
+                      setSelectedProfileType(option.value);
+                    }}
+                    aria-pressed={isSelected}
+                  >
+                    <div
+                      className={`mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-colors ${
+                        isSelected ? "border-primary bg-primary" : "border-border"
+                      }`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <span className="text-sm font-medium text-foreground">{option.label}</span>
+                      <p className="text-xs text-foreground/60">{option.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
             <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
               {profileTypeMessage ? (
@@ -436,7 +592,7 @@ export default function ProfilePage() {
               <ResponsiveActionButton
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={() => void handleSaveProfileType()}
+                onClick={handleSaveProfileType}
                 disabled={savingProfileType || !selectedProfileType}
                 action="save"
                 label={savingProfileType ? "Saving..." : "Save Profile Type"}
@@ -514,6 +670,18 @@ export default function ProfilePage() {
 
           <ProfileNotePerformance />
         </div>
+      ) : null}
+
+      {/* Profile type switch confirmation modal */}
+      <ProfileTypeSwitchModal
+        pendingProfileType={pendingProfileType}
+        saving={savingProfileType}
+        onCancel={() => setPendingProfileType(null)}
+        onConfirm={() => { void handleConfirmProfileTypeSwitch(); }}
+      />
+
+      {profileTypeSwitchToast ? (
+        <ToastMessage message={profileTypeSwitchToast} tone="success" />
       ) : null}
     </main>
   );
