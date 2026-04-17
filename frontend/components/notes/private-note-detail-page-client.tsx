@@ -264,11 +264,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const [isPremiumPlan, setIsPremiumPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") === "PREMIUM");
   const [isEmailVerified, setIsEmailVerified] = useState(() => Boolean(getAuthUser()?.emailVerifiedAt));
-  const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">(() => (
-    getAuthUser()?.profileType === "BOARD_EXAM" || getAuthUser()?.profileType === "TEACHER"
-      ? getAuthUser()!.profileType
-      : "STUDENT"
-  ));
+  const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">(() => {
+    const authUser = getAuthUser();
+    return authUser?.profileType === "BOARD_EXAM" || authUser?.profileType === "TEACHER"
+      ? authUser.profileType
+      : "STUDENT";
+  });
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
