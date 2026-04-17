@@ -15,6 +15,7 @@ public class MockQuizGenerationUtils {
     private static final int MAX_TOPIC_LABEL_LENGTH = 48;
     private static final int CHALLENGE_TEMPLATE_COUNT = 15;
     private static final int ADAPTIVE_TEMPLATE_COUNT = 10;
+    private static final int TEACHER_TEMPLATE_COUNT = 12;
     private static final int MAX_GENERATION_ATTEMPTS_MULTIPLIER = 20;
     private static final List<String> FALLBACK_CONCEPTS = List.of(
             "Core Principle",
@@ -50,6 +51,19 @@ public class MockQuizGenerationUtils {
         String topic = resolveTopicLabel(studyPackTitle, context);
         return buildUniqueQuizItems(questionCount, disallowedQuestions, attempt ->
                 buildAdaptiveQuizItem(attempt, concepts, topic)
+        );
+    }
+
+    public List<QuizItem> generateTeacherQuiz(
+            String noteTitle,
+            List<String> disallowedQuestions,
+            int questionCount,
+            StudyPackGenerationContext context
+    ) {
+        List<String> concepts = resolveConcepts(context == null ? List.of() : context.tags());
+        String topic = resolveTopicLabel(noteTitle, context);
+        return buildUniqueQuizItems(questionCount, disallowedQuestions, attempt ->
+                buildTeacherQuizItem(attempt, concepts, topic)
         );
     }
 
@@ -147,6 +161,43 @@ public class MockQuizGenerationUtils {
         );
         String explanation = "Adaptive Practice is meant to rebuild weak concepts, so the best answer reinforces the core idea of "
                 + concept + " in " + topic + " before moving into harder variations.";
+        return new QuizItem(question, placeChoices(correctChoice, distractors, correctIndex), correctIndex, concept, explanation);
+    }
+
+    private QuizItem buildTeacherQuizItem(int index, List<String> concepts, String topic) {
+        String concept = concepts.get(index % concepts.size());
+        int correctIndex = (index + 2) % 4;
+        String question = switch (index % TEACHER_TEMPLATE_COUNT) {
+            case 0 -> "Which question best checks student understanding of " + concept + " from " + topic + "?";
+            case 1 -> "Which classroom prompt most accurately tests " + concept + " in " + topic + "?";
+            case 2 -> "Which item would be the clearest assessment question for " + concept + "?";
+            case 3 -> "Which option best measures applied understanding of " + concept + " from " + topic + "?";
+            case 4 -> "Which question avoids ambiguity while testing " + concept + "?";
+            case 5 -> "Which item best distinguishes " + concept + " from a common misconception?";
+            case 6 -> "Which teacher-ready question best checks the main idea behind " + concept + "?";
+            case 7 -> "Which question would give students the fairest check of " + concept + "?";
+            case 8 -> "Which assessment item keeps " + concept + " grounded in the notes from " + topic + "?";
+            case 9 -> "Which classroom question best targets accurate reasoning about " + concept + "?";
+            case 10 -> "Which option would work best in a printable quiz about " + concept + "?";
+            default -> "Which question best prepares a teacher to review " + concept + " with students?";
+        };
+        if (index >= TEACHER_TEMPLATE_COUNT) {
+            question = question + " (variation " + (index / TEACHER_TEMPLATE_COUNT + 1) + ")";
+        }
+
+        String correctChoice = switch (index % 4) {
+            case 0 -> "It targets the core idea of " + concept + " with a clear, defensible answer.";
+            case 1 -> "It checks student understanding of " + concept + " using note-based evidence.";
+            case 2 -> "It keeps the wording precise while testing the main relationship in " + concept + ".";
+            default -> "It measures applied understanding of " + concept + " without adding outside assumptions.";
+        };
+        List<String> distractors = List.of(
+                "It relies on information that was not provided in the notes.",
+                "It is too vague to identify one clearly correct answer.",
+                "It focuses on a side detail instead of the main idea being taught."
+        );
+        String explanation = "The best answer stays faithful to the notes, tests the core idea of " + concept
+                + ", and remains clear enough for teacher review and export.";
         return new QuizItem(question, placeChoices(correctChoice, distractors, correctIndex), correctIndex, concept, explanation);
     }
 

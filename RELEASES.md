@@ -16,18 +16,17 @@
   - toast copy is mode-specific (e.g. "You're now in Board Taker mode — focused for exam prep.")
 
 - **Mode system (`frontend/lib/profile-mode.ts`)** — introduces a clean mode layer above profile types so shared components branch on mode, not on profile name:
-  - `ProfileMode`: `"LEARNING"` (Student, Board Taker) or `"CREATOR"` (Teacher)
-  - `SessionMode`: `"LEARNING"` (scored, default for Learning mode) or `"PREVIEW"` (unscored, default for Creator mode)
-  - `resolveProfileMode()` and `resolveDefaultSessionMode()` are the canonical resolution functions
+  - `ProfileMode`: `"LEARNING"` (Student, Board Taker) or `"TEACHING"` (Teacher)
+  - `resolveProfileMode()` is the canonical resolution function
   - `ACTIVE_PROFILE_TYPES` and `DISABLED_PROFILE_TYPES` constants centralise availability rules
   - `getProfileTypeSwitchContent()` returns mode-specific confirmation copy for each active type
 
-- **Quiz session mode for Teacher (Creator mode)** — Challenge Quiz prestart now shows a session mode toggle for Creator mode users:
-  - "Preview" (default for Teacher) — quiz runs normally but scores are not recorded in performance history
-  - "Take Quiz (scored)" — full scoring; Teacher opts in explicitly
-  - toggle appears only for Creator mode users, above the Challenge Quiz / Board Exam Mode choice
-  - results screen shows "Preview mode — scores were not recorded" when preview was selected
-  - `sessionMode` field added to `ChallengeQuizStartRequest` so the backend can eventually enforce the distinction
+- **Teacher Flow v1**
+  - Added quiz generation for teachers with a note-owned `generatedQuiz` model instead of quiz sessions
+  - Introduced Quiz Preview with answers and explanations visible by default
+  - Moved Export into the dedicated quiz view for better context
+  - Added regeneration with credit usage and confirmation
+  - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 
 ### Documentation
 

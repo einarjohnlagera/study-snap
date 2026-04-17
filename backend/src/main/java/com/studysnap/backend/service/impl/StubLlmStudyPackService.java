@@ -130,4 +130,35 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 })
                 .toList();
     }
+
+    @Override
+    public List<QuizItem> generateTeacherQuiz(
+            String noteTitle,
+            String noteContent,
+            List<String> disallowedQuestions,
+            int questionCount,
+            StudyPackGenerationContext context
+    ) {
+        int normalizedCount = Math.max(5, Math.min(12, questionCount));
+        String concept = context != null && context.subject() != null && !context.subject().isBlank()
+                ? context.subject()
+                : "Core Concept";
+        return IntStream.range(0, normalizedCount)
+                .mapToObj(index -> {
+                    String correctAnswer = concept + " best-practice understanding";
+                    return new QuizItem(
+                            "Which teacher-ready question best checks " + concept + " from " + (noteTitle == null ? "this note" : noteTitle) + "?",
+                            List.of(
+                                    correctAnswer,
+                                    concept + " unrelated detail",
+                                    concept + " vague prompt",
+                                    concept + " unsupported assumption"
+                            ),
+                            correctAnswer,
+                            concept,
+                            "This answer is clear, note-based, and suitable for review or export."
+                    );
+                })
+                .toList();
+    }
 }

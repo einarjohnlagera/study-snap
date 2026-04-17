@@ -5,6 +5,7 @@ import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
+import com.studysnap.backend.dto.GeneratedQuizResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
@@ -21,6 +22,7 @@ import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
+import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
@@ -60,6 +62,7 @@ public class NoteController {
     private final QuickReviewStudyTipService quickReviewStudyTipService;
     private final ChallengeQuizService challengeQuizService;
     private final QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
+    private final GeneratedQuizService generatedQuizService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
@@ -261,6 +264,27 @@ public class NoteController {
         UUID userId = user.userId();
         String studyPackId = noteService.getOwnedStudyPackIdOrThrow(id, userId);
         return challengeQuizService.getSessionReview(studyPackId, sessionId, userId);
+    }
+
+    @GetMapping("/{id}/generated-quiz")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public GeneratedQuizResponse getGeneratedQuiz(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        return generatedQuizService.getByNoteId(id, userId);
+    }
+
+    @PostMapping("/{id}/generated-quiz")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public GeneratedQuizResponse generateGeneratedQuiz(
+            @PathVariable String id,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        return generatedQuizService.generate(id, userId);
     }
 
     @PostMapping("/{id}/adaptive-practice/start")

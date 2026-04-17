@@ -17,6 +17,7 @@ public class QuizGenerationService {
     private static final String QUIZ_GENERATION_MODE_MOCK = "mock";
     private static final String QUIZ_TYPE_CHALLENGE = "challenge quiz";
     private static final String QUIZ_TYPE_ADAPTIVE = "adaptive practice";
+    private static final String QUIZ_TYPE_TEACHER = "teacher quiz";
     private static final String MOCK_GENERATION_LOG_MESSAGE = "Quiz generation mock mode enabled for {}; real LLM not called.";
     private static final int MAX_MOCK_DELAY_MS = 5_000;
 
@@ -82,6 +83,33 @@ public class QuizGenerationService {
         return MockQuizGenerationUtils.generateAdaptivePracticeQuiz(
                 studyPackTitle,
                 weakConcepts,
+                disallowedQuestions,
+                questionCount,
+                context
+        );
+    }
+
+    public List<QuizItem> generateTeacherQuiz(
+            String noteTitle,
+            String noteContent,
+            List<String> disallowedQuestions,
+            int questionCount,
+            StudyPackGenerationContext context
+    ) {
+        if (!isMockModeEnabled()) {
+            return llmStudyPackService.generateTeacherQuiz(
+                    noteTitle,
+                    noteContent,
+                    disallowedQuestions,
+                    questionCount,
+                    context
+            );
+        }
+
+        log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_TEACHER);
+        maybeApplyMockDelay();
+        return MockQuizGenerationUtils.generateTeacherQuiz(
+                noteTitle,
                 disallowedQuestions,
                 questionCount,
                 context

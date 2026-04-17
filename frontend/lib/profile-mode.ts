@@ -6,14 +6,7 @@ import type { ProfileType } from "./api";
  * Behaviour mode derived from profile type.
  * Use mode checks in shared components — never branch on profile type name directly.
  */
-export type ProfileMode = "LEARNING" | "CREATOR";
-
-/**
- * Quiz session recording mode.
- * LEARNING — session is scored and performance is stored.
- * PREVIEW   — quiz runs but scores are not recorded (default for Creator mode).
- */
-export type SessionMode = "LEARNING" | "PREVIEW";
+export type ProfileMode = "LEARNING" | "TEACHING";
 
 // --- Profile type availability ---
 
@@ -38,21 +31,7 @@ export function resolveProfileMode(
   profileType: ProfileType | null | undefined,
 ): ProfileMode {
   if (profileType === "TEACHER") {
-    return "CREATOR";
-  }
-  return "LEARNING";
-}
-
-/**
- * Returns the default quiz session mode for a given profile type.
- * Creator mode (Teacher) defaults to PREVIEW — scores not recorded until the user
- * explicitly chooses "Take Quiz". Learning mode always defaults to LEARNING.
- */
-export function resolveDefaultSessionMode(
-  profileType: ProfileType | null | undefined,
-): SessionMode {
-  if (resolveProfileMode(profileType) === "CREATOR") {
-    return "PREVIEW";
+    return "TEACHING";
   }
   return "LEARNING";
 }
@@ -95,12 +74,11 @@ const PROFILE_TYPE_SWITCH_CONTENT: Record<
   TEACHER: {
     title: "Switch to Teacher mode?",
     body: [
-      "Teacher mode is designed for creating and exporting study materials.",
-      "You can preview quizzes and export them directly.",
-      "Quiz scores are only recorded when taking quizzes in learning mode.",
+      "Teacher mode is designed for generating, reviewing, and exporting quizzes from notes.",
+      "Teacher quiz preview stays separate from student quiz sessions and scoring.",
     ],
     note: SWITCH_NOTE,
-    toast: "You're now in Teacher mode — quizzes open in preview by default.",
+    toast: "You're now in Teacher mode — focused on generate, review, and export.",
   },
 };
 

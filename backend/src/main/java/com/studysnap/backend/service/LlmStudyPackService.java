@@ -30,4 +30,12 @@ public interface LlmStudyPackService {
 			String difficulty,
 			StudyPackGenerationContext context
 	);
+
+	List<QuizItem> generateTeacherQuiz(
+			String noteTitle,
+			String noteContent,
+			List<String> disallowedQuestions,
+			int questionCount,
+			StudyPackGenerationContext context
+	);
 }

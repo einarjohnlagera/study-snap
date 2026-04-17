@@ -21,6 +21,11 @@ Core loop:
 
 `Capture -> Generate -> Review -> Improve -> Make a Copy -> Repeat`
 
+Teacher flow rule:
+
+- Do not reuse student quiz session logic for teacher preview.
+- Teacher flow uses `generatedQuiz` only.
+
 ## Implementation Workflow Rules
 
 - After every completed prompt/task that results in code or doc changes, always include a suggested commit message in the final response.

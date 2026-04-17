@@ -5,6 +5,7 @@ import {
   completeProductOnboarding,
   copyNote,
   deleteNote,
+  generateGeneratedQuiz,
   getBillingPricing,
   getMyPlan,
   getChallengeQuizPerformanceSummary,
@@ -61,6 +62,7 @@ jest.mock("@/lib/api", () => ({
   copyNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
+  generateGeneratedQuiz: jest.fn(),
   getBillingPricing: jest.fn(),
   getMyPlan: jest.fn(),
   getChallengeQuizPerformanceSummary: jest.fn(),
@@ -102,6 +104,7 @@ const baseNote = {
   summary: null,
   keyConcepts: [],
   quiz: [],
+  generatedQuiz: null,
   quizCount: 0,
   quickReviewAvailable: false,
   challengeQuizAvailable: false,
@@ -123,6 +126,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (completeProductOnboarding as jest.Mock).mockReset();
     (copyNote as jest.Mock).mockReset();
     (deleteNote as jest.Mock).mockReset();
+    (generateGeneratedQuiz as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getChallengeQuizPerformanceSummary as jest.Mock).mockReset();
@@ -241,6 +245,19 @@ describe("PrivateNoteDetailPageClient", () => {
       challengeQuizAvailable: false,
       adaptivePracticeAvailable: false,
     });
+    (generateGeneratedQuiz as jest.Mock).mockResolvedValue({
+      noteId: "note-1",
+      questions: [
+        {
+          question: "What is the nucleus?",
+          choices: ["Control center", "Energy source", "Cell wall", "Waste product"],
+          correctIndex: 0,
+          concept: "Cells",
+          explanation: "The nucleus controls cell activity.",
+        },
+      ],
+      generatedAt: "2026-04-17T09:00:00Z",
+    });
     (getMyStudyPack as jest.Mock).mockResolvedValue({
       id: "sp-1",
       noteId: "note-1",
@@ -285,8 +302,8 @@ describe("PrivateNoteDetailPageClient", () => {
 
     expect(title).toHaveClass("break-words");
     expect(menuTrigger).toBeVisible();
-    expect(menuAnchor).toHaveClass("absolute", "right-4", "top-4", "sm:right-6", "sm:top-6");
-    expect(titleColumn).toHaveClass("pr-14", "sm:pr-16");
+    expect(menuAnchor).toHaveClass("relative", "shrink-0", "self-start");
+    expect(titleColumn).toHaveClass("min-w-0", "flex-1", "space-y-3");
 
     fireEvent.click(menuTrigger);
 
@@ -554,6 +571,75 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
     expect(await screen.findByText("Adaptive Practice is a Premium feature")).toBeInTheDocument();
+  });
+
+  it("renders teacher note detail with Generate Quiz only and hides student quiz surfaces", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+      generatedQuiz: null,
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByRole("button", { name: "Generate Quiz" })).toBeInTheDocument();
+    expect(screen.getByText("Generate a quiz from this note with answers and explanations for review and export.")).toBeInTheDocument();
+    expect(screen.queryByText("Performance Overview")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recent Sessions")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Challenge Quiz" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Quiz" }));
+
+    await waitFor(() => {
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1");
+    });
+  });
+
+  it("renders teacher note detail with View Quiz and regenerate confirmation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "TEACHER",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      generatedQuiz: {
+        noteId: "note-1",
+        questions: [
+          {
+            question: "What is the nucleus?",
+            choices: ["Control center", "Energy source", "Cell wall", "Waste product"],
+            correctIndex: 0,
+            concept: "Cells",
+            explanation: "The nucleus controls cell activity.",
+          },
+        ],
+        generatedAt: "2026-04-17T09:00:00Z",
+      },
+    });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    expect(await screen.findByRole("button", { name: "View Quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "View Quiz" }));
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/quiz");
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(screen.getByText("Regenerate quiz?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate Quiz" }));
+
+    await waitFor(() => {
+      expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1");
+    });
   });
 
   it("shows the generate study pack guide for first-time users after creating a note", async () => {

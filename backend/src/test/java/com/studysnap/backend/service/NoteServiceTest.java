@@ -16,6 +16,7 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
@@ -57,6 +58,8 @@ class NoteServiceTest {
     @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
+    private GeneratedQuizRepository generatedQuizRepository;
+    @Mock
     private UserRepository userRepository;
     @Mock
     private SubscriptionService subscriptionService;
@@ -74,6 +77,7 @@ class NoteServiceTest {
                 analyticsEventRepository,
                 publicNoteLikeRepository,
                 studyPackRepository,
+                generatedQuizRepository,
                 userRepository,
                 subscriptionService,
                 featureGateService,
@@ -83,6 +87,7 @@ class NoteServiceTest {
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByOwnerUserId(any())).thenReturn(List.of());
         lenient().when(noteRepository.findCourseProgramValuesByVisibility(any())).thenReturn(List.of());
+        lenient().when(generatedQuizRepository.findByNoteId(any())).thenReturn(Optional.empty());
         lenient().when(noteRepository.countCopiedPublicNotesBySourceNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.countLikesByNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());

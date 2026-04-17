@@ -7,6 +7,7 @@ import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
+import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
@@ -19,6 +20,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
+import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteCopyCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeCountProjection;
 import com.studysnap.backend.repository.PublicNoteLikeRepository;
@@ -77,6 +79,7 @@ public class NoteService {
     private final AnalyticsEventRepository analyticsEventRepository;
     private final PublicNoteLikeRepository publicNoteLikeRepository;
     private final StudyPackRepository studyPackRepository;
+    private final GeneratedQuizRepository generatedQuizRepository;
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
@@ -486,6 +489,7 @@ public class NoteService {
         List<com.studysnap.backend.dto.QuizItem> quiz = studyPack == null || studyPack.getQuiz() == null
                 ? List.of()
                 : studyPack.getQuiz();
+        GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findByNoteId(entity.getId()).orElse(null);
         int quizCount = quiz.size();
         boolean hasGeneratedQuiz = !quiz.isEmpty();
         PlanType planType = subscriptionService.resolvePlan(entity.getOwnerUserId());
@@ -509,6 +513,11 @@ public class NoteService {
                 studyPack == null ? null : studyPack.getSummary(),
                 keyConcepts,
                 quiz,
+                generatedQuiz == null ? null : new com.studysnap.backend.dto.GeneratedQuizResponse(
+                        entity.getId().toString(),
+                        generatedQuiz.getQuestions() == null ? List.of() : generatedQuiz.getQuestions(),
+                        generatedQuiz.getGeneratedAt()
+                ),
                 quizCount,
                 hasGeneratedQuiz,
                 hasGeneratedQuiz,

@@ -1,5 +1,14 @@
 package com.studysnap.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.CreateStudyPackRequest;
 import com.studysnap.backend.dto.QuizItem;
@@ -11,7 +20,6 @@ import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.StudyPackEntity;
-import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
@@ -21,6 +29,12 @@ import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,25 +42,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.TransactionException;
-import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
-
-import java.math.BigDecimal;
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class StudyPackServiceTest {
@@ -79,6 +77,8 @@ class StudyPackServiceTest {
     private OcrUsageProtectionService ocrUsageProtectionService;
     @Mock
     private AiRateLimitService aiRateLimitService;
+    @Mock
+    private StudyPackGenerationContextResolver generationContextResolver;
 
     private StudyPackService studyPackService;
     private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
@@ -94,7 +94,6 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
-                userRepository,
                 ocrService,
                 llmStudyPackService,
                 new StudySnapProperties(),
@@ -106,6 +105,7 @@ class StudyPackServiceTest {
                 ocrRateLimitService,
                 ocrUsageProtectionService,
                 aiRateLimitService,
+                generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run)
         );
@@ -113,6 +113,9 @@ class StudyPackServiceTest {
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());
         lenient().when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
+        lenient().when(generationContextResolver.resolve(any(UUID.class), any())).thenReturn(
+                new com.studysnap.backend.service.model.StudyPackGenerationContext(null, null, null, List.of())
+        );
     }
 
     @Test
@@ -141,11 +144,6 @@ class StudyPackServiceTest {
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
-        UserEntity owner = new UserEntity();
-        owner.setId(userId);
-        owner.setLearnerLevel(LearnerLevel.COLLEGE);
-        owner.setCourseProgram("Biology");
-        when(userRepository.findById(userId)).thenReturn(Optional.of(owner));
         when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
@@ -154,6 +152,14 @@ class StudyPackServiceTest {
                         OffsetDateTime.now().plusDays(20),
                         0
                 ));
+        when(generationContextResolver.resolve(userId, draftNote)).thenReturn(
+                new StudyPackGenerationContext(
+                        LearnerLevel.COLLEGE,
+                        "Biology",
+                        "Subject",
+                        List.of("draft")
+                )
+        );
         when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
                 .thenReturn(generated);
 
@@ -303,7 +309,6 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
-                userRepository,
                 ocrService,
                 llmStudyPackService,
                 properties,
@@ -315,6 +320,7 @@ class StudyPackServiceTest {
                 ocrRateLimitService,
                 ocrUsageProtectionService,
                 aiRateLimitService,
+                generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(Runnable::run)
         );
@@ -377,7 +383,6 @@ class StudyPackServiceTest {
                 studyPackRepository,
                 studyPackDraftRepository,
                 noteRepository,
-                userRepository,
                 ocrService,
                 llmStudyPackService,
                 new StudySnapProperties(),
@@ -389,6 +394,7 @@ class StudyPackServiceTest {
                 ocrRateLimitService,
                 ocrUsageProtectionService,
                 aiRateLimitService,
+                generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
                 new StudyPackGenerationTaskDispatcher(generationTasks::add)
         );

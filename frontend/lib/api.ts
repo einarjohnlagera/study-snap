@@ -25,6 +25,12 @@ export type QuizItem = {
   explanation: string;
 };
 
+export type GeneratedQuizResponse = {
+  noteId: string;
+  questions: QuizItem[];
+  generatedAt: string;
+};
+
 export type StudyPackResponse = {
   id: string;
   noteId: string | null;
@@ -753,6 +759,7 @@ export type NoteResponse = {
   summary: string | null;
   keyConcepts: string[];
   quiz: QuizItem[];
+  generatedQuiz: GeneratedQuizResponse | null;
   quizCount: number;
   quickReviewAvailable: boolean;
   challengeQuizAvailable: boolean;
@@ -2139,6 +2146,30 @@ export async function getNote(noteId: string): Promise<NoteResponse> {
     true,
   );
   return parseApiResponse<NoteResponse>(response, "Could not load note.");
+}
+
+export async function getGeneratedQuiz(noteId: string): Promise<GeneratedQuizResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/generated-quiz`,
+    {
+      method: "GET",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<GeneratedQuizResponse>(response, "Could not load generated quiz.");
+}
+
+export async function generateGeneratedQuiz(noteId: string): Promise<GeneratedQuizResponse> {
+  const response = await fetchWithAuth(
+    `/notes/${noteId}/generated-quiz`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<GeneratedQuizResponse>(response, "Could not generate quiz.");
 }
 
 export async function listNotes(): Promise<NoteListItemResponse[]> {

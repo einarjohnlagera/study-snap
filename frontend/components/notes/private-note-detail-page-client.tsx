@@ -37,6 +37,7 @@ import {
   copyNote,
   createStudyPackFromNote,
   deleteNote,
+  generateGeneratedQuiz,
   getChallengeQuizPerformanceSummary,
   getMe,
   getMyStudyPack,
@@ -255,13 +256,20 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [pendingSuggestion, setPendingSuggestion] = useState<PendingSuggestion | null>(null);
   const [applyingSuggestion, setApplyingSuggestion] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
+  const [generatingTeacherQuiz, setGeneratingTeacherQuiz] = useState(false);
+  const [showRegenerateQuizConfirm, setShowRegenerateQuizConfirm] = useState(false);
 
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
 
-  const [isPremiumPlan, setIsPremiumPlan] = useState(false);
-  const [isEmailVerified, setIsEmailVerified] = useState(false);
-  const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">("STUDENT");
+  const [isPremiumPlan, setIsPremiumPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") === "PREMIUM");
+  const [isEmailVerified, setIsEmailVerified] = useState(() => Boolean(getAuthUser()?.emailVerifiedAt));
+  const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">(() => {
+    const authUser = getAuthUser();
+    return authUser?.profileType === "BOARD_EXAM" || authUser?.profileType === "TEACHER"
+      ? authUser.profileType
+      : "STUDENT";
+  });
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
@@ -327,7 +335,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setNote(loadedNote);
       void maybeShowGeneratedMetadataSuggestion(loadedNote);
 
-      if (!loadedNote.quickReviewAvailable) {
+      if (profileType === "TEACHER" || !loadedNote.quickReviewAvailable) {
         setQuickSummary(null);
         setChallengeSummary(null);
         setQuickRecentSessions([]);
@@ -364,7 +372,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setLoading(false);
     }
-  }, [maybeShowGeneratedMetadataSuggestion, normalizedRouteId, pathname, router]);
+  }, [maybeShowGeneratedMetadataSuggestion, normalizedRouteId, pathname, profileType, router]);
 
   useEffect(() => {
     void loadDetail();
@@ -544,6 +552,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   }, [isInlineMetadataEditMode, note]);
 
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
+  const isTeacherMode = profileType === "TEACHER";
   const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
@@ -570,9 +579,9 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const shouldShowNearLimitBanner = usageSummary
-    ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
+    ? !isTeacherMode && shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
-  const showFirstStudyPackSuccessBanner = firstStudyStep === "study-pack-ready"
+  const showFirstStudyPackSuccessBanner = !isTeacherMode && firstStudyStep === "study-pack-ready"
     && note?.studyPackStatus === "STUDY_PACK_READY";
   const availableCourseProgramSuggestions = useMemo(
     () => mergeCourseProgramSuggestions(
@@ -972,6 +981,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (
       !shouldAutoStartQuickReview
       || autoQuickReviewHandledRef.current
+      || isTeacherMode
       || !note
       || !isStudyPackReady
       || !note.quickReviewAvailable
@@ -984,7 +994,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     next.delete(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview);
     router.replace(next.size > 0 ? `${pathname}?${next.toString()}` : pathname, { scroll: false });
     void handleStartQuickReview();
-  }, [handleStartQuickReview, isStudyPackReady, note, pathname, router, searchParams]);
+  }, [handleStartQuickReview, isStudyPackReady, isTeacherMode, note, pathname, router, searchParams]);
 
   const dismissFirstStudyGuide = useCallback(async () => {
     const authUser = getAuthUser();
@@ -1040,6 +1050,40 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
     router.push(`/notes/${note.id}/adaptive-practice`);
   };
+
+  const handleGenerateTeacherQuiz = useCallback(async () => {
+    if (!note || generatingTeacherQuiz) {
+      return;
+    }
+    if (!isEmailVerified) {
+      setToast("Verify your email before generating quizzes.");
+      return;
+    }
+
+    setGeneratingTeacherQuiz(true);
+    setError(null);
+    try {
+      const generatedQuiz = await generateGeneratedQuiz(note.id);
+      setNote((current) => current ? {
+        ...current,
+        generatedQuiz,
+      } : current);
+      setShowRegenerateQuizConfirm(false);
+      setToast(note.generatedQuiz ? "Quiz regenerated." : "Quiz generated.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not generate quiz.";
+      setError(message);
+    } finally {
+      setGeneratingTeacherQuiz(false);
+    }
+  }, [generatingTeacherQuiz, isEmailVerified, note]);
+
+  const handleViewTeacherQuiz = useCallback(() => {
+    if (!note?.generatedQuiz) {
+      return;
+    }
+    router.push(`/notes/${note.id}/quiz`);
+  }, [note, router]);
 
   const handleCopyLink = async () => {
     if (!note || sharing || isInlineMetadataEditMode) {
@@ -1175,7 +1219,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     />
                   </div>
                 ) : (
-                  <h1 className="wrap-break-word text-2xl font-semibold sm:text-3xl">{title}</h1>
+                  <h1 className="break-words text-2xl font-semibold sm:text-3xl">{title}</h1>
                 )}
 
                 {hasCopyAttribution ? (
@@ -1418,6 +1462,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <p className="text-xs text-foreground/70">
                 Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.
               </p>
+            ) : isTeacherMode ? (
+              <p className="text-xs text-foreground/70">
+                Teacher mode keeps quiz work separate from student quiz sessions. Generate, review, and export from the dedicated quiz preview.
+              </p>
             ) : isGeneratingStudyPack ? (
               <p className="text-xs text-foreground/70">
                 Your note is saved. NoteLib is generating the Study Pack in the background.
@@ -1431,7 +1479,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                 Generating locks this note to preserve its Study Pack. Need changes later? Use Make a Copy.
               </p>
             ) : null}
-            {isDraft && !isGeneratingStudyPack && !hasGenerationFailed && !isInlineMetadataEditMode ? (
+            {isDraft && !isTeacherMode && !isGeneratingStudyPack && !hasGenerationFailed && !isInlineMetadataEditMode ? (
               <GuidanceTip
                 tipId="note-detail-generate-study-pack"
                 message="Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note."
@@ -1440,7 +1488,31 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             {!isInlineMetadataEditMode ? (
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  {isGeneratingStudyPack ? (
+                  {isTeacherMode ? (
+                    note?.generatedQuiz ? (
+                      <>
+                        <Button type="button" onClick={handleViewTeacherQuiz}>
+                          View Quiz
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowRegenerateQuizConfirm(true)}
+                          disabled={generatingTeacherQuiz}
+                        >
+                          {generatingTeacherQuiz ? "Regenerating..." : "Regenerate"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={() => void handleGenerateTeacherQuiz()}
+                        disabled={generatingTeacherQuiz || !isEmailVerified}
+                      >
+                        {generatingTeacherQuiz ? "Generating..." : "Generate Quiz"}
+                      </Button>
+                    )
+                  ) : isGeneratingStudyPack ? (
                     <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />
                   ) : canGenerateStudyPack ? (
                     <ResponsiveActionButton
@@ -1460,7 +1532,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                       ) : null}
                     </>
                   )}
-                  {!isGeneratingStudyPack && !canGenerateStudyPack ? (
+                  {isTeacherMode ? (
+                    <p className="w-full text-xs text-foreground/60 sm:w-auto sm:self-center">
+                      {note?.generatedQuiz
+                        ? "Already generated a quiz? Regenerate to create a new version (costs 1 credit)."
+                        : "Generate a quiz from this note with answers and explanations for review and export."}
+                    </p>
+                  ) : !isGeneratingStudyPack && !canGenerateStudyPack ? (
                     <p className="w-full text-xs text-foreground/60 sm:w-auto sm:self-center">
                       Quick Review uses saved questions &bull; Challenge Quiz generates new timed questions
                     </p>
@@ -1470,136 +1548,152 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             ) : null}
           </Card>
 
-          {isGeneratingStudyPack ? (
-            <StudyPackGeneratingCard message={generationMessage} />
-          ) : null}
-
-          {hasGenerationFailed ? (
-            <StudyPackFailureCard
-              retrying={generating}
-              onRetry={() => {
-                void handleGenerate();
-              }}
-            />
-          ) : null}
-
-          <Card className="space-y-3 p-4 sm:p-6">
-            <NoteDetailTabs
-              activeTab={activeStudyPackTab}
-              onChange={handleChangeStudyPackTab}
-              ariaLabel="Private note detail views"
-            />
-            <p className="text-xs text-foreground/60">
-              Switch between the summary, key concepts, quiz, and full note without leaving this page.
-            </p>
-          </Card>
-
-          {activeStudyPackTab === "summary" ? (
-            <NoteDetailSummaryCard
-              summary={
-                isGeneratingStudyPack
-                  ? "Your Study Pack is being generated. The summary will appear here when it is ready."
-                  : hasGenerationFailed
-                    ? "We couldn't generate the Study Pack this time. Your note is saved, and you can retry generation."
-                    : isDraft
-                      ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide."
-                      : (note.summary ?? "No summary available.")
-              }
-              onViewFullNotes={() => handleChangeStudyPackTab("full-notes")}
-            />
-          ) : null}
-
-          {activeStudyPackTab === "key-concepts" ? (
-            <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
-              {isGeneratingStudyPack ? (
-                <p className="text-sm text-foreground/75">Key concepts are being generated from your note.</p>
-              ) : hasGenerationFailed ? (
-                <p className="text-sm text-foreground/75">Generation did not complete, so key concepts are not available yet. Retry Generate when you are ready.</p>
-              ) : isDraft || note.keyConcepts.length === 0 ? (
-                <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
-              ) : (
-                <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
-                  {note.keyConcepts.map((concept, index) => (
-                    <li key={`${note.id}-concept-${index}`}>{concept}</li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          ) : null}
-
-          {activeStudyPackTab === "quiz" ? (
-            isGeneratingStudyPack ? (
-              <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
-                <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
-                <p className="text-sm text-foreground/75">Practice questions are being generated from your note.</p>
-              </Card>
-            ) : hasGenerationFailed ? (
-              <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
-                <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
-                <p className="text-sm text-foreground/75">Generation did not complete, so the quiz is not available yet. Retry Generate when you are ready.</p>
-              </Card>
-            ) : isDraft ? (
-              <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
-                <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
-                <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
-              </Card>
-            ) : (
-              <div id="practice-quiz">
-                <PracticeQuizCard quiz={note.quiz} />
-              </div>
-            )
-          ) : null}
-
-          {activeStudyPackTab === "full-notes" ? (
+          {isTeacherMode ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <h2 className="text-lg font-semibold sm:text-xl">Full Notes</h2>
+              <p className="text-sm text-foreground/75">
+                Use the note as your source material, then open Quiz Preview to review or export the generated quiz.
+              </p>
               <div className="rounded-2xl border border-border bg-background px-4 py-4">
                 <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
                   {fullNoteContent}
                 </p>
               </div>
             </Card>
-          ) : null}
+          ) : (
+            <>
+              {isGeneratingStudyPack ? (
+                <StudyPackGeneratingCard message={generationMessage} />
+              ) : null}
 
-          <Card className="space-y-3 p-4 sm:p-6">
-            <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
-            {isGeneratingStudyPack ? (
-              <p className="text-sm text-foreground/75">Performance will appear after the Study Pack is ready and you complete a quiz.</p>
-            ) : hasGenerationFailed ? (
-              <p className="text-sm text-foreground/75">Performance is unavailable because generation did not complete.</p>
-            ) : isDraft ? (
-              <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
-            ) : (
-              <>
-                {(quickSummary?.attempts ?? 0) === 0 && (challengeSummary?.attempts ?? 0) === 0 ? (
-                  <GuidanceTip
-                    tipId="note-detail-try-quiz"
-                    message="Try Quick Review or Challenge Quiz to start tracking your performance on this note."
-                  />
-                ) : null}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-md border border-border bg-background p-3">
-                  <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
-                  <p className="mt-1 text-sm text-foreground/80">Attempts: {quickSummary?.attempts ?? 0}</p>
-                  <p className="text-sm text-foreground/80">Last score: {quickSummary?.lastScorePercentage ?? "-"}</p>
-                </div>
-                <div className="rounded-md border border-border bg-background p-3">
-                  <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
-                  <p className="mt-1 text-sm text-foreground/80">Attempts: {challengeSummary?.attempts ?? 0}</p>
-                  <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
-                </div>
-              </div>
-              </>
-            )}
-          </Card>
+              {hasGenerationFailed ? (
+                <StudyPackFailureCard
+                  retrying={generating}
+                  onRetry={() => {
+                    void handleGenerate();
+                  }}
+                />
+              ) : null}
 
-          {!isGeneratingStudyPack && !hasGenerationFailed && !isDraft ? (
-            <QuizSessionHistory
-              sessions={recentQuizSessions}
-              onSelectSession={handleSelectSessionReview}
-            />
-          ) : null}
+              <Card className="space-y-3 p-4 sm:p-6">
+                <NoteDetailTabs
+                  activeTab={activeStudyPackTab}
+                  onChange={handleChangeStudyPackTab}
+                  ariaLabel="Private note detail views"
+                />
+                <p className="text-xs text-foreground/60">
+                  Switch between the summary, key concepts, quiz, and full note without leaving this page.
+                </p>
+              </Card>
+
+              {activeStudyPackTab === "summary" ? (
+                <NoteDetailSummaryCard
+                  summary={
+                    isGeneratingStudyPack
+                      ? "Your Study Pack is being generated. The summary will appear here when it is ready."
+                      : hasGenerationFailed
+                        ? "We couldn't generate the Study Pack this time. Your note is saved, and you can retry generation."
+                        : isDraft
+                          ? "No summary yet. Generate a Study Pack to turn this note into a structured study guide."
+                          : (note.summary ?? "No summary available.")
+                  }
+                  onViewFullNotes={() => handleChangeStudyPackTab("full-notes")}
+                />
+              ) : null}
+
+              {activeStudyPackTab === "key-concepts" ? (
+                <Card className="space-y-3 p-4 sm:p-6">
+                  <h2 className="text-lg font-semibold sm:text-xl">Key Concepts</h2>
+                  {isGeneratingStudyPack ? (
+                    <p className="text-sm text-foreground/75">Key concepts are being generated from your note.</p>
+                  ) : hasGenerationFailed ? (
+                    <p className="text-sm text-foreground/75">Generation did not complete, so key concepts are not available yet. Retry Generate when you are ready.</p>
+                  ) : isDraft || note.keyConcepts.length === 0 ? (
+                    <p className="text-sm text-foreground/75">No key concepts yet. Generate a Study Pack to extract the most important ideas from this note.</p>
+                  ) : (
+                    <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-foreground/85">
+                      {note.keyConcepts.map((concept, index) => (
+                        <li key={`${note.id}-concept-${index}`}>{concept}</li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+              ) : null}
+
+              {activeStudyPackTab === "quiz" ? (
+                isGeneratingStudyPack ? (
+                  <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
+                    <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
+                    <p className="text-sm text-foreground/75">Practice questions are being generated from your note.</p>
+                  </Card>
+                ) : hasGenerationFailed ? (
+                  <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
+                    <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
+                    <p className="text-sm text-foreground/75">Generation did not complete, so the quiz is not available yet. Retry Generate when you are ready.</p>
+                  </Card>
+                ) : isDraft ? (
+                  <Card id="practice-quiz" className="space-y-3 p-4 sm:p-6">
+                    <h2 className="text-lg font-semibold sm:text-xl">Practice Quiz</h2>
+                    <p className="text-sm text-foreground/75">No quiz yet. Generate a Study Pack to create practice questions from this note.</p>
+                  </Card>
+                ) : (
+                  <div id="practice-quiz">
+                    <PracticeQuizCard quiz={note.quiz} />
+                  </div>
+                )
+              ) : null}
+
+              {activeStudyPackTab === "full-notes" ? (
+                <Card className="space-y-3 p-4 sm:p-6">
+                  <h2 className="text-lg font-semibold sm:text-xl">Full Notes</h2>
+                  <div className="rounded-2xl border border-border bg-background px-4 py-4">
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
+                      {fullNoteContent}
+                    </p>
+                  </div>
+                </Card>
+              ) : null}
+
+              <Card className="space-y-3 p-4 sm:p-6">
+                <h2 className="text-lg font-semibold sm:text-xl">Performance Overview</h2>
+                {isGeneratingStudyPack ? (
+                  <p className="text-sm text-foreground/75">Performance will appear after the Study Pack is ready and you complete a quiz.</p>
+                ) : hasGenerationFailed ? (
+                  <p className="text-sm text-foreground/75">Performance is unavailable because generation did not complete.</p>
+                ) : isDraft ? (
+                  <p className="text-sm text-foreground/75">Performance will appear after Quick Review or Challenge Quiz.</p>
+                ) : (
+                  <>
+                    {(quickSummary?.attempts ?? 0) === 0 && (challengeSummary?.attempts ?? 0) === 0 ? (
+                      <GuidanceTip
+                        tipId="note-detail-try-quiz"
+                        message="Try Quick Review or Challenge Quiz to start tracking your performance on this note."
+                      />
+                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-border bg-background p-3">
+                        <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
+                        <p className="mt-1 text-sm text-foreground/80">Attempts: {quickSummary?.attempts ?? 0}</p>
+                        <p className="text-sm text-foreground/80">Last score: {quickSummary?.lastScorePercentage ?? "-"}</p>
+                      </div>
+                      <div className="rounded-md border border-border bg-background p-3">
+                        <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
+                        <p className="mt-1 text-sm text-foreground/80">Attempts: {challengeSummary?.attempts ?? 0}</p>
+                        <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </Card>
+
+              {!isGeneratingStudyPack && !hasGenerationFailed && !isDraft ? (
+                <QuizSessionHistory
+                  sessions={recentQuizSessions}
+                  onSelectSession={handleSelectSessionReview}
+                />
+              ) : null}
+            </>
+          )}
         </div>
       ) : null}
 
@@ -1704,6 +1798,32 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         </div>
       </AppModal>
 
+      <AppModal
+        isOpen={showRegenerateQuizConfirm}
+        title="Regenerate quiz?"
+        description="This will create a new set of questions and costs 1 credit."
+        onClose={() => {
+          if (!generatingTeacherQuiz) {
+            setShowRegenerateQuizConfirm(false);
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowRegenerateQuizConfirm(false)}
+              disabled={generatingTeacherQuiz}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void handleGenerateTeacherQuiz()} disabled={generatingTeacherQuiz}>
+              {generatingTeacherQuiz ? "Regenerating..." : "Regenerate Quiz"}
+            </Button>
+          </div>
+        )}
+      />
+
       <DeleteConfirmationModal
         isOpen={showDeleteConfirm}
         title="Delete this note?"
@@ -1737,7 +1857,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       <AppModal
-        isOpen={showGenerateStudyPackGuide}
+        isOpen={!isTeacherMode && showGenerateStudyPackGuide}
         title="Step 2: Generate your Study Pack"
         description="This will create a summary, key concepts, and quiz from your notes."
         onClose={() => {
@@ -1768,7 +1888,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       <AppModal
-        isOpen={showQuickReviewGuide}
+        isOpen={!isTeacherMode && showQuickReviewGuide}
         title="Step 3: Try Quick Review"
         description="Quick Review helps you remember what you just studied."
         onClose={() => {
@@ -1799,14 +1919,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       <PaywallModal
-        isOpen={activePaywallModal !== null}
+        isOpen={!isTeacherMode && activePaywallModal !== null}
         variant={activePaywallModal ?? "adaptive-practice"}
         source="private_note_detail"
         onClose={() => setActivePaywallModal(null)}
       />
 
       <StudyPackLimitModal
-        isOpen={showLimitReachedModal}
+        isOpen={!isTeacherMode && showLimitReachedModal}
         planType={usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE")}
         resetDateLabel={usageResetDateLabel}
         onClose={() => setShowLimitReachedModal(false)}

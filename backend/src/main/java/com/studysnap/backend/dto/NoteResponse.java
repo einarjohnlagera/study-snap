@@ -23,6 +23,7 @@ public record NoteResponse(
         String summary,
         List<String> keyConcepts,
         List<QuizItem> quiz,
+        GeneratedQuizResponse generatedQuiz,
         Integer quizCount,
         boolean quickReviewAvailable,
         boolean challengeQuizAvailable,

@@ -4,13 +4,12 @@ import {
   getProfileTypeSwitchContent,
   isActiveProfileType,
   isActiveProfileTypeForSwitch,
-  resolveDefaultSessionMode,
   resolveProfileMode,
 } from "./profile-mode";
 
 describe("resolveProfileMode", () => {
-  it("returns CREATOR for TEACHER", () => {
-    expect(resolveProfileMode("TEACHER")).toBe("CREATOR");
+  it("returns TEACHING for TEACHER", () => {
+    expect(resolveProfileMode("TEACHER")).toBe("TEACHING");
   });
 
   it("returns LEARNING for STUDENT", () => {
@@ -35,24 +34,6 @@ describe("resolveProfileMode", () => {
 
   it("returns LEARNING for PROFESSIONAL (disabled type)", () => {
     expect(resolveProfileMode("PROFESSIONAL")).toBe("LEARNING");
-  });
-});
-
-describe("resolveDefaultSessionMode", () => {
-  it("returns PREVIEW for TEACHER (Creator mode)", () => {
-    expect(resolveDefaultSessionMode("TEACHER")).toBe("PREVIEW");
-  });
-
-  it("returns LEARNING for STUDENT", () => {
-    expect(resolveDefaultSessionMode("STUDENT")).toBe("LEARNING");
-  });
-
-  it("returns LEARNING for BOARD_EXAM", () => {
-    expect(resolveDefaultSessionMode("BOARD_EXAM")).toBe("LEARNING");
-  });
-
-  it("returns LEARNING for null", () => {
-    expect(resolveDefaultSessionMode(null)).toBe("LEARNING");
   });
 });
 
@@ -81,10 +62,10 @@ describe("getProfileTypeSwitchContent", () => {
     expect(content.toast).toContain("Board Taker");
   });
 
-  it("returns content for TEACHER mentioning preview", () => {
+  it("returns content for TEACHER mentioning quiz review and export", () => {
     const content = getProfileTypeSwitchContent("TEACHER");
     expect(content.title).toBe("Switch to Teacher mode?");
-    expect(content.body.some((line) => line.toLowerCase().includes("preview"))).toBe(true);
+    expect(content.body.some((line) => line.toLowerCase().includes("export"))).toBe(true);
     expect(content.toast).toContain("Teacher");
   });
 
