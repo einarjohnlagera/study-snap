@@ -23,9 +23,9 @@ const STEPS: Step[] = [
   {
     number: 2,
     icon: BookOpen,
-    title: "Generate a Study Pack",
+    title: "Generate a Quiz",
     description:
-      "Turn the note into a summary, key concepts, and a set of practice quiz questions in one click. NoteLib does the structuring.",
+      "Turn the note into a teacher-ready quiz with questions, answers, and explanations in one click.",
     cta: { label: "Open Library", href: "/library" },
   },
   {
@@ -33,7 +33,7 @@ const STEPS: Step[] = [
     icon: Search,
     title: "Review the Output",
     description:
-      "Read through the summary and quiz questions to check accuracy. Run a Quick Review or Challenge Quiz yourself to validate the material before sharing.",
+      "Open Quiz Preview to review every question with the correct answer and explanation already visible.",
     cta: { label: "Open Library", href: "/library" },
   },
   {
@@ -41,7 +41,7 @@ const STEPS: Step[] = [
     icon: Download,
     title: "Export for Reuse",
     description:
-      "From the Session Review page, export a Full Review PDF that includes all questions, answers, and explanations. Use this as a take-home reviewer or study reference.",
+      "Export questions only, questions with answers, or just the answer key from Quiz Preview for classroom use.",
     cta: { label: "Open Library", href: "/library" },
   },
 ];
@@ -49,7 +49,7 @@ const STEPS: Step[] = [
 const TIPS = [
   "Start with one lesson topic at a time — focused notes produce tighter quiz questions.",
   "Clearer, well-structured notes lead to more accurate summaries and quiz outputs.",
-  "Run through the quiz yourself before sharing results with students.",
+  "Review the generated answer key before printing or sharing with students.",
   "Use Make a Copy on any note to refine material without losing the original Study Pack.",
 ];
 
@@ -98,7 +98,7 @@ export function TeacherGuide() {
         <p className="mb-1 text-sm font-medium text-foreground">Where NoteLib fits today</p>
         <p className="text-xs leading-relaxed text-foreground/60">
           Teacher-focused workflows are still improving. Right now, NoteLib works best for turning your lesson
-          notes into study packs, quiz material, and exportable review content — a practical shortcut for
+          notes into quiz material, answer keys, and exportable review content — a practical shortcut for
           building reviewer resources faster.
         </p>
       </section>

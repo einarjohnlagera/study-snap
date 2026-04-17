@@ -35,6 +35,8 @@ public class OpenAiLlmConfig {
         String developerPromptTemplate = readResourceAsString(promptDir + "/developer.txt");
         String challengeQuizSystemPrompt = readResourceAsString(promptDir + "/challenge-quiz-system.txt");
         String challengeQuizDeveloperPromptTemplate = readResourceAsString(promptDir + "/challenge-quiz-developer.txt");
+        String teacherQuizSystemPrompt = readResourceAsString(promptDir + "/teacher-quiz-system.txt");
+        String teacherQuizDeveloperPromptTemplate = readResourceAsString(promptDir + "/teacher-quiz-developer.txt");
         String adaptivePracticeSystemPrompt = readResourceAsString(promptDir + "/adaptive-practice-system.txt");
         String adaptivePracticeDeveloperPromptTemplate = readResourceAsString(promptDir + "/adaptive-practice-developer.txt");
         JsonNode responseSchema = readResourceAsJson(promptDir + "/schema.json", objectMapper);
@@ -44,6 +46,8 @@ public class OpenAiLlmConfig {
                 responseSchema,
                 challengeQuizSystemPrompt,
                 challengeQuizDeveloperPromptTemplate,
+                teacherQuizSystemPrompt,
+                teacherQuizDeveloperPromptTemplate,
                 adaptivePracticeSystemPrompt,
                 adaptivePracticeDeveloperPromptTemplate
         );
@@ -77,4 +81,3 @@ public class OpenAiLlmConfig {
         }
     }
 }
-

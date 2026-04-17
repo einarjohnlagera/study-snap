@@ -11,6 +11,7 @@ import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
+import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteService;
 import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
@@ -55,6 +56,8 @@ class NoteControllerTest {
     private ChallengeQuizService challengeQuizService;
     @Mock
     private QuickReviewAdaptivePracticeService quickReviewAdaptivePracticeService;
+    @Mock
+    private GeneratedQuizService generatedQuizService;
 
     private NoteController noteController;
 
@@ -68,7 +71,8 @@ class NoteControllerTest {
                 quickReviewSessionService,
                 quickReviewStudyTipService,
                 challengeQuizService,
-                quickReviewAdaptivePracticeService
+                quickReviewAdaptivePracticeService,
+                generatedQuizService
         );
     }
 
@@ -96,6 +100,7 @@ class NoteControllerTest {
                 null,
                 List.of(),
                 List.of(),
+                null,
                 0,
                 false,
                 false,
@@ -145,6 +150,24 @@ class NoteControllerTest {
                 .isSameAs(verificationError);
 
         verify(studyPackService, never()).startAsyncGenerationFromNote("note-1", userId);
+    }
+
+    @Test
+    void generateGeneratedQuiz_callsEmailVerificationBeforeGeneration() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        com.studysnap.backend.dto.GeneratedQuizResponse expected = new com.studysnap.backend.dto.GeneratedQuizResponse(
+                "note-1",
+                List.of(),
+                OffsetDateTime.now()
+        );
+        when(generatedQuizService.generate("note-1", userId)).thenReturn(expected);
+
+        com.studysnap.backend.dto.GeneratedQuizResponse response = noteController.generateGeneratedQuiz("note-1", user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(generatedQuizService).generate("note-1", userId);
+        assertThat(response).isEqualTo(expected);
     }
 
     @Test

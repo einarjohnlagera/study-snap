@@ -26,7 +26,6 @@ import com.studysnap.backend.exception.StudyPackNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.StudyPackDraftRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
-import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.security.OcrRateLimitService;
 import com.studysnap.backend.service.model.GeneratedStudyPackContent;
@@ -87,7 +86,6 @@ public class StudyPackService {
     private final StudyPackRepository studyPackRepository;
     private final StudyPackDraftRepository studyPackDraftRepository;
     private final NoteRepository noteRepository;
-    private final UserRepository userRepository;
     private final OcrService ocrService;
     private final LlmStudyPackService llmStudyPackService;
     private final StudySnapProperties properties;
@@ -99,6 +97,7 @@ public class StudyPackService {
     private final OcrRateLimitService ocrRateLimitService;
     private final OcrUsageProtectionService ocrUsageProtectionService;
     private final AiRateLimitService aiRateLimitService;
+    private final StudyPackGenerationContextResolver generationContextResolver;
     private final TransactionOperations studyPackGenerationTransactionOperations;
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
 
@@ -112,7 +111,7 @@ public class StudyPackService {
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
 
-        StudyPackGenerationContext generationContext = buildGenerationContext(ownerUserId, requestedSourceNote);
+        StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, requestedSourceNote);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
                 normalizedText,
                 generationContext
@@ -153,7 +152,7 @@ public class StudyPackService {
         String normalizedText = normalizeAndValidateText(sourceNote.getContent());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
-        StudyPackGenerationContext generationContext = buildGenerationContext(ownerUserId, sourceNote);
+        StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, sourceNote);
         UUID noteId = sourceNote.getId();
 
         sourceNote.setStatus(NoteStatus.GENERATING);
@@ -207,7 +206,7 @@ public class StudyPackService {
 
         String normalizedText = normalizeAndValidateText(extractedText);
         aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
-        StudyPackGenerationContext generationContext = buildGenerationContext(ownerUserId, null);
+        StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, null);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
                 normalizedText,
                 generationContext
@@ -257,7 +256,7 @@ public class StudyPackService {
         String normalizedText = normalizeAndValidateText(request.notesText());
         PlanType planType = assertMonthlyStudyPackQuotaAvailable(ownerUserId);
         aiRateLimitService.assertAllowed(ownerUserId, planType, STUDY_PACK);
-        StudyPackGenerationContext generationContext = buildGenerationContext(ownerUserId, null);
+        StudyPackGenerationContext generationContext = generationContextResolver.resolve(ownerUserId, null);
         GeneratedStudyPackContent generated = llmStudyPackService.generateStudyPack(
                 normalizedText,
                 generationContext
@@ -887,33 +886,6 @@ public class StudyPackService {
         }
         metadata.put("generatedFromExistingNote", generatedFromExistingNote);
         return metadata;
-    }
-
-    private StudyPackGenerationContext buildGenerationContext(UUID ownerUserId, NoteEntity note) {
-        List<String> tags = note == null || note.getTags() == null
-                ? List.of()
-                : Arrays.asList(note.getTags());
-
-        return userRepository.findById(ownerUserId)
-                .map(user -> new StudyPackGenerationContext(
-                        user.getLearnerLevel(),
-                        note == null ? user.getCourseProgram() : firstNonBlank(note.getCourseProgram(), user.getCourseProgram()),
-                        note == null ? null : note.getSubject(),
-                        tags
-                ))
-                .orElseGet(() -> new StudyPackGenerationContext(
-                        null,
-                        note == null ? null : note.getCourseProgram(),
-                        note == null ? null : note.getSubject(),
-                        tags
-                ));
-    }
-
-    private String firstNonBlank(String primary, String fallback) {
-        if (primary != null && !primary.isBlank()) {
-            return primary;
-        }
-        return fallback;
     }
 
     private void assertNoteEditable(UUID noteId, UUID ownerUserId) {

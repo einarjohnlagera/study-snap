@@ -17,11 +17,6 @@ import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser } from "@/lib/auth";
 import { clearFirstStudyOnboardingStep, getFirstStudyOnboardingStep } from "@/lib/first-study-onboarding";
-import {
-  resolveDefaultSessionMode,
-  resolveProfileMode,
-  type SessionMode,
-} from "@/lib/profile-mode";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   type ChallengeQuizStartRequest,
@@ -242,10 +237,6 @@ export default function ChallengeQuizPage() {
   const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
   const [isMobileNavigatorViewport, setIsMobileNavigatorViewport] = useState(isMobileQuestionNavigatorViewport);
-  // Session mode for Creator mode (Teacher): PREVIEW = scores not recorded, LEARNING = scored.
-  const initialSessionMode = resolveDefaultSessionMode(getAuthUser()?.profileType);
-  const [quizSessionMode, setQuizSessionMode] = useState<SessionMode>(initialSessionMode);
-  const isCreatorMode = resolveProfileMode(getAuthUser()?.profileType) === "CREATOR";
   const [isQuestionNavigatorCollapsed, setIsQuestionNavigatorCollapsed] = useState(false);
 
   const noteId = useMemo(() => {
@@ -706,8 +697,8 @@ export default function ChallengeQuizPage() {
     }
     try {
       const request: ChallengeQuizStartRequest = nextMode === CHALLENGE_MODE && note.difficultySelectionAvailable
-        ? { difficulty: selectedDifficulty, mode: nextMode, sessionMode: quizSessionMode }
-        : { mode: nextMode, sessionMode: quizSessionMode };
+        ? { difficulty: selectedDifficulty, mode: nextMode }
+        : { mode: nextMode };
       const started = await startChallengeQuizSession(note.id, request);
       if (!started.sessionId) {
         throw new Error(nextMode === BOARD_EXAM_MODE ? "Could not start Board Exam Mode." : "Could not start Challenge Quiz.");
@@ -946,44 +937,6 @@ export default function ChallengeQuizPage() {
             <p className="text-sm text-foreground/80">
               Choose how you want to take this quiz for {note?.title ?? "this note"}. Challenge Quiz stays flexible, while Board Exam Mode uses a stricter exam-style flow.
             </p>
-            {isCreatorMode ? (
-              <div className="rounded-xl border border-border bg-muted/10 p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground/60">
-                  Session Mode
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                      quizSessionMode === "PREVIEW"
-                        ? "border-primary bg-primary/5 font-medium text-foreground dark:bg-primary/10"
-                        : "border-border bg-background text-foreground/70 hover:bg-highlight"
-                    }`}
-                    onClick={() => setQuizSessionMode("PREVIEW")}
-                    disabled={challengeGenerationLocked}
-                  >
-                    Preview
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                      quizSessionMode === "LEARNING"
-                        ? "border-primary bg-primary/5 font-medium text-foreground dark:bg-primary/10"
-                        : "border-border bg-background text-foreground/70 hover:bg-highlight"
-                    }`}
-                    onClick={() => setQuizSessionMode("LEARNING")}
-                    disabled={challengeGenerationLocked}
-                  >
-                    Take Quiz (scored)
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-foreground/60">
-                  {quizSessionMode === "PREVIEW"
-                    ? "Preview mode — scores not recorded. Use to review quiz material without affecting performance history."
-                    : "Scored mode — results are recorded in performance history."}
-                </p>
-              </div>
-            ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
@@ -1357,11 +1310,6 @@ export default function ChallengeQuizPage() {
               ? "Your board exam simulation is complete. Review your performance first, then use the follow-up actions to recover weak areas."
               : "Your Challenge Quiz is complete. Review the result summary first, then choose the next study action."}
           </p>
-          {isCreatorMode && quizSessionMode === "PREVIEW" ? (
-            <p className="text-xs text-foreground/60">
-              Preview mode — scores were not recorded in performance history.
-            </p>
-          ) : null}
           {showFirstQuizCompletionBanner ? (
             <Card className="space-y-3 border-emerald-500/30 bg-emerald-500/5 p-4">
               <div className="space-y-1">
