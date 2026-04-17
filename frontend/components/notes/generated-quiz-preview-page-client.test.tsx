@@ -90,14 +90,16 @@ describe("GeneratedQuizPreviewPageClient", () => {
         },
       ],
     });
-    (exportGeneratedQuizDocument as jest.Mock).mockResolvedValue({ filename: "quiz.txt" });
+    (exportGeneratedQuizDocument as jest.Mock).mockResolvedValue({ filename: "quiz.pdf" });
   });
 
   it("renders the generated quiz with answers visible", async () => {
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
-    expect(await screen.findByRole("heading", { name: "Teacher Note" })).toBeInTheDocument();
-    expect(screen.getByText("What is the nucleus?")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Quiz Preview" })).toBeInTheDocument();
+    expect(await screen.findByText("What is the nucleus?")).toBeInTheDocument();
+    expect(screen.getByText("Teacher Note")).toBeInTheDocument();
+    expect(screen.getByText("Generated Quiz - Ready for export")).toBeInTheDocument();
     expect(screen.getByText("✓ Correct")).toBeInTheDocument();
     expect(screen.getByText("The nucleus controls cell activity.")).toBeInTheDocument();
   });
@@ -105,20 +107,22 @@ describe("GeneratedQuizPreviewPageClient", () => {
   it("exports from the dedicated quiz view", async () => {
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
-    await screen.findByRole("heading", { name: "Teacher Note" });
+    await screen.findByText("What is the nucleus?");
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Export Answer Key" }));
+    fireEvent.click(screen.getByRole("button", { name: /Export with answers/i }));
 
     await waitFor(() => {
-      expect(exportGeneratedQuizDocument).toHaveBeenCalled();
+      expect(exportGeneratedQuizDocument).toHaveBeenCalledWith(expect.objectContaining({
+        exportType: "with-answers",
+      }));
     });
   });
 
   it("regenerates after confirmation", async () => {
     render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
 
-    await screen.findByRole("heading", { name: "Teacher Note" });
-    fireEvent.click(screen.getByRole("button", { name: "Regenerate Quiz" }));
+    await screen.findByText("What is the nucleus?");
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
     expect(screen.getByText("Regenerate quiz?")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Regenerate Quiz" }).at(-1) as HTMLButtonElement);
 

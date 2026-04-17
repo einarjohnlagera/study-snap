@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, FileText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BackLink } from "@/components/ui/back-link";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ToastMessage } from "@/components/ui/toast-message";
+import { ExportDropdownMenu } from "@/components/ui/export-dropdown-menu";
 import { QuizSessionReviewContent } from "@/components/notes/quiz-session-review-content";
 import {
   getNote,
@@ -43,10 +42,8 @@ export function NoteSessionReviewPageClient({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastTone, setToastTone] = useState<"success" | "error" | "info">("info");
-  const exportMenuRef = useRef<HTMLDivElement>(null);
 
   const sessionMode = useMemo(
     () => fromNoteSessionReviewRouteMode(searchParams.get(NOTE_SESSION_REVIEW_QUERY_PARAMS.routeMode)),
@@ -123,21 +120,6 @@ export function NoteSessionReviewPageClient({
     };
   }, [noteId, router, sessionId, sessionMode]);
 
-  useEffect(() => {
-    if (!exportMenuOpen) {
-      return undefined;
-    }
-    const handleClickOutside = (event: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-        setExportMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [exportMenuOpen]);
-
   const adaptivePracticeExportEnabled = review?.sessionMode === "ADAPTIVE";
   const adaptiveDisabledReason = (() => {
     const isPremium = getAuthUser()?.planType === "PREMIUM";
@@ -150,8 +132,6 @@ export function NoteSessionReviewPageClient({
     if (!review || exporting) {
       return;
     }
-
-    setExportMenuOpen(false);
 
     if (!hasExportableContent(exportType, review)) {
       setToastTone("info");
@@ -235,87 +215,44 @@ export function NoteSessionReviewPageClient({
                 </p>
               </div>
               <div className="flex flex-col items-start gap-3 sm:items-end">
-                <div className="relative" ref={exportMenuRef}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => setExportMenuOpen((prev) => !prev)}
-                    disabled={exporting}
-                  >
-                    <FileText className="h-4 w-4" aria-hidden="true" />
-                    <span>{exporting ? "Exporting..." : "Export"}</span>
-                    <ChevronDown className="h-3 w-3" aria-hidden="true" />
-                  </Button>
-                  {exportMenuOpen ? (
-                    <div className="motion-export-panel fixed inset-x-4 bottom-4 z-50 overflow-hidden rounded-2xl border border-border bg-background shadow-xl sm:absolute sm:bottom-auto sm:inset-x-auto sm:right-0 sm:top-full sm:mt-1 sm:min-w-50 sm:rounded-md sm:shadow-md">
-                      {/* Mobile header */}
-                      <div className="border-b border-border px-4 py-3 sm:hidden">
-                        <p className="text-sm font-semibold text-foreground">Export</p>
-                        <p className="text-xs text-foreground/60">Choose what to export</p>
-                      </div>
-                      {/* Desktop group label */}
-                      <p className="hidden px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wide text-foreground/50 sm:block">
-                        Review Materials
-                      </p>
-                      {/* Options */}
-                      <div className="p-2 sm:p-1">
-                        <button
-                          type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-highlight active:bg-highlight-strong sm:rounded sm:py-2"
-                          onClick={() => void handleExport("full")}
-                        >
-                          <span className="block text-sm font-medium text-foreground">Full Review</span>
-                          <span className="block text-xs text-foreground/55 sm:hidden">All questions with answers and explanations</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-highlight active:bg-highlight-strong sm:rounded sm:py-2"
-                          onClick={() => void handleExport("mistakes-only")}
-                        >
-                          <span className="block text-sm font-medium text-foreground">Mistakes</span>
-                          <span className="block text-xs text-foreground/55 sm:hidden">Incorrect answers only</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-highlight active:bg-highlight-strong sm:rounded sm:py-2"
-                          onClick={() => void handleExport("weak-concepts")}
-                        >
-                          <span className="block text-sm font-medium text-foreground">Weak Concepts</span>
-                          <span className="block text-xs text-foreground/55 sm:hidden">Questions from areas needing practice</span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`w-full rounded-lg px-3 py-3 text-left sm:rounded sm:py-2 ${
-                            adaptivePracticeExportEnabled
-                              ? "motion-lift transition-colors hover:bg-highlight active:bg-highlight-strong"
-                              : "cursor-not-allowed opacity-50"
-                          }`}
-                          onClick={adaptivePracticeExportEnabled ? () => void handleExport("adaptive-practice") : undefined}
-                          disabled={!adaptivePracticeExportEnabled}
-                        >
-                          <span className="block text-sm font-medium text-foreground">Adaptive Practice</span>
-                          <span className="block text-xs text-foreground/55">
-                            {adaptivePracticeExportEnabled
-                              ? "Adaptive practice session review"
-                              : adaptiveDisabledReason}
-                          </span>
-                        </button>
-                      </div>
-                      {/* Mobile cancel */}
-                      <div className="border-t border-border p-2 sm:hidden">
-                        <button
-                          type="button"
-                          className="motion-lift w-full rounded-lg px-3 py-2.5 text-center text-sm font-medium text-foreground/60 transition-colors hover:bg-highlight active:bg-highlight-strong"
-                          onClick={() => setExportMenuOpen(false)}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
+                <ExportDropdownMenu
+                  exporting={exporting}
+                  buttonLabel="Export"
+                  menuTitle="Export"
+                  menuDescription="Choose what to export"
+                  groupLabel="Review Materials"
+                  items={[
+                    {
+                      key: "full",
+                      label: "Full Review",
+                      description: "All questions with answers and explanations",
+                      onSelect: () => void handleExport("full"),
+                    },
+                    {
+                      key: "mistakes-only",
+                      label: "Mistakes",
+                      description: "Incorrect answers only",
+                      onSelect: () => void handleExport("mistakes-only"),
+                    },
+                    {
+                      key: "weak-concepts",
+                      label: "Weak Concepts",
+                      description: "Questions from areas needing practice",
+                      onSelect: () => void handleExport("weak-concepts"),
+                    },
+                    {
+                      key: "adaptive-practice",
+                      label: "Adaptive Practice",
+                      description: adaptivePracticeExportEnabled
+                        ? "Adaptive practice session review"
+                        : adaptiveDisabledReason,
+                      disabled: !adaptivePracticeExportEnabled,
+                      onSelect: adaptivePracticeExportEnabled
+                        ? () => void handleExport("adaptive-practice")
+                        : undefined,
+                    },
+                  ]}
+                />
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/70">
                     {quizTypeLabel}

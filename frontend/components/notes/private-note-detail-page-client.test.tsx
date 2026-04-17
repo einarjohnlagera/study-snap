@@ -573,7 +573,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(await screen.findByText("Adaptive Practice is a Premium feature")).toBeInTheDocument();
   });
 
-  it("renders teacher note detail with Generate Quiz only and hides student quiz surfaces", async () => {
+  it("renders teacher note detail with Study Pack tabs visible and student-only sections hidden", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       planType: "PREMIUM",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
@@ -588,7 +588,11 @@ describe("PrivateNoteDetailPageClient", () => {
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
     expect(await screen.findByRole("button", { name: "Generate Quiz" })).toBeInTheDocument();
-    expect(screen.getByText("Generate a quiz from this note with answers and explanations for review and export.")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Key Concepts" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Full Notes" })).toBeInTheDocument();
+    expect(screen.getByText("Teacher mode keeps quiz work separate from student quiz sessions. Generate, review, and export from the dedicated quiz preview.")).toBeInTheDocument();
     expect(screen.queryByText("Performance Overview")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent Sessions")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
@@ -629,6 +633,8 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(await screen.findByRole("button", { name: "View Quiz" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Regenerate" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.queryByText("Performance Overview")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "View Quiz" }));
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/quiz");

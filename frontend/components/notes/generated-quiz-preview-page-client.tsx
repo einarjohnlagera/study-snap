@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
+import { ExportDropdownMenu } from "@/components/ui/export-dropdown-menu";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { getGeneratedQuiz, generateGeneratedQuiz, getNote, type GeneratedQuizResponse, type NoteResponse } from "@/lib/api";
 import { exportGeneratedQuizDocument, type GeneratedQuizExportType } from "@/lib/generated-quiz-export";
@@ -26,13 +28,11 @@ const GENERATED_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
 
 export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQuizPreviewPageClientProps>) {
   const router = useRouter();
-  const exportMenuRef = useRef<HTMLDivElement | null>(null);
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuizResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
@@ -77,29 +77,6 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     return () => window.clearTimeout(timeoutId);
   }, [toast]);
 
-  useEffect(() => {
-    if (!exportMenuOpen) {
-      return undefined;
-    }
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!exportMenuRef.current || exportMenuRef.current.contains(event.target as Node)) {
-        return;
-      }
-      setExportMenuOpen(false);
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setExportMenuOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("keydown", handleEscape);
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [exportMenuOpen]);
-
   const noteTitle = note?.title?.trim() || "Untitled note";
   const noteSubject = note?.subject ?? null;
   const generatedAtLabel = useMemo(() => {
@@ -113,9 +90,8 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     if (!generatedQuiz || exporting) {
       return;
     }
-    setExportMenuOpen(false);
     setExporting(true);
-    setToast("Exporting...");
+    setToast("Exporting PDF...");
     try {
       await exportGeneratedQuizDocument({
         exportType,
@@ -123,9 +99,9 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
         noteSubject,
         quiz: generatedQuiz.questions,
       });
-      setToast("Export ready.");
+      setToast("PDF ready");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not export quiz.";
+      const message = err instanceof Error ? err.message : "Could not export PDF.";
       setError(message);
       setToast(null);
     } finally {
@@ -186,65 +162,47 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
           <Card className="space-y-4 p-4 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                  Quiz Preview
-                </p>
-                <h1 className="text-2xl font-semibold sm:text-3xl">{noteTitle}</h1>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Quiz Preview</p>
+                <h1 className="text-2xl font-semibold sm:text-3xl">Quiz Preview</h1>
                 <p className="text-sm text-foreground/75">
-                  Review the generated quiz with answers and explanations visible before exporting it for class use.
+                  Review the generated quiz with answers and explanations before exporting it for class use.
                 </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-blue-500/30 bg-blue-500/5 px-3 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                    Generated Quiz - Ready for export
+                  </span>
+                  <span className="text-sm text-foreground/70">{noteTitle}</span>
+                </div>
                 {generatedAtLabel ? (
                   <p className="text-xs text-foreground/60">Generated {generatedAtLabel}</p>
                 ) : null}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button type="button" variant="outline" onClick={() => setShowRegenerateConfirm(true)} disabled={regenerating}>
-                  {regenerating ? "Regenerating..." : "Regenerate Quiz"}
+                <ExportDropdownMenu
+                  exporting={exporting}
+                  buttonLabel="Export"
+                  menuTitle="Export"
+                  menuDescription="Choose what to export"
+                  groupLabel="Quiz Materials"
+                  items={[
+                    {
+                      key: "pdf",
+                      label: "Export as PDF",
+                      description: "Questions and choices for classroom use",
+                      onSelect: () => void handleExport("pdf"),
+                    },
+                    {
+                      key: "with-answers",
+                      label: "Export with answers",
+                      description: "Include answers and explanations",
+                      onSelect: () => void handleExport("with-answers"),
+                    },
+                  ]}
+                />
+                <Button type="button" variant="outline" className="gap-2" onClick={() => setShowRegenerateConfirm(true)} disabled={regenerating}>
+                  <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  <span>{regenerating ? "Regenerating..." : "Regenerate"}</span>
                 </Button>
-                <div className="relative" ref={exportMenuRef}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setExportMenuOpen((previous) => !previous)}
-                    disabled={exporting}
-                    aria-haspopup="menu"
-                    aria-expanded={exportMenuOpen}
-                  >
-                    {exporting ? "Exporting..." : "Export"}
-                  </Button>
-                  {exportMenuOpen ? (
-                    <div
-                      role="menu"
-                      aria-label="Export quiz"
-                      className="absolute right-0 top-12 z-20 min-w-60 rounded-xl border border-border bg-background p-1.5 shadow-sm"
-                    >
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="w-full rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-highlight"
-                        onClick={() => void handleExport("questions-only")}
-                      >
-                        Export Questions Only
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="w-full rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-highlight"
-                        onClick={() => void handleExport("questions-answers")}
-                      >
-                        Export Questions + Answers
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="w-full rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-highlight"
-                        onClick={() => void handleExport("answer-key")}
-                      >
-                        Export Answer Key
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
               </div>
             </div>
           </Card>
