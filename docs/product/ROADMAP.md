@@ -117,6 +117,16 @@ Potential expansion areas after `v0.8.0`:
 - optional public-profile enhancements such as followers, likes, and creator bios
 - optional snapshot/history tables if product value is proven
 
+### Public Library persona filtering (roadmap)
+
+Planned for a future release after the mode system matures:
+
+- persona-based note recommendations in Public Library discovery (same-profile notes ranked higher)
+- cross-profile discovery still allowed so learners can find materials outside their profile type
+- filtering UI: optional "Relevant to me" toggle that uses the current user's profile mode for ranking
+- implementation must remain additive — no ranking change without the toggle enabled
+- do not build until there are enough public notes per profile type to make filtering meaningful
+
 ## Product Learning Loop
 
 Capture -> Generate -> Review -> Improve -> Copy -> Repeat

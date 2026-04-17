@@ -552,9 +552,19 @@ export type NotePerformanceSummaryResponse = {
   bestSessionMode: Extract<QuizSessionMode, "QUICK_REVIEW" | "CHALLENGE">;
 };
 
+/**
+ * LEARNING — session is scored and persisted as a performance record (default).
+ * PREVIEW  — quiz runs normally but the backend does not record a scored session.
+ *            Default for Creator mode (Teacher) so reviewing quiz material does not
+ *            pollute performance history. The user can explicitly choose LEARNING to
+ *            take the quiz as a learner.
+ */
+export type QuizStartSessionMode = "LEARNING" | "PREVIEW";
+
 export type ChallengeQuizStartRequest = {
   difficulty?: "easy" | "medium" | "hard";
   mode?: ChallengeQuizMode;
+  sessionMode?: QuizStartSessionMode;
 };
 
 export type ChallengeQuizStartResponse = {

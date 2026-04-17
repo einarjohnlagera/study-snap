@@ -87,29 +87,76 @@ High-level model:
 
 ## Profile Types
 
-Supported profile types:
+### Active profile types
 
-- `STUDENT`
-- `BOARD_EXAM`
-- `TEACHER`
+| Profile type | Label | Availability |
+|---|---|---|
+| `STUDENT` | Student | Active |
+| `BOARD_EXAM` | Board Taker | Active |
+| `TEACHER` | Teacher | Active |
+| `PROFESSIONAL` | Professional | Coming Soon — not selectable |
+| `PARENT` | Parent | Coming Soon — not selectable |
 
 Profile type is a personalization setting on `User`.
 
-Profile type affects:
+Disabled profile types (`PROFESSIONAL`, `PARENT`) are visible in the Profile Type selector but not selectable. They show a "Coming Soon" badge. They must not be saved to the backend.
+
+### Profile switching UX
+
+- Switching to an active profile type shows a confirmation modal before saving.
+- Confirmation modal copy is specific to the target mode (not the profile name).
+- Modal always includes: "You can switch back anytime."
+- On confirm, the modal closes and a post-switch toast appears with mode-specific copy.
+- Toast auto-dismisses after 4 seconds.
+- Cancelling the modal leaves the UI selection unchanged without saving.
+
+### Mode system
+
+Profile types map to one of two behavioural modes. **All shared components must branch on mode, not on profile type name.**
+
+| Profile type | Mode | Description |
+|---|---|---|
+| `STUDENT` | `LEARNING` | Scored quizzes, progress tracking, study recall emphasis |
+| `BOARD_EXAM` | `LEARNING` | Scored quizzes, exam prep emphasis, weak-concept drilling |
+| `TEACHER` | `CREATOR` | Quiz creation and export; quiz preview by default |
+
+Mode resolution lives in `frontend/lib/profile-mode.ts`:
+- `resolveProfileMode(profileType)` → `"LEARNING"` or `"CREATOR"`
+- `resolveDefaultSessionMode(profileType)` → `"LEARNING"` or `"PREVIEW"`
+
+### Quiz session mode
+
+When a user starts a quiz, a `sessionMode` is resolved from their profile mode:
+
+| Profile mode | Default session mode | Effect |
+|---|---|---|
+| `LEARNING` | `LEARNING` | Quiz session is scored and stored in performance history |
+| `CREATOR` | `PREVIEW` | Quiz runs normally but scores are not recorded |
+
+Rules:
+- Teachers always see a **session mode toggle** on the Challenge Quiz prestart ("Preview" / "Take Quiz (scored)").
+- Default is "Preview" for Creator mode; Teacher can switch to "Take Quiz" to record performance.
+- Score recording is a backend concern; the frontend passes `sessionMode` in `ChallengeQuizStartRequest`.
+- The results screen shows "Preview mode — scores were not recorded" when in preview mode.
+
+### Profile type effects
+
+Profile type affects (via mode):
 
 - Dashboard layout and section priority
-- CTA behavior
+- CTA behaviour
 - Labels and wording
 - Workflow emphasis
 - Recommendations
-- Default tab after generation
+- Default tab after Study Pack generation
+- Default quiz session mode (LEARNING vs PREVIEW)
 
 Profile type does not affect:
 
 - Note ownership
 - Study Pack generation pipeline
-- Quiz-session persistence
-- Activity history
+- Quiz-session schema or persistence structure
+- Activity history structure
 - Weak-concept storage
 - Core table structure
 
