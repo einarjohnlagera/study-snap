@@ -18,6 +18,7 @@
   - keeps the shared Study Pack / note workspace visible through `Recent Notes`
   - replaces student analytics sections with teacher-focused sections: `Create Teaching Material`, `Recently Generated Quizzes`, `Ready to Export`, and `Teacher Help / Tips`
   - links generated quizzes directly into Quiz Preview so export stays inside the teacher review flow
+  - refined post-audit teacher guidance so the dashboard welcome copy is teacher-specific and the generated-quiz empty state now routes teachers to a recent ready note when no quiz preview exists yet
 
 - **Persona-based quiz defaults** — quiz entry now emphasizes the right mode per learner intent while keeping the alternate mode reachable:
   - `Student` defaults to `Challenge Quiz` emphasis on the shared mode-selection screen

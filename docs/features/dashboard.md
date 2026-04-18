@@ -26,8 +26,10 @@ Teacher sections:
 - `Create Teaching Material` -> primary CTA `Create Note`
 - `Recent Notes` -> latest notes and Study Packs
 - `Recently Generated Quizzes` -> quick links to Quiz Preview pages
+  - when no generated quiz exists yet, the empty state should direct teachers to a recent ready note when available; otherwise it should fall back to `Create Note`
 - `Ready to Export` -> spotlight for generated quizzes that are ready to open in Quiz Preview
 - `Teacher Help / Tips` -> lightweight workflow guidance
+- dashboard welcome copy should sound teacher-first in `Teacher` mode and point users toward note -> Study Pack -> Quiz Preview
 
 ## Continue Studying
 
