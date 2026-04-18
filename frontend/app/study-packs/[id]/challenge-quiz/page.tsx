@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
@@ -49,6 +49,10 @@ import {
   serializeSelectedChoiceIndexRecord,
   toSelectedChoiceIndexRecord,
 } from "@/lib/quiz";
+import {
+  CHALLENGE_QUIZ_ENTRY_QUERY_PARAM,
+  isModeSelectionChallengeQuizEntry,
+} from "@/lib/challenge-quiz-entry";
 import { cn } from "@/lib/utils";
 
 type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
@@ -124,6 +128,14 @@ function resolveRecoveryPrestartStep(mode: ChallengeQuizMode): ChallengePrestart
     return "board-exam-setup";
   }
   return "challenge-setup";
+}
+
+function resolveInitialPrestartStep(): ChallengePrestartStep {
+  return "mode-selection";
+}
+
+function shouldShowChallengeQuizLimitPage(planType: ChallengeViewerPlanType): boolean {
+  return planType === "PREMIUM";
 }
 
 function resolvePreferredChallengeMode(profileType: string | null | undefined): ChallengeQuizMode {
@@ -207,6 +219,7 @@ function getPerformanceBadgeClass(performanceLevel: string): string {
 export default function ChallengeQuizPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
   const progressRef = useRef<{ currentIndex: number; selectedChoices: Record<number, number> }>({
     currentIndex: 0,
@@ -223,9 +236,7 @@ export default function ChallengeQuizPage() {
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
   const [phase, setPhase] = useState<ChallengePhase>("prestart");
-  const [prestartStep, setPrestartStep] = useState<ChallengePrestartStep>(() => (
-    resolveRecoveryPrestartStep(resolvePreferredChallengeMode(getAuthUser()?.profileType))
-  ));
+  const [prestartStep, setPrestartStep] = useState<ChallengePrestartStep>(resolveInitialPrestartStep);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -258,6 +269,10 @@ export default function ChallengeQuizPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
+  const shouldForceModeSelectionEntry = useMemo(
+    () => isModeSelectionChallengeQuizEntry(searchParams.get(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM)),
+    [searchParams],
+  );
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const syncProgressRef = useCallback((nextIndex: number, nextSelectedChoices: Record<number, number>) => {
     progressRef.current = {
@@ -300,6 +315,23 @@ export default function ChallengeQuizPage() {
       globalThis.removeEventListener("studysnap-auth-change", syncVerification);
     };
   }, []);
+
+  useEffect(() => {
+    if (!shouldForceModeSelectionEntry) {
+      return;
+    }
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM);
+    router.replace(nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams, shouldForceModeSelectionEntry]);
+
+  useEffect(() => {
+    if (!shouldForceModeSelectionEntry || phase !== "prestart" || challengeSession?.sessionId) {
+      return;
+    }
+    setSelectedMode(resolvePreferredChallengeMode(viewerProfileType));
+    setPrestartStep(resolveInitialPrestartStep());
+  }, [challengeSession?.sessionId, phase, shouldForceModeSelectionEntry, viewerProfileType]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -451,8 +483,11 @@ export default function ChallengeQuizPage() {
       setNote(detail);
       const authUser = getAuthUser();
       const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
+      const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PREMIUM"
+        ? authUser.planType
+        : null;
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
-      setViewerPlanType(authUser?.planType === "FREE" || authUser?.planType === "PREMIUM" ? authUser.planType : null);
+      setViewerPlanType(resolvedViewerPlanType);
       setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
       if (!authUser?.emailVerifiedAt) {
         syncProgressRef(0, {});
@@ -465,7 +500,8 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(preferredMode);
-        setPrestartStep(resolveRecoveryPrestartStep(preferredMode));
+        setPrestartStep(resolveInitialPrestartStep());
+        setActivePaywallModal(null);
         setPhase("prestart");
         return;
       }
@@ -474,6 +510,7 @@ export default function ChallengeQuizPage() {
       setSelectedMode(inProgress.mode ?? preferredMode);
       if (inProgress.sessionId) {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
+        setActivePaywallModal(null);
         applyStartedSession(inProgress, true);
       } else {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
@@ -487,11 +524,14 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(preferredMode);
-        setPrestartStep(resolveRecoveryPrestartStep(preferredMode));
+        setPrestartStep(resolveInitialPrestartStep());
         const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
-        setPhase(hasReachedMonthlyLimit ? "limit-reached" : "prestart");
+        const shouldShowLimitPage = hasReachedMonthlyLimit && shouldShowChallengeQuizLimitPage(resolvedViewerPlanType);
+        setPhase(shouldShowLimitPage ? "limit-reached" : "prestart");
         if (hasReachedMonthlyLimit) {
-          setActivePaywallModal("challenge-quiz-limit");
+          setActivePaywallModal(shouldShowLimitPage ? null : "challenge-quiz-limit");
+        } else {
+          setActivePaywallModal(null);
         }
       }
     } catch (err) {
@@ -743,8 +783,13 @@ export default function ChallengeQuizPage() {
       }
       setError(message);
       if (message.toLowerCase().includes("monthly challenge quiz limit")) {
-        setPhase("limit-reached");
-        openLockedFeaturePaywall("challenge-quiz-limit", "challenge_quiz_start");
+        if (shouldShowChallengeQuizLimitPage(viewerPlanType)) {
+          setActivePaywallModal(null);
+          setPhase("limit-reached");
+        } else {
+          setPhase("prestart");
+          openLockedFeaturePaywall("challenge-quiz-limit", "challenge_quiz_start");
+        }
       }
     } finally {
       startInFlightRef.current = false;
@@ -803,8 +848,12 @@ export default function ChallengeQuizPage() {
   const handleSelectBoardExamMode = useCallback(() => {
     setSelectedMode(BOARD_EXAM_MODE);
     setError(null);
+    if (!boardExamAvailable) {
+      openLockedFeaturePaywall("board-exam-mode", "board_exam_mode_selection");
+      return;
+    }
     setPrestartStep("board-exam-setup");
-  }, []);
+  }, [boardExamAvailable, openLockedFeaturePaywall]);
   const returnToModeSelection = useCallback(() => {
     setError(null);
     setShowBoardExamStartModal(false);
@@ -962,18 +1011,35 @@ export default function ChallengeQuizPage() {
             </p>
             <h1 className="text-xl font-semibold sm:text-2xl">Choose your quiz mode</h1>
             <p className="text-sm text-foreground/80">
-              Choose how you want to take this quiz for {note?.title ?? "this note"}. Challenge Quiz stays flexible, while Board Exam Mode uses a stricter exam-style flow.
+              {prefersBoardExam
+                ? `Choose how you want to prepare with ${note?.title ?? "this note"}. Board Exam Mode emphasizes exam simulation, while Challenge Quiz stays flexible for regular practice.`
+                : `Choose how you want to practice with ${note?.title ?? "this note"}. Challenge Quiz stays flexible, while Board Exam Mode uses a stricter exam-style flow.`}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                className="rounded-xl border border-border bg-background p-4 text-left transition hover:border-blue-400/50 hover:bg-blue-500/[0.04]"
+                aria-pressed={selectedMode === CHALLENGE_MODE}
+                className={cn(
+                  "rounded-xl border bg-background p-4 text-left transition hover:border-blue-400/50 hover:bg-blue-500/[0.04]",
+                  selectedMode === CHALLENGE_MODE
+                    ? "border-blue-500 bg-blue-500/[0.06] shadow-sm"
+                    : "border-border",
+                )}
                 onClick={() => void handleSelectChallengeQuizMode()}
                 disabled={challengeGenerationLocked}
               >
-                <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
+                  {selectedMode === CHALLENGE_MODE ? (
+                    <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
+                      {prefersBoardExam ? "Alternate" : "Recommended"}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-sm text-foreground/70">
-                  Flexible quiz mode with optional difficulty selection.
+                  {prefersBoardExam
+                    ? "Flexible timed practice when you want a lighter setup before full exam simulation."
+                    : "Flexible quiz mode with optional difficulty selection."}
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
                   {canChooseChallengeDifficulty
@@ -983,13 +1049,28 @@ export default function ChallengeQuizPage() {
               </button>
               <button
                 type="button"
-                className="rounded-xl border border-border bg-background p-4 text-left transition hover:border-foreground/30 hover:bg-foreground/[0.03]"
+                aria-pressed={selectedMode === BOARD_EXAM_MODE}
+                className={cn(
+                  "rounded-xl border bg-background p-4 text-left transition hover:border-foreground/30 hover:bg-foreground/[0.03]",
+                  selectedMode === BOARD_EXAM_MODE
+                    ? "border-foreground/35 bg-foreground/[0.03] shadow-sm"
+                    : "border-border",
+                )}
                 onClick={() => handleSelectBoardExamMode()}
                 disabled={challengeGenerationLocked}
               >
-                <p className="text-sm font-semibold text-foreground">Board Exam Mode</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">Board Exam Mode</p>
+                  {selectedMode === BOARD_EXAM_MODE ? (
+                    <span className="rounded-full border border-foreground/20 bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                      {prefersBoardExam ? "Recommended" : "Alternate"}
+                    </span>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-sm text-foreground/70">
-                  Simulate a real exam with mixed difficulty and a stricter, more controlled flow.
+                  {prefersBoardExam
+                    ? "Simulate a real exam with mixed difficulty and a stricter, more controlled flow."
+                    : "Simulate a real exam with mixed difficulty and a stricter, more controlled flow."}
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
                   {boardExamAvailable

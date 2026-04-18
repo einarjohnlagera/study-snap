@@ -786,12 +786,21 @@ export function NoteEditorPageClient({
         onSkip={keepMineAndContinue}
       />
 
-      <StudyPackLimitModal
-        isOpen={showLimitReachedModal}
-        planType={currentPlan}
-        resetDateLabel={usageResetDateLabel}
-        onClose={() => setShowLimitReachedModal(false)}
-      />
+      {currentPlan === "FREE" ? (
+        <PaywallModal
+          isOpen={showLimitReachedModal}
+          variant="study-pack-limit"
+          source="note_editor_study_pack_limit"
+          onClose={() => setShowLimitReachedModal(false)}
+        />
+      ) : (
+        <StudyPackLimitModal
+          isOpen={showLimitReachedModal}
+          planType={currentPlan}
+          resetDateLabel={usageResetDateLabel}
+          onClose={() => setShowLimitReachedModal(false)}
+        />
+      )}
 
       {currentPlan === "FREE" ? (
         <PaywallModal

@@ -536,7 +536,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText("Delete this note?")).toBeInTheDocument();
   });
 
-  it("lets free users start Challenge Quiz without showing the premium modal", async () => {
+  it("routes free users into the shared Challenge Quiz mode-selection entry without showing the premium modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
@@ -551,7 +551,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?entry=mode-selection");
     expect(screen.queryByText("Adaptive Practice is a Premium feature")).not.toBeInTheDocument();
   });
 
@@ -722,7 +722,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(await screen.findByText("Your Study Pack is ready!")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Start Challenge Quiz" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?entry=mode-selection");
   });
 
   it("shows the generating state immediately after starting generation from note detail", async () => {
@@ -920,6 +920,54 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText(/Your limit resets on April 20\./)).toBeInTheDocument();
   });
 
+  it("shows the upgrade paywall modal when Generate is clicked at the free Study Pack limit", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+      profileType: "STUDENT",
+    });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+      },
+      usage: {
+        studyPacksUsed: 10,
+        challengeQuizzesUsed: 1,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 0,
+        challengeQuizzesRemaining: 4,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+      },
+      usageCycle: {
+        startsAt: "2026-03-20T00:00:00Z",
+        endsAt: "2026-04-20T00:00:00Z",
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+    (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
+
+    render(<PrivateNoteDetailPageClient routeId="note-1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
+
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit" })).toBeInTheDocument();
+    expect(screen.queryByText("Monthly Limit Reached")).not.toBeInTheDocument();
+  });
+
   it("shows quiz view when tab=quiz is requested", async () => {
     searchParamValues = { tab: "quiz" };
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
@@ -1063,7 +1111,7 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText(/Line two stays visible\./i)).toBeInTheDocument();
   });
 
-  it("lets Premium users go straight to Challenge Quiz without showing the paywall modal", async () => {
+  it("routes Premium users into the shared Challenge Quiz mode-selection entry without showing the paywall modal", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "PREMIUM",
@@ -1106,7 +1154,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz");
+    expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?entry=mode-selection");
     expect(screen.queryByText("Unlock Exam Mode")).not.toBeInTheDocument();
   });
 });

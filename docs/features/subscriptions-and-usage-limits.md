@@ -73,16 +73,18 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Waitlist joins are idempotent per authenticated user and should return:
   - `You're on the list! We'll notify you when Premium launches.`
 - Challenge Quiz, Adaptive Practice, Settings billing, pricing CTAs, and dashboard upgrade cards should all route through this pre-launch waitlist flow.
-- Study Pack limit blocks should use student-friendly monthly-limit banners and shared limit-reached modals instead of disabling the `Generate Study Pack` action.
+- Study Pack limit blocks should keep `Generate Study Pack` clickable instead of disabling it.
 - Near-limit Study Pack banners should appear on Dashboard, Note Detail, and Study Pack generation/editor surfaces when:
   - Free remaining is `2` or `1`
   - Premium remaining is `2` or `1`
 - Limit-reached Study Pack messaging should appear when remaining is `0`:
   - Free: `You’ve reached your Free plan limit for this month. You can generate more again on {resetDate}.`
   - Premium: `You’ve used all your Study Packs this month. Limit resets on {resetDate}.`
-- The shared Study Pack limit modal should keep Generate clickable and open on demand with:
-  - Free actions: `Upgrade to Premium`, `Maybe Later`, `View My Plan`
-  - Premium actions: `Upgrade Plan`, `Get More Study Packs`, `Maybe Later`
+- Free users at `0` remaining Study Packs should see the Premium/upgrade modal when they try to generate.
+- Premium users at `0` remaining Study Packs should see the dedicated Study Pack monthly-limit modal with:
+  - `Upgrade Plan`
+  - `Get More Study Packs`
+  - `Maybe Later`
 - Upgrade actions from these flows may land on pricing or plan surfaces, but the current conversion path should still feed the Premium waitlist experience until checkout launches.
 
 ## Pricing page and upgrade positioning

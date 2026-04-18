@@ -17,6 +17,7 @@ const routerMock = {
   replace: replaceMock,
 };
 const paramsMock = { id: "note-1" };
+let searchParamsMock = new URLSearchParams();
 let mobileViewport = false;
 const mediaQueryListeners = new Set<(event: MediaQueryListEvent) => void>();
 
@@ -29,6 +30,7 @@ jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
   usePathname: () => "/notes/note-1/challenge-quiz",
   useParams: () => paramsMock,
+  useSearchParams: () => searchParamsMock,
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -55,6 +57,7 @@ describe("ChallengeQuizPage", () => {
   beforeEach(() => {
     pushMock.mockReset();
     replaceMock.mockReset();
+    searchParamsMock = new URLSearchParams();
     mobileViewport = false;
     mediaQueryListeners.clear();
     Object.defineProperty(window, "matchMedia", {
@@ -97,8 +100,9 @@ describe("ChallengeQuizPage", () => {
     jest.restoreAllMocks();
   });
 
-  function getModeCard(label: string): HTMLButtonElement {
-    const card = screen.getAllByRole("button").find((button) => within(button).queryByText(label));
+  async function getModeCard(label: string): Promise<HTMLButtonElement> {
+    const buttons = await screen.findAllByRole("button");
+    const card = buttons.find((button) => within(button).queryByText(label));
     expect(card).toBeDefined();
     return card as HTMLButtonElement;
   }
@@ -167,6 +171,10 @@ describe("ChallengeQuizPage", () => {
     difficultySelectionAvailable = true,
     profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" = "STUDENT",
     planType?: "FREE" | "PREMIUM",
+    options: {
+      usedThisMonth?: number;
+      monthlyLimit?: number;
+    } = {},
   ) {
     const resolvedPlanType = planType ?? (difficultySelectionAvailable ? "PREMIUM" : "FREE");
     (getAuthUser as jest.Mock).mockReturnValue({
@@ -207,8 +215,8 @@ describe("ChallengeQuizPage", () => {
       title: "Challenge Note",
       totalQuestions: 0,
       timeLimitSeconds: 600,
-      usedThisMonth: 0,
-      monthlyLimit: difficultySelectionAvailable ? 50 : 5,
+      usedThisMonth: options.usedThisMonth ?? 0,
+      monthlyLimit: options.monthlyLimit ?? (difficultySelectionAvailable ? 50 : 5),
       difficultySelectionAvailable,
       mode: "challenge",
       selectedDifficulty: "medium",
@@ -289,33 +297,35 @@ describe("ChallengeQuizPage", () => {
     });
   }
 
-  it("defaults students into Challenge Quiz setup without auto-starting", async () => {
+  it("starts students on the shared mode-selection screen with Challenge Quiz emphasized", async () => {
     setupChallengePrestart(true, "STUDENT");
 
     render(<ChallengeQuizPage />);
 
-    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose another mode" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "true");
+    expect(await getModeCard("Board Exam Mode")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText("Recommended")).toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 
-  it("still lets students choose another mode from the default Challenge Quiz setup", async () => {
+  it("lets students choose either setup from the shared mode-selection screen", async () => {
     setupChallengePrestart(true, "STUDENT");
 
     render(<ChallengeQuizPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Choose another mode" }));
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    expect(getModeCard("Challenge Quiz")).toBeInTheDocument();
-    expect(getModeCard("Board Exam Mode")).toBeInTheDocument();
+    fireEvent.click(await getModeCard("Challenge Quiz"));
+
+    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
   });
 
-  it("shows Premium difficulty selection from the default Challenge Quiz setup", async () => {
+  it("shows Premium difficulty selection after students choose Challenge Quiz", async () => {
     setupChallengePrestart(true, "STUDENT");
 
     render(<ChallengeQuizPage />);
 
+    fireEvent.click(await getModeCard("Challenge Quiz"));
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "easy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "medium" })).toBeInTheDocument();
@@ -332,6 +342,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
+    fireEvent.click(await getModeCard("Challenge Quiz"));
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     expect(screen.getByText("Recommended difficulty: Medium")).toBeInTheDocument();
     expect(screen.getByText("Choose difficulty (Premium)")).toBeInTheDocument();
@@ -363,6 +374,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
+    fireEvent.click(await getModeCard("Challenge Quiz"));
     fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
 
     await waitFor(() => {
@@ -370,10 +382,24 @@ describe("ChallengeQuizPage", () => {
     });
   });
 
-  it("defaults Board Takers into Board Exam setup without difficulty controls", async () => {
+  it("starts Board Takers on the shared mode-selection screen with Board Exam emphasized", async () => {
     setupChallengePrestart(true, "BOARD_EXAM", "PREMIUM");
 
     render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(await getModeCard("Board Exam Mode")).toHaveAttribute("aria-pressed", "true");
+    expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getAllByText("Recommended")).not.toHaveLength(0);
+    expect(screen.getByText(/Board Exam Mode emphasizes exam simulation/)).toBeInTheDocument();
+  });
+
+  it("opens Board Exam setup for premium Board Takers after mode selection", async () => {
+    setupChallengePrestart(true, "BOARD_EXAM", "PREMIUM");
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await getModeCard("Board Exam Mode"));
 
     expect(await screen.findByRole("heading", { name: "Board Exam Setup" })).toBeInTheDocument();
     expect(screen.getByText("Review the exam setup for Challenge Note before you begin.")).toBeInTheDocument();
@@ -387,32 +413,38 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "hard" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Exam" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose another mode" })).toBeInTheDocument();
   });
 
-  it("shows Board Exam as the default Board Taker entry while keeping Challenge Quiz reachable", async () => {
-    setupChallengePrestart(true, "BOARD_EXAM", "PREMIUM");
-
-    render(<ChallengeQuizPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Choose another mode" }));
-
-    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
-    fireEvent.click(getModeCard("Challenge Quiz"));
-    expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
-  });
-
-  it("shows the Board Exam paywall for free Board Takers instead of starting the exam", async () => {
+  it("shows the Board Exam paywall for free Board Takers from mode selection instead of entering setup", async () => {
     setupChallengePrestart(false, "BOARD_EXAM", "FREE");
 
     render(<ChallengeQuizPage />);
 
-    expect(await screen.findByRole("heading", { name: "Board Exam Setup" })).toBeInTheDocument();
-    expect(screen.getByText("Premium required to start Board Exam Mode.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Unlock Board Exam Mode" }));
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    fireEvent.click(await getModeCard("Board Exam Mode"));
 
     expect(await screen.findByRole("dialog", { name: "Board Exam Mode is a Premium feature" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Board Exam Setup" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("shows the premium modal instead of the limit page for free users who exhausted Challenge Quiz credits", async () => {
+    setupChallengePrestart(false, "STUDENT", "FREE", { usedThisMonth: 5, monthlyLimit: 5 });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Monthly limit reached" })).not.toBeInTheDocument();
+  });
+
+  it("shows the limit page for premium users who exhausted Challenge Quiz credits", async () => {
+    setupChallengePrestart(true, "STUDENT", "PREMIUM", { usedThisMonth: 50, monthlyLimit: 50 });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Monthly limit reached" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "You’ve reached your quiz limit" })).not.toBeInTheDocument();
   });
 
   it("keeps the Challenge Quiz navigator expanded by default on desktop", async () => {
@@ -503,6 +535,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
+    fireEvent.click(await getModeCard("Board Exam Mode"));
     fireEvent.click(await screen.findByRole("button", { name: "Start Exam" }));
 
     expect(screen.getByRole("dialog", { name: "Start Board Exam Mode?" })).toBeInTheDocument();
@@ -838,6 +871,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
+    fireEvent.click(await getModeCard("Challenge Quiz"));
     const hardButton = await screen.findByRole("button", { name: "hard" });
     fireEvent.click(hardButton);
     expect(hardButton).toHaveClass("border-blue-500");

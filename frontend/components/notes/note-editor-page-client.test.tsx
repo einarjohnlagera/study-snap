@@ -441,7 +441,7 @@ describe("NoteEditorPageClient", () => {
     expect(uploadInput).not.toBeDisabled();
   });
 
-  it("shows a limit-reached paywall modal for free users at their monthly Study Pack cap", async () => {
+  it("shows the upgrade paywall modal for free users at their monthly Study Pack cap", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
@@ -477,9 +477,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
 
-    expect(await screen.findByText("Free Plan Limit Reached")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
-    expect(pushMock).toHaveBeenCalledWith("/pricing");
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit" })).toBeInTheDocument();
   });
 
   it("shows the exact remaining Study Pack count in the near-limit banner", async () => {

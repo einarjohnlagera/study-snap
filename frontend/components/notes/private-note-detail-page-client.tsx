@@ -79,6 +79,10 @@ import {
   resolveGeneratedNoteTab,
   type NoteDetailTab,
 } from "@/lib/note-entry";
+import {
+  buildChallengeQuizHref,
+  CHALLENGE_QUIZ_MODE_SELECTION_ENTRY,
+} from "@/lib/challenge-quiz-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
 import {
   buildRecentQuizSessionHistory,
@@ -577,6 +581,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     )
     : null;
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
+  const currentPlan = usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE");
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const shouldShowNearLimitBanner = usageSummary
     ? !isTeacherMode && shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
@@ -668,8 +673,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         noteId: note?.id ?? null,
       },
     });
+    if (currentPlan === "FREE") {
+      setActivePaywallModal("study-pack-limit");
+      return;
+    }
     setShowLimitReachedModal(true);
-  }, [note?.id, pathname]);
+  }, [currentPlan, note?.id, pathname]);
 
   const handleChangeStudyPackTab = useCallback((nextTab: NoteDetailTab) => {
     if (!note || activeStudyPackTab === nextTab) {
@@ -1033,7 +1042,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Generate a Study Pack with quiz questions before starting Challenge Quiz.");
       return;
     }
-    router.push(`/notes/${note.id}/challenge-quiz`);
+    router.push(buildChallengeQuizHref(note.id, { entry: CHALLENGE_QUIZ_MODE_SELECTION_ENTRY }));
   };
 
   const handleStartAdaptivePractice = () => {
@@ -1219,7 +1228,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     />
                   </div>
                 ) : (
-                  <h1 className="break-words text-2xl font-semibold sm:text-3xl">{title}</h1>
+                  <h1 className="wrap-break-word text-2xl font-semibold sm:text-3xl">{title}</h1>
                 )}
 
                 {hasCopyAttribution ? (
@@ -1913,8 +1922,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       <StudyPackLimitModal
-        isOpen={!isTeacherMode && showLimitReachedModal}
-        planType={usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE")}
+        isOpen={!isTeacherMode && currentPlan === "PREMIUM" && showLimitReachedModal}
+        planType={currentPlan}
         resetDateLabel={usageResetDateLabel}
         onClose={() => setShowLimitReachedModal(false)}
       />

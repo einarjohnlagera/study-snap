@@ -142,9 +142,15 @@ Rules:
 
 ### Quiz entry defaults
 
-- `Student` should enter through `Challenge Quiz Setup` by default.
-- `Board Taker` should enter through `Board Exam Setup` by default.
-- The alternate quiz mode must remain accessible through the shared mode-selection step.
+- `Student` and `Board Taker` should both enter through the shared `mode-selection` screen first.
+- `Student` should see `Challenge Quiz` visually emphasized by default on that shared screen.
+- `Board Taker` should see `Board Exam Mode` visually emphasized by default on that shared screen.
+- The alternate quiz mode must remain accessible from the same shared mode-selection step.
+- The `Challenge Quiz` CTA on Note Detail must route into that same shared `mode-selection` entry instead of bypassing it.
+- Free users who select premium-only `Board Exam Mode` must see the Premium upsell modal instead of entering setup.
+- Free users who exhaust Challenge Quiz credits must see the Premium upsell modal instead of the monthly-limit page.
+- Premium users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
+- Premium-only feature gating and monthly usage-limit gating must stay separate UI states.
 - `Board Exam Mode` remains Premium-only at quiz entry.
 
 ### Profile type effects
@@ -1038,7 +1044,9 @@ Page responsibilities:
 - Study Pack quota increments only after a successful Study Pack is persisted.
 - Failed Study Pack generation, note saves, opening generation screens, and failed retries must not consume quota.
 - Study Pack near-limit messaging should appear when `studyPacksRemaining <= 2` and should show the actual remaining count with plan-specific monthly-limit copy.
-- When `studyPacksRemaining == 0`, `Generate Study Pack` should remain clickable and open the shared monthly-limit modal instead of rendering as a disabled action.
+- When `studyPacksRemaining == 0`, `Generate Study Pack` should remain clickable instead of rendering as a disabled action.
+- Free users at `studyPacksRemaining == 0` should see the Premium/upgrade modal.
+- Premium users at `studyPacksRemaining == 0` should see the dedicated monthly-limit modal.
 
 ## Study Pack Generation Consistency
 
