@@ -139,6 +139,25 @@ function truncateShareUrl(url: string, maxLength = 58) {
   return `${url.slice(0, maxLength - 3)}...`;
 }
 
+function resolvePaywallFeature(variant: PaywallModalVariant): string {
+  if (variant === "adaptive-practice") {
+    return "adaptive";
+  }
+  if (variant === "challenge-quiz-limit") {
+    return "quiz_limit";
+  }
+  if (variant === "study-pack-limit") {
+    return "study_pack_limit";
+  }
+  if (variant === "board-exam-mode") {
+    return "board_exam";
+  }
+  if (variant === "difficulty-selection") {
+    return "difficulty";
+  }
+  return "study_pack_limit";
+}
+
 function buildShareUrl(subject: string | null, title: string | null) {
   const path = buildPublicLibraryNotePath({ subject, title });
   if (globalThis.window === undefined) {
@@ -580,9 +599,25 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       usageSummary.remaining?.studyPacksRemaining,
     )
     : null;
+  const challengeQuizzesRemaining = usageSummary
+    ? resolveRemainingUsageCredits(
+      usageSummary.usage.challengeQuizzesUsed,
+      usageSummary.limits.challengeQuizzesPerMonth,
+      usageSummary.remaining?.challengeQuizzesRemaining,
+    )
+    : null;
+  const adaptivePracticeRemaining = usageSummary
+    ? resolveRemainingUsageCredits(
+      usageSummary.usage.adaptivePracticeUsed,
+      usageSummary.limits.adaptivePracticePerMonth,
+      usageSummary.remaining?.adaptivePracticeRemaining,
+    )
+    : null;
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const currentPlan = usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE");
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
+  const hasReachedChallengeQuizLimit = currentPlan === "FREE" && challengeQuizzesRemaining !== null && challengeQuizzesRemaining <= 0;
+  const hasReachedAdaptivePracticeLimit = currentPlan === "PREMIUM" && adaptivePracticeRemaining !== null && adaptivePracticeRemaining <= 0;
   const shouldShowNearLimitBanner = usageSummary
     ? !isTeacherMode && shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
@@ -654,7 +689,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
       metadata: {
-        feature: variant === "adaptive-practice" ? "adaptive" : "study_pack_limit",
+        feature: resolvePaywallFeature(variant),
         source,
         path: pathname,
         noteId: note?.id ?? null,
@@ -1042,6 +1077,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Generate a Study Pack with quiz questions before starting Challenge Quiz.");
       return;
     }
+    if (hasReachedChallengeQuizLimit) {
+      openPaywallModal("challenge-quiz-limit", "private_note_detail_challenge_quiz_limit");
+      return;
+    }
     router.push(buildChallengeQuizHref(note.id, { entry: CHALLENGE_QUIZ_MODE_SELECTION_ENTRY }));
   };
 
@@ -1051,6 +1090,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     }
     if (!isEmailVerified) {
       setToast("Verify your email to use this feature.");
+      return;
+    }
+    if (currentPlan === "FREE") {
+      openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice");
+      return;
+    }
+    if (hasReachedAdaptivePracticeLimit) {
+      router.push(`/notes/${note.id}/adaptive-practice`);
       return;
     }
     if (!note.adaptivePracticeAvailable) {

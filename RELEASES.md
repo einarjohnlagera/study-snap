@@ -6,12 +6,13 @@
 
 - **Challenge Quiz entry flow fix** — restored the shared entry screen and premium gating behavior:
   - free users who choose premium-only `Board Exam Mode` now see the premium upsell modal instead of falling into a confusing setup flow
-  - free users who exhaust credit-gated `Challenge Quiz` usage now see the premium/upgrade modal instead of the monthly-limit page
+  - free users who exhaust credit-gated `Challenge Quiz` usage now see the premium/upgrade modal immediately instead of entering quiz flow or landing on the monthly-limit page
   - premium users who exhaust `Challenge Quiz` usage still see the real monthly-limit state
   - monthly quiz-limit handling remains separate from premium-feature upsell handling
   - `Student` and `Board Taker` now both enter through the same mode-selection screen again
   - mode selection now uses persona-based default emphasis: `Student` highlights `Challenge Quiz`, while `Board Taker` highlights `Board Exam Mode`
   - the `Challenge Quiz` action on Note Detail now always routes into the shared mode-selection entry instead of dropping users into a setup screen
+  - `Board Exam Mode` remains visible to free users inside mode selection and opens the shared paywall modal on click
 
 - **Teacher Dashboard** — added a teacher-first dashboard experience without splitting Teacher into a separate product:
   - keeps the shared Study Pack / note workspace visible through `Recent Notes`
@@ -26,7 +27,7 @@
 
 - **Free-plan credit gating cleanup** — free users now stop at the upgrade modal for credit-gated study actions:
   - `Generate Study Pack` shows the premium/upgrade modal for Free users at `0` remaining
-  - `Challenge Quiz` and `Board Exam Mode` use the premium/upgrade modal for Free users when credits or premium access block entry
+  - `Challenge Quiz`, `Board Exam Mode`, and `Adaptive Practice` use the premium/upgrade modal for Free users when credits or premium access block entry
   - Premium users with genuine monthly exhaustion still see the dedicated limit state instead of the Free-plan upsell flow
 
 - **Onboarding / profile wording alignment** — persona naming is now consistent across setup and profile surfaces:

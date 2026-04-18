@@ -44,9 +44,11 @@ Runtime/session rules:
 ## Premium Gating
 
 - `Board Exam Mode` is Premium-only.
+- Free users should still see `Board Exam Mode` on the shared mode-selection screen.
 - Free users who click `Board Exam Mode` from the shared mode-selection screen must see the shared Premium upsell modal.
 - Do not replace the Premium upsell with a normal setup screen for free users.
 - Monthly quiz-limit handling is separate:
   - free user + premium-only path -> Premium upsell modal
   - free user + exhausted Challenge Quiz credits -> Premium upsell modal
   - premium user + exhausted monthly usage -> quiz-limit state / limit messaging
+- Free users who already exhausted Challenge Quiz credits should be stopped by the paywall modal before entering quiz setup or mode-selection flow from Note Detail actions.

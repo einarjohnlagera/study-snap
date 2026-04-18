@@ -150,6 +150,8 @@ Rules:
 - Free users who select premium-only `Board Exam Mode` must see the Premium upsell modal instead of entering setup.
 - Free users who exhaust Challenge Quiz credits must see the Premium upsell modal instead of the monthly-limit page.
 - Premium users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
+- Free users who click `Adaptive Practice` must see the Premium upsell modal.
+- Premium users who exhaust `Adaptive Practice` credits should see the dedicated monthly-limit state.
 - Premium-only feature gating and monthly usage-limit gating must stay separate UI states.
 - `Board Exam Mode` remains Premium-only at quiz entry.
 

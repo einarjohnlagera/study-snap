@@ -28,3 +28,10 @@ Runtime/session rules:
 - Backend normalization must convert the LLM answer letter into canonical `correctIndex` before persistence.
 - Frontend rendering may shuffle displayed choices, but `A` / `B` / `C` / `D` stay UI-only labels derived from displayed order.
 - Session grading must compare selected canonical choice indexes against canonical `correctIndex`.
+
+## Gating
+
+- `Adaptive Practice` should remain visible on Note Detail when weak concepts exist.
+- Free users who click `Adaptive Practice` must see the shared Premium/upgrade modal.
+- Premium users who exhausted their monthly `Adaptive Practice` quota must see the dedicated monthly-limit state instead of the Premium upsell.
+- Do not silently fail or redirect free users into unrelated pages when `Adaptive Practice` is gated.

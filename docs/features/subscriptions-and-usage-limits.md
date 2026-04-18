@@ -85,6 +85,10 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `Upgrade Plan`
   - `Get More Study Packs`
   - `Maybe Later`
+- Shared gating rule for study/quiz actions:
+  - free user + premium-only feature -> Premium/upgrade modal
+  - free user + exhausted free quota -> Premium/upgrade modal
+  - premium user + exhausted monthly quota -> dedicated monthly-limit state
 - Upgrade actions from these flows may land on pricing or plan surfaces, but the current conversion path should still feed the Premium waitlist experience until checkout launches.
 
 ## Pricing page and upgrade positioning

@@ -13,7 +13,9 @@ import { QuizAnswerReview } from "@/components/study-pack/quiz-answer-review";
 import { QuizGenerationOverlay } from "@/components/study-pack/quiz-generation-overlay";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getAuthUser } from "@/lib/auth";
+import { resolveRemainingUsageCredits } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import {
   completeAdaptivePracticeSession,
@@ -66,6 +68,8 @@ export default function AdaptivePracticePage() {
   const [showPremiumPaywall, setShowPremiumPaywall] = useState(false);
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
+  const [showLimitReachedState, setShowLimitReachedState] = useState(false);
+  const { usageSummary } = useBillingUsageSummary();
 
   const noteId = useMemo(() => {
     if (!params?.id) {
@@ -74,6 +78,17 @@ export default function AdaptivePracticePage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
+  const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType === "PREMIUM" ? "PREMIUM" : "FREE");
+  const adaptivePracticeRemaining = usageSummary
+    ? resolveRemainingUsageCredits(
+      usageSummary.usage.adaptivePracticeUsed,
+      usageSummary.limits.adaptivePracticePerMonth,
+      usageSummary.remaining?.adaptivePracticeRemaining,
+    )
+    : null;
+  const hasReachedAdaptivePracticeLimit = currentPlan === "PREMIUM"
+    && adaptivePracticeRemaining !== null
+    && adaptivePracticeRemaining <= 0;
   const openAdaptivePracticePaywall = useCallback((source: string) => {
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
@@ -126,6 +141,7 @@ export default function AdaptivePracticePage() {
     requestInFlightRef.current = true;
     setError(null);
     setPremiumLocked(false);
+    setShowLimitReachedState(false);
     const authUser = getAuthUser();
     if (!authUser?.emailVerifiedAt) {
       setAdaptiveQuiz(null);
@@ -146,13 +162,18 @@ export default function AdaptivePracticePage() {
         return;
       }
       setNote(detail);
-      if (!detail.adaptivePracticeAvailable) {
+      if (currentPlan === "FREE" && !detail.adaptivePracticeAvailable) {
         setAdaptiveQuiz(null);
         setPremiumLocked(true);
         setShowPremiumPaywall(true);
         return;
       }
       const response = await getInProgressAdaptivePracticeSession(detail.id);
+      if (!response.sessionId && hasReachedAdaptivePracticeLimit) {
+        setAdaptiveQuiz(null);
+        setShowLimitReachedState(true);
+        return;
+      }
       applyAdaptiveSession(response);
     } catch (err) {
       if (pathname.startsWith("/study-packs/")) {
@@ -184,7 +205,7 @@ export default function AdaptivePracticePage() {
       setLoading(false);
       requestInFlightRef.current = false;
     }
-  }, [applyAdaptiveSession, noteId, pathname, router, searchParams]);
+  }, [applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, noteId, pathname, router, searchParams]);
 
   useEffect(() => {
     if (!noteId) {
@@ -195,6 +216,15 @@ export default function AdaptivePracticePage() {
     }
     void loadAdaptiveQuiz();
   }, [loadAdaptiveQuiz, noteId]);
+
+  useEffect(() => {
+    if (currentPlan !== "PREMIUM" || !hasReachedAdaptivePracticeLimit || adaptiveQuiz?.sessionId) {
+      return;
+    }
+    setPremiumLocked(false);
+    setShowPremiumPaywall(false);
+    setShowLimitReachedState(true);
+  }, [adaptiveQuiz?.sessionId, currentPlan, hasReachedAdaptivePracticeLimit]);
 
   const quiz = useMemo(() => adaptiveQuiz?.quiz ?? [], [adaptiveQuiz]);
   const hasQuestions = quiz.length > 0;
@@ -265,6 +295,15 @@ export default function AdaptivePracticePage() {
       setShowVerifyEmailModal(true);
       return;
     }
+    if (currentPlan === "FREE") {
+      setPremiumLocked(true);
+      openAdaptivePracticePaywall("adaptive_practice_start");
+      return;
+    }
+    if (hasReachedAdaptivePracticeLimit) {
+      setShowLimitReachedState(true);
+      return;
+    }
 
     requestInFlightRef.current = true;
     setStartingAdaptive(true);
@@ -281,12 +320,16 @@ export default function AdaptivePracticePage() {
       if (isEmailNotVerifiedError(err)) {
         setShowVerifyEmailModal(true);
       }
-      setError(message);
+      if (message.toLowerCase().includes("monthly adaptive practice limit")) {
+        setShowLimitReachedState(true);
+      } else {
+        setError(message);
+      }
     } finally {
       requestInFlightRef.current = false;
       setStartingAdaptive(false);
     }
-  }, [applyAdaptiveSession, note]);
+  }, [applyAdaptiveSession, currentPlan, hasReachedAdaptivePracticeLimit, note, openAdaptivePracticePaywall]);
 
   const adaptiveGenerationLocked = startingAdaptive || adaptiveQuiz?.status === "GENERATING";
   const adaptiveQuizActive = Boolean(
@@ -369,6 +412,15 @@ export default function AdaptivePracticePage() {
 
       {loading ? (
         <AdaptivePracticeLoading />
+      ) : showLimitReachedState ? (
+        <Card className="space-y-4 p-4 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Adaptive Practice
+          </p>
+          <h1 className="text-xl font-semibold sm:text-2xl">Monthly limit reached</h1>
+          <p className="text-sm text-foreground/75">You&apos;ve reached your monthly Adaptive Practice limit.</p>
+          <BackLink href={noteDetailHref} label="Back to Note" />
+        </Card>
       ) : error ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">Could not generate adaptive practice</h1>

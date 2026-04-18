@@ -31,9 +31,6 @@ type PaywallConfig = {
   feature: string;
 };
 
-const DISMISSAL_STORAGE_KEY = "notelib-paywall-dismissals";
-const SESSION_STORAGE_KEY = "notelib-paywall-session-id";
-
 const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
   "adaptive-practice": {
     title: "Adaptive Practice is a Premium feature",
@@ -79,58 +76,6 @@ const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
   },
 };
 
-function getCurrentSessionId(): string | null {
-  if (globalThis.window === undefined) {
-    return null;
-  }
-  const existing = globalThis.sessionStorage.getItem(SESSION_STORAGE_KEY);
-  if (existing) {
-    return existing;
-  }
-  const next = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  globalThis.sessionStorage.setItem(SESSION_STORAGE_KEY, next);
-  return next;
-}
-
-function readDismissals(): Record<string, string> {
-  if (globalThis.window === undefined) {
-    return {};
-  }
-  try {
-    const value = globalThis.localStorage.getItem(DISMISSAL_STORAGE_KEY);
-    if (!value) {
-      return {};
-    }
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? parsed as Record<string, string> : {};
-  } catch {
-    return {};
-  }
-}
-
-function hasDismissedInCurrentSession(variant: PaywallModalVariant): boolean {
-  const sessionId = getCurrentSessionId();
-  if (!sessionId) {
-    return false;
-  }
-  return readDismissals()[variant] === sessionId;
-}
-
-function storeDismissal(variant: PaywallModalVariant) {
-  if (globalThis.window === undefined) {
-    return;
-  }
-  const sessionId = getCurrentSessionId();
-  if (!sessionId) {
-    return;
-  }
-  const next = {
-    ...readDismissals(),
-    [variant]: sessionId,
-  };
-  globalThis.localStorage.setItem(DISMISSAL_STORAGE_KEY, JSON.stringify(next));
-}
-
 export function PaywallModal({
   isOpen,
   variant,
@@ -149,10 +94,6 @@ export function PaywallModal({
       setVerifyEmailModalOpen(false);
       return;
     }
-    if (hasDismissedInCurrentSession(variant)) {
-      onClose();
-      return;
-    }
     if (hasTrackedOpenRef.current) {
       return;
     }
@@ -169,7 +110,6 @@ export function PaywallModal({
   }, [config.feature, isOpen, onClose, pathname, source, variant]);
 
   const handleDismiss = () => {
-    storeDismissal(variant);
     void trackAnalyticsEvent({
       eventType: "PAYWALL_DISMISSED",
       metadata: {
@@ -205,7 +145,7 @@ export function PaywallModal({
   return (
     <>
       <AppModal
-        isOpen={isOpen && !hasDismissedInCurrentSession(variant)}
+        isOpen={isOpen}
         title={config.title}
         description={config.message}
         onClose={handleDismiss}

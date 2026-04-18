@@ -11,6 +11,7 @@ import {
   updateEngagementMode,
   updateStudyReminders,
 } from "@/lib/api";
+import { PLAN_BILLING_SECTION_ID } from "@/lib/plans";
 
 const routerMock = {
   push: jest.fn(),
@@ -82,6 +83,7 @@ const scheduledCancellationProfile = {
 
 describe("Settings page cancellation flow", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/settings");
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getBillingHistory as jest.Mock).mockReset();
@@ -455,6 +457,34 @@ describe("Settings page cancellation flow", () => {
     expect(studyPackMetric).toHaveTextContent("April 15");
     expect(studyPackMetric).toHaveTextContent("Upgrade to Premium");
     expect(within(studyPackMetric).getByRole("button", { name: "Upgrade to Premium" })).toBeInTheDocument();
+  });
+
+  it("scrolls to Plan & Billing when the page loads with the billing hash", async () => {
+    const scrollIntoViewMock = jest.fn();
+    const requestAnimationFrameSpy = jest
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback: FrameRequestCallback) => {
+        callback(0);
+        return 0;
+      });
+
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
+      writable: true,
+    });
+
+    window.history.replaceState(null, "", `/settings#${PLAN_BILLING_SECTION_ID}`);
+
+    render(<SettingsPage />);
+
+    expect(await screen.findByRole("heading", { name: "Plan & Billing" })).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    });
+
+    requestAnimationFrameSpy.mockRestore();
   });
 
   it("persists learning style changes", async () => {
