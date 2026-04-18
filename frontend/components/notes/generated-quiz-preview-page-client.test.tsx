@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GeneratedQuizPreviewPageClient } from "./generated-quiz-preview-page-client";
-import { generateGeneratedQuiz, getGeneratedQuiz, getNote } from "@/lib/api";
+import { generateGeneratedQuiz, getGeneratedQuiz, getNote, trackAnalyticsEvent } from "@/lib/api";
 import { exportGeneratedQuizDocument } from "@/lib/generated-quiz-export";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -12,6 +13,7 @@ const routerMock = {
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  usePathname: () => "/notes/note-1/quiz",
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -22,10 +24,15 @@ jest.mock("@/lib/api", () => ({
   getGeneratedQuiz: jest.fn(),
   generateGeneratedQuiz: jest.fn(),
   getNote: jest.fn(),
+  trackAnalyticsEvent: jest.fn(),
 }));
 
 jest.mock("@/lib/generated-quiz-export", () => ({
   exportGeneratedQuizDocument: jest.fn(),
+}));
+
+jest.mock("@/hooks/use-billing-usage-summary", () => ({
+  useBillingUsageSummary: jest.fn(),
 }));
 
 describe("GeneratedQuizPreviewPageClient", () => {
@@ -35,7 +42,9 @@ describe("GeneratedQuizPreviewPageClient", () => {
     (getNote as jest.Mock).mockReset();
     (getGeneratedQuiz as jest.Mock).mockReset();
     (generateGeneratedQuiz as jest.Mock).mockReset();
+    (trackAnalyticsEvent as jest.Mock).mockReset();
     (exportGeneratedQuizDocument as jest.Mock).mockReset();
+    (useBillingUsageSummary as jest.Mock).mockReset();
 
     (getNote as jest.Mock).mockResolvedValue({
       id: "note-1",
@@ -91,6 +100,36 @@ describe("GeneratedQuizPreviewPageClient", () => {
       ],
     });
     (exportGeneratedQuizDocument as jest.Mock).mockResolvedValue({ filename: "quiz.pdf" });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: {
+          studyPacksPerMonth: 10,
+          challengeQuizzesPerMonth: 5,
+          adaptivePracticePerMonth: 0,
+          ocrPerMonth: 20,
+        },
+        usage: {
+          studyPacksUsed: 1,
+          challengeQuizzesUsed: 1,
+          adaptivePracticeUsed: 0,
+          ocrUsed: 0,
+        },
+        remaining: {
+          studyPacksRemaining: 9,
+          challengeQuizzesRemaining: 4,
+          adaptivePracticeRemaining: 0,
+          ocrRemaining: 20,
+        },
+        features: {
+          adaptivePracticeAvailable: false,
+          difficultySelectionAvailable: false,
+          fileUploadAvailable: true,
+          ocrAvailable: true,
+        },
+      },
+      refreshUsageSummary: jest.fn(),
+    });
   });
 
   it("renders the generated quiz with answers visible", async () => {
@@ -130,5 +169,47 @@ describe("GeneratedQuizPreviewPageClient", () => {
       expect(generateGeneratedQuiz).toHaveBeenCalledWith("note-1");
     });
     expect(await screen.findByText("What does the membrane do?")).toBeInTheDocument();
+  });
+
+  it("shows the paywall modal instead of regenerating when free teacher quiz credits are exhausted", async () => {
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: {
+          studyPacksPerMonth: 10,
+          challengeQuizzesPerMonth: 5,
+          adaptivePracticePerMonth: 0,
+          ocrPerMonth: 20,
+        },
+        usage: {
+          studyPacksUsed: 1,
+          challengeQuizzesUsed: 5,
+          adaptivePracticeUsed: 0,
+          ocrUsed: 0,
+        },
+        remaining: {
+          studyPacksRemaining: 9,
+          challengeQuizzesRemaining: 0,
+          adaptivePracticeRemaining: 0,
+          ocrRemaining: 20,
+        },
+        features: {
+          adaptivePracticeAvailable: false,
+          difficultySelectionAvailable: false,
+          fileUploadAvailable: true,
+          ocrAvailable: true,
+        },
+      },
+      refreshUsageSummary: jest.fn(),
+    });
+
+    render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
+
+    await screen.findByText("What is the nucleus?");
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Regenerate Quiz" }).at(-1) as HTMLButtonElement);
+
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
+    expect(generateGeneratedQuiz).not.toHaveBeenCalled();
   });
 });

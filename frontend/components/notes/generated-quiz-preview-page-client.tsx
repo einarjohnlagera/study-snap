@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { ExportDropdownMenu } from "@/components/ui/export-dropdown-menu";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getGeneratedQuiz, generateGeneratedQuiz, getNote, type GeneratedQuizResponse, type NoteResponse } from "@/lib/api";
 import { exportGeneratedQuizDocument, type GeneratedQuizExportType } from "@/lib/generated-quiz-export";
+import { isQuizLimitReachedMessage, resolveRemainingUsageCredits } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
 
@@ -36,6 +39,8 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const [exporting, setExporting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
+  const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
 
   const loadPage = useCallback(async () => {
     if (!noteId) {
@@ -85,6 +90,16 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     }
     return GENERATED_DATE_FORMATTER.format(new Date(generatedQuiz.generatedAt));
   }, [generatedQuiz?.generatedAt]);
+  const challengeQuizzesRemaining = usageSummary
+    ? resolveRemainingUsageCredits(
+      usageSummary.usage.challengeQuizzesUsed,
+      usageSummary.limits.challengeQuizzesPerMonth,
+      usageSummary.remaining?.challengeQuizzesRemaining,
+    )
+    : null;
+  const hasReachedChallengeQuizLimit = usageSummary?.plan === "FREE"
+    && challengeQuizzesRemaining !== null
+    && challengeQuizzesRemaining <= 0;
 
   const handleExport = useCallback(async (exportType: GeneratedQuizExportType) => {
     if (!generatedQuiz || exporting) {
@@ -113,6 +128,11 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     if (regenerating) {
       return;
     }
+    if (hasReachedChallengeQuizLimit) {
+      setShowRegenerateConfirm(false);
+      setActivePaywallModal("challenge-quiz-limit");
+      return;
+    }
     setRegenerating(true);
     setError(null);
     try {
@@ -122,11 +142,17 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
       setToast("Quiz regenerated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not regenerate quiz.";
+      if (usageSummary?.plan === "FREE" && isQuizLimitReachedMessage(message)) {
+        void refreshUsageSummary();
+        setShowRegenerateConfirm(false);
+        setActivePaywallModal("challenge-quiz-limit");
+        return;
+      }
       setError(message);
     } finally {
       setRegenerating(false);
     }
-  }, [noteId, regenerating]);
+  }, [hasReachedChallengeQuizLimit, noteId, refreshUsageSummary, regenerating, usageSummary?.plan]);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -265,6 +291,13 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
             </Button>
           </div>
         )}
+      />
+
+      <PaywallModal
+        isOpen={activePaywallModal !== null}
+        variant={activePaywallModal ?? "challenge-quiz-limit"}
+        source="generated_quiz_preview"
+        onClose={() => setActivePaywallModal(null)}
       />
 
       {toast ? (
