@@ -2,9 +2,9 @@
 
 Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table names remain unchanged unless explicitly requested.
 
-Current documentation baseline: `v0.6.0 - Landing Revamp & Positioning (In Progress)`
+Current documentation baseline: `v0.10.0 - Profile Type System & Teacher Flow Phase 1 (In Progress)`
 
-Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
+Current in-progress release: `v0.10.0 - Profile Type System & Teacher Flow Phase 1`
 
 ## Product Overview
 
@@ -118,26 +118,42 @@ Profile types map to one of two behavioural modes. **All shared components must 
 |---|---|---|
 | `STUDENT` | `LEARNING` | Scored quizzes, progress tracking, study recall emphasis |
 | `BOARD_EXAM` | `LEARNING` | Scored quizzes, exam prep emphasis, weak-concept drilling |
-| `TEACHER` | `CREATOR` | Quiz creation and export; quiz preview by default |
+| `TEACHER` | `TEACHING` | Quiz generation, review, and export without student quiz-session behaviour |
 
 Mode resolution lives in `frontend/lib/profile-mode.ts`:
-- `resolveProfileMode(profileType)` → `"LEARNING"` or `"CREATOR"`
-- `resolveDefaultSessionMode(profileType)` → `"LEARNING"` or `"PREVIEW"`
+- `resolveProfileMode(profileType)` → `"LEARNING"` or `"TEACHING"`
 
-### Quiz session mode
+### Teacher quiz workflow
 
-When a user starts a quiz, a `sessionMode` is resolved from their profile mode:
+Teacher quiz work must stay separate from student quiz sessions.
 
-| Profile mode | Default session mode | Effect |
-|---|---|---|
-| `LEARNING` | `LEARNING` | Quiz session is scored and stored in performance history |
-| `CREATOR` | `PREVIEW` | Quiz runs normally but scores are not recorded |
+Teacher flow is:
+
+- `Generate`
+- `View`
+- `Export`
 
 Rules:
-- Teachers always see a **session mode toggle** on the Challenge Quiz prestart ("Preview" / "Take Quiz (scored)").
-- Default is "Preview" for Creator mode; Teacher can switch to "Take Quiz" to record performance.
-- Score recording is a backend concern; the frontend passes `sessionMode` in `ChallengeQuizStartRequest`.
-- The results screen shows "Preview mode — scores were not recorded" when in preview mode.
+- Teacher preview uses the note-owned `generatedQuiz` model only.
+- Teacher preview must not reuse `quizSession`, Challenge Quiz session setup, timers, scoring, weak-concept tracking, or session history.
+- Teacher Note Detail generates and regenerates `generatedQuiz`.
+- Teacher Quiz Preview is read-only and shows answers plus explanations by default.
+- Export belongs only inside Quiz Preview.
+
+### Quiz entry defaults
+
+- `Student` and `Board Taker` should both enter through the shared `mode-selection` screen first.
+- `Student` should see `Challenge Quiz` visually emphasized by default on that shared screen.
+- `Board Taker` should see `Board Exam Mode` visually emphasized by default on that shared screen.
+- The alternate quiz mode must remain accessible from the same shared mode-selection step.
+- The `Challenge Quiz` CTA on Note Detail must route into that same shared `mode-selection` entry instead of bypassing it.
+- Free users who select premium-only `Board Exam Mode` must see the Premium upsell modal instead of entering setup.
+- Free users who exhaust Challenge Quiz credits must see the Premium upsell modal instead of the monthly-limit page.
+- Premium users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
+- Free users who click `Adaptive Practice` must see the Premium upsell modal.
+- Premium users who exhaust `Adaptive Practice` credits should see the dedicated monthly-limit state.
+- Premium-only feature gating and monthly usage-limit gating must stay separate UI states.
+- `Board Exam Mode` remains Premium-only at quiz entry.
 
 ### Profile type effects
 
@@ -149,7 +165,7 @@ Profile type affects (via mode):
 - Workflow emphasis
 - Recommendations
 - Default tab after Study Pack generation
-- Default quiz session mode (LEARNING vs PREVIEW)
+- Default quiz-entry emphasis (Student -> Challenge Quiz, Board Taker -> Board Exam)
 
 Profile type does not affect:
 
@@ -855,20 +871,19 @@ Dashboard guidance rules:
   - keep the resume button routed from the single continue-studying payload; do not add extra frontend fetches to label the card
 - `BOARD_EXAM` dashboard should prioritize:
   - `Exam Countdown` when `examDate` exists
-  - `Practice Challenge Quiz`
+  - `Start Board Exam`
   - `Weak Areas`
   - `Adaptive Practice`
   - `Study Activity This Week`
   - `Usage / Progress`
-  - main CTA -> `Practice Challenge Quiz`
+  - main CTA -> `Start Board Exam`
 - `TEACHER` dashboard should prioritize:
-  - `Create Quiz`
-  - `Upload / Paste Material`
-  - `Recent Materials`
+  - `Create Teaching Material`
+  - `Recent Notes`
   - `Recently Generated Quizzes`
-  - `Activity`
-  - `Usage`
-  - main CTA -> `Create Quiz`
+  - `Ready to Export`
+  - `Teacher Help / Tips`
+  - main CTA -> `Create Note`
 - Note entry modes may change the initial editor focus and post-generation destination without changing the underlying note pipeline:
   - `/notes/new?mode=quiz` focuses quiz creation and should open note detail with `tab=quiz`
   - `/notes/new?source=paste` focuses pasted material entry and should open note detail with `tab=quiz`
@@ -878,10 +893,12 @@ Dashboard guidance rules:
 - Dashboard must not use LLM calls for statistics or recommendations.
 - `Focus Areas` should show the top weak concepts and route Premium users to Adaptive Practice through `noteId`.
 - Free users should see the same weak concepts but hit the soft Premium paywall when trying to start Adaptive Practice from Dashboard.
-- Board Exam CTA wording may use exam-prep labels such as `Practice Challenge Quiz` and `Weak Areas`, but must still use the same shared note, quiz-session, activity, and usage data.
-- Teacher CTA wording may use material and quiz-generation labels, but the underlying workflow remains `Note -> Study Pack -> Quiz`.
+- Board Taker dashboard should still use the shared note, quiz-session, activity, and usage data even when Board Exam is the default emphasis.
+- Teacher dashboard must hide student-only analytics widgets such as performance overview, recent quiz sessions, weak concepts, and score-tracking cards.
+- Teacher dashboard should keep the shared note / Study Pack workspace visible while changing intent toward creation, preview, and export.
+- Teacher dashboard may fetch note detail to surface `generatedQuiz` links, but must not create a separate teacher note system.
 - Post-generation note detail should stay on the same unified note route and use `tab=summary` or `tab=quiz` to choose the initial study view rather than creating separate note-detail pages.
-- Dashboard monthly usage should show:
+- Dashboard monthly usage should show for learning personas:
   - Study Packs
   - Challenge Quiz
   - Adaptive Practice for Premium only
@@ -1029,7 +1046,9 @@ Page responsibilities:
 - Study Pack quota increments only after a successful Study Pack is persisted.
 - Failed Study Pack generation, note saves, opening generation screens, and failed retries must not consume quota.
 - Study Pack near-limit messaging should appear when `studyPacksRemaining <= 2` and should show the actual remaining count with plan-specific monthly-limit copy.
-- When `studyPacksRemaining == 0`, `Generate Study Pack` should remain clickable and open the shared monthly-limit modal instead of rendering as a disabled action.
+- When `studyPacksRemaining == 0`, `Generate Study Pack` should remain clickable instead of rendering as a disabled action.
+- Free users at `studyPacksRemaining == 0` should see the Premium/upgrade modal.
+- Premium users at `studyPacksRemaining == 0` should see the dedicated monthly-limit modal.
 
 ## Study Pack Generation Consistency
 
@@ -1077,9 +1096,11 @@ Page responsibilities:
 - Query-string state such as `?tab=quiz` must be preserved in redirect restoration.
 - Manual login from public pages should land on `Dashboard`, not return to a public marketing/discovery page automatically.
 - Login-page messaging should match the auth reason:
-  - `reason=session_expired` -> `Your session has expired. Please log in again.`
-  - `reason=logged_out` -> neutral logout messaging
+  - `reason=session_expired` -> `Your session expired. Please log in again.`
+  - `reason=logged_out` -> no status message
   - `reason=auth_required` or no reason -> neutral login prompt
+- If auth can reliably detect a more specific sign-out reason such as a session conflict, it may show that message.
+- If that reason is not reliably detectable, auth must fall back to the generic session-expired message instead of guessing.
 - Auth pages (`/auth`, `/login`, `/signup`) must immediately redirect authenticated users away from the auth form.
 - Auth pages must not remain visible once authentication succeeds.
 - Users can sign up/login before verification; unverified users are blocked from generation

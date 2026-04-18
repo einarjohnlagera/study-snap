@@ -169,10 +169,7 @@ Errors should remain supportive and actionable.
   - `You have {X} Study Packs left this month on the Free plan.`
 - Premium near-limit banner copy should say:
   - `You have {X} Study Packs left this month.`
-- When a Free user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared limit modal with:
-  - title: `Free Plan Limit Reached`
-  - reset-date messaging
-  - actions: `Upgrade to Premium`, `Maybe Later`, `View My Plan`
+- When a Free user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared Premium/upgrade modal instead of the monthly-limit modal.
 - When a Premium user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared limit modal with:
   - title: `Monthly Limit Reached`
   - reset-date messaging

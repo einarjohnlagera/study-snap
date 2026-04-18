@@ -118,11 +118,12 @@ describe("AuthPage", () => {
 
   it("shows the session-expired banner and redirects cleanly after re-login", async () => {
     window.history.replaceState({}, "", "/login?reason=session_expired&redirect=%2Fnotes%2Fnote-1%3Ftab%3Dquiz");
+    window.sessionStorage.setItem("notelib-session-expired-user-id", "user-1");
     (login as jest.Mock).mockResolvedValue(verifiedAuthUser);
 
     const { container } = render(<AuthPage />);
 
-    expect(screen.getByText("Your session has expired. Please log in again.")).toBeInTheDocument();
+    expect(screen.getByText("Your session expired. Please log in again.")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "note@example.com" },
@@ -136,17 +137,17 @@ describe("AuthPage", () => {
       expect(routerMock.replace).toHaveBeenCalledWith("/notes/note-1?tab=quiz");
     });
     await waitFor(() => {
-      expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
+      expect(screen.queryByText("Your session expired. Please log in again.")).not.toBeInTheDocument();
     });
   });
 
-  it("shows a neutral message after manual logout", () => {
+  it("shows no status message after manual logout", () => {
     window.history.replaceState({}, "", "/login?reason=logged_out");
 
     render(<AuthPage />);
 
-    expect(screen.getByText("You have been logged out.")).toBeInTheDocument();
-    expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
+    expect(screen.queryByText("You have been logged out.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your session expired. Please log in again.")).not.toBeInTheDocument();
   });
 
   it("redirects manual logout relogin to the dashboard even when a stale redirect query remains", async () => {
@@ -197,7 +198,7 @@ describe("AuthPage", () => {
     render(<AuthPage />);
 
     expect(screen.getByText("Please log in to continue.")).toBeInTheDocument();
-    expect(screen.queryByText("Your session has expired. Please log in again.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your session expired. Please log in again.")).not.toBeInTheDocument();
   });
 
   it("redirects authenticated visitors away from the login page", async () => {

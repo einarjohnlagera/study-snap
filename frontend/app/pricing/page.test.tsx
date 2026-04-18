@@ -37,7 +37,7 @@ describe("PricingPage", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Board Exam Mode is available on Free for a limited time and stays included on Premium."),
+      screen.getByText("Board Exam Mode is included with Premium for stricter exam-style practice."),
     ).toBeInTheDocument();
     expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
     expect(screen.getByText("₱1,999/year (Save ₱989)")).toBeInTheDocument();
@@ -55,7 +55,7 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("5 Challenge Quizzes / month")).not.toHaveLength(0);
     expect(screen.getAllByText("AI Summary + Key Concepts")).not.toHaveLength(0);
     expect(screen.getAllByText("Weak Concepts tracking")).not.toHaveLength(0);
-    expect(screen.getByText("Board Exam Mode (Free for limited time)")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Mode (Premium)")).toBeInTheDocument();
     expect(screen.getByText("Adaptive Practice (Premium)")).toBeInTheDocument();
     expect(screen.getByText("Difficulty selection (Premium)")).toBeInTheDocument();
     expect(screen.getByText("Move into deeper, exam-focused practice.")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("PricingPage", () => {
     expect(
       screen.getByText("Free covers the core study loop. Premium expands limits and unlocks deeper quiz training."),
     ).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Not included")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
 
     const comparisonTable = screen.getByRole("table");
     const pricingText = comparisonTable.textContent ?? "";
@@ -85,7 +85,7 @@ describe("PricingPage", () => {
     expect(pricingText.indexOf("Weak Concepts tracking")).toBeLessThan(pricingText.indexOf("Adaptive Practice"));
     expect(pricingText.indexOf("Adaptive Practice")).toBeLessThan(pricingText.indexOf("Difficulty selection"));
     expect(pricingText.indexOf("Difficulty selection")).toBeLessThan(pricingText.indexOf("Board Exam Mode"));
-    expect(pricingText).toContain("Free for limited time");
+    expect(pricingText).not.toContain("Free for limited time");
   });
 
   it("links signup CTA and opens the premium waitlist flow", async () => {

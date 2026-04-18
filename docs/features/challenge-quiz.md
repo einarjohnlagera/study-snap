@@ -28,3 +28,27 @@ Runtime/session rules:
 - Backend normalization must convert the LLM answer letter into canonical `correctIndex` before persistence.
 - Frontend rendering may shuffle displayed choices, but `A` / `B` / `C` / `D` stay UI-only labels derived from displayed order.
 - Session grading must compare selected canonical choice indexes against canonical `correctIndex`.
+
+## Entry Flow
+
+- `Student` and `Board Taker` use the same initial mode-selection screen.
+- Entering `Challenge Quiz` from Note Detail must land on that same shared mode-selection screen.
+- Both modes must remain visible on that first screen:
+  - `Challenge Quiz`
+  - `Board Exam Mode`
+- Persona difference is emphasis only:
+  - `Student` -> `Challenge Quiz` is visually emphasized by default
+  - `Board Taker` -> `Board Exam Mode` is visually emphasized by default
+- Do not skip directly into setup based only on persona.
+
+## Premium Gating
+
+- `Board Exam Mode` is Premium-only.
+- Free users should still see `Board Exam Mode` on the shared mode-selection screen.
+- Free users who click `Board Exam Mode` from the shared mode-selection screen must see the shared Premium upsell modal.
+- Do not replace the Premium upsell with a normal setup screen for free users.
+- Monthly quiz-limit handling is separate:
+  - free user + premium-only path -> Premium upsell modal
+  - free user + exhausted Challenge Quiz credits -> Premium upsell modal
+  - premium user + exhausted monthly usage -> quiz-limit state / limit messaging
+- Free users who already exhausted Challenge Quiz credits should be stopped by the paywall modal before entering quiz setup or mode-selection flow from Note Detail actions.

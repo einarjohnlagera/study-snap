@@ -33,7 +33,7 @@ type PublicProfilePageClientProps = {
 
 const PROFILE_TYPE_LABELS: Record<ProfileType, string> = {
   STUDENT: "Student",
-  BOARD_EXAM: "Board Exam",
+  BOARD_EXAM: "Board Taker",
   TEACHER: "Teacher",
   PARENT: "Parent",
   PROFESSIONAL: "Professional",

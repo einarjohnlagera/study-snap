@@ -5,6 +5,7 @@ import {
   getContinueStudyingRecommendation,
   getDashboardOverview,
   getMe,
+  getNote,
   getQuickReviewPerformanceSummary,
   listNotes,
 } from "@/lib/api";
@@ -35,6 +36,7 @@ jest.mock("@/lib/api", () => ({
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
   getMe: jest.fn(),
+  getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   joinPremiumWaitlist: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
@@ -104,6 +106,7 @@ describe("DashboardPage profile variants", () => {
     (getContinueStudyingRecommendation as jest.Mock).mockReset();
     (getDashboardOverview as jest.Mock).mockReset();
     (getQuickReviewPerformanceSummary as jest.Mock).mockReset();
+    (getNote as jest.Mock).mockReset();
     (completeProductOnboarding as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
@@ -165,7 +168,7 @@ describe("DashboardPage profile variants", () => {
       productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
       studyPackCount: 2,
       profileType: "BOARD_EXAM",
-      examDate: "2026-04-15",
+      examDate: "2026-05-15",
       onboardingCompletedAt: "2026-03-20T00:00:00Z",
     });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
@@ -187,7 +190,7 @@ describe("DashboardPage profile variants", () => {
 
     expect(await screen.findByText("Exam Countdown")).toBeInTheDocument();
     expect(screen.getByText(/You have .* days until your exam\./)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Practice Challenge Quiz" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Start Board Exam" })).toBeInTheDocument();
     expect(screen.getByText("Weak Areas")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Adaptive Practice" })).toBeInTheDocument();
     expect(screen.getByText("Study Activity This Week")).toBeInTheDocument();
@@ -212,17 +215,56 @@ describe("DashboardPage profile variants", () => {
         usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
       },
     });
+    (getNote as jest.Mock).mockImplementation(async (noteId: string) => ({
+      id: noteId,
+      title: noteId === "note-1" ? "Biology Review" : "History Draft",
+      subject: noteId === "note-1" ? "Biology" : "History",
+      tags: noteId === "note-1" ? ["Cells"] : [],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: noteId === "note-1" ? "2026-03-24T00:00:00Z" : "2026-03-23T00:00:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: noteId === "note-1" ? "pack-1" : null,
+      studyPackStatus: noteId === "note-1" ? "STUDY_PACK_READY" : "DRAFT",
+      summary: "Summary",
+      keyConcepts: [],
+      quiz: [],
+      generatedQuiz: noteId === "note-1"
+        ? {
+            noteId,
+            generatedAt: "2026-03-24T00:00:00Z",
+            questions: [
+              {
+                question: "What is a cell?",
+                choices: ["A", "B", "C", "D"],
+                correctIndex: 0,
+                explanation: "Because it is.",
+              },
+            ],
+          }
+        : null,
+      quizCount: 1,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
+    }));
 
     render(<DashboardPage />);
 
-    expect(await screen.findByRole("heading", { name: "Create Quiz" })).toBeInTheDocument();
-    expect(screen.getByText("Upload / Paste Material")).toBeInTheDocument();
-    expect(screen.getByText("Recent Materials")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Create Teaching Material" })).toBeInTheDocument();
+    expect(screen.getByText("Recent Notes")).toBeInTheDocument();
     expect(screen.getByText("Recently Generated Quizzes")).toBeInTheDocument();
-    expect(screen.getByText("Activity")).toBeInTheDocument();
-    expect(screen.getByText("Usage")).toBeInTheDocument();
+    expect(screen.getByText("Ready to Export")).toBeInTheDocument();
+    expect(screen.getByText("Teacher Help / Tips")).toBeInTheDocument();
     expect(screen.queryByText("Continue Studying")).not.toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
+    expect(screen.queryByText("Usage / Progress")).not.toBeInTheDocument();
   });
 
   it("shows first-study onboarding to new users and routes them to create a note", async () => {

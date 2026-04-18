@@ -65,7 +65,7 @@ describe("PaywallModal", () => {
     });
   });
 
-  it("does not reopen after dismissal in the same session", async () => {
+  it("reopens after dismissal when the user triggers the same gated action again", async () => {
     const onClose = jest.fn();
     const { rerender } = render(
       <PaywallModal
@@ -87,9 +87,7 @@ describe("PaywallModal", () => {
       />,
     );
 
-    await waitFor(() => {
-      expect(screen.queryByText("Difficulty Selection is a Premium feature")).not.toBeInTheDocument();
-    });
+    expect(await screen.findByText("Difficulty Selection is a Premium feature")).toBeInTheDocument();
   });
 
   it("shows the verification modal instead of routing when the user is unverified", async () => {

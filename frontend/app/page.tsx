@@ -153,7 +153,7 @@ function HeroSection() {
               Notes to active recall
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Board Exam Mode · Free for a limited time
+              Board Exam Mode · Premium
             </span>
           </div>
           <div className="space-y-3">

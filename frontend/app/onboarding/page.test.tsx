@@ -79,7 +79,7 @@ describe("OnboardingPage", () => {
 
     expect(await screen.findByText("Let's set up NoteLib for you.")).toBeInTheDocument();
     expect(await screen.findByText("What will you use NoteLib for?")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Board Exam"));
+    fireEvent.click(screen.getByLabelText("Board Taker"));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("Learning Profile")).toBeInTheDocument();

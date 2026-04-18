@@ -35,7 +35,7 @@ Onboarding collects:
 Profile Type options:
 
 - `Student`
-- `Board Exam`
+- `Board Taker`
 - `Teacher`
 
 Learning Profile step:
@@ -60,7 +60,7 @@ Reminder step:
 - `Light reminders`
 - `Stay on track`
 
-Board exam users also select an `Exam Date` before finishing onboarding.
+Board Takers also select an `Exam Date` before finishing onboarding.
 
 Current onboarding order:
 
@@ -68,7 +68,7 @@ Current onboarding order:
 2. `Learning Profile`
 3. `Learning Style`
 4. `Study Reminder Frequency`
-5. `Exam Date` for board exam users only
+5. `Exam Date` for Board Takers only
 
 ## Persistence
 

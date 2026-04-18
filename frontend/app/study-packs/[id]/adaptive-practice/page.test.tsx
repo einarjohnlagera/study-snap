@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AdaptivePracticePage from "./page";
 import { getAuthUser } from "@/lib/auth";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   completeAdaptivePracticeSession,
   forfeitAdaptivePracticeSession,
@@ -32,6 +33,10 @@ jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
 }));
 
+jest.mock("@/hooks/use-billing-usage-summary", () => ({
+  useBillingUsageSummary: jest.fn(),
+}));
+
 jest.mock("@/lib/api", () => ({
   completeAdaptivePracticeSession: jest.fn(),
   forfeitAdaptivePracticeSession: jest.fn(),
@@ -47,6 +52,32 @@ describe("AdaptivePracticePage", () => {
   beforeEach(() => {
     routerMock.push.mockReset();
     routerMock.replace.mockReset();
+    (useBillingUsageSummary as jest.Mock).mockReset();
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PREMIUM",
+        limits: {
+          studyPacksPerMonth: 100,
+          challengeQuizzesPerMonth: 50,
+          adaptivePracticePerMonth: 30,
+          ocrPerMonth: 100,
+        },
+        usage: {
+          studyPacksUsed: 0,
+          challengeQuizzesUsed: 0,
+          adaptivePracticeUsed: 0,
+          ocrUsed: 0,
+        },
+        remaining: {
+          studyPacksRemaining: 100,
+          challengeQuizzesRemaining: 50,
+          adaptivePracticeRemaining: 30,
+          ocrRemaining: 100,
+        },
+      },
+      usageLoaded: true,
+      refreshUsageSummary: jest.fn(),
+    });
     (getAuthUser as jest.Mock).mockReset();
     (getNote as jest.Mock).mockReset();
     (generateAdaptiveQuickReviewQuiz as jest.Mock).mockReset();
@@ -198,6 +229,50 @@ describe("AdaptivePracticePage", () => {
     expect(screen.getByText("Creating personalized questions from your notes")).toBeInTheDocument();
     expect(screen.getByText("Please keep this page open")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Starting..." })).toBeDisabled();
+  });
+
+  it("shows the monthly limit state for premium users who exhausted Adaptive Practice usage", async () => {
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "PREMIUM",
+        limits: {
+          studyPacksPerMonth: 100,
+          challengeQuizzesPerMonth: 50,
+          adaptivePracticePerMonth: 30,
+          ocrPerMonth: 100,
+        },
+        usage: {
+          studyPacksUsed: 0,
+          challengeQuizzesUsed: 0,
+          adaptivePracticeUsed: 30,
+          ocrUsed: 0,
+        },
+        remaining: {
+          studyPacksRemaining: 100,
+          challengeQuizzesRemaining: 50,
+          adaptivePracticeRemaining: 0,
+          ocrRemaining: 100,
+        },
+      },
+      usageLoaded: true,
+      refreshUsageSummary: jest.fn(),
+    });
+    (getAuthUser as jest.Mock).mockReturnValue({
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Derivatives",
+      studyPackStatus: "STUDY_PACK_READY",
+      adaptivePracticeAvailable: true,
+    });
+
+    render(<AdaptivePracticePage />);
+
+    expect(await screen.findByRole("heading", { name: "Monthly limit reached" })).toBeInTheDocument();
+    expect(screen.getByText("You've reached your monthly Adaptive Practice limit.")).toBeInTheDocument();
+    expect(screen.queryByText("Adaptive Practice is a Premium feature")).not.toBeInTheDocument();
   });
 
   it('result screen shows "Generate New Set" as the primary action', async () => {

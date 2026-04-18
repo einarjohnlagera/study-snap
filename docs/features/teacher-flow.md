@@ -12,6 +12,14 @@ Core lifecycle:
 - `View`
 - `Export`
 
+Teacher Dashboard should feed that lifecycle, not replace the shared note product.
+
+- `Create Teaching Material`
+- `Recent Notes`
+- `Recently Generated Quizzes`
+- `Ready to Export`
+- `Teacher Help / Tips`
+
 ## Ownership Model
 
 Teacher quiz data uses `generatedQuiz`.

@@ -32,7 +32,7 @@ export default function PricingPage() {
             Upgrade to Premium when you need higher limits, Adaptive Practice, and more control during heavy exam weeks.
           </p>
           <p className="max-w-3xl rounded-2xl border border-blue-500/15 bg-background/80 px-4 py-3 text-sm text-foreground/75 backdrop-blur">
-            Board Exam Mode is available on Free for a limited time and stays included on Premium.
+            Board Exam Mode is included with Premium for stricter exam-style practice.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/auth" className="w-full sm:w-auto">

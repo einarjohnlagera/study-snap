@@ -54,9 +54,10 @@ Required endpoints:
 - Manual login from public pages such as Landing, Learn, Public Library, or Public Note should resolve to `Dashboard`.
 - Auth pages should also redirect already-authenticated users to the same resolved post-login destination.
 - Login-page messaging should follow the auth reason:
-  - `reason=session_expired` -> `Your session has expired. Please log in again.`
-  - `reason=logged_out` -> `You have been logged out.` or another neutral logout message
+  - `reason=session_expired` -> `Your session expired. Please log in again.`
+  - `reason=logged_out` -> no status message
   - `reason=auth_required` or no reason -> neutral login prompt
+  - if a more specific sign-out reason is not reliably detectable, fall back to the session-expired message instead of guessing
 
 ## Verification Gating Rules
 

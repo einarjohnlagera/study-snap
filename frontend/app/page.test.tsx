@@ -44,7 +44,7 @@ describe("LandingPage", () => {
     expect(
       screen.getByText("Build a notes library, browse what others share, and turn saved notes into summaries, key concepts, and quizzes when review starts."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Board Exam Mode · Free for a limited time")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Mode · Premium")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
     expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "/how-it-works");
     expect(screen.getByRole("link", { name: "Try demo access" })).toHaveAttribute("href", "/demo");

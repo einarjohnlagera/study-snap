@@ -194,7 +194,7 @@ export default function HowItWorksPage() {
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
             <Trophy className="h-3.5 w-3.5" />
-            Board Exam Mode — Free for a limited time
+            Board Exam Mode — Premium
           </div>
           <h2 className="text-2xl font-semibold sm:text-3xl">Practice under stricter exam conditions</h2>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">

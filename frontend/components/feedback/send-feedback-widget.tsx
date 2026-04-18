@@ -24,6 +24,7 @@ type SendFeedbackWidgetProps = {
   triggerLabel?: string;
   quickActions?: FeedbackQuickAction[];
   iconButtonClassName?: string;
+  showTriggerButton?: boolean;
 };
 
 export function SendFeedbackWidget({
@@ -35,6 +36,7 @@ export function SendFeedbackWidget({
   triggerLabel = "Send Feedback",
   quickActions = [],
   iconButtonClassName,
+  showTriggerButton = true,
 }: Readonly<SendFeedbackWidgetProps>) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -102,7 +104,7 @@ export function SendFeedbackWidget({
                 type="button"
                 size="sm"
                 variant={action.variant ?? "outline"}
-                className="w-full sm:w-auto"
+                className="w-full gap-2 sm:w-auto"
                 onClick={() => {
                   if (action.onClick) {
                     action.onClick();
@@ -115,15 +117,17 @@ export function SendFeedbackWidget({
                 {action.label}
               </Button>
             ))}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => handleOpen()}
-            >
-              {triggerLabel}
-            </Button>
+            {showTriggerButton ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => handleOpen()}
+              >
+                {triggerLabel}
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : variant === "icon" ? (

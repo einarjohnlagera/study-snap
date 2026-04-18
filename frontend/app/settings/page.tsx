@@ -141,6 +141,22 @@ export default function SettingsPage() {
   const [cancellationFeedback, setCancellationFeedback] = useState("");
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
 
+  const scrollToPlanBillingSection = useCallback(() => {
+    if (globalThis.window === undefined) {
+      return;
+    }
+    if (globalThis.location.hash !== `#${PLAN_BILLING_SECTION_ID}`) {
+      return;
+    }
+    const section = globalThis.document.getElementById(PLAN_BILLING_SECTION_ID);
+    if (!section) {
+      return;
+    }
+    globalThis.requestAnimationFrame(() => {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
     if (!authUser) {
@@ -181,6 +197,28 @@ export default function SettingsPage() {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      scrollToPlanBillingSection();
+    }, 0);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [loading, scrollToPlanBillingSection]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      scrollToPlanBillingSection();
+    };
+    globalThis.addEventListener("hashchange", handleHashChange);
+    return () => {
+      globalThis.removeEventListener("hashchange", handleHashChange);
+    };
+  }, [scrollToPlanBillingSection]);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -557,7 +595,7 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card id={PLAN_BILLING_SECTION_ID} className="space-y-4 p-4 sm:p-6">
+          <Card id={PLAN_BILLING_SECTION_ID} className="scroll-mt-24 space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Plan &amp; Billing</h2>
             <div className="space-y-4 rounded-md border border-border bg-background p-4">
               <div>
