@@ -4,6 +4,31 @@
 
 ### New Features
 
+- **Teacher Dashboard** — added a teacher-first dashboard experience without splitting Teacher into a separate product:
+  - keeps the shared Study Pack / note workspace visible through `Recent Notes`
+  - replaces student analytics sections with teacher-focused sections: `Create Teaching Material`, `Recently Generated Quizzes`, `Ready to Export`, and `Teacher Help / Tips`
+  - links generated quizzes directly into Quiz Preview so export stays inside the teacher review flow
+
+- **Persona-based quiz defaults** — quiz entry now emphasizes the right mode per learner intent while keeping the alternate mode reachable:
+  - `Student` defaults to `Challenge Quiz Setup`
+  - `Board Taker` defaults to `Board Exam Setup`
+  - `Choose another mode` still exposes both quiz paths instead of removing flexibility
+  - `Board Exam Mode` is reinforced as Premium-only at quiz entry through the shared paywall pattern
+
+- **Onboarding / profile wording alignment** — persona naming is now consistent across setup and profile surfaces:
+  - onboarding now uses `Board Taker` instead of `Board Exam`
+  - onboarding continues to show only the active selectable personas: `Student`, `Board Taker`, and `Teacher`
+
+- **Auth status messaging cleanup** — login messaging now stays reason-based and avoids misleading logout copy:
+  - manual logout shows no status banner
+  - expired sessions show `Your session expired. Please log in again.`
+  - specific sign-out reasons should only be shown when they are reliably detectable; otherwise auth falls back to the session-expired message
+
+- **Post-quiz feedback cleanup** — simplified the result-screen feedback actions:
+  - keeps `Yes` and `Give Feedback`
+  - removes the duplicate `Send Feedback` button from the quiz-results card
+  - aligns icon / label spacing with the shared button system
+
 - **Profile Type System** — formalises the three active profile types (Student, Board Taker, Teacher) with a controlled availability model:
   - `PROFESSIONAL` and `PARENT` are now visible in the Profile Type card but not selectable — they show a "Coming Soon" badge and remain disabled until the personas are ready
   - active types (Student, Board Taker, Teacher) use a visual card-list selector with radio indicator and one-line description instead of a plain `<select>`
@@ -30,7 +55,10 @@
 
 ### Documentation
 
-- `docs/product/SPEC.md`: added Profile Type System section with mode table, quiz session mode rules, profile switching UX spec, disabled-type behaviour, and mode resolution API
+- `docs/product/SPEC.md`: updated teacher dashboard purpose, teacher quiz separation, persona-based quiz defaults, and auth/login message rules
+- `docs/features/dashboard.md`: documented the teacher-first dashboard sections and profile-specific priorities
+- `docs/features/authentication.md`: documented session-expired vs manual-logout messaging rules
+- `docs/features/teacher-flow.md`: clarified how Teacher Dashboard feeds the Generate -> View -> Export teacher lifecycle
 - `docs/product/ROADMAP.md`: added Public Library persona filtering as a future direction
 
 ---

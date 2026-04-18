@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 type DashboardHeroProps = {
   greetingName: string;
   description: string;
+  supportingText?: string;
 };
 
 function resolveGreetingLabel(hour: number): string {
@@ -16,7 +17,11 @@ function resolveGreetingLabel(hour: number): string {
   return "Good evening";
 }
 
-export function DashboardHero({ greetingName, description }: DashboardHeroProps) {
+export function DashboardHero({
+  greetingName,
+  description,
+  supportingText = "Ready to continue your studies?",
+}: Readonly<DashboardHeroProps>) {
   const greetingLabel = resolveGreetingLabel(new Date().getHours());
 
   return (
@@ -25,7 +30,7 @@ export function DashboardHero({ greetingName, description }: DashboardHeroProps)
         <h2 className="text-xl font-semibold sm:text-2xl">
           {greetingLabel}, {greetingName}
         </h2>
-        <p className="text-sm text-foreground/75">Ready to continue your studies?</p>
+        <p className="text-sm text-foreground/75">{supportingText}</p>
       </Card>
       <PageHeader
         eyebrow="DASHBOARD"

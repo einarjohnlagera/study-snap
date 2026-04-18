@@ -58,6 +58,8 @@ type ChallengeSessionStatePayload = {
   timerStartedAtEpochSeconds?: number;
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
+type ChallengeViewerProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | null;
+type ChallengeViewerPlanType = "FREE" | "PREMIUM" | null;
 
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
@@ -117,14 +119,19 @@ function normalizePracticeDifficulty(
   return "medium";
 }
 
-function resolveRecoveryPrestartStep(
-  mode: ChallengeQuizMode,
-  difficultySelectionAvailable: boolean,
-): ChallengePrestartStep {
+function resolveRecoveryPrestartStep(mode: ChallengeQuizMode): ChallengePrestartStep {
   if (mode === BOARD_EXAM_MODE) {
     return "board-exam-setup";
   }
-  return difficultySelectionAvailable ? "challenge-setup" : "mode-selection";
+  return "challenge-setup";
+}
+
+function resolvePreferredChallengeMode(profileType: string | null | undefined): ChallengeQuizMode {
+  return profileType === "BOARD_EXAM" ? BOARD_EXAM_MODE : CHALLENGE_MODE;
+}
+
+function isChallengeViewerProfileType(value: string | null | undefined): value is Exclude<ChallengeViewerProfileType, null> {
+  return value === "STUDENT" || value === "BOARD_EXAM" || value === "TEACHER";
 }
 
 async function requestBoardExamFullscreen() {
@@ -216,7 +223,9 @@ export default function ChallengeQuizPage() {
   const [challengeSession, setChallengeSession] = useState<ChallengeQuizStartResponse | null>(null);
   const [result, setResult] = useState<ChallengeQuizSessionResponse | null>(null);
   const [phase, setPhase] = useState<ChallengePhase>("prestart");
-  const [prestartStep, setPrestartStep] = useState<ChallengePrestartStep>("mode-selection");
+  const [prestartStep, setPrestartStep] = useState<ChallengePrestartStep>(() => (
+    resolveRecoveryPrestartStep(resolvePreferredChallengeMode(getAuthUser()?.profileType))
+  ));
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -230,9 +239,13 @@ export default function ChallengeQuizPage() {
   const [showFirstQuizCompletionBanner, setShowFirstQuizCompletionBanner] = useState(false);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
   const [viewerId, setViewerId] = useState<string | null>(null);
-  const [activePaywallModal, setActivePaywallModal] = useState<"difficulty-selection" | "challenge-quiz-limit" | null>(null);
+  const [viewerPlanType, setViewerPlanType] = useState<ChallengeViewerPlanType>(null);
+  const [viewerProfileType, setViewerProfileType] = useState<ChallengeViewerProfileType>(null);
+  const [activePaywallModal, setActivePaywallModal] = useState<"board-exam-mode" | "difficulty-selection" | "challenge-quiz-limit" | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<ChallengeDifficulty>("medium");
-  const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(CHALLENGE_MODE);
+  const [selectedMode, setSelectedMode] = useState<ChallengeQuizMode>(() => (
+    resolvePreferredChallengeMode(getAuthUser()?.profileType)
+  ));
   const [showVerifyEmailModal, setShowVerifyEmailModal] = useState(false);
   const [showBoardExamStartModal, setShowBoardExamStartModal] = useState(false);
   const [showBoardExamFocusTip, setShowBoardExamFocusTip] = useState(false);
@@ -253,11 +266,16 @@ export default function ChallengeQuizPage() {
     };
   }, []);
   const openLockedFeaturePaywall = useCallback(
-    (variant: "difficulty-selection" | "challenge-quiz-limit", source: string) => {
+    (variant: "board-exam-mode" | "difficulty-selection" | "challenge-quiz-limit", source: string) => {
+      const feature = variant === "difficulty-selection"
+        ? "difficulty"
+        : variant === "challenge-quiz-limit"
+          ? "quiz_limit"
+          : "board_exam";
       void trackAnalyticsEvent({
         eventType: "FEATURE_LOCKED_CLICKED",
         metadata: {
-          feature: variant === "difficulty-selection" ? "difficulty" : "quiz_limit",
+          feature,
           source,
           path: pathname,
           noteId,
@@ -273,6 +291,8 @@ export default function ChallengeQuizPage() {
       const authUser = getAuthUser();
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
       setViewerId(authUser?.id ?? null);
+      setViewerPlanType(authUser?.planType === "FREE" || authUser?.planType === "PREMIUM" ? authUser.planType : null);
+      setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
     };
     syncVerification();
     globalThis.addEventListener("studysnap-auth-change", syncVerification);
@@ -322,7 +342,7 @@ export default function ChallengeQuizPage() {
       setRemainingSeconds(0);
       setTimedOut(false);
       setShowAnswerReview(false);
-      setPrestartStep(resolveRecoveryPrestartStep(started.mode, started.difficultySelectionAvailable));
+      setPrestartStep(resolveRecoveryPrestartStep(started.mode));
       setPhase("generating");
       return;
     }
@@ -337,7 +357,7 @@ export default function ChallengeQuizPage() {
       setRemainingSeconds(0);
       setTimedOut(false);
       setShowAnswerReview(false);
-      setPrestartStep(resolveRecoveryPrestartStep(started.mode, started.difficultySelectionAvailable));
+      setPrestartStep(resolveRecoveryPrestartStep(started.mode));
       setError(started.mode === BOARD_EXAM_MODE
         ? "We couldn't generate Board Exam Mode this time. Try again."
         : "We couldn't generate the Challenge Quiz this time. Try again.");
@@ -356,7 +376,7 @@ export default function ChallengeQuizPage() {
       setRemainingSeconds(0);
       setTimedOut(false);
       setShowAnswerReview(false);
-      setPrestartStep(resolveRecoveryPrestartStep(started.mode, started.difficultySelectionAvailable));
+      setPrestartStep(resolveRecoveryPrestartStep(started.mode));
       setPhase("prestart");
       return;
     }
@@ -430,7 +450,10 @@ export default function ChallengeQuizPage() {
       }
       setNote(detail);
       const authUser = getAuthUser();
+      const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
+      setViewerPlanType(authUser?.planType === "FREE" || authUser?.planType === "PREMIUM" ? authUser.planType : null);
+      setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
       if (!authUser?.emailVerifiedAt) {
         syncProgressRef(0, {});
         setChallengeSession(null);
@@ -441,13 +464,14 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setPrestartStep("mode-selection");
+        setSelectedMode(preferredMode);
+        setPrestartStep(resolveRecoveryPrestartStep(preferredMode));
         setPhase("prestart");
         return;
       }
 
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
-      setSelectedMode(inProgress.mode ?? CHALLENGE_MODE);
+      setSelectedMode(inProgress.mode ?? preferredMode);
       if (inProgress.sessionId) {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
         applyStartedSession(inProgress, true);
@@ -462,7 +486,8 @@ export default function ChallengeQuizPage() {
         setRemainingSeconds(0);
         setTimedOut(false);
         setShowAnswerReview(false);
-        setPrestartStep("mode-selection");
+        setSelectedMode(preferredMode);
+        setPrestartStep(resolveRecoveryPrestartStep(preferredMode));
         const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
         setPhase(hasReachedMonthlyLimit ? "limit-reached" : "prestart");
         if (hasReachedMonthlyLimit) {
@@ -740,7 +765,7 @@ export default function ChallengeQuizPage() {
     setError(null);
     setShowAnswerReview(false);
     setShowBoardExamStartModal(false);
-    setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode, Boolean(note?.difficultySelectionAvailable)));
+    setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode));
     setPhase("prestart");
   };
 
@@ -758,6 +783,8 @@ export default function ChallengeQuizPage() {
     : "Creating personalized questions from your notes";
   const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable, selectedDifficulty);
   const canChooseChallengeDifficulty = Boolean(note?.difficultySelectionAvailable);
+  const boardExamAvailable = viewerPlanType === "PREMIUM";
+  const prefersBoardExam = viewerProfileType === "BOARD_EXAM";
   const boardExamTimerState = useMemo(
     () => resolveBoardExamTimerState(remainingSeconds),
     [remainingSeconds],
@@ -782,8 +809,8 @@ export default function ChallengeQuizPage() {
     setError(null);
     setShowBoardExamStartModal(false);
     setPrestartStep("mode-selection");
-    setSelectedMode(CHALLENGE_MODE);
-  }, []);
+    setSelectedMode(prefersBoardExam ? BOARD_EXAM_MODE : CHALLENGE_MODE);
+  }, [prefersBoardExam]);
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: challengeQuizActive,
     fallbackHref: noteDetailHref,
@@ -965,7 +992,9 @@ export default function ChallengeQuizPage() {
                   Simulate a real exam with mixed difficulty and a stricter, more controlled flow.
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
-                  Uses the same Challenge Quiz attempt as the standard Challenge Quiz flow.
+                  {boardExamAvailable
+                    ? "Uses the same Challenge Quiz attempt as the standard Challenge Quiz flow."
+                    : "Premium only. Upgrade to unlock a stricter board-style exam flow."}
                 </p>
               </button>
             </div>
@@ -1049,7 +1078,7 @@ export default function ChallengeQuizPage() {
                 onClick={returnToModeSelection}
                 disabled={challengeGenerationLocked}
               >
-                Back
+                Choose another mode
               </Button>
               <Button
                 type="button"
@@ -1075,6 +1104,9 @@ export default function ChallengeQuizPage() {
               <div className="space-y-2">
                 <h2 className="text-base font-semibold text-foreground">Description</h2>
                 <p>Simulate a focused exam session with mixed difficulty.</p>
+                {!boardExamAvailable ? (
+                  <p className="text-amber-700 dark:text-amber-300">Premium required to start Board Exam Mode.</p>
+                ) : null}
               </div>
             </div>
 
@@ -1094,7 +1126,7 @@ export default function ChallengeQuizPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">Attempt usage</p>
-                  <p>Consumes 1 Challenge Quiz attempt.</p>
+                  <p>{boardExamAvailable ? "Consumes 1 Challenge Quiz attempt." : "Unlock with Premium. Challenge Quiz stays available on your current plan."}</p>
                 </div>
               </div>
             </div>
@@ -1111,15 +1143,23 @@ export default function ChallengeQuizPage() {
                 onClick={returnToModeSelection}
                 disabled={challengeGenerationLocked}
               >
-                Cancel
+                Choose another mode
               </Button>
               <Button
                 type="button"
                 className="w-full sm:w-auto"
-                onClick={() => setShowBoardExamStartModal(true)}
+                onClick={() => {
+                  if (!boardExamAvailable) {
+                    openLockedFeaturePaywall("board-exam-mode", "board_exam_setup");
+                    return;
+                  }
+                  setShowBoardExamStartModal(true);
+                }}
                 disabled={challengeGenerationLocked}
               >
-                {challengeGenerationLocked ? "Starting..." : "Start Exam"}
+                {boardExamAvailable
+                  ? challengeGenerationLocked ? "Starting..." : "Start Exam"
+                  : "Unlock Board Exam Mode"}
               </Button>
             </div>
           </Card>

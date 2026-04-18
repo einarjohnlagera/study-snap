@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
@@ -16,6 +17,7 @@ import {
   getContinueStudyingRecommendation,
   getDashboardOverview,
   getMe,
+  getNote,
   getQuickReviewPerformanceSummary,
   listNotes,
   type ContinueStudyingResponse,
@@ -46,6 +48,28 @@ import {
 } from "@/lib/first-study-onboarding";
 
 type SupportedDashboardProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
+type TeacherGeneratedQuizSummary = {
+  noteId: string;
+  title: string;
+  subject: string | null;
+  generatedAt: string;
+  updatedAt: string;
+  questionCount: number;
+};
+
+const MAX_TEACHER_QUIZ_NOTES = 8;
+
+function formatDashboardDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unavailable";
+  }
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 function resolveDashboardProfileType(profileType: ProfileType | null | undefined): SupportedDashboardProfileType {
   if (profileType === "BOARD_EXAM" || profileType === "TEACHER") {
@@ -105,10 +129,108 @@ function resolveChallengeQuizHref(
   return "/notes/new";
 }
 
+function TeacherGeneratedQuizSection({
+  items,
+}: Readonly<{
+  items: TeacherGeneratedQuizSummary[];
+}>) {
+  return (
+    <section className="space-y-3 sm:space-y-4">
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-semibold sm:text-xl">Recently Generated Quizzes</h2>
+        <p className="text-xs text-foreground/65">{items.length} quiz previews</p>
+      </div>
+      {items.length > 0 ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {items.map((item) => (
+            <Link key={item.noteId} href={`/notes/${item.noteId}/quiz`} className="block">
+              <Card className="h-full space-y-3 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6">
+                <div className="space-y-1.5">
+                  <h3 className="text-base font-semibold sm:text-lg">{item.title}</h3>
+                  <p className="text-sm text-foreground/70">{item.subject?.trim() || "No subject"}</p>
+                  <p className="text-xs text-foreground/60">Generated {formatDashboardDate(item.generatedAt)}</p>
+                </div>
+                <p className="text-sm text-foreground/75">
+                  Review answers and explanations before exporting this quiz for class use.
+                </p>
+                <div className="flex items-center justify-between text-xs text-foreground/60">
+                  <span>{item.questionCount} questions</span>
+                  <span>Open Quiz Preview &rarr;</span>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <Card className="space-y-3 p-4 sm:p-6">
+          <h3 className="text-base font-semibold sm:text-lg">No generated quizzes yet</h3>
+          <p className="text-sm text-foreground/75">
+            Generate a quiz from any ready note to review answers and explanations before class.
+          </p>
+        </Card>
+      )}
+    </section>
+  );
+}
+
+function TeacherReadyToExportSection({
+  items,
+}: Readonly<{
+  items: TeacherGeneratedQuizSummary[];
+}>) {
+  const latestQuiz = items[0] ?? null;
+
+  return (
+    <Card className="space-y-4 p-4 sm:p-6">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold sm:text-xl">Ready to Export</h2>
+        <p className="text-sm text-foreground/75">
+          Quiz export stays inside Quiz Preview so you can review answers and explanations first.
+        </p>
+      </div>
+      {latestQuiz ? (
+        <>
+          <div className="space-y-2 rounded-xl border border-border bg-background p-4">
+            <p className="text-sm font-medium text-foreground">{latestQuiz.title}</p>
+            <p className="text-xs text-foreground/60">
+              {latestQuiz.questionCount} questions • Generated {formatDashboardDate(latestQuiz.generatedAt)}
+            </p>
+            <p className="text-xs text-foreground/60">
+              {items.length} {items.length === 1 ? "quiz preview is" : "quiz previews are"} ready for export.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <ResponsiveActionLink href={`/notes/${latestQuiz.noteId}/quiz`} action="open" label="Open Latest Quiz Preview" className="w-full sm:w-auto" />
+            <ResponsiveActionLink href="/library" action="library" label="View All Notes" variant="outline" className="w-full sm:w-auto" />
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-foreground/75">
+          Once a generated quiz exists, it will appear here for quick access to the export-ready preview.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function TeacherTipsCard() {
+  return (
+    <Card className="space-y-3 p-4 sm:p-6">
+      <h2 className="text-lg font-semibold sm:text-xl">Teacher Help / Tips</h2>
+      <div className="space-y-2 text-sm text-foreground/75">
+        <p>Start with one clear lesson note per topic so quiz questions stay focused and export cleanly.</p>
+        <p>Generate the quiz after the Study Pack is ready, then review answers and explanations in Quiz Preview before class.</p>
+        <p>Use Regenerate when you want a fresh version, then export from Quiz Preview once the set looks right.</p>
+      </div>
+    </Card>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [recentNoteMetaById, setRecentNoteMetaById] = useState<Record<string, { lastReviewedAt: string | null; quizCount: number | null }>>({});
+  const [teacherGeneratedQuizzes, setTeacherGeneratedQuizzes] = useState<TeacherGeneratedQuizSummary[]>([]);
   const [greetingName, setGreetingName] = useState("there");
   const [profile, setProfile] = useState<MeResponse | null>(null);
   const [continueStudying, setContinueStudying] = useState<ContinueStudyingResponse | null>(null);
@@ -129,37 +251,19 @@ export default function DashboardPage() {
     setLoading(true);
     setError(null);
     try {
-      const notes = await listNotes();
-      setItems(notes);
-
-      const recentStudyPackNotes = [...notes]
-        .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
-        .slice(0, 4)
-        .filter((note) => note.studyPackStatus === "STUDY_PACK_READY" && Boolean(note.studyPackId));
-
-      if (recentStudyPackNotes.length > 0) {
-        const entries = await Promise.all(
-          recentStudyPackNotes.map(async (note) => {
-            const quickReviewResult = await getQuickReviewPerformanceSummary(note.id).catch(() => null);
-            return [
-              note.id,
-              {
-                lastReviewedAt: quickReviewResult?.lastReviewedAt ?? null,
-                quizCount: note.quizCount,
-              },
-            ] as const;
-          }),
-        );
-        setRecentNoteMetaById(Object.fromEntries(entries));
-      } else {
-        setRecentNoteMetaById({});
-      }
-
-      const [meResult, continueStudyingResult, overviewResult] = await Promise.allSettled([
+      const [notesResult, meResult, continueStudyingResult, overviewResult] = await Promise.allSettled([
+        listNotes(),
         getMe(),
         getContinueStudyingRecommendation(),
         getDashboardOverview(),
       ]);
+
+      if (notesResult.status !== "fulfilled") {
+        throw notesResult.reason;
+      }
+
+      const notes = notesResult.value;
+      setItems(notes);
 
       if (meResult.status === "fulfilled") {
         const me = meResult.value;
@@ -169,6 +273,63 @@ export default function DashboardPage() {
           || "there";
         setGreetingName(preferredName);
         setShowFirstStudyWelcomeModal(isFirstStudyOnboardingEligible(me));
+
+        if (me.profileType === "TEACHER") {
+          const recentTeacherNotes = [...notes]
+            .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+            .slice(0, MAX_TEACHER_QUIZ_NOTES);
+          const detailResults = await Promise.allSettled(
+            recentTeacherNotes.map((note) => getNote(note.id)),
+          );
+          const generatedQuizItems = detailResults.flatMap((result) => {
+            if (result.status !== "fulfilled") {
+              return [];
+            }
+            const detail = result.value;
+            const generatedQuiz = detail.generatedQuiz;
+            if (!generatedQuiz) {
+              return [];
+            }
+            return [{
+              noteId: detail.id,
+              title: detail.title?.trim() || "Untitled note",
+              subject: detail.subject ?? null,
+              generatedAt: generatedQuiz.generatedAt,
+              updatedAt: detail.updatedAt,
+              questionCount: generatedQuiz.questions.length,
+            }];
+          })
+            .sort((left, right) => new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime());
+          setTeacherGeneratedQuizzes(generatedQuizItems);
+          setRecentNoteMetaById({});
+        } else {
+          const recentStudyPackNotes = [...notes]
+            .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+            .slice(0, 4)
+            .filter((note) => note.studyPackStatus === "STUDY_PACK_READY" && Boolean(note.studyPackId));
+
+          if (recentStudyPackNotes.length > 0) {
+            const entries = await Promise.all(
+              recentStudyPackNotes.map(async (note) => {
+                const quickReviewResult = await getQuickReviewPerformanceSummary(note.id).catch(() => null);
+                return [
+                  note.id,
+                  {
+                    lastReviewedAt: quickReviewResult?.lastReviewedAt ?? null,
+                    quizCount: note.quizCount,
+                  },
+                ] as const;
+              }),
+            );
+            setRecentNoteMetaById(Object.fromEntries(entries));
+          } else {
+            setRecentNoteMetaById({});
+          }
+          setTeacherGeneratedQuizzes([]);
+        }
+      } else {
+        setTeacherGeneratedQuizzes([]);
+        setRecentNoteMetaById({});
       }
       setContinueStudying(continueStudyingResult.status === "fulfilled" ? continueStudyingResult.value : null);
       setOverview(overviewResult.status === "fulfilled" ? overviewResult.value : null);
@@ -247,6 +408,10 @@ export default function DashboardPage() {
     () => recentNotes.filter((note) => note.studyPackStatus === "STUDY_PACK_READY"),
     [recentNotes],
   );
+  const recentTeacherGeneratedQuizzes = useMemo(
+    () => teacherGeneratedQuizzes.slice(0, 4),
+    [teacherGeneratedQuizzes],
+  );
   const dashboardProfileType = useMemo(
     () => resolveDashboardProfileType(profile?.profileType),
     [profile?.profileType],
@@ -277,16 +442,17 @@ export default function DashboardPage() {
       studyPacksRemaining,
     )
     : false;
-  const shouldShowFreeUpgradeCard = usageSummary?.plan === "FREE";
-  const teacherQuizBuilderHref = "/notes/new?mode=quiz";
-  const teacherPasteMaterialHref = "/notes/new?source=paste";
-  const teacherUploadHref = "/notes/new?source=upload";
-  const showTeacherRecentQuizSection = recentReadyNotes.length > 0;
+  const shouldShowFreeUpgradeCard = usageSummary?.plan === "FREE" && dashboardProfileType !== "TEACHER";
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       <DashboardHero
         greetingName={greetingName}
+        supportingText={dashboardProfileType === "BOARD_EXAM"
+          ? "Ready to focus on exam prep?"
+          : dashboardProfileType === "TEACHER"
+            ? "Ready to build your next class review?"
+            : undefined}
         description={dashboardProfileType === "BOARD_EXAM"
           ? "Your exam prep workspace. Practice, review weak areas, and keep your momentum steady."
           : dashboardProfileType === "TEACHER"
@@ -390,9 +556,9 @@ export default function DashboardPage() {
                 </Card>
               ) : null}
               <DashboardActionCard
-                title="Practice Challenge Quiz"
-                description="Use timed quiz practice to prepare for test conditions and sharpen exam recall."
-                actionLabel="Practice Challenge Quiz"
+                title="Start Board Exam"
+                description="Board Taker mode opens in Board Exam by default, with Challenge Quiz still available from the setup flow."
+                actionLabel="Start Board Exam"
                 actionHref={boardExamChallengeHref}
                 actionIcon="challengeQuiz"
                 secondaryActionLabel="Review Recent Note"
@@ -438,69 +604,38 @@ export default function DashboardPage() {
           {dashboardProfileType === "TEACHER" ? (
             <>
               <DashboardActionCard
-                title="Create Quiz"
-                description="Turn teaching materials into quiz-ready study packs and question sets for class review."
-                actionLabel="Create Quiz"
-                actionHref={teacherQuizBuilderHref}
-                actionIcon="challengeQuiz"
-                secondaryActionLabel="Add Material"
-                secondaryActionHref="/notes/new"
-                secondaryActionIcon="create"
-              />
-              <DashboardActionCard
-                title="Upload / Paste Material"
-                description="Start with pasted notes, reviewer text, or uploaded files to build quiz material faster."
-                actionLabel="Paste Material"
-                actionHref={teacherPasteMaterialHref}
-                actionIcon="studyPack"
-                secondaryActionLabel="Upload Material"
-                secondaryActionHref={teacherUploadHref}
-                secondaryActionIcon="studyPack"
+                title="Create Teaching Material"
+                description="Create a note, generate a Study Pack, then review the generated quiz before exporting it for class use."
+                actionLabel="Create Note"
+                actionHref="/notes/new"
+                actionIcon="create"
+                secondaryActionLabel="Open Library"
+                secondaryActionHref="/library"
+                secondaryActionIcon="library"
               />
               {items.length === 0 ? (
-                <DashboardEmpty />
+                <Card className="space-y-4 p-4 sm:p-6">
+                  <h2 className="text-lg font-semibold sm:text-xl">Start your teaching workspace</h2>
+                  <p className="max-w-2xl text-sm text-foreground/75">
+                    Create a note first. Once the Study Pack is ready, generate a quiz and review it in Quiz Preview before export.
+                  </p>
+                  <ResponsiveActionLink href="/notes/new" action="create" label="Create Your First Note" className="w-full sm:w-auto" />
+                </Card>
               ) : (
                 <StudyPackGrid
                   notes={recentNotes}
                   totalNotes={items.length}
-                  recentNoteMetaById={recentNoteMetaById}
-                  title="Recent Materials"
-                  countLabel="materials"
-                  viewAllLabel="View All Materials"
-                  readyStatusLabel="Quiz Material"
-                  draftStatusLabel="Material Draft"
-                />
-              )}
-              {showTeacherRecentQuizSection ? (
-                <StudyPackGrid
-                  notes={recentReadyNotes}
-                  totalNotes={recentReadyNotes.length}
-                  recentNoteMetaById={recentNoteMetaById}
-                  title="Recently Generated Quizzes"
-                  countLabel="quiz-ready"
-                  viewAllLabel="View All Quiz Materials"
-                  readyStatusLabel="Quiz Ready"
+                  recentNoteMetaById={{}}
+                  title="Recent Notes"
+                  countLabel="notes"
+                  viewAllLabel="View All in Library"
+                  readyStatusLabel="Study Pack Ready"
                   draftStatusLabel="Draft"
                 />
-              ) : (
-                <Card className="space-y-3 p-4 sm:p-6">
-                  <h2 className="text-lg font-semibold sm:text-xl">Recently Generated Quizzes</h2>
-                  <p className="text-sm text-foreground/75">
-                    Generate your first Study Pack to open quiz-ready material for class review.
-                  </p>
-                </Card>
               )}
-              <DashboardWeeklyActivityCard
-                activity={overview?.weeklyActivity ?? null}
-                title="Activity"
-                labels={{
-                  studyPacksCreated: "Materials Created",
-                  quizzesTaken: "Quizzes Generated",
-                  adaptiveSessions: "Adaptive Sessions",
-                  studyDays: "Active Days",
-                }}
-              />
-              <DashboardMonthlyUsageCard usageSummary={usageSummary} title="Usage" />
+              <TeacherGeneratedQuizSection items={recentTeacherGeneratedQuizzes} />
+              <TeacherReadyToExportSection items={teacherGeneratedQuizzes} />
+              <TeacherTipsCard />
             </>
           ) : null}
         </div>

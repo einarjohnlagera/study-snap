@@ -45,7 +45,7 @@ describe("HowItWorksPage", () => {
     expect(screen.getByAltText("NoteLib Board Exam Mode and Challenge Quiz in-progress screen")).toBeInTheDocument();
     expect(screen.getByAltText("NoteLib quiz results and weak concept review screen")).toBeInTheDocument();
 
-    expect(screen.getByText("Board Exam Mode — Free for a limited time")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Mode — Premium")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Start for Free" })).toHaveAttribute("href", "/signup");
     expect(screen.getByRole("link", { name: "View Pricing" })).toHaveAttribute("href", "/pricing");
     expect(screen.getByRole("link", { name: "How it Works" })).toHaveAttribute("href", "/how-it-works");

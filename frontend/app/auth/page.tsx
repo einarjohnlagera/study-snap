@@ -48,16 +48,12 @@ function AuthPageContent() {
     switch (loginReason) {
       case LOGIN_REASON_SESSION_EXPIRED:
         return {
-          message: "Your session has expired. Please log in again.",
+          message: "Your session expired. Please log in again.",
           className:
             "rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-200",
         };
       case LOGIN_REASON_LOGGED_OUT:
-        return {
-          message: "You have been logged out.",
-          className:
-            "rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground/80",
-        };
+        return null;
       case LOGIN_REASON_AUTH_REQUIRED:
         return {
           message: "Please log in to continue.",

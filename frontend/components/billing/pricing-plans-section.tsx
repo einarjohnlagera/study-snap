@@ -25,12 +25,12 @@ const FREE_FEATURES = [
   `${pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month`,
   "AI Summary + Key Concepts",
   "Weak Concepts tracking",
-  "Board Exam Mode (Free for limited time)",
 ];
 
 const FREE_LIMITATIONS = [
   "Adaptive Practice (Premium)",
   "Difficulty selection (Premium)",
+  "Board Exam Mode (Premium)",
 ];
 
 const PREMIUM_FEATURES = [
@@ -74,7 +74,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
   },
   {
     label: "Board Exam Mode",
-    free: "Free for limited time",
+    free: null,
     premium: "check",
   },
 ];

@@ -54,7 +54,7 @@ export function QuizFeedbackPanel({
             ? "Thanks. Your response helps us improve future quizzes."
             : "Tell us whether this quiz felt useful, or send feedback if something felt off."
         }
-        triggerLabel="Send Feedback"
+        showTriggerButton={false}
         quickActions={[
           {
             label: "Yes",

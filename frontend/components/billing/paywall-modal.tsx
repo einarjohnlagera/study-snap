@@ -11,6 +11,7 @@ import { PLAN_BILLING_PATH } from "@/lib/plans";
 
 export type PaywallModalVariant =
   | "adaptive-practice"
+  | "board-exam-mode"
   | "difficulty-selection"
   | "challenge-quiz-limit"
   | "study-pack-limit"
@@ -40,6 +41,13 @@ const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
       "Adaptive Practice focuses on your weak concepts and helps you improve faster. Upgrade to Premium to unlock personalized practice and deeper review.",
     dismissLabel: "Maybe Later",
     feature: "adaptive",
+  },
+  "board-exam-mode": {
+    title: "Board Exam Mode is a Premium feature",
+    message:
+      "Board Exam Mode gives you a stricter exam-style session for focused prep. Upgrade to Premium to unlock board-style practice.",
+    dismissLabel: "Maybe Later",
+    feature: "board_exam",
   },
   "difficulty-selection": {
     title: "Difficulty Selection is a Premium feature",
@@ -72,24 +80,24 @@ const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
 };
 
 function getCurrentSessionId(): string | null {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return null;
   }
-  const existing = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+  const existing = globalThis.sessionStorage.getItem(SESSION_STORAGE_KEY);
   if (existing) {
     return existing;
   }
   const next = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  window.sessionStorage.setItem(SESSION_STORAGE_KEY, next);
+  globalThis.sessionStorage.setItem(SESSION_STORAGE_KEY, next);
   return next;
 }
 
 function readDismissals(): Record<string, string> {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return {};
   }
   try {
-    const value = window.localStorage.getItem(DISMISSAL_STORAGE_KEY);
+    const value = globalThis.localStorage.getItem(DISMISSAL_STORAGE_KEY);
     if (!value) {
       return {};
     }
@@ -109,7 +117,7 @@ function hasDismissedInCurrentSession(variant: PaywallModalVariant): boolean {
 }
 
 function storeDismissal(variant: PaywallModalVariant) {
-  if (typeof window === "undefined") {
+  if (globalThis.window === undefined) {
     return;
   }
   const sessionId = getCurrentSessionId();
@@ -120,7 +128,7 @@ function storeDismissal(variant: PaywallModalVariant) {
     ...readDismissals(),
     [variant]: sessionId,
   };
-  window.localStorage.setItem(DISMISSAL_STORAGE_KEY, JSON.stringify(next));
+  globalThis.localStorage.setItem(DISMISSAL_STORAGE_KEY, JSON.stringify(next));
 }
 
 export function PaywallModal({
@@ -128,7 +136,7 @@ export function PaywallModal({
   variant,
   onClose,
   source,
-}: PaywallModalProps) {
+}: Readonly<PaywallModalProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const hasTrackedOpenRef = useRef(false);

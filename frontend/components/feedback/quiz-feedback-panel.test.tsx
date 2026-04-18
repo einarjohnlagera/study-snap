@@ -14,6 +14,7 @@ describe("QuizFeedbackPanel", () => {
     expect(screen.getByText("Was this quiz helpful?")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Yes" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Give Feedback" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send Feedback" })).not.toBeInTheDocument();
   });
 
   it("shows a lightweight thank-you state after positive helpfulness feedback", () => {

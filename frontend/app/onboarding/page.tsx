@@ -31,7 +31,7 @@ const PROFILE_TYPE_OPTIONS: Array<{
   },
   {
     value: "BOARD_EXAM",
-    label: "Board Exam",
+    label: "Board Taker",
     description: "I am preparing for a board or licensure exam.",
   },
   {
