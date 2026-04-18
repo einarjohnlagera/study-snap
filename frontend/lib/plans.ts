@@ -88,3 +88,12 @@ export function isStudyPackLimitReachedMessage(message: string): boolean {
     || normalized.includes("study pack generations per month")
   );
 }
+
+export function isQuizLimitReachedMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    (normalized.includes("quiz") && normalized.includes("limit"))
+    || normalized.includes("monthly quiz credit limit")
+    || normalized.includes("challenge quizzes for this month")
+  );
+}

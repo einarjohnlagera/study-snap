@@ -258,6 +258,9 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     expect(await screen.findByRole("heading", { name: "Create Teaching Material" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Welcome to NoteLib! Start by creating a note, then generate a Study Pack and review the quiz in Quiz Preview."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Recent Notes")).toBeInTheDocument();
     expect(screen.getByText("Recently Generated Quizzes")).toBeInTheDocument();
     expect(screen.getByText("Ready to Export")).toBeInTheDocument();
@@ -265,6 +268,56 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Continue Studying")).not.toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
     expect(screen.queryByText("Usage / Progress")).not.toBeInTheDocument();
+  });
+
+  it("gives teachers a recent-ready-note CTA when no generated quizzes exist yet", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Teach",
+      displayName: "Teach",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "TEACHER",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+    (getNote as jest.Mock).mockImplementation(async (noteId: string) => ({
+      id: noteId,
+      title: noteId === "note-1" ? "Biology Review" : "History Draft",
+      subject: noteId === "note-1" ? "Biology" : "History",
+      tags: noteId === "note-1" ? ["Cells"] : [],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: noteId === "note-1" ? "2026-03-24T00:00:00Z" : "2026-03-23T00:00:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: noteId === "note-1" ? "pack-1" : null,
+      studyPackStatus: noteId === "note-1" ? "STUDY_PACK_READY" : "DRAFT",
+      summary: "Summary",
+      keyConcepts: [],
+      quiz: [],
+      generatedQuiz: null,
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: true,
+    }));
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("No generated quizzes yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Recent Ready Note" })).toHaveAttribute("href", "/notes/note-1");
   });
 
   it("shows first-study onboarding to new users and routes them to create a note", async () => {

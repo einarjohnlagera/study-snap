@@ -25,6 +25,7 @@ import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import {
   formatStudyPackResetDate,
+  isQuizLimitReachedMessage,
   isStudyPackLimitReached,
   isStudyPackLimitReachedMessage,
   resolveRemainingUsageCredits,
@@ -1115,6 +1116,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Verify your email before generating quizzes.");
       return;
     }
+    if (hasReachedChallengeQuizLimit) {
+      openPaywallModal("challenge-quiz-limit", "private_note_detail_teacher_generate_quiz_limit");
+      return;
+    }
 
     setGeneratingTeacherQuiz(true);
     setError(null);
@@ -1128,11 +1133,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast(note.generatedQuiz ? "Quiz regenerated." : "Quiz generated.");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not generate quiz.";
+      if (currentPlan === "FREE" && isQuizLimitReachedMessage(message)) {
+        void refreshUsageSummary();
+        setShowRegenerateQuizConfirm(false);
+        openPaywallModal("challenge-quiz-limit", "private_note_detail_teacher_generate_quiz_limit_error");
+        return;
+      }
       setError(message);
     } finally {
       setGeneratingTeacherQuiz(false);
     }
-  }, [generatingTeacherQuiz, isEmailVerified, note]);
+  }, [currentPlan, generatingTeacherQuiz, hasReachedChallengeQuizLimit, isEmailVerified, note, openPaywallModal, refreshUsageSummary]);
 
   const handleViewTeacherQuiz = useCallback(() => {
     if (!note?.generatedQuiz) {
@@ -1962,7 +1973,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       <PaywallModal
-        isOpen={!isTeacherMode && activePaywallModal !== null}
+        isOpen={activePaywallModal !== null}
         variant={activePaywallModal ?? "adaptive-practice"}
         source="private_note_detail"
         onClose={() => setActivePaywallModal(null)}

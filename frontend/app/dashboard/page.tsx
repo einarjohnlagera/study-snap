@@ -129,10 +129,30 @@ function resolveChallengeQuizHref(
   return "/notes/new";
 }
 
+function getTeacherWelcomeMessage(profileType: SupportedDashboardProfileType) {
+  if (profileType === "TEACHER") {
+    return "Welcome to NoteLib! Start by creating a note, then generate a Study Pack and review the quiz in Quiz Preview.";
+  }
+  return "Welcome to NoteLib! Start by creating a note, then generate your first Study Pack.";
+}
+
+function getTeacherFirstStudyDescription(profileType: SupportedDashboardProfileType) {
+  if (profileType === "TEACHER") {
+    return "NoteLib helps teachers turn notes into summaries, key concepts, and export-ready quiz previews. Let’s create your first teaching note.";
+  }
+  return "NoteLib helps you turn notes into summaries, key concepts, and quizzes. Let’s create your first study pack.";
+}
+
 function TeacherGeneratedQuizSection({
   items,
+  emptyActionHref,
+  emptyActionLabel,
+  emptyActionIcon,
 }: Readonly<{
   items: TeacherGeneratedQuizSummary[];
+  emptyActionHref: string;
+  emptyActionLabel: string;
+  emptyActionIcon: "open" | "create";
 }>) {
   return (
     <section className="space-y-3 sm:space-y-4">
@@ -167,6 +187,12 @@ function TeacherGeneratedQuizSection({
           <p className="text-sm text-foreground/75">
             Generate a quiz from any ready note to review answers and explanations before class.
           </p>
+          <ResponsiveActionLink
+            href={emptyActionHref}
+            action={emptyActionIcon}
+            label={emptyActionLabel}
+            className="w-full sm:w-auto"
+          />
         </Card>
       )}
     </section>
@@ -443,6 +469,17 @@ export default function DashboardPage() {
     )
     : false;
   const shouldShowFreeUpgradeCard = usageSummary?.plan === "FREE" && dashboardProfileType !== "TEACHER";
+  const teacherGeneratedQuizEmptyAction = recentReadyNotes[0]?.id
+    ? {
+        href: `/notes/${recentReadyNotes[0].id}`,
+        label: "Open Recent Ready Note",
+        icon: "open" as const,
+      }
+    : {
+        href: "/notes/new",
+        label: "Create Note",
+        icon: "create" as const,
+      };
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -485,7 +522,7 @@ export default function DashboardPage() {
           {showWelcomeMessage && !showFirstStudyWelcomeModal ? (
             <Card className="space-y-3 p-4 sm:p-6">
               <p className="text-sm text-foreground/80">
-                Welcome to NoteLib! Start by creating a note, then generate your first Study Pack.
+                {getTeacherWelcomeMessage(dashboardProfileType)}
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="w-full sm:w-auto" />
@@ -633,7 +670,12 @@ export default function DashboardPage() {
                   draftStatusLabel="Draft"
                 />
               )}
-              <TeacherGeneratedQuizSection items={recentTeacherGeneratedQuizzes} />
+              <TeacherGeneratedQuizSection
+                items={recentTeacherGeneratedQuizzes}
+                emptyActionHref={teacherGeneratedQuizEmptyAction.href}
+                emptyActionLabel={teacherGeneratedQuizEmptyAction.label}
+                emptyActionIcon={teacherGeneratedQuizEmptyAction.icon}
+              />
               <TeacherReadyToExportSection items={teacherGeneratedQuizzes} />
               <TeacherTipsCard />
             </>
@@ -651,7 +693,7 @@ export default function DashboardPage() {
       <AppModal
         isOpen={showFirstStudyWelcomeModal}
         title="Welcome to NoteLib"
-        description="NoteLib helps you turn notes into summaries, key concepts, and quizzes. Let’s create your first study pack."
+        description={getTeacherFirstStudyDescription(dashboardProfileType)}
         onClose={() => {
           void handleSkipFirstStudyOnboarding();
         }}
