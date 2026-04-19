@@ -71,6 +71,13 @@
   - Added regeneration with credit usage and confirmation
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 
+- **Loading-state system** — standardized the app’s loading feedback for async actions, delayed redirects, and fetched sections:
+  - shared `Button` loading state now shows one consistent spinner treatment and disables duplicate clicks while requests are pending
+  - mounted a subtle top route-progress indicator so delayed programmatic navigation no longer feels unresponsive
+  - applied the shared pending pattern to auth submit, profile/settings saves, sign-out, teacher quiz generation/regeneration, export actions, and waitlist/paywall actions
+  - standardized high-visibility skeletons across dashboard, profile, settings, generated-quiz preview, strongest-notes, and public-library loading states
+  - tightened duplicate-action protection so repeat taps during in-flight async work do not create confusing extra requests
+
 ### Documentation
 
 - `docs/product/SPEC.md`: updated teacher dashboard purpose, teacher quiz separation, persona-based quiz defaults, and auth/login message rules

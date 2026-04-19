@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
@@ -31,6 +32,7 @@ import {
 } from "@/lib/profile-mode";
 import { BackLink } from "@/components/ui/back-link";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
+import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import { ProfileNotePerformance } from "@/components/profile/profile-note-performance";
 
@@ -92,9 +94,9 @@ const PROFILE_TYPE_OPTIONS: ProfileTypeOption[] = [
 function ProfileLoading() {
   return (
     <Card className="space-y-4 p-4 sm:p-6">
-      <div className="h-16 w-16 animate-pulse rounded-full bg-foreground/10" />
-      <div className="h-6 w-48 animate-pulse rounded bg-foreground/10" />
-      <div className="h-4 w-64 animate-pulse rounded bg-foreground/10" />
+      <Skeleton className="h-16 w-16 rounded-full" />
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="h-4 w-64" />
     </Card>
   );
 }
@@ -135,9 +137,10 @@ function ProfileTypeSwitchModal({
             type="button"
             className="w-full sm:w-auto"
             onClick={onConfirm}
-            disabled={saving}
+            loading={saving}
+            loadingText="Switching..."
           >
-            {saving ? "Switching..." : "Switch"}
+            Switch
           </Button>
         </div>
       )}
@@ -180,6 +183,22 @@ export default function ProfilePage() {
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
   const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+
+  const scrollToRequestedSection = useCallback(() => {
+    if (globalThis.window === undefined) {
+      return;
+    }
+    if (globalThis.location.hash !== `#${PROFILE_TOP_PERFORMANCE_SECTION_ID}`) {
+      return;
+    }
+    const section = globalThis.document.getElementById(PROFILE_TOP_PERFORMANCE_SECTION_ID);
+    if (!section) {
+      return;
+    }
+    globalThis.requestAnimationFrame(() => {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
 
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
@@ -231,6 +250,28 @@ export default function ProfilePage() {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      scrollToRequestedSection();
+    }, 0);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [loading, scrollToRequestedSection]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      scrollToRequestedSection();
+    };
+    globalThis.addEventListener("hashchange", handleHashChange);
+    return () => {
+      globalThis.removeEventListener("hashchange", handleHashChange);
+    };
+  }, [scrollToRequestedSection]);
 
   useEffect(() => {
     const ref = toastTimerRef;
@@ -520,9 +561,10 @@ export default function ProfilePage() {
                 type="button"
                 className="w-full sm:w-auto"
                 onClick={() => void handleSaveIdentity()}
-                disabled={savingIdentity}
+                loading={savingIdentity}
+                loadingText="Saving..."
                 action="save"
-                label={savingIdentity ? "Saving..." : "Save Identity"}
+                label="Save Identity"
               />
             </div>
           </Card>
@@ -594,8 +636,10 @@ export default function ProfilePage() {
                 className="w-full sm:w-auto"
                 onClick={handleSaveProfileType}
                 disabled={savingProfileType || !selectedProfileType}
+                loading={savingProfileType}
+                loadingText="Saving..."
                 action="save"
-                label={savingProfileType ? "Saving..." : "Save Profile Type"}
+                label="Save Profile Type"
               />
             </div>
           </Card>
@@ -661,9 +705,10 @@ export default function ProfilePage() {
                 type="button"
                 className="w-full sm:w-auto"
                 onClick={() => void handleSaveLearningProfile()}
-                disabled={savingLearningProfile}
+                loading={savingLearningProfile}
+                loadingText="Saving..."
                 action="save"
-                label={savingLearningProfile ? "Saving..." : "Save Learning Profile"}
+                label="Save Learning Profile"
               />
             </div>
           </Card>

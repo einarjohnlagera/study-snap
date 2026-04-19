@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
+import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { ExportDropdownMenu } from "@/components/ui/export-dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getGeneratedQuiz, generateGeneratedQuiz, getNote, type GeneratedQuizResponse, type NoteResponse } from "@/lib/api";
@@ -31,6 +33,7 @@ const GENERATED_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
 
 export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQuizPreviewPageClientProps>) {
   const router = useRouter();
+  const startRouteProgress = useRouteProgress();
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [generatedQuiz, setGeneratedQuiz] = useState<GeneratedQuizResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,8 +81,8 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     if (!toast) {
       return undefined;
     }
-    const timeoutId = window.setTimeout(() => setToast(null), 2200);
-    return () => window.clearTimeout(timeoutId);
+    const timeoutId = globalThis.setTimeout(() => setToast(null), 2200);
+    return () => globalThis.clearTimeout(timeoutId);
   }, [toast]);
 
   const noteTitle = note?.title?.trim() || "Untitled note";
@@ -160,8 +163,9 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
 
       {loading ? (
         <Card className="space-y-3 p-4 sm:p-6">
-          <h1 className="text-xl font-semibold sm:text-2xl">Quiz Preview</h1>
-          <p className="text-sm text-foreground/75">Loading your generated quiz...</p>
+          <Skeleton className="h-8 w-40" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
         </Card>
       ) : error ? (
         <Card className="space-y-3 p-4 sm:p-6">
@@ -171,7 +175,14 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
             <Button type="button" onClick={() => void loadPage()}>
               Try Again
             </Button>
-            <Button type="button" variant="outline" onClick={() => router.push(`/notes/${noteId}`)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                startRouteProgress();
+                router.push(`/notes/${noteId}`);
+              }}
+            >
               Back to Note
             </Button>
           </div>
@@ -225,9 +236,16 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                     },
                   ]}
                 />
-                <Button type="button" variant="outline" className="gap-2" onClick={() => setShowRegenerateConfirm(true)} disabled={regenerating}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => setShowRegenerateConfirm(true)}
+                  loading={regenerating}
+                  loadingText="Regenerating..."
+                >
                   <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                  <span>{regenerating ? "Regenerating..." : "Regenerate"}</span>
+                  <span>Regenerate</span>
                 </Button>
               </div>
             </div>
@@ -286,8 +304,13 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
             <Button type="button" variant="outline" onClick={() => setShowRegenerateConfirm(false)} disabled={regenerating}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => void handleRegenerate()} disabled={regenerating}>
-              {regenerating ? "Regenerating..." : "Regenerate Quiz"}
+            <Button
+              type="button"
+              onClick={() => void handleRegenerate()}
+              loading={regenerating}
+              loadingText="Regenerating..."
+            >
+              Regenerate Quiz
             </Button>
           </div>
         )}

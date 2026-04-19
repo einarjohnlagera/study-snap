@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PremiumWaitlistModal } from "@/components/billing/premium-waitlist-modal";
+import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
 import { PageHeader } from "@/components/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   cancelPremiumSubscription,
   getBillingPricing,
@@ -39,9 +41,9 @@ import {
 function SettingsLoading() {
   return (
     <Card className="space-y-4 p-4 sm:p-6">
-      <div className="h-6 w-48 animate-pulse rounded bg-foreground/10" />
-      <div className="h-4 w-64 animate-pulse rounded bg-foreground/10" />
-      <div className="h-10 w-full animate-pulse rounded bg-foreground/10" />
+      <Skeleton className="h-6 w-48" />
+      <Skeleton className="h-4 w-64" />
+      <Skeleton className="h-10 w-full" />
     </Card>
   );
 }
@@ -120,6 +122,7 @@ const CANCELLATION_REASONS: Array<{
 
 export default function SettingsPage() {
   const router = useRouter();
+  const startRouteProgress = useRouteProgress();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
@@ -224,6 +227,7 @@ export default function SettingsPage() {
     setSigningOut(true);
     try {
       await logout();
+      startRouteProgress();
       router.push(
         buildLoginPath({
           reason: LOGIN_REASON_LOGGED_OUT,
@@ -535,9 +539,10 @@ export default function SettingsPage() {
                   type="button"
                   className="w-full sm:w-auto"
                   onClick={() => void handleSaveEngagementMode()}
-                  disabled={savingEngagementMode}
+                  loading={savingEngagementMode}
+                  loadingText="Saving..."
                   action="save"
-                  label={savingEngagementMode ? "Saving..." : "Save Learning Style"}
+                  label="Save Learning Style"
                 />
                 {engagementModeMessage ? (
                   <p className="text-xs text-foreground/60">{engagementModeMessage}</p>
@@ -584,9 +589,10 @@ export default function SettingsPage() {
                   type="button"
                   className="w-full sm:w-auto"
                   onClick={() => void handleSaveStudyReminders()}
-                  disabled={savingStudyReminders}
+                  loading={savingStudyReminders}
+                  loadingText="Saving..."
                   action="save"
-                  label={savingStudyReminders ? "Saving..." : "Save Study Reminders"}
+                  label="Save Study Reminders"
                 />
                 {studyRemindersMessage ? (
                   <p className="text-xs text-foreground/60">{studyRemindersMessage}</p>
@@ -872,7 +878,15 @@ export default function SettingsPage() {
           <Card className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Account</h2>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <ResponsiveActionButton type="button" className="w-full sm:w-auto" onClick={() => void handleSignOut()} disabled={signingOut} action="signOut" label={signingOut ? "Signing out..." : "Sign Out"} />
+              <ResponsiveActionButton
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleSignOut()}
+                loading={signingOut}
+                loadingText="Signing out..."
+                action="signOut"
+                label="Sign Out"
+              />
               <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" disabled action="delete" label="Delete Account (Coming Soon)" />
             </div>
           </Card>
@@ -900,9 +914,10 @@ export default function SettingsPage() {
               type="button"
               className="w-full sm:w-auto"
               onClick={() => void handleConfirmCancellation()}
-              disabled={cancellingSubscription}
+              loading={cancellingSubscription}
+              loadingText="Confirming..."
               action="delete"
-              label={cancellingSubscription ? "Confirming..." : "Confirm Cancellation"}
+              label="Confirm Cancellation"
             />
           </div>
         )}

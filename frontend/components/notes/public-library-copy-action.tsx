@@ -4,6 +4,7 @@ import type { MouseEvent } from "react";
 import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Check, Save } from "lucide-react";
+import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { buildLoginPath, getAuthUser } from "@/lib/auth";
@@ -35,6 +36,7 @@ export function PublicLibraryCopyAction({
 }: Readonly<PublicLibraryCopyActionProps>) {
   const router = useRouter();
   const pathname = usePathname();
+  const startRouteProgress = useRouteProgress();
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -119,10 +121,11 @@ export function PublicLibraryCopyAction({
         variant="outline"
         className="h-9 gap-1.5 rounded-full px-3 shadow-sm shadow-black/[0.02]"
         onClick={(event) => void handleCopy(event)}
-        disabled={copying}
+        loading={copying}
+        loadingText={SAVE_LOADING_LABEL}
       >
         <Save className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{copying ? SAVE_LOADING_LABEL : SAVE_BUTTON_LABEL}</span>
+        <span>{SAVE_BUTTON_LABEL}</span>
       </Button>
       {copyError ? (
         <p className="text-xs text-red-600 dark:text-red-400">{copyError}</p>
@@ -139,6 +142,7 @@ export function PublicLibraryCopyAction({
               variant="outline"
               onClick={() => {
                 setAuthModalOpen(false);
+                startRouteProgress();
                 router.push(buildLoginPath({ redirectTo: authRedirectTarget }));
               }}
             >
@@ -148,6 +152,7 @@ export function PublicLibraryCopyAction({
               type="button"
               onClick={() => {
                 setAuthModalOpen(false);
+                startRouteProgress();
                 router.push(`/signup?redirect=${encodeURIComponent(authRedirectTarget)}`);
               }}
             >

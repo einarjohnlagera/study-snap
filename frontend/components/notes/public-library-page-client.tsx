@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowUpDown, CheckCircle2, Filter, X } from "lucide-react";
+import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
@@ -16,6 +17,7 @@ import { PublicLibraryCopyAction } from "@/components/notes/public-library-copy-
 import { PublicLibraryLikeAction } from "@/components/notes/public-library-like-action";
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getAuthUser } from "@/lib/auth";
 import {
   type LearnerLevel,
@@ -924,14 +926,17 @@ export function PublicLibraryPageClient() {
       </Button>
     </div>
   ) : null;
+  const startRouteProgress = useRouteProgress();
   const openDiscoveryView = useCallback((view: PublicLibraryDiscoveryView) => {
     setActiveDiscoveryViewState(view);
+    startRouteProgress();
     router.push(`${pathname}?${PUBLIC_LIBRARY_VIEW_PARAM}=${view}`);
-  }, [pathname, router]);
+  }, [pathname, router, startRouteProgress]);
   const clearDiscoveryView = useCallback(() => {
     setActiveDiscoveryViewState(null);
+    startRouteProgress();
     router.push(pathname);
-  }, [pathname, router]);
+  }, [pathname, router, startRouteProgress]);
   const activeSectionCopy = activeDiscoveryView === null ? null : DISCOVERY_SECTION_COPY[activeDiscoveryView];
 
   useEffect(() => {
@@ -970,9 +975,9 @@ export function PublicLibraryPageClient() {
         <div className="grid gap-4 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (
             <Card key={`public-library-loading-${index}`} className="space-y-3 p-4 sm:p-6">
-              <div className="h-5 w-2/3 animate-pulse rounded bg-foreground/10" />
-              <div className="h-4 w-full animate-pulse rounded bg-foreground/10" />
-              <div className="h-4 w-1/2 animate-pulse rounded bg-foreground/10" />
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-1/2" />
             </Card>
           ))}
         </div>
@@ -1163,7 +1168,10 @@ export function PublicLibraryPageClient() {
                     key={item.id}
                     item={item}
                     currentUserId={currentUserId}
-                    onNavigate={(path) => router.push(path)}
+                    onNavigate={(path) => {
+                      startRouteProgress();
+                      router.push(path);
+                    }}
                     existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
                     onCopySuccess={handleCopySuccess}
                     onLikeSuccess={handleLikeSuccess}
@@ -1186,7 +1194,10 @@ export function PublicLibraryPageClient() {
                   description="High-engagement notes worth studying"
                   items={featuredNotes}
                   currentUserId={currentUserId}
-                  onNavigate={(path) => router.push(path)}
+                  onNavigate={(path) => {
+                    startRouteProgress();
+                    router.push(path);
+                  }}
                   onViewMore={() => openDiscoveryView("featured")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
@@ -1199,7 +1210,10 @@ export function PublicLibraryPageClient() {
                   title="🔥 Most Popular"
                   items={popularNotes}
                   currentUserId={currentUserId}
-                  onNavigate={(path) => router.push(path)}
+                  onNavigate={(path) => {
+                    startRouteProgress();
+                    router.push(path);
+                  }}
                   onViewMore={() => openDiscoveryView("popular")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
@@ -1212,7 +1226,10 @@ export function PublicLibraryPageClient() {
                   title="🆕 Recently Added"
                   items={recentNotes}
                   currentUserId={currentUserId}
-                  onNavigate={(path) => router.push(path)}
+                  onNavigate={(path) => {
+                    startRouteProgress();
+                    router.push(path);
+                  }}
                   onViewMore={() => openDiscoveryView("recent")}
                   copiedNoteIdsBySourceId={copiedNoteIdsBySourceId}
                   onCopySuccess={handleCopySuccess}
@@ -1235,7 +1252,10 @@ export function PublicLibraryPageClient() {
                   key={item.id}
                   item={item}
                   currentUserId={currentUserId}
-                  onNavigate={(path) => router.push(path)}
+                  onNavigate={(path) => {
+                    startRouteProgress();
+                    router.push(path);
+                  }}
                   existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
                   onCopySuccess={handleCopySuccess}
                   onLikeSuccess={handleLikeSuccess}
@@ -1539,7 +1559,10 @@ export function PublicLibraryPageClient() {
               className="w-full sm:w-auto"
               action="library"
               label={MODAL_VIEW_NOTE_LABEL}
-              onClick={() => router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "library"))}
+              onClick={() => {
+                startRouteProgress();
+                router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "library"));
+              }}
               showTextOnMobile
             />
             <ResponsiveActionButton
@@ -1547,7 +1570,10 @@ export function PublicLibraryPageClient() {
               className="w-full sm:w-auto"
               action="quickReview"
               label={MODAL_START_REVIEW_LABEL}
-              onClick={() => router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "quick-review"))}
+              onClick={() => {
+                startRouteProgress();
+                router.push(buildCopiedNotePath(copySuccessState.copiedNoteId, "quick-review"));
+              }}
               showTextOnMobile
             />
           </div>
