@@ -269,10 +269,11 @@ export default function ChallengeQuizPage() {
     }
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
-  const shouldForceModeSelectionEntry = useMemo(
+  const hasModeSelectionEntryQuery = useMemo(
     () => isModeSelectionChallengeQuizEntry(searchParams.get(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM)),
     [searchParams],
   );
+  const [sharedModeSelectionEntryRequested, setSharedModeSelectionEntryRequested] = useState(hasModeSelectionEntryQuery);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const syncProgressRef = useCallback((nextIndex: number, nextSelectedChoices: Record<number, number>) => {
     progressRef.current = {
@@ -317,21 +318,28 @@ export default function ChallengeQuizPage() {
   }, []);
 
   useEffect(() => {
-    if (!shouldForceModeSelectionEntry) {
+    if (!hasModeSelectionEntryQuery) {
+      return;
+    }
+    setSharedModeSelectionEntryRequested(true);
+  }, [hasModeSelectionEntryQuery]);
+
+  useEffect(() => {
+    if (!hasModeSelectionEntryQuery) {
       return;
     }
     const nextSearchParams = new URLSearchParams(searchParams.toString());
     nextSearchParams.delete(CHALLENGE_QUIZ_ENTRY_QUERY_PARAM);
     router.replace(nextSearchParams.size > 0 ? `${pathname}?${nextSearchParams.toString()}` : pathname, { scroll: false });
-  }, [pathname, router, searchParams, shouldForceModeSelectionEntry]);
+  }, [hasModeSelectionEntryQuery, pathname, router, searchParams]);
 
   useEffect(() => {
-    if (!shouldForceModeSelectionEntry || phase !== "prestart" || challengeSession?.sessionId) {
+    if (!sharedModeSelectionEntryRequested || phase !== "prestart" || challengeSession?.sessionId) {
       return;
     }
     setSelectedMode(resolvePreferredChallengeMode(viewerProfileType));
     setPrestartStep(resolveInitialPrestartStep());
-  }, [challengeSession?.sessionId, phase, shouldForceModeSelectionEntry, viewerProfileType]);
+  }, [challengeSession?.sessionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
 
   useEffect(() => {
     challengeSessionRef.current = challengeSession;
@@ -507,6 +515,30 @@ export default function ChallengeQuizPage() {
       }
 
       const inProgress = await getInProgressChallengeQuizSession(detail.id);
+      if (sharedModeSelectionEntryRequested) {
+        setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
+        syncProgressRef(0, {});
+        setChallengeSession(null);
+        setResult(null);
+        setSelectedChoices({});
+        setCurrentIndex(0);
+        setDeadlineEpochSeconds(null);
+        setRemainingSeconds(0);
+        setTimedOut(false);
+        setShowAnswerReview(false);
+        setSelectedMode(preferredMode);
+        setPrestartStep(resolveInitialPrestartStep());
+        const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
+        const shouldShowLimitPage = hasReachedMonthlyLimit && shouldShowChallengeQuizLimitPage(resolvedViewerPlanType);
+        setPhase(shouldShowLimitPage ? "limit-reached" : "prestart");
+        if (hasReachedMonthlyLimit) {
+          setActivePaywallModal(shouldShowLimitPage ? null : "challenge-quiz-limit");
+        } else {
+          setActivePaywallModal(null);
+        }
+        return;
+      }
+
       setSelectedMode(inProgress.mode ?? preferredMode);
       if (inProgress.sessionId) {
         setSelectedDifficulty(normalizePracticeDifficulty(inProgress.selectedDifficulty));
@@ -557,7 +589,7 @@ export default function ChallengeQuizPage() {
     } finally {
       setLoading(false);
     }
-  }, [applyStartedSession, noteId, pathname, router, syncProgressRef]);
+  }, [applyStartedSession, noteId, pathname, router, sharedModeSelectionEntryRequested, syncProgressRef]);
 
   useEffect(() => {
     void loadNote();
