@@ -17,7 +17,7 @@ type PremiumWaitlistModalProps = {
 };
 
 const PREMIUM_FEATURES = [
-  "Challenge Quiz",
+  "Quiz",
   "Adaptive Practice",
   "Weak Concept Training",
   "Higher monthly limits",
@@ -29,7 +29,7 @@ export function PremiumWaitlistModal({
   source,
   feature = null,
   trackPaywallView = false,
-}: PremiumWaitlistModalProps) {
+}: Readonly<PremiumWaitlistModalProps>) {
   const pathname = usePathname();
   const [joining, setJoining] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);

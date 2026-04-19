@@ -22,7 +22,7 @@ type ComparisonRow = {
 
 const FREE_FEATURES = [
   `${pricingConfig.free.studyPacksPerMonth} Study Packs / month`,
-  `${pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month`,
+  `${pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month`,
   "AI Summary + Key Concepts",
   "Weak Concepts tracking",
 ];
@@ -35,7 +35,7 @@ const FREE_LIMITATIONS = [
 
 const PREMIUM_FEATURES = [
   `${pricingConfig.premium.studyPacksPerMonth} Study Packs / month`,
-  `${pricingConfig.premium.challengeQuizzesPerMonth} Challenge Quizzes / month`,
+  `${pricingConfig.premium.challengeQuizzesPerMonth} Quizzes / month`,
   `${pricingConfig.premium.adaptivePracticePerMonth} Adaptive Practice sessions / month`,
   "Difficulty selection",
   "Board Exam Mode",
@@ -48,7 +48,7 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     premium: String(pricingConfig.premium.studyPacksPerMonth),
   },
   {
-    label: "Challenge Quizzes / month",
+    label: "Quizzes / month",
     free: String(pricingConfig.free.challengeQuizzesPerMonth),
     premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
   },
@@ -272,7 +272,7 @@ export function SimplePricingSection() {
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Challenge Quizzes / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />AI Summary + Key Concepts</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts tracking</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Board Exam Mode (Free for limited time)</li>

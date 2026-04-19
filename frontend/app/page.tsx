@@ -67,7 +67,7 @@ const howItWorksSteps = [
   },
   {
     title: "Test yourself",
-    description: "Use Challenge Quiz and Board Exam Mode to practice active recall instead of passive rereading.",
+    description: "Use Quiz and Board Exam Mode to practice active recall instead of passive rereading.",
     icon: Trophy,
   },
 ];
@@ -86,7 +86,7 @@ const differentiationRows = [
   {
     label: "Exam-style practice",
     generic: "Rarely feels like a real review session.",
-    noteLib: "Includes Challenge Quiz and Board Exam Mode for structured self-testing.",
+    noteLib: "Includes Quiz and Board Exam Mode for structured self-testing.",
   },
   {
     label: "Designed for repeated review",
@@ -132,7 +132,7 @@ const valueSummaryCards = [
   },
   {
     title: "Practice like a real exam",
-    description: "Use Challenge Quiz and Board Exam Mode for timed, focused self-testing that feels closer to real review conditions.",
+    description: "Use Quiz and Board Exam Mode for timed, focused self-testing that feels closer to real review conditions.",
     icon: Trophy,
   },
   {

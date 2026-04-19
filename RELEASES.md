@@ -30,6 +30,8 @@
   - `Generate Study Pack` shows the premium/upgrade modal for Free users at `0` remaining
   - `Challenge Quiz`, `Board Exam Mode`, and `Adaptive Practice` use the premium/upgrade modal for Free users when credits or premium access block entry
   - Premium users with genuine monthly exhaustion still see the dedicated limit state instead of the Free-plan upsell flow
+  - refined paywall modal messaging so quiz-limit copy now adapts to `Student`, `Board Taker`, and `Teacher` context without creating separate modal implementations
+  - standardized broad plan and marketing terminology from `Challenge Quiz` to `Quiz` across pricing, landing, settings billing, and plan comparison surfaces
 
 - **Onboarding / profile wording alignment** — persona naming is now consistent across setup and profile surfaces:
   - onboarding now uses `Board Taker` instead of `Board Exam`

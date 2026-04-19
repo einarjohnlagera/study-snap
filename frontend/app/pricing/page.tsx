@@ -8,7 +8,7 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Pricing — Free and Premium Plans",
-  description: "Compare Free and Premium plans for Study Packs, Challenge Quiz, Adaptive Practice, and Board Exam Mode.",
+  description: "Compare Free and Premium plans for Study Packs, Quiz, Adaptive Practice, and Board Exam Mode.",
   path: "/pricing",
 });
 

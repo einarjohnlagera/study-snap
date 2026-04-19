@@ -52,7 +52,7 @@ describe("PricingPage", () => {
       screen.getByText("Build notes, generate Study Packs, and review with quizzes without paying upfront."),
     ).toBeInTheDocument();
     expect(screen.getAllByText("10 Study Packs / month")).not.toHaveLength(0);
-    expect(screen.getAllByText("5 Challenge Quizzes / month")).not.toHaveLength(0);
+    expect(screen.getAllByText("5 Quizzes / month")).not.toHaveLength(0);
     expect(screen.getAllByText("AI Summary + Key Concepts")).not.toHaveLength(0);
     expect(screen.getAllByText("Weak Concepts tracking")).not.toHaveLength(0);
     expect(screen.getByText("Board Exam Mode (Premium)")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("PricingPage", () => {
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getAllByText("100")).not.toHaveLength(0);
     expect(screen.getByText("30")).toBeInTheDocument();
-    expect(screen.getByText("50 Challenge Quizzes / month")).toBeInTheDocument();
+    expect(screen.getByText("50 Quizzes / month")).toBeInTheDocument();
     expect(screen.getByText("30 Adaptive Practice sessions / month")).toBeInTheDocument();
     expect(screen.getAllByText("Difficulty selection")).not.toHaveLength(0);
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
@@ -79,8 +79,8 @@ describe("PricingPage", () => {
 
     const comparisonTable = screen.getByRole("table");
     const pricingText = comparisonTable.textContent ?? "";
-    expect(pricingText.indexOf("Study Packs / month")).toBeLessThan(pricingText.indexOf("Challenge Quizzes / month"));
-    expect(pricingText.indexOf("Challenge Quizzes / month")).toBeLessThan(pricingText.indexOf("AI Summary + Key Concepts"));
+    expect(pricingText.indexOf("Study Packs / month")).toBeLessThan(pricingText.indexOf("Quizzes / month"));
+    expect(pricingText.indexOf("Quizzes / month")).toBeLessThan(pricingText.indexOf("AI Summary + Key Concepts"));
     expect(pricingText.indexOf("AI Summary + Key Concepts")).toBeLessThan(pricingText.indexOf("Weak Concepts tracking"));
     expect(pricingText.indexOf("Weak Concepts tracking")).toBeLessThan(pricingText.indexOf("Adaptive Practice"));
     expect(pricingText.indexOf("Adaptive Practice")).toBeLessThan(pricingText.indexOf("Difficulty selection"));
@@ -105,7 +105,7 @@ describe("PricingPage", () => {
   it("exports pricing metadata with canonical and social preview fields", () => {
     expect(metadata).toMatchObject({
       title: "NoteLib Pricing — Free and Premium Plans",
-      description: "Compare Free and Premium plans for Study Packs, Challenge Quiz, Adaptive Practice, and Board Exam Mode.",
+      description: "Compare Free and Premium plans for Study Packs, Quiz, Adaptive Practice, and Board Exam Mode.",
       alternates: {
         canonical: "https://notelib.app/pricing",
       },
