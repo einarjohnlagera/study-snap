@@ -68,11 +68,13 @@ export function ExportDropdownMenu({
         className="gap-2"
         onClick={() => setOpen((previous) => !previous)}
         disabled={disabled || exporting}
+        loading={exporting}
+        loadingText="Exporting..."
         aria-haspopup="menu"
         aria-expanded={open}
       >
         <FileText className="h-4 w-4" aria-hidden="true" />
-        <span>{exporting ? "Exporting..." : buttonLabel}</span>
+        <span>{buttonLabel}</span>
         <ChevronDown className="h-3 w-3" aria-hidden="true" />
       </Button>
 

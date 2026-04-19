@@ -109,8 +109,13 @@ export function PremiumWaitlistModal({
             <Button type="button" variant="outline" onClick={onClose} disabled={joining}>
               Maybe Later
             </Button>
-            <Button type="button" onClick={() => void handleJoinWaitlist()} disabled={joining}>
-              {joining ? "Joining..." : "Join Waitlist"}
+            <Button
+              type="button"
+              onClick={() => void handleJoinWaitlist()}
+              loading={joining}
+              loadingText="Joining..."
+            >
+              Join Waitlist
             </Button>
           </div>
         )}

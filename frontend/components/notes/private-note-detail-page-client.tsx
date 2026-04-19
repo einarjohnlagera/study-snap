@@ -8,6 +8,7 @@ import { ChevronDown, Eye, MoreHorizontal, RotateCcw, Sparkles } from "lucide-re
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { StudyPackLimitModal } from "@/components/billing/study-pack-limit-modal";
+import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
 import { NoteDetailTabs } from "@/components/notes/note-detail-tabs";
@@ -240,6 +241,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const startRouteProgress = useRouteProgress();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const noteActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const latestSearchQueryRef = useRef(searchParams.toString());
@@ -314,6 +316,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
 
   const normalizedRouteId = useMemo(() => routeId, [routeId]);
+  const navigateTo = useCallback((href: string) => {
+    startRouteProgress();
+    router.push(href);
+  }, [router, startRouteProgress]);
 
   const maybeShowGeneratedMetadataSuggestion = useCallback(async (loadedNote: NoteResponse) => {
     if (!awaitingGeneratedMetadataSuggestionRef.current || loadedNote.studyPackStatus !== "STUDY_PACK_READY" || !loadedNote.studyPackId) {
@@ -412,8 +418,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note) {
       return;
     }
-    router.push(buildNoteSessionReviewPath(note.id, session.sessionId, session.sessionMode, activeStudyPackTab));
-  }, [activeStudyPackTab, note, router]);
+    navigateTo(buildNoteSessionReviewPath(note.id, session.sessionId, session.sessionMode, activeStudyPackTab));
+  }, [activeStudyPackTab, navigateTo, note]);
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -898,7 +904,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setCopying(true);
     try {
       const copied = await copyNote(note.id);
-      router.push(`/notes/${copied.id}?copied=1`);
+      navigateTo(`/notes/${copied.id}?copied=1`);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not copy note.";
       setError(message);
@@ -941,7 +947,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setIsInlineMetadataEditMode(true);
       return;
     }
-    router.push(`/notes/${note.id}/edit`);
+    navigateTo(`/notes/${note.id}/edit`);
   };
 
   const handleCancelMetadataEdit = () => {
@@ -1013,13 +1019,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     try {
       const started = await startQuickReviewSession(note.id);
       if (started.sessionId) {
-        router.push(`/notes/${note.id}/quick-review?sessionId=${started.sessionId}`);
+        navigateTo(`/notes/${note.id}/quick-review?sessionId=${started.sessionId}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not start Quick Review.";
       setError(message);
     }
-  }, [note, router]);
+  }, [navigateTo, note]);
 
   useEffect(() => {
     const shouldAutoStartQuickReview = searchParams.get(PUBLIC_NOTE_COPY_QUERY_PARAMS.startQuickReview) === "1";
@@ -1082,7 +1088,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       openPaywallModal("challenge-quiz-limit", "private_note_detail_challenge_quiz_limit");
       return;
     }
-    router.push(buildChallengeQuizHref(note.id, { entry: CHALLENGE_QUIZ_MODE_SELECTION_ENTRY }));
+    navigateTo(buildChallengeQuizHref(note.id, { entry: CHALLENGE_QUIZ_MODE_SELECTION_ENTRY }));
   };
 
   const handleStartAdaptivePractice = () => {
@@ -1098,14 +1104,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     if (hasReachedAdaptivePracticeLimit) {
-      router.push(`/notes/${note.id}/adaptive-practice`);
+      navigateTo(`/notes/${note.id}/adaptive-practice`);
       return;
     }
     if (!note.adaptivePracticeAvailable) {
       openPaywallModal("adaptive-practice", "private_note_detail_adaptive_practice");
       return;
     }
-    router.push(`/notes/${note.id}/adaptive-practice`);
+    navigateTo(`/notes/${note.id}/adaptive-practice`);
   };
 
   const handleGenerateTeacherQuiz = useCallback(async () => {
@@ -1149,8 +1155,8 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note?.generatedQuiz) {
       return;
     }
-    router.push(`/notes/${note.id}/quiz`);
-  }, [note, router]);
+    navigateTo(`/notes/${note.id}/quiz`);
+  }, [navigateTo, note]);
 
   const handleCopyLink = async () => {
     if (!note || sharing || isInlineMetadataEditMode) {
@@ -1213,7 +1219,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     setDeleting(true);
     try {
       await deleteNote(note.id);
-      router.push("/library");
+      navigateTo("/library");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not delete note.";
       setError(message);
@@ -1567,10 +1573,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                           variant="outline"
                           className="gap-2"
                           onClick={() => setShowRegenerateQuizConfirm(true)}
-                          disabled={generatingTeacherQuiz}
+                          loading={generatingTeacherQuiz}
+                          loadingText="Regenerating..."
                         >
                           <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                          <span>{generatingTeacherQuiz ? "Regenerating..." : "Regenerate"}</span>
+                          <span>Regenerate</span>
                         </Button>
                       </>
                     ) : (
@@ -1578,10 +1585,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                         type="button"
                         className="gap-2"
                         onClick={() => void handleGenerateTeacherQuiz()}
-                        disabled={generatingTeacherQuiz || !isEmailVerified}
+                        disabled={!isEmailVerified}
+                        loading={generatingTeacherQuiz}
+                        loadingText="Generating..."
                       >
                         <Sparkles className="h-4 w-4" aria-hidden="true" />
-                        <span>{generatingTeacherQuiz ? "Generating..." : "Generate Quiz"}</span>
+                        <span>Generate Quiz</span>
                       </Button>
                     )
                   ) : isGeneratingStudyPack ? (
@@ -1590,9 +1599,11 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <ResponsiveActionButton
                       type="button"
                       onClick={() => void handleGenerate()}
-                      disabled={generating || !isEmailVerified}
+                      disabled={!isEmailVerified}
+                      loading={generating}
+                      loadingText={hasGenerationFailed ? "Retrying..." : "Generating..."}
                       action="studyPack"
-                      label={generating ? "Generating..." : hasGenerationFailed ? "Retry Generate" : "Generate Study Pack"}
+                      label={hasGenerationFailed ? "Retry Generate" : "Generate Study Pack"}
                       showTextOnMobile
                     />
                   ) : (
@@ -1871,8 +1882,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
             >
               Cancel
             </Button>
-            <Button type="button" onClick={() => void handleGenerateTeacherQuiz()} disabled={generatingTeacherQuiz}>
-              {generatingTeacherQuiz ? "Regenerating..." : "Regenerate Quiz"}
+            <Button
+              type="button"
+              onClick={() => void handleGenerateTeacherQuiz()}
+              loading={generatingTeacherQuiz}
+              loadingText="Regenerating..."
+            >
+              Regenerate Quiz
             </Button>
           </div>
         )}

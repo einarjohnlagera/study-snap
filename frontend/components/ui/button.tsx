@@ -1,4 +1,5 @@
 import * as React from "react";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { cn } from "@/lib/utils";
 
 type ButtonVariant = "default" | "outline" | "ghost";
@@ -30,16 +31,31 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  loading = false,
+  loadingText,
+  disabled,
+  children,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  loading?: boolean;
+  loadingText?: string;
 }) {
   return (
     <button
       className={buttonVariants({ variant, size, className })}
+      disabled={loading || disabled}
+      aria-busy={loading || undefined}
       {...props}
-    />
+    >
+      {loading ? (
+        <span className="inline-flex items-center justify-center gap-2">
+          <LoadingSpinner />
+          <span>{loadingText ?? children}</span>
+        </span>
+      ) : children}
+    </button>
   );
 }
 

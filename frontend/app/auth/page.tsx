@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
+import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ function resolveModeFromLocation(): Mode {
 
 function AuthPageContent() {
   const router = useRouter();
+  const startRouteProgress = useRouteProgress();
   const searchParams = useSearchParams();
   const [authenticatedUser, setAuthenticatedUser] = useState<AuthUser | null>(() => getAuthUser());
   const [mode, setMode] = useState<Mode>(resolveModeFromLocation);
@@ -87,8 +89,9 @@ function AuthPageContent() {
       return;
     }
 
+    startRouteProgress();
     router.replace(resolvePostLoginDestination(authenticatedUser));
-  }, [authenticatedUser, router]);
+  }, [authenticatedUser, router, startRouteProgress]);
 
   useEffect(() => {
     if (mode !== "signup" || hasTrackedSignupStartRef.current) {
@@ -135,6 +138,7 @@ function AuthPageContent() {
       };
       setAuthUser(nextAuthUser);
       setAuthenticatedUser(nextAuthUser);
+      startRouteProgress();
       router.replace(resolvePostLoginDestination(nextAuthUser));
       router.refresh();
     } catch (err) {
@@ -249,8 +253,14 @@ function AuthPageContent() {
 
           {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
-          <Button type="submit" className="w-full sm:w-auto" disabled={!canSubmit || loading}>
-            {loading ? "Please wait..." : mode === "login" ? "Log in" : "Create account"}
+          <Button
+            type="submit"
+            className="w-full sm:w-auto"
+            disabled={!canSubmit}
+            loading={loading}
+            loadingText={mode === "login" ? "Logging in..." : "Creating account..."}
+          >
+            {mode === "login" ? "Log in" : "Create account"}
           </Button>
         </form>
       </Card>

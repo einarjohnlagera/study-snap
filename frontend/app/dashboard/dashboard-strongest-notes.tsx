@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { type NotePerformanceSummaryResponse, getUserNotePerformanceSummary } from "@/lib/api";
 import { buildNoteSessionReviewPath } from "@/lib/note-session-review";
 
@@ -11,6 +13,7 @@ const STRONGEST_NOTES_LIMIT = 3;
 
 export function DashboardStrongestNotes() {
   const router = useRouter();
+  const startRouteProgress = useRouteProgress();
   const [notes, setNotes] = useState<NotePerformanceSummaryResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,6 +42,7 @@ export function DashboardStrongestNotes() {
       "quiz",
       "dashboard",
     );
+    startRouteProgress();
     router.push(path);
   };
 
@@ -48,7 +52,7 @@ export function DashboardStrongestNotes() {
         <h2 className="text-lg font-semibold sm:text-xl">Strongest Notes</h2>
         <div className="space-y-2">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-14 animate-pulse rounded-2xl bg-foreground/5" />
+            <Skeleton key={i} className="h-14 rounded-2xl bg-foreground/5" />
           ))}
         </div>
       </section>

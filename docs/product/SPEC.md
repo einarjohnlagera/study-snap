@@ -192,6 +192,31 @@ Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 
 NoteLib is designed to help users iteratively improve understanding, not just generate summaries once.
 
+## Loading-State Patterns
+
+Loading feedback should be quick, subtle, and consistent across the app.
+
+Shared rules:
+
+- async buttons must show a shared inline spinner immediately on click
+- pending buttons must disable repeat clicks until the request resolves
+- button loading should preserve the existing button footprint as much as possible
+- lightweight route changes should use the shared top route-progress indicator instead of blocking overlays
+- fetched sections should prefer skeletons that match the final card or list structure
+- full-screen loaders should be avoided unless the entire screen is truly blocked
+
+Required usage:
+
+- important async actions such as auth submit, profile/settings saves, quiz generation, regeneration, export, sign-out, and upgrade/waitlist actions must use the shared button-loading pattern
+- programmatic `router.push` / `router.replace` flows that may feel delayed should start the shared route-progress feedback before navigation
+- dashboards, note-detail dependent sections, quiz preview loading states, and public-library result loading should use skeleton placeholders rather than blank space
+
+Non-goals:
+
+- do not add heavy modal-like loading overlays for normal button actions
+- do not replace strong existing generation-state UX with generic spinners
+- do not introduce competing spinner styles or one-off pending button patterns
+
 ---
 
 ## Key Features
