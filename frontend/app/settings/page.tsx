@@ -617,7 +617,7 @@ export default function SettingsPage() {
                     onUpgradeClick={() => setIsWaitlistModalOpen(true)}
                   />
                   <UsageMetric
-                    label="Challenge Quiz"
+                    label="Quiz"
                     used={challengeQuizUsed}
                     limit={challengeQuizLimit}
                     resetDateLabel={usageResetDateLabel}
@@ -656,7 +656,7 @@ export default function SettingsPage() {
                       <li>Save unlimited notes</li>
                       <li>{studyPacksLimit} Study Packs per month</li>
                       <li>Quick Review</li>
-                      <li>{challengeQuizLimit} Challenge Quizzes per month</li>
+                      <li>{challengeQuizLimit} Quizzes per month</li>
                       <li>Weak concepts visible</li>
                       <li>File uploads available</li>
                       <li>Image to Text (OCR) - Limited</li>

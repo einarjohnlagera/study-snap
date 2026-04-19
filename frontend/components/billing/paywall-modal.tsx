@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
-import { trackAnalyticsEvent } from "@/lib/api";
+import { trackAnalyticsEvent, type ProfileType } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
 
@@ -31,6 +31,16 @@ type PaywallConfig = {
   feature: string;
 };
 
+function resolveQuizLimitMessage(profileType: ProfileType | null | undefined) {
+  if (profileType === "BOARD_EXAM") {
+    return "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and access Board Exam mode.";
+  }
+  if (profileType === "TEACHER") {
+    return "You’ve used all your quiz generations for this month. Upgrade to Premium to generate more quizzes and export materials for your class.";
+  }
+  return "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and unlock Adaptive Practice.";
+}
+
 const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
   "adaptive-practice": {
     title: "Adaptive Practice is a Premium feature",
@@ -55,23 +65,22 @@ const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
   },
   "challenge-quiz-limit": {
     title: "You’ve reached your quiz limit",
-    message:
-      "You’ve used all your Challenge Quizzes for this month. Upgrade to Premium for more quizzes and Adaptive Practice to focus on weak areas.",
-    dismissLabel: "OK",
+    message: "",
+    dismissLabel: "Maybe Later",
     feature: "quiz_limit",
   },
   "study-pack-limit": {
     title: "You’ve reached your study pack limit",
     message:
       "You can still review your existing notes and quizzes. Upgrade to Premium to generate more Study Packs.",
-    dismissLabel: "OK",
+    dismissLabel: "Maybe Later",
     feature: "study_pack_limit",
   },
   "ocr-limit": {
     title: "OCR limit reached",
     message:
       "You’ve reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade to Premium for higher OCR limits.",
-    dismissLabel: "OK",
+    dismissLabel: "Maybe Later",
     feature: "ocr_limit",
   },
 };
@@ -86,7 +95,16 @@ export function PaywallModal({
   const pathname = usePathname();
   const hasTrackedOpenRef = useRef(false);
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
-  const config = useMemo(() => PAYWALL_CONTENT[variant], [variant]);
+  const authUser = getAuthUser();
+  const config = useMemo(() => {
+    if (variant !== "challenge-quiz-limit") {
+      return PAYWALL_CONTENT[variant];
+    }
+    return {
+      ...PAYWALL_CONTENT[variant],
+      message: resolveQuizLimitMessage(authUser?.profileType),
+    };
+  }, [authUser?.profileType, variant]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -123,7 +141,6 @@ export function PaywallModal({
   };
 
   const handleUpgrade = () => {
-    const authUser = getAuthUser();
     if (authUser && !authUser.emailVerifiedAt) {
       setVerifyEmailModalOpen(true);
       return;

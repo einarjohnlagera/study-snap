@@ -28,6 +28,7 @@ describe("PaywallModal", () => {
     getAuthUserMock.mockReset();
     getAuthUserMock.mockReturnValue({
       emailVerifiedAt: "2026-03-24T00:00:00Z",
+      profileType: "STUDENT",
     });
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -90,9 +91,67 @@ describe("PaywallModal", () => {
     expect(await screen.findByText("Difficulty Selection is a Premium feature")).toBeInTheDocument();
   });
 
+  it("uses student-specific quiz limit copy", async () => {
+    render(
+      <PaywallModal
+        isOpen
+        variant="challenge-quiz-limit"
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("You’ve reached your quiz limit")).toBeInTheDocument();
+    expect(
+      screen.getByText("You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and unlock Adaptive Practice."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
+  });
+
+  it("uses board taker-specific quiz limit copy", async () => {
+    getAuthUserMock.mockReturnValue({
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      profileType: "BOARD_EXAM",
+    });
+
+    render(
+      <PaywallModal
+        isOpen
+        variant="challenge-quiz-limit"
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByText("You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and access Board Exam mode."),
+    ).toBeInTheDocument();
+  });
+
+  it("uses teacher-specific quiz generation copy", async () => {
+    getAuthUserMock.mockReturnValue({
+      emailVerifiedAt: "2026-03-24T00:00:00Z",
+      profileType: "TEACHER",
+    });
+
+    render(
+      <PaywallModal
+        isOpen
+        variant="challenge-quiz-limit"
+        source="test_source"
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(
+      await screen.findByText("You’ve used all your quiz generations for this month. Upgrade to Premium to generate more quizzes and export materials for your class."),
+    ).toBeInTheDocument();
+  });
+
   it("shows the verification modal instead of routing when the user is unverified", async () => {
     getAuthUserMock.mockReturnValue({
       emailVerifiedAt: null,
+      profileType: "STUDENT",
     });
     requestEmailVerificationMock.mockResolvedValue({
       message: "Verification email sent. Please check your inbox.",
