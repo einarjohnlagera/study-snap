@@ -78,6 +78,11 @@
   - standardized high-visibility skeletons across dashboard, profile, settings, generated-quiz preview, strongest-notes, and public-library loading states
   - tightened duplicate-action protection so repeat taps during in-flight async work do not create confusing extra requests
 
+- **Challenge Quiz Note Detail entry hardening** — fixed the recurring routing drift from Note Detail into quiz setup:
+  - the Note Detail `Challenge Quiz` button now always enters through the shared initial mode-selection screen for both `Student` and `Board Taker`
+  - `Student` still defaults to `Challenge Quiz` emphasis there, while `Board Taker` still defaults to `Board Exam Mode`
+  - the challenge-quiz page now treats the shared mode-selection entry as the single source of truth and no longer lets session-recovery logic bypass it into setup or running state
+
 ### Documentation
 
 - `docs/product/SPEC.md`: updated teacher dashboard purpose, teacher quiz separation, persona-based quiz defaults, and auth/login message rules

@@ -309,6 +309,19 @@ describe("ChallengeQuizPage", () => {
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
 
+  it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for students even when an in-progress session exists", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupInProgressChallengeQuiz("challenge");
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { name: "Challenge Quiz Setup" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("challenge-quiz-top-bar")).not.toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
+  });
+
   it("lets students choose either setup from the shared mode-selection screen", async () => {
     setupChallengePrestart(true, "STUDENT");
 
@@ -392,6 +405,26 @@ describe("ChallengeQuizPage", () => {
     expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "false");
     expect(screen.getAllByText("Recommended")).not.toHaveLength(0);
     expect(screen.getByText(/Board Exam Mode emphasizes exam simulation/)).toBeInTheDocument();
+  });
+
+  it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for Board Takers even when an in-progress session exists", async () => {
+    searchParamsMock = new URLSearchParams("entry=mode-selection");
+    setupInProgressChallengeQuiz("board_exam");
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      profileType: "BOARD_EXAM",
+      planType: "PREMIUM",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(await getModeCard("Board Exam Mode")).toHaveAttribute("aria-pressed", "true");
+    expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("heading", { name: "Board Exam Setup" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("board-exam-timer")).not.toBeInTheDocument();
+    expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
   });
 
   it("opens Board Exam setup for premium Board Takers after mode selection", async () => {

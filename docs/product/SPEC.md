@@ -147,6 +147,7 @@ Rules:
 - `Board Taker` should see `Board Exam Mode` visually emphasized by default on that shared screen.
 - The alternate quiz mode must remain accessible from the same shared mode-selection step.
 - The `Challenge Quiz` CTA on Note Detail must route into that same shared `mode-selection` entry instead of bypassing it.
+- The shared Note Detail entry must keep users on the initial mode-selection screen even when prior quiz-session recovery data exists; session recovery must not override that entry into setup or running state.
 - Free users who select premium-only `Board Exam Mode` must see the Premium upsell modal instead of entering setup.
 - Free users who exhaust Challenge Quiz credits must see the Premium upsell modal instead of the monthly-limit page.
 - Premium users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
