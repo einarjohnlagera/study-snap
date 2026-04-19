@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { type NotePerformanceSummaryResponse, getUserNotePerformanceSummary } from "@/lib/api";
+import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { buildNoteSessionReviewPath } from "@/lib/note-session-review";
 
 const NOTE_PERFORMANCE_LIMIT = 5;
@@ -84,7 +85,7 @@ export function ProfileNotePerformance() {
   };
 
   return (
-    <Card id="top-performance-by-note" className="space-y-4 p-4 sm:p-6">
+    <Card id={PROFILE_TOP_PERFORMANCE_SECTION_ID} className="space-y-4 p-4 sm:p-6">
       <div className="space-y-1">
         <h2 className="text-lg font-semibold sm:text-xl">Top Performance by Note</h2>
         <p className="text-sm text-foreground/75">

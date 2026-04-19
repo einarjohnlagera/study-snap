@@ -7,6 +7,7 @@ import { useRouteProgress } from "@/components/navigation/route-progress-provide
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type NotePerformanceSummaryResponse, getUserNotePerformanceSummary } from "@/lib/api";
+import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { buildNoteSessionReviewPath } from "@/lib/note-session-review";
 
 const STRONGEST_NOTES_LIMIT = 3;
@@ -75,7 +76,7 @@ export function DashboardStrongestNotes() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold sm:text-xl">Strongest Notes</h2>
         <Link
-          href="/profile#top-performance-by-note"
+          href={`/profile#${PROFILE_TOP_PERFORMANCE_SECTION_ID}`}
           className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
         >
           View all

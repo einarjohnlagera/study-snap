@@ -32,6 +32,7 @@ import {
 } from "@/lib/profile-mode";
 import { BackLink } from "@/components/ui/back-link";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
+import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import { ProfileNotePerformance } from "@/components/profile/profile-note-performance";
 
@@ -183,6 +184,22 @@ export default function ProfilePage() {
   const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
 
+  const scrollToRequestedSection = useCallback(() => {
+    if (globalThis.window === undefined) {
+      return;
+    }
+    if (globalThis.location.hash !== `#${PROFILE_TOP_PERFORMANCE_SECTION_ID}`) {
+      return;
+    }
+    const section = globalThis.document.getElementById(PROFILE_TOP_PERFORMANCE_SECTION_ID);
+    if (!section) {
+      return;
+    }
+    globalThis.requestAnimationFrame(() => {
+      section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
   const loadProfile = useCallback(async () => {
     const authUser = getAuthUser();
     if (!authUser) {
@@ -233,6 +250,28 @@ export default function ProfilePage() {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      scrollToRequestedSection();
+    }, 0);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [loading, scrollToRequestedSection]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      scrollToRequestedSection();
+    };
+    globalThis.addEventListener("hashchange", handleHashChange);
+    return () => {
+      globalThis.removeEventListener("hashchange", handleHashChange);
+    };
+  }, [scrollToRequestedSection]);
 
   useEffect(() => {
     const ref = toastTimerRef;
