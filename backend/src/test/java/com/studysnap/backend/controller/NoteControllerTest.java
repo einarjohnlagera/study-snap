@@ -85,6 +85,7 @@ class NoteControllerTest {
                 "Draft note",
                 "Biology",
                 "Nursing",
+                "STUDENT",
                 List.of("tag"),
                 "content",
                 "PRIVATE",
@@ -234,6 +235,7 @@ class NoteControllerTest {
                         "My public note",
                         "Nursing",
                         "COLLEGE",
+                        "STUDENT",
                         "Biology",
                         List.of("cells"),
                         "preview",
@@ -256,12 +258,12 @@ class NoteControllerTest {
                         false
                 )
         );
-        when(noteService.listPublic(userId, null, null)).thenReturn(expected);
+        when(noteService.listPublic(userId, null, null, null)).thenReturn(expected);
 
-        List<NoteListItemResponse> response = noteController.listPublic(null, null, user);
+        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, user);
 
         assertThat(response).isEqualTo(expected);
-        verify(noteService).listPublic(userId, null, null);
+        verify(noteService).listPublic(userId, null, null, null);
     }
 
     @Test

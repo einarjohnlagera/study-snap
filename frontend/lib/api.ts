@@ -147,6 +147,7 @@ export type DashboardOverviewResponse = {
 };
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";
+export type NoteTargetProfileType = "STUDENT" | "BOARD_TAKER" | "TEACHER";
 export type LearnerLevel =
   | "GRADE_SCHOOL"
   | "JUNIOR_HIGH"
@@ -736,6 +737,7 @@ export type UpsertNoteRequest = {
   subject?: string | null;
   courseProgram?: string | null;
   tags?: string[];
+  targetProfileType?: NoteTargetProfileType | null;
   content: string;
 };
 
@@ -744,6 +746,7 @@ export type NoteResponse = {
   title: string | null;
   subject: string | null;
   courseProgram?: string | null;
+  targetProfileType: NoteTargetProfileType;
   tags: string[];
   content: string;
   visibility: NoteVisibility;
@@ -778,6 +781,7 @@ export type NoteListItemResponse = {
   title: string | null;
   courseProgram: string | null;
   learnerLevel: LearnerLevel | null;
+  targetProfileType: NoteTargetProfileType;
   subject: string | null;
   tags: string[];
   contentPreview: string;
@@ -2184,8 +2188,18 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
   return parseApiResponse<NoteListItemResponse[]>(response, "Could not load notes.");
 }
 
-export async function listPublicNotes(params?: { subject?: string }): Promise<NoteListItemResponse[]> {
-  const query = params?.subject ? `?subject=${encodeURIComponent(params.subject)}` : "";
+export async function listPublicNotes(params?: {
+  subject?: string;
+  targetProfileType?: NoteTargetProfileType;
+}): Promise<NoteListItemResponse[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.subject) {
+    searchParams.set("subject", params.subject);
+  }
+  if (params?.targetProfileType) {
+    searchParams.set("targetProfileType", params.targetProfileType);
+  }
+  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
   const response = await fetch(buildUrl(`/notes/public${query}`), {
     method: "GET",
     headers: buildAuthHeaders(),

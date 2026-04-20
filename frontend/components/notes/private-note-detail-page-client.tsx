@@ -868,6 +868,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         subject: nextMetadata.subject,
         courseProgram: note.courseProgram ?? null,
         tags: nextMetadata.tags,
+        targetProfileType: note.targetProfileType,
         content: note.content,
       });
       setNote(updated);
@@ -986,6 +987,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         subject: normalizeMetadataInput(metadataDraft.subject),
         courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
         tags: metadataDraft.tags,
+        targetProfileType: note.targetProfileType,
         content: note.content,
       });
       setNote(updated);

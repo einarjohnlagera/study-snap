@@ -10,14 +10,17 @@ import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.NoteNotFoundException;
+import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.NoteRepository;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
@@ -66,6 +69,10 @@ public class NoteService {
     private static final String DEFAULT_AUTHOR_NAME = "Anonymous learner";
     private static final String OFFICIAL_AUTHOR_DISPLAY_NAME = "NoteLib";
     private static final String OFFICIAL_AUTHOR_EMAIL = "einar.lagera@gmail.com";
+    private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_CODE = "NOTE_TARGET_PROFILE_TYPE_REQUIRED";
+    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_CODE = "NOTE_TARGET_PROFILE_TYPE_INVALID";
+    private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE = "Please choose who this note is for.";
+    private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE = "Please choose Student or Board Taker for this note.";
     private static final Comparator<String> COURSE_PROGRAM_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
         return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
@@ -86,16 +93,18 @@ public class NoteService {
     private final AnalyticsService analyticsService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
+        UserEntity owner = getOwnerOrThrow(ownerUserId);
         NoteEntity entity = new NoteEntity();
         entity.setId(UUID.randomUUID());
         entity.setOwnerUserId(ownerUserId);
         entity.setTitle(normalizeOptionalText(request.title()));
         entity.setSubject(resolveCanonicalSubject(request.subject()));
-        entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), ownerUserId));
+        entity.setCourseProgram(resolveRequestedCourseProgram(request.courseProgram(), owner));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
         entity.setContent(normalizeRequiredContent(request.content()));
         entity.setStatus(NoteStatus.DRAFT);
         entity.setVisibility(NoteVisibility.PRIVATE);
+        entity.setTargetProfileType(resolveTargetProfileType(request.targetProfileType(), owner));
         entity.setSourceNoteId(null);
         entity.setCopiedFromNoteId(null);
         entity.setCopiedFromUserId(null);
@@ -116,6 +125,7 @@ public class NoteService {
         UUID noteId = UuidParsingUtils.parseUuidOrThrow(id, NoteNotFoundException::new);
         NoteEntity entity = noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)
                 .orElseThrow(NoteNotFoundException::new);
+        UserEntity owner = getOwnerOrThrow(ownerUserId);
 
         String normalizedRequestedContent = normalizeRequiredContent(request.content());
         NoteStatus currentStatus = resolveStatus(entity);
@@ -136,6 +146,7 @@ public class NoteService {
         entity.setSubject(resolveCanonicalSubject(request.subject()));
         entity.setCourseProgram(normalizeOptionalCourseProgram(request.courseProgram()));
         entity.setTags(normalizeTags(request.tags()).toArray(String[]::new));
+        entity.setTargetProfileType(resolveTargetProfileType(request.targetProfileType(), owner));
         entity.setUpdatedAt(OffsetDateTime.now());
 
         NoteEntity saved = noteRepository.save(entity);
@@ -192,6 +203,7 @@ public class NoteService {
         copy.setContent(source.getContent());
         copy.setStatus(NoteStatus.DRAFT);
         copy.setVisibility(NoteVisibility.PRIVATE);
+        copy.setTargetProfileType(resolveTargetProfileType(source));
         copy.setSourceNoteId(source.getId());
         if (isOwner) {
             copy.setCopiedFromNoteId(null);
@@ -269,8 +281,15 @@ public class NoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<NoteListItemResponse> listPublic(UUID viewerUserId, String sort, String subject) {
-        List<NoteEntity> notes = noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC);
+    public List<NoteListItemResponse> listPublic(
+            UUID viewerUserId,
+            String sort,
+            String subject,
+            NoteTargetProfileType targetProfileType
+    ) {
+        List<NoteEntity> notes = targetProfileType == null
+                ? noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
+                : noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
         List<NoteListItemResponse> items = toListItems(notes, viewerUserId);
         if (subject != null && !subject.isBlank()) {
             String normalizedSubjectFilter = SubjectNormalizationUtils.normalizeForLookup(subject);
@@ -467,19 +486,74 @@ public class NoteService {
         return List.copyOf(normalizedByKey.values());
     }
 
-    private String resolveRequestedCourseProgram(String requestedCourseProgram, UUID ownerUserId) {
+    private UserEntity getOwnerOrThrow(UUID ownerUserId) {
+        return userRepository.findById(ownerUserId)
+                .orElseThrow(UserNotFoundException::new);
+    }
+
+    private String resolveRequestedCourseProgram(String requestedCourseProgram, UserEntity owner) {
         String normalizedRequested = normalizeOptionalCourseProgram(requestedCourseProgram);
         if (normalizedRequested != null) {
             return normalizedRequested;
         }
-        return userRepository.findById(ownerUserId)
-                .map(UserEntity::getCourseProgram)
-                .map(this::normalizeOptionalCourseProgram)
-                .orElse(null);
+        return normalizeOptionalCourseProgram(owner.getCourseProgram());
     }
 
     private String normalizeOptionalCourseProgram(String value) {
         return CourseProgramNormalizationUtils.normalizeForStorage(value);
+    }
+
+    private NoteTargetProfileType resolveTargetProfileType(String requestedTargetProfileType, UserEntity owner) {
+        if (isTeacherSelectableOwner(owner)) {
+            return parseSelectableTargetProfileTypeOrThrow(requestedTargetProfileType);
+        }
+        return mapOwnerProfileTypeToNoteTarget(owner.getProfileType());
+    }
+
+    private boolean isTeacherSelectableOwner(UserEntity owner) {
+        return owner.getRole() == UserRole.ADMIN || owner.getProfileType() == ProfileType.TEACHER;
+    }
+
+    private NoteTargetProfileType parseSelectableTargetProfileTypeOrThrow(String rawValue) {
+        if (rawValue == null || rawValue.isBlank()) {
+            throw new AppException(
+                    NOTE_TARGET_PROFILE_TYPE_REQUIRED_CODE,
+                    NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        NoteTargetProfileType targetProfileType;
+        try {
+            targetProfileType = NoteTargetProfileType.valueOf(rawValue.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new AppException(
+                    NOTE_TARGET_PROFILE_TYPE_INVALID_CODE,
+                    NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        if (targetProfileType == NoteTargetProfileType.STUDENT || targetProfileType == NoteTargetProfileType.BOARD_TAKER) {
+            return targetProfileType;
+        }
+        throw new AppException(
+                NOTE_TARGET_PROFILE_TYPE_INVALID_CODE,
+                NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE,
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    private NoteTargetProfileType mapOwnerProfileTypeToNoteTarget(ProfileType profileType) {
+        if (profileType == ProfileType.BOARD_EXAM) {
+            return NoteTargetProfileType.BOARD_TAKER;
+        }
+        if (profileType == ProfileType.TEACHER) {
+            return NoteTargetProfileType.TEACHER;
+        }
+        return NoteTargetProfileType.STUDENT;
+    }
+
+    private NoteTargetProfileType resolveTargetProfileType(NoteEntity note) {
+        return note.getTargetProfileType() == null ? NoteTargetProfileType.STUDENT : note.getTargetProfileType();
     }
 
     private NoteResponse mapToResponse(NoteEntity entity, StudyPackEntity studyPack) {
@@ -498,6 +572,7 @@ public class NoteService {
                 entity.getTitle(),
                 entity.getSubject(),
                 entity.getCourseProgram(),
+                resolveTargetProfileType(entity).name(),
                 entity.getTags() == null ? List.of() : Arrays.asList(entity.getTags()),
                 entity.getContent(),
                 resolveVisibility(entity).name(),
@@ -544,6 +619,7 @@ public class NoteService {
                 note.getTitle(),
                 normalizeOptionalText(note.getCourseProgram()),
                 owner == null || owner.getLearnerLevel() == null ? null : owner.getLearnerLevel().name(),
+                resolveTargetProfileType(note).name(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
                 ContentPreviewUtils.buildContentPreview(note.getContent(), CONTENT_PREVIEW_MAX_LENGTH),

@@ -52,6 +52,10 @@ public class NoteEntity {
     @Column(nullable = false, length = 16)
     private NoteVisibility visibility;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_profile_type", nullable = false, length = 16)
+    private NoteTargetProfileType targetProfileType;
+
     @Column(name = "source_note_id")
     private UUID sourceNoteId;
 

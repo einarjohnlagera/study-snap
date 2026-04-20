@@ -24,6 +24,7 @@ import {
   listNotes,
   listPublicNotes,
   listSubjects,
+  type NoteTargetProfileType,
   type NoteListItemResponse,
 } from "@/lib/api";
 import {
@@ -41,6 +42,15 @@ import {
   getRecentNotes,
 } from "@/lib/public-library-discovery";
 import { buildCopiedNotePath } from "@/lib/public-note-copy";
+import {
+  getNoteTargetProfileLabel,
+  isPublicNoteTargetProfileFilter,
+  mapProfileTypeToNoteTargetProfile,
+  NOTE_TARGET_PROFILE_ALL,
+  PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY,
+  PUBLIC_NOTE_TARGET_PROFILE_TYPES,
+  type NoteTargetProfileFilter,
+} from "@/lib/note-target-profile";
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
@@ -73,6 +83,29 @@ type PublicLibrarySortOption =
   | "TITLE_ASC";
 
 type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
+
+function resolveDefaultTargetProfileFilter(): NoteTargetProfileFilter {
+  const authUser = getAuthUser();
+  if (!authUser?.profileType) {
+    return NOTE_TARGET_PROFILE_ALL;
+  }
+  return mapProfileTypeToNoteTargetProfile(authUser.profileType);
+}
+
+function resolveInitialTargetProfileFilter(): NoteTargetProfileFilter {
+  if (globalThis.window === undefined) {
+    return resolveDefaultTargetProfileFilter();
+  }
+  try {
+    const storedValue = globalThis.localStorage?.getItem(PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY);
+    if (isPublicNoteTargetProfileFilter(storedValue)) {
+      return storedValue;
+    }
+  } catch {
+    // Ignore localStorage access issues and fall back to the signed-in default.
+  }
+  return resolveDefaultTargetProfileFilter();
+}
 
 const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
   NEWEST: "Newest",
@@ -395,6 +428,7 @@ export function PublicLibraryPageClient() {
   const router = useRouter();
   const pathname = usePathname();
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
+  const [selectedTargetProfile, setSelectedTargetProfile] = useState<NoteTargetProfileFilter>(resolveInitialTargetProfileFilter);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -433,7 +467,9 @@ export function PublicLibraryPageClient() {
     setError(null);
     try {
       const [notesResult, subjectsResult] = await Promise.allSettled([
-        listPublicNotes(),
+        listPublicNotes({
+          targetProfileType: selectedTargetProfile === NOTE_TARGET_PROFILE_ALL ? undefined : selectedTargetProfile,
+        }),
         listSubjects("public"),
       ]);
       if (notesResult.status !== "fulfilled") {
@@ -447,7 +483,7 @@ export function PublicLibraryPageClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedTargetProfile]);
 
   useEffect(() => {
     void loadNotes();
@@ -455,7 +491,20 @@ export function PublicLibraryPageClient() {
 
   useEffect(() => {
     const syncAuth = () => {
-      setCurrentUserId(getAuthUser()?.id ?? null);
+      const authUser = getAuthUser();
+      setCurrentUserId(authUser?.id ?? null);
+      try {
+        const storedValue = globalThis.localStorage?.getItem(PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY);
+        if (isPublicNoteTargetProfileFilter(storedValue)) {
+          setSelectedTargetProfile(storedValue);
+          return;
+        }
+      } catch {
+        // Ignore localStorage access issues and fall back to the profile default.
+      }
+      setSelectedTargetProfile(
+        authUser?.profileType ? mapProfileTypeToNoteTargetProfile(authUser.profileType) : NOTE_TARGET_PROFILE_ALL,
+      );
     };
 
     syncAuth();
@@ -464,6 +513,14 @@ export function PublicLibraryPageClient() {
       globalThis.removeEventListener("studysnap-auth-change", syncAuth);
     };
   }, []);
+
+  useEffect(() => {
+    try {
+      globalThis.localStorage?.setItem(PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY, selectedTargetProfile);
+    } catch {
+      // Ignore localStorage access issues.
+    }
+  }, [selectedTargetProfile]);
 
   useEffect(() => {
     if (globalThis.window === undefined || typeof globalThis.matchMedia !== "function") {
@@ -851,6 +908,20 @@ export function PublicLibraryPageClient() {
 
   const activeFilterSummary = hasActiveFilters ? (
     <div className="flex flex-wrap items-center gap-2">
+      {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
+          For: {getNoteTargetProfileLabel(selectedTargetProfile)}
+          <button
+            type="button"
+            className="text-foreground/65 hover:text-foreground"
+            onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)}
+            aria-label="Clear note audience filter"
+          >
+            x
+          </button>
+        </span>
+      ) : null}
+
       {selectedCourseProgram !== ALL_COURSE_PROGRAMS ? (
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-3 py-1 text-xs">
           Course: {selectedCourseProgram}
@@ -1041,6 +1112,42 @@ export function PublicLibraryPageClient() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">For</p>
+                {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL ? (
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                    onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)}
+                  >
+                    View all notes
+                  </button>
+                ) : null}
+              </div>
+              <div className={getScrollRailClassName()}>
+                <button
+                  type="button"
+                  className={getFilterChipClassName(selectedTargetProfile === NOTE_TARGET_PROFILE_ALL)}
+                  onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)}
+                  aria-pressed={selectedTargetProfile === NOTE_TARGET_PROFILE_ALL}
+                >
+                  All
+                </button>
+                {PUBLIC_NOTE_TARGET_PROFILE_TYPES.map((targetProfileType) => (
+                  <button
+                    key={targetProfileType}
+                    type="button"
+                    className={getFilterChipClassName(selectedTargetProfile === targetProfileType)}
+                    onClick={() => setSelectedTargetProfile(targetProfileType)}
+                    aria-pressed={selectedTargetProfile === targetProfileType}
+                  >
+                    {getNoteTargetProfileLabel(targetProfileType)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">Subjects</p>
                 {selectedSubject !== ALL_SUBJECTS ? (
                   <button
@@ -1183,8 +1290,21 @@ export function PublicLibraryPageClient() {
             <div className="space-y-10">
               {items.length === 0 ? (
                 <Card className="space-y-3 p-4 sm:p-6">
-                  <h2 className="text-base font-semibold sm:text-lg">No public notes yet.</h2>
-                  <p className="text-sm text-foreground/75">Be the first to share a note to the public library.</p>
+                  <h2 className="text-base font-semibold sm:text-lg">
+                    {selectedTargetProfile === NOTE_TARGET_PROFILE_ALL
+                      ? "No public notes yet."
+                      : "No notes available for this category yet."}
+                  </h2>
+                  <p className="text-sm text-foreground/75">
+                    {selectedTargetProfile === NOTE_TARGET_PROFILE_ALL
+                      ? "Be the first to share a note to the public library."
+                      : "Try another category or view the full Public Library."}
+                  </p>
+                  {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL ? (
+                    <Button type="button" variant="outline" onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)} className="w-full sm:w-auto">
+                      View all notes
+                    </Button>
+                  ) : null}
                 </Card>
               ) : null}
 
@@ -1239,11 +1359,25 @@ export function PublicLibraryPageClient() {
             </div>
           ) : sortedItems.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-base font-semibold sm:text-lg">No public notes match your filters.</h2>
-              <p className="text-sm text-foreground/75">Try adjusting search or filters.</p>
-              <Button type="button" variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
-                Clear filters
-              </Button>
+              {searchQuery.trim().length === 0
+                && !hasActiveFilters
+                && selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL ? (
+                  <>
+                    <h2 className="text-base font-semibold sm:text-lg">No notes available for this category yet.</h2>
+                    <p className="text-sm text-foreground/75">Try another note audience or browse the full Public Library.</p>
+                    <Button type="button" variant="outline" onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)} className="w-full sm:w-auto">
+                      View all notes
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <h2 className="text-base font-semibold sm:text-lg">No public notes match your filters.</h2>
+                    <p className="text-sm text-foreground/75">Try adjusting search or filters.</p>
+                    <Button type="button" variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+                      Clear filters
+                    </Button>
+                  </>
+                )}
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">

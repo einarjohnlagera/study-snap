@@ -127,6 +127,7 @@ class PublicNotesScoringUtilsTest {
                 "Title",
                 null,
                 null,
+                "STUDENT",
                 "Subject",
                 List.of(),
                 contentPreview,

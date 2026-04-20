@@ -17,6 +17,7 @@ import {
   isOcrLimitReachedError,
   listCoursePrograms,
   listSubjects,
+  type NoteTargetProfileType,
   trackAnalyticsEvent,
   type LearnerLevel,
   type NoteResponse,
@@ -56,6 +57,12 @@ import {
   mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
+import {
+  isTeacherSelectableNoteTarget,
+  mapProfileTypeToNoteTargetProfile,
+  NOTE_TARGET_PROFILE_STORAGE_KEY,
+  toSelectableNoteTargetProfile,
+} from "@/lib/note-target-profile";
 
 type NoteEditorPageClientProps = {
   noteId?: string;
@@ -80,6 +87,7 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
     title: note.title ?? "",
     subject: note.subject ?? "",
     courseProgram: note.courseProgram ?? "",
+    targetProfileType: toSelectableNoteTargetProfile(note.targetProfileType),
     content: note.content,
     tags: note.tags ?? [],
   };
@@ -110,6 +118,7 @@ export function NoteEditorPageClient({
   initialMode = null,
   initialSource = null,
 }: Readonly<NoteEditorPageClientProps>) {
+  const authUser = getAuthUser();
   const router = useRouter();
   const pathname = usePathname();
   const isEditMode = Boolean(noteId);
@@ -118,6 +127,7 @@ export function NoteEditorPageClient({
     title: "",
     subject: "",
     courseProgram: "",
+    targetProfileType: "",
     content: "",
     tags: [],
   });
@@ -145,8 +155,10 @@ export function NoteEditorPageClient({
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
-  const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
-  const currentProfileType = getAuthUser()?.profileType ?? "STUDENT";
+  const currentPlan = usageSummary?.plan ?? (authUser?.planType ?? "FREE");
+  const currentProfileType = authUser?.profileType ?? "STUDENT";
+  const currentUserRole = authUser?.role ?? "USER";
+  const showTargetProfileTypeField = isTeacherSelectableNoteTarget(currentProfileType, currentUserRole);
   const generateLabel = resolveGenerateLabel(currentProfileType);
   const generateHelperText = resolveGenerateHelperText(currentProfileType);
   const generatingLabel = currentProfileType === "BOARD_EXAM"
@@ -228,6 +240,20 @@ export function NoteEditorPageClient({
       active = false;
     };
   }, [isEditMode]);
+
+  useEffect(() => {
+    if (isEditMode || !showTargetProfileTypeField || draft.targetProfileType) {
+      return;
+    }
+    try {
+      const storedValue = globalThis.localStorage?.getItem(NOTE_TARGET_PROFILE_STORAGE_KEY);
+      if (storedValue === "STUDENT" || storedValue === "BOARD_TAKER") {
+        setDraft((previous) => ({ ...previous, targetProfileType: storedValue }));
+      }
+    } catch {
+      // Ignore localStorage access issues and keep the selector empty.
+    }
+  }, [draft.targetProfileType, isEditMode, showTargetProfileTypeField]);
 
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     setToastTone(tone);
@@ -424,13 +450,31 @@ export function NoteEditorPageClient({
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
 
-  const buildRequest = useCallback(() => ({
-    title: normalizeOptional(draft.title),
-    subject: normalizeOptional(draft.subject),
-    courseProgram: normalizeOptional(draft.courseProgram),
-    tags: draft.tags,
-    content: draft.content,
-  }), [draft.content, draft.courseProgram, draft.subject, draft.tags, draft.title]);
+  const resolveTargetProfileType = useCallback((): NoteTargetProfileType | null => {
+    if (showTargetProfileTypeField) {
+      if (!draft.targetProfileType) {
+        showToast("Please choose who this note is for.", "info");
+        return null;
+      }
+      return draft.targetProfileType;
+    }
+    return mapProfileTypeToNoteTargetProfile(currentProfileType);
+  }, [currentProfileType, draft.targetProfileType, showTargetProfileTypeField, showToast]);
+
+  const buildRequest = useCallback(() => {
+    const targetProfileType = resolveTargetProfileType();
+    if (!targetProfileType) {
+      return null;
+    }
+    return {
+      title: normalizeOptional(draft.title),
+      subject: normalizeOptional(draft.subject),
+      courseProgram: normalizeOptional(draft.courseProgram),
+      tags: draft.tags,
+      targetProfileType,
+      content: draft.content,
+    };
+  }, [draft.content, draft.courseProgram, draft.subject, draft.tags, draft.title, resolveTargetProfileType]);
 
   const upsertNote = useCallback(async (): Promise<NoteResponse | null> => {
     if (contentEmpty) {
@@ -439,6 +483,9 @@ export function NoteEditorPageClient({
     }
 
     const payload = buildRequest();
+    if (!payload) {
+      return null;
+    }
     const saved = currentNoteId
       ? await updateNote(currentNoteId, payload)
       : await createNote(payload);
@@ -553,6 +600,10 @@ export function NoteEditorPageClient({
 
     setApplyingSuggestion(true);
     try {
+      const targetProfileType = resolveTargetProfileType();
+      if (!targetProfileType) {
+        return;
+      }
       const nextMetadata = applyAiSuggestionSelection(
         {
           title: draft.title,
@@ -571,6 +622,7 @@ export function NoteEditorPageClient({
         subject: nextMetadata.subject,
         courseProgram: normalizeOptional(draft.courseProgram),
         tags: nextMetadata.tags,
+        targetProfileType,
         content: draft.content,
       });
       setDraft(toDraft(updated));
@@ -592,6 +644,7 @@ export function NoteEditorPageClient({
     draft.title,
     finalizeGenerationRedirect,
     pendingSuggestion,
+    resolveTargetProfileType,
     showToast,
   ]);
 
@@ -720,6 +773,17 @@ export function NoteEditorPageClient({
         onTitleChange={(value) => setDraft((previous) => ({ ...previous, title: value }))}
         onSubjectChange={(value) => setDraft((previous) => ({ ...previous, subject: value }))}
         onCourseProgramChange={(value) => setDraft((previous) => ({ ...previous, courseProgram: value }))}
+        onTargetProfileTypeChange={(value) => {
+          setDraft((previous) => ({ ...previous, targetProfileType: value }));
+          if (!value) {
+            return;
+          }
+          try {
+            globalThis.localStorage?.setItem(NOTE_TARGET_PROFILE_STORAGE_KEY, value);
+          } catch {
+            // Ignore localStorage access issues.
+          }
+        }}
         onContentChange={(value) => setDraft((previous) => ({ ...previous, content: value }))}
         onTagsChange={(nextTags) => setDraft((previous) => ({ ...previous, tags: nextTags }))}
         onSave={() => {
@@ -764,6 +828,7 @@ export function NoteEditorPageClient({
         subjectSuggestions={subjectSuggestions}
         courseProgramSuggestions={availableCourseProgramSuggestions}
         learnerLevel={profileLearnerLevel}
+        showTargetProfileTypeField={showTargetProfileTypeField}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {

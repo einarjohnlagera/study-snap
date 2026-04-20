@@ -71,6 +71,14 @@
   - Added regeneration with credit usage and confirmation
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 
+- **Note target profile type system** — notes now store who they are written for separately from the creator's profile:
+  - added required `notes.target_profile_type` with `STUDENT`, `BOARD_TAKER`, and `TEACHER`
+  - existing notes are backfilled from the creator profile through a one-time migration (`BOARD_EXAM` -> `BOARD_TAKER`)
+  - `Student` and `Board Taker` note creation now auto-assign the note target profile from the current user profile without showing extra UI
+  - `Teacher` and `Admin` note creation/editing now require `Who is this note for?` with `Student` and `Board Taker` options
+  - Public Library filtering now uses `note.targetProfileType` instead of creator profile type and defaults to the signed-in user's current profile category
+  - category-empty Public Library states now guide users to `View all notes` when no notes exist yet for the selected audience
+
 - **Loading-state system** — standardized the app’s loading feedback for async actions, delayed redirects, and fetched sections:
   - shared `Button` loading state now shows one consistent spinner treatment and disables duplicate clicks while requests are pending
   - mounted a subtle top route-progress indicator so delayed programmatic navigation no longer feels unresponsive
@@ -103,6 +111,9 @@
 - `docs/features/authentication.md`: documented session-expired vs manual-logout messaging rules
 - `docs/features/teacher-flow.md`: clarified how Teacher Dashboard feeds the Generate -> View -> Export teacher lifecycle
 - `docs/product/ROADMAP.md`: added Public Library persona filtering as a future direction
+- `docs/product/SPEC.md`: documented note target profile ownership, teacher audience selection, and Public Library audience filtering defaults
+- `docs/features/public-library.md`: documented note-audience rails and category-empty-state behavior
+- `docs/features/study-library.md`: documented note target audience assignment during note creation and copy behavior
 
 ---
 

@@ -60,6 +60,7 @@ const baseNote = {
   title: "Draft Note",
   subject: "Biology",
   courseProgram: "Nursing",
+  targetProfileType: "STUDENT" as const,
   tags: ["cells"],
   content: "Cell content",
   visibility: "PRIVATE" as const,
@@ -75,6 +76,7 @@ const baseNote = {
   summary: null,
   keyConcepts: [],
   quiz: [],
+  generatedQuiz: null,
   quizCount: 0,
   quickReviewAvailable: false,
   challengeQuizAvailable: false,
@@ -477,7 +479,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit" })).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your monthly study pack limit")).toBeInTheDocument();
   });
 
   it("shows the exact remaining Study Pack count in the near-limit banner", async () => {
@@ -721,7 +723,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
-    expect(screen.getByText(/You’ve reached your image-to-text limit for this month\./i)).toBeInTheDocument();
+    expect(screen.getByText(/You've reached your image-to-text limit for this month\./i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
     expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
@@ -776,6 +778,7 @@ describe("NoteEditorPageClient", () => {
 
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
+    fireEvent.change(screen.getByLabelText("Who is this note for?"), { target: { value: "STUDENT" } });
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
 
