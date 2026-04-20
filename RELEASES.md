@@ -68,6 +68,8 @@
   - Added quiz generation for teachers with a note-owned `generatedQuiz` model instead of quiz sessions
   - Introduced Quiz Preview with answers and explanations visible by default
   - Moved Export into the dedicated quiz view for better context
+  - added Teacher DOCX export from Quiz Preview using stored `generatedQuiz` data only — no LLM calls, no quiz session reuse
+  - teacher export now supports `Quiz Only (Student Version)` and `Quiz + Answers (Teacher Version)` as downloadable `.docx` files
   - Added regeneration with credit usage and confirmation
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 

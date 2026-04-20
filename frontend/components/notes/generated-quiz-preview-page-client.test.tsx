@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { GeneratedQuizPreviewPageClient } from "./generated-quiz-preview-page-client";
-import { generateGeneratedQuiz, getGeneratedQuiz, getNote, trackAnalyticsEvent } from "@/lib/api";
-import { exportGeneratedQuizDocument } from "@/lib/generated-quiz-export";
+import { exportGeneratedQuizDocx, generateGeneratedQuiz, getGeneratedQuiz, getNote, trackAnalyticsEvent } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 
 const pushMock = jest.fn();
@@ -25,10 +25,11 @@ jest.mock("@/lib/api", () => ({
   generateGeneratedQuiz: jest.fn(),
   getNote: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
+  exportGeneratedQuizDocx: jest.fn(),
 }));
 
-jest.mock("@/lib/generated-quiz-export", () => ({
-  exportGeneratedQuizDocument: jest.fn(),
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: jest.fn(),
 }));
 
 jest.mock("@/hooks/use-billing-usage-summary", () => ({
@@ -43,8 +44,15 @@ describe("GeneratedQuizPreviewPageClient", () => {
     (getGeneratedQuiz as jest.Mock).mockReset();
     (generateGeneratedQuiz as jest.Mock).mockReset();
     (trackAnalyticsEvent as jest.Mock).mockReset();
-    (exportGeneratedQuizDocument as jest.Mock).mockReset();
+    (exportGeneratedQuizDocx as jest.Mock).mockReset();
+    (getAuthUser as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReset();
+
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
 
     (getNote as jest.Mock).mockResolvedValue({
       id: "note-1",
@@ -74,6 +82,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
       difficultySelectionAvailable: false,
     });
     (getGeneratedQuiz as jest.Mock).mockResolvedValue({
+      id: "quiz-1",
       noteId: "note-1",
       generatedAt: "2026-04-17T09:00:00Z",
       questions: [
@@ -87,6 +96,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
       ],
     });
     (generateGeneratedQuiz as jest.Mock).mockResolvedValue({
+      id: "quiz-2",
       noteId: "note-1",
       generatedAt: "2026-04-17T10:00:00Z",
       questions: [
@@ -99,7 +109,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
         },
       ],
     });
-    (exportGeneratedQuizDocument as jest.Mock).mockResolvedValue({ filename: "quiz.pdf" });
+    (exportGeneratedQuizDocx as jest.Mock).mockResolvedValue({ filename: "teacher-note-quiz.docx" });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
         plan: "FREE",
@@ -148,13 +158,24 @@ describe("GeneratedQuizPreviewPageClient", () => {
 
     await screen.findByText("What is the nucleus?");
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
-    fireEvent.click(screen.getByRole("button", { name: /Export with answers/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Quiz \+ Answers \(Teacher Version\)/i }));
 
     await waitFor(() => {
-      expect(exportGeneratedQuizDocument).toHaveBeenCalledWith(expect.objectContaining({
-        exportType: "with-answers",
-      }));
+      expect(exportGeneratedQuizDocx).toHaveBeenCalledWith("quiz-1", "WITH_ANSWERS");
     });
+  });
+
+  it("hides DOCX export for non-teacher non-admin users", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-2",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+
+    render(<GeneratedQuizPreviewPageClient noteId="note-1" />);
+
+    await screen.findByText("What is the nucleus?");
+    expect(screen.queryByRole("button", { name: "Export" })).not.toBeInTheDocument();
   });
 
   it("regenerates after confirmation", async () => {
@@ -209,7 +230,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Regenerate Quiz" }).at(-1) as HTMLButtonElement);
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You've reached your monthly quiz limit" })).toBeInTheDocument();
     expect(generateGeneratedQuiz).not.toHaveBeenCalled();
   });
 });

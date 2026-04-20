@@ -586,6 +586,7 @@ public class NoteService {
                 keyConcepts,
                 quiz,
                 generatedQuiz == null ? null : new com.studysnap.backend.dto.GeneratedQuizResponse(
+                        generatedQuiz.getId().toString(),
                         entity.getId().toString(),
                         generatedQuiz.getQuestions() == null ? List.of() : generatedQuiz.getQuestions(),
                         generatedQuiz.getGeneratedAt()

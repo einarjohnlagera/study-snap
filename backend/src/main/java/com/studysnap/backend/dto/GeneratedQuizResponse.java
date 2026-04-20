@@ -4,6 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 public record GeneratedQuizResponse(
+        String id,
         String noteId,
         List<QuizItem> questions,
         OffsetDateTime generatedAt
