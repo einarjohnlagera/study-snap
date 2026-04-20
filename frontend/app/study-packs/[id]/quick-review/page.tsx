@@ -64,7 +64,7 @@ function getMotivationalFeedback(scorePercentage: number) {
   if (scorePercentage >= 50) {
     return "Good effort. A quick retry can help reinforce what you missed.";
   }
-  return "Nice attempt. Let's review the concepts and try again.";
+  return "Good effort. Let's review the concepts and try again.";
 }
 
 function getPerformanceBadge(scorePercentage: number) {
@@ -861,7 +861,7 @@ export default function QuickReviewPage() {
                 </Button>
               </div>
             ) : null}
-            {displayedRetryCount > 0 ? <p>Retry attempts: {displayedRetryCount}</p> : null}
+            {displayedRetryCount > 0 ? <p>Retries: {displayedRetryCount}</p> : null}
             {studyTip ? (
               <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">

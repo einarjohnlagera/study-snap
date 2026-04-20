@@ -37,7 +37,7 @@ export function QuizSessionHistory({
       <div className="space-y-1">
         <h2 className="text-lg font-semibold sm:text-xl">Recent Sessions</h2>
         <p className="text-sm text-foreground/75">
-          Revisit past quiz attempts to review answers, spot weak concepts, and track whether you&apos;re improving.
+          Revisit past quiz sessions to review answers, spot weak concepts, and track whether you&apos;re improving.
         </p>
       </div>
 
@@ -78,7 +78,7 @@ export function QuizSessionHistory({
                   </p>
                   <p className="text-xs text-foreground/65">
                     {session.sessionMode === "QUICK_REVIEW" && session.retryCount > 0
-                      ? `Retry attempts: ${session.retryCount}`
+                      ? `Retries: ${session.retryCount}`
                       : session.weakConcepts.length > 0
                         ? `${session.weakConcepts.length} weak concept${session.weakConcepts.length === 1 ? "" : "s"} flagged`
                         : "No weak concepts flagged"}
