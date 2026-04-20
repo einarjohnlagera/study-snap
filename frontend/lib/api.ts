@@ -147,7 +147,7 @@ export type DashboardOverviewResponse = {
 };
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";
-export type NoteTargetProfileType = "STUDENT" | "BOARD_TAKER" | "TEACHER";
+export type NoteTargetProfileType = "STUDENT" | "BOARD_TAKER";
 export type LearnerLevel =
   | "GRADE_SCHOOL"
   | "JUNIOR_HIGH"

@@ -64,6 +64,7 @@ type NoteEditorFormProps = {
   courseProgramSuggestions?: string[];
   learnerLevel?: LearnerLevel | "" | null;
   showTargetProfileTypeField?: boolean;
+  targetProfileTypeHelperText?: string;
   backHref?: string;
   backLabel?: string;
 };
@@ -118,6 +119,7 @@ export function NoteEditorForm({
   courseProgramSuggestions = [],
   learnerLevel = null,
   showTargetProfileTypeField = false,
+  targetProfileTypeHelperText = "Choose the learner audience for this note before saving or generating.",
   backHref,
   backLabel,
 }: Readonly<NoteEditorFormProps>) {
@@ -303,10 +305,9 @@ export function NoteEditorForm({
               />
               <p className="text-xs text-foreground/60">Used to personalize content and quiz recommendations.</p>
             </div>
-          </div>
 
-          {showTargetProfileTypeField ? (
-            <div className="space-y-2">
+            {showTargetProfileTypeField ? (
+              <div className="max-w-md space-y-2 sm:max-w-none">
               <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
                 Who is this note for?
               </label>
@@ -322,10 +323,11 @@ export function NoteEditorForm({
                 <option value="BOARD_TAKER">{getNoteTargetProfileLabel("BOARD_TAKER")}</option>
               </select>
               <p className="text-xs text-foreground/60">
-                Choose the learner audience for this note before saving or generating.
+                {targetProfileTypeHelperText}
               </p>
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </div>
 
           {showTagsSection ? (
             <div className="space-y-2">

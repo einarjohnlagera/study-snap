@@ -57,6 +57,7 @@ import {
   type ChallengeQuizSessionSummaryResponse,
   type ChallengeQuizPerformanceSummaryResponse,
   type LearnerLevel,
+  type NoteTargetProfileType,
   type NoteResponse,
   type NoteStudyPackStatus,
   type NoteVisibility,
@@ -86,6 +87,10 @@ import {
   CHALLENGE_QUIZ_MODE_SELECTION_ENTRY,
 } from "@/lib/challenge-quiz-entry";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
+import {
+  getNoteTargetProfileLabel,
+  isTeacherSelectableNoteTarget,
+} from "@/lib/note-target-profile";
 import {
   buildRecentQuizSessionHistory,
   type RecentQuizSessionHistoryItem,
@@ -284,6 +289,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
   const [isPremiumPlan, setIsPremiumPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") === "PREMIUM");
   const [isEmailVerified, setIsEmailVerified] = useState(() => Boolean(getAuthUser()?.emailVerifiedAt));
+  const [userRole, setUserRole] = useState<"USER" | "ADMIN">(() => getAuthUser()?.role ?? "USER");
   const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">(() => {
     const authUser = getAuthUser();
     return authUser?.profileType === "BOARD_EXAM" || authUser?.profileType === "TEACHER"
@@ -300,11 +306,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     title: string;
     subject: string;
     courseProgram: string;
+    targetProfileType: NoteTargetProfileType | "";
     tags: string[];
   }>({
     title: "",
     subject: "",
     courseProgram: "",
+    targetProfileType: "",
     tags: [],
   });
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
@@ -420,6 +428,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       const authUser = getAuthUser();
       setIsPremiumPlan((authUser?.planType ?? "FREE") === "PREMIUM");
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
+      setUserRole(authUser?.role ?? "USER");
       setProfileType(authUser?.profileType === "BOARD_EXAM" || authUser?.profileType === "TEACHER" ? authUser.profileType : "STUDENT");
       if (authUser && hasPendingFirstStudyOnboarding(authUser)) {
         setFirstStudyStep(getFirstStudyOnboardingStep(authUser.id));
@@ -571,12 +580,14 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       title: note.title ?? "",
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
+      targetProfileType: note.targetProfileType,
       tags: [...(note.tags ?? [])],
     });
   }, [isInlineMetadataEditMode, note]);
 
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
   const isTeacherMode = profileType === "TEACHER";
+  const canEditTargetProfileType = isTeacherSelectableNoteTarget(profileType, userRole);
   const isStudyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const isGeneratingStudyPack = studyPackStatus === "GENERATING";
   const hasGenerationFailed = studyPackStatus === "FAILED";
@@ -834,6 +845,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       title: note.title ?? "",
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
+      targetProfileType: note.targetProfileType,
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -936,6 +948,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         title: note.title ?? "",
         subject: note.subject ?? "",
         courseProgram: note.courseProgram ?? "",
+        targetProfileType: note.targetProfileType,
         tags: [...(note.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -953,6 +966,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       title: note.title ?? "",
       subject: note.subject ?? "",
       courseProgram: note.courseProgram ?? "",
+      targetProfileType: note.targetProfileType,
       tags: [...(note.tags ?? [])],
     });
     setMetadataTagDraft("");
@@ -980,6 +994,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     if (!note || savingMetadata) {
       return;
     }
+    if (canEditTargetProfileType && !metadataDraft.targetProfileType) {
+      setError("Please choose who this note is for.");
+      return;
+    }
+    const nextTargetProfileType: NoteTargetProfileType = canEditTargetProfileType
+      ? metadataDraft.targetProfileType as NoteTargetProfileType
+      : note.targetProfileType;
     setSavingMetadata(true);
     try {
       const updated = await updateNote(note.id, {
@@ -987,7 +1008,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         subject: normalizeMetadataInput(metadataDraft.subject),
         courseProgram: normalizeMetadataInput(metadataDraft.courseProgram),
         tags: metadataDraft.tags,
-        targetProfileType: note.targetProfileType,
+        targetProfileType: nextTargetProfileType,
         content: note.content,
       });
       setNote(updated);
@@ -995,6 +1016,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         title: updated.title ?? "",
         subject: updated.subject ?? "",
         courseProgram: updated.courseProgram ?? "",
+        targetProfileType: updated.targetProfileType,
         tags: [...(updated.tags ?? [])],
       });
       setMetadataTagDraft("");
@@ -1475,6 +1497,29 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     context="note"
                   />
                 </div>
+                {canEditTargetProfileType ? (
+                  <div className="max-w-md space-y-2 sm:max-w-none">
+                    <label htmlFor="note-target-profile-type-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                      Who is this note for?
+                    </label>
+                    <select
+                      id="note-target-profile-type-inline"
+                      value={metadataDraft.targetProfileType}
+                      onChange={(event) => setMetadataDraft((previous) => ({
+                        ...previous,
+                        targetProfileType: event.target.value as NoteTargetProfileType | "",
+                      }))}
+                      className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+                    >
+                      <option value="">Select an audience</option>
+                      <option value="STUDENT">{getNoteTargetProfileLabel("STUDENT")}</option>
+                      <option value="BOARD_TAKER">{getNoteTargetProfileLabel("BOARD_TAKER")}</option>
+                    </select>
+                    <p className="text-xs text-foreground/60">
+                      Changing audience will affect future quiz generation.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Tags</p>
                   <div className="flex flex-col gap-2 sm:flex-row">

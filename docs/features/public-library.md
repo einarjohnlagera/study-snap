@@ -166,7 +166,15 @@ Public Library filters:
 
 Public Library browsing rails:
 
-- `Audience` is note-owned and defaults to the signed-in user's mapped profile (`Student` -> `Student`, `Board Taker` -> `Board Taker`, `Teacher` -> `Teacher`, guest -> `All`)
+- `Audience` is note-owned and uses:
+  - `All`
+  - `Student`
+  - `Board Taker`
+- default audience:
+  - `Student` -> `Student`
+  - `Board Taker` -> `Board Taker`
+  - `Teacher` -> `All`
+  - guest -> `All`
 - audience filtering must use `note.targetProfileType`, never the creator's `user.profileType`
 - `Subjects` stays single-select with `All` as the default
 - `Popular Tags` stays multi-select and should use OR logic within the tag group
@@ -189,7 +197,7 @@ Public Library browsing rails:
 
 `GET /notes/public` also accepts an optional `?targetProfileType=` query parameter:
 
-- supported values: `STUDENT`, `BOARD_TAKER`, `TEACHER`
+- supported values: `STUDENT`, `BOARD_TAKER`
 - when omitted, backend returns all public notes
 - when present, backend returns only notes where `note.targetProfileType` matches the selected category
 

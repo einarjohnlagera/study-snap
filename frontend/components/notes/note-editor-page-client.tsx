@@ -161,6 +161,9 @@ export function NoteEditorPageClient({
   const showTargetProfileTypeField = isTeacherSelectableNoteTarget(currentProfileType, currentUserRole);
   const generateLabel = resolveGenerateLabel(currentProfileType);
   const generateHelperText = resolveGenerateHelperText(currentProfileType);
+  const targetProfileTypeHelperText = isEditMode
+    ? "Changing audience will affect future quiz generation."
+    : "Choose the learner audience for this note before saving or generating.";
   const generatingLabel = currentProfileType === "BOARD_EXAM"
     ? "Preparing practice..."
     : currentProfileType === "TEACHER"
@@ -829,6 +832,7 @@ export function NoteEditorPageClient({
         courseProgramSuggestions={availableCourseProgramSuggestions}
         learnerLevel={profileLearnerLevel}
         showTargetProfileTypeField={showTargetProfileTypeField}
+        targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}
         backLabel={isEditMode ? "Note" : "Library"}
         onDismissFirstStudyHint={showFirstStudyHint ? () => {

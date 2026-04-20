@@ -72,11 +72,12 @@
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 
 - **Note target profile type system** — notes now store who they are written for separately from the creator's profile:
-  - added required `notes.target_profile_type` with `STUDENT`, `BOARD_TAKER`, and `TEACHER`
-  - existing notes are backfilled from the creator profile through a one-time migration (`BOARD_EXAM` -> `BOARD_TAKER`)
+  - added required `notes.target_profile_type` with `STUDENT` and `BOARD_TAKER`
+  - cleaned up incorrectly assigned teacher-target notes by falling back `TEACHER` -> `STUDENT` through a follow-up migration
   - `Student` and `Board Taker` note creation now auto-assign the note target profile from the current user profile without showing extra UI
   - `Teacher` and `Admin` note creation/editing now require `Who is this note for?` with `Student` and `Board Taker` options
-  - Public Library filtering now uses `note.targetProfileType` instead of creator profile type and defaults to the signed-in user's current profile category
+  - post-generation metadata editing now lets `Teacher` and `Admin` change note audience without triggering regeneration; the change only affects future quiz generation
+  - Public Library filtering now uses `note.targetProfileType` instead of creator profile type and offers `All`, `Student`, and `Board Taker`
   - category-empty Public Library states now guide users to `View all notes` when no notes exist yet for the selected audience
 
 - **Loading-state system** — standardized the app’s loading feedback for async actions, delayed redirects, and fetched sections:

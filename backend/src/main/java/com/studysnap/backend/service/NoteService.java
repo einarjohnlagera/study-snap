@@ -546,9 +546,6 @@ public class NoteService {
         if (profileType == ProfileType.BOARD_EXAM) {
             return NoteTargetProfileType.BOARD_TAKER;
         }
-        if (profileType == ProfileType.TEACHER) {
-            return NoteTargetProfileType.TEACHER;
-        }
         return NoteTargetProfileType.STUDENT;
     }
 

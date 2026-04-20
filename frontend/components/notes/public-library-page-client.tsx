@@ -24,7 +24,6 @@ import {
   listNotes,
   listPublicNotes,
   listSubjects,
-  type NoteTargetProfileType,
   type NoteListItemResponse,
 } from "@/lib/api";
 import {
@@ -45,10 +44,10 @@ import { buildCopiedNotePath } from "@/lib/public-note-copy";
 import {
   getNoteTargetProfileLabel,
   isPublicNoteTargetProfileFilter,
-  mapProfileTypeToNoteTargetProfile,
   NOTE_TARGET_PROFILE_ALL,
   PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY,
   PUBLIC_NOTE_TARGET_PROFILE_TYPES,
+  resolvePublicLibraryTargetProfileFilter,
   type NoteTargetProfileFilter,
 } from "@/lib/note-target-profile";
 
@@ -89,7 +88,7 @@ function resolveDefaultTargetProfileFilter(): NoteTargetProfileFilter {
   if (!authUser?.profileType) {
     return NOTE_TARGET_PROFILE_ALL;
   }
-  return mapProfileTypeToNoteTargetProfile(authUser.profileType);
+  return resolvePublicLibraryTargetProfileFilter(authUser.profileType);
 }
 
 function resolveInitialTargetProfileFilter(): NoteTargetProfileFilter {
@@ -503,7 +502,7 @@ export function PublicLibraryPageClient() {
         // Ignore localStorage access issues and fall back to the profile default.
       }
       setSelectedTargetProfile(
-        authUser?.profileType ? mapProfileTypeToNoteTargetProfile(authUser.profileType) : NOTE_TARGET_PROFILE_ALL,
+        authUser?.profileType ? resolvePublicLibraryTargetProfileFilter(authUser.profileType) : NOTE_TARGET_PROFILE_ALL,
       );
     };
 

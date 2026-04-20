@@ -182,6 +182,8 @@ Creation rules:
 - current teacher/admin audience choices:
   - `Student`
   - `Board Taker`
+- post-generation note metadata editing may still change `targetProfileType` for `Teacher` and `Admin`
+- changing `targetProfileType` does not regenerate existing quizzes or Study Packs; it only affects future quiz generation
 
 ## Dashboard Guardrails
 

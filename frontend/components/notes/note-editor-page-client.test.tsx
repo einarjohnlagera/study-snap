@@ -293,6 +293,7 @@ describe("NoteEditorPageClient", () => {
     expect((createNote as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
       subject: "Microbiology Lab",
       courseProgram: "Nursing",
+      targetProfileType: "STUDENT",
     }));
   });
 
@@ -325,6 +326,7 @@ describe("NoteEditorPageClient", () => {
         subject: "General Science",
         courseProgram: "Nursing",
         tags: ["review"],
+        targetProfileType: "STUDENT",
       }));
       expect(createStudyPackFromNote).toHaveBeenCalledWith("note-created");
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=summary");
@@ -362,6 +364,8 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findAllByRole("button", { name: "Create Quiz" })).not.toHaveLength(0);
     expect(screen.getAllByText("Generates quiz questions from your material.")).not.toHaveLength(0);
+    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
   });
 
   it("uses the board exam generate label and helper text for board exam users", async () => {

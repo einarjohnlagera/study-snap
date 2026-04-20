@@ -81,7 +81,7 @@ High-level model:
 
 - `notes` table stores user-authored fields (`title`, `courseProgram`, `subject`, `content`, `tags`).
 - `notes.visibility` controls whether notes are private or listed in Public Library.
-- `notes.targetProfileType` stores who the note is written for (`STUDENT`, `BOARD_TAKER`, `TEACHER`) and is separate from the creator's user profile.
+- `notes.targetProfileType` stores who the note is written for (`STUDENT`, `BOARD_TAKER`) and is separate from the creator's user profile.
 - Generated fields are stored and linked to the same Note (`summary`, `key concepts`, `quizzes`).
 - Quiz sessions and performance are linked by `noteId`.
 - Copy creates a new Draft Note row with copied user-authored fields only.
@@ -104,6 +104,7 @@ Creation rules:
 - `Teacher` and `Admin` note creation/editing must require `Who is this note for?`.
 - Teacher/Admin audience choices are currently limited to `Student` and `Board Taker`.
 - `targetProfileType` is required for every saved note.
+- changing `targetProfileType` does not regenerate existing Study Packs or quizzes; it only affects future quiz generation
 
 Copy rule:
 
@@ -217,11 +218,10 @@ Public Library browsing supports an audience-first filter based on note audience
   - `All`
   - `Student`
   - `Board Taker`
-  - `Teacher`
 - signed-in users default to their mapped audience:
   - `Student` -> `Student`
   - `Board Taker` -> `Board Taker`
-  - `Teacher` -> `Teacher`
+- `Teacher` and `Admin` default to `All` because note audience is limited to student-facing targets
 - guests default to `All`
 - empty category state copy should use:
   - `No notes available for this category yet.`
