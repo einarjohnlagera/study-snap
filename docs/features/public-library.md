@@ -43,6 +43,7 @@ Switching from discovery to filter mode:
 - Selecting any filter (Course, Learner Level, Subject, Tags, Source) → filter mode
 - Changing sort from Newest → filter mode
 - Clicking a subject chip or tag chip in the top rails → applies filter → filter mode
+- Changing the audience rail (`All`, `Student`, `Board Taker`, `Teacher`) reloads Public Library for that note audience
 
 ## Ranking Audit Summary
 
@@ -154,6 +155,7 @@ Density improvements should come from tighter section limits and focused section
 
 Public Library filters:
 
+- `Audience` / note target profile
 - `Course / Program`
 - `Learner Level` when public note-owner metadata is available
 - `Subject`
@@ -164,6 +166,16 @@ Public Library filters:
 
 Public Library browsing rails:
 
+- `Audience` is note-owned and uses:
+  - `All`
+  - `Student`
+  - `Board Taker`
+- default audience:
+  - `Student` -> `Student`
+  - `Board Taker` -> `Board Taker`
+  - `Teacher` -> `All`
+  - guest -> `All`
+- audience filtering must use `note.targetProfileType`, never the creator's `user.profileType`
 - `Subjects` stays single-select with `All` as the default
 - `Popular Tags` stays multi-select and should use OR logic within the tag group
 - both rails should stay on one horizontal scroll line instead of wrapping
@@ -182,6 +194,19 @@ Public Library browsing rails:
 - Case-insensitive match via `SubjectNormalizationUtils.normalizeForLookup`
 - Applied after fetching all public notes, before sort
 - Frontend currently performs client-side filtering; the `listPublicNotes({ subject })` API function supports passing subject for backend filtering when needed
+
+`GET /notes/public` also accepts an optional `?targetProfileType=` query parameter:
+
+- supported values: `STUDENT`, `BOARD_TAKER`
+- when omitted, backend returns all public notes
+- when present, backend returns only notes where `note.targetProfileType` matches the selected category
+
+## Empty state
+
+If the selected audience category has no matching notes and no other filters are active:
+
+- show `No notes available for this category yet.`
+- show `View all notes`
 
 ## Sorting
 

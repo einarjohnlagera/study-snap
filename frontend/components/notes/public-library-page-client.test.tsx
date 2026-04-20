@@ -36,6 +36,7 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
     title: "Community Note",
     courseProgram: "Engineering",
     learnerLevel: "COLLEGE",
+    targetProfileType: "STUDENT",
     subject: "Physics",
     tags: ["motion"],
     contentPreview: "Community preview",
@@ -59,7 +60,7 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
 }
 
 describe("PublicLibraryPageClient", () => {
-  let currentAuthUser: { id: string } | null = { id: "user-1" };
+  let currentAuthUser: { id: string; profileType?: "STUDENT" | "BOARD_EXAM" | "TEACHER" } | null = { id: "user-1" };
 
   beforeAll(() => {
     const authModule = jest.requireMock("@/lib/auth") as { getAuthUser: jest.Mock };
@@ -81,6 +82,7 @@ describe("PublicLibraryPageClient", () => {
 
   beforeEach(() => {
     pushMock.mockReset();
+    window.localStorage.clear();
     (copyNote as jest.Mock).mockReset();
     (listNotes as jest.Mock).mockReset();
     (listPublicNotes as jest.Mock).mockReset();
@@ -134,6 +136,23 @@ describe("PublicLibraryPageClient", () => {
     expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
     expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Copy to My Library" })).not.toBeInTheDocument();
+  });
+
+  it("defaults to the student's note audience and hides any Teacher audience filter", async () => {
+    currentAuthUser = { id: "user-1", profileType: "STUDENT" };
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      createPublicNote({
+        id: "note-student",
+        title: "Student Note",
+        targetProfileType: "STUDENT",
+      }),
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Student Note")).toBeInTheDocument();
+    expect(listPublicNotes).toHaveBeenCalledWith({ targetProfileType: "STUDENT" });
+    expect(screen.queryByRole("button", { name: "Teacher" })).not.toBeInTheDocument();
   });
 
   it("updates the card like count when a user likes a public note", async () => {

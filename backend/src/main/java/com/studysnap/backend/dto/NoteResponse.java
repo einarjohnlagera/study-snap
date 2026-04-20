@@ -8,6 +8,7 @@ public record NoteResponse(
         String title,
         String subject,
         String courseProgram,
+        String targetProfileType,
         List<String> tags,
         String content,
         String visibility,

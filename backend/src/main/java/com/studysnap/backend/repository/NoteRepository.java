@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.NoteEntity;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -20,6 +21,7 @@ public interface NoteRepository extends JpaRepository<NoteEntity, UUID> {
     long countByVisibility(NoteVisibility visibility);
 
     List<NoteEntity> findByVisibilityOrderByUpdatedAtDesc(NoteVisibility visibility);
+    List<NoteEntity> findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility visibility, NoteTargetProfileType targetProfileType);
 
     @Query("""
             select n.subject

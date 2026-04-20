@@ -89,6 +89,7 @@ const baseNote = {
   title: "Test Note",
   subject: "Biology",
   courseProgram: "Nursing",
+  targetProfileType: "STUDENT" as const,
   tags: ["cells"],
   content: "Cell content",
   visibility: "PRIVATE" as const,
@@ -300,7 +301,7 @@ describe("PrivateNoteDetailPageClient", () => {
     const menuAnchor = menuTrigger.parentElement;
     const titleColumn = title.parentElement;
 
-    expect(title).toHaveClass("break-words");
+    expect(title).toHaveClass("wrap-break-word");
     expect(menuTrigger).toBeVisible();
     expect(menuAnchor).toHaveClass("relative", "shrink-0", "self-start");
     expect(titleColumn).toHaveClass("min-w-0", "flex-1", "space-y-3");
@@ -346,7 +347,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("for generated notes, Edit enables inline metadata editing instead of routing", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
@@ -368,6 +369,8 @@ describe("PrivateNoteDetailPageClient", () => {
         "Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
+    expect(screen.getByText("Changing audience will affect future quiz generation.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start Quick Review" })).not.toBeInTheDocument();
   });
@@ -597,7 +600,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You've reached your monthly quiz limit" })).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -680,7 +683,10 @@ describe("PrivateNoteDetailPageClient", () => {
     });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
-      studyPackStatus: "DRAFT",
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
       generatedQuiz: null,
     });
 
@@ -739,7 +745,10 @@ describe("PrivateNoteDetailPageClient", () => {
     });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
-      studyPackStatus: "DRAFT",
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
       generatedQuiz: null,
     });
 
@@ -747,7 +756,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You've reached your monthly quiz generation limit" })).toBeInTheDocument();
     expect(generateGeneratedQuiz).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -760,6 +769,10 @@ describe("PrivateNoteDetailPageClient", () => {
     });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
+      studyPackStatus: "STUDY_PACK_READY",
+      studyPackId: "sp-1",
+      summary: "Generated summary",
+      keyConcepts: ["Cells"],
       generatedQuiz: {
         noteId: "note-1",
         questions: [
@@ -1063,8 +1076,8 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
 
-    expect(await screen.findByText("Monthly Limit Reached")).toBeInTheDocument();
-    expect(screen.getByText(/Your limit resets on April 20\./)).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You’ve used all your study pack usage for this month" })).toBeInTheDocument();
+    expect(screen.getByText(/Your study pack usage will reset on April 20\./)).toBeInTheDocument();
   });
 
   it("shows the upgrade paywall modal when Generate is clicked at the free Study Pack limit", async () => {
@@ -1111,8 +1124,8 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit" })).toBeInTheDocument();
-    expect(screen.queryByText("Monthly Limit Reached")).not.toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You've reached your monthly study pack limit" })).toBeInTheDocument();
+    expect(screen.queryByText("You’ve used all your study pack usage for this month")).not.toBeInTheDocument();
   });
 
   it("shows quiz view when tab=quiz is requested", async () => {

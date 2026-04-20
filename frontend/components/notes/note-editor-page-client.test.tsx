@@ -60,6 +60,7 @@ const baseNote = {
   title: "Draft Note",
   subject: "Biology",
   courseProgram: "Nursing",
+  targetProfileType: "STUDENT" as const,
   tags: ["cells"],
   content: "Cell content",
   visibility: "PRIVATE" as const,
@@ -75,6 +76,7 @@ const baseNote = {
   summary: null,
   keyConcepts: [],
   quiz: [],
+  generatedQuiz: null,
   quizCount: 0,
   quickReviewAvailable: false,
   challengeQuizAvailable: false,
@@ -291,6 +293,7 @@ describe("NoteEditorPageClient", () => {
     expect((createNote as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
       subject: "Microbiology Lab",
       courseProgram: "Nursing",
+      targetProfileType: "STUDENT",
     }));
   });
 
@@ -323,6 +326,7 @@ describe("NoteEditorPageClient", () => {
         subject: "General Science",
         courseProgram: "Nursing",
         tags: ["review"],
+        targetProfileType: "STUDENT",
       }));
       expect(createStudyPackFromNote).toHaveBeenCalledWith("note-created");
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=summary");
@@ -360,6 +364,24 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findAllByRole("button", { name: "Create Quiz" })).not.toHaveLength(0);
     expect(screen.getAllByText("Generates quiz questions from your material.")).not.toHaveLength(0);
+    expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
+    expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
+  });
+
+  it("requires teachers to select an audience before saving or generating", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+
+    render(<NoteEditorPageClient initialMode="quiz" />);
+
+    const contentInput = await screen.findByLabelText("Content");
+    fireEvent.change(contentInput, { target: { value: "Teacher note content" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
+
+    expect(await screen.findByText("Please select an audience")).toBeInTheDocument();
+    expect(createNote).not.toHaveBeenCalled();
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
 
   it("uses the board exam generate label and helper text for board exam users", async () => {
@@ -477,7 +499,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit" })).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your monthly study pack limit")).toBeInTheDocument();
   });
 
   it("shows the exact remaining Study Pack count in the near-limit banner", async () => {
@@ -721,7 +743,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
-    expect(screen.getByText(/You’ve reached your image-to-text limit for this month\./i)).toBeInTheDocument();
+    expect(screen.getByText(/You've reached your image-to-text limit for this month\./i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
     expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
@@ -776,6 +798,7 @@ describe("NoteEditorPageClient", () => {
 
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
+    fireEvent.change(screen.getByLabelText("Who is this note for?"), { target: { value: "STUDENT" } });
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
 

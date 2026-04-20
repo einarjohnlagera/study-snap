@@ -81,9 +81,34 @@ High-level model:
 
 - `notes` table stores user-authored fields (`title`, `courseProgram`, `subject`, `content`, `tags`).
 - `notes.visibility` controls whether notes are private or listed in Public Library.
+- `notes.targetProfileType` stores who the note is written for (`STUDENT`, `BOARD_TAKER`) and is separate from the creator's user profile.
 - Generated fields are stored and linked to the same Note (`summary`, `key concepts`, `quizzes`).
 - Quiz sessions and performance are linked by `noteId`.
 - Copy creates a new Draft Note row with copied user-authored fields only.
+
+### Note target profile type
+
+Note audience is note-owned metadata, not user-owned personalization.
+
+Rules:
+
+- `User.profileType` describes the creator's current persona.
+- `Note.targetProfileType` describes who the note is for.
+- Public Library audience filtering must use `Note.targetProfileType` only.
+- Creator profile type must not be used as a proxy for note audience filtering.
+
+Creation rules:
+
+- `Student` note creation auto-assigns `Note.targetProfileType = STUDENT`.
+- `Board Taker` note creation auto-assigns `Note.targetProfileType = BOARD_TAKER`.
+- `Teacher` and `Admin` note creation/editing must require `Who is this note for?`.
+- Teacher/Admin audience choices are currently limited to `Student` and `Board Taker`.
+- `targetProfileType` is required for every saved note.
+- changing `targetProfileType` does not regenerate existing Study Packs or quizzes; it only affects future quiz generation
+
+Copy rule:
+
+- copying a note preserves `targetProfileType` on the new Draft note.
 
 ## Profile Types
 
@@ -184,6 +209,23 @@ All users share the same learning engine:
 `Note -> Study Pack -> Quiz -> Activity -> Weak Concepts`
 
 Do not create separate note, study-pack, quiz, or activity systems per profile type.
+
+## Public Library audience filtering
+
+Public Library browsing supports an audience-first filter based on note audience:
+
+- filter options:
+  - `All`
+  - `Student`
+  - `Board Taker`
+- signed-in users default to their mapped audience:
+  - `Student` -> `Student`
+  - `Board Taker` -> `Board Taker`
+- `Teacher` and `Admin` default to `All` because note audience is limited to student-facing targets
+- guests default to `All`
+- empty category state copy should use:
+  - `No notes available for this category yet.`
+  - CTA: `View all notes`
 
 ## Product Philosophy
 

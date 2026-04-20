@@ -2,17 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
-import type { LearnerLevel } from "@/lib/api";
+import type { LearnerLevel, NoteTargetProfileType } from "@/lib/api";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getNoteTargetProfileLabel } from "@/lib/note-target-profile";
 
 export type NoteEditorDraft = {
   title: string;
   subject: string;
   courseProgram: string;
+  targetProfileType: NoteTargetProfileType | "";
   content: string;
   tags: string[];
 };
@@ -23,6 +25,7 @@ type NoteEditorFormProps = {
   onTitleChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
   onCourseProgramChange: (value: string) => void;
+  onTargetProfileTypeChange?: (value: NoteTargetProfileType | "") => void;
   onContentChange: (value: string) => void;
   onTagsChange?: (nextTags: string[]) => void;
   onSave: () => void;
@@ -60,6 +63,8 @@ type NoteEditorFormProps = {
   subjectSuggestions?: string[];
   courseProgramSuggestions?: string[];
   learnerLevel?: LearnerLevel | "" | null;
+  showTargetProfileTypeField?: boolean;
+  targetProfileTypeHelperText?: string;
   backHref?: string;
   backLabel?: string;
 };
@@ -75,6 +80,7 @@ export function NoteEditorForm({
   onTitleChange,
   onSubjectChange,
   onCourseProgramChange,
+  onTargetProfileTypeChange,
   onContentChange,
   onTagsChange,
   onSave,
@@ -112,6 +118,8 @@ export function NoteEditorForm({
   subjectSuggestions = [],
   courseProgramSuggestions = [],
   learnerLevel = null,
+  showTargetProfileTypeField = false,
+  targetProfileTypeHelperText = "Choose the learner audience for this note.",
   backHref,
   backLabel,
 }: Readonly<NoteEditorFormProps>) {
@@ -297,6 +305,28 @@ export function NoteEditorForm({
               />
               <p className="text-xs text-foreground/60">Used to personalize content and quiz recommendations.</p>
             </div>
+
+            {showTargetProfileTypeField ? (
+              <div className="space-y-2">
+              <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
+                Who is this note for?
+              </label>
+              <select
+                id="note-target-profile-type"
+                value={note.targetProfileType}
+                onChange={(event) => onTargetProfileTypeChange?.(event.target.value as NoteTargetProfileType | "")}
+                disabled={isCopying}
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+              >
+                <option value="">Select an audience</option>
+                <option value="STUDENT">{getNoteTargetProfileLabel("STUDENT")}</option>
+                <option value="BOARD_TAKER">{getNoteTargetProfileLabel("BOARD_TAKER")}</option>
+              </select>
+              <p className="text-xs text-foreground/60">
+                {targetProfileTypeHelperText}
+              </p>
+              </div>
+            ) : null}
           </div>
 
           {showTagsSection ? (

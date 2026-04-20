@@ -19,6 +19,7 @@ import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
 import com.studysnap.backend.dto.UpsertNoteRequest;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
@@ -337,10 +338,11 @@ public class NoteController {
     public List<NoteListItemResponse> listPublic(
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "subject", required = false) String subject,
+            @RequestParam(value = "targetProfileType", required = false) NoteTargetProfileType targetProfileType,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID viewerUserId = user == null ? null : user.userId();
-        return noteService.listPublic(viewerUserId, sort, subject);
+        return noteService.listPublic(viewerUserId, sort, subject, targetProfileType);
     }
 
     @GetMapping("/public/{id}")

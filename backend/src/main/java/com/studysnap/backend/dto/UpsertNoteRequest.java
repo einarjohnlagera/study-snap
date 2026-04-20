@@ -9,6 +9,7 @@ public record UpsertNoteRequest(
         String subject,
         String courseProgram,
         List<String> tags,
+        String targetProfileType,
         @NotBlank(message = "Please provide note content before saving.")
         String content
 ) {

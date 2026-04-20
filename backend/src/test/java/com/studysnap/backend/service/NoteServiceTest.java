@@ -6,14 +6,17 @@ import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.UpsertNoteRequest;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PublicNoteLikeEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.repository.AnalyticsEventRepository;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
@@ -40,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -92,6 +96,11 @@ class NoteServiceTest {
         lenient().when(publicNoteLikeRepository.countLikesByNoteIds(any())).thenReturn(List.of());
         lenient().when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(any(), any())).thenReturn(List.of());
         lenient().when(analyticsEventRepository.countPublicNoteEventsByTypeAndNoteIds(any(), any())).thenReturn(List.of());
+        lenient().when(userRepository.findById(any())).thenAnswer(invocation -> {
+            UUID userId = invocation.getArgument(0);
+            UserEntity user = buildUser(userId, "user@example.com");
+            return Optional.of(user);
+        });
         lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.ADAPTIVE_QUIZ))).thenReturn(false);
         lenient().when(featureGateService.hasFeatureAccess(any(PlanType.class), eq(Feature.DIFFICULTY_SELECTION))).thenReturn(false);
@@ -110,6 +119,7 @@ class NoteServiceTest {
                 "  Web Dev  ",
                 null,
                 List.of("react", "frontend"),
+                null,
                 "  hooks and state  "
         );
 
@@ -123,14 +133,61 @@ class NoteServiceTest {
         assertThat(saved.getVisibility()).isEqualTo(NoteVisibility.PRIVATE);
         assertThat(saved.getCourseProgram()).isEqualTo("Computer Science");
         assertThat(saved.getContent()).isEqualTo("hooks and state");
+        assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
         assertThat(saved.getCopiedFromUserId()).isNull();
         assertThat(saved.getCopiedFromPublic()).isFalse();
 
         assertThat(created.studyPackStatus()).isEqualTo("DRAFT");
         assertThat(created.courseProgram()).isEqualTo("Computer Science");
+        assertThat(created.targetProfileType()).isEqualTo("STUDENT");
         assertThat(created.copiedFromUserId()).isNull();
         assertThat(created.copiedFromPublic()).isFalse();
         verify(analyticsService).trackEvent(eq(ownerUserId), eq(AnalyticsEventType.NOTE_CREATED), eq(saved.getId()), any());
+    }
+
+    @Test
+    void create_boardTakerAutoAssignsBoardTakerTargetProfileType() {
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = buildUser(ownerUserId, "board@example.com");
+        owner.setProfileType(ProfileType.BOARD_EXAM);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Board note",
+                "Subject",
+                null,
+                List.of(),
+                null,
+                "content"
+        );
+
+        noteService.create(request, ownerUserId);
+
+        verify(noteRepository).save(argThat(note -> note.getTargetProfileType() == NoteTargetProfileType.BOARD_TAKER));
+    }
+
+    @Test
+    void create_teacherRequiresExplicitTargetProfileType() {
+        UUID ownerUserId = UUID.randomUUID();
+        UserEntity owner = buildUser(ownerUserId, "teacher@example.com");
+        owner.setProfileType(ProfileType.TEACHER);
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
+
+        UpsertNoteRequest request = new UpsertNoteRequest(
+                "Teacher note",
+                "Subject",
+                null,
+                List.of(),
+                null,
+                "content"
+        );
+
+        assertThatThrownBy(() -> noteService.create(request, ownerUserId))
+                .isInstanceOf(AppException.class)
+                .extracting(error -> ((AppException) error).getCode())
+                .isEqualTo("NOTE_TARGET_PROFILE_TYPE_REQUIRED");
+
+        verify(noteRepository, never()).save(any(NoteEntity.class));
     }
 
     @Test
@@ -163,6 +220,7 @@ class NoteServiceTest {
                 " biology-cell division ",
                 null,
                 List.of(),
+                null,
                 "cell notes"
         );
 
@@ -186,6 +244,7 @@ class NoteServiceTest {
                 "Physics",
                 null,
                 List.of(),
+                null,
                 "motion"
         );
 
@@ -201,11 +260,13 @@ class NoteServiceTest {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity draftNote = buildNote(noteId, ownerUserId, NoteStatus.DRAFT, NoteVisibility.PRIVATE, "old content");
+        UserEntity owner = buildUser(ownerUserId, "owner@example.com");
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(draftNote));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
         when(studyPackRepository.findByNoteId(noteId)).thenReturn(Optional.empty());
         when(noteRepository.findAllSubjectValues()).thenReturn(List.of("Biology – Cell Division"));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("New title", "biology- cell division", "Pre-Med", List.of("cells"), "new content");
+        UpsertNoteRequest request = new UpsertNoteRequest("New title", "biology- cell division", "Pre-Med", List.of("cells"), null, "new content");
         NoteResponse updated = noteService.update(noteId.toString(), request, ownerUserId);
 
         assertThat(draftNote.getTitle()).isEqualTo("New title");
@@ -222,9 +283,11 @@ class NoteServiceTest {
         UUID ownerUserId = UUID.randomUUID();
         UUID noteId = UUID.randomUUID();
         NoteEntity generatedNote = buildNote(noteId, ownerUserId, NoteStatus.GENERATED, NoteVisibility.PRIVATE, "locked content");
+        UserEntity owner = buildUser(ownerUserId, "owner@example.com");
         when(noteRepository.findByIdAndOwnerUserId(noteId, ownerUserId)).thenReturn(Optional.of(generatedNote));
+        when(userRepository.findById(ownerUserId)).thenReturn(Optional.of(owner));
 
-        UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", "Nursing", List.of("tag"), "edited content");
+        UpsertNoteRequest request = new UpsertNoteRequest("Title", "Subject", "Nursing", List.of("tag"), null, "edited content");
 
 
         String id = noteId.toString();
@@ -245,6 +308,7 @@ class NoteServiceTest {
         source.setSubject("Math");
         source.setCourseProgram("Engineering");
         source.setTags(new String[]{"algebra"});
+        source.setTargetProfileType(NoteTargetProfileType.STUDENT);
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
 
         NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), ownerUserId);
@@ -255,6 +319,7 @@ class NoteServiceTest {
         assertThat(saved.getStatus()).isEqualTo(NoteStatus.DRAFT);
         assertThat(saved.getSourceNoteId()).isEqualTo(sourceNoteId);
         assertThat(saved.getCourseProgram()).isEqualTo("Engineering");
+        assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.STUDENT);
         assertThat(saved.getCopiedFromUserId()).isNull();
         assertThat(saved.getCopiedFromPublic()).isFalse();
         assertThat(copied.copiedFromUserId()).isNull();
@@ -271,6 +336,7 @@ class NoteServiceTest {
         source.setSubject("History");
         source.setCourseProgram("Humanities");
         source.setTags(new String[]{"ww2"});
+        source.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
         when(noteRepository.findById(sourceNoteId)).thenReturn(Optional.of(source));
 
         NoteResponse copied = noteService.copyNote(sourceNoteId.toString(), ownerUserId);
@@ -282,6 +348,7 @@ class NoteServiceTest {
         assertThat(saved.getCopiedFromUserId()).isEqualTo(sourceOwnerUserId);
         assertThat(saved.getCopiedFromTitle()).isEqualTo("Public source");
         assertThat(saved.getCourseProgram()).isEqualTo("Humanities");
+        assertThat(saved.getTargetProfileType()).isEqualTo(NoteTargetProfileType.BOARD_TAKER);
         assertThat(saved.getCopiedFromPublic()).isTrue();
         assertThat(saved.getCopiedAt()).isNotNull();
 
@@ -453,6 +520,7 @@ class NoteServiceTest {
         NoteEntity officialNote = buildNote(officialNoteId, officialOwnerUserId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "official content");
         officialNote.setTitle("Official note");
         officialNote.setCourseProgram("Chemistry");
+        officialNote.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
         StudyPackEntity officialStudyPack = new StudyPackEntity();
         officialStudyPack.setId(UUID.randomUUID());
         officialStudyPack.setNoteId(officialNoteId);
@@ -476,7 +544,7 @@ class NoteServiceTest {
         when(userRepository.findAllById(List.of(viewerUserId, officialOwnerUserId)))
                 .thenReturn(List.of(viewer, officialOwner));
 
-        var response = noteService.listPublic(viewerUserId, null, null);
+        var response = noteService.listPublic(viewerUserId, null, null, null);
 
         assertThat(response).hasSize(2);
         assertThat(response)
@@ -485,6 +553,7 @@ class NoteServiceTest {
         assertThat(response.getFirst().ownerUserId()).isEqualTo(viewerUserId.toString());
         assertThat(response.getFirst().courseProgram()).isEqualTo("Nursing");
         assertThat(response.getFirst().learnerLevel()).isEqualTo("COLLEGE");
+        assertThat(response.getFirst().targetProfileType()).isEqualTo("STUDENT");
         assertThat(response.getFirst().authorDisplayName()).isEqualTo("Viewer");
         assertThat(response.getFirst().contentPreview()).isEqualTo("viewer content");
         assertThat(response.getFirst().summaryPreview()).isEmpty();
@@ -500,6 +569,7 @@ class NoteServiceTest {
         assertThat(response.get(1).ownerUserId()).isEqualTo(officialOwnerUserId.toString());
         assertThat(response.get(1).courseProgram()).isEqualTo("Chemistry");
         assertThat(response.get(1).learnerLevel()).isEqualTo("PROFESSIONAL");
+        assertThat(response.get(1).targetProfileType()).isEqualTo("BOARD_TAKER");
         assertThat(response.get(1).authorDisplayName()).isEqualTo("NoteLib");
         assertThat(response.get(1).contentPreview()).isEqualTo("official content");
         assertThat(response.get(1).summaryPreview()).isEqualTo("Official summary preview");
@@ -534,7 +604,7 @@ class NoteServiceTest {
         when(publicNoteLikeRepository.findLikedNoteIdsByUserIdAndNoteIdIn(viewerUserId, List.of(likedNoteId, plainNoteId)))
                 .thenReturn(List.of(likedNoteId));
 
-        var response = noteService.listPublic(viewerUserId, null, null);
+        var response = noteService.listPublic(viewerUserId, null, null, null);
 
         assertThat(response).extracting(NoteListItemResponse::likeCount).containsExactly(12L, 0L);
         assertThat(response).extracting(NoteListItemResponse::likedByCurrentUser).containsExactly(true, false);
@@ -617,7 +687,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, null, null);
+        var result = noteService.listPublic(null, null, null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Note1", "Note2");
     }
@@ -658,7 +728,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(highViews, lowViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "featured", null);
+        var result = noteService.listPublic(null, "featured", null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("HighScore", "LowScore");
     }
@@ -699,7 +769,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(olderViews, newerViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "featured", null);
+        var result = noteService.listPublic(null, "featured", null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("NewerNote", "OlderNote");
     }
@@ -737,7 +807,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(eligibleViews, noSummaryViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "featured", null);
+        var result = noteService.listPublic(null, "featured", null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Eligible");
     }
@@ -766,7 +836,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(manyLikes, fewLikes));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "popular", null);
+        var result = noteService.listPublic(null, "popular", null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("ManyCopies", "FewCopies");
     }
@@ -800,7 +870,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(popularViews, belowViews));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "popular", null);
+        var result = noteService.listPublic(null, "popular", null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Popular");
     }
@@ -824,7 +894,7 @@ class NoteServiceTest {
                 .thenReturn(List.of(old, recent));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "recent", null);
+        var result = noteService.listPublic(null, "recent", null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("RecentNote", "OldNote");
     }
@@ -840,7 +910,7 @@ class NoteServiceTest {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of(note1, note2));
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
-        var result = noteService.listPublic(null, "unknown_value", null);
+        var result = noteService.listPublic(null, "unknown_value", null, null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("First", "Second");
     }
@@ -849,9 +919,9 @@ class NoteServiceTest {
     void listPublic_withEmptyPublicNotes_returnsEmptyRegardlessOfSort() {
         when(noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)).thenReturn(List.of());
 
-        assertThat(noteService.listPublic(null, "featured", null)).isEmpty();
-        assertThat(noteService.listPublic(null, "popular", null)).isEmpty();
-        assertThat(noteService.listPublic(null, "recent", null)).isEmpty();
+        assertThat(noteService.listPublic(null, "featured", null, null)).isEmpty();
+        assertThat(noteService.listPublic(null, "popular", null, null)).isEmpty();
+        assertThat(noteService.listPublic(null, "recent", null, null)).isEmpty();
     }
 
     @Test
@@ -868,9 +938,37 @@ class NoteServiceTest {
         when(userRepository.findAllById(any())).thenReturn(List.of(owner));
 
         // Case-insensitive match
-        var result = noteService.listPublic(null, null, "Integral Calculus");
+        var result = noteService.listPublic(null, null, "Integral Calculus", null);
 
         assertThat(result).extracting(NoteListItemResponse::title).containsExactly("MatchNote");
+    }
+
+    @Test
+    void listPublic_withTargetProfileFilter_usesNoteTargetProfileType() {
+        UUID viewerUserId = UUID.randomUUID();
+        UUID studentOwnerId = UUID.randomUUID();
+        UUID teacherOwnerId = UUID.randomUUID();
+
+        NoteEntity studentTargetNote = buildNote(UUID.randomUUID(), teacherOwnerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "student target");
+        studentTargetNote.setTitle("Student target");
+        studentTargetNote.setTargetProfileType(NoteTargetProfileType.STUDENT);
+        NoteEntity boardTargetNote = buildNote(UUID.randomUUID(), studentOwnerId, NoteStatus.GENERATED, NoteVisibility.PUBLIC, "board target");
+        boardTargetNote.setTitle("Board target");
+        boardTargetNote.setTargetProfileType(NoteTargetProfileType.BOARD_TAKER);
+
+        UserEntity studentOwner = buildUser(studentOwnerId, "student@example.com");
+        studentOwner.setProfileType(ProfileType.STUDENT);
+        UserEntity teacherOwner = buildUser(teacherOwnerId, "teacher@example.com");
+        teacherOwner.setProfileType(ProfileType.TEACHER);
+
+        when(noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, NoteTargetProfileType.BOARD_TAKER))
+                .thenReturn(List.of(boardTargetNote));
+        when(userRepository.findAllById(List.of(studentOwnerId))).thenReturn(List.of(studentOwner));
+
+        var result = noteService.listPublic(viewerUserId, null, null, NoteTargetProfileType.BOARD_TAKER);
+
+        assertThat(result).extracting(NoteListItemResponse::title).containsExactly("Board target");
+        assertThat(result.getFirst().targetProfileType()).isEqualTo("BOARD_TAKER");
     }
 
     // --- sort test helpers ---
@@ -910,6 +1008,8 @@ class NoteServiceTest {
         user.setId(userId);
         user.setFirstName("Test");
         user.setEmail(email);
+        user.setRole(UserRole.USER);
+        user.setProfileType(ProfileType.STUDENT);
         return user;
     }
 
@@ -930,6 +1030,7 @@ class NoteServiceTest {
         note.setContent(content);
         note.setStatus(status);
         note.setVisibility(visibility);
+        note.setTargetProfileType(NoteTargetProfileType.STUDENT);
         note.setSourceNoteId(null);
         note.setCopiedFromNoteId(null);
         note.setCopiedFromUserId(null);

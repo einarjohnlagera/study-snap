@@ -149,6 +149,8 @@ Copy includes only:
 
 - `title`
 - `subject`
+- `courseProgram`
+- `targetProfileType`
 - `tags`
 - `content`
 
@@ -167,6 +169,21 @@ Result:
 - redirect to unified Note Detail page
 - if copied from a public note, preserve attribution via `copiedFromNoteId` and `copiedFromUserId`
 - copied notes should show `Copied from {title} in Public Library.` on Note Detail when attribution is available
+
+## Note audience assignment
+
+Every note must store who it is written for through `targetProfileType`.
+
+Creation rules:
+
+- `Student` creators auto-save new notes with `targetProfileType = STUDENT`
+- `Board Taker` creators auto-save new notes with `targetProfileType = BOARD_TAKER`
+- `Teacher` and `Admin` creators must choose `Who is this note for?` before saving or generating
+- current teacher/admin audience choices:
+  - `Student`
+  - `Board Taker`
+- post-generation note metadata editing may still change `targetProfileType` for `Teacher` and `Admin`
+- changing `targetProfileType` does not regenerate existing quizzes or Study Packs; it only affects future quiz generation
 
 ## Dashboard Guardrails
 
