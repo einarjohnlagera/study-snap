@@ -293,7 +293,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
       <AppModal
         isOpen={showRegenerateConfirm}
         title="Regenerate quiz?"
-        description="This will create a new set of questions and costs 1 credit."
+        description="This will create a new set of questions and uses 1 quiz from your monthly usage."
         onClose={() => {
           if (!regenerating) {
             setShowRegenerateConfirm(false);

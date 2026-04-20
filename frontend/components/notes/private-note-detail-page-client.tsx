@@ -1759,12 +1759,12 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-md border border-border bg-background p-3">
                         <p className="text-xs uppercase tracking-wide text-foreground/60">Quick Review</p>
-                        <p className="mt-1 text-sm text-foreground/80">Attempts: {quickSummary?.attempts ?? 0}</p>
+                        <p className="mt-1 text-sm text-foreground/80">Sessions: {quickSummary?.attempts ?? 0}</p>
                         <p className="text-sm text-foreground/80">Last score: {quickSummary?.lastScorePercentage ?? "-"}</p>
                       </div>
                       <div className="rounded-md border border-border bg-background p-3">
                         <p className="text-xs uppercase tracking-wide text-foreground/60">Challenge Quiz</p>
-                        <p className="mt-1 text-sm text-foreground/80">Attempts: {challengeSummary?.attempts ?? 0}</p>
+                        <p className="mt-1 text-sm text-foreground/80">Sessions: {challengeSummary?.attempts ?? 0}</p>
                         <p className="text-sm text-foreground/80">Best score: {challengeSummary?.bestScorePercentage ?? "-"}</p>
                       </div>
                     </div>
@@ -1887,7 +1887,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       <AppModal
         isOpen={showRegenerateQuizConfirm}
         title="Regenerate quiz?"
-        description="This will create a new set of questions and costs 1 credit."
+        description="This will create a new set of questions and uses 1 quiz from your monthly usage."
         onClose={() => {
           if (!generatingTeacherQuiz) {
             setShowRegenerateQuizConfirm(false);

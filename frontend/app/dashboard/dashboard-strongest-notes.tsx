@@ -99,7 +99,7 @@ export function DashboardStrongestNotes() {
               </span>
             </div>
             <p className="mt-0.5 text-xs text-foreground/60">
-              {note.attemptCount} {note.attemptCount === 1 ? "attempt" : "attempts"}
+              {note.attemptCount} {note.attemptCount === 1 ? "session" : "sessions"}
             </p>
           </button>
         ))}

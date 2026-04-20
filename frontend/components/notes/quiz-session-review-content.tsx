@@ -49,7 +49,7 @@ export function QuizSessionReviewContent({
           </div>
           {review.retryCount > 0 ? (
             <div className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground/70">
-              Retry attempts: {review.retryCount}
+              Retries: {review.retryCount}
             </div>
           ) : null}
         </div>

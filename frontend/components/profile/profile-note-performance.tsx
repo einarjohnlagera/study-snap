@@ -130,7 +130,7 @@ export function ProfileNotePerformance() {
                     Best: {Math.round(note.bestScore)}%
                     {note.averageScore != null ? ` \u00b7 Avg: ${Math.round(note.averageScore)}%` : ""}
                     {" \u00b7 "}
-                    {note.attemptCount} {note.attemptCount === 1 ? "attempt" : "attempts"}
+                    {note.attemptCount} {note.attemptCount === 1 ? "session" : "sessions"}
                     {" \u00b7 "}
                     {formatLastAttempted(note.lastAttemptedAt)}
                   </p>
