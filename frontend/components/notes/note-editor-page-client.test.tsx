@@ -364,8 +364,24 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findAllByRole("button", { name: "Create Quiz" })).not.toHaveLength(0);
     expect(screen.getAllByText("Generates quiz questions from your material.")).not.toHaveLength(0);
-    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
+    expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
+  });
+
+  it("requires teachers to select an audience before saving or generating", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+
+    render(<NoteEditorPageClient initialMode="quiz" />);
+
+    const contentInput = await screen.findByLabelText("Content");
+    fireEvent.change(contentInput, { target: { value: "Teacher note content" } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
+
+    expect(await screen.findByText("Please select an audience")).toBeInTheDocument();
+    expect(createNote).not.toHaveBeenCalled();
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
 
   it("uses the board exam generate label and helper text for board exam users", async () => {

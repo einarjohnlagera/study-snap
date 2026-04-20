@@ -119,7 +119,7 @@ export function NoteEditorForm({
   courseProgramSuggestions = [],
   learnerLevel = null,
   showTargetProfileTypeField = false,
-  targetProfileTypeHelperText = "Choose the learner audience for this note before saving or generating.",
+  targetProfileTypeHelperText = "Choose the learner audience for this note.",
   backHref,
   backLabel,
 }: Readonly<NoteEditorFormProps>) {
@@ -307,7 +307,7 @@ export function NoteEditorForm({
             </div>
 
             {showTargetProfileTypeField ? (
-              <div className="max-w-md space-y-2 sm:max-w-none">
+              <div className="space-y-2">
               <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
                 Who is this note for?
               </label>

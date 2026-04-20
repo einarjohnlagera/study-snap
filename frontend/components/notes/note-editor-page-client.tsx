@@ -60,7 +60,6 @@ import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/no
 import {
   isTeacherSelectableNoteTarget,
   mapProfileTypeToNoteTargetProfile,
-  NOTE_TARGET_PROFILE_STORAGE_KEY,
   toSelectableNoteTargetProfile,
 } from "@/lib/note-target-profile";
 
@@ -163,7 +162,7 @@ export function NoteEditorPageClient({
   const generateHelperText = resolveGenerateHelperText(currentProfileType);
   const targetProfileTypeHelperText = isEditMode
     ? "Changing audience will affect future quiz generation."
-    : "Choose the learner audience for this note before saving or generating.";
+    : "Choose the learner audience for this note.";
   const generatingLabel = currentProfileType === "BOARD_EXAM"
     ? "Preparing practice..."
     : currentProfileType === "TEACHER"
@@ -243,20 +242,6 @@ export function NoteEditorPageClient({
       active = false;
     };
   }, [isEditMode]);
-
-  useEffect(() => {
-    if (isEditMode || !showTargetProfileTypeField || draft.targetProfileType) {
-      return;
-    }
-    try {
-      const storedValue = globalThis.localStorage?.getItem(NOTE_TARGET_PROFILE_STORAGE_KEY);
-      if (storedValue === "STUDENT" || storedValue === "BOARD_TAKER") {
-        setDraft((previous) => ({ ...previous, targetProfileType: storedValue }));
-      }
-    } catch {
-      // Ignore localStorage access issues and keep the selector empty.
-    }
-  }, [draft.targetProfileType, isEditMode, showTargetProfileTypeField]);
 
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     setToastTone(tone);
@@ -456,7 +441,7 @@ export function NoteEditorPageClient({
   const resolveTargetProfileType = useCallback((): NoteTargetProfileType | null => {
     if (showTargetProfileTypeField) {
       if (!draft.targetProfileType) {
-        showToast("Please choose who this note is for.", "info");
+        showToast("Please select an audience", "info");
         return null;
       }
       return draft.targetProfileType;
@@ -778,14 +763,6 @@ export function NoteEditorPageClient({
         onCourseProgramChange={(value) => setDraft((previous) => ({ ...previous, courseProgram: value }))}
         onTargetProfileTypeChange={(value) => {
           setDraft((previous) => ({ ...previous, targetProfileType: value }));
-          if (!value) {
-            return;
-          }
-          try {
-            globalThis.localStorage?.setItem(NOTE_TARGET_PROFILE_STORAGE_KEY, value);
-          } catch {
-            // Ignore localStorage access issues.
-          }
         }}
         onContentChange={(value) => setDraft((previous) => ({ ...previous, content: value }))}
         onTagsChange={(nextTags) => setDraft((previous) => ({ ...previous, tags: nextTags }))}

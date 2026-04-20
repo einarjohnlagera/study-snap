@@ -995,7 +995,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     if (canEditTargetProfileType && !metadataDraft.targetProfileType) {
-      setError("Please choose who this note is for.");
+      setError("Please select an audience");
       return;
     }
     const nextTargetProfileType: NoteTargetProfileType = canEditTargetProfileType
@@ -1498,7 +1498,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
                   />
                 </div>
                 {canEditTargetProfileType ? (
-                  <div className="max-w-md space-y-2 sm:max-w-none">
+                  <div className="space-y-2">
                     <label htmlFor="note-target-profile-type-inline" className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
                       Who is this note for?
                     </label>
