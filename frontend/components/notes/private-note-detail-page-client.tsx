@@ -1116,6 +1116,20 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       setToast("Verify your email before generating quizzes.");
       return;
     }
+    // Study Pack is a prerequisite for quiz generation. Gate on Study Pack first.
+    if (!isStudyPackReady) {
+      if (isGeneratingStudyPack) {
+        setToast("Study Pack is still generating. Please wait before generating a quiz.");
+        return;
+      }
+      // DRAFT or generation failed — generate the Study Pack first.
+      if (hasReachedStudyPackLimit) {
+        openStudyPackLimitModal("private_note_detail_teacher_generate_study_pack_prerequisite");
+        return;
+      }
+      void handleGenerate();
+      return;
+    }
     if (hasReachedChallengeQuizLimit) {
       openPaywallModal("quiz-generation-limit", "private_note_detail_teacher_quiz_generation_limit");
       return;
@@ -1143,7 +1157,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     } finally {
       setGeneratingTeacherQuiz(false);
     }
-  }, [currentPlan, generatingTeacherQuiz, hasReachedChallengeQuizLimit, isEmailVerified, note, openPaywallModal, refreshUsageSummary]);
+  }, [currentPlan, generatingTeacherQuiz, handleGenerate, hasReachedChallengeQuizLimit, hasReachedStudyPackLimit, isEmailVerified, isGeneratingStudyPack, isStudyPackReady, note, openPaywallModal, openStudyPackLimitModal, refreshUsageSummary]);
 
   const handleViewTeacherQuiz = useCallback(() => {
     if (!note?.generatedQuiz) {
@@ -1556,7 +1570,20 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   {isTeacherMode ? (
-                    note?.generatedQuiz ? (
+                    isGeneratingStudyPack ? (
+                      <ResponsiveActionButton type="button" disabled action="studyPack" label="Generating..." showTextOnMobile />
+                    ) : canGenerateStudyPack ? (
+                      <ResponsiveActionButton
+                        type="button"
+                        onClick={() => void handleGenerate()}
+                        disabled={!isEmailVerified}
+                        loading={generating}
+                        loadingText={hasGenerationFailed ? "Retrying..." : "Generating..."}
+                        action="studyPack"
+                        label={hasGenerationFailed ? "Retry Generate" : "Generate Study Pack"}
+                        showTextOnMobile
+                      />
+                    ) : note?.generatedQuiz ? (
                       <>
                         <Button type="button" className="gap-2" onClick={handleViewTeacherQuiz}>
                           <Eye className="h-4 w-4" aria-hidden="true" />
