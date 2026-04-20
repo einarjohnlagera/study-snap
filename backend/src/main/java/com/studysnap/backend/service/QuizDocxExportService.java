@@ -22,8 +22,9 @@ import java.util.Locale;
 
 @Service
 public class QuizDocxExportService {
-    private static final String ANSWER_KEY_HEADING = "Answer Key";
-    private static final String EXPLANATIONS_HEADING = "Explanations";
+    private static final String ANSWER_KEY_HEADING = "ANSWER KEY";
+    private static final String EXPLANATIONS_HEADING = "EXPLANATIONS";
+    private static final String DIVIDER = "-".repeat(44);
     private static final String UNTITLED_NOTE = "untitled-note";
     private static final String QUIZ_FILENAME_SUFFIX = "-quiz.docx";
     private static final String QUIZ_WITH_ANSWERS_FILENAME_SUFFIX = "-quiz-with-answers.docx";
@@ -39,8 +40,10 @@ public class QuizDocxExportService {
             addQuestions(document, quiz.questions());
             if (mode == QuizDocxExportMode.WITH_ANSWERS) {
                 addPageBreak(document);
-                addAnswerKey(document, quiz.questions());
-                addExplanations(document, quiz.questions());
+                addDividerSectionHeading(document, ANSWER_KEY_HEADING);
+                addAnswerKeyEntries(document, quiz.questions());
+                addDividerSectionHeading(document, EXPLANATIONS_HEADING);
+                addExplanationEntries(document, quiz.questions());
             }
             document.write(outputStream);
             return outputStream.toByteArray();
@@ -79,17 +82,41 @@ public class QuizDocxExportService {
 
         XWPFParagraph subtitleParagraph = document.createParagraph();
         subtitleParagraph.setAlignment(ParagraphAlignment.CENTER);
-        subtitleParagraph.setSpacingAfter(280);
+        subtitleParagraph.setSpacingAfter(160);
         XWPFRun subtitleRun = subtitleParagraph.createRun();
-        subtitleRun.setBold(false);
         subtitleRun.setFontSize(12);
         subtitleRun.setFontFamily(FONT_FAMILY);
         subtitleRun.setText("Quiz");
+
+        addDividerLine(document, 160);
     }
 
     private void addStudentInfoSection(XWPFDocument document) {
         addInfoLine(document, "Name: __________________________", 80);
         addInfoLine(document, "Date: __________________________", 360);
+    }
+
+    private void addDividerLine(XWPFDocument document, int spacingAfter) {
+        XWPFParagraph paragraph = document.createParagraph();
+        paragraph.setSpacingAfter(spacingAfter);
+        XWPFRun run = paragraph.createRun();
+        run.setFontSize(10);
+        run.setFontFamily(FONT_FAMILY);
+        run.setText(DIVIDER);
+    }
+
+    private void addDividerSectionHeading(XWPFDocument document, String text) {
+        addDividerLine(document, 60);
+
+        XWPFParagraph headingParagraph = document.createParagraph();
+        headingParagraph.setSpacingAfter(60);
+        XWPFRun headingRun = headingParagraph.createRun();
+        headingRun.setBold(true);
+        headingRun.setFontSize(13);
+        headingRun.setFontFamily(FONT_FAMILY);
+        headingRun.setText(text);
+
+        addDividerLine(document, 160);
     }
 
     private void addInfoLine(XWPFDocument document, String text, int spacingAfter) {
@@ -132,7 +159,7 @@ public class QuizDocxExportService {
             }
 
             XWPFParagraph spacer = document.createParagraph();
-            spacer.setSpacingAfter(200);
+            spacer.setSpacingAfter(220);
         }
     }
 
@@ -142,33 +169,20 @@ public class QuizDocxExportService {
         pageBreakRun.addBreak(BreakType.PAGE);
     }
 
-    private void addAnswerKey(XWPFDocument document, List<QuizItem> questions) {
-        addSectionHeading(document, ANSWER_KEY_HEADING);
+    private void addAnswerKeyEntries(XWPFDocument document, List<QuizItem> questions) {
         for (int index = 0; index < questions.size(); index++) {
             QuizItem question = questions.get(index);
             Integer correctIndex = question.correctIndex();
-            String answerLabel = correctIndex == null ? "-" : answerLabel(correctIndex);
-            addBodyParagraph(document, (index + 1) + ". " + answerLabel, false, 60);
+            String label = correctIndex == null ? "-" : answerLabel(correctIndex);
+            addBodyParagraph(document, (index + 1) + ". " + label, false, 60);
         }
     }
 
-    private void addExplanations(XWPFDocument document, List<QuizItem> questions) {
-        addSectionHeading(document, EXPLANATIONS_HEADING);
+    private void addExplanationEntries(XWPFDocument document, List<QuizItem> questions) {
         for (int index = 0; index < questions.size(); index++) {
             QuizItem question = questions.get(index);
             addBodyParagraph(document, (index + 1) + ". " + normalizeText(question.explanation()), false, 160);
         }
-    }
-
-    private void addSectionHeading(XWPFDocument document, String text) {
-        XWPFParagraph paragraph = document.createParagraph();
-        paragraph.setSpacingBefore(200);
-        paragraph.setSpacingAfter(120);
-        XWPFRun run = paragraph.createRun();
-        run.setBold(true);
-        run.setFontSize(14);
-        run.setFontFamily(FONT_FAMILY);
-        run.setText(text);
     }
 
     private void addBodyParagraph(XWPFDocument document, String text, boolean bold, int spacingAfter) {

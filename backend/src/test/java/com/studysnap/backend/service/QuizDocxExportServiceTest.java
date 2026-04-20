@@ -30,8 +30,8 @@ class QuizDocxExportServiceTest {
             .contains("Name: __________________________")
             .contains("1. What is the nucleus?")
             .contains("A. Control center")
-            .doesNotContain("Answer Key")
-            .doesNotContain("Explanations");
+            .doesNotContain("ANSWER KEY")
+            .doesNotContain("EXPLANATIONS");
     }
 
     @Test
@@ -42,9 +42,9 @@ class QuizDocxExportServiceTest {
 
         String text = extractText(content);
 
-        assertThat(text).contains("Answer Key")
+        assertThat(text).contains("ANSWER KEY")
             .contains("1. A")
-            .contains("Explanations")
+            .contains("EXPLANATIONS")
             .contains("1. Mitochondria produce most cellular ATP.");
     }
 
