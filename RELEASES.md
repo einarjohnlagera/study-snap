@@ -83,6 +83,19 @@
   - `Student` still defaults to `Challenge Quiz` emphasis there, while `Board Taker` still defaults to `Board Exam Mode`
   - the challenge-quiz page now treats the shared mode-selection entry as the single source of truth and no longer lets session-recovery logic bypass it into setup or running state
 
+- **Action-aware paywall and exhausted messaging system** — unified contextual messaging for free-user gating and premium-user limit states across all supported actions:
+  - new shared `frontend/lib/paywall-content.ts` centralises copy for five action contexts: Study Pack, Quiz, Board Exam, Quiz Generation, and Adaptive Practice
+  - `FREE_PAYWALL_CONTENT` maps each `PaywallAction` to title, body, analytics feature string, and dismiss label — imported by `PaywallModal` so all free-user gating uses the same content rules
+  - `PREMIUM_EXHAUSTED_CONTENT` maps each `PaywallAction` to title and body — imported by premium limit-reached states so exhausted messaging is action-specific and not generic "Monthly limit reached"
+  - **PaywallModal** (`components/billing/paywall-modal.tsx`): removed inline per-variant content constants and the profileType-based `resolveQuizLimitMessage()`; now resolves copy through `resolvePaywallAction(variant)` → `FREE_PAYWALL_CONTENT[action]`; keeps inline fallback content for `difficulty-selection` and `ocr-limit` which are out of scope for action-aware copy
+  - **New variant `quiz-generation-limit`** added to `PaywallModalVariant` — maps to `QUIZ_GENERATION` action; used when Teacher (Creator mode) hits the quiz generation limit, giving a distinct title ("You've reached your quiz generation limit") separate from the student quiz limit ("You've reached your quiz limit")
+  - **Teacher quiz generation gating** in Note Detail now uses `"quiz-generation-limit"` instead of `"challenge-quiz-limit"` for accurate action context; analytics source strings updated to `private_note_detail_teacher_quiz_generation_limit`
+  - **Challenge Quiz page `limit-reached` card**: heading updated from generic "Monthly limit reached" to "You've used all your quiz credits for this month" with reset cycle body copy
+  - **Adaptive Practice page `limit-reached` card**: heading updated from "Monthly limit reached" to "You've used all your quiz credits for this month" with Adaptive Practice-specific body copy
+  - **`StudyPackLimitModal`**: free plan and premium plan titles and body copy updated to match `FREE_PAYWALL_CONTENT.STUDY_PACK` and `PREMIUM_EXHAUSTED_CONTENT.STUDY_PACK` respectively; reset date is still surfaced when available
+  - `resolvePaywallFeature()` in Note Detail updated to handle all seven current `PaywallModalVariant` values including the new `quiz-generation-limit` and `ocr-limit`
+  - back navigation in limit-reached cards uses short destination label `Note` per Back Navigation Rule
+
 ### Documentation
 
 - `docs/product/SPEC.md`: updated teacher dashboard purpose, teacher quiz separation, persona-based quiz defaults, and auth/login message rules

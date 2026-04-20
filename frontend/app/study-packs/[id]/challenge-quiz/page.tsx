@@ -1029,9 +1029,9 @@ export default function ChallengeQuizPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Challenge Quiz
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">Monthly limit reached</h1>
-          <p className="text-sm text-foreground/75">You&apos;ve reached your monthly Challenge Quiz limit.</p>
-          <BackLink href={noteDetailHref} label="Back to Note" />
+          <h1 className="text-xl font-semibold sm:text-2xl">You&apos;ve used all your quiz credits for this month</h1>
+          <p className="text-sm text-foreground/75">Your quiz usage will reset on your next billing cycle.</p>
+          <BackLink href={noteDetailHref} label="Note" />
         </Card>
       ) : phase === "generating" ? (
         <ChallengeQuizLoading />
