@@ -5,15 +5,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
-import { trackAnalyticsEvent, type ProfileType } from "@/lib/api";
+import { trackAnalyticsEvent } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
+import {
+  FREE_PAYWALL_CONTENT,
+  type FreePaywallContent,
+  type PaywallAction,
+} from "@/lib/paywall-content";
 
 export type PaywallModalVariant =
   | "adaptive-practice"
   | "board-exam-mode"
   | "difficulty-selection"
   | "challenge-quiz-limit"
+  | "quiz-generation-limit"
   | "study-pack-limit"
   | "ocr-limit";
 
@@ -24,38 +30,15 @@ type PaywallModalProps = {
   source: string;
 };
 
-type PaywallConfig = {
+/** Variants with no PaywallAction mapping keep their own inline content. */
+type LegacyPaywallConfig = {
   title: string;
   message: string;
   dismissLabel: string;
   feature: string;
 };
 
-function resolveQuizLimitMessage(profileType: ProfileType | null | undefined) {
-  if (profileType === "BOARD_EXAM") {
-    return "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and access Board Exam mode.";
-  }
-  if (profileType === "TEACHER") {
-    return "You’ve used all your quiz generations for this month. Upgrade to Premium to generate more quizzes and export materials for your class.";
-  }
-  return "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and unlock Adaptive Practice.";
-}
-
-const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
-  "adaptive-practice": {
-    title: "Adaptive Practice is a Premium feature",
-    message:
-      "Adaptive Practice focuses on your weak concepts and helps you improve faster. Upgrade to Premium to unlock personalized practice and deeper review.",
-    dismissLabel: "Maybe Later",
-    feature: "adaptive",
-  },
-  "board-exam-mode": {
-    title: "Board Exam Mode is a Premium feature",
-    message:
-      "Board Exam Mode gives you a stricter exam-style session for focused prep. Upgrade to Premium to unlock board-style practice.",
-    dismissLabel: "Maybe Later",
-    feature: "board_exam",
-  },
+const LEGACY_PAYWALL_CONTENT: Partial<Record<PaywallModalVariant, LegacyPaywallConfig>> = {
   "difficulty-selection": {
     title: "Difficulty Selection is a Premium feature",
     message:
@@ -63,27 +46,34 @@ const PAYWALL_CONTENT: Record<PaywallModalVariant, PaywallConfig> = {
     dismissLabel: "Maybe Later",
     feature: "difficulty",
   },
-  "challenge-quiz-limit": {
-    title: "You’ve reached your quiz limit",
-    message: "",
-    dismissLabel: "Maybe Later",
-    feature: "quiz_limit",
-  },
-  "study-pack-limit": {
-    title: "You’ve reached your study pack limit",
-    message:
-      "You can still review your existing notes and quizzes. Upgrade to Premium to generate more Study Packs.",
-    dismissLabel: "Maybe Later",
-    feature: "study_pack_limit",
-  },
   "ocr-limit": {
     title: "OCR limit reached",
     message:
-      "You’ve reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade to Premium for higher OCR limits.",
+      "You've reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade to Premium for higher OCR limits.",
     dismissLabel: "Maybe Later",
     feature: "ocr_limit",
   },
 };
+
+function resolvePaywallAction(variant: PaywallModalVariant): PaywallAction | null {
+  switch (variant) {
+    case "study-pack-limit": return "STUDY_PACK";
+    case "challenge-quiz-limit": return "QUIZ";
+    case "quiz-generation-limit": return "QUIZ_GENERATION";
+    case "board-exam-mode": return "BOARD_EXAM";
+    case "adaptive-practice": return "ADAPTIVE_PRACTICE";
+    default: return null;
+  }
+}
+
+function toModalConfig(content: FreePaywallContent): LegacyPaywallConfig {
+  return {
+    title: content.title,
+    message: content.body,
+    dismissLabel: content.dismissLabel,
+    feature: content.feature,
+  };
+}
 
 export function PaywallModal({
   isOpen,
@@ -96,15 +86,19 @@ export function PaywallModal({
   const hasTrackedOpenRef = useRef(false);
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
   const authUser = getAuthUser();
-  const config = useMemo(() => {
-    if (variant !== "challenge-quiz-limit") {
-      return PAYWALL_CONTENT[variant];
+
+  const config = useMemo((): LegacyPaywallConfig => {
+    const action = resolvePaywallAction(variant);
+    if (action) {
+      return toModalConfig(FREE_PAYWALL_CONTENT[action]);
     }
-    return {
-      ...PAYWALL_CONTENT[variant],
-      message: resolveQuizLimitMessage(authUser?.profileType),
+    return LEGACY_PAYWALL_CONTENT[variant] ?? {
+      title: "Premium feature",
+      message: "Upgrade to Premium to access this feature.",
+      dismissLabel: "Maybe Later",
+      feature: variant,
     };
-  }, [authUser?.profileType, variant]);
+  }, [variant]);
 
   useEffect(() => {
     if (!isOpen) {

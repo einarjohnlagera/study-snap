@@ -417,9 +417,9 @@ export default function AdaptivePracticePage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Adaptive Practice
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">Monthly limit reached</h1>
-          <p className="text-sm text-foreground/75">You&apos;ve reached your monthly Adaptive Practice limit.</p>
-          <BackLink href={noteDetailHref} label="Back to Note" />
+          <h1 className="text-xl font-semibold sm:text-2xl">You&apos;ve used all your quiz credits for this month</h1>
+          <p className="text-sm text-foreground/75">Adaptive Practice will be available again after your monthly reset.</p>
+          <BackLink href={noteDetailHref} label="Note" />
         </Card>
       ) : error ? (
         <Card className="space-y-4 p-4 sm:p-6">

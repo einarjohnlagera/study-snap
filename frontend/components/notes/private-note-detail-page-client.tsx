@@ -142,22 +142,16 @@ function truncateShareUrl(url: string, maxLength = 58) {
 }
 
 function resolvePaywallFeature(variant: PaywallModalVariant): string {
-  if (variant === "adaptive-practice") {
-    return "adaptive";
+  switch (variant) {
+    case "adaptive-practice": return "adaptive";
+    case "challenge-quiz-limit": return "quiz_limit";
+    case "quiz-generation-limit": return "quiz_generation_limit";
+    case "study-pack-limit": return "study_pack_limit";
+    case "board-exam-mode": return "board_exam";
+    case "difficulty-selection": return "difficulty";
+    case "ocr-limit": return "ocr_limit";
+    default: return "study_pack_limit";
   }
-  if (variant === "challenge-quiz-limit") {
-    return "quiz_limit";
-  }
-  if (variant === "study-pack-limit") {
-    return "study_pack_limit";
-  }
-  if (variant === "board-exam-mode") {
-    return "board_exam";
-  }
-  if (variant === "difficulty-selection") {
-    return "difficulty";
-  }
-  return "study_pack_limit";
 }
 
 function buildShareUrl(subject: string | null, title: string | null) {
@@ -1123,7 +1117,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       return;
     }
     if (hasReachedChallengeQuizLimit) {
-      openPaywallModal("challenge-quiz-limit", "private_note_detail_teacher_generate_quiz_limit");
+      openPaywallModal("quiz-generation-limit", "private_note_detail_teacher_quiz_generation_limit");
       return;
     }
 
@@ -1142,7 +1136,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       if (currentPlan === "FREE" && isQuizLimitReachedMessage(message)) {
         void refreshUsageSummary();
         setShowRegenerateQuizConfirm(false);
-        openPaywallModal("challenge-quiz-limit", "private_note_detail_teacher_generate_quiz_limit_error");
+        openPaywallModal("quiz-generation-limit", "private_note_detail_teacher_quiz_generation_limit_error");
         return;
       }
       setError(message);
