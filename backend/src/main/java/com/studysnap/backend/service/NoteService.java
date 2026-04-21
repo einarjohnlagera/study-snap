@@ -389,6 +389,14 @@ public class NoteService {
                 studyPackByNoteId.put(studyPack.getNoteId(), studyPack);
             }
         }
+        Map<UUID, GeneratedQuizEntity> generatedQuizByNoteId = new HashMap<>();
+        if (viewerUserId != null) {
+            for (GeneratedQuizEntity generatedQuiz : generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(viewerUserId, noteIds)) {
+                if (generatedQuiz.getNoteId() != null) {
+                    generatedQuizByNoteId.put(generatedQuiz.getNoteId(), generatedQuiz);
+                }
+            }
+        }
         Map<UUID, UserEntity> ownerById = new HashMap<>();
         for (UserEntity owner : userRepository.findAllById(ownerIds)) {
             ownerById.put(owner.getId(), owner);
@@ -404,7 +412,8 @@ public class NoteService {
                         viewCountsByNoteId.getOrDefault(note.getId(), 0L),
                         ownerById.get(note.getOwnerUserId()),
                         viewerUserId,
-                        likedNoteIds.contains(note.getId())
+                        likedNoteIds.contains(note.getId()),
+                        generatedQuizByNoteId.get(note.getId())
                 ))
                 .toList();
     }
@@ -608,7 +617,8 @@ public class NoteService {
             long viewCount,
             UserEntity owner,
             UUID viewerUserId,
-            boolean likedByCurrentUser
+            boolean likedByCurrentUser,
+            GeneratedQuizEntity generatedQuiz
     ) {
         boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new NoteListItemResponse(
@@ -635,6 +645,8 @@ public class NoteService {
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getCreatedAt(),
                 note.getUpdatedAt(),
+                generatedQuiz == null ? null : generatedQuiz.getId().toString(),
+                generatedQuiz == null ? null : generatedQuiz.getGeneratedAt(),
                 note.getCopiedFromNoteId() == null ? null : note.getCopiedFromNoteId().toString(),
                 Boolean.TRUE.equals(note.getCopiedFromPublic()),
                 likedByCurrentUser

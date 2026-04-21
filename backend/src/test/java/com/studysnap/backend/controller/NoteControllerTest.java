@@ -255,6 +255,8 @@ class NoteControllerTest {
                         OffsetDateTime.now(),
                         OffsetDateTime.now(),
                         null,
+                        null,
+                        null,
                         false,
                         false
                 )

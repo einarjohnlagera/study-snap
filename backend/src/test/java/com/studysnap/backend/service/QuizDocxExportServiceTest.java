@@ -62,7 +62,7 @@ class QuizDocxExportServiceTest {
                 .findFirst()
                 .orElseThrow();
             assertThat(firstChoiceParagraph.getIndentationLeft()).isEqualTo(400);
-            assertThat(firstChoiceParagraph.getSpacingAfter()).isEqualTo(0);
+            assertThat(firstChoiceParagraph.getSpacingAfter()).isZero();
         }
     }
 
@@ -88,7 +88,7 @@ class QuizDocxExportServiceTest {
                 .filter(paragraph -> "Answer Key".equals(paragraph.getText()))
                 .findFirst()
                 .orElseThrow();
-            assertThat(answerKeyHeading.getSpacingBefore()).isEqualTo(0);
+            assertThat(answerKeyHeading.getSpacingBefore()).isZero();
             assertThat(answerKeyHeading.getSpacingAfter()).isEqualTo(120);
 
             XWPFParagraph pageBreakParagraph = document.getParagraphs().stream()
@@ -147,11 +147,55 @@ class QuizDocxExportServiceTest {
     }
 
     @Test
+    void exportCombinedQuiz_keepsSelectedSectionsAndOptionalTeacherMaterials() throws IOException {
+        List<QuizDocxExportService.ExportableQuiz> quizzes = List.of(
+                new QuizDocxExportService.ExportableQuiz(
+                        "Cells",
+                        "Biology",
+                        OffsetDateTime.parse("2026-04-20T10:00:00Z"),
+                        List.of(new QuizItem("What is a cell?", List.of("Unit", "Atom", "Bond", "Gas"), 0, "Cells", "Cells are the basic unit of life."))
+                ),
+                new QuizDocxExportService.ExportableQuiz(
+                        "Stoichiometry",
+                        "Chemistry",
+                        OffsetDateTime.parse("2026-04-20T10:30:00Z"),
+                        List.of(new QuizItem("What is a mole?", List.of("Mass", "Amount", "Energy", "Charge"), 1, "Stoichiometry", "A mole is a measure of amount of substance."))
+                )
+        );
+
+        byte[] content = quizDocxExportService.exportCombinedQuizToDocx(
+                quizzes,
+                new QuizDocxExportService.CombinedQuizDocxOptions(true, true)
+        );
+
+        try (XWPFDocument document = openDocument(content)) {
+            String text = extractText(document);
+
+            assertThat(text).contains("Subject: Mixed Subjects")
+                    .contains("Topic: Combined Exam")
+                    .contains("Section 1: Cells")
+                    .contains("Section 2: Stoichiometry")
+                    .contains("1. What is a cell?")
+                    .contains("2. What is a mole?")
+                    .contains("Answer Key")
+                    .contains("1. A")
+                    .contains("2. B")
+                    .contains("Explanations")
+                    .contains("1. Cells are the basic unit of life.")
+                    .contains("2. A mole is a measure of amount of substance.");
+        }
+    }
+
+    @Test
     void buildFilename_usesExpectedSuffixByMode() {
         assertThat(quizDocxExportService.buildFilename("Teacher Note", QuizDocxExportMode.QUIZ_ONLY))
                 .isEqualTo("teacher-note-quiz.docx");
         assertThat(quizDocxExportService.buildFilename("Teacher Note", QuizDocxExportMode.WITH_ANSWERS))
                 .isEqualTo("teacher-note-quiz-with-answers.docx");
+        assertThat(quizDocxExportService.buildCombinedFilename(false, false))
+                .isEqualTo("combined-exam.docx");
+        assertThat(quizDocxExportService.buildCombinedFilename(true, false))
+                .isEqualTo("combined-exam-with-answers.docx");
     }
 
     private QuizDocxExportService.ExportableQuiz buildQuiz(List<QuizItem> questions) {

@@ -11,6 +11,7 @@ import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.GeneratedQuizBatchExportValidationException;
 import com.studysnap.backend.exception.GeneratedQuizExportNotAllowedException;
 import com.studysnap.backend.exception.GeneratedQuizGenerationFailedException;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
@@ -29,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -135,6 +138,47 @@ public class GeneratedQuizService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public QuizDocxExportService.QuizDocxFile exportCombinedDocx(
+            List<String> noteIdRaws,
+            UUID userId,
+            boolean includeAnswerKey,
+            boolean includeExplanations
+    ) {
+        authService.requireEmailVerified(userId);
+        assertTeacherExportAllowed(userId);
+
+        List<UUID> noteIds = parseOrderedNoteIds(noteIdRaws);
+        if (noteIds.isEmpty()) {
+            throw GeneratedQuizBatchExportValidationException.emptySelection();
+        }
+
+        Map<UUID, NoteEntity> notesById = new LinkedHashMap<>();
+        for (NoteEntity note : noteRepository.findByOwnerUserIdAndIdIn(userId, noteIds)) {
+            notesById.put(note.getId(), note);
+        }
+        if (notesById.size() != noteIds.size()) {
+            throw GeneratedQuizBatchExportValidationException.unknownNote();
+        }
+
+        Map<UUID, GeneratedQuizEntity> generatedQuizByNoteId = new LinkedHashMap<>();
+        for (GeneratedQuizEntity generatedQuiz : generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, noteIds)) {
+            generatedQuizByNoteId.put(generatedQuiz.getNoteId(), generatedQuiz);
+        }
+
+        List<QuizDocxExportService.ExportableQuiz> exportableQuizzes = noteIds.stream()
+                .map(noteId -> buildExportableQuiz(notesById.get(noteId), generatedQuizByNoteId.get(noteId)))
+                .toList();
+
+        return new QuizDocxExportService.QuizDocxFile(
+                quizDocxExportService.buildCombinedFilename(includeAnswerKey, includeExplanations),
+                quizDocxExportService.exportCombinedQuizToDocx(
+                        exportableQuizzes,
+                        new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations)
+                )
+        );
+    }
+
     private int assertQuizCreditAvailable(UUID userId, PlanType planType) {
         int usedThisMonth = userUsageService.getMonthlyUsage(userId, OffsetDateTime.now(ZoneOffset.UTC))
                 .challengeQuizGenerations();
@@ -166,6 +210,31 @@ public class GeneratedQuizService {
                 .map(QuizItem::question)
                 .filter(question -> question != null && !question.isBlank())
                 .toList();
+    }
+
+    private List<UUID> parseOrderedNoteIds(List<String> noteIdRaws) {
+        if (noteIdRaws == null || noteIdRaws.isEmpty()) {
+            return List.of();
+        }
+        return noteIdRaws.stream()
+                .map(this::parseNoteId)
+                .distinct()
+                .toList();
+    }
+
+    private QuizDocxExportService.ExportableQuiz buildExportableQuiz(NoteEntity note, GeneratedQuizEntity generatedQuiz) {
+        if (note == null) {
+            throw GeneratedQuizBatchExportValidationException.unknownNote();
+        }
+        if (generatedQuiz == null || generatedQuiz.getQuestions() == null || generatedQuiz.getQuestions().isEmpty()) {
+            throw GeneratedQuizBatchExportValidationException.noteWithoutGeneratedQuiz();
+        }
+        return new QuizDocxExportService.ExportableQuiz(
+                note.getTitle(),
+                note.getSubject(),
+                generatedQuiz.getGeneratedAt(),
+                generatedQuiz.getQuestions()
+        );
     }
 
     private GeneratedQuizResponse toResponse(GeneratedQuizEntity entity) {

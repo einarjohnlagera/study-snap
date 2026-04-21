@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.MultiNoteQuizDocxExportRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.GeneratedQuizService;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -39,6 +41,30 @@ public class QuizExportController {
     ) {
         UUID userId = user.userId();
         QuizDocxExportService.QuizDocxFile exportedFile = generatedQuizService.exportDocx(quizId, userId, mode);
+        return ResponseEntity.ok()
+                .contentType(DOCX_MEDIA_TYPE)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(exportedFile.getFilename(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString()
+                )
+                .body(exportedFile.getContent());
+    }
+
+    @PostMapping("/export-docx")
+    public ResponseEntity<byte[]> exportCombinedGeneratedQuizDocx(
+            @RequestBody MultiNoteQuizDocxExportRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        QuizDocxExportService.QuizDocxFile exportedFile = generatedQuizService.exportCombinedDocx(
+                request.noteIds(),
+                userId,
+                request.includeAnswerKey(),
+                request.includeExplanations()
+        );
         return ResponseEntity.ok()
                 .contentType(DOCX_MEDIA_TYPE)
                 .header(
