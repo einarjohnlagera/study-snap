@@ -31,20 +31,31 @@ class QuizDocxExportServiceTest {
             String text = extractText(document);
 
             assertThat(document.getTables()).isEmpty();
-            assertThat(text).contains("BIOLOGY QUIZ")
-                .contains("Quiz")
-                .contains("Biology")
+            assertThat(text).contains("Subject: Biology")
+                .contains("Topic: Biology Quiz")
+                .contains("Time: ____________")
                 .contains("Name: __________________________")
                 .contains("Date: __________________________")
+                .contains("Score: __________________________")
+                .contains("QUIZ")
+                .contains("PART I - MULTIPLE CHOICE")
+                .contains("Direction: Choose the best answer.")
                 .contains("1. What is the nucleus?")
                 .contains("A. Control center")
                 .doesNotContain("Answer Key")
                 .doesNotContain("Explanations")
                 .doesNotContain("Correct");
 
-            XWPFParagraph titleParagraph = document.getParagraphs().getFirst();
+            XWPFParagraph headerParagraph = document.getParagraphs().getFirst();
+            assertThat(headerParagraph.getAlignment()).isEqualTo(ParagraphAlignment.LEFT);
+            assertThat(headerParagraph.getText()).isEqualTo("Subject: Biology");
+
+            XWPFParagraph titleParagraph = document.getParagraphs().stream()
+                .filter(paragraph -> "QUIZ".equals(paragraph.getText()))
+                .findFirst()
+                .orElseThrow();
             assertThat(titleParagraph.getAlignment()).isEqualTo(ParagraphAlignment.CENTER);
-            assertThat(titleParagraph.getSpacingAfter()).isEqualTo(200);
+            assertThat(titleParagraph.getSpacingAfter()).isEqualTo(300);
 
             XWPFParagraph firstChoiceParagraph = document.getParagraphs().stream()
                 .filter(paragraph -> "A. Control center".equals(paragraph.getText()))
@@ -64,7 +75,10 @@ class QuizDocxExportServiceTest {
         try (XWPFDocument document = openDocument(content)) {
             String text = extractText(document);
 
-            assertThat(text).contains("Answer Key")
+            assertThat(text).contains("Subject: Biology")
+                .contains("Topic: Biology Quiz")
+                .contains("PART I - MULTIPLE CHOICE")
+                .contains("Answer Key")
                 .contains("1. A")
                 .contains("Explanations")
                 .contains("1. Mitochondria produce most cellular ATP.")
@@ -101,7 +115,9 @@ class QuizDocxExportServiceTest {
         try (XWPFDocument document = openDocument(content)) {
             String text = extractText(document);
 
-            assertThat(text).contains("15. Question 15 – café ßeta?")
+            assertThat(text).contains("Subject: Biology")
+                .contains("Topic: Biology Quiz")
+                .contains("15. Question 15 – café ßeta?")
                 .contains("Deltá")
                 .contains("Explanation 15 covers café, naïve, and résumé.");
             assertThat(document.getParagraphs().stream().filter(paragraph -> paragraph.getText().startsWith("Question")).count()).isZero();

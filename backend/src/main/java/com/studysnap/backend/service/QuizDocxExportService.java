@@ -24,11 +24,17 @@ import java.util.Locale;
 @Service
 @Slf4j
 public class QuizDocxExportService {
-    private static final String QUIZ_SUBTITLE = "Quiz";
+    private static final String SUBJECT_PREFIX = "Subject: ";
+    private static final String TOPIC_PREFIX = "Topic: ";
+    private static final String TIME_LINE = "Time: ____________";
     private static final String ANSWER_KEY_HEADING = "Answer Key";
     private static final String EXPLANATIONS_HEADING = "Explanations";
+    private static final String EXAM_TITLE = "QUIZ";
+    private static final String MULTIPLE_CHOICE_SECTION = "PART I - MULTIPLE CHOICE";
+    private static final String MULTIPLE_CHOICE_DIRECTIONS = "Direction: Choose the best answer.";
     private static final String NAME_LINE = "Name: __________________________";
     private static final String DATE_LINE = "Date: __________________________";
+    private static final String SCORE_LINE = "Score: __________________________";
     private static final String UNTITLED_NOTE = "untitled-note";
     private static final String QUIZ_FILENAME_SUFFIX = "-quiz.docx";
     private static final String QUIZ_WITH_ANSWERS_FILENAME_SUFFIX = "-quiz-with-answers.docx";
@@ -45,10 +51,11 @@ public class QuizDocxExportService {
     public byte[] exportQuizToDocx(ExportableQuiz quiz, QuizDocxExportMode mode) {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            log.info("Applying DOCX v3 formatting...");
+            log.info("Applying DOCX v4 exam formatting...");
             setMargins(document);
             addHeader(document, quiz);
-            addStudentInfoSection(document);
+            addExamTitle(document);
+            addSectionIntro(document);
             addQuestions(document, quiz.questions());
             if (mode == QuizDocxExportMode.WITH_ANSWERS) {
                 addPageBreak(document);
@@ -83,37 +90,40 @@ public class QuizDocxExportService {
     }
 
     private void addHeader(XWPFDocument document, ExportableQuiz quiz) {
+        addHeaderLine(document, SUBJECT_PREFIX + normalizeText(quiz.subject()), DEFAULT_SPACING_AFTER);
+        addHeaderLine(document, TOPIC_PREFIX + normalizeText(quiz.title()), DEFAULT_SPACING_AFTER);
+        addHeaderLine(document, TIME_LINE, SECTION_SPACING);
+        addHeaderLine(document, NAME_LINE, DEFAULT_SPACING_AFTER);
+        addHeaderLine(document, DATE_LINE, DEFAULT_SPACING_AFTER);
+        addHeaderLine(document, SCORE_LINE, SECTION_SPACING);
+    }
+
+    private void addExamTitle(XWPFDocument document) {
         XWPFParagraph titleParagraph = document.createParagraph();
         titleParagraph.setAlignment(ParagraphAlignment.CENTER);
-        titleParagraph.setSpacingAfter(DEFAULT_SPACING_AFTER);
+        titleParagraph.setSpacingAfter(SECTION_SPACING);
         XWPFRun titleRun = titleParagraph.createRun();
         titleRun.setBold(true);
         titleRun.setFontSize(TITLE_FONT_SIZE);
         titleRun.setFontFamily(FONT_FAMILY);
-        titleRun.setText(normalizeText(quiz.title()).toUpperCase(Locale.US));
-
-        XWPFParagraph subtitleParagraph = document.createParagraph();
-        subtitleParagraph.setAlignment(ParagraphAlignment.CENTER);
-        subtitleParagraph.setSpacingAfter(DEFAULT_SPACING_AFTER);
-        XWPFRun subtitleRun = subtitleParagraph.createRun();
-        subtitleRun.setFontSize(SUBTITLE_FONT_SIZE);
-        subtitleRun.setFontFamily(FONT_FAMILY);
-        subtitleRun.setText(QUIZ_SUBTITLE);
-
-        if (quiz.subject() != null && !quiz.subject().isBlank()) {
-            XWPFParagraph subjectParagraph = document.createParagraph();
-            subjectParagraph.setAlignment(ParagraphAlignment.CENTER);
-            subjectParagraph.setSpacingAfter(SECTION_SPACING);
-            XWPFRun subjectRun = subjectParagraph.createRun();
-            subjectRun.setFontSize(SUBTITLE_FONT_SIZE);
-            subjectRun.setFontFamily(FONT_FAMILY);
-            subjectRun.setText(normalizeText(quiz.subject()));
-        }
+        titleRun.setText(EXAM_TITLE);
     }
 
-    private void addStudentInfoSection(XWPFDocument document) {
-        addInfoLine(document, NAME_LINE, DEFAULT_SPACING_AFTER);
-        addInfoLine(document, DATE_LINE, SECTION_SPACING);
+    private void addSectionIntro(XWPFDocument document) {
+        XWPFParagraph sectionParagraph = document.createParagraph();
+        sectionParagraph.setSpacingAfter(DEFAULT_SPACING_AFTER);
+        XWPFRun sectionRun = sectionParagraph.createRun();
+        sectionRun.setBold(true);
+        sectionRun.setFontSize(SUBTITLE_FONT_SIZE);
+        sectionRun.setFontFamily(FONT_FAMILY);
+        sectionRun.setText(MULTIPLE_CHOICE_SECTION);
+
+        XWPFParagraph directionParagraph = document.createParagraph();
+        directionParagraph.setSpacingAfter(SECTION_SPACING);
+        XWPFRun directionRun = directionParagraph.createRun();
+        directionRun.setFontSize(BODY_FONT_SIZE);
+        directionRun.setFontFamily(FONT_FAMILY);
+        directionRun.setText(MULTIPLE_CHOICE_DIRECTIONS);
     }
 
     private void addSectionHeading(XWPFDocument document, String text) {
@@ -127,7 +137,7 @@ public class QuizDocxExportService {
         headingRun.setText(text);
     }
 
-    private void addInfoLine(XWPFDocument document, String text, int spacingAfter) {
+    private void addHeaderLine(XWPFDocument document, String text, int spacingAfter) {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setSpacingAfter(spacingAfter);
         XWPFRun run = paragraph.createRun();
