@@ -804,6 +804,7 @@ export type NoteListItemResponse = {
   updatedAt: string;
   generatedQuizId?: string | null;
   generatedQuizGeneratedAt?: string | null;
+  generatedQuizQuestionCount?: number | null;
   copiedFromNoteId?: string | null;
   copiedFromPublic?: boolean;
   likedByCurrentUser: boolean;

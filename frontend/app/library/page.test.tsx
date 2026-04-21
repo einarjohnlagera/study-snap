@@ -54,6 +54,7 @@ describe("Library page", () => {
         studyPackStatus: "DRAFT",
         quizCount: null,
         generatedQuizId: null,
+        generatedQuizQuestionCount: null,
         createdAt: "2026-03-20T10:00:00Z",
         updatedAt: "2026-03-21T10:00:00Z",
       },
@@ -71,6 +72,7 @@ describe("Library page", () => {
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
         generatedQuizId: "generated-99",
+        generatedQuizQuestionCount: 10,
         createdAt: "2026-03-21T10:00:00Z",
         updatedAt: "2026-03-22T10:00:00Z",
       },
@@ -88,6 +90,7 @@ describe("Library page", () => {
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 4,
         generatedQuizId: "generated-77",
+        generatedQuizQuestionCount: 10,
         createdAt: "2026-03-18T10:00:00Z",
         updatedAt: "2026-03-23T10:00:00Z",
       },
@@ -124,6 +127,21 @@ describe("Library page", () => {
       "note-77",
       "note-99",
     )).toEqual(["note-77", "note-99", "note-42"]);
+  });
+
+  it("hides teacher exam actions for student profiles", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    expect(screen.queryByRole("button", { name: "Select" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create Exam" })).not.toBeInTheDocument();
   });
 
   it("filters notes by horizontal subject chips", async () => {
@@ -388,6 +406,7 @@ describe("Library page", () => {
 
     expect(screen.getByRole("heading", { name: "Exam Builder" })).toBeInTheDocument();
     expect(screen.getByText("Note 1")).toBeInTheDocument();
+    expect(screen.getAllByText("10 questions")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Move Dosage Calculations up" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Move Dosage Calculations up" }));
@@ -401,5 +420,5 @@ describe("Library page", () => {
         includeExplanations: true,
       });
     });
-  });
+  }, 15000);
 });
