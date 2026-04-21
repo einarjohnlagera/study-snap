@@ -79,7 +79,7 @@ Do not mix these models.
 - Teachers can also build one combined exam from `Library`:
   - enter teacher-only `Select` mode
   - choose multiple quiz-ready notes
-  - reorder notes inside `Exam Builder`
+  - reorder notes inside `Exam Builder` using the drag handle or the fallback move buttons
   - export one combined DOCX with optional `Answer Key` and `Explanations`
 
 ## UI Rules

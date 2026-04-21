@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
+import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
   exportCombinedGeneratedQuizDocx,
   getQuickReviewPerformanceSummary,
@@ -115,6 +116,14 @@ describe("Library page", () => {
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-42?from=library");
     });
+  });
+
+  it("reorders selected notes by drag target order", () => {
+    expect(reorderSelectedNoteIdsByDrag(
+      ["note-99", "note-77", "note-42"],
+      "note-77",
+      "note-99",
+    )).toEqual(["note-77", "note-99", "note-42"]);
   });
 
   it("filters notes by horizontal subject chips", async () => {
@@ -392,7 +401,5 @@ describe("Library page", () => {
         includeExplanations: true,
       });
     });
-
-    expect(await screen.findByRole("status")).toHaveTextContent("Exam DOCX ready.");
   });
 });

@@ -1,8 +1,16 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Globe, Lock, Square, Trash2 } from "lucide-react";
+import { closestCenter, DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Globe, GripVertical, Lock, Square, Trash2 } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,6 +31,7 @@ import {
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { normalizeSubject } from "@/lib/subjects";
+import { moveSelection, reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 
 type LibrarySortOption =
   | "RECENTLY_UPDATED"
@@ -198,18 +207,101 @@ function canIncludeInExam(item: NoteListItemResponse): boolean {
   return Boolean(item.generatedQuizId);
 }
 
-function moveSelection(ids: string[], noteId: string, direction: "up" | "down") {
-  const currentIndex = ids.indexOf(noteId);
-  if (currentIndex < 0) {
-    return ids;
-  }
-  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-  if (targetIndex < 0 || targetIndex >= ids.length) {
-    return ids;
-  }
-  const next = [...ids];
-  [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
-  return next;
+type SortableExamBuilderItemProps = {
+  note: ExamBuilderSelection;
+  index: number;
+  totalCount: number;
+  exporting: boolean;
+  onMove: (noteId: string, direction: "up" | "down") => void;
+  onRemove: (noteId: string) => void;
+};
+
+function SortableExamBuilderItem({
+  note,
+  index,
+  totalCount,
+  exporting,
+  onMove,
+  onRemove,
+}: Readonly<SortableExamBuilderItemProps>) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: note.noteId });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-start justify-between gap-3 rounded-2xl border border-border p-3 transition-shadow ${
+        isDragging ? "shadow-lg ring-1 ring-blue-500/30" : ""
+      }`}
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
+          aria-label={`Drag ${note.title}`}
+          disabled={exporting}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Note {index + 1}</p>
+          <p className="truncate text-sm font-medium text-foreground">{note.title}</p>
+          <p className="text-xs text-foreground/60">{note.subject}</p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 w-9 p-0"
+          onClick={() => onMove(note.noteId, "up")}
+          disabled={index === 0 || exporting}
+          aria-label={`Move ${note.title} up`}
+        >
+          <ArrowUp className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 w-9 p-0"
+          onClick={() => onMove(note.noteId, "down")}
+          disabled={index === totalCount - 1 || exporting}
+          aria-label={`Move ${note.title} down`}
+        >
+          <ArrowDown className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 w-9 p-0"
+          onClick={() => onRemove(note.noteId)}
+          disabled={exporting}
+          aria-label={`Remove ${note.title}`}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default function LibraryPage() {
@@ -244,6 +336,13 @@ export default function LibraryPage() {
 
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
+  const examBuilderSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+  );
 
   const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
     if (notes.length === 0) {
@@ -570,6 +669,15 @@ export default function LibraryPage() {
       setExportingExam(false);
     }
   }, [exportingExam, includeAnswerKey, includeExplanations, resetSelectionMode, selectedNotes]);
+
+  const handleExamBuilderDragEnd = useCallback((event: DragEndEvent) => {
+    const activeId = typeof event.active.id === "string" ? event.active.id : null;
+    const overId = typeof event.over?.id === "string" ? event.over.id : null;
+    if (!activeId) {
+      return;
+    }
+    setSelectedNoteIds((previous) => reorderSelectedNoteIdsByDrag(previous, activeId, overId));
+  }, []);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -1125,52 +1233,23 @@ export default function LibraryPage() {
             {selectedNotes.length === 0 ? (
               <p className="text-sm text-foreground/70">Select at least one quiz-ready note to continue.</p>
             ) : (
-              <div className="space-y-3">
-                {selectedNotes.map((note, index) => (
-                  <div key={note.noteId} className="flex items-start justify-between gap-3 rounded-2xl border border-border p-3">
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Note {index + 1}</p>
-                      <p className="truncate text-sm font-medium text-foreground">{note.title}</p>
-                      <p className="text-xs text-foreground/60">{note.subject}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 w-9 p-0"
-                        onClick={() => setSelectedNoteIds((previous) => moveSelection(previous, note.noteId, "up"))}
-                        disabled={index === 0 || exportingExam}
-                        aria-label={`Move ${note.title} up`}
-                      >
-                        <ArrowUp className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 w-9 p-0"
-                        onClick={() => setSelectedNoteIds((previous) => moveSelection(previous, note.noteId, "down"))}
-                        disabled={index === selectedNotes.length - 1 || exportingExam}
-                        aria-label={`Move ${note.title} down`}
-                      >
-                        <ArrowDown className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 w-9 p-0"
-                        onClick={() => setSelectedNoteIds((previous) => previous.filter((selectedId) => selectedId !== note.noteId))}
-                        disabled={exportingExam}
-                        aria-label={`Remove ${note.title}`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </Button>
-                    </div>
+              <DndContext sensors={examBuilderSensors} collisionDetection={closestCenter} onDragEnd={handleExamBuilderDragEnd}>
+                <SortableContext items={selectedNotes.map((note) => note.noteId)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-3">
+                    {selectedNotes.map((note, index) => (
+                      <SortableExamBuilderItem
+                        key={note.noteId}
+                        note={note}
+                        index={index}
+                        totalCount={selectedNotes.length}
+                        exporting={exportingExam}
+                        onMove={(noteId, direction) => setSelectedNoteIds((previous) => moveSelection(previous, noteId, direction))}
+                        onRemove={(noteId) => setSelectedNoteIds((previous) => previous.filter((selectedId) => selectedId !== noteId))}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
             )}
           </section>
 
