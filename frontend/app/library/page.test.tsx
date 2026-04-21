@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
 import { reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
 import {
-  exportCombinedGeneratedQuizDocx,
   getQuickReviewPerformanceSummary,
   listNotes,
   listSubjects,
@@ -10,11 +9,12 @@ import {
 import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
+const routerMock = {
+  push: pushMock,
+};
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: pushMock,
-  }),
+  useRouter: () => routerMock,
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -36,8 +36,6 @@ describe("Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
     (getAuthUser as jest.Mock).mockReturnValue(null);
-    (exportCombinedGeneratedQuizDocx as jest.Mock).mockReset();
-    (exportCombinedGeneratedQuizDocx as jest.Mock).mockResolvedValue({ filename: "combined-exam-with-answers.docx" });
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Pharmacy"]);
     (listNotes as jest.Mock).mockResolvedValue([
       {
@@ -388,7 +386,7 @@ describe("Library page", () => {
     expect(screen.getByText("1 note selected")).toBeInTheDocument();
   });
 
-  it("opens exam builder, preserves order changes, and exports a combined exam", async () => {
+  it("routes teacher selections into the dedicated exam builder page", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "teacher-1",
       role: "USER",
@@ -404,26 +402,8 @@ describe("Library page", () => {
     fireEvent.click(screen.getByLabelText("Select Dosage Calculations for exam export"));
     fireEvent.click(screen.getByRole("button", { name: "Create Exam" }));
 
-    expect(screen.getByRole("heading", { name: "Exam Builder" })).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Section A")).toBeInTheDocument();
-    expect(screen.getAllByText("10 questions")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Move Dosage Calculations up" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Move Dosage Calculations up" }));
-    fireEvent.click(screen.getByRole("button", { name: "Remove Zygote Review" }));
-    fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
-
     await waitFor(() => {
-      expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledWith({
-        sections: [
-          {
-            title: "Section A",
-            noteIds: ["note-77"],
-          },
-        ],
-        includeAnswerKey: true,
-        includeExplanations: true,
-      });
+      expect(pushMock).toHaveBeenCalledWith("/library/exam-builder?notes=note-99%2Cnote-77");
     });
-  }, 15000);
+  });
 });
