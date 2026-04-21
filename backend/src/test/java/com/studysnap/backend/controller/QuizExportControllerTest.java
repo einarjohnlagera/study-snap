@@ -58,16 +58,18 @@ class QuizExportControllerTest {
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         byte[] content = "combined-docx".getBytes();
         MultiNoteQuizDocxExportRequest request = new MultiNoteQuizDocxExportRequest(
-                java.util.List.of("note-1", "note-2"),
+                java.util.List.of(
+                        new MultiNoteQuizDocxExportRequest.Section("Section A", java.util.List.of("note-1", "note-2"))
+                ),
                 true,
                 true
         );
-        when(generatedQuizService.exportCombinedDocx(request.noteIds(), userId, true, true))
+        when(generatedQuizService.exportCombinedDocx(request.sections(), userId, true, true))
                 .thenReturn(new QuizDocxExportService.QuizDocxFile("combined-exam-with-answers.docx", content));
 
         var response = quizExportController.exportCombinedGeneratedQuizDocx(request, user);
 
-        verify(generatedQuizService).exportCombinedDocx(request.noteIds(), userId, true, true);
+        verify(generatedQuizService).exportCombinedDocx(request.sections(), userId, true, true);
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE))
                 .isEqualTo("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))

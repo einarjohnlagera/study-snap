@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
+import com.studysnap.backend.dto.MultiNoteQuizDocxExportRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
@@ -33,6 +34,7 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -140,7 +142,7 @@ public class GeneratedQuizService {
 
     @Transactional(readOnly = true)
     public QuizDocxExportService.QuizDocxFile exportCombinedDocx(
-            List<String> noteIdRaws,
+            List<MultiNoteQuizDocxExportRequest.Section> sections,
             UUID userId,
             boolean includeAnswerKey,
             boolean includeExplanations
@@ -148,7 +150,11 @@ public class GeneratedQuizService {
         authService.requireEmailVerified(userId);
         assertTeacherExportAllowed(userId);
 
-        List<UUID> noteIds = parseOrderedNoteIds(noteIdRaws);
+        List<ExportSectionRequest> requestedSections = parseSectionRequests(sections);
+        List<UUID> noteIds = requestedSections.stream()
+                .flatMap(section -> section.noteIds().stream())
+                .distinct()
+                .toList();
         if (noteIds.isEmpty()) {
             throw GeneratedQuizBatchExportValidationException.emptySelection();
         }
@@ -166,14 +172,18 @@ public class GeneratedQuizService {
             generatedQuizByNoteId.put(generatedQuiz.getNoteId(), generatedQuiz);
         }
 
-        List<QuizDocxExportService.ExportableQuiz> exportableQuizzes = noteIds.stream()
-                .map(noteId -> buildExportableQuiz(notesById.get(noteId), generatedQuizByNoteId.get(noteId)))
+        List<QuizDocxExportService.ExportableSection> exportableSections = requestedSections.stream()
+                .map(section -> buildExportableSection(section, notesById, generatedQuizByNoteId))
+                .filter(section -> !section.quizzes().isEmpty())
                 .toList();
+        if (exportableSections.isEmpty()) {
+            throw GeneratedQuizBatchExportValidationException.emptySelection();
+        }
 
         return new QuizDocxExportService.QuizDocxFile(
                 quizDocxExportService.buildCombinedFilename(includeAnswerKey, includeExplanations),
                 quizDocxExportService.exportCombinedQuizToDocx(
-                        exportableQuizzes,
+                        exportableSections,
                         new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations)
                 )
         );
@@ -212,14 +222,34 @@ public class GeneratedQuizService {
                 .toList();
     }
 
-    private List<UUID> parseOrderedNoteIds(List<String> noteIdRaws) {
-        if (noteIdRaws == null || noteIdRaws.isEmpty()) {
+    private List<ExportSectionRequest> parseSectionRequests(List<MultiNoteQuizDocxExportRequest.Section> sections) {
+        if (sections == null || sections.isEmpty()) {
             return List.of();
         }
-        return noteIdRaws.stream()
-                .map(this::parseNoteId)
-                .distinct()
+        return sections.stream()
+                .filter(Objects::nonNull)
+                .map(section -> new ExportSectionRequest(
+                        section.title(),
+                        section.noteIds() == null ? List.of() : section.noteIds().stream()
+                                .map(this::parseNoteId)
+                                .distinct()
+                                .toList()
+                ))
+                .filter(section -> !section.noteIds().isEmpty())
                 .toList();
+    }
+
+    private QuizDocxExportService.ExportableSection buildExportableSection(
+            ExportSectionRequest section,
+            Map<UUID, NoteEntity> notesById,
+            Map<UUID, GeneratedQuizEntity> generatedQuizByNoteId
+    ) {
+        return new QuizDocxExportService.ExportableSection(
+                section.title(),
+                section.noteIds().stream()
+                        .map(noteId -> buildExportableQuiz(notesById.get(noteId), generatedQuizByNoteId.get(noteId)))
+                        .toList()
+        );
     }
 
     private QuizDocxExportService.ExportableQuiz buildExportableQuiz(NoteEntity note, GeneratedQuizEntity generatedQuiz) {
@@ -253,5 +283,11 @@ public class GeneratedQuizService {
             return;
         }
         throw new GeneratedQuizExportNotAllowedException();
+    }
+
+    private record ExportSectionRequest(
+            String title,
+            List<UUID> noteIds
+    ) {
     }
 }

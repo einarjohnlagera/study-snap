@@ -1,17 +1,17 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { closestCenter, DndContext, DragOverlay, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import { closestCenter, DndContext, DragOverlay, type DragEndEvent, type DragOverEvent, PointerSensor, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Globe, GripVertical, Lock, Square, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Globe, GripVertical, Lock, Plus, Square, Trash2 } from "lucide-react";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -32,7 +32,19 @@ import {
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { normalizeSubject } from "@/lib/subjects";
-import { moveSelection, reorderSelectedNoteIdsByDrag } from "./exam-builder-order";
+import {
+  buildDefaultSectionTitle,
+  createExamSection,
+  createDefaultExamSections,
+  deleteExamSection,
+  flattenExamSectionNoteIds,
+  type ExamBuilderSection,
+  moveNoteToSection,
+  moveNoteWithinSection,
+  removeNoteFromExamSections,
+  renameExamSection,
+  reorderExamSections,
+} from "./exam-builder-order";
 
 type LibrarySortOption =
   | "RECENTLY_UPDATED"
@@ -209,7 +221,20 @@ function canIncludeInExam(item: NoteListItemResponse): boolean {
   return Boolean(item.generatedQuizId);
 }
 
+function getSectionSortableId(sectionId: string) {
+  return `section:${sectionId}`;
+}
+
+function getNoteSortableId(noteId: string) {
+  return `note:${noteId}`;
+}
+
+function getSectionNoteDropzoneId(sectionId: string) {
+  return `section-notes:${sectionId}`;
+}
+
 type SortableExamBuilderItemProps = {
+  sectionId: string;
   note: ExamBuilderSelection;
   index: number;
   totalCount: number;
@@ -220,6 +245,7 @@ type SortableExamBuilderItemProps = {
 };
 
 function SortableExamBuilderItem({
+  sectionId,
   note,
   index,
   totalCount,
@@ -236,7 +262,14 @@ function SortableExamBuilderItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: note.noteId });
+  } = useSortable({
+    id: getNoteSortableId(note.noteId),
+    data: {
+      type: "note",
+      noteId: note.noteId,
+      sectionId,
+    },
+  });
 
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -319,6 +352,172 @@ function SortableExamBuilderItem({
   );
 }
 
+type SectionNoteDropzoneProps = {
+  sectionId: string;
+  isActive: boolean;
+  children: ReactNode;
+};
+
+function SectionNoteDropzone({ sectionId, isActive, children }: Readonly<SectionNoteDropzoneProps>) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: getSectionNoteDropzoneId(sectionId),
+    data: {
+      type: "section-dropzone",
+      sectionId,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`space-y-3 rounded-2xl border border-dashed p-3 transition-colors ${
+        isActive || isOver ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20" : "border-border/70 bg-transparent"
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+type SortableExamBuilderSectionProps = {
+  section: ExamBuilderSection;
+  sectionIndex: number;
+  notes: ExamBuilderSelection[];
+  exporting: boolean;
+  activeDragNoteId: string | null;
+  activeDragSectionId: string | null;
+  onRename: (sectionId: string, title: string) => void;
+  onDelete: (sectionId: string) => void;
+  onAddBelow: (sectionId: string) => void;
+  onMoveNote: (sectionId: string, noteId: string, direction: "up" | "down") => void;
+  onRemoveNote: (noteId: string) => void;
+};
+
+function SortableExamBuilderSection({
+  section,
+  sectionIndex,
+  notes,
+  exporting,
+  activeDragNoteId,
+  activeDragSectionId,
+  onRename,
+  onDelete,
+  onAddBelow,
+  onMoveNote,
+  onRemoveNote,
+}: Readonly<SortableExamBuilderSectionProps>) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: getSectionSortableId(section.id),
+    data: {
+      type: "section",
+      sectionId: section.id,
+    },
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`space-y-4 rounded-2xl border border-border bg-background p-4 shadow-sm transition-shadow ${
+        isDragging
+          ? "shadow-lg ring-1 ring-blue-500/30"
+          : activeDragSectionId === section.id
+            ? "ring-1 ring-blue-500/20"
+            : ""
+      }`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
+            aria-label={`Drag ${section.title}`}
+            disabled={exporting}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <div className="min-w-0 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Section {sectionIndex + 1}</p>
+            <input
+              type="text"
+              value={section.title}
+              onChange={(event) => onRename(section.id, event.target.value)}
+              disabled={exporting}
+              aria-label={`Section title ${sectionIndex + 1}`}
+              className="h-10 w-full min-w-0 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600 sm:min-w-[220px]"
+              placeholder={buildDefaultSectionTitle(sectionIndex)}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => onAddBelow(section.id)}
+            disabled={exporting}
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            <span>Add Section</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 w-9 p-0"
+            onClick={() => onDelete(section.id)}
+            disabled={exporting}
+            aria-label={`Delete ${section.title}`}
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+
+      <SectionNoteDropzone sectionId={section.id} isActive={activeDragNoteId !== null}>
+        {notes.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-foreground/65">
+            Drag notes here
+          </p>
+        ) : (
+          <SortableContext items={notes.map((note) => getNoteSortableId(note.noteId))} strategy={verticalListSortingStrategy}>
+            {notes.map((note, index) => (
+              <SortableExamBuilderItem
+                key={note.noteId}
+                sectionId={section.id}
+                note={note}
+                index={index}
+                totalCount={notes.length}
+                exporting={exporting}
+                activeDragNoteId={activeDragNoteId}
+                onMove={(noteId, direction) => onMoveNote(section.id, noteId, direction)}
+                onRemove={onRemoveNote}
+              />
+            ))}
+          </SortableContext>
+        )}
+      </SectionNoteDropzone>
+    </div>
+  );
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const initialLoadStartedRef = useRef(false);
@@ -343,11 +542,15 @@ export default function LibraryPage() {
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [examSections, setExamSections] = useState<ExamBuilderSection[]>([]);
   const [examBuilderOpen, setExamBuilderOpen] = useState(false);
+  const [pendingDeleteSectionId, setPendingDeleteSectionId] = useState<string | null>(null);
   const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
   const [includeExplanations, setIncludeExplanations] = useState(true);
   const [exportingExam, setExportingExam] = useState(false);
   const [activeDragNoteId, setActiveDragNoteId] = useState<string | null>(null);
+  const [activeDragSectionId, setActiveDragSectionId] = useState<string | null>(null);
+  const [nextSectionIndex, setNextSectionIndex] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
 
   const authUser = getAuthUser();
@@ -633,25 +836,53 @@ export default function LibraryPage() {
   const itemsById = useMemo(() => {
     return new Map(items.map((item) => [item.id, item]));
   }, [items]);
-  const selectedNotes = useMemo<ExamBuilderSelection[]>(() => {
-    return selectedNoteIds
-      .map((noteId) => itemsById.get(noteId))
-      .filter((item): item is NoteListItemResponse => Boolean(item))
-      .map((item) => ({
-        noteId: item.id,
-        title: item.title?.trim() || "Untitled note",
-        subject: getLibrarySubject(item),
-        questionCount: item.generatedQuizQuestionCount ?? null,
-      }));
+  const selectedNoteMetaById = useMemo(() => {
+    return Object.fromEntries(
+      selectedNoteIds
+        .map((noteId) => itemsById.get(noteId))
+        .filter((item): item is NoteListItemResponse => Boolean(item))
+        .map((item) => [item.id, {
+          noteId: item.id,
+          title: item.title?.trim() || "Untitled note",
+          subject: getLibrarySubject(item),
+          questionCount: item.generatedQuizQuestionCount ?? null,
+        } satisfies ExamBuilderSelection]),
+    ) as Record<string, ExamBuilderSelection>;
   }, [itemsById, selectedNoteIds]);
+  const exportableExamSections = useMemo(() => {
+    return examSections
+      .map((section, index) => ({
+        ...section,
+        title: section.title.trim() || buildDefaultSectionTitle(index),
+        noteIds: section.noteIds.filter((noteId) => Boolean(selectedNoteMetaById[noteId])),
+      }))
+      .filter((section) => section.noteIds.length > 0);
+  }, [examSections, selectedNoteMetaById]);
+  const pendingDeleteSection = useMemo(
+    () => examSections.find((section) => section.id === pendingDeleteSectionId) ?? null,
+    [examSections, pendingDeleteSectionId],
+  );
+  const builderNoteCount = useMemo(
+    () => flattenExamSectionNoteIds(exportableExamSections).length,
+    [exportableExamSections],
+  );
+
+  const updateExamSections = useCallback((nextSections: ExamBuilderSection[]) => {
+    setExamSections(nextSections);
+    setSelectedNoteIds(flattenExamSectionNoteIds(nextSections));
+  }, []);
 
   const resetSelectionMode = useCallback(() => {
     setSelectionMode(false);
     setSelectedNoteIds([]);
+    setExamSections([]);
     setExamBuilderOpen(false);
+    setPendingDeleteSectionId(null);
     setIncludeAnswerKey(true);
     setIncludeExplanations(true);
     setActiveDragNoteId(null);
+    setActiveDragSectionId(null);
+    setNextSectionIndex(1);
   }, []);
 
   const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
@@ -666,15 +897,59 @@ export default function LibraryPage() {
     ));
   }, []);
 
+  const openExamBuilder = useCallback(() => {
+    if (selectedNoteIds.length === 0) {
+      return;
+    }
+    setExamSections(createDefaultExamSections(selectedNoteIds));
+    setNextSectionIndex(1);
+    setExamBuilderOpen(true);
+  }, [selectedNoteIds]);
+
+  const handleAddSectionBelow = useCallback((sectionId: string) => {
+    setExamSections((previous) => {
+      const sectionIndex = previous.findIndex((section) => section.id === sectionId);
+      const insertIndex = sectionIndex < 0 ? previous.length : sectionIndex + 1;
+      const nextSection = createExamSection(nextSectionIndex);
+      const next = [...previous];
+      next.splice(insertIndex, 0, nextSection);
+      return next;
+    });
+    setNextSectionIndex((previous) => previous + 1);
+  }, [nextSectionIndex]);
+
+  const handleDeleteSectionRequest = useCallback((sectionId: string) => {
+    const section = examSections.find((candidate) => candidate.id === sectionId);
+    if (!section) {
+      return;
+    }
+    if (section.noteIds.length === 0) {
+      updateExamSections(deleteExamSection(examSections, sectionId, "delete_notes"));
+      return;
+    }
+    setPendingDeleteSectionId(sectionId);
+  }, [examSections, updateExamSections]);
+
+  const handleConfirmDeleteSection = useCallback((strategy: "move_notes" | "delete_notes") => {
+    if (!pendingDeleteSectionId) {
+      return;
+    }
+    updateExamSections(deleteExamSection(examSections, pendingDeleteSectionId, strategy));
+    setPendingDeleteSectionId(null);
+  }, [examSections, pendingDeleteSectionId, updateExamSections]);
+
   const handleExportExam = useCallback(async () => {
-    if (selectedNotes.length === 0 || exportingExam) {
+    if (exportableExamSections.length === 0 || exportingExam) {
       return;
     }
     setExportingExam(true);
     setError(null);
     try {
       await exportCombinedGeneratedQuizDocx({
-        noteIds: selectedNotes.map((note) => note.noteId),
+        sections: exportableExamSections.map((section) => ({
+          title: section.title,
+          noteIds: section.noteIds,
+        })),
         includeAnswerKey,
         includeExplanations,
       });
@@ -686,17 +961,74 @@ export default function LibraryPage() {
     } finally {
       setExportingExam(false);
     }
-  }, [exportingExam, includeAnswerKey, includeExplanations, resetSelectionMode, selectedNotes]);
+  }, [exportableExamSections, exportingExam, includeAnswerKey, includeExplanations, resetSelectionMode]);
 
-  const handleExamBuilderDragEnd = useCallback((event: DragEndEvent) => {
-    const activeId = typeof event.active.id === "string" ? event.active.id : null;
-    const overId = typeof event.over?.id === "string" ? event.over.id : null;
-    setActiveDragNoteId(null);
-    if (!activeId) {
+  const handleExamBuilderDragOver = useCallback((event: DragOverEvent) => {
+    const activeData = event.active.data.current;
+    const overData = event.over?.data.current;
+    if (activeData?.type !== "note" || !overData) {
       return;
     }
-    setSelectedNoteIds((previous) => reorderSelectedNoteIdsByDrag(previous, activeId, overId));
-  }, []);
+    const activeNoteId = String(activeData.noteId);
+    const targetSectionId = String(overData.sectionId);
+    if (!activeNoteId || !targetSectionId) {
+      return;
+    }
+    const targetSection = examSections.find((section) => section.id === targetSectionId);
+    if (!targetSection) {
+      return;
+    }
+    const targetIndex = overData.type === "note"
+      ? targetSection.noteIds.findIndex((noteId) => noteId === String(overData.noteId))
+      : targetSection.noteIds.length;
+    if (targetIndex < 0) {
+      return;
+    }
+    updateExamSections(moveNoteToSection(examSections, activeNoteId, targetSectionId, targetIndex));
+  }, [examSections, updateExamSections]);
+
+  const handleExamBuilderDragEnd = useCallback((event: DragEndEvent) => {
+    const activeData = event.active.data.current;
+    const overData = event.over?.data.current;
+    setActiveDragNoteId(null);
+    setActiveDragSectionId(null);
+    if (!activeData) {
+      return;
+    }
+    if (activeData.type === "note") {
+      if (!overData) {
+        return;
+      }
+      const targetSectionId = String(overData.sectionId);
+      const targetSection = examSections.find((section) => section.id === targetSectionId);
+      if (!targetSection) {
+        return;
+      }
+      const targetIndex = overData.type === "note"
+        ? targetSection.noteIds.findIndex((noteId) => noteId === String(overData.noteId))
+        : targetSection.noteIds.length;
+      if (targetIndex < 0) {
+        return;
+      }
+      updateExamSections(moveNoteToSection(
+        examSections,
+        String(activeData.noteId),
+        targetSectionId,
+        targetIndex,
+      ));
+      return;
+    }
+    if (activeData.type === "section") {
+      if (!overData || overData.type !== "section") {
+        return;
+      }
+      updateExamSections(reorderExamSections(
+        examSections,
+        String(activeData.sectionId),
+        String(overData.sectionId),
+      ));
+    }
+  }, [examSections, updateExamSections]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -764,7 +1096,7 @@ export default function LibraryPage() {
                   </Button>
                   <Button
                     type="button"
-                    onClick={() => setExamBuilderOpen(true)}
+                    onClick={openExamBuilder}
                     disabled={selectedNoteIds.length === 0}
                   >
                     Create Exam
@@ -1233,9 +1565,9 @@ export default function LibraryPage() {
         actions={(
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="hidden text-sm text-foreground/60 sm:block">
-              {selectedNotes.length === 0
+              {builderNoteCount === 0
                 ? "Select notes from your library to start building an exam."
-                : `${selectedNotes.length} note${selectedNotes.length === 1 ? "" : "s"} ready for export`}
+                : `${builderNoteCount} note${builderNoteCount === 1 ? "" : "s"} ready for export`}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <Button type="button" variant="ghost" onClick={() => setExamBuilderOpen(false)} disabled={exportingExam}>
@@ -1247,7 +1579,7 @@ export default function LibraryPage() {
                 onClick={() => void handleExportExam()}
                 loading={exportingExam}
                 loadingText="Exporting..."
-                disabled={selectedNotes.length === 0}
+                disabled={builderNoteCount === 0}
               >
                 Export Exam
               </Button>
@@ -1261,7 +1593,7 @@ export default function LibraryPage() {
               <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">Selected Notes</h3>
               <p className="text-sm text-foreground/70">Drag to reorder sections</p>
             </div>
-            {selectedNotes.length === 0 ? (
+            {builderNoteCount === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-center">
                 <p className="text-sm font-medium text-foreground/80">
                   Select notes from your library to start building an exam.
@@ -1271,25 +1603,48 @@ export default function LibraryPage() {
               <DndContext
                 sensors={examBuilderSensors}
                 collisionDetection={closestCenter}
-                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                onDragStart={(event) => setActiveDragNoteId(typeof event.active.id === "string" ? event.active.id : null)}
-                onDragCancel={() => setActiveDragNoteId(null)}
+                modifiers={[restrictToVerticalAxis]}
+                onDragStart={(event) => {
+                  const data = event.active.data.current;
+                  if (data?.type === "note") {
+                    setActiveDragNoteId(String(data.noteId));
+                    setActiveDragSectionId(null);
+                    return;
+                  }
+                  if (data?.type === "section") {
+                    setActiveDragSectionId(String(data.sectionId));
+                    setActiveDragNoteId(null);
+                  }
+                }}
+                onDragCancel={() => {
+                  setActiveDragNoteId(null);
+                  setActiveDragSectionId(null);
+                }}
+                onDragOver={handleExamBuilderDragOver}
                 onDragEnd={handleExamBuilderDragEnd}
               >
-                <SortableContext items={selectedNotes.map((note) => note.noteId)} strategy={verticalListSortingStrategy}>
-                  <div className={`space-y-3 rounded-2xl border border-dashed p-3 transition-colors ${
-                    activeDragNoteId ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20" : "border-border/70 bg-transparent"
+                <SortableContext items={examSections.map((section) => getSectionSortableId(section.id))} strategy={verticalListSortingStrategy}>
+                  <div className={`space-y-4 rounded-2xl border border-border/70 bg-background/80 p-3 transition-colors ${
+                    activeDragNoteId || activeDragSectionId ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20" : ""
                   }`}>
-                    {selectedNotes.map((note, index) => (
-                      <SortableExamBuilderItem
-                        key={note.noteId}
-                        note={note}
-                        index={index}
-                        totalCount={selectedNotes.length}
+                    {examSections.map((section, sectionIndex) => (
+                      <SortableExamBuilderSection
+                        key={section.id}
+                        section={section}
+                        sectionIndex={sectionIndex}
+                        notes={section.noteIds
+                          .map((noteId) => selectedNoteMetaById[noteId])
+                          .filter((note): note is ExamBuilderSelection => Boolean(note))}
                         exporting={exportingExam}
                         activeDragNoteId={activeDragNoteId}
-                        onMove={(noteId, direction) => setSelectedNoteIds((previous) => moveSelection(previous, noteId, direction))}
-                        onRemove={(noteId) => setSelectedNoteIds((previous) => previous.filter((selectedId) => selectedId !== noteId))}
+                        activeDragSectionId={activeDragSectionId}
+                        onRename={(sectionId, title) => updateExamSections(renameExamSection(examSections, sectionId, title))}
+                        onDelete={handleDeleteSectionRequest}
+                        onAddBelow={handleAddSectionBelow}
+                        onMoveNote={(sectionId, noteId, direction) => updateExamSections(
+                          moveNoteWithinSection(examSections, sectionId, noteId, direction),
+                        )}
+                        onRemoveNote={(noteId) => updateExamSections(removeNoteFromExamSections(examSections, noteId))}
                       />
                     ))}
                   </div>
@@ -1303,13 +1658,20 @@ export default function LibraryPage() {
                         </span>
                         <div className="min-w-0 space-y-1">
                           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
-                            Note {selectedNotes.findIndex((note) => note.noteId === activeDragNoteId) + 1}
+                            Note
                           </p>
                           <p className="truncate text-sm font-medium text-foreground">
-                            {selectedNotes.find((note) => note.noteId === activeDragNoteId)?.title}
+                            {selectedNoteMetaById[activeDragNoteId]?.title}
                           </p>
                         </div>
                       </div>
+                    </div>
+                  ) : activeDragSectionId ? (
+                    <div className="rounded-2xl border border-blue-400 bg-background p-4 shadow-xl">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Section</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {examSections.find((section) => section.id === activeDragSectionId)?.title}
+                      </p>
                     </div>
                   ) : null}
                 </DragOverlay>
@@ -1349,6 +1711,53 @@ export default function LibraryPage() {
             </div>
           </section>
         </div>
+      </AppModal>
+
+      <AppModal
+        isOpen={pendingDeleteSection !== null}
+        title="Delete section?"
+        description={
+          pendingDeleteSection?.noteIds.length
+            ? "This section still has notes. Move them to the previous section or remove them from the exam."
+            : "Remove this empty section from the exam builder."
+        }
+        onClose={() => {
+          if (!exportingExam) {
+            setPendingDeleteSectionId(null);
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" onClick={() => setPendingDeleteSectionId(null)} disabled={exportingExam}>
+              Cancel
+            </Button>
+            {pendingDeleteSection?.noteIds.length ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleConfirmDeleteSection("move_notes")}
+                disabled={exportingExam}
+              >
+                Move Notes
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant={pendingDeleteSection?.noteIds.length ? "outline" : "default"}
+              className={pendingDeleteSection?.noteIds.length ? "text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200" : undefined}
+              onClick={() => handleConfirmDeleteSection("delete_notes")}
+              disabled={exportingExam}
+            >
+              {pendingDeleteSection?.noteIds.length ? "Delete Notes" : "Delete Section"}
+            </Button>
+          </div>
+        )}
+      >
+        <p className="text-sm text-foreground/70">
+          {pendingDeleteSection?.noteIds.length
+            ? `${pendingDeleteSection.noteIds.length} note${pendingDeleteSection.noteIds.length === 1 ? "" : "s"} will be affected.`
+            : "This section has no notes, so it can be removed immediately."}
+        </p>
       </AppModal>
 
       {toast ? (

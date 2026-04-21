@@ -79,8 +79,11 @@ Do not mix these models.
 - Teachers can also build one combined exam from `Library`:
   - enter teacher-only `Select` mode
   - choose multiple quiz-ready notes
-  - reorder notes inside `Exam Builder` using the drag handle or the fallback move buttons
+  - organize notes into editable sections inside `Exam Builder`
+  - reorder sections and move notes across sections using the drag handles
+  - keep note-level `Move up` / `Move down` controls as the accessibility fallback
   - export one combined DOCX with optional `Answer Key` and `Explanations`
+  - combined DOCX export preserves the section titles and section order chosen by the teacher
 
 ## UI Rules
 

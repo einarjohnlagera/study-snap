@@ -30,6 +30,7 @@ import java.util.Set;
 public class QuizDocxExportService {
     private static final String COMBINED_TOPIC = "Combined Exam";
     private static final String MIXED_SUBJECTS = "Mixed Subjects";
+    private static final String DEFAULT_SECTION_TITLE = "Section";
     private static final String SUBJECT_PREFIX = "Subject: ";
     private static final String TOPIC_PREFIX = "Topic: ";
     private static final String TIME_LINE = "Time: ____________";
@@ -86,25 +87,24 @@ public class QuizDocxExportService {
         }
     }
 
-    public byte[] exportCombinedQuizToDocx(List<ExportableQuiz> quizzes, CombinedQuizDocxOptions options) {
+    public byte[] exportCombinedQuizToDocx(List<ExportableSection> sections, CombinedQuizDocxOptions options) {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             log.info("Applying DOCX exam builder formatting...");
             setMargins(document);
-            addCombinedHeader(document, quizzes);
+            addCombinedHeader(document, sections);
             addExamTitle(document);
             addSectionIntro(document);
 
             List<QuizItem> orderedQuestions = new ArrayList<>();
             int nextQuestionNumber = 1;
-            boolean multipleSections = quizzes.size() > 1;
-            for (int quizIndex = 0; quizIndex < quizzes.size(); quizIndex++) {
-                ExportableQuiz quiz = quizzes.get(quizIndex);
-                if (multipleSections) {
-                    addNoteSectionHeading(document, quizIndex + 1, quiz.title());
+            for (int sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
+                ExportableSection section = sections.get(sectionIndex);
+                addNoteSectionHeading(document, sectionIndex, section.title());
+                for (ExportableQuiz quiz : section.quizzes()) {
+                    nextQuestionNumber = addQuestions(document, quiz.questions(), nextQuestionNumber);
+                    orderedQuestions.addAll(quiz.questions());
                 }
-                nextQuestionNumber = addQuestions(document, quiz.questions(), nextQuestionNumber);
-                orderedQuestions.addAll(quiz.questions());
             }
 
             if (options.includeAnswerKey()) {
@@ -158,8 +158,8 @@ public class QuizDocxExportService {
         addHeaderLine(document, SCORE_LINE, SECTION_SPACING);
     }
 
-    private void addCombinedHeader(XWPFDocument document, List<ExportableQuiz> quizzes) {
-        addHeaderLine(document, SUBJECT_PREFIX + resolveCombinedSubject(quizzes), HEADER_SPACING);
+    private void addCombinedHeader(XWPFDocument document, List<ExportableSection> sections) {
+        addHeaderLine(document, SUBJECT_PREFIX + resolveCombinedSubject(sections), HEADER_SPACING);
         addHeaderLine(document, TOPIC_PREFIX + COMBINED_TOPIC, HEADER_SPACING);
         addHeaderLine(document, TIME_LINE, SECTION_SPACING);
         addHeaderLine(document, NAME_LINE, HEADER_SPACING);
@@ -195,7 +195,7 @@ public class QuizDocxExportService {
         directionRun.setText(MULTIPLE_CHOICE_DIRECTIONS);
     }
 
-    private void addNoteSectionHeading(XWPFDocument document, int sectionNumber, String title) {
+    private void addNoteSectionHeading(XWPFDocument document, int sectionIndex, String title) {
         XWPFParagraph headingParagraph = document.createParagraph();
         headingParagraph.setSpacingBefore(NOTE_SECTION_SPACING);
         headingParagraph.setSpacingAfter(HEADER_SPACING);
@@ -203,7 +203,7 @@ public class QuizDocxExportService {
         headingRun.setBold(true);
         headingRun.setFontSize(NOTE_SECTION_HEADING_FONT_SIZE);
         headingRun.setFontFamily(FONT_FAMILY);
-        headingRun.setText("Section " + sectionNumber + ": " + normalizeText(title));
+        headingRun.setText(normalizeSectionTitle(sectionIndex, title));
     }
 
     private void addSectionHeading(XWPFDocument document, String text) {
@@ -323,18 +323,25 @@ public class QuizDocxExportService {
         return value == null || value.isBlank() ? "-" : value.trim();
     }
 
-    private String resolveCombinedSubject(List<ExportableQuiz> quizzes) {
+    private String resolveCombinedSubject(List<ExportableSection> sections) {
         Set<String> subjects = new LinkedHashSet<>();
-        for (ExportableQuiz quiz : quizzes) {
-            String normalizedSubject = normalizeOptionalText(quiz.subject());
-            if (normalizedSubject != null) {
-                subjects.add(normalizedSubject);
+        for (ExportableSection section : sections) {
+            for (ExportableQuiz quiz : section.quizzes()) {
+                String normalizedSubject = normalizeOptionalText(quiz.subject());
+                if (normalizedSubject != null) {
+                    subjects.add(normalizedSubject);
+                }
             }
         }
         if (subjects.size() == 1) {
             return subjects.iterator().next();
         }
         return MIXED_SUBJECTS;
+    }
+
+    private String normalizeSectionTitle(int sectionIndex, String value) {
+        String normalized = value == null ? "" : value.trim();
+        return normalized.isBlank() ? DEFAULT_SECTION_TITLE + " " + (sectionIndex + 1) : normalized;
     }
 
     private String normalizeOptionalText(String value) {
@@ -354,6 +361,15 @@ public class QuizDocxExportService {
     ) {
         public ExportableQuiz {
             questions = questions == null ? List.of() : List.copyOf(questions);
+        }
+    }
+
+    public record ExportableSection(
+            String title,
+            List<ExportableQuiz> quizzes
+    ) {
+        public ExportableSection {
+            quizzes = quizzes == null ? List.of() : List.copyOf(quizzes);
         }
     }
 

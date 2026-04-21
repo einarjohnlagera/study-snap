@@ -148,23 +148,29 @@ class QuizDocxExportServiceTest {
 
     @Test
     void exportCombinedQuiz_keepsSelectedSectionsAndOptionalTeacherMaterials() throws IOException {
-        List<QuizDocxExportService.ExportableQuiz> quizzes = List.of(
-                new QuizDocxExportService.ExportableQuiz(
-                        "Cells",
-                        "Biology",
-                        OffsetDateTime.parse("2026-04-20T10:00:00Z"),
-                        List.of(new QuizItem("What is a cell?", List.of("Unit", "Atom", "Bond", "Gas"), 0, "Cells", "Cells are the basic unit of life."))
+        List<QuizDocxExportService.ExportableSection> sections = List.of(
+                new QuizDocxExportService.ExportableSection(
+                        "SECTION A - Multiple Choice",
+                        List.of(new QuizDocxExportService.ExportableQuiz(
+                                "Cells",
+                                "Biology",
+                                OffsetDateTime.parse("2026-04-20T10:00:00Z"),
+                                List.of(new QuizItem("What is a cell?", List.of("Unit", "Atom", "Bond", "Gas"), 0, "Cells", "Cells are the basic unit of life."))
+                        ))
                 ),
-                new QuizDocxExportService.ExportableQuiz(
-                        "Stoichiometry",
-                        "Chemistry",
-                        OffsetDateTime.parse("2026-04-20T10:30:00Z"),
-                        List.of(new QuizItem("What is a mole?", List.of("Mass", "Amount", "Energy", "Charge"), 1, "Stoichiometry", "A mole is a measure of amount of substance."))
+                new QuizDocxExportService.ExportableSection(
+                        "SECTION B - Application",
+                        List.of(new QuizDocxExportService.ExportableQuiz(
+                                "Stoichiometry",
+                                "Chemistry",
+                                OffsetDateTime.parse("2026-04-20T10:30:00Z"),
+                                List.of(new QuizItem("What is a mole?", List.of("Mass", "Amount", "Energy", "Charge"), 1, "Stoichiometry", "A mole is a measure of amount of substance."))
+                        ))
                 )
         );
 
         byte[] content = quizDocxExportService.exportCombinedQuizToDocx(
-                quizzes,
+                sections,
                 new QuizDocxExportService.CombinedQuizDocxOptions(true, true)
         );
 
@@ -173,8 +179,8 @@ class QuizDocxExportServiceTest {
 
             assertThat(text).contains("Subject: Mixed Subjects")
                     .contains("Topic: Combined Exam")
-                    .contains("Section 1: Cells")
-                    .contains("Section 2: Stoichiometry")
+                    .contains("SECTION A - Multiple Choice")
+                    .contains("SECTION B - Application")
                     .contains("1. What is a cell?")
                     .contains("2. What is a mole?")
                     .contains("Answer Key")
