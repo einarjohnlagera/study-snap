@@ -405,7 +405,7 @@ describe("Library page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create Exam" }));
 
     expect(screen.getByRole("heading", { name: "Exam Builder" })).toBeInTheDocument();
-    expect(screen.getByText("Note 1")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Section A")).toBeInTheDocument();
     expect(screen.getAllByText("10 questions")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Move Dosage Calculations up" })).toBeInTheDocument();
 
@@ -415,7 +415,12 @@ describe("Library page", () => {
 
     await waitFor(() => {
       expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledWith({
-        noteIds: ["note-77"],
+        sections: [
+          {
+            title: "Section A",
+            noteIds: ["note-77"],
+          },
+        ],
         includeAnswerKey: true,
         includeExplanations: true,
       });

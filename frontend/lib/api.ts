@@ -811,7 +811,10 @@ export type NoteListItemResponse = {
 };
 
 export type MultiNoteQuizDocxExportRequest = {
-  noteIds: string[];
+  sections: Array<{
+    title: string;
+    noteIds: string[];
+  }>;
   includeAnswerKey: boolean;
   includeExplanations: boolean;
 };

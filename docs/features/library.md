@@ -41,7 +41,13 @@ Interaction:
   - each note shows a checkbox while selection mode is active
   - only notes with a stored `generatedQuiz` can be selected for exam export
   - non-quiz-ready notes stay visible but show a disabled checkbox plus `Generate a quiz first` guidance
-  - selected notes open `Exam Builder`, where teachers can reorder notes through a drag handle, keep `Move up` / `Move down` fallback controls, remove notes, and export one combined DOCX exam
+  - selected notes open `Exam Builder`, where teachers can:
+    - organize notes into editable sections such as `Section A`, `Section B`, and `Section C`
+    - reorder sections with a drag handle
+    - drag notes within a section or move notes across sections
+    - keep `Move up` / `Move down` note controls as the accessibility fallback
+    - remove notes or delete sections before export
+    - export one combined DOCX exam that preserves section order and grouping
 
 Shared list controls:
 

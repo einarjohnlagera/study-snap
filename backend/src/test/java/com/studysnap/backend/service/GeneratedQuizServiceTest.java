@@ -2,6 +2,7 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
+import com.studysnap.backend.dto.MultiNoteQuizDocxExportRequest;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
@@ -220,7 +221,10 @@ class GeneratedQuizServiceTest {
         )).thenReturn("combined-docx".getBytes());
 
         QuizDocxExportService.QuizDocxFile exported = generatedQuizService.exportCombinedDocx(
-                List.of(firstNoteId.toString(), secondNoteId.toString()),
+                List.of(
+                        new MultiNoteQuizDocxExportRequest.Section("Section A", List.of(firstNoteId.toString())),
+                        new MultiNoteQuizDocxExportRequest.Section("Section B", List.of(secondNoteId.toString()))
+                ),
                 userId,
                 true,
                 true
@@ -229,13 +233,17 @@ class GeneratedQuizServiceTest {
         assertThat(exported.getFilename()).isEqualTo("combined-exam-with-answers.docx");
         assertThat(exported.getContent()).isEqualTo("combined-docx".getBytes());
 
-        ArgumentCaptor<List<QuizDocxExportService.ExportableQuiz>> captor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<QuizDocxExportService.ExportableSection>> captor = ArgumentCaptor.forClass(List.class);
         verify(quizDocxExportService).exportCombinedQuizToDocx(
                 captor.capture(),
                 eq(new QuizDocxExportService.CombinedQuizDocxOptions(true, true))
         );
-        assertThat(captor.getValue()).extracting(QuizDocxExportService.ExportableQuiz::title)
-                .containsExactly("First Note", "Second Note");
+        assertThat(captor.getValue()).extracting(QuizDocxExportService.ExportableSection::title)
+                .containsExactly("Section A", "Section B");
+        assertThat(captor.getValue().get(0).quizzes()).extracting(QuizDocxExportService.ExportableQuiz::title)
+                .containsExactly("First Note");
+        assertThat(captor.getValue().get(1).quizzes()).extracting(QuizDocxExportService.ExportableQuiz::title)
+                .containsExactly("Second Note");
     }
 
     @Test
@@ -250,7 +258,7 @@ class GeneratedQuizServiceTest {
         when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
 
         assertThatThrownBy(() -> generatedQuizService.exportCombinedDocx(
-                List.of(noteId.toString()),
+                List.of(new MultiNoteQuizDocxExportRequest.Section("Section A", List.of(noteId.toString()))),
                 userId,
                 true,
                 false

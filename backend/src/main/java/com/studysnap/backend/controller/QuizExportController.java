@@ -60,7 +60,7 @@ public class QuizExportController {
     ) {
         UUID userId = user.userId();
         QuizDocxExportService.QuizDocxFile exportedFile = generatedQuizService.exportCombinedDocx(
-                request.noteIds(),
+                request.sections(),
                 userId,
                 request.includeAnswerKey(),
                 request.includeExplanations()

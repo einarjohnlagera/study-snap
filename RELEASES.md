@@ -72,7 +72,9 @@
   - teacher export now supports `Quiz Only (Student Version)` and `Quiz + Answers (Teacher Version)` as downloadable `.docx` files
   - added teacher Library `Select` mode and `Exam Builder` for combining multiple quiz-ready notes into one ordered DOCX exam export
   - `Exam Builder` now supports handle-based drag-and-drop reordering with `@dnd-kit`, while keeping `Move up` / `Move down` controls as the accessibility fallback
+  - `Exam Builder` now adds teacher-defined sections with inline titles, drag-reorderable section groups, and note movement across sections before export
   - combined exam export supports note reordering plus optional `Answer Key` and `Explanations` sections in the generated document
+  - combined exam DOCX export now preserves section order and section headings from the teacher builder instead of flattening notes into one unnamed list
   - Added regeneration with credit usage and confirmation
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 
