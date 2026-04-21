@@ -49,6 +49,7 @@ type ExamBuilderSelection = {
   noteId: string;
   title: string;
   subject: string;
+  questionCount: number | null;
 };
 
 const LIBRARY_PAGE_SIZE = 20;
@@ -244,7 +245,7 @@ function SortableExamBuilderItem({
       ref={setNodeRef}
       style={style}
       className={`flex items-start justify-between gap-3 rounded-2xl border border-border p-3 transition-shadow ${
-        isDragging ? "shadow-lg ring-1 ring-blue-500/30" : ""
+        isDragging ? "bg-background shadow-lg ring-1 ring-blue-500/30" : "bg-background shadow-sm"
       }`}
     >
       <div className="flex min-w-0 items-start gap-3">
@@ -262,7 +263,14 @@ function SortableExamBuilderItem({
         <div className="min-w-0 space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Note {index + 1}</p>
           <p className="truncate text-sm font-medium text-foreground">{note.title}</p>
-          <p className="text-xs text-foreground/60">{note.subject}</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
+            <p>{note.subject}</p>
+            {typeof note.questionCount === "number" ? (
+              <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/70">
+                {note.questionCount} question{note.questionCount === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
@@ -625,6 +633,7 @@ export default function LibraryPage() {
         noteId: item.id,
         title: item.title?.trim() || "Untitled note",
         subject: getLibrarySubject(item),
+        questionCount: item.quizCount ?? null,
       }));
   }, [itemsById, selectedNoteIds]);
 
@@ -1201,26 +1210,38 @@ export default function LibraryPage() {
       <AppModal
         isOpen={examBuilderOpen}
         title="Exam Builder"
-        description="Review the selected notes, adjust their order, and choose what to include before exporting one combined DOCX."
+        description="Create a structured exam from selected notes"
+        panelClassName="w-[96%] max-w-3xl rounded-2xl border-border p-0 shadow-2xl sm:w-full"
+        headerClassName="border-b border-border px-4 py-4 sm:px-6 sm:py-5"
+        contentClassName="px-4 py-4 sm:px-6 sm:py-5"
+        actionsClassName="sticky bottom-0 border-t border-border bg-background/95 px-4 py-4 backdrop-blur sm:px-6"
         onClose={() => {
           if (!exportingExam) {
             setExamBuilderOpen(false);
           }
         }}
         actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={() => setExamBuilderOpen(false)} disabled={exportingExam}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleExportExam()}
-              loading={exportingExam}
-              loadingText="Exporting..."
-              disabled={selectedNotes.length === 0}
-            >
-              Export Exam
-            </Button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="hidden text-sm text-foreground/60 sm:block">
+              {selectedNotes.length === 0
+                ? "Select notes from your library to start building an exam."
+                : `${selectedNotes.length} note${selectedNotes.length === 1 ? "" : "s"} ready for export`}
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" onClick={() => setExamBuilderOpen(false)} disabled={exportingExam}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                onClick={() => void handleExportExam()}
+                loading={exportingExam}
+                loadingText="Exporting..."
+                disabled={selectedNotes.length === 0}
+              >
+                Export Exam
+              </Button>
+            </div>
           </div>
         )}
       >
@@ -1228,10 +1249,14 @@ export default function LibraryPage() {
           <section className="space-y-3">
             <div>
               <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">Selected Notes</h3>
-              <p className="text-sm text-foreground/70">The exam follows this order.</p>
+              <p className="text-sm text-foreground/70">Drag notes into the order you want students to see them.</p>
             </div>
             {selectedNotes.length === 0 ? (
-              <p className="text-sm text-foreground/70">Select at least one quiz-ready note to continue.</p>
+              <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+                <p className="text-sm font-medium text-foreground/80">
+                  Select notes from your library to start building an exam.
+                </p>
+              </div>
             ) : (
               <DndContext sensors={examBuilderSensors} collisionDetection={closestCenter} onDragEnd={handleExamBuilderDragEnd}>
                 <SortableContext items={selectedNotes.map((note) => note.noteId)} strategy={verticalListSortingStrategy}>
@@ -1253,32 +1278,53 @@ export default function LibraryPage() {
             )}
           </section>
 
-          <section className="space-y-3">
+          <section className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4 shadow-sm">
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">Options</h3>
+              <h3 className="text-base font-semibold text-foreground">Exam Options</h3>
+              <p className="text-sm text-foreground/65">Choose which teacher materials to include in the exported DOCX.</p>
             </div>
-            <label className="flex items-start gap-3 rounded-2xl border border-border p-3">
-              <input
-                type="checkbox"
-                checked={includeAnswerKey}
-                onChange={(event) => setIncludeAnswerKey(event.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
-              />
+            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-border bg-background p-4 shadow-sm">
               <span className="space-y-1">
                 <span className="block text-sm font-medium text-foreground">Include Answer Key</span>
                 <span className="block text-xs text-foreground/65">Add a teacher answer key after the questions.</span>
               </span>
+              <span className="relative mt-0.5 inline-flex items-center">
+                <input
+                  type="checkbox"
+                  checked={includeAnswerKey}
+                  onChange={(event) => setIncludeAnswerKey(event.target.checked)}
+                  className="peer sr-only"
+                />
+                <span
+                  aria-hidden="true"
+                  className="block h-6 w-11 rounded-full bg-foreground/15 transition-colors peer-checked:bg-blue-600"
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-5"
+                />
+              </span>
             </label>
-            <label className="flex items-start gap-3 rounded-2xl border border-border p-3">
-              <input
-                type="checkbox"
-                checked={includeExplanations}
-                onChange={(event) => setIncludeExplanations(event.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
-              />
+            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-border bg-background p-4 shadow-sm">
               <span className="space-y-1">
                 <span className="block text-sm font-medium text-foreground">Include Explanations</span>
                 <span className="block text-xs text-foreground/65">Append teacher explanations on a separate page.</span>
+              </span>
+              <span className="relative mt-0.5 inline-flex items-center">
+                <input
+                  type="checkbox"
+                  checked={includeExplanations}
+                  onChange={(event) => setIncludeExplanations(event.target.checked)}
+                  className="peer sr-only"
+                />
+                <span
+                  aria-hidden="true"
+                  className="block h-6 w-11 rounded-full bg-foreground/15 transition-colors peer-checked:bg-blue-600"
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-5"
+                />
               </span>
             </label>
           </section>
