@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.xwpf.usermodel.BreakType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
@@ -21,28 +22,39 @@ import java.util.List;
 import java.util.Locale;
 
 @Service
+@Slf4j
 public class QuizDocxExportService {
-    private static final String ANSWER_KEY_HEADING = "ANSWER KEY";
-    private static final String EXPLANATIONS_HEADING = "EXPLANATIONS";
-    private static final String DIVIDER = "-".repeat(44);
+    private static final String QUIZ_SUBTITLE = "Quiz";
+    private static final String ANSWER_KEY_HEADING = "Answer Key";
+    private static final String EXPLANATIONS_HEADING = "Explanations";
+    private static final String NAME_LINE = "Name: __________________________";
+    private static final String DATE_LINE = "Date: __________________________";
     private static final String UNTITLED_NOTE = "untitled-note";
     private static final String QUIZ_FILENAME_SUFFIX = "-quiz.docx";
     private static final String QUIZ_WITH_ANSWERS_FILENAME_SUFFIX = "-quiz-with-answers.docx";
     private static final String FONT_FAMILY = "Calibri";
     private static final int MARGIN_TWIPS = 1440;
+    private static final int TITLE_FONT_SIZE = 16;
+    private static final int SUBTITLE_FONT_SIZE = 12;
+    private static final int BODY_FONT_SIZE = 11;
+    private static final int SECTION_HEADING_FONT_SIZE = 14;
+    private static final int DEFAULT_SPACING_AFTER = 200;
+    private static final int SECTION_SPACING = 300;
+    private static final int CHOICE_INDENT = 400;
 
     public byte[] exportQuizToDocx(ExportableQuiz quiz, QuizDocxExportMode mode) {
         try (XWPFDocument document = new XWPFDocument();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            log.info("Applying DOCX v3 formatting...");
             setMargins(document);
             addHeader(document, quiz);
             addStudentInfoSection(document);
             addQuestions(document, quiz.questions());
             if (mode == QuizDocxExportMode.WITH_ANSWERS) {
                 addPageBreak(document);
-                addDividerSectionHeading(document, ANSWER_KEY_HEADING);
+                addSectionHeading(document, ANSWER_KEY_HEADING);
                 addAnswerKeyEntries(document, quiz.questions());
-                addDividerSectionHeading(document, EXPLANATIONS_HEADING);
+                addSectionHeading(document, EXPLANATIONS_HEADING);
                 addExplanationEntries(document, quiz.questions());
             }
             document.write(outputStream);
@@ -73,57 +85,53 @@ public class QuizDocxExportService {
     private void addHeader(XWPFDocument document, ExportableQuiz quiz) {
         XWPFParagraph titleParagraph = document.createParagraph();
         titleParagraph.setAlignment(ParagraphAlignment.CENTER);
-        titleParagraph.setSpacingAfter(80);
+        titleParagraph.setSpacingAfter(DEFAULT_SPACING_AFTER);
         XWPFRun titleRun = titleParagraph.createRun();
         titleRun.setBold(true);
-        titleRun.setFontSize(16);
+        titleRun.setFontSize(TITLE_FONT_SIZE);
         titleRun.setFontFamily(FONT_FAMILY);
-        titleRun.setText(normalizeText(quiz.title()));
+        titleRun.setText(normalizeText(quiz.title()).toUpperCase(Locale.US));
 
         XWPFParagraph subtitleParagraph = document.createParagraph();
         subtitleParagraph.setAlignment(ParagraphAlignment.CENTER);
-        subtitleParagraph.setSpacingAfter(160);
+        subtitleParagraph.setSpacingAfter(DEFAULT_SPACING_AFTER);
         XWPFRun subtitleRun = subtitleParagraph.createRun();
-        subtitleRun.setFontSize(12);
+        subtitleRun.setFontSize(SUBTITLE_FONT_SIZE);
         subtitleRun.setFontFamily(FONT_FAMILY);
-        subtitleRun.setText("Quiz");
+        subtitleRun.setText(QUIZ_SUBTITLE);
 
-        addDividerLine(document, 160);
+        if (quiz.subject() != null && !quiz.subject().isBlank()) {
+            XWPFParagraph subjectParagraph = document.createParagraph();
+            subjectParagraph.setAlignment(ParagraphAlignment.CENTER);
+            subjectParagraph.setSpacingAfter(SECTION_SPACING);
+            XWPFRun subjectRun = subjectParagraph.createRun();
+            subjectRun.setFontSize(SUBTITLE_FONT_SIZE);
+            subjectRun.setFontFamily(FONT_FAMILY);
+            subjectRun.setText(normalizeText(quiz.subject()));
+        }
     }
 
     private void addStudentInfoSection(XWPFDocument document) {
-        addInfoLine(document, "Name: __________________________", 80);
-        addInfoLine(document, "Date: __________________________", 360);
+        addInfoLine(document, NAME_LINE, DEFAULT_SPACING_AFTER);
+        addInfoLine(document, DATE_LINE, SECTION_SPACING);
     }
 
-    private void addDividerLine(XWPFDocument document, int spacingAfter) {
-        XWPFParagraph paragraph = document.createParagraph();
-        paragraph.setSpacingAfter(spacingAfter);
-        XWPFRun run = paragraph.createRun();
-        run.setFontSize(10);
-        run.setFontFamily(FONT_FAMILY);
-        run.setText(DIVIDER);
-    }
-
-    private void addDividerSectionHeading(XWPFDocument document, String text) {
-        addDividerLine(document, 60);
-
+    private void addSectionHeading(XWPFDocument document, String text) {
         XWPFParagraph headingParagraph = document.createParagraph();
-        headingParagraph.setSpacingAfter(60);
+        headingParagraph.setSpacingBefore(SECTION_SPACING);
+        headingParagraph.setSpacingAfter(SECTION_SPACING);
         XWPFRun headingRun = headingParagraph.createRun();
         headingRun.setBold(true);
-        headingRun.setFontSize(13);
+        headingRun.setFontSize(SECTION_HEADING_FONT_SIZE);
         headingRun.setFontFamily(FONT_FAMILY);
         headingRun.setText(text);
-
-        addDividerLine(document, 160);
     }
 
     private void addInfoLine(XWPFDocument document, String text, int spacingAfter) {
         XWPFParagraph paragraph = document.createParagraph();
         paragraph.setSpacingAfter(spacingAfter);
         XWPFRun run = paragraph.createRun();
-        run.setFontSize(11);
+        run.setFontSize(BODY_FONT_SIZE);
         run.setFontFamily(FONT_FAMILY);
         run.setText(text);
     }
@@ -133,39 +141,46 @@ public class QuizDocxExportService {
             QuizItem question = questions.get(index);
 
             XWPFParagraph questionParagraph = document.createParagraph();
-            questionParagraph.setSpacingAfter(100);
+            questionParagraph.setSpacingAfter(DEFAULT_SPACING_AFTER);
 
             XWPFRun numberRun = questionParagraph.createRun();
             numberRun.setBold(true);
-            numberRun.setFontSize(12);
+            numberRun.setFontSize(BODY_FONT_SIZE);
             numberRun.setFontFamily(FONT_FAMILY);
             numberRun.setText((index + 1) + ". ");
 
             XWPFRun questionRun = questionParagraph.createRun();
             questionRun.setBold(false);
-            questionRun.setFontSize(12);
+            questionRun.setFontSize(BODY_FONT_SIZE);
             questionRun.setFontFamily(FONT_FAMILY);
             questionRun.setText(normalizeText(question.question()));
 
             List<String> choices = question.choices() == null ? List.of() : question.choices();
             for (int choiceIndex = 0; choiceIndex < choices.size(); choiceIndex++) {
                 XWPFParagraph choiceParagraph = document.createParagraph();
-                choiceParagraph.setIndentationLeft(360);
-                choiceParagraph.setSpacingAfter(choiceIndex == choices.size() - 1 ? 0 : 60);
+                choiceParagraph.setIndentationLeft(CHOICE_INDENT);
+                choiceParagraph.setSpacingAfter(DEFAULT_SPACING_AFTER);
                 XWPFRun choiceRun = choiceParagraph.createRun();
-                choiceRun.setFontSize(11);
+                choiceRun.setFontSize(BODY_FONT_SIZE);
                 choiceRun.setFontFamily(FONT_FAMILY);
                 choiceRun.setText(answerLabel(choiceIndex) + ". " + normalizeText(choices.get(choiceIndex)));
             }
 
             XWPFParagraph spacer = document.createParagraph();
-            spacer.setSpacingAfter(220);
+            spacer.setSpacingAfter(SECTION_SPACING);
+            XWPFRun spacerRun = spacer.createRun();
+            spacerRun.setFontFamily(FONT_FAMILY);
+            spacerRun.setFontSize(BODY_FONT_SIZE);
+            spacerRun.addBreak();
+            spacerRun.addBreak();
         }
     }
 
     private void addPageBreak(XWPFDocument document) {
         XWPFParagraph pageBreakParagraph = document.createParagraph();
+        pageBreakParagraph.setSpacingAfter(SECTION_SPACING);
         XWPFRun pageBreakRun = pageBreakParagraph.createRun();
+        pageBreakRun.setFontFamily(FONT_FAMILY);
         pageBreakRun.addBreak(BreakType.PAGE);
     }
 
@@ -174,14 +189,14 @@ public class QuizDocxExportService {
             QuizItem question = questions.get(index);
             Integer correctIndex = question.correctIndex();
             String label = correctIndex == null ? "-" : answerLabel(correctIndex);
-            addBodyParagraph(document, (index + 1) + ". " + label, false, 60);
+            addBodyParagraph(document, (index + 1) + ". " + label, false, DEFAULT_SPACING_AFTER);
         }
     }
 
     private void addExplanationEntries(XWPFDocument document, List<QuizItem> questions) {
         for (int index = 0; index < questions.size(); index++) {
             QuizItem question = questions.get(index);
-            addBodyParagraph(document, (index + 1) + ". " + normalizeText(question.explanation()), false, 160);
+            addBodyParagraph(document, (index + 1) + ". " + normalizeText(question.explanation()), false, SECTION_SPACING);
         }
     }
 
@@ -190,7 +205,7 @@ public class QuizDocxExportService {
         paragraph.setSpacingAfter(spacingAfter);
         XWPFRun run = paragraph.createRun();
         run.setBold(bold);
-        run.setFontSize(11);
+        run.setFontSize(BODY_FONT_SIZE);
         run.setFontFamily(FONT_FAMILY);
         run.setText(normalizeText(text));
     }

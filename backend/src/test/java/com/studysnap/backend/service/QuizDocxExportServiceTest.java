@@ -2,9 +2,12 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
+import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.junit.jupiter.api.Test;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.STBrType;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -24,14 +27,32 @@ class QuizDocxExportServiceTest {
                 new QuizItem("What is the nucleus?", List.of("Control center", "Energy source", "Cell wall", "Waste"), 0, "Cells", "The nucleus controls the cell.")
         )), QuizDocxExportMode.QUIZ_ONLY);
 
-        String text = extractText(content);
+        try (XWPFDocument document = openDocument(content)) {
+            String text = extractText(document);
 
-        assertThat(text).contains("Biology Quiz")
-            .contains("Name: __________________________")
-            .contains("1. What is the nucleus?")
-            .contains("A. Control center")
-            .doesNotContain("ANSWER KEY")
-            .doesNotContain("EXPLANATIONS");
+            assertThat(document.getTables()).isEmpty();
+            assertThat(text).contains("BIOLOGY QUIZ")
+                .contains("Quiz")
+                .contains("Biology")
+                .contains("Name: __________________________")
+                .contains("Date: __________________________")
+                .contains("1. What is the nucleus?")
+                .contains("A. Control center")
+                .doesNotContain("Answer Key")
+                .doesNotContain("Explanations")
+                .doesNotContain("Correct");
+
+            XWPFParagraph titleParagraph = document.getParagraphs().getFirst();
+            assertThat(titleParagraph.getAlignment()).isEqualTo(ParagraphAlignment.CENTER);
+            assertThat(titleParagraph.getSpacingAfter()).isEqualTo(200);
+
+            XWPFParagraph firstChoiceParagraph = document.getParagraphs().stream()
+                .filter(paragraph -> "A. Control center".equals(paragraph.getText()))
+                .findFirst()
+                .orElseThrow();
+            assertThat(firstChoiceParagraph.getIndentationLeft()).isEqualTo(400);
+            assertThat(firstChoiceParagraph.getSpacingAfter()).isEqualTo(200);
+        }
     }
 
     @Test
@@ -40,12 +61,28 @@ class QuizDocxExportServiceTest {
                 new QuizItem("Which organelle produces ATP?", List.of("Mitochondria", "Nucleus", "Ribosome", "Golgi body"), 0, "Cells", "Mitochondria produce most cellular ATP.")
         )), QuizDocxExportMode.WITH_ANSWERS);
 
-        String text = extractText(content);
+        try (XWPFDocument document = openDocument(content)) {
+            String text = extractText(document);
 
-        assertThat(text).contains("ANSWER KEY")
-            .contains("1. A")
-            .contains("EXPLANATIONS")
-            .contains("1. Mitochondria produce most cellular ATP.");
+            assertThat(text).contains("Answer Key")
+                .contains("1. A")
+                .contains("Explanations")
+                .contains("1. Mitochondria produce most cellular ATP.")
+                .doesNotContain("Correct");
+
+            XWPFParagraph answerKeyHeading = document.getParagraphs().stream()
+                .filter(paragraph -> "Answer Key".equals(paragraph.getText()))
+                .findFirst()
+                .orElseThrow();
+            assertThat(answerKeyHeading.getSpacingBefore()).isEqualTo(300);
+            assertThat(answerKeyHeading.getSpacingAfter()).isEqualTo(300);
+
+            XWPFParagraph pageBreakParagraph = document.getParagraphs().stream()
+                .filter(paragraph -> paragraph.getRuns().stream().anyMatch(this::hasPageBreak))
+                .findFirst()
+                .orElseThrow();
+            assertThat(pageBreakParagraph.getRuns().stream().anyMatch(this::hasPageBreak)).isTrue();
+        }
     }
 
     @Test
@@ -61,11 +98,14 @@ class QuizDocxExportServiceTest {
                 .toList();
 
         byte[] content = quizDocxExportService.exportQuizToDocx(buildQuiz(questions), QuizDocxExportMode.WITH_ANSWERS);
-        String text = extractText(content);
+        try (XWPFDocument document = openDocument(content)) {
+            String text = extractText(document);
 
-        assertThat(text).contains("15. Question 15 – café ßeta?")
-            .contains("Deltá")
-            .contains("Explanation 15 covers café, naïve, and résumé.");
+            assertThat(text).contains("15. Question 15 – café ßeta?")
+                .contains("Deltá")
+                .contains("Explanation 15 covers café, naïve, and résumé.");
+            assertThat(document.getParagraphs().stream().filter(paragraph -> paragraph.getText().startsWith("Question")).count()).isZero();
+        }
     }
 
     @Test
@@ -85,11 +125,17 @@ class QuizDocxExportServiceTest {
         );
     }
 
-    private String extractText(byte[] content) throws IOException {
-        try (XWPFDocument document = new XWPFDocument(new ByteArrayInputStream(content))) {
-            return document.getParagraphs().stream()
-                    .map(XWPFParagraph::getText)
-                    .collect(Collectors.joining("\n"));
-        }
+    private XWPFDocument openDocument(byte[] content) throws IOException {
+        return new XWPFDocument(new ByteArrayInputStream(content));
+    }
+
+    private String extractText(XWPFDocument document) {
+        return document.getParagraphs().stream()
+                .map(XWPFParagraph::getText)
+                .collect(Collectors.joining("\n"));
+    }
+
+    private boolean hasPageBreak(XWPFRun run) {
+        return run.getCTR().getBrList().stream().anyMatch(breakElement -> breakElement.getType() == STBrType.PAGE);
     }
 }
