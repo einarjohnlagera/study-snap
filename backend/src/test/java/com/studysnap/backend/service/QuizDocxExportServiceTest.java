@@ -39,7 +39,7 @@ class QuizDocxExportServiceTest {
                 .contains("Score: __________________________")
                 .contains("QUIZ")
                 .contains("PART I - MULTIPLE CHOICE")
-                .contains("Direction: Choose the best answer.")
+                .contains("Instructions: Read each question carefully. Choose the best answer.")
                 .contains("1. What is the nucleus?")
                 .contains("A. Control center")
                 .doesNotContain("Answer Key")
@@ -55,14 +55,14 @@ class QuizDocxExportServiceTest {
                 .findFirst()
                 .orElseThrow();
             assertThat(titleParagraph.getAlignment()).isEqualTo(ParagraphAlignment.CENTER);
-            assertThat(titleParagraph.getSpacingAfter()).isEqualTo(300);
+            assertThat(titleParagraph.getSpacingAfter()).isEqualTo(180);
 
             XWPFParagraph firstChoiceParagraph = document.getParagraphs().stream()
                 .filter(paragraph -> "A. Control center".equals(paragraph.getText()))
                 .findFirst()
                 .orElseThrow();
             assertThat(firstChoiceParagraph.getIndentationLeft()).isEqualTo(400);
-            assertThat(firstChoiceParagraph.getSpacingAfter()).isEqualTo(200);
+            assertThat(firstChoiceParagraph.getSpacingAfter()).isEqualTo(0);
         }
     }
 
@@ -88,14 +88,36 @@ class QuizDocxExportServiceTest {
                 .filter(paragraph -> "Answer Key".equals(paragraph.getText()))
                 .findFirst()
                 .orElseThrow();
-            assertThat(answerKeyHeading.getSpacingBefore()).isEqualTo(300);
-            assertThat(answerKeyHeading.getSpacingAfter()).isEqualTo(300);
+            assertThat(answerKeyHeading.getSpacingBefore()).isEqualTo(0);
+            assertThat(answerKeyHeading.getSpacingAfter()).isEqualTo(120);
 
             XWPFParagraph pageBreakParagraph = document.getParagraphs().stream()
                 .filter(paragraph -> paragraph.getRuns().stream().anyMatch(this::hasPageBreak))
                 .findFirst()
                 .orElseThrow();
             assertThat(pageBreakParagraph.getRuns().stream().anyMatch(this::hasPageBreak)).isTrue();
+        }
+    }
+
+    @Test
+    void exportWithAnswers_compactsAnswerKeyIntoRows() throws IOException {
+        List<QuizItem> questions = IntStream.rangeClosed(1, 10)
+            .mapToObj(index -> new QuizItem(
+                "Question " + index,
+                List.of("A", "B", "C", "D"),
+                index % 4,
+                "Topic " + index,
+                "Explanation " + index
+            ))
+            .toList();
+
+        byte[] content = quizDocxExportService.exportQuizToDocx(buildQuiz(questions), QuizDocxExportMode.WITH_ANSWERS);
+
+        try (XWPFDocument document = openDocument(content)) {
+            String text = extractText(document);
+
+            assertThat(text).contains("1. B    2. C    3. D    4. A    5. B");
+            assertThat(text).contains("6. C    7. D    8. A    9. B    10. C");
         }
     }
 

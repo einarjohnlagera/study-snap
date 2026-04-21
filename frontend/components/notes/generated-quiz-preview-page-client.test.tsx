@@ -158,7 +158,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
 
     await screen.findByText("What is the nucleus?");
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
-    fireEvent.click(screen.getByRole("button", { name: /Quiz \+ Answers Includes answer key and explanations for teachers/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Quiz \+ Answers Includes answer key and explanations for teacher review\./i }));
 
     await waitFor(() => {
       expect(exportGeneratedQuizDocx).toHaveBeenCalledWith("quiz-1", "WITH_ANSWERS");

@@ -230,13 +230,13 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                       {
                         key: "quiz-only",
                         label: "Quiz Only",
-                        description: "Generate a student-ready version without answers",
+                        description: "Questions and choices only. Ready for student distribution.",
                         onSelect: () => void handleExport("QUIZ_ONLY"),
                       },
                       {
                         key: "with-answers",
                         label: "Quiz + Answers",
-                        description: "Includes answer key and explanations for teachers",
+                        description: "Includes answer key and explanations for teacher review.",
                         onSelect: () => void handleExport("WITH_ANSWERS"),
                       },
                     ]}
