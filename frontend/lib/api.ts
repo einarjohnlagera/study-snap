@@ -802,9 +802,17 @@ export type NoteListItemResponse = {
   isCurrentUser: boolean;
   createdAt: string;
   updatedAt: string;
+  generatedQuizId?: string | null;
+  generatedQuizGeneratedAt?: string | null;
   copiedFromNoteId?: string | null;
   copiedFromPublic?: boolean;
   likedByCurrentUser: boolean;
+};
+
+export type MultiNoteQuizDocxExportRequest = {
+  noteIds: string[];
+  includeAnswerKey: boolean;
+  includeExplanations: boolean;
 };
 
 export type PublicNoteLikeResponse = {
@@ -2238,6 +2246,30 @@ export async function exportGeneratedQuizDocx(
   }
   const blob = await response.blob();
   const fallbackFilename = mode === "WITH_ANSWERS" ? "generated-quiz-with-answers.docx" : "generated-quiz.docx";
+  const filename = extractDownloadFilename(response.headers.get("content-disposition"), fallbackFilename);
+  triggerBlobDownload(blob, filename);
+  return { filename };
+}
+
+export async function exportCombinedGeneratedQuizDocx(
+  request: MultiNoteQuizDocxExportRequest,
+): Promise<{ filename: string }> {
+  const response = await fetchWithAuth(
+    "/quizzes/export-docx",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  if (!response.ok) {
+    return throwApiRequestError(response, "Could not export exam.");
+  }
+  const blob = await response.blob();
+  const fallbackFilename = request.includeAnswerKey || request.includeExplanations
+    ? "combined-exam-with-answers.docx"
+    : "combined-exam.docx";
   const filename = extractDownloadFilename(response.headers.get("content-disposition"), fallbackFilename);
   triggerBlobDownload(blob, filename);
   return { filename };

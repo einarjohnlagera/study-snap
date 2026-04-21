@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import LibraryPage from "./page";
 import {
+  exportCombinedGeneratedQuizDocx,
   getQuickReviewPerformanceSummary,
   listNotes,
   listSubjects,
 } from "@/lib/api";
+import { getAuthUser } from "@/lib/auth";
 
 const pushMock = jest.fn();
 
@@ -19,14 +21,22 @@ jest.mock("@/lib/route-guards", () => ({
 }));
 
 jest.mock("@/lib/api", () => ({
+  exportCombinedGeneratedQuizDocx: jest.fn(),
   listNotes: jest.fn(),
   listSubjects: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
 }));
 
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: jest.fn(),
+}));
+
 describe("Library page", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+    (exportCombinedGeneratedQuizDocx as jest.Mock).mockReset();
+    (exportCombinedGeneratedQuizDocx as jest.Mock).mockResolvedValue({ filename: "combined-exam-with-answers.docx" });
     (listSubjects as jest.Mock).mockResolvedValue(["Biology", "Chemistry", "Pharmacy"]);
     (listNotes as jest.Mock).mockResolvedValue([
       {
@@ -42,6 +52,7 @@ describe("Library page", () => {
         studyPackId: null,
         studyPackStatus: "DRAFT",
         quizCount: null,
+        generatedQuizId: null,
         createdAt: "2026-03-20T10:00:00Z",
         updatedAt: "2026-03-21T10:00:00Z",
       },
@@ -58,6 +69,7 @@ describe("Library page", () => {
         studyPackId: "pack-99",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
+        generatedQuizId: "generated-99",
         createdAt: "2026-03-21T10:00:00Z",
         updatedAt: "2026-03-22T10:00:00Z",
       },
@@ -74,6 +86,7 @@ describe("Library page", () => {
         studyPackId: "pack-77",
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 4,
+        generatedQuizId: "generated-77",
         createdAt: "2026-03-18T10:00:00Z",
         updatedAt: "2026-03-23T10:00:00Z",
       },
@@ -324,5 +337,62 @@ describe("Library page", () => {
     expect(await screen.findByText("You don't have any notes yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create Your First Note" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Try Demo" })).toBeInTheDocument();
+  });
+
+  it("enables teacher selection mode only for quiz-ready notes", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "teacher-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+
+    const disabledCheckbox = screen.getByLabelText("Select Cell Respiration for exam export");
+    expect(disabledCheckbox).toBeDisabled();
+    expect(screen.getByText("Generate a quiz first to include this note in an exam.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Select Zygote Review for exam export"));
+
+    expect(screen.getByText("1 note selected")).toBeInTheDocument();
+  });
+
+  it("opens exam builder, preserves order changes, and exports a combined exam", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "teacher-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByLabelText("Select Zygote Review for exam export"));
+    fireEvent.click(screen.getByLabelText("Select Dosage Calculations for exam export"));
+    fireEvent.click(screen.getByRole("button", { name: "Create Exam" }));
+
+    expect(screen.getByRole("heading", { name: "Exam Builder" })).toBeInTheDocument();
+    expect(screen.getByText("Note 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Move Dosage Calculations up" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move Dosage Calculations up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Zygote Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
+
+    await waitFor(() => {
+      expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledWith({
+        noteIds: ["note-77"],
+        includeAnswerKey: true,
+        includeExplanations: true,
+      });
+    });
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Exam DOCX ready.");
   });
 });

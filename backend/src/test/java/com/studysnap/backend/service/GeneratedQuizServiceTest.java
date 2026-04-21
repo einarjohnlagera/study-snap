@@ -192,6 +192,73 @@ class GeneratedQuizServiceTest {
         verify(quizDocxExportService, never()).exportQuizToDocx(any(), any());
     }
 
+    @Test
+    void exportCombinedDocx_preservesSelectedNoteOrderAndUsesCombinedExporter() {
+        UUID userId = UUID.randomUUID();
+        UUID firstNoteId = UUID.randomUUID();
+        UUID secondNoteId = UUID.randomUUID();
+        NoteEntity firstNote = buildNote(firstNoteId, userId);
+        firstNote.setTitle("First Note");
+        firstNote.setSubject("Biology");
+        NoteEntity secondNote = buildNote(secondNoteId, userId);
+        secondNote.setTitle("Second Note");
+        secondNote.setSubject("Chemistry");
+
+        GeneratedQuizEntity firstQuiz = buildGeneratedQuiz(firstNoteId, userId, "First explanation");
+        GeneratedQuizEntity secondQuiz = buildGeneratedQuiz(secondNoteId, userId, "Second explanation");
+        UserEntity teacher = buildUser(userId, UserRole.USER, ProfileType.TEACHER);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(firstNoteId, secondNoteId)))
+                .thenReturn(List.of(firstNote, secondNote));
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(firstNoteId, secondNoteId)))
+                .thenReturn(List.of(firstQuiz, secondQuiz));
+        when(quizDocxExportService.buildCombinedFilename(true, true)).thenReturn("combined-exam-with-answers.docx");
+        when(quizDocxExportService.exportCombinedQuizToDocx(
+                any(List.class),
+                eq(new QuizDocxExportService.CombinedQuizDocxOptions(true, true))
+        )).thenReturn("combined-docx".getBytes());
+
+        QuizDocxExportService.QuizDocxFile exported = generatedQuizService.exportCombinedDocx(
+                List.of(firstNoteId.toString(), secondNoteId.toString()),
+                userId,
+                true,
+                true
+        );
+
+        assertThat(exported.getFilename()).isEqualTo("combined-exam-with-answers.docx");
+        assertThat(exported.getContent()).isEqualTo("combined-docx".getBytes());
+
+        ArgumentCaptor<List<QuizDocxExportService.ExportableQuiz>> captor = ArgumentCaptor.forClass(List.class);
+        verify(quizDocxExportService).exportCombinedQuizToDocx(
+                captor.capture(),
+                eq(new QuizDocxExportService.CombinedQuizDocxOptions(true, true))
+        );
+        assertThat(captor.getValue()).extracting(QuizDocxExportService.ExportableQuiz::title)
+                .containsExactly("First Note", "Second Note");
+    }
+
+    @Test
+    void exportCombinedDocx_rejectsNotesWithoutGeneratedQuiz() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        UserEntity teacher = buildUser(userId, UserRole.USER, ProfileType.TEACHER);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
+        when(noteRepository.findByOwnerUserIdAndIdIn(userId, List.of(noteId))).thenReturn(List.of(note));
+        when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
+
+        assertThatThrownBy(() -> generatedQuizService.exportCombinedDocx(
+                List.of(noteId.toString()),
+                userId,
+                true,
+                false
+        )).hasMessage("Only notes with generated quizzes can be included in an exam export.");
+
+        verify(quizDocxExportService, never()).exportCombinedQuizToDocx(any(), any());
+    }
+
     private NoteEntity buildNote(UUID noteId, UUID userId) {
         NoteEntity note = new NoteEntity();
         note.setId(noteId);
@@ -223,5 +290,22 @@ class GeneratedQuizServiceTest {
         user.setRole(role);
         user.setProfileType(profileType);
         return user;
+    }
+
+    private GeneratedQuizEntity buildGeneratedQuiz(UUID noteId, UUID userId, String explanation) {
+        GeneratedQuizEntity generatedQuiz = new GeneratedQuizEntity();
+        generatedQuiz.setId(UUID.randomUUID());
+        generatedQuiz.setOwnerUserId(userId);
+        generatedQuiz.setNoteId(noteId);
+        generatedQuiz.setQuestions(List.of(new QuizItem(
+                "Question?",
+                List.of("A", "B", "C", "D"),
+                1,
+                "Concept",
+                explanation
+        )));
+        generatedQuiz.setGeneratedAt(OffsetDateTime.parse("2026-04-17T09:00:00Z"));
+        generatedQuiz.setUpdatedAt(OffsetDateTime.parse("2026-04-17T09:00:00Z"));
+        return generatedQuiz;
     }
 }

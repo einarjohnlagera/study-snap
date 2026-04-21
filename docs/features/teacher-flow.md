@@ -76,6 +76,11 @@ Do not mix these models.
   - `Answer Key`
   - `Explanations`
 - DOCX export is shown only for `Teacher` and `Admin`
+- Teachers can also build one combined exam from `Library`:
+  - enter teacher-only `Select` mode
+  - choose multiple quiz-ready notes
+  - reorder notes inside `Exam Builder`
+  - export one combined DOCX with optional `Answer Key` and `Explanations`
 
 ## UI Rules
 

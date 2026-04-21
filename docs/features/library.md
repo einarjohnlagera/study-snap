@@ -37,6 +37,11 @@ Interaction:
 - whole card opens Note Detail
 - note cards stay preview/navigation only
 - note actions belong in Note Detail
+- Teacher/Admin Library adds a teacher-only `Select` mode instead of changing default card behavior:
+  - each note shows a checkbox while selection mode is active
+  - only notes with a stored `generatedQuiz` can be selected for exam export
+  - non-quiz-ready notes stay visible but show a disabled checkbox plus `Generate a quiz first` guidance
+  - selected notes open `Exam Builder`, where teachers can reorder notes, remove notes, and export one combined DOCX exam
 
 Shared list controls:
 

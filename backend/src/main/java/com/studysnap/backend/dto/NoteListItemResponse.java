@@ -27,6 +27,8 @@ public record NoteListItemResponse(
         boolean isCurrentUser,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
+        String generatedQuizId,
+        OffsetDateTime generatedQuizGeneratedAt,
         String copiedFromNoteId,
         boolean copiedFromPublic,
         boolean likedByCurrentUser

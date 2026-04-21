@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, Globe, Lock } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Globe, Lock, Square, Trash2 } from "lucide-react";
+import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SharedNoteCard } from "@/components/notes/shared-note-card";
@@ -10,7 +11,9 @@ import { PageHeader } from "@/components/page-header";
 import { LibrarySheetModal } from "@/components/notes/library-sheet-modal";
 import { NoteStateBadge } from "@/components/notes/note-state-badge";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
+import { getAuthUser } from "@/lib/auth";
 import {
+  exportCombinedGeneratedQuizDocx,
   getQuickReviewPerformanceSummary,
   listNotes,
   listSubjects,
@@ -31,6 +34,12 @@ type LibrarySortOption =
 
 type ReviewSummaryMeta = {
   lastReviewedAt: string | null;
+};
+
+type ExamBuilderSelection = {
+  noteId: string;
+  title: string;
+  subject: string;
 };
 
 const LIBRARY_PAGE_SIZE = 20;
@@ -185,6 +194,24 @@ function LibraryLoading() {
   );
 }
 
+function canIncludeInExam(item: NoteListItemResponse): boolean {
+  return Boolean(item.generatedQuizId);
+}
+
+function moveSelection(ids: string[], noteId: string, direction: "up" | "down") {
+  const currentIndex = ids.indexOf(noteId);
+  if (currentIndex < 0) {
+    return ids;
+  }
+  const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (targetIndex < 0 || targetIndex >= ids.length) {
+    return ids;
+  }
+  const next = [...ids];
+  [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
+  return next;
+}
+
 export default function LibraryPage() {
   const router = useRouter();
   const initialLoadStartedRef = useRef(false);
@@ -207,6 +234,16 @@ export default function LibraryPage() {
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
+  const [examBuilderOpen, setExamBuilderOpen] = useState(false);
+  const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
+  const [includeExplanations, setIncludeExplanations] = useState(true);
+  const [exportingExam, setExportingExam] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const authUser = getAuthUser();
+  const isTeacherExamBuilderEnabled = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
 
   const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
     if (notes.length === 0) {
@@ -266,6 +303,14 @@ export default function LibraryPage() {
     initialLoadStartedRef.current = true;
     void loadLibrary();
   }, [loadLibrary]);
+
+  useEffect(() => {
+    if (!toast) {
+      return undefined;
+    }
+    const timeoutId = globalThis.setTimeout(() => setToast(null), 2200);
+    return () => globalThis.clearTimeout(timeoutId);
+  }, [toast]);
 
   const hasItems = items.length > 0;
 
@@ -470,6 +515,61 @@ export default function LibraryPage() {
     [sortedFilteredItems, visibleCount],
   );
   const hasMore = visibleCount < sortedFilteredItems.length;
+  const itemsById = useMemo(() => {
+    return new Map(items.map((item) => [item.id, item]));
+  }, [items]);
+  const selectedNotes = useMemo<ExamBuilderSelection[]>(() => {
+    return selectedNoteIds
+      .map((noteId) => itemsById.get(noteId))
+      .filter((item): item is NoteListItemResponse => Boolean(item))
+      .map((item) => ({
+        noteId: item.id,
+        title: item.title?.trim() || "Untitled note",
+        subject: getLibrarySubject(item),
+      }));
+  }, [itemsById, selectedNoteIds]);
+
+  const resetSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedNoteIds([]);
+    setExamBuilderOpen(false);
+    setIncludeAnswerKey(true);
+    setIncludeExplanations(true);
+  }, []);
+
+  const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
+    if (!canIncludeInExam(item)) {
+      setToast("Generate a quiz for this note before adding it to an exam.");
+      return;
+    }
+    setSelectedNoteIds((previous) => (
+      previous.includes(item.id)
+        ? previous.filter((noteId) => noteId !== item.id)
+        : [...previous, item.id]
+    ));
+  }, []);
+
+  const handleExportExam = useCallback(async () => {
+    if (selectedNotes.length === 0 || exportingExam) {
+      return;
+    }
+    setExportingExam(true);
+    setError(null);
+    try {
+      await exportCombinedGeneratedQuizDocx({
+        noteIds: selectedNotes.map((note) => note.noteId),
+        includeAnswerKey,
+        includeExplanations,
+      });
+      resetSelectionMode();
+      setToast("Exam DOCX ready.");
+    } catch (exportError) {
+      const message = exportError instanceof Error ? exportError.message : "Could not export exam.";
+      setError(message);
+    } finally {
+      setExportingExam(false);
+    }
+  }, [exportingExam, includeAnswerKey, includeExplanations, resetSelectionMode, selectedNotes]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -478,7 +578,26 @@ export default function LibraryPage() {
         title="Library"
         description="Browse and revisit all of your saved notes."
         actions={(
-          <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="block w-full sm:w-auto" />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            {isTeacherExamBuilderEnabled ? (
+              <Button
+                type="button"
+                variant={selectionMode ? "default" : "outline"}
+                className="gap-2"
+                onClick={() => {
+                  if (selectionMode) {
+                    resetSelectionMode();
+                    return;
+                  }
+                  setSelectionMode(true);
+                }}
+              >
+                {selectionMode ? <CheckSquare className="h-4 w-4" aria-hidden="true" /> : <Square className="h-4 w-4" aria-hidden="true" />}
+                <span>Select</span>
+              </Button>
+            ) : null}
+            <ResponsiveActionLink href="/notes/new" action="create" label="Create Note" className="block w-full sm:w-auto" />
+          </div>
         )}
       />
 
@@ -503,6 +622,31 @@ export default function LibraryPage() {
         </Card>
       ) : (
         <div className="space-y-4">
+          {selectionMode ? (
+            <Card className="space-y-3 p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">{selectedNoteIds.length} note{selectedNoteIds.length === 1 ? "" : "s"} selected</h2>
+                  <p className="text-sm text-foreground/70">
+                    Select quiz-ready notes to build one combined exam. Notes without generated quizzes stay disabled.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button type="button" variant="outline" onClick={resetSelectionMode}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setExamBuilderOpen(true)}
+                    disabled={selectedNoteIds.length === 0}
+                  >
+                    Create Exam
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
           <Card className="space-y-4 p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1 space-y-2">
@@ -666,20 +810,39 @@ export default function LibraryPage() {
               {visibleItems.map((item) => {
                 const reviewSummary = reviewSummaryByNoteId[item.id] ?? { lastReviewedAt: null };
                 const itemTags = normalizeTags(item.tags);
+                const examReady = canIncludeInExam(item);
+                const isSelected = selectedNoteIds.includes(item.id);
 
                 return (
                   <Card
                     key={item.id}
-                    role="link"
+                    role={selectionMode ? "button" : "link"}
                     tabIndex={0}
-                    onClick={() => router.push(`/notes/${item.id}?from=library`)}
+                    onClick={() => {
+                      if (selectionMode) {
+                        toggleNoteSelection(item);
+                        return;
+                      }
+                      router.push(`/notes/${item.id}?from=library`);
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
+                        if (selectionMode) {
+                          toggleNoteSelection(item);
+                          return;
+                        }
                         router.push(`/notes/${item.id}?from=library`);
                       }
                     }}
-                    className="flex h-full cursor-pointer flex-col justify-between space-y-4 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-6"
+                    aria-pressed={selectionMode ? isSelected : undefined}
+                    className={`flex h-full flex-col justify-between space-y-4 p-4 transition-colors sm:p-6 ${
+                      selectionMode
+                        ? examReady
+                          ? `cursor-pointer border-blue-500/30 ${isSelected ? "bg-blue-50/70 shadow-sm dark:bg-blue-950/20" : "hover:bg-highlight"}`
+                          : "cursor-not-allowed opacity-70"
+                        : "cursor-pointer hover:bg-highlight hover:shadow-md"
+                    }`}
                   >
                     <SharedNoteCard
                       title={item.title}
@@ -688,10 +851,32 @@ export default function LibraryPage() {
                       tags={itemTags}
                       contentPreview={item.contentPreview}
                       summaryPreview={item.summaryPreview}
-                      titleTrailing={renderVisibilityIcon(item.visibility)}
+                      titleTrailing={selectionMode ? (
+                        <span className="inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleNoteSelection(item)}
+                            onClick={(event) => event.stopPropagation()}
+                            disabled={!examReady}
+                            aria-label={`Select ${item.title?.trim() || "Untitled note"} for exam export`}
+                            className="h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600 disabled:cursor-not-allowed"
+                          />
+                        </span>
+                      ) : renderVisibilityIcon(item.visibility)}
                       stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
+                      metadataBadges={selectionMode && examReady ? (
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          Quiz ready
+                        </span>
+                      ) : null}
                       footer={(
                         <div className="space-y-1">
+                          {selectionMode && !examReady ? (
+                            <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                              Generate a quiz first to include this note in an exam.
+                            </p>
+                          ) : null}
                           <p className="text-xs text-foreground/65">
                             Updated {new Date(item.updatedAt).toLocaleString()}
                           </p>
@@ -904,6 +1089,128 @@ export default function LibraryPage() {
           })}
         </div>
       </LibrarySheetModal>
+
+      <AppModal
+        isOpen={examBuilderOpen}
+        title="Exam Builder"
+        description="Review the selected notes, adjust their order, and choose what to include before exporting one combined DOCX."
+        onClose={() => {
+          if (!exportingExam) {
+            setExamBuilderOpen(false);
+          }
+        }}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={() => setExamBuilderOpen(false)} disabled={exportingExam}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleExportExam()}
+              loading={exportingExam}
+              loadingText="Exporting..."
+              disabled={selectedNotes.length === 0}
+            >
+              Export Exam
+            </Button>
+          </div>
+        )}
+      >
+        <div className="space-y-6">
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">Selected Notes</h3>
+              <p className="text-sm text-foreground/70">The exam follows this order.</p>
+            </div>
+            {selectedNotes.length === 0 ? (
+              <p className="text-sm text-foreground/70">Select at least one quiz-ready note to continue.</p>
+            ) : (
+              <div className="space-y-3">
+                {selectedNotes.map((note, index) => (
+                  <div key={note.noteId} className="flex items-start justify-between gap-3 rounded-2xl border border-border p-3">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Note {index + 1}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{note.title}</p>
+                      <p className="text-xs text-foreground/60">{note.subject}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 p-0"
+                        onClick={() => setSelectedNoteIds((previous) => moveSelection(previous, note.noteId, "up"))}
+                        disabled={index === 0 || exportingExam}
+                        aria-label={`Move ${note.title} up`}
+                      >
+                        <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 p-0"
+                        onClick={() => setSelectedNoteIds((previous) => moveSelection(previous, note.noteId, "down"))}
+                        disabled={index === selectedNotes.length - 1 || exportingExam}
+                        aria-label={`Move ${note.title} down`}
+                      >
+                        <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 w-9 p-0"
+                        onClick={() => setSelectedNoteIds((previous) => previous.filter((selectedId) => selectedId !== note.noteId))}
+                        disabled={exportingExam}
+                        aria-label={`Remove ${note.title}`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">Options</h3>
+            </div>
+            <label className="flex items-start gap-3 rounded-2xl border border-border p-3">
+              <input
+                type="checkbox"
+                checked={includeAnswerKey}
+                onChange={(event) => setIncludeAnswerKey(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
+              />
+              <span className="space-y-1">
+                <span className="block text-sm font-medium text-foreground">Include Answer Key</span>
+                <span className="block text-xs text-foreground/65">Add a teacher answer key after the questions.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 rounded-2xl border border-border p-3">
+              <input
+                type="checkbox"
+                checked={includeExplanations}
+                onChange={(event) => setIncludeExplanations(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
+              />
+              <span className="space-y-1">
+                <span className="block text-sm font-medium text-foreground">Include Explanations</span>
+                <span className="block text-xs text-foreground/65">Append teacher explanations on a separate page.</span>
+              </span>
+            </label>
+          </section>
+        </div>
+      </AppModal>
+
+      {toast ? (
+        <div role="status" aria-live="polite" className="fixed bottom-4 right-4 z-50 rounded-md border border-border bg-background px-3 py-2 text-sm shadow-sm">
+          {toast}
+        </div>
+      ) : null}
     </main>
   );
 }
