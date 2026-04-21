@@ -3,7 +3,8 @@
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { closestCenter, DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { closestCenter, DndContext, DragOverlay, type DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
   SortableContext,
   useSortable,
@@ -213,6 +214,7 @@ type SortableExamBuilderItemProps = {
   index: number;
   totalCount: number;
   exporting: boolean;
+  activeDragNoteId: string | null;
   onMove: (noteId: string, direction: "up" | "down") => void;
   onRemove: (noteId: string) => void;
 };
@@ -222,6 +224,7 @@ function SortableExamBuilderItem({
   index,
   totalCount,
   exporting,
+  activeDragNoteId,
   onMove,
   onRemove,
 }: Readonly<SortableExamBuilderItemProps>) {
@@ -245,7 +248,11 @@ function SortableExamBuilderItem({
       ref={setNodeRef}
       style={style}
       className={`flex items-start justify-between gap-3 rounded-2xl border border-border p-3 transition-shadow ${
-        isDragging ? "bg-background shadow-lg ring-1 ring-blue-500/30" : "bg-background shadow-sm"
+        isDragging
+          ? "border-dashed border-blue-400 bg-blue-50/40 shadow-sm dark:bg-blue-950/20"
+          : activeDragNoteId === note.noteId
+            ? "bg-background shadow-md ring-1 ring-blue-500/30"
+            : "bg-background shadow-sm"
       }`}
     >
       <div className="flex min-w-0 items-start gap-3">
@@ -340,10 +347,11 @@ export default function LibraryPage() {
   const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
   const [includeExplanations, setIncludeExplanations] = useState(true);
   const [exportingExam, setExportingExam] = useState(false);
+  const [activeDragNoteId, setActiveDragNoteId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const authUser = getAuthUser();
-  const isTeacherExamBuilderEnabled = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
+  const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
   const examBuilderSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -643,6 +651,7 @@ export default function LibraryPage() {
     setExamBuilderOpen(false);
     setIncludeAnswerKey(true);
     setIncludeExplanations(true);
+    setActiveDragNoteId(null);
   }, []);
 
   const toggleNoteSelection = useCallback((item: NoteListItemResponse) => {
@@ -682,6 +691,7 @@ export default function LibraryPage() {
   const handleExamBuilderDragEnd = useCallback((event: DragEndEvent) => {
     const activeId = typeof event.active.id === "string" ? event.active.id : null;
     const overId = typeof event.over?.id === "string" ? event.over.id : null;
+    setActiveDragNoteId(null);
     if (!activeId) {
       return;
     }
@@ -984,7 +994,7 @@ export default function LibraryPage() {
                       stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
                       metadataBadges={selectionMode && examReady ? (
                         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                          Quiz ready
+                          Quiz Ready
                         </span>
                       ) : null}
                       footer={(
@@ -1228,7 +1238,7 @@ export default function LibraryPage() {
                 : `${selectedNotes.length} note${selectedNotes.length === 1 ? "" : "s"} ready for export`}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" onClick={() => setExamBuilderOpen(false)} disabled={exportingExam}>
+              <Button type="button" variant="ghost" onClick={() => setExamBuilderOpen(false)} disabled={exportingExam}>
                 Cancel
               </Button>
               <Button
@@ -1246,21 +1256,30 @@ export default function LibraryPage() {
         )}
       >
         <div className="space-y-6">
-          <section className="space-y-3">
+          <section className="space-y-3 rounded-2xl border border-border bg-muted/20 p-4 shadow-sm">
             <div>
               <h3 className="text-sm font-semibold uppercase tracking-wide text-foreground/60">Selected Notes</h3>
-              <p className="text-sm text-foreground/70">Drag notes into the order you want students to see them.</p>
+              <p className="text-sm text-foreground/70">Drag to reorder sections</p>
             </div>
             {selectedNotes.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-4 py-8 text-center">
+              <div className="rounded-2xl border border-dashed border-border bg-background px-4 py-8 text-center">
                 <p className="text-sm font-medium text-foreground/80">
                   Select notes from your library to start building an exam.
                 </p>
               </div>
             ) : (
-              <DndContext sensors={examBuilderSensors} collisionDetection={closestCenter} onDragEnd={handleExamBuilderDragEnd}>
+              <DndContext
+                sensors={examBuilderSensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                onDragStart={(event) => setActiveDragNoteId(typeof event.active.id === "string" ? event.active.id : null)}
+                onDragCancel={() => setActiveDragNoteId(null)}
+                onDragEnd={handleExamBuilderDragEnd}
+              >
                 <SortableContext items={selectedNotes.map((note) => note.noteId)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-3">
+                  <div className={`space-y-3 rounded-2xl border border-dashed p-3 transition-colors ${
+                    activeDragNoteId ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20" : "border-border/70 bg-transparent"
+                  }`}>
                     {selectedNotes.map((note, index) => (
                       <SortableExamBuilderItem
                         key={note.noteId}
@@ -1268,65 +1287,66 @@ export default function LibraryPage() {
                         index={index}
                         totalCount={selectedNotes.length}
                         exporting={exportingExam}
+                        activeDragNoteId={activeDragNoteId}
                         onMove={(noteId, direction) => setSelectedNoteIds((previous) => moveSelection(previous, noteId, direction))}
                         onRemove={(noteId) => setSelectedNoteIds((previous) => previous.filter((selectedId) => selectedId !== noteId))}
                       />
                     ))}
                   </div>
                 </SortableContext>
+                <DragOverlay>
+                  {activeDragNoteId ? (
+                    <div className="flex items-start justify-between gap-3 rounded-2xl border border-blue-400 bg-background p-3 shadow-xl">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65">
+                          <GripVertical className="h-4 w-4" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
+                            Note {selectedNotes.findIndex((note) => note.noteId === activeDragNoteId) + 1}
+                          </p>
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {selectedNotes.find((note) => note.noteId === activeDragNoteId)?.title}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </DragOverlay>
               </DndContext>
             )}
           </section>
 
-          <section className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4 shadow-sm">
+          <section className="space-y-3">
             <div>
               <h3 className="text-base font-semibold text-foreground">Exam Options</h3>
-              <p className="text-sm text-foreground/65">Choose which teacher materials to include in the exported DOCX.</p>
             </div>
-            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-border bg-background p-4 shadow-sm">
-              <span className="space-y-1">
-                <span className="block text-sm font-medium text-foreground">Include Answer Key</span>
-                <span className="block text-xs text-foreground/65">Add a teacher answer key after the questions.</span>
-              </span>
-              <span className="relative mt-0.5 inline-flex items-center">
+            <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+              <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
                 <input
                   type="checkbox"
                   checked={includeAnswerKey}
                   onChange={(event) => setIncludeAnswerKey(event.target.checked)}
-                  className="peer sr-only"
+                  className="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
                 />
-                <span
-                  aria-hidden="true"
-                  className="block h-6 w-11 rounded-full bg-foreground/15 transition-colors peer-checked:bg-blue-600"
-                />
-                <span
-                  aria-hidden="true"
-                  className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-5"
-                />
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-2xl border border-border bg-background p-4 shadow-sm">
-              <span className="space-y-1">
-                <span className="block text-sm font-medium text-foreground">Include Explanations</span>
-                <span className="block text-xs text-foreground/65">Append teacher explanations on a separate page.</span>
-              </span>
-              <span className="relative mt-0.5 inline-flex items-center">
+                <span className="space-y-0.5">
+                  <span className="block text-sm font-medium text-foreground">Include Answer Key</span>
+                  <span className="block text-xs text-foreground/65">Add the correct answers after the exam.</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
                 <input
                   type="checkbox"
                   checked={includeExplanations}
                   onChange={(event) => setIncludeExplanations(event.target.checked)}
-                  className="peer sr-only"
+                  className="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
                 />
-                <span
-                  aria-hidden="true"
-                  className="block h-6 w-11 rounded-full bg-foreground/15 transition-colors peer-checked:bg-blue-600"
-                />
-                <span
-                  aria-hidden="true"
-                  className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-background shadow-sm transition-transform peer-checked:translate-x-5"
-                />
-              </span>
-            </label>
+                <span className="space-y-0.5">
+                  <span className="block text-sm font-medium text-foreground">Include Explanations</span>
+                  <span className="block text-xs text-foreground/65">Append brief teaching explanations on a separate page.</span>
+                </span>
+              </label>
+            </div>
           </section>
         </div>
       </AppModal>

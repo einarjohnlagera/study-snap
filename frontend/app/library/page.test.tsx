@@ -126,6 +126,21 @@ describe("Library page", () => {
     )).toEqual(["note-77", "note-99", "note-42"]);
   });
 
+  it("hides teacher exam actions for student profiles", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    expect(screen.queryByRole("button", { name: "Select" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create Exam" })).not.toBeInTheDocument();
+  });
+
   it("filters notes by horizontal subject chips", async () => {
     render(<LibraryPage />);
 
