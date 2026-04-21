@@ -106,6 +106,10 @@ describe("Exam Builder page", () => {
     render(<ExamBuilderPage />);
 
     expect(await screen.findByRole("heading", { name: "Exam Builder" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Choose a template" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start from Scratch Begin with one flexible section and build the rest your way." }));
+
     expect(await screen.findByDisplayValue("Section A")).toBeInTheDocument();
     expect(screen.getAllByText("10 questions")).toHaveLength(2);
 
@@ -130,6 +134,8 @@ describe("Exam Builder page", () => {
   it("keeps the section title input focused while typing", async () => {
     render(<ExamBuilderPage />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Start from Scratch Begin with one flexible section and build the rest your way." }));
+
     const input = await screen.findByLabelText("Section title 1");
     input.focus();
 
@@ -139,5 +145,30 @@ describe("Exam Builder page", () => {
 
     expect(input).toHaveFocus();
     expect(input).toHaveValue("Section A - Application");
+  });
+
+  it("applies built-in templates and asks before replacing an edited structure", async () => {
+    render(<ExamBuilderPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Prelim Exam Basic Concepts -> Problem Solving -> Application" }));
+
+    expect(await screen.findByDisplayValue("Section A - Basic Concepts")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Section B - Problem Solving")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Section C - Application")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Section title 1"), {
+      target: { value: "Section A - Intro Review" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Change Template" }));
+    fireEvent.click(screen.getByRole("button", { name: "Final Exam Comprehensive Review -> Advanced Problems -> Case-Based Questions" }));
+
+    expect(screen.getByRole("heading", { name: "Apply new template?" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply Template" }));
+
+    expect(await screen.findByDisplayValue("Section A - Comprehensive Review")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Section B - Advanced Problems")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Section C - Case-Based Questions")).toBeInTheDocument();
   });
 });

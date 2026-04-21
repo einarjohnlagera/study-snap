@@ -1,0 +1,92 @@
+import type { ExamBuilderSection } from "../exam-builder-order";
+import { createExamSectionId } from "../exam-builder-order";
+
+export type ExamTemplateId =
+  | "SCRATCH"
+  | "PRELIM"
+  | "MIDTERM"
+  | "FINAL"
+  | "QUARTERLY"
+  | "TRITERM";
+
+export type ExamTemplateDefinition = {
+  id: ExamTemplateId;
+  title: string;
+  description: string;
+  sectionTitles: string[];
+};
+
+export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
+  {
+    id: "SCRATCH",
+    title: "Start from Scratch",
+    description: "Begin with one flexible section and build the rest your way.",
+    sectionTitles: ["Section A"],
+  },
+  {
+    id: "PRELIM",
+    title: "Prelim Exam",
+    description: "Basic Concepts -> Problem Solving -> Application",
+    sectionTitles: [
+      "Section A - Basic Concepts",
+      "Section B - Problem Solving",
+      "Section C - Application",
+    ],
+  },
+  {
+    id: "MIDTERM",
+    title: "Midterm Exam",
+    description: "Fundamentals Review -> Intermediate Problems -> Mixed Application",
+    sectionTitles: [
+      "Section A - Fundamentals Review",
+      "Section B - Intermediate Problems",
+      "Section C - Mixed Application",
+    ],
+  },
+  {
+    id: "FINAL",
+    title: "Final Exam",
+    description: "Comprehensive Review -> Advanced Problems -> Case-Based Questions",
+    sectionTitles: [
+      "Section A - Comprehensive Review",
+      "Section B - Advanced Problems",
+      "Section C - Case-Based Questions",
+    ],
+  },
+  {
+    id: "QUARTERLY",
+    title: "Quarterly Exam",
+    description: "Knowledge Check -> Understanding -> Application -> Critical Thinking",
+    sectionTitles: [
+      "Section A - Knowledge Check",
+      "Section B - Understanding",
+      "Section C - Application",
+      "Section D - Critical Thinking",
+    ],
+  },
+  {
+    id: "TRITERM",
+    title: "Triterm Exam",
+    description: "Core Concepts -> Application -> Integration",
+    sectionTitles: [
+      "Section A - Core Concepts",
+      "Section B - Application",
+      "Section C - Integration",
+    ],
+  },
+];
+
+export function getExamTemplateById(templateId: ExamTemplateId): ExamTemplateDefinition | null {
+  return EXAM_TEMPLATES.find((template) => template.id === templateId) ?? null;
+}
+
+export function buildTemplateSections(
+  template: ExamTemplateDefinition,
+  selectedNoteIds: string[],
+): ExamBuilderSection[] {
+  return template.sectionTitles.map((title, index) => ({
+    id: createExamSectionId(),
+    title,
+    noteIds: index === 0 ? [...selectedNoteIds] : [],
+  }));
+}

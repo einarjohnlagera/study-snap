@@ -9,7 +9,6 @@ import {
   DragOverlay,
   type DragEndEvent,
   type DragOverEvent,
-  KeyboardSensor,
   PointerSensor,
   TouchSensor,
   useDroppable,
@@ -18,7 +17,6 @@ import {
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
-  sortableKeyboardCoordinates,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -42,7 +40,6 @@ import { normalizeSubject } from "@/lib/subjects";
 import {
   buildDefaultSectionTitle,
   createExamSection,
-  createDefaultExamSections,
   deleteExamSection,
   flattenExamSectionNoteIds,
   type ExamBuilderSection,
@@ -52,6 +49,12 @@ import {
   renameExamSection,
   reorderExamSections,
 } from "../exam-builder-order";
+import {
+  buildTemplateSections,
+  EXAM_TEMPLATES,
+  getExamTemplateById,
+  type ExamTemplateId,
+} from "./templates";
 
 type ExamBuilderSelection = {
   noteId: string;
@@ -396,6 +399,10 @@ export default function ExamBuilderPage() {
   const [error, setError] = useState<string | null>(null);
   const [examSections, setExamSections] = useState<ExamBuilderSection[]>([]);
   const [pendingDeleteSectionId, setPendingDeleteSectionId] = useState<string | null>(null);
+  const [pendingTemplateId, setPendingTemplateId] = useState<ExamTemplateId | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<ExamTemplateId | null>(null);
+  const [templateDirty, setTemplateDirty] = useState(false);
+  const [showTemplateSelector, setShowTemplateSelector] = useState(true);
   const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
   const [includeExplanations, setIncludeExplanations] = useState(true);
   const [exportingExam, setExportingExam] = useState(false);
@@ -406,7 +413,6 @@ export default function ExamBuilderPage() {
   const examBuilderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   useEffect(() => {
@@ -417,9 +423,13 @@ export default function ExamBuilderPage() {
       router.replace("/library");
       return;
     }
-    setExamSections(createDefaultExamSections(selectedNoteIds));
+    setExamSections([]);
     setNextSectionIndex(1);
     setPendingDeleteSectionId(null);
+    setPendingTemplateId(null);
+    setSelectedTemplateId(null);
+    setTemplateDirty(false);
+    setShowTemplateSelector(true);
     setIncludeAnswerKey(true);
     setIncludeExplanations(true);
   }, [isTeacherExamBuilderEnabled, router, selectedNoteIds]);
@@ -478,6 +488,10 @@ export default function ExamBuilderPage() {
         } satisfies ExamBuilderSelection]),
     ) as Record<string, ExamBuilderSelection>;
   }, [itemsById, selectedNoteIds]);
+  const selectedReadyNoteIds = useMemo(
+    () => selectedNoteIds.filter((noteId) => Boolean(selectedNoteMetaById[noteId])),
+    [selectedNoteIds, selectedNoteMetaById],
+  );
   const exportableExamSections = useMemo(() => {
     return examSections
       .map((section, index) => ({
@@ -491,6 +505,10 @@ export default function ExamBuilderPage() {
     () => examSections.find((section) => section.id === pendingDeleteSectionId) ?? null,
     [examSections, pendingDeleteSectionId],
   );
+  const selectedTemplate = useMemo(
+    () => (selectedTemplateId ? getExamTemplateById(selectedTemplateId) : null),
+    [selectedTemplateId],
+  );
   const builderNoteCount = useMemo(
     () => flattenExamSectionNoteIds(exportableExamSections).length,
     [exportableExamSections],
@@ -498,7 +516,30 @@ export default function ExamBuilderPage() {
 
   const updateExamSections = useCallback((nextSections: ExamBuilderSection[]) => {
     setExamSections(nextSections);
+    setTemplateDirty(true);
   }, []);
+
+  const applyTemplate = useCallback((templateId: ExamTemplateId) => {
+    const template = getExamTemplateById(templateId);
+    if (!template) {
+      return;
+    }
+    setExamSections(buildTemplateSections(template, selectedReadyNoteIds));
+    setSelectedTemplateId(templateId);
+    setTemplateDirty(false);
+    setShowTemplateSelector(false);
+    setPendingTemplateId(null);
+    setPendingDeleteSectionId(null);
+    setNextSectionIndex(template.sectionTitles.length);
+  }, [selectedReadyNoteIds]);
+
+  const handleTemplateSelection = useCallback((templateId: ExamTemplateId) => {
+    if (selectedTemplateId && templateDirty) {
+      setPendingTemplateId(templateId);
+      return;
+    }
+    applyTemplate(templateId);
+  }, [applyTemplate, selectedTemplateId, templateDirty]);
 
   const handleAddSectionBelow = useCallback((sectionId: string) => {
     setExamSections((previous) => {
@@ -509,6 +550,7 @@ export default function ExamBuilderPage() {
       next.splice(insertIndex, 0, nextSection);
       return next;
     });
+    setTemplateDirty(true);
     setNextSectionIndex((previous) => previous + 1);
   }, [nextSectionIndex]);
 
@@ -662,7 +704,7 @@ export default function ExamBuilderPage() {
             </Button>
           </div>
         </Card>
-      ) : builderNoteCount === 0 ? (
+      ) : selectedReadyNoteIds.length === 0 ? (
         <Card className="space-y-4 p-4 sm:p-6">
           <h2 className="text-xl font-semibold">No quiz-ready notes selected</h2>
           <p className="text-sm text-foreground/75">
@@ -674,6 +716,61 @@ export default function ExamBuilderPage() {
         </Card>
       ) : (
         <>
+          {showTemplateSelector || !selectedTemplate ? (
+            <section className="space-y-4">
+              <Card className="space-y-4 p-4 sm:p-6">
+                <div className="space-y-1">
+                  <h2 className="text-xl font-semibold">
+                    {selectedTemplate ? "Change template" : "Choose a template"}
+                  </h2>
+                  <p className="text-sm text-foreground/75">
+                    Pick a section preset to structure this exam. You can rename, reorder, add, or remove sections anytime after applying it.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {EXAM_TEMPLATES.map((template) => {
+                    const isSelected = template.id === selectedTemplateId;
+                    return (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => handleTemplateSelection(template.id)}
+                        className={`rounded-2xl border p-4 text-left transition-colors ${
+                          isSelected && !showTemplateSelector
+                            ? "border-blue-600 bg-blue-50/70 dark:border-blue-400 dark:bg-blue-950/30"
+                            : "border-border bg-background hover:bg-highlight"
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-foreground">{template.title}</p>
+                        <p className="mt-1 text-sm text-foreground/70">{template.description}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+            </section>
+          ) : null}
+
+          {selectedTemplate ? (
+            <Card className="space-y-3 p-4 sm:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">Template</p>
+                  <h2 className="text-base font-semibold text-foreground sm:text-lg">{selectedTemplate.title}</h2>
+                  <p className="text-sm text-foreground/70">{selectedTemplate.description}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowTemplateSelector((previous) => !previous)}
+                >
+                  {showTemplateSelector ? "Hide Templates" : "Change Template"}
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
+          {selectedTemplate ? (
           <section className="w-full space-y-3 rounded-2xl border border-border bg-muted/20 p-4 shadow-sm sm:p-5">
             <div className="space-y-1">
               <h2 className="text-base font-semibold text-foreground sm:text-lg">Selected Notes</h2>
@@ -755,7 +852,9 @@ export default function ExamBuilderPage() {
               </DragOverlay>
             </DndContext>
           </section>
+          ) : null}
 
+          {selectedTemplate ? (
           <section className="w-full space-y-3">
             <div>
               <h2 className="text-base font-semibold text-foreground sm:text-lg">Exam Options</h2>
@@ -787,6 +886,7 @@ export default function ExamBuilderPage() {
               </label>
             </div>
           </section>
+          ) : null}
         </>
       )}
 
@@ -794,7 +894,9 @@ export default function ExamBuilderPage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">
-              {builderNoteCount === 0
+              {selectedTemplate === null
+                ? "Choose a template to start building this exam."
+                : builderNoteCount === 0
                 ? "Select notes from your library to start building an exam."
                 : `${builderNoteCount} note${builderNoteCount === 1 ? "" : "s"} across ${exportableExamSections.length} section${exportableExamSections.length === 1 ? "" : "s"}`}
             </p>
@@ -810,7 +912,7 @@ export default function ExamBuilderPage() {
               onClick={() => void handleExportExam()}
               loading={exportingExam}
               loadingText="Exporting..."
-              disabled={builderNoteCount === 0}
+              disabled={builderNoteCount === 0 || selectedTemplate === null}
             >
               Export Exam
             </Button>
@@ -862,6 +964,34 @@ export default function ExamBuilderPage() {
           {pendingDeleteSection?.noteIds.length
             ? `${pendingDeleteSection.noteIds.length} note${pendingDeleteSection.noteIds.length === 1 ? "" : "s"} will be affected.`
             : "This section has no notes, so it can be removed immediately."}
+        </p>
+      </AppModal>
+
+      <AppModal
+        isOpen={pendingTemplateId !== null}
+        title="Apply new template?"
+        description="Applying a new template will replace your current section layout. Continue?"
+        onClose={() => setPendingTemplateId(null)}
+        actions={(
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="ghost" onClick={() => setPendingTemplateId(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (pendingTemplateId) {
+                  applyTemplate(pendingTemplateId);
+                }
+              }}
+            >
+              Apply Template
+            </Button>
+          </div>
+        )}
+      >
+        <p className="text-sm text-foreground/70">
+          Your current section titles, order, and note placement will be replaced by the selected template.
         </p>
       </AppModal>
 
