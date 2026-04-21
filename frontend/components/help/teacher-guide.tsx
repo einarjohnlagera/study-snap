@@ -41,7 +41,7 @@ const STEPS: Step[] = [
     icon: Download,
     title: "Export for Reuse",
     description:
-      "Export questions only, questions with answers, or just the answer key from Quiz Preview for classroom use.",
+      "Export a classroom-ready DOCX from Quiz Preview as either Quiz Only (Student Version) or Quiz + Answers (Teacher Version).",
     cta: { label: "Open Library", href: "/library" },
   },
 ];

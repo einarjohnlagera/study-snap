@@ -26,10 +26,13 @@ export type QuizItem = {
 };
 
 export type GeneratedQuizResponse = {
+  id?: string;
   noteId: string;
   questions: QuizItem[];
   generatedAt: string;
 };
+
+export type QuizDocxExportMode = "QUIZ_ONLY" | "WITH_ANSWERS";
 
 export type StudyPackResponse = {
   id: string;
@@ -924,6 +927,48 @@ async function parseApiResponse<T>(
     action: errorPayload?.error?.action ?? null,
     status: response.status,
   });
+}
+
+async function throwApiRequestError(
+  response: Response,
+  fallbackMessage = "Request failed. Please try again.",
+): Promise<never> {
+  let errorPayload: ApiErrorPayload | null = null;
+  try {
+    errorPayload = (await response.json()) as ApiErrorPayload;
+  } catch {
+    // Ignore JSON parse failures and use fallback below.
+  }
+
+  const message = errorPayload?.error?.message ?? fallbackMessage;
+  throw new ApiRequestError(message, {
+    code: errorPayload?.error?.code ?? null,
+    action: errorPayload?.error?.action ?? null,
+    status: response.status,
+  });
+}
+
+function extractDownloadFilename(contentDisposition: string | null, fallback: string): string {
+  if (!contentDisposition) {
+    return fallback;
+  }
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  const basicMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+  return basicMatch?.[1] ?? fallback;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function toAuthUser(payload: AuthResponse): AuthUser {
@@ -2174,6 +2219,28 @@ export async function generateGeneratedQuiz(noteId: string): Promise<GeneratedQu
     true,
   );
   return parseApiResponse<GeneratedQuizResponse>(response, "Could not generate quiz.");
+}
+
+export async function exportGeneratedQuizDocx(
+  quizId: string,
+  mode: QuizDocxExportMode,
+): Promise<{ filename: string }> {
+  const response = await fetchWithAuth(
+    `/quizzes/${quizId}/export-docx?mode=${mode}`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  if (!response.ok) {
+    return throwApiRequestError(response, "Could not export quiz.");
+  }
+  const blob = await response.blob();
+  const fallbackFilename = mode === "WITH_ANSWERS" ? "generated-quiz-with-answers.docx" : "generated-quiz.docx";
+  const filename = extractDownloadFilename(response.headers.get("content-disposition"), fallbackFilename);
+  triggerBlobDownload(blob, filename);
+  return { filename };
 }
 
 export async function listNotes(): Promise<NoteListItemResponse[]> {

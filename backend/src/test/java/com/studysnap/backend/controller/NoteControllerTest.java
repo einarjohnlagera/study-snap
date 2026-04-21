@@ -158,6 +158,7 @@ class NoteControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         com.studysnap.backend.dto.GeneratedQuizResponse expected = new com.studysnap.backend.dto.GeneratedQuizResponse(
+                UUID.randomUUID().toString(),
                 "note-1",
                 List.of(),
                 OffsetDateTime.now()

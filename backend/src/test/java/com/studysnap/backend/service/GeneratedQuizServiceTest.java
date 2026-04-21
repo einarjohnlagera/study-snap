@@ -2,14 +2,20 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
+import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.NoteStatus;
 import com.studysnap.backend.entity.NoteVisibility;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
+import com.studysnap.backend.exception.GeneratedQuizExportNotAllowedException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,8 +31,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -49,6 +57,10 @@ class GeneratedQuizServiceTest {
     private AiRateLimitService aiRateLimitService;
     @Mock
     private StudyPackGenerationContextResolver generationContextResolver;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private QuizDocxExportService quizDocxExportService;
 
     private GeneratedQuizService generatedQuizService;
 
@@ -63,7 +75,9 @@ class GeneratedQuizServiceTest {
                 userUsageService,
                 authService,
                 aiRateLimitService,
-                generationContextResolver
+                generationContextResolver,
+                userRepository,
+                quizDocxExportService
         );
     }
 
@@ -123,9 +137,59 @@ class GeneratedQuizServiceTest {
 
         GeneratedQuizResponse response = generatedQuizService.getByNoteId(noteId.toString(), userId);
 
+        assertThat(response.id()).isEqualTo(generatedQuiz.getId().toString());
         assertThat(response.noteId()).isEqualTo(noteId.toString());
         assertThat(response.generatedAt()).isEqualTo(OffsetDateTime.parse("2026-04-17T09:00:00Z"));
         assertThat(response.questions()).hasSize(10);
+    }
+
+    @Test
+    void exportDocx_returnsGeneratedQuizDocumentWithoutCallingQuizGeneration() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID quizId = UUID.randomUUID();
+        NoteEntity note = buildNote(noteId, userId);
+        note.setSubject("Biology");
+        GeneratedQuizEntity generatedQuiz = new GeneratedQuizEntity();
+        generatedQuiz.setId(quizId);
+        generatedQuiz.setOwnerUserId(userId);
+        generatedQuiz.setNoteId(noteId);
+        generatedQuiz.setQuestions(buildQuestions());
+        generatedQuiz.setGeneratedAt(OffsetDateTime.parse("2026-04-17T09:00:00Z"));
+        generatedQuiz.setUpdatedAt(OffsetDateTime.parse("2026-04-17T09:00:00Z"));
+        UserEntity teacher = buildUser(userId, UserRole.USER, ProfileType.TEACHER);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(teacher));
+        when(generatedQuizRepository.findByIdAndOwnerUserId(quizId, userId)).thenReturn(Optional.of(generatedQuiz));
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
+        when(quizDocxExportService.buildFilename("Cell Structure", QuizDocxExportMode.WITH_ANSWERS))
+                .thenReturn("cell-structure-quiz-with-answers.docx");
+        when(quizDocxExportService.exportQuizToDocx(any(QuizDocxExportService.ExportableQuiz.class), eq(QuizDocxExportMode.WITH_ANSWERS)))
+                .thenReturn("docx".getBytes());
+
+        QuizDocxExportService.QuizDocxFile exported = generatedQuizService.exportDocx(
+                quizId.toString(),
+                userId,
+                QuizDocxExportMode.WITH_ANSWERS
+        );
+
+        assertThat(exported.getFilename()).isEqualTo("cell-structure-quiz-with-answers.docx");
+        assertThat(exported.getContent()).isEqualTo("docx".getBytes());
+        verify(quizDocxExportService).exportQuizToDocx(any(QuizDocxExportService.ExportableQuiz.class), eq(QuizDocxExportMode.WITH_ANSWERS));
+        verify(quizGenerationService, never()).generateTeacherQuiz(any(), any(), any(), any(Integer.class), any(StudyPackGenerationContext.class));
+    }
+
+    @Test
+    void exportDocx_blocksNonTeacherNonAdminUsers() {
+        UUID userId = UUID.randomUUID();
+        UserEntity student = buildUser(userId, UserRole.USER, ProfileType.STUDENT);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(student));
+
+        assertThatThrownBy(() -> generatedQuizService.exportDocx(UUID.randomUUID().toString(), userId, QuizDocxExportMode.QUIZ_ONLY))
+                .isInstanceOf(GeneratedQuizExportNotAllowedException.class);
+
+        verify(generatedQuizRepository, never()).findByIdAndOwnerUserId(any(UUID.class), eq(userId));
+        verify(quizDocxExportService, never()).exportQuizToDocx(any(), any());
     }
 
     private NoteEntity buildNote(UUID noteId, UUID userId) {
@@ -151,5 +215,13 @@ class GeneratedQuizServiceTest {
                         "Explanation " + index
                 ))
                 .toList();
+    }
+
+    private UserEntity buildUser(UUID userId, UserRole role, ProfileType profileType) {
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setRole(role);
+        user.setProfileType(profileType);
+        return user;
     }
 }

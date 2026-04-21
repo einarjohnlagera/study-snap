@@ -13,8 +13,16 @@ import { ExportDropdownMenu } from "@/components/ui/export-dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
-import { getGeneratedQuiz, generateGeneratedQuiz, getNote, type GeneratedQuizResponse, type NoteResponse } from "@/lib/api";
-import { exportGeneratedQuizDocument, type GeneratedQuizExportType } from "@/lib/generated-quiz-export";
+import { getAuthUser } from "@/lib/auth";
+import {
+  exportGeneratedQuizDocx,
+  getGeneratedQuiz,
+  generateGeneratedQuiz,
+  getNote,
+  type GeneratedQuizResponse,
+  type NoteResponse,
+  type QuizDocxExportMode,
+} from "@/lib/api";
 import { isQuizLimitReachedMessage, resolveRemainingUsageCredits } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { resolveQuizCorrectIndex } from "@/lib/quiz";
@@ -86,7 +94,8 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   }, [toast]);
 
   const noteTitle = note?.title?.trim() || "Untitled note";
-  const noteSubject = note?.subject ?? null;
+  const authUser = getAuthUser();
+  const canExportDocx = authUser?.role === "ADMIN" || authUser?.profileType === "TEACHER";
   const generatedAtLabel = useMemo(() => {
     if (!generatedQuiz?.generatedAt) {
       return null;
@@ -104,28 +113,23 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     && challengeQuizzesRemaining !== null
     && challengeQuizzesRemaining <= 0;
 
-  const handleExport = useCallback(async (exportType: GeneratedQuizExportType) => {
-    if (!generatedQuiz || exporting) {
+  const handleExport = useCallback(async (mode: QuizDocxExportMode) => {
+    if (!generatedQuiz?.id || exporting) {
       return;
     }
     setExporting(true);
-    setToast("Exporting PDF...");
+    setToast("Exporting DOCX...");
     try {
-      await exportGeneratedQuizDocument({
-        exportType,
-        noteTitle,
-        noteSubject,
-        quiz: generatedQuiz.questions,
-      });
-      setToast("PDF ready");
+      await exportGeneratedQuizDocx(generatedQuiz.id, mode);
+      setToast("DOCX ready");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not export PDF.";
+      const message = err instanceof Error ? err.message : "Could not export quiz.";
       setError(message);
       setToast(null);
     } finally {
       setExporting(false);
     }
-  }, [exporting, generatedQuiz, noteSubject, noteTitle]);
+  }, [exporting, generatedQuiz]);
 
   const handleRegenerate = useCallback(async () => {
     if (regenerating) {
@@ -215,27 +219,29 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                 ) : null}
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <ExportDropdownMenu
-                  exporting={exporting}
-                  buttonLabel="Export"
-                  menuTitle="Export"
-                  menuDescription="Choose what to export"
-                  groupLabel="Quiz Materials"
-                  items={[
-                    {
-                      key: "pdf",
-                      label: "Export as PDF",
-                      description: "Questions and choices for classroom use",
-                      onSelect: () => void handleExport("pdf"),
-                    },
-                    {
-                      key: "with-answers",
-                      label: "Export with answers",
-                      description: "Include answers and explanations",
-                      onSelect: () => void handleExport("with-answers"),
-                    },
-                  ]}
-                />
+                {canExportDocx ? (
+                  <ExportDropdownMenu
+                    exporting={exporting}
+                    buttonLabel="Export"
+                    menuTitle="Export as DOCX"
+                    menuDescription="Choose a DOCX export format"
+                    groupLabel="DOCX Export"
+                    items={[
+                      {
+                        key: "quiz-only",
+                        label: "Quiz Only",
+                        description: "Questions and choices only. Ready for student distribution.",
+                        onSelect: () => void handleExport("QUIZ_ONLY"),
+                      },
+                      {
+                        key: "with-answers",
+                        label: "Quiz + Answers",
+                        description: "Includes answer key and explanations for teacher review.",
+                        onSelect: () => void handleExport("WITH_ANSWERS"),
+                      },
+                    ]}
+                  />
+                ) : null}
                 <Button
                   type="button"
                   variant="outline"

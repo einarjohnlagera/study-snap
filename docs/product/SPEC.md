@@ -164,6 +164,8 @@ Rules:
 - Teacher Note Detail generates and regenerates `generatedQuiz`.
 - Teacher Quiz Preview is read-only and shows answers plus explanations by default.
 - Export belongs only inside Quiz Preview.
+- Teacher Quiz Preview export uses stored `generatedQuiz` data only and must not trigger LLM generation.
+- Teacher/Admin export format is `DOCX` with `Quiz Only (Student Version)` and `Quiz + Answers (Teacher Version)` options.
 
 ### Quiz entry defaults
 

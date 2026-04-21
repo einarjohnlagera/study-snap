@@ -67,10 +67,15 @@ Do not mix these models.
 
 - Export belongs only inside Quiz Preview
 - Place Export in the top-right of the Quiz Preview header
+- Export uses stored `generatedQuiz` data only and must not call LLMs
+- Export format for Teacher Flow is `DOCX`
 - Export options:
-  - `Export Questions Only`
-  - `Export Questions + Answers`
-  - `Export Answer Key`
+  - `Quiz Only (Student Version)`
+  - `Quiz + Answers (Teacher Version)`
+- `Quiz + Answers` appends:
+  - `Answer Key`
+  - `Explanations`
+- DOCX export is shown only for `Teacher` and `Admin`
 
 ## UI Rules
 

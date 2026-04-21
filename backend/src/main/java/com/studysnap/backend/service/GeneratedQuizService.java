@@ -2,17 +2,23 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
+import com.studysnap.backend.dto.QuizDocxExportMode;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.GeneratedQuizEntity;
 import com.studysnap.backend.entity.NoteEntity;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.ProfileType;
+import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.GeneratedQuizExportNotAllowedException;
 import com.studysnap.backend.exception.GeneratedQuizGenerationFailedException;
 import com.studysnap.backend.exception.GeneratedQuizNotFoundException;
 import com.studysnap.backend.exception.MonthlyQuizCreditLimitReachedException;
 import com.studysnap.backend.exception.NoteNotFoundException;
 import com.studysnap.backend.repository.GeneratedQuizRepository;
 import com.studysnap.backend.repository.NoteRepository;
+import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.security.AiRateLimitService;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.util.QuizDeduplicationUtils;
@@ -42,6 +48,8 @@ public class GeneratedQuizService {
     private final AuthService authService;
     private final AiRateLimitService aiRateLimitService;
     private final StudyPackGenerationContextResolver generationContextResolver;
+    private final UserRepository userRepository;
+    private final QuizDocxExportService quizDocxExportService;
 
     @Transactional(readOnly = true)
     public GeneratedQuizResponse getByNoteId(String noteIdRaw, UUID userId) {
@@ -107,6 +115,26 @@ public class GeneratedQuizService {
         }
     }
 
+    @Transactional(readOnly = true)
+    public QuizDocxExportService.QuizDocxFile exportDocx(String quizIdRaw, UUID userId, QuizDocxExportMode mode) {
+        authService.requireEmailVerified(userId);
+        assertTeacherExportAllowed(userId);
+        UUID quizId = parseQuizId(quizIdRaw);
+        GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findByIdAndOwnerUserId(quizId, userId)
+                .orElseThrow(GeneratedQuizNotFoundException::new);
+        NoteEntity note = findOwnedNoteOrThrow(generatedQuiz.getNoteId(), userId);
+        QuizDocxExportService.ExportableQuiz exportableQuiz = new QuizDocxExportService.ExportableQuiz(
+                note.getTitle(),
+                note.getSubject(),
+                generatedQuiz.getGeneratedAt(),
+                generatedQuiz.getQuestions()
+        );
+        return new QuizDocxExportService.QuizDocxFile(
+                quizDocxExportService.buildFilename(note.getTitle(), mode),
+                quizDocxExportService.exportQuizToDocx(exportableQuiz, mode)
+        );
+    }
+
     private int assertQuizCreditAvailable(UUID userId, PlanType planType) {
         int usedThisMonth = userUsageService.getMonthlyUsage(userId, OffsetDateTime.now(ZoneOffset.UTC))
                 .challengeQuizGenerations();
@@ -119,6 +147,10 @@ public class GeneratedQuizService {
 
     private UUID parseNoteId(String noteIdRaw) {
         return UuidParsingUtils.parseUuidOrThrow(noteIdRaw, NoteNotFoundException::new);
+    }
+
+    private UUID parseQuizId(String quizIdRaw) {
+        return UuidParsingUtils.parseUuidOrThrow(quizIdRaw, GeneratedQuizNotFoundException::new);
     }
 
     private NoteEntity findOwnedNoteOrThrow(UUID noteId, UUID userId) {
@@ -138,9 +170,19 @@ public class GeneratedQuizService {
 
     private GeneratedQuizResponse toResponse(GeneratedQuizEntity entity) {
         return new GeneratedQuizResponse(
+                entity.getId().toString(),
                 entity.getNoteId().toString(),
                 entity.getQuestions() == null ? List.of() : entity.getQuestions(),
                 entity.getGeneratedAt()
         );
+    }
+
+    private void assertTeacherExportAllowed(UUID userId) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(GeneratedQuizExportNotAllowedException::new);
+        if (user.getRole() == UserRole.ADMIN || user.getProfileType() == ProfileType.TEACHER) {
+            return;
+        }
+        throw new GeneratedQuizExportNotAllowedException();
     }
 }
