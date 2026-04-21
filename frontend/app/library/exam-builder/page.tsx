@@ -9,13 +9,16 @@ import {
   DragOverlay,
   type DragEndEvent,
   type DragOverEvent,
+  KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import {
+  sortableKeyboardCoordinates,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -140,7 +143,7 @@ function SortableExamBuilderItem({
       style={style}
       className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-2xl border border-border p-3 transition-shadow ${
         isDragging
-          ? "border-dashed border-blue-400 bg-blue-50/40 shadow-sm dark:bg-blue-950/20"
+          ? "opacity-40 border-dashed border-blue-400 bg-blue-50/40 shadow-sm dark:bg-blue-950/20"
           : activeDragNoteId === note.noteId
             ? "bg-background shadow-md ring-1 ring-blue-500/30"
             : "bg-background shadow-sm"
@@ -150,7 +153,7 @@ function SortableExamBuilderItem({
         <button
           ref={setActivatorNodeRef}
           type="button"
-          className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
+          className="mt-0.5 inline-flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
           aria-label={`Drag ${note.title}`}
           disabled={exporting}
           {...attributes}
@@ -228,8 +231,12 @@ function SectionNoteDropzone({ sectionId, isActive, children }: Readonly<Section
   return (
     <div
       ref={setNodeRef}
-      className={`w-full space-y-3 rounded-2xl border border-dashed p-3 transition-colors ${
-        isActive || isOver ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20" : "border-border/70 bg-transparent"
+      className={`w-full space-y-3 rounded-2xl border p-3 transition-colors ${
+        isOver
+          ? "border-dashed border-blue-400 bg-blue-50/40 dark:bg-blue-950/20"
+          : isActive
+            ? "border-dashed border-border/50 bg-transparent"
+            : "border-transparent bg-transparent"
       }`}
     >
       {children}
@@ -272,6 +279,7 @@ function SortableExamBuilderSection({
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({
     id: getSectionSortableId(section.id),
     data: {
@@ -289,11 +297,11 @@ function SortableExamBuilderSection({
     <div
       ref={setNodeRef}
       style={style}
-      className={`w-full min-w-0 space-y-4 rounded-2xl border border-border bg-background p-4 shadow-sm transition-shadow ${
+      className={`w-full min-w-0 space-y-4 rounded-2xl border border-border bg-background p-4 shadow-sm transition-all ${
         isDragging
-          ? "shadow-lg ring-1 ring-blue-500/30"
-          : activeDragSectionId === section.id
-            ? "ring-1 ring-blue-500/20"
+          ? "opacity-40 shadow-lg ring-1 ring-blue-500/30"
+          : isOver && activeDragSectionId !== null
+            ? "ring-2 ring-blue-500/40"
             : ""
       }`}
     >
@@ -302,7 +310,7 @@ function SortableExamBuilderSection({
           <button
             ref={setActivatorNodeRef}
             type="button"
-            className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
+            className="mt-0.5 inline-flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
             aria-label={`Drag ${section.title}`}
             disabled={exporting}
             {...attributes}
@@ -396,11 +404,9 @@ export default function ExamBuilderPage() {
   const [nextSectionIndex, setNextSectionIndex] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const examBuilderSensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   useEffect(() => {
@@ -725,7 +731,7 @@ export default function ExamBuilderPage() {
               </SortableContext>
               <DragOverlay>
                 {activeDragNoteId ? (
-                  <div className="flex min-w-[280px] items-start justify-between gap-3 rounded-2xl border border-blue-400 bg-background p-3 shadow-xl">
+                  <div className="flex min-w-[280px] scale-[1.02] items-start justify-between gap-3 rounded-2xl border border-blue-400 bg-background p-3 shadow-xl">
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65">
                         <GripVertical className="h-4 w-4" aria-hidden="true" />
@@ -739,7 +745,7 @@ export default function ExamBuilderPage() {
                     </div>
                   </div>
                 ) : activeDragSectionId ? (
-                  <div className="min-w-[280px] rounded-2xl border border-blue-400 bg-background p-4 shadow-xl">
+                  <div className="min-w-[280px] scale-[1.02] rounded-2xl border border-blue-400 bg-background p-4 shadow-xl">
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Section</p>
                     <p className="truncate text-sm font-medium text-foreground">
                       {examSections.find((section) => section.id === activeDragSectionId)?.title}
