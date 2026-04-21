@@ -641,7 +641,7 @@ export default function LibraryPage() {
         noteId: item.id,
         title: item.title?.trim() || "Untitled note",
         subject: getLibrarySubject(item),
-        questionCount: item.quizCount ?? null,
+        questionCount: item.generatedQuizQuestionCount ?? null,
       }));
   }, [itemsById, selectedNoteIds]);
 

@@ -29,6 +29,7 @@ public record NoteListItemResponse(
         OffsetDateTime updatedAt,
         String generatedQuizId,
         OffsetDateTime generatedQuizGeneratedAt,
+        Integer generatedQuizQuestionCount,
         String copiedFromNoteId,
         boolean copiedFromPublic,
         boolean likedByCurrentUser

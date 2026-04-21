@@ -647,6 +647,7 @@ public class NoteService {
                 note.getUpdatedAt(),
                 generatedQuiz == null ? null : generatedQuiz.getId().toString(),
                 generatedQuiz == null ? null : generatedQuiz.getGeneratedAt(),
+                generatedQuiz == null || generatedQuiz.getQuestions() == null ? null : generatedQuiz.getQuestions().size(),
                 note.getCopiedFromNoteId() == null ? null : note.getCopiedFromNoteId().toString(),
                 Boolean.TRUE.equals(note.getCopiedFromPublic()),
                 likedByCurrentUser
