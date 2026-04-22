@@ -9,9 +9,9 @@ import { trackAnalyticsEvent } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
 import {
-  FREE_PAYWALL_CONTENT,
   type FreePaywallContent,
   type PaywallAction,
+  resolveFreePaywallContent,
 } from "@/lib/paywall-content";
 
 export type PaywallModalVariant =
@@ -90,7 +90,7 @@ export function PaywallModal({
   const config = useMemo((): LegacyPaywallConfig => {
     const action = resolvePaywallAction(variant);
     if (action) {
-      return toModalConfig(FREE_PAYWALL_CONTENT[action]);
+      return toModalConfig(resolveFreePaywallContent(action, authUser?.profileType));
     }
     return LEGACY_PAYWALL_CONTENT[variant] ?? {
       title: "Premium feature",
@@ -98,7 +98,7 @@ export function PaywallModal({
       dismissLabel: "Maybe Later",
       feature: variant,
     };
-  }, [variant]);
+  }, [authUser?.profileType, variant]);
 
   useEffect(() => {
     if (!isOpen) {

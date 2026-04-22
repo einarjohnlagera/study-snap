@@ -1934,7 +1934,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       <AppModal
         isOpen={showRegenerateQuizConfirm}
         title="Regenerate quiz?"
-        description="This will create a new set of questions and uses 1 quiz from your monthly usage."
+        description="This will create a new set of questions and counts toward your monthly quiz generation limit."
         onClose={() => {
           if (!generatingTeacherQuiz) {
             setShowRegenerateQuizConfirm(false);

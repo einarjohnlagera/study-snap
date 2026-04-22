@@ -600,7 +600,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
-    expect(await screen.findByRole("dialog", { name: "You've reached your monthly quiz limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -756,7 +756,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
 
-    expect(await screen.findByRole("dialog", { name: "You've reached your monthly quiz generation limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz generation limit" })).toBeInTheDocument();
     expect(generateGeneratedQuiz).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -1076,8 +1076,8 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
 
-    expect(await screen.findByRole("dialog", { name: "You’ve used all your study pack usage for this month" })).toBeInTheDocument();
-    expect(screen.getByText(/Your study pack usage will reset on April 20\./)).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit for this month" })).toBeInTheDocument();
+    expect(screen.getByText(/Your study pack limit resets on April 20\./)).toBeInTheDocument();
   });
 
   it("shows the upgrade paywall modal when Generate is clicked at the free Study Pack limit", async () => {
@@ -1124,8 +1124,8 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
 
-    expect(await screen.findByRole("dialog", { name: "You've reached your monthly study pack limit" })).toBeInTheDocument();
-    expect(screen.queryByText("You’ve used all your study pack usage for this month")).not.toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit" })).toBeInTheDocument();
+    expect(screen.queryByText("You’ve reached your study pack limit for this month")).not.toBeInTheDocument();
   });
 
   it("shows quiz view when tab=quiz is requested", async () => {

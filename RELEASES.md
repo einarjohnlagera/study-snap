@@ -69,7 +69,7 @@
   - Introduced Quiz Preview with answers and explanations visible by default
   - Moved Export into the dedicated quiz view for better context
   - added Teacher DOCX export from Quiz Preview using stored `generatedQuiz` data only — no LLM calls, no quiz session reuse
-  - teacher export now supports `Quiz Only (Student Version)` and `Quiz + Answers (Teacher Version)` as downloadable `.docx` files
+  - teacher export now supports `Quiz Only` and `Quiz + Answers` as downloadable `.docx` files
   - added teacher Library `Select` mode and `Exam Builder` for combining multiple quiz-ready notes into one ordered DOCX exam export
   - `Exam Builder` now supports handle-based drag-and-drop reordering with `@dnd-kit`, while keeping `Move up` / `Move down` controls as the accessibility fallback
   - `Exam Builder` now adds teacher-defined sections with inline titles, drag-reorderable section groups, and note movement across sections before export
@@ -77,6 +77,9 @@
   - combined exam DOCX export now preserves section order and section headings from the teacher builder instead of flattening notes into one unnamed list
   - `Exam Builder` now supports `Auto Balance Sections`, which redistributes the pooled exported questions evenly across the current section layout without shuffling question order
   - combined exam export now uses question-level section assignments, so balanced sections export exactly the same grouped question order shown in the builder
+  - finalized v0.10.0 limit-state wording so paywalls, premium exhausted states, and teacher quiz generation use consistent `limit` terminology instead of mixed `usage` copy
+  - fixed teacher quiz preview regeneration to use the dedicated quiz-generation paywall context instead of the student quiz-limit context
+  - refined the Send Feedback modal for mobile with a roomier bottom-sheet-style layout and safer textarea spacing
   - Added regeneration with credit usage and confirmation
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 

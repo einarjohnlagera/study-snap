@@ -112,6 +112,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const hasReachedChallengeQuizLimit = usageSummary?.plan === "FREE"
     && challengeQuizzesRemaining !== null
     && challengeQuizzesRemaining <= 0;
+  const quizGenerationPaywallVariant: PaywallModalVariant = "quiz-generation-limit";
 
   const handleExport = useCallback(async (mode: QuizDocxExportMode) => {
     if (!generatedQuiz?.id || exporting) {
@@ -137,7 +138,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     }
     if (hasReachedChallengeQuizLimit) {
       setShowRegenerateConfirm(false);
-      setActivePaywallModal("challenge-quiz-limit");
+      setActivePaywallModal(quizGenerationPaywallVariant);
       return;
     }
     setRegenerating(true);
@@ -152,14 +153,14 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
       if (usageSummary?.plan === "FREE" && isQuizLimitReachedMessage(message)) {
         void refreshUsageSummary();
         setShowRegenerateConfirm(false);
-        setActivePaywallModal("challenge-quiz-limit");
+        setActivePaywallModal(quizGenerationPaywallVariant);
         return;
       }
       setError(message);
     } finally {
       setRegenerating(false);
     }
-  }, [hasReachedChallengeQuizLimit, noteId, refreshUsageSummary, regenerating, usageSummary?.plan]);
+  }, [hasReachedChallengeQuizLimit, noteId, quizGenerationPaywallVariant, refreshUsageSummary, regenerating, usageSummary?.plan]);
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -299,7 +300,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
       <AppModal
         isOpen={showRegenerateConfirm}
         title="Regenerate quiz?"
-        description="This will create a new set of questions and uses 1 quiz from your monthly usage."
+        description="This will create a new set of questions and counts toward your monthly quiz generation limit."
         onClose={() => {
           if (!regenerating) {
             setShowRegenerateConfirm(false);
@@ -324,7 +325,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
 
       <PaywallModal
         isOpen={activePaywallModal !== null}
-        variant={activePaywallModal ?? "challenge-quiz-limit"}
+        variant={activePaywallModal ?? quizGenerationPaywallVariant}
         source="generated_quiz_preview"
         onClose={() => setActivePaywallModal(null)}
       />

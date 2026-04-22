@@ -70,8 +70,8 @@ Do not mix these models.
 - Export uses stored `generatedQuiz` data only and must not call LLMs
 - Export format for Teacher Flow is `DOCX`
 - Export options:
-  - `Quiz Only (Student Version)`
-  - `Quiz + Answers (Teacher Version)`
+  - `Quiz Only`
+  - `Quiz + Answers`
 - `Quiz + Answers` appends:
   - `Answer Key`
   - `Explanations`

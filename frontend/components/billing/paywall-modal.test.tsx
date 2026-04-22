@@ -137,7 +137,7 @@ describe("PaywallModal", () => {
     render(
       <PaywallModal
         isOpen
-        variant="challenge-quiz-limit"
+        variant="quiz-generation-limit"
         source="test_source"
         onClose={jest.fn()}
       />,

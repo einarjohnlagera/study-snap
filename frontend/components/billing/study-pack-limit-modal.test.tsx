@@ -24,8 +24,8 @@ describe("StudyPackLimitModal", () => {
       />,
     );
 
-    expect(screen.getByText("Free Plan Limit Reached")).toBeInTheDocument();
-    expect(screen.getByText(/You’ve reached your Study Pack limit for this month on the Free plan\./)).toBeInTheDocument();
+    expect(screen.getByText("You’ve reached your study pack limit")).toBeInTheDocument();
+    expect(screen.getByText(/Upgrade to Premium to create more study packs/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upgrade to Premium" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View My Plan" })).toBeInTheDocument();
@@ -60,8 +60,8 @@ describe("StudyPackLimitModal", () => {
       />,
     );
 
-    expect(screen.getByText("Monthly Limit Reached")).toBeInTheDocument();
-    expect(screen.getByText(/You’ve used all your Study Packs for this month\./)).toBeInTheDocument();
+    expect(screen.getByText("You’ve reached your study pack limit for this month")).toBeInTheDocument();
+    expect(screen.getByText(/Your study pack limit resets on April 20\./)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Upgrade Plan" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get More Study Packs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();

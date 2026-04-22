@@ -230,7 +230,7 @@ describe("GeneratedQuizPreviewPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Regenerate Quiz" }).at(-1) as HTMLButtonElement);
 
-    expect(await screen.findByRole("dialog", { name: "You've reached your monthly quiz limit" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz generation limit" })).toBeInTheDocument();
     expect(generateGeneratedQuiz).not.toHaveBeenCalled();
   });
 });

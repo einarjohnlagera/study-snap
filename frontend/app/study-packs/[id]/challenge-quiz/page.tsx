@@ -1029,8 +1029,8 @@ export default function ChallengeQuizPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Challenge Quiz
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">You&apos;ve used all your quiz usage for this month</h1>
-          <p className="text-sm text-foreground/75">Your monthly quiz usage will reset on your next billing cycle.</p>
+          <h1 className="text-xl font-semibold sm:text-2xl">You’ve reached your quiz limit for this month</h1>
+          <p className="text-sm text-foreground/75">Your quiz limit resets on your next billing cycle.</p>
           <BackLink href={noteDetailHref} label="Note" />
         </Card>
       ) : phase === "generating" ? (
@@ -1106,13 +1106,13 @@ export default function ChallengeQuizPage() {
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
                   {boardExamAvailable
-                    ? "Uses 1 quiz from your monthly usage, the same as the standard Challenge Quiz flow."
+                    ? "Counts toward your monthly quiz limit, the same as the standard Challenge Quiz flow."
                     : "Premium only. Upgrade to unlock a stricter board-style exam flow."}
                 </p>
               </button>
             </div>
             <p className="text-xs text-foreground/60">
-              Both modes use 1 quiz from your monthly usage.
+              Both modes count toward your monthly quiz limit.
             </p>
             {challengeGenerationLocked ? (
               <p className="text-sm text-foreground/75">Preparing your {quizModeLabel.toLowerCase()}...</p>
@@ -1174,8 +1174,8 @@ export default function ChallengeQuizPage() {
                   <p>{canChooseChallengeDifficulty ? questionCountSummary : "Recommended based on your recent performance."}</p>
                 </div>
                 <div className="space-y-1">
-                  <p className="font-medium text-foreground">Monthly usage</p>
-                  <p>Uses 1 quiz from your monthly usage.</p>
+                  <p className="font-medium text-foreground">Monthly limit</p>
+                  <p>Counts toward your monthly quiz limit.</p>
                 </div>
               </div>
             </div>
@@ -1238,8 +1238,8 @@ export default function ChallengeQuizPage() {
                   </ul>
                 </div>
                 <div className="space-y-1">
-                  <p className="font-medium text-foreground">Monthly usage</p>
-                  <p>{boardExamAvailable ? "Uses 1 quiz from your monthly usage." : "Unlock with Premium. Challenge Quiz stays available on your current plan."}</p>
+                  <p className="font-medium text-foreground">Monthly limit</p>
+                  <p>{boardExamAvailable ? "Counts toward your monthly quiz limit." : "Unlock with Premium. Challenge Quiz stays available on your current plan."}</p>
                 </div>
               </div>
             </div>
