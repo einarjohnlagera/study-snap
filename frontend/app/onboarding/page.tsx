@@ -13,6 +13,7 @@ import {
   LEARNER_LEVEL_OPTIONS,
   mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
+import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type OnboardingProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
@@ -327,7 +328,10 @@ export default function OnboardingPage() {
                   {PROFILE_TYPE_OPTIONS.map((option) => (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background px-4 py-3"
+                      className={getSelectionCardClassName({
+                        selected: profileType === option.value,
+                        className: "flex items-start gap-3 px-4 py-3",
+                      })}
                     >
                       <input
                         aria-label={option.label}
@@ -407,7 +411,10 @@ export default function OnboardingPage() {
                   {LEARNING_STYLE_OPTIONS.map((option) => (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background px-4 py-3"
+                      className={getSelectionCardClassName({
+                        selected: engagementMode === option.value,
+                        className: "flex items-start gap-3 px-4 py-3",
+                      })}
                     >
                       <input
                         aria-label={option.label}
@@ -439,7 +446,10 @@ export default function OnboardingPage() {
                   {REMINDER_OPTIONS.map((option) => (
                     <label
                       key={option.value}
-                      className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background px-4 py-3"
+                      className={getSelectionCardClassName({
+                        selected: reminderPreset === option.value,
+                        className: "flex items-start gap-3 px-4 py-3",
+                      })}
                     >
                       <input
                         aria-label={option.label}

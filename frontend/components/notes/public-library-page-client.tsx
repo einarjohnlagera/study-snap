@@ -34,6 +34,7 @@ import {
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
 import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
+import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import {
   excludeById,
   getFeaturedNotes,
@@ -287,7 +288,7 @@ function PublicNoteCard({
           onNavigate(path);
         }
       }}
-      className="flex h-full cursor-pointer flex-col justify-between space-y-3 p-4 transition-colors hover:bg-highlight hover:shadow-md sm:p-5"
+      className={getBrowsingCardClassName("flex h-full flex-col justify-between space-y-3 p-4 sm:p-5")}
     >
       <SharedNoteCard
         title={item.title}

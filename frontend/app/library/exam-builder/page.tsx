@@ -9,6 +9,7 @@ import {
   DragOverlay,
   type DragEndEvent,
   type DragOverEvent,
+  type DropAnimation,
   PointerSensor,
   TouchSensor,
   useDroppable,
@@ -40,6 +41,7 @@ import {
 import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { normalizeSubject } from "@/lib/subjects";
+import { getSelectionCardClassName } from "@/lib/clickable-card";
 import {
   buildDefaultSectionTitle,
   countExamSectionQuestions,
@@ -77,6 +79,11 @@ const SUBJECT_FALLBACK = "General";
 const EXAM_EXPORT_READY_MESSAGE = "Exam DOCX ready.";
 const SMART_BALANCE_MODE: ExamBalanceMode = "SMART";
 const EVEN_BALANCE_MODE: ExamBalanceMode = "EVEN";
+const DND_TRANSITION_CLASS = "transition-[transform,box-shadow,border-color,background-color,opacity] duration-150 ease-out";
+const DND_DROP_ANIMATION: DropAnimation = {
+  duration: 160,
+  easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+};
 
 function canIncludeInExam(item: NoteListItemResponse): boolean {
   return Boolean(item.generatedQuizId);
@@ -146,6 +153,7 @@ function SortableExamBuilderItem({
     transform,
     transition,
     isDragging,
+    isOver,
   } = useSortable({
     id: getEntrySortableId(entry.entryId),
     data: {
@@ -164,19 +172,19 @@ function SortableExamBuilderItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-2xl border border-border p-3 transition-shadow ${
+      className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-2xl border p-3 ${DND_TRANSITION_CLASS} ${
         isDragging
-          ? "scale-[1.01] border-dashed border-blue-400 bg-blue-50/40 opacity-40 shadow-lg dark:bg-blue-950/20"
-          : activeDragEntryId === entry.entryId
-            ? "bg-background shadow-md ring-1 ring-blue-500/30"
-            : "bg-background shadow-sm"
+          ? "scale-[1.015] border-dashed border-blue-400/80 bg-blue-50/45 opacity-35 shadow-xl dark:bg-blue-950/20"
+          : isOver && activeDragEntryId !== null
+            ? "border-blue-300 bg-blue-50/35 shadow-md ring-1 ring-blue-400/35 dark:bg-blue-950/15"
+            : "border-border bg-background shadow-sm md:hover:border-border/90 md:hover:shadow-md"
       }`}
     >
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <button
           ref={setActivatorNodeRef}
           type="button"
-          className={`mt-0.5 inline-flex h-9 w-9 shrink-0 touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50 ${
+          className={`mt-0.5 inline-flex h-9 w-9 shrink-0 touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 ${DND_TRANSITION_CLASS} md:hover:border-blue-200 md:hover:bg-blue-50/70 md:hover:text-foreground dark:md:hover:border-blue-800 dark:md:hover:bg-blue-950/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50 ${
             isDragging ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
           }`}
           aria-label={`Drag ${entry.title}`}
@@ -239,10 +247,11 @@ function SortableExamBuilderItem({
 type SectionNoteDropzoneProps = {
   sectionId: string;
   isActive: boolean;
-  children: ReactNode;
+  emptyMessage?: string;
+  children?: ReactNode;
 };
 
-function SectionNoteDropzone({ sectionId, isActive, children }: Readonly<SectionNoteDropzoneProps>) {
+function SectionNoteDropzone({ sectionId, isActive, emptyMessage, children }: Readonly<SectionNoteDropzoneProps>) {
   const { isOver, setNodeRef } = useDroppable({
     id: getSectionNoteDropzoneId(sectionId),
     data: {
@@ -254,15 +263,27 @@ function SectionNoteDropzone({ sectionId, isActive, children }: Readonly<Section
   return (
     <div
       ref={setNodeRef}
-      className={`w-full space-y-3 rounded-2xl border p-3 transition-colors ${
+      className={`w-full space-y-3 rounded-2xl border p-3 ${DND_TRANSITION_CLASS} ${
         isOver
-          ? "border-dashed border-blue-400 bg-blue-50/40 dark:bg-blue-950/20"
+          ? "border-dashed border-blue-400/80 bg-blue-50/45 shadow-inner dark:bg-blue-950/20"
           : isActive
-            ? "border-dashed border-border/50 bg-transparent"
+            ? "border-dashed border-border/70 bg-muted/10"
             : "border-transparent bg-transparent"
       }`}
     >
-      {children}
+      {emptyMessage ? (
+        <p
+          className={`rounded-xl border px-3 py-4 text-sm ${DND_TRANSITION_CLASS} ${
+            isOver
+              ? "border-dashed border-blue-400/80 bg-blue-50/50 font-medium text-blue-800 dark:bg-blue-950/25 dark:text-blue-100"
+              : isActive
+                ? "border-dashed border-border/80 bg-background/80 text-foreground/75"
+                : "border-dashed border-border bg-muted/20 text-foreground/65"
+          }`}
+        >
+          {emptyMessage}
+        </p>
+      ) : children}
     </div>
   );
 }
@@ -320,12 +341,14 @@ function SortableExamBuilderSection({
     <div
       ref={setNodeRef}
       style={style}
-      className={`w-full min-w-0 space-y-4 rounded-2xl border border-border bg-background p-4 shadow-sm transition-all ${
+      className={`w-full min-w-0 space-y-4 rounded-2xl border bg-background p-4 shadow-sm ${DND_TRANSITION_CLASS} ${
         isDragging
-          ? "opacity-40 shadow-lg ring-1 ring-blue-500/30"
+          ? "scale-[1.01] border-blue-400/70 opacity-45 shadow-xl ring-1 ring-blue-400/30"
           : isOver && activeDragSectionId !== null
-            ? "ring-2 ring-blue-500/40"
-            : ""
+            ? "border-blue-400/70 bg-blue-50/35 ring-2 ring-blue-400/25 dark:bg-blue-950/15"
+            : activeDragEntryId !== null
+              ? "border-border/90"
+              : "border-border"
       }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -333,7 +356,7 @@ function SortableExamBuilderSection({
           <button
             ref={setActivatorNodeRef}
             type="button"
-            className="mt-0.5 inline-flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
+            className={`mt-0.5 inline-flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 ${DND_TRANSITION_CLASS} md:hover:border-blue-200 md:hover:bg-blue-50/70 md:hover:text-foreground dark:md:hover:border-blue-800 dark:md:hover:bg-blue-950/30 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50`}
             aria-label={`Drag ${section.title}`}
             disabled={exporting}
             {...attributes}
@@ -380,12 +403,12 @@ function SortableExamBuilderSection({
         </div>
       </div>
 
-      <SectionNoteDropzone sectionId={section.id} isActive={activeDragEntryId !== null}>
-        {entries.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-foreground/65">
-            Drag notes here
-          </p>
-        ) : (
+      <SectionNoteDropzone
+        sectionId={section.id}
+        isActive={activeDragEntryId !== null}
+        emptyMessage={entries.length === 0 ? "Drag notes here" : undefined}
+      >
+        {entries.length === 0 ? null : (
           <SortableContext items={entries.map((entry) => getEntrySortableId(entry.entryId))} strategy={verticalListSortingStrategy}>
             {entries.map((entry, index) => (
               <SortableExamBuilderItem
@@ -855,11 +878,10 @@ export default function ExamBuilderPage() {
                         key={template.id}
                         type="button"
                         onClick={() => handleTemplateSelection(template.id)}
-                        className={`rounded-2xl border p-4 text-left transition-colors ${
-                          isSelected && !showTemplateSelector
-                            ? "border-blue-600 bg-blue-50/70 dark:border-blue-400 dark:bg-blue-950/30"
-                            : "border-border bg-background hover:bg-highlight"
-                        }`}
+                        className={getSelectionCardClassName({
+                          selected: isSelected && !showTemplateSelector,
+                          className: "rounded-2xl p-4",
+                        })}
                       >
                         <p className="text-sm font-semibold text-foreground">{template.title}</p>
                         <p className="mt-1 text-sm text-foreground/70">{template.description}</p>
@@ -955,8 +977,10 @@ export default function ExamBuilderPage() {
                 onDragEnd={handleExamBuilderDragEnd}
               >
                 <SortableContext items={examSections.map((section) => getSectionSortableId(section.id))} strategy={verticalListSortingStrategy}>
-                  <div className={`w-full space-y-4 rounded-2xl border border-border/70 bg-background/80 p-3 transition-colors sm:p-4 ${
-                    activeDragEntryId || activeDragSectionId ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20" : ""
+                  <div className={`w-full space-y-4 rounded-2xl border border-border/70 bg-background/80 p-3 ${DND_TRANSITION_CLASS} sm:p-4 ${
+                    activeDragEntryId || activeDragSectionId
+                      ? "border-dashed border-blue-400/70 bg-blue-50/35 shadow-inner dark:bg-blue-950/15"
+                      : ""
                   }`}>
                     {examSections.map((section, sectionIndex) => (
                       <SortableExamBuilderSection
@@ -978,25 +1002,25 @@ export default function ExamBuilderPage() {
                     ))}
                   </div>
                 </SortableContext>
-                <DragOverlay>
+                <DragOverlay dropAnimation={DND_DROP_ANIMATION}>
                   {activeDragEntryId ? (
-                    <div className="flex min-w-[280px] scale-[1.02] items-start justify-between gap-3 rounded-2xl border border-blue-400 bg-background p-3 shadow-xl">
+                    <div className="flex min-w-[280px] scale-[1.015] items-start justify-between gap-3 rounded-2xl border border-blue-400/80 bg-background p-3 shadow-xl">
                       <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65">
+                        <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground/65 shadow-sm">
                           <GripVertical className="h-4 w-4" aria-hidden="true" />
                         </span>
                         <div className="min-w-0 flex-1 space-y-1">
                           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Note</p>
-                          <p className="truncate text-sm font-medium text-foreground">
+                          <p className="line-clamp-2 text-sm font-medium leading-5 text-foreground">
                             {Object.values(examSectionSelectionsById).flat().find((entry) => entry.entryId === activeDragEntryId)?.title}
                           </p>
                         </div>
                       </div>
                     </div>
                   ) : activeDragSectionId ? (
-                    <div className="min-w-[280px] scale-[1.02] rounded-2xl border border-blue-400 bg-background p-4 shadow-xl">
+                    <div className="min-w-[280px] scale-[1.015] rounded-2xl border border-blue-400/80 bg-background p-4 shadow-xl">
                       <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Section</p>
-                      <p className="truncate text-sm font-medium text-foreground">
+                      <p className="line-clamp-2 text-sm font-medium leading-5 text-foreground">
                         {examSections.find((section) => section.id === activeDragSectionId)?.title}
                       </p>
                     </div>

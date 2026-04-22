@@ -34,6 +34,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
 import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
+import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { ProfileNotePerformance } from "@/components/profile/profile-note-performance";
 
 type IdentityForm = {
@@ -599,11 +600,10 @@ export default function ProfilePage() {
                   <button
                     key={option.value}
                     type="button"
-                    className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors hover:bg-highlight ${
-                      isSelected
-                        ? "border-primary bg-primary/5 dark:bg-primary/10"
-                        : "border-border bg-background"
-                    }`}
+                    className={getSelectionCardClassName({
+                      selected: isSelected,
+                      className: "flex w-full items-start gap-3 px-4 py-3",
+                    })}
                     onClick={() => {
                       setProfileTypeMessage(null);
                       setSelectedProfileType(option.value);

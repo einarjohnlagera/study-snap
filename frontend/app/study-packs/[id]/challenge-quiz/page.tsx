@@ -54,6 +54,7 @@ import {
   isModeSelectionChallengeQuizEntry,
 } from "@/lib/challenge-quiz-entry";
 import { cn } from "@/lib/utils";
+import { getSelectionCardClassName } from "@/lib/clickable-card";
 
 type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
 type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup";
@@ -1051,12 +1052,11 @@ export default function ChallengeQuizPage() {
               <button
                 type="button"
                 aria-pressed={selectedMode === CHALLENGE_MODE}
-                className={cn(
-                  "rounded-xl border bg-background p-4 text-left transition hover:border-blue-400/50 hover:bg-blue-500/[0.04]",
-                  selectedMode === CHALLENGE_MODE
-                    ? "border-blue-500 bg-blue-500/[0.06] shadow-sm"
-                    : "border-border",
-                )}
+                className={getSelectionCardClassName({
+                  selected: selectedMode === CHALLENGE_MODE,
+                  disabled: challengeGenerationLocked,
+                  className: "p-4",
+                })}
                 onClick={() => void handleSelectChallengeQuizMode()}
                 disabled={challengeGenerationLocked}
               >
@@ -1083,10 +1083,14 @@ export default function ChallengeQuizPage() {
                 type="button"
                 aria-pressed={selectedMode === BOARD_EXAM_MODE}
                 className={cn(
-                  "rounded-xl border bg-background p-4 text-left transition hover:border-foreground/30 hover:bg-foreground/[0.03]",
+                  getSelectionCardClassName({
+                    selected: selectedMode === BOARD_EXAM_MODE,
+                    disabled: challengeGenerationLocked,
+                    className: "p-4",
+                  }),
                   selectedMode === BOARD_EXAM_MODE
-                    ? "border-foreground/35 bg-foreground/[0.03] shadow-sm"
-                    : "border-border",
+                    ? "border-foreground/35 bg-foreground/[0.03] dark:bg-foreground/[0.06]"
+                    : "hover:border-foreground/30 hover:bg-foreground/[0.03] dark:hover:bg-foreground/[0.05]",
                 )}
                 onClick={() => handleSelectBoardExamMode()}
                 disabled={challengeGenerationLocked}
