@@ -130,6 +130,7 @@ describe("Exam Builder page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Move Dosage Calculations up" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove Zygote Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Quiz \+ Answers/i }));
 
     await waitFor(() => {
       expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledWith({
@@ -195,6 +196,7 @@ describe("Exam Builder page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Prelim Exam Basic Concepts -> Problem Solving -> Application" }));
     fireEvent.click(await screen.findByRole("button", { name: "Even Balance" }));
     fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Quiz \+ Answers/i }));
 
     await waitFor(() => {
       expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledWith({
@@ -252,6 +254,7 @@ describe("Exam Builder page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Apply Smart Balance" }));
     expect(await screen.findByText("Rebalanced 20 questions across 3 sections. Balanced by section size and topic coverage.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Quiz \+ Answers/i }));
 
     await waitFor(() => {
       expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledTimes(1);

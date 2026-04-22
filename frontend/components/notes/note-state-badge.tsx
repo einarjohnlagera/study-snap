@@ -6,7 +6,7 @@ export function getNoteStateMeta(status: NoteStudyPackStatus) {
   if (status === "STUDY_PACK_READY") {
     return {
       label: "Study Pack Ready",
-      className: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      className: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300",
     };
   }
   if (status === "GENERATING") {

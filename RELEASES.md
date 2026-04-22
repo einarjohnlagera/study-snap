@@ -82,8 +82,17 @@
   - finalized v0.10.0 limit-state wording so paywalls, premium exhausted states, and teacher quiz generation use consistent `limit` terminology instead of mixed `usage` copy
   - fixed teacher quiz preview regeneration to use the dedicated quiz-generation paywall context instead of the student quiz-limit context
   - refined the Send Feedback modal for mobile with a roomier bottom-sheet-style layout and safer textarea spacing
+  - unified teacher export entry points so Quiz Preview and Exam Builder both open the same two-option export chooser: `Quiz Only` or `Quiz + Answers`
+  - reduced teacher Quiz Preview `Regenerate` to a lighter secondary action so `Export` stays the primary CTA, especially on mobile
   - Added regeneration with credit usage and confirmation
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
+
+- **Final UX polish pass** — tightened the last release-blocking workflow details without changing core behavior:
+  - Create/Edit Note now uses one shared sticky footer across profiles with `Save Note` and `Generate`, replacing duplicated top and bottom action clusters
+  - Library now includes local readiness chips for `All`, `Quiz Ready`, and `Study Pack Ready` to make teacher quiz-ready notes easier to scan
+  - readiness badges are visually separated more clearly: `Study Pack Ready` uses a neutral/blue treatment while `Quiz Ready` uses green
+  - Exam Builder now uses the same export-choice wording as Quiz Preview, removes the old answer/explanation toggle combinations, and adds enough bottom spacing so the sticky footer no longer covers content on mobile
+  - Exam Builder note cards now keep better mobile readability with two-line title clamping and clearer drag-state feedback on the handle and active item
 
 - **Note target profile type system** — notes now store who they are written for separately from the creator's profile:
   - added required `notes.target_profile_type` with `STUDENT` and `BOARD_TAKER`

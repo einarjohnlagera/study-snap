@@ -194,20 +194,6 @@ export function NoteEditorForm({
     </Button>
   );
 
-  const renderCancelButton = (className: string) => (
-    onCancel ? (
-      <Button
-        type="button"
-        onClick={onCancel}
-        disabled={isSaving || isGenerating || isCopying}
-        variant="outline"
-        className={className}
-      >
-        {cancelLabel}
-      </Button>
-    ) : null
-  );
-
   const renderPrimaryAction = (
     buttonClassName: string,
     containerClassName: string,
@@ -242,22 +228,13 @@ export function NoteEditorForm({
   );
 
   return (
-    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 pb-24 sm:px-6 sm:py-8 sm:pb-8">
+    <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 pb-36 sm:px-6 sm:py-8 sm:pb-40">
       {backHref && backLabel ? <BackLink href={backHref} label={backLabel} /> : null}
-      <header className="sticky top-4 z-20 space-y-3">
+      <header className="space-y-3">
         <Card className="space-y-3 border-border/80 bg-background/95 p-4 shadow-sm backdrop-blur sm:p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-2">
-              <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{pageTitle}</h1>
-              <p className="max-w-xl text-xs text-foreground/70">{helperText}</p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-start">
-              {renderCancelButton("w-full sm:w-auto")}
-              {renderSaveButton("w-full sm:w-auto")}
-              <div className="hidden sm:block">
-                {renderPrimaryAction("w-full sm:w-auto", "space-y-1")}
-              </div>
-            </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{pageTitle}</h1>
+            <p className="max-w-xl text-xs text-foreground/70">{helperText}</p>
           </div>
         </Card>
         {saveStateLabel ? (
@@ -515,16 +492,17 @@ export function NoteEditorForm({
             ? actionHelperText
             : "Generate when you&apos;re ready. To create a new version later, make a copy first."}
         </p>
-        <div className="hidden justify-end gap-2 pt-2 sm:flex">
-          {renderCancelButton("w-auto")}
-          {renderSaveButton("w-auto")}
-          {renderPrimaryAction("w-auto", "space-y-1")}
-        </div>
       </Card>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:hidden">
-        <div className="mx-auto flex w-full max-w-sm justify-center">
-          {renderPrimaryAction("w-full rounded-full shadow-lg", "w-full", { showHelperText: false })}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-foreground/75">{saveStateLabel ?? "Save your note or generate a Study Pack when ready."}</p>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:min-w-[280px]">
+            {renderSaveButton("h-11 w-full")}
+            {renderPrimaryAction("h-11 w-full", "w-full", { showHelperText: false })}
+          </div>
         </div>
       </div>
     </main>
