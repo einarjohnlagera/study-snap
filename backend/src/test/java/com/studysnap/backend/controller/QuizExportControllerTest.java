@@ -59,7 +59,13 @@ class QuizExportControllerTest {
         byte[] content = "combined-docx".getBytes();
         MultiNoteQuizDocxExportRequest request = new MultiNoteQuizDocxExportRequest(
                 java.util.List.of(
-                        new MultiNoteQuizDocxExportRequest.Section("Section A", java.util.List.of("note-1", "note-2"))
+                        new MultiNoteQuizDocxExportRequest.Section(
+                                "Section A",
+                                java.util.List.of(
+                                        new MultiNoteQuizDocxExportRequest.QuestionRef("note-1", 0),
+                                        new MultiNoteQuizDocxExportRequest.QuestionRef("note-2", 1)
+                                )
+                        )
                 ),
                 true,
                 true

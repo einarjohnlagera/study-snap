@@ -1,5 +1,5 @@
 import type { ExamBuilderSection } from "../exam-builder-order";
-import { createExamSectionId } from "../exam-builder-order";
+import { buildWholeNoteEntries, createExamSectionId } from "../exam-builder-order";
 
 export type ExamTemplateId =
   | "SCRATCH"
@@ -83,10 +83,11 @@ export function getExamTemplateById(templateId: ExamTemplateId): ExamTemplateDef
 export function buildTemplateSections(
   template: ExamTemplateDefinition,
   selectedNoteIds: string[],
+  questionCountsByNoteId: Record<string, number>,
 ): ExamBuilderSection[] {
   return template.sectionTitles.map((title, index) => ({
     id: createExamSectionId(),
     title,
-    noteIds: index === 0 ? [...selectedNoteIds] : [],
+    entries: index === 0 ? buildWholeNoteEntries(selectedNoteIds, questionCountsByNoteId) : [],
   }));
 }

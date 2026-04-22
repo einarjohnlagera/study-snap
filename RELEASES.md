@@ -75,6 +75,8 @@
   - `Exam Builder` now adds teacher-defined sections with inline titles, drag-reorderable section groups, and note movement across sections before export
   - combined exam export supports note reordering plus optional `Answer Key` and `Explanations` sections in the generated document
   - combined exam DOCX export now preserves section order and section headings from the teacher builder instead of flattening notes into one unnamed list
+  - `Exam Builder` now supports `Auto Balance Sections`, which redistributes the pooled exported questions evenly across the current section layout without shuffling question order
+  - combined exam export now uses question-level section assignments, so balanced sections export exactly the same grouped question order shown in the builder
   - Added regeneration with credit usage and confirmation
   - Removed student-only quiz actions, performance UI, recent sessions, and Board Exam references from Teacher mode note detail
 

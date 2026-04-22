@@ -151,21 +151,13 @@ class QuizDocxExportServiceTest {
         List<QuizDocxExportService.ExportableSection> sections = List.of(
                 new QuizDocxExportService.ExportableSection(
                         "SECTION A - Multiple Choice",
-                        List.of(new QuizDocxExportService.ExportableQuiz(
-                                "Cells",
-                                "Biology",
-                                OffsetDateTime.parse("2026-04-20T10:00:00Z"),
-                                List.of(new QuizItem("What is a cell?", List.of("Unit", "Atom", "Bond", "Gas"), 0, "Cells", "Cells are the basic unit of life."))
-                        ))
+                        List.of("Biology"),
+                        List.of(new QuizItem("What is a cell?", List.of("Unit", "Atom", "Bond", "Gas"), 0, "Cells", "Cells are the basic unit of life."))
                 ),
                 new QuizDocxExportService.ExportableSection(
                         "SECTION B - Application",
-                        List.of(new QuizDocxExportService.ExportableQuiz(
-                                "Stoichiometry",
-                                "Chemistry",
-                                OffsetDateTime.parse("2026-04-20T10:30:00Z"),
-                                List.of(new QuizItem("What is a mole?", List.of("Mass", "Amount", "Energy", "Charge"), 1, "Stoichiometry", "A mole is a measure of amount of substance."))
-                        ))
+                        List.of("Chemistry"),
+                        List.of(new QuizItem("What is a mole?", List.of("Mass", "Amount", "Energy", "Charge"), 1, "Stoichiometry", "A mole is a measure of amount of substance."))
                 )
         );
 

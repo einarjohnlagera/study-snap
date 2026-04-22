@@ -20,4 +20,8 @@ public class GeneratedQuizBatchExportValidationException extends AppException {
     public static GeneratedQuizBatchExportValidationException unknownNote() {
         return new GeneratedQuizBatchExportValidationException("One or more selected notes could not be exported.");
     }
+
+    public static GeneratedQuizBatchExportValidationException invalidQuestionSelection() {
+        return new GeneratedQuizBatchExportValidationException("One or more selected quiz questions could not be exported.");
+    }
 }

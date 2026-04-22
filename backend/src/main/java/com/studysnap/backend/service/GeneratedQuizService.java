@@ -152,7 +152,8 @@ public class GeneratedQuizService {
 
         List<ExportSectionRequest> requestedSections = parseSectionRequests(sections);
         List<UUID> noteIds = requestedSections.stream()
-                .flatMap(section -> section.noteIds().stream())
+                .flatMap(section -> section.questionReferences().stream())
+                .map(ExportQuestionReference::noteId)
                 .distinct()
                 .toList();
         if (noteIds.isEmpty()) {
@@ -174,7 +175,7 @@ public class GeneratedQuizService {
 
         List<QuizDocxExportService.ExportableSection> exportableSections = requestedSections.stream()
                 .map(section -> buildExportableSection(section, notesById, generatedQuizByNoteId))
-                .filter(section -> !section.quizzes().isEmpty())
+                .filter(section -> !section.questions().isEmpty())
                 .toList();
         if (exportableSections.isEmpty()) {
             throw GeneratedQuizBatchExportValidationException.emptySelection();
@@ -230,12 +231,15 @@ public class GeneratedQuizService {
                 .filter(Objects::nonNull)
                 .map(section -> new ExportSectionRequest(
                         section.title(),
-                        section.noteIds() == null ? List.of() : section.noteIds().stream()
-                                .map(this::parseNoteId)
-                                .distinct()
+                        section.questionRefs() == null ? List.of() : section.questionRefs().stream()
+                                .filter(Objects::nonNull)
+                                .map(questionRef -> new ExportQuestionReference(
+                                        parseNoteId(questionRef.noteId()),
+                                        parseQuestionIndex(questionRef.questionIndex())
+                                ))
                                 .toList()
                 ))
-                .filter(section -> !section.noteIds().isEmpty())
+                .filter(section -> !section.questionReferences().isEmpty())
                 .toList();
     }
 
@@ -244,27 +248,45 @@ public class GeneratedQuizService {
             Map<UUID, NoteEntity> notesById,
             Map<UUID, GeneratedQuizEntity> generatedQuizByNoteId
     ) {
+        List<QuizItem> sectionQuestions = section.questionReferences().stream()
+                .map(questionReference -> buildExportableQuestion(
+                        notesById.get(questionReference.noteId()),
+                        generatedQuizByNoteId.get(questionReference.noteId()),
+                        questionReference.questionIndex()
+                ))
+                .toList();
+        List<String> sectionSubjects = section.questionReferences().stream()
+                .map(ExportQuestionReference::noteId)
+                .distinct()
+                .map(notesById::get)
+                .map(note -> note == null ? null : note.getSubject())
+                .filter(Objects::nonNull)
+                .toList();
         return new QuizDocxExportService.ExportableSection(
                 section.title(),
-                section.noteIds().stream()
-                        .map(noteId -> buildExportableQuiz(notesById.get(noteId), generatedQuizByNoteId.get(noteId)))
-                        .toList()
+                sectionSubjects,
+                sectionQuestions
         );
     }
 
-    private QuizDocxExportService.ExportableQuiz buildExportableQuiz(NoteEntity note, GeneratedQuizEntity generatedQuiz) {
+    private QuizItem buildExportableQuestion(NoteEntity note, GeneratedQuizEntity generatedQuiz, int questionIndex) {
         if (note == null) {
             throw GeneratedQuizBatchExportValidationException.unknownNote();
         }
         if (generatedQuiz == null || generatedQuiz.getQuestions() == null || generatedQuiz.getQuestions().isEmpty()) {
             throw GeneratedQuizBatchExportValidationException.noteWithoutGeneratedQuiz();
         }
-        return new QuizDocxExportService.ExportableQuiz(
-                note.getTitle(),
-                note.getSubject(),
-                generatedQuiz.getGeneratedAt(),
-                generatedQuiz.getQuestions()
-        );
+        if (questionIndex < 0 || questionIndex >= generatedQuiz.getQuestions().size()) {
+            throw GeneratedQuizBatchExportValidationException.invalidQuestionSelection();
+        }
+        return generatedQuiz.getQuestions().get(questionIndex);
+    }
+
+    private int parseQuestionIndex(Integer questionIndex) {
+        if (questionIndex == null || questionIndex < 0) {
+            throw GeneratedQuizBatchExportValidationException.invalidQuestionSelection();
+        }
+        return questionIndex;
     }
 
     private GeneratedQuizResponse toResponse(GeneratedQuizEntity entity) {
@@ -287,7 +309,13 @@ public class GeneratedQuizService {
 
     private record ExportSectionRequest(
             String title,
-            List<UUID> noteIds
+            List<ExportQuestionReference> questionReferences
+    ) {
+    }
+
+    private record ExportQuestionReference(
+            UUID noteId,
+            int questionIndex
     ) {
     }
 }
