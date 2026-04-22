@@ -7,6 +7,7 @@ import { useRouteProgress } from "@/components/navigation/route-progress-provide
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type NotePerformanceSummaryResponse, getUserNotePerformanceSummary } from "@/lib/api";
+import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { buildNoteSessionReviewPath } from "@/lib/note-session-review";
 
@@ -88,7 +89,7 @@ export function DashboardStrongestNotes() {
             key={note.noteId}
             type="button"
             onClick={() => handleSelectNote(note)}
-            className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-highlight"
+            className={getBrowsingCardClassName("w-full px-4 py-3 text-left")}
           >
             <div className="flex items-center justify-between gap-3">
               <p className="min-w-0 truncate text-sm font-medium text-foreground">

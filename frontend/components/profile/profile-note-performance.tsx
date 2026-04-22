@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { type NotePerformanceSummaryResponse, getUserNotePerformanceSummary } from "@/lib/api";
+import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { buildNoteSessionReviewPath } from "@/lib/note-session-review";
 
@@ -116,7 +117,7 @@ export function ProfileNotePerformance() {
               key={note.noteId}
               type="button"
               onClick={() => handleSelectNote(note)}
-              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-highlight"
+              className={getBrowsingCardClassName("w-full px-4 py-3 text-left")}
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 space-y-1">

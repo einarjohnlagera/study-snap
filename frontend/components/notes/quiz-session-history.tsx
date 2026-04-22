@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
+import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import {
   type RecentQuizSessionHistoryItem,
   getQuizSessionModeLabel,
@@ -59,7 +60,7 @@ export function QuizSessionHistory({
               key={`${session.sessionMode}-${session.sessionId}`}
               type="button"
               onClick={() => onSelectSession(session)}
-              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-highlight"
+              className={getBrowsingCardClassName("w-full px-4 py-3 text-left")}
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1">

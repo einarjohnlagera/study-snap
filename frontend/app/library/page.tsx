@@ -24,6 +24,7 @@ import {
   type NoteListItemResponse,
   type NoteVisibility,
 } from "@/lib/api";
+import {getBrowsingCardClassName, getSelectionCardClassName} from "@/lib/clickable-card";
 import {normalizeCourseProgram} from "@/lib/learning-profile";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {normalizeSubject} from "@/lib/subjects";
@@ -834,12 +835,15 @@ export default function LibraryPage() {
                       }
                     }}
                     aria-pressed={selectionMode ? isSelected : undefined}
-                    className={`flex h-full flex-col justify-between space-y-4 p-4 transition-colors sm:p-6 ${
+                    className={`flex h-full flex-col justify-between space-y-4 p-4 sm:p-6 ${
                       selectionMode
                         ? examReady
-                          ? `cursor-pointer border-blue-500/30 ${isSelected ? "bg-blue-50/70 shadow-sm dark:bg-blue-950/20" : "hover:bg-highlight"}`
+                          ? getSelectionCardClassName({
+                              selected: isSelected,
+                              className: "h-full rounded-2xl",
+                            })
                           : "cursor-not-allowed opacity-70"
-                        : "cursor-pointer hover:bg-highlight hover:shadow-md"
+                        : getBrowsingCardClassName("h-full")
                     }`}
                   >
                     <SharedNoteCard
