@@ -36,6 +36,8 @@ type LibrarySortOption =
   | "TITLE_DESC"
   | "OLDEST";
 
+type LibraryReadinessFilter = "ALL" | "QUIZ_READY" | "STUDY_PACK_READY";
+
 type ReviewSummaryMeta = {
   lastReviewedAt: string | null;
 };
@@ -55,6 +57,11 @@ const SORT_LABELS: Record<LibrarySortOption, string> = {
   TITLE_ASC: "Title (A-Z)",
   TITLE_DESC: "Title (Z-A)",
   OLDEST: "Oldest",
+};
+const READINESS_FILTER_LABELS: Record<LibraryReadinessFilter, string> = {
+  ALL: "All",
+  QUIZ_READY: "Quiz Ready",
+  STUDY_PACK_READY: "Study Pack Ready",
 };
 
 function normalizeTags(tags: string[] | null | undefined): string[] {
@@ -218,6 +225,7 @@ export default function LibraryPage() {
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
   const [recentTags, setRecentTags] = useState<string[]>([]);
   const [recentSubjects, setRecentSubjects] = useState<string[]>([]);
+  const [readinessFilter, setReadinessFilter] = useState<LibraryReadinessFilter>("ALL");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [toast, setToast] = useState<string | null>(null);
@@ -366,7 +374,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     setVisibleCount(LIBRARY_PAGE_SIZE);
-  }, [searchQuery, selectedSubject, selectedTags, sortBy]);
+  }, [readinessFilter, searchQuery, selectedSubject, selectedTags, sortBy]);
 
   const clearFilters = useCallback(() => {
     setSearchQuery("");
@@ -376,6 +384,7 @@ export default function LibraryPage() {
     setTagDraft([]);
     setSubjectSearchQuery("");
     setTagSearchQuery("");
+    setReadinessFilter("ALL");
   }, []);
 
   const toggleDraftTag = useCallback((tag: string) => {
@@ -432,6 +441,7 @@ export default function LibraryPage() {
   }, [displayedTags, visiblePopularTags]);
 
   const hasActiveFilters = searchQuery.trim().length > 0
+    || readinessFilter !== "ALL"
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0;
 
@@ -445,10 +455,13 @@ export default function LibraryPage() {
       const searchMatch = query.length === 0
         || itemTitle.toLowerCase().includes(query)
         || itemTags.some((tag) => tag.toLowerCase().includes(query));
+      const readinessMatch = readinessFilter === "ALL"
+        || (readinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
+        || (readinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
       const subjectMatch = selectedSubject === ALL_SUBJECTS || itemSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
 
-      return searchMatch && subjectMatch && tagMatch;
+      return searchMatch && readinessMatch && subjectMatch && tagMatch;
     });
 
     const byDateDesc = (leftDate: string | null | undefined, rightDate: string | null | undefined) => {
@@ -488,7 +501,7 @@ export default function LibraryPage() {
           return byDateDesc(left.updatedAt, right.updatedAt);
       }
     });
-  }, [items, reviewSummaryByNoteId, searchQuery, selectedSubject, selectedTags, sortBy]);
+  }, [items, readinessFilter, reviewSummaryByNoteId, searchQuery, selectedSubject, selectedTags, sortBy]);
 
   const visibleItems = useMemo(
     () => sortedFilteredItems.slice(0, visibleCount),
@@ -631,6 +644,34 @@ export default function LibraryPage() {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Filter</p>
+                {readinessFilter !== "ALL" ? (
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                    onClick={() => setReadinessFilter("ALL")}
+                  >
+                    Reset
+                  </button>
+                ) : null}
+              </div>
+              <div className={getScrollRailClassName()}>
+                {(Object.keys(READINESS_FILTER_LABELS) as LibraryReadinessFilter[]).map((filterKey) => (
+                  <button
+                    key={filterKey}
+                    type="button"
+                    className={getFilterChipClassName(readinessFilter === filterKey)}
+                    onClick={() => setReadinessFilter(filterKey)}
+                    aria-pressed={readinessFilter === filterKey}
+                  >
+                    {READINESS_FILTER_LABELS[filterKey]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">Subjects</p>
                 {selectedSubject !== ALL_SUBJECTS ? (
                   <button
@@ -734,6 +775,11 @@ export default function LibraryPage() {
                   Subject: {selectedSubject}
                 </span>
               ) : null}
+              {readinessFilter !== "ALL" ? (
+                <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
+                  {READINESS_FILTER_LABELS[readinessFilter]}
+                </span>
+              ) : null}
               {selectedTags.length > 0 ? (
                 <span className="rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/70">
                   {selectedTags.length} tag{selectedTags.length === 1 ? "" : "s"} selected
@@ -749,7 +795,7 @@ export default function LibraryPage() {
 
           {visibleItems.length === 0 ? (
             <Card className="space-y-3 p-4 sm:p-6">
-              <h2 className="text-base font-semibold sm:text-lg">No study packs found</h2>
+              <h2 className="text-base font-semibold sm:text-lg">No notes match these filters</h2>
               <p className="text-sm text-foreground/75">Try adjusting your filters</p>
               <div className="flex justify-start">
                 <Button type="button" variant="outline" onClick={clearFilters}>
@@ -817,8 +863,8 @@ export default function LibraryPage() {
                         </span>
                       ) : renderVisibilityIcon(item.visibility)}
                       stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
-                      metadataBadges={selectionMode && examReady ? (
-                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                      metadataBadges={examReady ? (
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                           Quiz Ready
                         </span>
                       ) : null}

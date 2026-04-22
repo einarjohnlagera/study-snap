@@ -217,9 +217,9 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByRole("heading", { name: "Edit Note" })).toBeInTheDocument();
     expect(screen.getByText("Update your note details and content.")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Save Changes" })).not.toHaveLength(0);
-    expect(screen.getAllByRole("button", { name: /^Generate$/i })).not.toHaveLength(0);
-    expect(screen.getAllByRole("button", { name: "Cancel" })).not.toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Save Note" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Generate$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     expect(screen.queryByText("Create or import your notes first, then generate a Study Pack when you are ready.")).not.toBeInTheDocument();
   });
 
@@ -252,7 +252,7 @@ describe("NoteEditorPageClient", () => {
 
     const titleInput = await screen.findByLabelText("Title (optional)");
     fireEvent.change(titleInput, { target: { value: "Updated title" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Save Changes" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
 
     await waitFor(() => {
       expect(updateNote).toHaveBeenCalledWith("note-1", expect.objectContaining({
@@ -262,15 +262,13 @@ describe("NoteEditorPageClient", () => {
     });
   });
 
-  it("returns to note detail when cancel is clicked in edit mode", async () => {
+  it("renders the note back link in edit mode", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT" });
 
     render(<NoteEditorPageClient noteId="note-1" />);
 
-    fireEvent.click((await screen.findAllByRole("button", { name: "Cancel" }))[0]);
-
-    expect(pushMock).toHaveBeenCalledWith("/notes/note-1");
+    expect(await screen.findByRole("link", { name: "Note" })).toHaveAttribute("href", "/notes/note-1");
   });
 
   it("saves a custom subject even when it is not in backend suggestions", async () => {
@@ -285,7 +283,7 @@ describe("NoteEditorPageClient", () => {
     });
     fireEvent.change(subjectInput, { target: { value: "Microbiology Lab" } });
     fireEvent.change(contentInput, { target: { value: "Custom subject note" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Save" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalled();
@@ -318,7 +316,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(screen.getByPlaceholderText("Add a tag"), { target: { value: "review" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Generate$/i }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
@@ -353,8 +351,8 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    expect(await screen.findAllByRole("button", { name: "Generate" })).not.toHaveLength(0);
-    expect(screen.getAllByText("Creates summary, key concepts, and quiz.")).not.toHaveLength(0);
+    expect(await screen.findByRole("button", { name: "Generate" })).toBeInTheDocument();
+    expect(screen.getByText("Save your note or generate a Study Pack when ready.")).toBeInTheDocument();
   });
 
   it("uses the teacher generate label and helper text for teacher note creation", async () => {
@@ -362,8 +360,7 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient initialMode="quiz" />);
 
-    expect(await screen.findAllByRole("button", { name: "Create Quiz" })).not.toHaveLength(0);
-    expect(screen.getAllByText("Generates quiz questions from your material.")).not.toHaveLength(0);
+    expect(await screen.findByRole("button", { name: "Generate" })).toBeInTheDocument();
     expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
@@ -377,7 +374,7 @@ describe("NoteEditorPageClient", () => {
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Teacher note content" } });
 
-    fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Generate$/i }));
 
     expect(await screen.findByText("Please select an audience")).toBeInTheDocument();
     expect(createNote).not.toHaveBeenCalled();
@@ -389,8 +386,7 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
-    expect(await screen.findAllByRole("button", { name: "Practice" })).not.toHaveLength(0);
-    expect(screen.getAllByText("Generates a new quiz from your material.")).not.toHaveLength(0);
+    expect(await screen.findByRole("button", { name: "Generate" })).toBeInTheDocument();
   });
 
   it("locks content editing for generated notes but keeps metadata fields editable", async () => {
@@ -420,9 +416,9 @@ describe("NoteEditorPageClient", () => {
     expect(
       screen.getByText("Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Save Changes" })).not.toHaveLength(0);
-    expect(screen.getAllByRole("button", { name: "Cancel" })).not.toHaveLength(0);
-    expect(screen.getAllByRole("button", { name: "Make a Copy" })).not.toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Save Note" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make a Copy" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Generate$/i })).not.toBeInTheDocument();
   });
 
@@ -437,7 +433,7 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient noteId="note-generated" />);
 
-    fireEvent.click((await screen.findAllByRole("button", { name: "Make a Copy" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Make a Copy" }));
 
     await waitFor(() => {
       expect(copyNote).toHaveBeenCalledWith("note-generated");
@@ -497,9 +493,9 @@ describe("NoteEditorPageClient", () => {
 
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
-    fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Generate$/i }));
 
-    expect(await screen.findByText("You've reached your monthly study pack limit")).toBeInTheDocument();
+    expect(await screen.findByText("You’ve reached your study pack limit")).toBeInTheDocument();
   });
 
   it("shows the exact remaining Study Pack count in the near-limit banner", async () => {
@@ -800,7 +796,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
     fireEvent.change(screen.getByLabelText("Who is this note for?"), { target: { value: "STUDENT" } });
 
-    fireEvent.click(screen.getAllByRole("button", { name: /^Create Quiz$/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Generate$/i }));
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=quiz");
@@ -815,7 +811,7 @@ describe("NoteEditorPageClient", () => {
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Student note content" } });
 
-    fireEvent.click(screen.getAllByRole("button", { name: /^Generate$/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Generate$/i }));
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=summary");

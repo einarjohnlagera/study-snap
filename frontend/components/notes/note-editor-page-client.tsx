@@ -92,24 +92,12 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
   };
 }
 
-function resolveGenerateLabel(profileType: string | null | undefined): string {
-  if (profileType === "BOARD_EXAM") {
-    return "Practice";
-  }
-  if (profileType === "TEACHER") {
-    return "Create Quiz";
-  }
+function resolveGenerateLabel(_profileType: string | null | undefined): string {
   return "Generate";
 }
 
-function resolveGenerateHelperText(profileType: string | null | undefined): string {
-  if (profileType === "BOARD_EXAM") {
-    return "Generates a new quiz from your material.";
-  }
-  if (profileType === "TEACHER") {
-    return "Generates quiz questions from your material.";
-  }
-  return "Creates summary, key concepts, and quiz.";
+function resolveGenerateHelperText(_profileType: string | null | undefined): string {
+  return "Generates a Study Pack from your material.";
 }
 
 export function NoteEditorPageClient({
@@ -799,7 +787,7 @@ export function NoteEditorPageClient({
         autoFocusContent={autoFocusContent}
         autoFocusImport={autoFocusImport}
         importPanelHighlighted={autoFocusImport}
-        saveLabel={isEditMode ? "Save Changes" : "Save"}
+        saveLabel="Save Note"
         actionLabel={actionLabel}
         actionHelperText={actionHelperText}
         actionLoadingLabel={actionLoadingLabel}

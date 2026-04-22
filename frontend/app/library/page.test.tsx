@@ -156,6 +156,24 @@ describe("Library page", () => {
     expect(screen.queryByText("Dosage Calculations")).not.toBeInTheDocument();
   });
 
+  it("filters notes by readiness chips", async () => {
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
+
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Study Pack Ready" }));
+
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+    expect(screen.getByText("Zygote Review")).toBeInTheDocument();
+    expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
   it("filters subjects from the searchable subject selector", async () => {
     render(<LibraryPage />);
 
@@ -325,7 +343,7 @@ describe("Library page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "review" }).at(-1) as HTMLElement);
     fireEvent.click(screen.getByRole("button", { name: "Apply" }));
 
-    expect(screen.getByText("No study packs found")).toBeInTheDocument();
+    expect(screen.getByText("No notes match these filters")).toBeInTheDocument();
     expect(screen.getByText("Try adjusting your filters")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);

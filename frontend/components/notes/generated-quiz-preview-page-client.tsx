@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { FileText, RotateCcw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -9,7 +9,7 @@ import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AppModal } from "@/components/ui/app-modal";
-import { ExportDropdownMenu } from "@/components/ui/export-dropdown-menu";
+import { QuizExportModal, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
@@ -50,6 +50,7 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
   const [exporting, setExporting] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
 
@@ -114,11 +115,12 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
     && challengeQuizzesRemaining <= 0;
   const quizGenerationPaywallVariant: PaywallModalVariant = "quiz-generation-limit";
 
-  const handleExport = useCallback(async (mode: QuizDocxExportMode) => {
+  const handleExport = useCallback(async (mode: QuizDocxExportMode | QuizExportModalMode) => {
     if (!generatedQuiz?.id || exporting) {
       return;
     }
     setExporting(true);
+    setShowExportModal(false);
     setToast("Exporting DOCX...");
     try {
       await exportGeneratedQuizDocx(generatedQuiz.id, mode);
@@ -219,34 +221,24 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
                   <p className="text-xs text-foreground/60">Generated {generatedAtLabel}</p>
                 ) : null}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center">
                 {canExportDocx ? (
-                  <ExportDropdownMenu
-                    exporting={exporting}
-                    buttonLabel="Export"
-                    menuTitle="Export as DOCX"
-                    menuDescription="Choose a DOCX export format"
-                    groupLabel="DOCX Export"
-                    items={[
-                      {
-                        key: "quiz-only",
-                        label: "Quiz Only",
-                        description: "Questions and choices only. Ready for student distribution.",
-                        onSelect: () => void handleExport("QUIZ_ONLY"),
-                      },
-                      {
-                        key: "with-answers",
-                        label: "Quiz + Answers",
-                        description: "Includes answer key and explanations for teacher review.",
-                        onSelect: () => void handleExport("WITH_ANSWERS"),
-                      },
-                    ]}
-                  />
+                  <Button
+                    type="button"
+                    className="gap-2"
+                    onClick={() => setShowExportModal(true)}
+                    loading={exporting}
+                    loadingText="Exporting..."
+                  >
+                    <FileText className="h-4 w-4" aria-hidden="true" />
+                    <span>Export</span>
+                  </Button>
                 ) : null}
                 <Button
                   type="button"
-                  variant="outline"
-                  className="gap-2"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 justify-start gap-2 px-2 text-foreground/70 sm:justify-center"
                   onClick={() => setShowRegenerateConfirm(true)}
                   loading={regenerating}
                   loadingText="Regenerating..."
@@ -321,6 +313,15 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
             </Button>
           </div>
         )}
+      />
+
+      <QuizExportModal
+        isOpen={showExportModal}
+        title="Export Quiz"
+        description="Choose an export format for this quiz."
+        exporting={exporting}
+        onClose={() => setShowExportModal(false)}
+        onSelect={(mode) => void handleExport(mode)}
       />
 
       <PaywallModal

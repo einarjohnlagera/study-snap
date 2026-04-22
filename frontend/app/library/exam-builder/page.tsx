@@ -27,6 +27,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { QuizExportModal, type QuizExportModalMode } from "@/components/ui/quiz-export-modal";
 import { PageHeader } from "@/components/page-header";
 import { getAuthUser } from "@/lib/auth";
 import {
@@ -165,7 +166,7 @@ function SortableExamBuilderItem({
       style={style}
       className={`flex w-full min-w-0 items-start justify-between gap-3 rounded-2xl border border-border p-3 transition-shadow ${
         isDragging
-          ? "border-dashed border-blue-400 bg-blue-50/40 opacity-40 shadow-sm dark:bg-blue-950/20"
+          ? "scale-[1.01] border-dashed border-blue-400 bg-blue-50/40 opacity-40 shadow-lg dark:bg-blue-950/20"
           : activeDragEntryId === entry.entryId
             ? "bg-background shadow-md ring-1 ring-blue-500/30"
             : "bg-background shadow-sm"
@@ -175,7 +176,9 @@ function SortableExamBuilderItem({
         <button
           ref={setActivatorNodeRef}
           type="button"
-          className="mt-0.5 inline-flex h-9 w-9 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50"
+          className={`mt-0.5 inline-flex h-9 w-9 shrink-0 touch-none items-center justify-center rounded-lg border border-border bg-background text-foreground/65 transition-colors hover:bg-highlight hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:pointer-events-none disabled:opacity-50 ${
+            isDragging ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing"
+          }`}
           aria-label={`Drag ${entry.title}`}
           disabled={exporting}
           {...attributes}
@@ -185,7 +188,7 @@ function SortableExamBuilderItem({
         </button>
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">Note {index + 1}</p>
-          <p className="block truncate text-sm font-medium text-foreground">{entry.title}</p>
+          <p className="line-clamp-2 block text-sm font-medium leading-5 text-foreground">{entry.title}</p>
           <div className="flex flex-wrap items-center gap-2 text-xs text-foreground/60">
             <p className="truncate">{entry.subject}</p>
             <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/70">
@@ -421,9 +424,8 @@ export default function ExamBuilderPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<ExamTemplateId | null>(null);
   const [templateDirty, setTemplateDirty] = useState(false);
   const [showTemplateSelector, setShowTemplateSelector] = useState(true);
-  const [includeAnswerKey, setIncludeAnswerKey] = useState(true);
-  const [includeExplanations, setIncludeExplanations] = useState(true);
   const [exportingExam, setExportingExam] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [activeDragEntryId, setActiveDragEntryId] = useState<string | null>(null);
   const [activeDragSectionId, setActiveDragSectionId] = useState<string | null>(null);
   const [nextSectionIndex, setNextSectionIndex] = useState(1);
@@ -450,8 +452,7 @@ export default function ExamBuilderPage() {
     setSelectedTemplateId(null);
     setTemplateDirty(false);
     setShowTemplateSelector(true);
-    setIncludeAnswerKey(true);
-    setIncludeExplanations(true);
+    setShowExportModal(false);
     setPendingBalanceMode(null);
   }, [isTeacherExamBuilderEnabled, router, selectedNoteIds]);
 
@@ -668,11 +669,12 @@ export default function ExamBuilderPage() {
     );
   }, [canBalanceSections, examSections, questionBalanceMetadataByRefKey, selectedTemplate?.sectionIntents, updateExamSections]);
 
-  const handleExportExam = useCallback(async () => {
+  const handleExportExam = useCallback(async (mode: QuizExportModalMode) => {
     if (exportableExamSections.length === 0 || exportingExam) {
       return;
     }
     setExportingExam(true);
+    setShowExportModal(false);
     setError(null);
     try {
       await exportCombinedGeneratedQuizDocx({
@@ -683,8 +685,8 @@ export default function ExamBuilderPage() {
             questionIndex: questionRef.questionIndex,
           }))),
         })),
-        includeAnswerKey,
-        includeExplanations,
+        includeAnswerKey: mode === "WITH_ANSWERS",
+        includeExplanations: mode === "WITH_ANSWERS",
       });
       setToast(EXAM_EXPORT_READY_MESSAGE);
     } catch (exportError) {
@@ -692,7 +694,7 @@ export default function ExamBuilderPage() {
     } finally {
       setExportingExam(false);
     }
-  }, [exportableExamSections, exportingExam, includeAnswerKey, includeExplanations]);
+  }, [exportableExamSections, exportingExam]);
 
   const handleExamBuilderDragOver = useCallback((event: DragOverEvent) => {
     const activeData = event.active.data.current;
@@ -791,7 +793,7 @@ export default function ExamBuilderPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 pb-32 sm:px-6 sm:py-10 sm:pb-36">
+    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 pb-44 sm:px-6 sm:py-10 sm:pb-40">
       <BackLink href="/library" label="Library" />
       <PageHeader
         eyebrow="EXAM BUILDER"
@@ -1004,39 +1006,6 @@ export default function ExamBuilderPage() {
             </section>
           ) : null}
 
-          {selectedTemplate ? (
-            <section className="w-full space-y-3">
-              <div>
-                <h2 className="text-base font-semibold text-foreground sm:text-lg">Exam Options</h2>
-              </div>
-              <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
-                <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={includeAnswerKey}
-                    onChange={(event) => setIncludeAnswerKey(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
-                  />
-                  <span className="space-y-0.5">
-                    <span className="block text-sm font-medium text-foreground">Include Answer Key</span>
-                    <span className="block text-xs text-foreground/65">Add the correct answers after the exam.</span>
-                  </span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={includeExplanations}
-                    onChange={(event) => setIncludeExplanations(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-2 focus:ring-blue-600"
-                  />
-                  <span className="space-y-0.5">
-                    <span className="block text-sm font-medium text-foreground">Include Explanations</span>
-                    <span className="block text-xs text-foreground/65">Append brief teaching explanations on a separate page.</span>
-                  </span>
-                </label>
-              </div>
-            </section>
-          ) : null}
         </>
       )}
 
@@ -1059,7 +1028,7 @@ export default function ExamBuilderPage() {
             <Button
               type="button"
               className="w-full sm:w-auto"
-              onClick={() => void handleExportExam()}
+              onClick={() => setShowExportModal(true)}
               loading={exportingExam}
               loadingText="Exporting..."
               disabled={builderQuestionCount === 0 || selectedTemplate === null}
@@ -1165,6 +1134,15 @@ export default function ExamBuilderPage() {
           Your current section names and note placement will be replaced by the new template preset.
         </p>
       </AppModal>
+
+      <QuizExportModal
+        isOpen={showExportModal}
+        title="Export Exam"
+        description="Choose an export format for this exam."
+        exporting={exportingExam}
+        onClose={() => setShowExportModal(false)}
+        onSelect={(mode) => void handleExportExam(mode)}
+      />
 
       {toast ? (
         <div className="fixed right-4 top-4 z-40 rounded-xl border border-border bg-background px-4 py-3 text-sm shadow-lg">
