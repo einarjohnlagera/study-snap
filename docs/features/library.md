@@ -45,7 +45,9 @@ Interaction:
     - organize notes into editable sections such as `Section A`, `Section B`, and `Section C`
     - reorder sections with a drag handle
     - drag notes within a section or move notes across sections
-    - auto-balance pooled quiz questions across the current section layout without shuffling question order
+    - rebalance pooled quiz questions with either:
+      - `Even Balance` for deterministic equal counts only
+      - `Smart Balance` for deterministic section size, topic, and note-mix balancing with soft template guidance when available
     - keep `Move up` / `Move down` note controls as the accessibility fallback
     - remove notes or delete sections before export
     - export one combined DOCX exam that preserves section order and exact question grouping

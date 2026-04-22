@@ -189,15 +189,11 @@ describe("Exam Builder page", () => {
     expect(screen.getByDisplayValue("Section C - Case-Based Questions")).toBeInTheDocument();
   });
 
-  it("auto balances pooled questions evenly across sections", async () => {
+  it("applies Even Balance with the original equal-slice distribution", async () => {
     render(<ExamBuilderPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Prelim Exam Basic Concepts -> Problem Solving -> Application" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Auto Balance Sections" }));
-
-    expect(await screen.findByRole("heading", { name: "Auto balance sections?" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Auto Balance" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Even Balance" }));
     fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
 
     await waitFor(() => {
@@ -243,5 +239,41 @@ describe("Exam Builder page", () => {
         includeExplanations: true,
       });
     });
+  });
+
+  it("applies Smart Balance deterministically across sections", async () => {
+    render(<ExamBuilderPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Prelim Exam Basic Concepts -> Problem Solving -> Application" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Smart Balance" }));
+
+    expect(await screen.findByRole("heading", { name: "Apply Smart Balance?" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply Smart Balance" }));
+    expect(await screen.findByText("Rebalanced 20 questions across 3 sections. Balanced by section size and topic coverage.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
+
+    await waitFor(() => {
+      expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledTimes(1);
+    });
+
+    const exportRequest = (exportCombinedGeneratedQuizDocx as jest.Mock).mock.calls[0]?.[0];
+    expect(exportRequest).toMatchObject({
+      includeAnswerKey: true,
+      includeExplanations: true,
+    });
+    expect(exportRequest.sections.map((section: { title: string }) => section.title)).toEqual([
+      "Section A - Basic Concepts",
+      "Section B - Problem Solving",
+      "Section C - Application",
+    ]);
+    expect(exportRequest.sections.map((section: { questionRefs: Array<unknown> }) => section.questionRefs.length)).toEqual([7, 7, 6]);
+
+    const allQuestionRefs = exportRequest.sections.flatMap((section: { questionRefs: Array<{ noteId: string; questionIndex: number }> }) => section.questionRefs);
+    expect(allQuestionRefs).toHaveLength(20);
+    expect(new Set(allQuestionRefs.map((questionRef: { noteId: string; questionIndex: number }) => `${questionRef.noteId}:${questionRef.questionIndex}`)).size).toBe(20);
+    expect(exportRequest.sections.every((section: { questionRefs: Array<{ noteId: string }> }) => (
+      new Set(section.questionRefs.map((questionRef) => questionRef.noteId)).size === 2
+    ))).toBe(true);
   });
 });
