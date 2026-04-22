@@ -50,5 +50,5 @@ Runtime/session rules:
 - Monthly quiz-limit handling is separate:
   - free user + premium-only path -> Premium upsell modal
   - free user + exhausted Challenge Quiz credits -> Premium upsell modal
-  - premium user + exhausted monthly usage -> quiz-limit state / limit messaging
+  - premium user + exhausted monthly quiz limit -> quiz-limit state / limit messaging
 - Free users who already exhausted Challenge Quiz credits should be stopped by the paywall modal before entering quiz setup or mode-selection flow from Note Detail actions.

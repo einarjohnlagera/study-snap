@@ -31,11 +31,11 @@ export function StudyPackLimitModal({
 
   const isFreePlan = planType === "FREE";
   const title = isFreePlan
-    ? "You’ve reached your monthly study pack limit"
-    : "You’ve used all your study pack usage for this month";
+    ? "You’ve reached your study pack limit"
+    : "You’ve reached your study pack limit for this month";
   const description = isFreePlan
     ? `Upgrade to Premium to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.\n\nYou can still create and save notes. Your limit resets on ${resetDateLabel}.`
-    : `Your study pack usage will reset on ${resetDateLabel}.\n\nYou can still review your existing notes and quizzes while you wait.`;
+    : `Your study pack limit resets on ${resetDateLabel}.\n\nYou can still review your existing notes and quizzes while you wait.`;
 
   return (
     <AppModal

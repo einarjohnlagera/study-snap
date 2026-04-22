@@ -270,8 +270,8 @@ describe("AdaptivePracticePage", () => {
 
     render(<AdaptivePracticePage />);
 
-    expect(await screen.findByRole("heading", { name: "Monthly limit reached" })).toBeInTheDocument();
-    expect(screen.getByText("You've reached your monthly Adaptive Practice limit.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "You’ve reached your quiz limit for this month" })).toBeInTheDocument();
+    expect(screen.getByText("Your Adaptive Practice limit resets on your next billing cycle.")).toBeInTheDocument();
     expect(screen.queryByText("Adaptive Practice is a Premium feature")).not.toBeInTheDocument();
   });
 

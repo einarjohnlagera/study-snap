@@ -16,6 +16,15 @@ export type PaywallAction =
   | "QUIZ_GENERATION"
   | "ADAPTIVE_PRACTICE";
 
+type PaywallProfileType =
+  | "STUDENT"
+  | "BOARD_EXAM"
+  | "TEACHER"
+  | "PARENT"
+  | "PROFESSIONAL"
+  | null
+  | undefined;
+
 export type FreePaywallContent = {
   title: string;
   body: string;
@@ -29,16 +38,16 @@ export type PremiumExhaustedContent = {
   body: string;
 };
 
-export const FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
+const BASE_FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
   STUDY_PACK: {
-    title: "You've reached your monthly study pack limit",
-    body: "Upgrade to Premium to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.",
+    title: "You’ve reached your study pack limit",
+    body: "You’ve used all your Study Packs for this month. Upgrade to Premium to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.",
     feature: "study_pack_limit",
     dismissLabel: "Maybe Later",
   },
   QUIZ: {
-    title: "You've reached your monthly quiz limit",
-    body: "Upgrade to Premium to continue practicing with more quizzes and keep your review going.",
+    title: "You’ve reached your quiz limit",
+    body: "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing with more quizzes and keep your review going.",
     feature: "quiz_limit",
     dismissLabel: "Maybe Later",
   },
@@ -49,14 +58,14 @@ export const FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
     dismissLabel: "Maybe Later",
   },
   QUIZ_GENERATION: {
-    title: "You've reached your monthly quiz generation limit",
-    body: "Upgrade to Premium to generate more quizzes and prepare materials for your class.",
+    title: "You’ve reached your quiz generation limit",
+    body: "You’ve used all your quiz generations for this month. Upgrade to Premium to generate more quizzes and prepare materials for your class.",
     feature: "quiz_generation_limit",
     dismissLabel: "Maybe Later",
   },
   ADAPTIVE_PRACTICE: {
     title: "Adaptive Practice is a Premium feature",
-    body: "Upgrade to Premium to unlock targeted practice based on your weak concepts.",
+    body: "Adaptive Practice focuses on your weak concepts. Upgrade to Premium to unlock targeted practice built around them.",
     feature: "adaptive",
     dismissLabel: "Maybe Later",
   },
@@ -64,23 +73,52 @@ export const FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
 
 export const PREMIUM_EXHAUSTED_CONTENT: Record<PaywallAction, PremiumExhaustedContent> = {
   STUDY_PACK: {
-    title: "You've used all your study pack usage for this month",
-    body: "Your monthly study pack usage will reset on your next billing cycle.",
+    title: "You’ve reached your study pack limit for this month",
+    body: "Your study pack limit resets on your next billing cycle.",
   },
   QUIZ: {
-    title: "You've used all your quiz usage for this month",
-    body: "Your monthly quiz usage will reset on your next billing cycle.",
+    title: "You’ve reached your quiz limit for this month",
+    body: "Your quiz limit resets on your next billing cycle.",
   },
   BOARD_EXAM: {
-    title: "You've used all your quiz usage for this month",
-    body: "Board Exam Mode shares your monthly quiz usage and will be available again after your reset.",
+    title: "You’ve reached your quiz limit for this month",
+    body: "Board Exam Mode shares your quiz limit and will be available again after your next billing cycle.",
   },
   QUIZ_GENERATION: {
-    title: "You've used all your quiz generation usage for this month",
-    body: "Your monthly quiz generation usage will reset on your next billing cycle.",
+    title: "You’ve reached your quiz generation limit for this month",
+    body: "Your quiz generation limit resets on your next billing cycle.",
   },
   ADAPTIVE_PRACTICE: {
-    title: "You've used all your quiz usage for this month",
-    body: "Adaptive Practice will be available again after your monthly reset.",
+    title: "You’ve reached your quiz limit for this month",
+    body: "Adaptive Practice will be available again after your next billing cycle.",
   },
 };
+
+export const FREE_PAYWALL_CONTENT = BASE_FREE_PAYWALL_CONTENT;
+
+export function resolveFreePaywallContent(
+  action: PaywallAction,
+  profileType: PaywallProfileType,
+): FreePaywallContent {
+  if (action === "QUIZ") {
+    if (profileType === "BOARD_EXAM") {
+      return {
+        ...BASE_FREE_PAYWALL_CONTENT.QUIZ,
+        body: "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and access Board Exam mode.",
+      };
+    }
+    return {
+      ...BASE_FREE_PAYWALL_CONTENT.QUIZ,
+      body: "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and unlock Adaptive Practice.",
+    };
+  }
+  if (action === "QUIZ_GENERATION") {
+    return {
+      ...BASE_FREE_PAYWALL_CONTENT.QUIZ_GENERATION,
+      body: profileType === "TEACHER"
+        ? "You’ve used all your quiz generations for this month. Upgrade to Premium to generate more quizzes and export materials for your class."
+        : BASE_FREE_PAYWALL_CONTENT.QUIZ_GENERATION.body,
+    };
+  }
+  return BASE_FREE_PAYWALL_CONTENT[action];
+}

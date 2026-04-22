@@ -121,16 +121,15 @@ describe("Profile page", () => {
 
     render(<ProfilePage />);
 
-    fireEvent.change(await screen.findByDisplayValue("Student"), {
-      target: { value: "TEACHER" },
-    });
+    fireEvent.click(await screen.findByRole("button", { name: /Teacher Create and export quiz materials from your notes\./i }));
     fireEvent.click(screen.getByRole("button", { name: "Save Profile Type" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Switch" }));
 
     await waitFor(() => {
       expect(completeOnboardingProfileType).toHaveBeenCalledWith({ profileType: "TEACHER" });
     });
     expect(updateUserProfile).not.toHaveBeenCalled();
-    expect(await screen.findByText("Profile type updated successfully.")).toBeInTheDocument();
+    expect(await screen.findByText("You're now in Teacher mode — focused on generate, review, and export.")).toBeInTheDocument();
   });
 
   it("shows pending email verification guidance after email change", async () => {

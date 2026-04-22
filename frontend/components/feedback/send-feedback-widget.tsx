@@ -160,6 +160,7 @@ export function SendFeedbackWidget({
         title={title}
         description={description}
         descriptionClassName="whitespace-pre-line"
+        contentClassName="pb-1"
         actions={successMessage ? (
           <div className="flex justify-end">
             <Button type="button" onClick={closeModal}>
@@ -180,7 +181,8 @@ export function SendFeedbackWidget({
             </Button>
           </div>
         )}
-        panelClassName="max-w-[520px]"
+        panelClassName="w-full max-w-[520px] self-end rounded-t-2xl pb-[env(safe-area-inset-bottom)] sm:self-center sm:rounded-xl"
+        enableSwipeToClose
       >
         {successMessage ? (
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-800 dark:text-emerald-200">
@@ -198,7 +200,7 @@ export function SendFeedbackWidget({
               rows={6}
               maxLength={4000}
               placeholder="Describe the bug, issue, or feature you'd like to suggest..."
-              className="w-full rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
+              className="min-h-[180px] w-full rounded-xl border border-border bg-background px-3 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600 sm:min-h-[220px]"
             />
             {error ? (
               <p className="text-sm text-red-700 dark:text-red-300">{error}</p>

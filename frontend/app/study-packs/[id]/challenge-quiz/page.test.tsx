@@ -345,7 +345,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "hard" })).toBeInTheDocument();
     expect(screen.getByText("Premium lets you choose the level before you start.")).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
-    expect(screen.getByText("Consumes 1 Challenge Quiz attempt.")).toBeInTheDocument();
+    expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Choose another mode" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start Quiz" })).toBeInTheDocument();
   });
@@ -361,7 +361,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("Choose difficulty (Premium)")).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
     expect(screen.getByText("Recommended based on your recent performance.")).toBeInTheDocument();
-    expect(screen.getByText("Consumes 1 Challenge Quiz attempt.")).toBeInTheDocument();
+    expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
@@ -441,7 +441,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByText("No navigation during exam")).toBeInTheDocument();
     expect(screen.getByText("Results shown after completion")).toBeInTheDocument();
     expect(screen.getByText("Leaving counts as submission")).toBeInTheDocument();
-    expect(screen.getByText("Consumes 1 Challenge Quiz attempt.")).toBeInTheDocument();
+    expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "easy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "medium" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "hard" })).not.toBeInTheDocument();
@@ -468,7 +468,7 @@ describe("ChallengeQuizPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Monthly limit reached" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "You’ve reached your quiz limit for this month" })).not.toBeInTheDocument();
   });
 
   it("shows the limit page for premium users who exhausted Challenge Quiz credits", async () => {
@@ -476,7 +476,7 @@ describe("ChallengeQuizPage", () => {
 
     render(<ChallengeQuizPage />);
 
-    expect(await screen.findByRole("heading", { name: "Monthly limit reached" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "You’ve reached your quiz limit for this month" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "You’ve reached your quiz limit" })).not.toBeInTheDocument();
   });
 
