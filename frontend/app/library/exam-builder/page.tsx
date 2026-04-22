@@ -40,11 +40,13 @@ import { normalizeCourseProgram } from "@/lib/learning-profile";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { normalizeSubject } from "@/lib/subjects";
 import {
-  autoBalanceExamSections,
   buildDefaultSectionTitle,
   countExamSectionQuestions,
   createExamSection,
+  createExamQuestionRefKey,
   deleteExamSection,
+  evenBalanceExamSections,
+  type ExamBalanceMode,
   type ExamBuilderSection,
   flattenExamSectionQuestionRefs,
   moveEntryToSection,
@@ -52,6 +54,7 @@ import {
   removeEntryFromExamSections,
   renameExamSection,
   reorderExamSections,
+  smartBalanceExamSections,
 } from "../exam-builder-order";
 import {
   buildTemplateSections,
@@ -71,7 +74,8 @@ type ExamBuilderSelection = {
 
 const SUBJECT_FALLBACK = "General";
 const EXAM_EXPORT_READY_MESSAGE = "Exam DOCX ready.";
-const AUTO_BALANCE_READY_MESSAGE = "Sections balanced.";
+const SMART_BALANCE_MODE: ExamBalanceMode = "SMART";
+const EVEN_BALANCE_MODE: ExamBalanceMode = "EVEN";
 
 function canIncludeInExam(item: NoteListItemResponse): boolean {
   return Boolean(item.generatedQuizId);
@@ -424,7 +428,7 @@ export default function ExamBuilderPage() {
   const [activeDragSectionId, setActiveDragSectionId] = useState<string | null>(null);
   const [nextSectionIndex, setNextSectionIndex] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
-  const [showAutoBalanceConfirm, setShowAutoBalanceConfirm] = useState(false);
+  const [pendingBalanceMode, setPendingBalanceMode] = useState<ExamBalanceMode | null>(null);
   const examBuilderSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -448,7 +452,7 @@ export default function ExamBuilderPage() {
     setShowTemplateSelector(true);
     setIncludeAnswerKey(true);
     setIncludeExplanations(true);
-    setShowAutoBalanceConfirm(false);
+    setPendingBalanceMode(null);
   }, [isTeacherExamBuilderEnabled, router, selectedNoteIds]);
 
   useEffect(() => {
@@ -562,7 +566,23 @@ export default function ExamBuilderPage() {
     [exportableExamSections],
   );
 
-  const canAutoBalanceSections = selectedTemplate !== null
+  const questionBalanceMetadataByRefKey = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(generatedQuizByNoteId).flatMap(([noteId, generatedQuiz]) => (
+        generatedQuiz.questions.map((question, questionIndex) => {
+          const difficulty = typeof (question as { difficulty?: unknown }).difficulty === "string"
+            ? (question as { difficulty?: string }).difficulty ?? null
+            : null;
+          return [createExamQuestionRefKey(noteId, questionIndex), {
+            concept: question.concept ?? null,
+            difficulty,
+          }];
+        })
+      )),
+    );
+  }, [generatedQuizByNoteId]);
+
+  const canBalanceSections = selectedTemplate !== null
     && examSections.length > 1
     && countExamSectionQuestions(examSections) > 0;
 
@@ -582,7 +602,7 @@ export default function ExamBuilderPage() {
     setShowTemplateSelector(false);
     setPendingTemplateId(null);
     setPendingDeleteSectionId(null);
-    setShowAutoBalanceConfirm(false);
+    setPendingBalanceMode(null);
     setNextSectionIndex(template.sectionTitles.length);
   }, [questionCountsByNoteId, selectedReadyNoteIds]);
 
@@ -627,14 +647,26 @@ export default function ExamBuilderPage() {
     setPendingDeleteSectionId(null);
   }, [examSections, pendingDeleteSectionId, updateExamSections]);
 
-  const handleAutoBalance = useCallback(() => {
-    if (!canAutoBalanceSections) {
+  const handleApplyBalance = useCallback((mode: ExamBalanceMode) => {
+    if (!canBalanceSections) {
       return;
     }
-    updateExamSections(autoBalanceExamSections(examSections));
-    setShowAutoBalanceConfirm(false);
-    setToast(AUTO_BALANCE_READY_MESSAGE);
-  }, [canAutoBalanceSections, examSections, updateExamSections]);
+    const nextSections = mode === SMART_BALANCE_MODE
+      ? smartBalanceExamSections(examSections, {
+        questionMetadataByRefKey: questionBalanceMetadataByRefKey,
+        sectionIntents: selectedTemplate?.sectionIntents,
+      })
+      : evenBalanceExamSections(examSections, {
+        questionMetadataByRefKey: questionBalanceMetadataByRefKey,
+      });
+    updateExamSections(nextSections);
+    setPendingBalanceMode(null);
+    setToast(
+      mode === SMART_BALANCE_MODE
+        ? `Rebalanced ${countExamSectionQuestions(nextSections)} questions across ${nextSections.length} sections. Balanced by section size and topic coverage.`
+        : `Rebalanced ${countExamSectionQuestions(nextSections)} questions across ${nextSections.length} sections. Balanced by section size only.`,
+    );
+  }, [canBalanceSections, examSections, questionBalanceMetadataByRefKey, selectedTemplate?.sectionIntents, updateExamSections]);
 
   const handleExportExam = useCallback(async () => {
     if (exportableExamSections.length === 0 || exportingExam) {
@@ -863,16 +895,38 @@ export default function ExamBuilderPage() {
                   <h2 className="text-base font-semibold text-foreground sm:text-lg">Selected Notes</h2>
                   <p className="text-sm text-foreground/70">Drag to reorder sections and move notes across sections.</p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2 self-start"
-                  onClick={() => setShowAutoBalanceConfirm(true)}
-                  disabled={!canAutoBalanceSections || exportingExam}
-                >
-                  <Shuffle className="h-4 w-4" aria-hidden="true" />
-                  <span>Auto Balance Sections</span>
-                </Button>
+                <div className="w-full max-w-md rounded-2xl border border-border bg-background p-3 shadow-sm sm:self-start">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground">Balance Sections</h3>
+                    <p className="text-xs text-foreground/65">Reorganize existing questions without changing their content.</p>
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => handleApplyBalance(EVEN_BALANCE_MODE)}
+                      disabled={!canBalanceSections || exportingExam}
+                    >
+                      <Shuffle className="h-4 w-4" aria-hidden="true" />
+                      <span>Even Balance</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => setPendingBalanceMode(SMART_BALANCE_MODE)}
+                      disabled={!canBalanceSections || exportingExam}
+                    >
+                      <Shuffle className="h-4 w-4" aria-hidden="true" />
+                      <span>Smart Balance</span>
+                    </Button>
+                  </div>
+                  <div className="mt-3 space-y-1 text-xs text-foreground/65">
+                    <p><span className="font-medium text-foreground/80">Even Balance:</span> balances question counts only.</p>
+                    <p><span className="font-medium text-foreground/80">Smart Balance:</span> balances counts, topics, and section mix.</p>
+                  </div>
+                </div>
               </div>
 
               <DndContext
@@ -1064,23 +1118,23 @@ export default function ExamBuilderPage() {
       </AppModal>
 
       <AppModal
-        isOpen={showAutoBalanceConfirm}
-        title="Auto balance sections?"
-        description="This will redistribute questions across sections. Continue?"
-        onClose={() => setShowAutoBalanceConfirm(false)}
+        isOpen={pendingBalanceMode === SMART_BALANCE_MODE}
+        title="Apply Smart Balance?"
+        description="Smart Balance will reorganize your current section assignments. Continue?"
+        onClose={() => setPendingBalanceMode(null)}
         actions={(
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => setShowAutoBalanceConfirm(false)} disabled={exportingExam}>
+            <Button type="button" variant="ghost" onClick={() => setPendingBalanceMode(null)} disabled={exportingExam}>
               Cancel
             </Button>
-            <Button type="button" onClick={handleAutoBalance} disabled={exportingExam || !canAutoBalanceSections}>
-              Auto Balance
+            <Button type="button" onClick={() => handleApplyBalance(SMART_BALANCE_MODE)} disabled={exportingExam || !canBalanceSections}>
+              Apply Smart Balance
             </Button>
           </div>
         )}
       >
         <p className="text-sm text-foreground/70">
-          Questions will stay in their current order and be split evenly across your sections.
+          Questions stay deterministic while Smart Balance evens out section size and spreads topic coverage where possible.
         </p>
       </AppModal>
 

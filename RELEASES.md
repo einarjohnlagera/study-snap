@@ -75,7 +75,9 @@
   - `Exam Builder` now adds teacher-defined sections with inline titles, drag-reorderable section groups, and note movement across sections before export
   - combined exam export supports note reordering plus optional `Answer Key` and `Explanations` sections in the generated document
   - combined exam DOCX export now preserves section order and section headings from the teacher builder instead of flattening notes into one unnamed list
-  - `Exam Builder` now supports `Auto Balance Sections`, which redistributes the pooled exported questions evenly across the current section layout without shuffling question order
+  - `Exam Builder` now supports both `Even Balance` and `Smart Balance` for section redistribution:
+    - `Even Balance` keeps the original deterministic equal-slice behavior
+    - `Smart Balance` keeps counts even while spreading note coverage, concept coverage, and soft template intent where metadata exists
   - combined exam export now uses question-level section assignments, so balanced sections export exactly the same grouped question order shown in the builder
   - finalized v0.10.0 limit-state wording so paywalls, premium exhausted states, and teacher quiz generation use consistent `limit` terminology instead of mixed `usage` copy
   - fixed teacher quiz preview regeneration to use the dedicated quiz-generation paywall context instead of the student quiz-limit context

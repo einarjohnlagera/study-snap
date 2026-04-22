@@ -1,4 +1,4 @@
-import type { ExamBuilderSection } from "../exam-builder-order";
+import type { ExamBalanceSectionIntent, ExamBuilderSection } from "../exam-builder-order";
 import { buildWholeNoteEntries, createExamSectionId } from "../exam-builder-order";
 
 export type ExamTemplateId =
@@ -14,6 +14,7 @@ export type ExamTemplateDefinition = {
   title: string;
   description: string;
   sectionTitles: string[];
+  sectionIntents: ExamBalanceSectionIntent[];
 };
 
 export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
@@ -22,6 +23,7 @@ export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
     title: "Start from Scratch",
     description: "Begin with one flexible section and build the rest your way.",
     sectionTitles: ["Section A"],
+    sectionIntents: ["FLEXIBLE"],
   },
   {
     id: "PRELIM",
@@ -32,6 +34,7 @@ export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
       "Section B - Problem Solving",
       "Section C - Application",
     ],
+    sectionIntents: ["FOUNDATIONAL", "PROBLEM_SOLVING", "APPLICATION"],
   },
   {
     id: "MIDTERM",
@@ -42,6 +45,7 @@ export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
       "Section B - Intermediate Problems",
       "Section C - Mixed Application",
     ],
+    sectionIntents: ["REVIEW", "PROBLEM_SOLVING", "APPLICATION"],
   },
   {
     id: "FINAL",
@@ -52,6 +56,7 @@ export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
       "Section B - Advanced Problems",
       "Section C - Case-Based Questions",
     ],
+    sectionIntents: ["REVIEW", "ADVANCED", "CASE_BASED"],
   },
   {
     id: "QUARTERLY",
@@ -63,6 +68,7 @@ export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
       "Section C - Application",
       "Section D - Critical Thinking",
     ],
+    sectionIntents: ["FOUNDATIONAL", "UNDERSTANDING", "APPLICATION", "CRITICAL_THINKING"],
   },
   {
     id: "TRITERM",
@@ -73,6 +79,7 @@ export const EXAM_TEMPLATES: ExamTemplateDefinition[] = [
       "Section B - Application",
       "Section C - Integration",
     ],
+    sectionIntents: ["FOUNDATIONAL", "APPLICATION", "INTEGRATION"],
   },
 ];
 

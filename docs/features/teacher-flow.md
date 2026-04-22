@@ -81,7 +81,7 @@ Do not mix these models.
   - choose multiple quiz-ready notes
   - organize notes into editable sections inside `Exam Builder`
   - reorder sections and move notes across sections using the drag handles
-  - auto-balance the pooled questions across the current sections with a deterministic even split and no shuffling
+  - rebalance the pooled questions with either `Even Balance` (counts only) or `Smart Balance` (counts, topic spread, note mix, and soft template guidance) without generating new questions
   - keep note-level `Move up` / `Move down` controls as the accessibility fallback
   - export one combined DOCX with optional `Answer Key` and `Explanations`
   - combined DOCX export preserves the section titles, section order, and question-level balanced grouping chosen in the builder

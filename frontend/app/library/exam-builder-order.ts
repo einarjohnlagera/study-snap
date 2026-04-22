@@ -5,6 +5,25 @@ export type ExamQuestionRef = {
   questionIndex: number;
 };
 
+export type ExamBalanceMode = "EVEN" | "SMART";
+
+export type ExamBalanceSectionIntent =
+  | "FLEXIBLE"
+  | "FOUNDATIONAL"
+  | "REVIEW"
+  | "UNDERSTANDING"
+  | "PROBLEM_SOLVING"
+  | "APPLICATION"
+  | "INTEGRATION"
+  | "ADVANCED"
+  | "CASE_BASED"
+  | "CRITICAL_THINKING";
+
+export type ExamQuestionBalanceMetadata = {
+  concept?: string | null;
+  difficulty?: string | null;
+};
+
 export type ExamBuilderEntry = {
   id: string;
   noteId: string;
@@ -18,12 +37,50 @@ export type ExamBuilderSection = {
 };
 
 const SECTION_PREFIX = "Section ";
+const EVEN_BALANCE_MODE: ExamBalanceMode = "EVEN";
+const FLEXIBLE_SECTION_INTENT: ExamBalanceSectionIntent = "FLEXIBLE";
+const COUNT_BALANCE_WEIGHT = 100;
+const SAME_CONCEPT_PENALTY = 12;
+const SAME_NOTE_PENALTY = 10;
+const SAME_DIFFICULTY_PENALTY = 6;
+const TEMPLATE_HINT_WEIGHT = 18;
+const STABLE_TIEBREAKER_WEIGHT = 0.001;
+const SECTION_INTENT_TARGET_PERCENTILES: Record<ExamBalanceSectionIntent, number | null> = {
+  FLEXIBLE: null,
+  FOUNDATIONAL: 0.15,
+  REVIEW: 0.3,
+  UNDERSTANDING: 0.4,
+  PROBLEM_SOLVING: 0.55,
+  APPLICATION: 0.7,
+  INTEGRATION: 0.8,
+  ADVANCED: 0.86,
+  CASE_BASED: 0.9,
+  CRITICAL_THINKING: 0.94,
+};
+
+type PreparedExamQuestion = ExamQuestionRef & {
+  originalIndex: number;
+  concept: string | null;
+  difficulty: string | null;
+};
+
+type ExamBalanceSectionState = {
+  assignedQuestions: PreparedExamQuestion[];
+  noteCounts: Record<string, number>;
+  conceptCounts: Record<string, number>;
+  difficultyCounts: Record<string, number>;
+};
+
+export type ExamSectionBalanceOptions = {
+  questionMetadataByRefKey?: Record<string, ExamQuestionBalanceMetadata | undefined>;
+  sectionIntents?: Array<ExamBalanceSectionIntent | null | undefined>;
+};
 
 function buildSectionLetters(index: number): string {
   let nextIndex = index;
   let letters = "";
   do {
-    letters = String.fromCharCode(65 + (nextIndex % 26)) + letters;
+    letters = String.fromCodePoint(65 + (nextIndex % 26)) + letters;
     nextIndex = Math.floor(nextIndex / 26) - 1;
   } while (nextIndex >= 0);
   return letters;
@@ -52,6 +109,10 @@ export function createQuestionRefs(noteId: string, questionCount: number): ExamQ
     noteId,
     questionIndex,
   }));
+}
+
+export function createExamQuestionRefKey(noteId: string, questionIndex: number): string {
+  return `${noteId}:${questionIndex}`;
 }
 
 export function createExamEntry(noteId: string, questionRefs: ExamQuestionRef[]): ExamBuilderEntry {
@@ -238,7 +299,7 @@ export function deleteExamSection(
       if (strategy === "move_notes" && targetSectionIndex === index) {
         return [{
           ...section,
-          entries: [...section.entries, ...sections[sectionIndex]!.entries],
+          entries: [...section.entries, ...sections[sectionIndex].entries],
         }];
       }
       return [section];
@@ -253,7 +314,7 @@ function createEntriesFromQuestionRefs(questionRefs: ExamQuestionRef[]): ExamBui
   }
 
   const entries: ExamBuilderEntry[] = [];
-  let currentNoteId = questionRefs[0]!.noteId;
+  let currentNoteId = questionRefs[0].noteId;
   let currentRefs: ExamQuestionRef[] = [];
 
   for (const questionRef of questionRefs) {
@@ -272,28 +333,219 @@ function createEntriesFromQuestionRefs(questionRefs: ExamQuestionRef[]): ExamBui
   return entries;
 }
 
-export function autoBalanceExamSections(sections: ExamBuilderSection[]): ExamBuilderSection[] {
-  if (sections.length <= 1) {
-    return sections;
+function normalizeBalanceMetadataValue(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
   }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
-  const pooledQuestionRefs = flattenExamSectionQuestionRefs(sections);
-  if (pooledQuestionRefs.length === 0) {
+function buildSectionQuestionTargets(totalQuestionCount: number, sectionCount: number): number[] {
+  const baseCount = Math.floor(totalQuestionCount / sectionCount);
+  const remainder = totalQuestionCount % sectionCount;
+  return Array.from({ length: sectionCount }, (_, sectionIndex) => baseCount + (sectionIndex < remainder ? 1 : 0));
+}
+
+function prepareExamQuestionPool(
+  sections: ExamBuilderSection[],
+  questionMetadataByRefKey: Record<string, ExamQuestionBalanceMetadata | undefined>,
+): PreparedExamQuestion[] {
+  return flattenExamSectionQuestionRefs(sections).map((questionRef, originalIndex) => {
+    const metadata = questionMetadataByRefKey[createExamQuestionRefKey(questionRef.noteId, questionRef.questionIndex)];
+    return {
+      ...questionRef,
+      originalIndex,
+      concept: normalizeBalanceMetadataValue(metadata?.concept),
+      difficulty: normalizeBalanceMetadataValue(metadata?.difficulty),
+    };
+  });
+}
+
+function createEmptySectionBalanceState(): ExamBalanceSectionState {
+  return {
+    assignedQuestions: [],
+    noteCounts: {},
+    conceptCounts: {},
+    difficultyCounts: {},
+  };
+}
+
+function incrementCount(counts: Record<string, number>, key: string | null) {
+  if (!key) {
+    return;
+  }
+  counts[key] = (counts[key] ?? 0) + 1;
+}
+
+function countForKey(counts: Record<string, number>, key: string | null): number {
+  if (!key) {
+    return 0;
+  }
+  return counts[key] ?? 0;
+}
+
+function appendQuestionToSectionState(
+  sectionState: ExamBalanceSectionState,
+  question: PreparedExamQuestion,
+): ExamBalanceSectionState {
+  const nextState: ExamBalanceSectionState = {
+    assignedQuestions: [...sectionState.assignedQuestions, question],
+    noteCounts: { ...sectionState.noteCounts },
+    conceptCounts: { ...sectionState.conceptCounts },
+    difficultyCounts: { ...sectionState.difficultyCounts },
+  };
+  incrementCount(nextState.noteCounts, question.noteId);
+  incrementCount(nextState.conceptCounts, question.concept);
+  incrementCount(nextState.difficultyCounts, question.difficulty);
+  return nextState;
+}
+
+function getSectionIntentTargetPercentile(
+  sectionIntent: ExamBalanceSectionIntent | null | undefined,
+): number | null {
+  if (!sectionIntent) {
+    return null;
+  }
+  return SECTION_INTENT_TARGET_PERCENTILES[sectionIntent] ?? null;
+}
+
+function resolveTemplateHintPenalty(
+  question: PreparedExamQuestion,
+  totalQuestionCount: number,
+  sectionIntent: ExamBalanceSectionIntent | null | undefined,
+): number {
+  const targetPercentile = getSectionIntentTargetPercentile(sectionIntent);
+  if (targetPercentile === null || totalQuestionCount <= 1) {
+    return 0;
+  }
+  const questionPercentile = question.originalIndex / (totalQuestionCount - 1);
+  return Math.abs(questionPercentile - targetPercentile) * TEMPLATE_HINT_WEIGHT;
+}
+
+function scoreSectionForSmartBalance(
+  question: PreparedExamQuestion,
+  sectionState: ExamBalanceSectionState,
+  targetCount: number,
+  sectionIndex: number,
+  totalQuestionCount: number,
+  sectionIntent: ExamBalanceSectionIntent | null | undefined,
+): number {
+  const fillRatio = sectionState.assignedQuestions.length / Math.max(targetCount, 1);
+  const conceptPenalty = countForKey(sectionState.conceptCounts, question.concept) * SAME_CONCEPT_PENALTY;
+  const notePenalty = countForKey(sectionState.noteCounts, question.noteId) * SAME_NOTE_PENALTY;
+  const difficultyPenalty = countForKey(sectionState.difficultyCounts, question.difficulty) * SAME_DIFFICULTY_PENALTY;
+  const templatePenalty = resolveTemplateHintPenalty(question, totalQuestionCount, sectionIntent);
+
+  return (fillRatio * COUNT_BALANCE_WEIGHT)
+    + conceptPenalty
+    + notePenalty
+    + difficultyPenalty
+    + templatePenalty
+    + (sectionIndex * STABLE_TIEBREAKER_WEIGHT);
+}
+
+function buildBalancedSections(
+  sections: ExamBuilderSection[],
+  questionPool: PreparedExamQuestion[],
+  scoreSection: (
+    question: PreparedExamQuestion,
+    sectionState: ExamBalanceSectionState,
+    targetCount: number,
+    sectionIndex: number,
+  ) => number,
+): ExamBuilderSection[] {
+  if (sections.length <= 1 || questionPool.length === 0) {
     return sections;
   }
 
   const sectionCount = sections.length;
-  const baseCount = Math.floor(pooledQuestionRefs.length / sectionCount);
-  const remainder = pooledQuestionRefs.length % sectionCount;
-  let nextIndex = 0;
+  const targetCounts = buildSectionQuestionTargets(questionPool.length, sectionCount);
+  const sectionStates = sections.map(() => createEmptySectionBalanceState());
+
+  for (const question of questionPool) {
+    let bestSectionIndex = -1;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    for (let sectionIndex = 0; sectionIndex < sectionCount; sectionIndex += 1) {
+      const targetCount = targetCounts[sectionIndex] ?? 0;
+      const sectionState = sectionStates[sectionIndex];
+      if (!sectionState || targetCount <= sectionState.assignedQuestions.length) {
+        continue;
+      }
+      const score = scoreSection(question, sectionState, targetCount, sectionIndex);
+      if (score < bestScore) {
+        bestScore = score;
+        bestSectionIndex = sectionIndex;
+      }
+    }
+
+    if (bestSectionIndex >= 0) {
+      sectionStates[bestSectionIndex] = appendQuestionToSectionState(sectionStates[bestSectionIndex], question);
+    }
+  }
 
   return sections.map((section, sectionIndex) => {
-    const sectionQuestionCount = baseCount + (sectionIndex < remainder ? 1 : 0);
-    const questionSlice = pooledQuestionRefs.slice(nextIndex, nextIndex + sectionQuestionCount);
-    nextIndex += sectionQuestionCount;
     return {
       ...section,
-      entries: createEntriesFromQuestionRefs(questionSlice),
+      entries: createEntriesFromQuestionRefs(
+        (sectionStates[sectionIndex]?.assignedQuestions ?? []).map(({ noteId, questionIndex }) => ({
+          noteId,
+          questionIndex,
+        })),
+      ),
     };
   });
+}
+
+export function evenBalanceExamSections(
+  sections: ExamBuilderSection[],
+  options: ExamSectionBalanceOptions = {},
+): ExamBuilderSection[] {
+  const questionPool = prepareExamQuestionPool(sections, options.questionMetadataByRefKey ?? {});
+  if (sections.length <= 1 || questionPool.length === 0) {
+    return sections;
+  }
+
+  const targetCounts = buildSectionQuestionTargets(questionPool.length, sections.length);
+  let nextQuestionIndex = 0;
+
+  return sections.map((section, sectionIndex) => {
+    const sectionQuestionCount = targetCounts[sectionIndex] ?? 0;
+    const questionSlice = questionPool.slice(nextQuestionIndex, nextQuestionIndex + sectionQuestionCount);
+    nextQuestionIndex += sectionQuestionCount;
+    return {
+      ...section,
+      entries: createEntriesFromQuestionRefs(
+        questionSlice.map(({ noteId, questionIndex }) => ({ noteId, questionIndex })),
+      ),
+    };
+  });
+}
+
+export function smartBalanceExamSections(
+  sections: ExamBuilderSection[],
+  options: ExamSectionBalanceOptions = {},
+): ExamBuilderSection[] {
+  const questionPool = prepareExamQuestionPool(sections, options.questionMetadataByRefKey ?? {});
+  const sectionIntents = options.sectionIntents ?? [];
+  return buildBalancedSections(
+    sections,
+    questionPool,
+    (question, sectionState, targetCount, sectionIndex) => scoreSectionForSmartBalance(
+      question,
+      sectionState,
+      targetCount,
+      sectionIndex,
+      questionPool.length,
+      sectionIntents[sectionIndex] ?? FLEXIBLE_SECTION_INTENT,
+    ),
+  );
+}
+
+export function autoBalanceExamSections(
+  sections: ExamBuilderSection[],
+  options: ExamSectionBalanceOptions = {},
+): ExamBuilderSection[] {
+  return evenBalanceExamSections(sections, options);
 }
