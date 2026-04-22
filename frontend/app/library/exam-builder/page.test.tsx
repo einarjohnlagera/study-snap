@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ExamBuilderPage from "./page";
 import {
   exportCombinedGeneratedQuizDocx,
+  getGeneratedQuiz,
   listNotes,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
@@ -26,6 +27,7 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/api", () => ({
   exportCombinedGeneratedQuizDocx: jest.fn(),
+  getGeneratedQuiz: jest.fn(),
   listNotes: jest.fn(),
 }));
 
@@ -44,6 +46,18 @@ describe("Exam Builder page", () => {
     });
     (exportCombinedGeneratedQuizDocx as jest.Mock).mockReset();
     (exportCombinedGeneratedQuizDocx as jest.Mock).mockResolvedValue({ filename: "combined-exam-with-answers.docx" });
+    (getGeneratedQuiz as jest.Mock).mockReset();
+    (getGeneratedQuiz as jest.Mock).mockImplementation(async (noteId: string) => ({
+      id: `generated-${noteId}`,
+      noteId,
+      questions: Array.from({ length: 10 }, (_, questionIndex) => ({
+        question: `${noteId} question ${questionIndex + 1}`,
+        choices: ["A", "B", "C", "D"],
+        correctIndex: questionIndex % 4,
+        explanation: `${noteId} explanation ${questionIndex + 1}`,
+      })),
+      generatedAt: "2026-03-24T10:00:00Z",
+    }));
     (listNotes as jest.Mock).mockResolvedValue([
       {
         id: "note-42",
@@ -77,7 +91,7 @@ describe("Exam Builder page", () => {
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 3,
         generatedQuizId: "generated-99",
-        generatedQuizQuestionCount: 10,
+        generatedQuizQuestionCount: 5,
         createdAt: "2026-03-21T10:00:00Z",
         updatedAt: "2026-03-22T10:00:00Z",
       },
@@ -95,7 +109,7 @@ describe("Exam Builder page", () => {
         studyPackStatus: "STUDY_PACK_READY",
         quizCount: 4,
         generatedQuizId: "generated-77",
-        generatedQuizQuestionCount: 10,
+        generatedQuizQuestionCount: 2,
         createdAt: "2026-03-18T10:00:00Z",
         updatedAt: "2026-03-23T10:00:00Z",
       },
@@ -106,7 +120,7 @@ describe("Exam Builder page", () => {
     render(<ExamBuilderPage />);
 
     expect(await screen.findByRole("heading", { name: "Exam Builder" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Choose a template" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Choose a template" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Start from Scratch Begin with one flexible section and build the rest your way." }));
 
@@ -122,7 +136,10 @@ describe("Exam Builder page", () => {
         sections: [
           {
             title: "Section A",
-            noteIds: ["note-77"],
+            questionRefs: Array.from({ length: 10 }, (_, questionIndex) => ({
+              noteId: "note-77",
+              questionIndex,
+            })),
           },
         ],
         includeAnswerKey: true,
@@ -170,5 +187,61 @@ describe("Exam Builder page", () => {
     expect(await screen.findByDisplayValue("Section A - Comprehensive Review")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Section B - Advanced Problems")).toBeInTheDocument();
     expect(screen.getByDisplayValue("Section C - Case-Based Questions")).toBeInTheDocument();
+  });
+
+  it("auto balances pooled questions evenly across sections", async () => {
+    render(<ExamBuilderPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Prelim Exam Basic Concepts -> Problem Solving -> Application" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Auto Balance Sections" }));
+
+    expect(await screen.findByRole("heading", { name: "Auto balance sections?" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Auto Balance" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export Exam" }));
+
+    await waitFor(() => {
+      expect(exportCombinedGeneratedQuizDocx).toHaveBeenCalledWith({
+        sections: [
+          {
+            title: "Section A - Basic Concepts",
+            questionRefs: [
+              { noteId: "note-99", questionIndex: 0 },
+              { noteId: "note-99", questionIndex: 1 },
+              { noteId: "note-99", questionIndex: 2 },
+              { noteId: "note-99", questionIndex: 3 },
+              { noteId: "note-99", questionIndex: 4 },
+              { noteId: "note-99", questionIndex: 5 },
+              { noteId: "note-99", questionIndex: 6 },
+            ],
+          },
+          {
+            title: "Section B - Problem Solving",
+            questionRefs: [
+              { noteId: "note-99", questionIndex: 7 },
+              { noteId: "note-99", questionIndex: 8 },
+              { noteId: "note-99", questionIndex: 9 },
+              { noteId: "note-77", questionIndex: 0 },
+              { noteId: "note-77", questionIndex: 1 },
+              { noteId: "note-77", questionIndex: 2 },
+              { noteId: "note-77", questionIndex: 3 },
+            ],
+          },
+          {
+            title: "Section C - Application",
+            questionRefs: [
+              { noteId: "note-77", questionIndex: 4 },
+              { noteId: "note-77", questionIndex: 5 },
+              { noteId: "note-77", questionIndex: 6 },
+              { noteId: "note-77", questionIndex: 7 },
+              { noteId: "note-77", questionIndex: 8 },
+              { noteId: "note-77", questionIndex: 9 },
+            ],
+          },
+        ],
+        includeAnswerKey: true,
+        includeExplanations: true,
+      });
+    });
   });
 });

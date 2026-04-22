@@ -222,8 +222,14 @@ class GeneratedQuizServiceTest {
 
         QuizDocxExportService.QuizDocxFile exported = generatedQuizService.exportCombinedDocx(
                 List.of(
-                        new MultiNoteQuizDocxExportRequest.Section("Section A", List.of(firstNoteId.toString())),
-                        new MultiNoteQuizDocxExportRequest.Section("Section B", List.of(secondNoteId.toString()))
+                        new MultiNoteQuizDocxExportRequest.Section(
+                                "Section A",
+                                List.of(new MultiNoteQuizDocxExportRequest.QuestionRef(firstNoteId.toString(), 0))
+                        ),
+                        new MultiNoteQuizDocxExportRequest.Section(
+                                "Section B",
+                                List.of(new MultiNoteQuizDocxExportRequest.QuestionRef(secondNoteId.toString(), 0))
+                        )
                 ),
                 userId,
                 true,
@@ -240,10 +246,10 @@ class GeneratedQuizServiceTest {
         );
         assertThat(captor.getValue()).extracting(QuizDocxExportService.ExportableSection::title)
                 .containsExactly("Section A", "Section B");
-        assertThat(captor.getValue().get(0).quizzes()).extracting(QuizDocxExportService.ExportableQuiz::title)
-                .containsExactly("First Note");
-        assertThat(captor.getValue().get(1).quizzes()).extracting(QuizDocxExportService.ExportableQuiz::title)
-                .containsExactly("Second Note");
+        assertThat(captor.getValue().get(0).questions()).extracting(QuizItem::question)
+                .containsExactly("Question?");
+        assertThat(captor.getValue().get(1).questions()).extracting(QuizItem::question)
+                .containsExactly("Question?");
     }
 
     @Test
@@ -258,7 +264,10 @@ class GeneratedQuizServiceTest {
         when(generatedQuizRepository.findByOwnerUserIdAndNoteIdIn(userId, List.of(noteId))).thenReturn(List.of());
 
         assertThatThrownBy(() -> generatedQuizService.exportCombinedDocx(
-                List.of(new MultiNoteQuizDocxExportRequest.Section("Section A", List.of(noteId.toString()))),
+                List.of(new MultiNoteQuizDocxExportRequest.Section(
+                        "Section A",
+                        List.of(new MultiNoteQuizDocxExportRequest.QuestionRef(noteId.toString(), 0))
+                )),
                 userId,
                 true,
                 false

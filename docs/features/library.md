@@ -45,9 +45,10 @@ Interaction:
     - organize notes into editable sections such as `Section A`, `Section B`, and `Section C`
     - reorder sections with a drag handle
     - drag notes within a section or move notes across sections
+    - auto-balance pooled quiz questions across the current section layout without shuffling question order
     - keep `Move up` / `Move down` note controls as the accessibility fallback
     - remove notes or delete sections before export
-    - export one combined DOCX exam that preserves section order and grouping
+    - export one combined DOCX exam that preserves section order and exact question grouping
 
 Shared list controls:
 

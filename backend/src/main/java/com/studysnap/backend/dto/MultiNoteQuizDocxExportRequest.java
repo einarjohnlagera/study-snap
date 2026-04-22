@@ -9,7 +9,13 @@ public record MultiNoteQuizDocxExportRequest(
 ) {
     public record Section(
             String title,
-            List<String> noteIds
+            List<QuestionRef> questionRefs
+    ) {
+    }
+
+    public record QuestionRef(
+            String noteId,
+            Integer questionIndex
     ) {
     }
 }

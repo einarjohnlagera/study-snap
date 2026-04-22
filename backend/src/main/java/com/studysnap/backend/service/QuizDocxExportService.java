@@ -101,10 +101,8 @@ public class QuizDocxExportService {
             for (int sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
                 ExportableSection section = sections.get(sectionIndex);
                 addNoteSectionHeading(document, sectionIndex, section.title());
-                for (ExportableQuiz quiz : section.quizzes()) {
-                    nextQuestionNumber = addQuestions(document, quiz.questions(), nextQuestionNumber);
-                    orderedQuestions.addAll(quiz.questions());
-                }
+                nextQuestionNumber = addQuestions(document, section.questions(), nextQuestionNumber);
+                orderedQuestions.addAll(section.questions());
             }
 
             if (options.includeAnswerKey()) {
@@ -326,8 +324,8 @@ public class QuizDocxExportService {
     private String resolveCombinedSubject(List<ExportableSection> sections) {
         Set<String> subjects = new LinkedHashSet<>();
         for (ExportableSection section : sections) {
-            for (ExportableQuiz quiz : section.quizzes()) {
-                String normalizedSubject = normalizeOptionalText(quiz.subject());
+            for (String subject : section.subjects()) {
+                String normalizedSubject = normalizeOptionalText(subject);
                 if (normalizedSubject != null) {
                     subjects.add(normalizedSubject);
                 }
@@ -366,10 +364,12 @@ public class QuizDocxExportService {
 
     public record ExportableSection(
             String title,
-            List<ExportableQuiz> quizzes
+            List<String> subjects,
+            List<QuizItem> questions
     ) {
         public ExportableSection {
-            quizzes = quizzes == null ? List.of() : List.copyOf(quizzes);
+            subjects = subjects == null ? List.of() : List.copyOf(subjects);
+            questions = questions == null ? List.of() : List.copyOf(questions);
         }
     }
 
