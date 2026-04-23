@@ -126,17 +126,17 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             Pricing
           </p>
           <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Premium for deeper exam prep.</h2>
-          <p className="max-w-3xl text-sm text-foreground/75">
-            Compare the core NoteLib workflow with the higher limits and premium practice tools designed for heavier review weeks.
+          <p className="max-w-3xl text-sm leading-relaxed text-foreground/75">
+            Compare the core NoteLib workflow with the higher limits and deeper practice tools designed for heavier review weeks.
           </p>
         </div>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="space-y-5 p-4 sm:p-6">
+        <Card className="space-y-5 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
             <CardTitle>For everyday study</CardTitle>
-            <CardDescription>
+            <CardDescription className="leading-relaxed">
               Build notes, generate Study Packs, and review with quizzes without paying upfront.
             </CardDescription>
           </div>
@@ -165,14 +165,14 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           </Link>
         </Card>
 
-        <Card className="space-y-5 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
+        <Card className="space-y-5 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
           <div className="space-y-2">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
               <Crown className="h-3.5 w-3.5" />
               Premium
             </div>
             <CardTitle>For focused exam preparation</CardTitle>
-            <CardDescription>
+            <CardDescription className="leading-relaxed">
               Premium adds higher limits and targeted quiz tools for the weeks when review gets serious.
             </CardDescription>
           </div>
@@ -250,17 +250,17 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
       <Card className="space-y-4 p-4 sm:p-6">
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Regional Pricing</p>
-          <h3 className="text-lg font-semibold">Pricing by region</h3>
-          <p className="text-sm text-foreground/70">Both regions are shown below. Prices may vary depending on your region.</p>
+          <h3 className="text-lg font-semibold">Pricing shown clearly</h3>
+          <p className="text-sm leading-relaxed text-foreground/70">Prices are shown for Philippines (PHP) and international (USD).</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1 rounded-2xl border border-border bg-muted/20 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Philippines</p>
+          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
+            <p className="text-sm font-semibold text-foreground">🇵🇭 Philippines pricing (PHP)</p>
             <p className="text-2xl font-semibold text-foreground">₱{pricingConfig.price.PH.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
             <p className="text-sm text-foreground/70">₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</p>
           </div>
-          <div className="space-y-1 rounded-2xl border border-border bg-muted/20 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">International</p>
+          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
+            <p className="text-sm font-semibold text-foreground">🌍 International pricing</p>
             <p className="text-2xl font-semibold text-foreground">${pricingConfig.price.DEFAULT.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
             <p className="text-sm text-foreground/70">${pricingConfig.price.DEFAULT.yearly}/year</p>
           </div>
@@ -276,7 +276,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           {[
             { q: "Is NoteLib free?", a: "Yes. You can use core features for free — including Study Packs, summaries, key concepts, and quizzes up to the monthly limits." },
             { q: "When should I upgrade?", a: "When you need more quizzes, Adaptive Practice, or deeper exam-style practice with higher monthly limits." },
-            { q: "Do prices vary by country?", a: "Yes. Local pricing may differ. Philippines pricing is shown above alongside international pricing." },
+            { q: "Do prices vary by country?", a: "Prices are shown for Philippines (PHP) and international (USD)." },
             { q: "Is Board Exam Mode included?", a: "Yes, it is part of Premium." },
           ].map(({ q, a }) => (
             <div key={q} className="space-y-1">
@@ -294,7 +294,7 @@ export function SimplePricingSection() {
   return (
     <section className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="space-y-4 p-4 sm:p-6">
+        <Card className="space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
             <CardTitle>For everyday study</CardTitle>
@@ -311,7 +311,7 @@ export function SimplePricingSection() {
           </Link>
         </Card>
 
-        <Card className="space-y-4 border-blue-300 p-4 sm:p-6 dark:border-blue-700">
+        <Card className="space-y-4 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
           <div className="space-y-2">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
               <Crown className="h-3.5 w-3.5" />
@@ -322,7 +322,7 @@ export function SimplePricingSection() {
           <div className="space-y-1">
             <p className="text-xl font-semibold">₱{pricingConfig.price.PH.monthly}/month <span className="text-sm font-normal text-foreground/60">· ₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</span></p>
             <p className="text-sm text-foreground/60">${pricingConfig.price.DEFAULT.monthly}/month · ${pricingConfig.price.DEFAULT.yearly}/year</p>
-            <p className="text-xs text-foreground/50">Prices may vary depending on your region.</p>
+            <p className="text-xs text-foreground/50">Prices are shown for Philippines (PHP) and international (USD).</p>
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.studyPacksPerMonth} Study Packs / month</li>
@@ -336,6 +336,25 @@ export function SimplePricingSection() {
           </Link>
         </Card>
       </div>
+      <Card className="space-y-4 p-4 sm:p-6">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Regional Pricing</p>
+          <h3 className="text-lg font-semibold">Pricing shown clearly</h3>
+          <p className="text-sm leading-relaxed text-foreground/70">Prices are shown for Philippines (PHP) and international (USD).</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
+            <p className="text-sm font-semibold text-foreground">🇵🇭 Philippines pricing (PHP)</p>
+            <p className="text-2xl font-semibold text-foreground">₱{pricingConfig.price.PH.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
+            <p className="text-sm text-foreground/70">₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</p>
+          </div>
+          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
+            <p className="text-sm font-semibold text-foreground">🌍 International pricing</p>
+            <p className="text-2xl font-semibold text-foreground">${pricingConfig.price.DEFAULT.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
+            <p className="text-sm text-foreground/70">${pricingConfig.price.DEFAULT.yearly}/year</p>
+          </div>
+        </div>
+      </Card>
     </section>
   );
 }

@@ -8,13 +8,13 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Pricing — Free and Premium Plans",
-  description: "Simple plans for everyday study and serious review. Start free. Upgrade for more quizzes, Adaptive Practice, and Board Exam Mode.",
+  description: "Simple plans for everyday study and serious review. Start free, and upgrade when your review gets serious.",
   path: "/pricing",
 });
 
 export default function PricingPage() {
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-6xl space-y-8 px-4 py-8 pb-28 sm:px-6 sm:py-12 sm:pb-12">
       <section className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-amber-500/10 p-6 shadow-sm sm:p-10">
         <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
         <div className="relative space-y-5">
@@ -28,8 +28,11 @@ export default function PricingPage() {
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
             Start free for core features. Upgrade when you need more quizzes, deeper practice, and higher limits.
           </p>
+          <p className="max-w-2xl text-sm leading-relaxed text-foreground/70 sm:text-base">
+            Most users stay on Free while studying casually. Upgrade when your review gets serious.
+          </p>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Link href="/auth" className="w-full sm:w-auto">
+            <Link href="/signup" className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
                 Start for Free
               </Button>
@@ -53,9 +56,19 @@ export default function PricingPage() {
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
             Free covers the full note-to-study-pack workflow. Premium adds higher limits and deeper practice tools.
           </p>
+          <p className="max-w-3xl text-sm leading-relaxed text-foreground/70 sm:text-base">
+            Most users stay on Free while studying casually. Upgrade when your review gets serious.
+          </p>
         </div>
         <PricingPlansSection showHeading={false} />
       </section>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
+        <Link href="/signup" className="block">
+          <Button type="button" className="w-full">
+            Start for Free
+          </Button>
+        </Link>
+      </div>
     </main>
   );
 }

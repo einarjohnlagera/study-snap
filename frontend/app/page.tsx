@@ -126,12 +126,12 @@ const landingScreenshots = {
 
 const valueSummaryCards = [
   {
-    title: "From notes to structured study packs",
-    description: "Turn saved notes into summaries, key concepts, and quiz material without rebuilding your workflow from scratch.",
+    title: "Turn one note into a full study session",
+    description: "Turn a saved note into a summary, key concepts, and quiz material without rebuilding your workflow.",
     icon: Sparkles,
   },
   {
-    title: "Practice like a real exam",
+    title: "Practice like the real exam",
     description: "Use Quiz and Board Exam Mode for timed, focused self-testing that feels closer to real review conditions.",
     icon: Trophy,
   },
@@ -158,49 +158,37 @@ function HeroSection() {
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Turn your notes into real study tools.
+              Turn your notes into real study tools
             </h1>
+            <p className="text-base font-medium text-foreground/85 sm:text-lg">
+              Stop rereading. Start remembering.
+            </p>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
               Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it&apos;s time to review.
             </p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <TrackedLink
-              href="/signup"
-              className={buttonVariants({ className: "w-full sm:w-auto" })}
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
-            >
-              Start for Free
-            </TrackedLink>
-            <TrackedLink
-              href="/public/library"
-              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_secondary", destination: "/public/library" }}
-            >
-              Browse Public Library
-            </TrackedLink>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-foreground/70">
-            <TrackedLink
-              href="/demo"
-              className="inline-flex items-center gap-2 font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_demo", destination: "/demo" }}
-            >
-              Try demo access
-              <ArrowRight className="h-4 w-4" />
-            </TrackedLink>
-            <TrackedLink
-              href="/public/library"
-              className="inline-flex items-center gap-2 font-medium text-foreground/75 transition hover:text-foreground dark:text-foreground/75 dark:hover:text-foreground"
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_public_library", destination: "/public/library" }}
-            >
-              Browse Public Library
-              <ArrowRight className="h-4 w-4" />
-            </TrackedLink>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <TrackedLink
+                href="/signup"
+                className={buttonVariants({ className: "w-full sm:w-auto" })}
+                eventType="LANDING_CTA_CLICKED"
+                eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
+              >
+                Start for Free
+              </TrackedLink>
+              <TrackedLink
+                href="/public/library"
+                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                eventType="LANDING_CTA_CLICKED"
+                eventMetadata={{ placement: "hero_secondary", destination: "/public/library" }}
+              >
+                Browse Public Library
+              </TrackedLink>
+            </div>
+            <p className="text-sm text-foreground/65">
+              No setup needed. Start with your notes.
+            </p>
           </div>
         </div>
 
@@ -225,6 +213,9 @@ function PublicLibrarySection() {
               <h2 className="text-2xl font-semibold sm:text-3xl">Explore notes worth studying</h2>
               <p className="max-w-xl text-sm leading-relaxed text-foreground/75 sm:text-base">
                 Browse notes shared by others. Copy them into your library and turn them into summaries, key concepts, and quizzes.
+              </p>
+              <p className="text-sm font-medium text-foreground/75">
+                Start even if you don&apos;t have notes yet.
               </p>
             </div>
             <ul className="space-y-2 text-sm text-foreground/75">
@@ -276,8 +267,11 @@ function HowItWorksSection() {
     <section className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">How It Works</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Go from notes to self-testing in three steps</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">How It Works</p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Go from notes to self-testing in three steps</h2>
+          <p className="text-sm leading-relaxed text-foreground/70">
+            From notes → to quiz → to exam-ready review
+          </p>
         </div>
         <TrackedLink
           href="/how-it-works"
@@ -338,7 +332,7 @@ function DifferentiationSection() {
         <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
           Why NoteLib
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">More useful than a generic AI answer box</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for study, not just answers</h2>
       </div>
       <Card className="overflow-hidden p-0">
         <div className="grid border-b border-border bg-muted/20 text-sm font-medium sm:grid-cols-[0.9fr_1fr_1fr]">
@@ -401,7 +395,7 @@ function PricingPreviewSection() {
           </p>
           <h2 className="text-2xl font-semibold sm:text-3xl">Simple pricing. Start free.</h2>
           <p className="max-w-3xl text-sm text-foreground/75">
-            Use NoteLib for free, and upgrade when you need more quizzes and deeper practice.
+            Use NoteLib for free, and upgrade only when your review gets serious.
           </p>
         </div>
         <TrackedLink
@@ -427,7 +421,7 @@ function FinalCtaSection() {
           <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
             Start Today
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Build a study system from the notes you already have.</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Start building your study system today</h2>
           <p className="mx-auto max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
             Turn saved notes into summaries, quizzes, and Board Exam Mode sessions that keep you reviewing with
             purpose.
@@ -442,15 +436,8 @@ function FinalCtaSection() {
           >
             Start for Free
           </TrackedLink>
-          <TrackedLink
-            href="/pricing"
-            className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-            eventType="LANDING_CTA_CLICKED"
-            eventMetadata={{ placement: "bottom_cta_secondary", destination: "/pricing" }}
-          >
-            View Pricing
-          </TrackedLink>
         </div>
+        <p className="text-sm text-foreground/65">Takes less than a minute.</p>
       </div>
     </section>
   );
@@ -458,7 +445,7 @@ function FinalCtaSection() {
 
 export default function Home() {
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 pb-28 sm:px-6 sm:py-12 sm:pb-12">
       <StructuredDataScript
         id="landing-page-structured-data"
         data={buildWebsiteStructuredData(landingPageDescription)}
@@ -473,6 +460,16 @@ export default function Home() {
       <PricingPreviewSection />
       <FinalCtaSection />
       <PublicFooter />
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
+        <TrackedLink
+          href="/signup"
+          className={buttonVariants({ className: "w-full" })}
+          eventType="LANDING_CTA_CLICKED"
+          eventMetadata={{ placement: "mobile_sticky_cta", destination: "/signup" }}
+        >
+          Start for Free
+        </TrackedLink>
+      </div>
     </main>
   );
 }

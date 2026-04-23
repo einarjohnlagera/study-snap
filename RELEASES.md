@@ -1,5 +1,35 @@
 # RELEASES.md - NoteLib
 
+## v0.10.1 - Landing & Pricing Conversion Polish
+
+### Improvements
+
+- **Landing page conversion polish** — refined the public homepage messaging without changing the core layout:
+  - hero now keeps `Turn your notes into real study tools` and adds the clearer emotional hook `Stop rereading. Start remembering.`
+  - removed the extra hero demo CTA so the primary action stays focused on `Start for Free` with `Browse Public Library` as the only secondary action
+  - added supporting trust microcopy under the hero CTA: `No setup needed. Start with your notes.`
+  - clarified `How It Works` with the line `From notes → to quiz → to exam-ready review`
+  - updated feature and comparison headings to sound more study-focused and less confrontational
+  - added `Start even if you don't have notes yet.` under the Public Library section to reduce first-use hesitation
+  - simplified the final CTA to `Start building your study system today` with `Takes less than a minute.`
+
+- **Pricing clarity and trust polish** — improved pricing visibility and conversion messaging on both the landing preview and full pricing page:
+  - added trust copy that makes Free feel complete and Premium feel like the step for deeper practice rather than an immediate upsell
+  - pricing hero now explicitly reassures users that most can stay on Free until review gets serious
+  - Premium cards now use a subtle visual emphasis and both plan cards have restrained hover feedback
+  - pricing copy now consistently uses `Quiz` wording and keeps the tone approachable rather than aggressive
+
+- **PHP pricing visibility for compliance** — PHP pricing is now always visible instead of implied through region detection:
+  - landing pricing preview and pricing page now both show:
+    - `🇵🇭 Philippines pricing (PHP)` with `₱249/month` and `₱2,499/year`
+    - `🌍 International pricing` with `$4.99/month` and `$39.99/year`
+  - replaced vague region text with `Prices are shown for Philippines (PHP) and international (USD).`
+
+- **Mobile conversion polish** — improved the public marketing experience on small screens:
+  - hero and pricing pages now reserve bottom space so content does not sit behind the mobile CTA
+  - added a simple sticky mobile `Start for Free` CTA on landing and pricing pages
+  - tightened spacing and readability so the hero content feels less cramped on mobile
+
 ## v0.10.0 - Profile Type System & Teacher Flow Phase 1 (In Progress)
 
 ### New Features
