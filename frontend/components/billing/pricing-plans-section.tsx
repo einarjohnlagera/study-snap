@@ -177,16 +177,19 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             </CardDescription>
           </div>
           <div className="space-y-1">
-            <p className="text-xl font-semibold text-foreground">{monthlyLabel}</p>
-            <p className="text-sm text-foreground/70">{yearlyLabel}</p>
-            {billingPricing ? (
+            <p className="text-xl font-semibold text-foreground">
+              ₱{pricingConfig.price.PH.monthly}/month{" "}
+              <span className="text-sm font-normal text-foreground/60">· ₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</span>
+            </p>
+            <p className="text-sm text-foreground/60">
+              ${pricingConfig.price.DEFAULT.monthly}/month · ${pricingConfig.price.DEFAULT.yearly}/year
+            </p>
+            {billingPricing?.introEligible && billingPricing.introMonthlyPrice !== null ? (
               <p className="text-xs text-foreground/60">
-                {billingPricing.introEligible && billingPricing.introMonthlyPrice !== null
-                  ? `First month ${formatBillingAmount(billingPricing.introMonthlyPrice, billingPricing.currency)}`
-                  : `Monthly base ${formatBillingAmount(billingPricing.monthlyPrice, billingPricing.currency)}`}{" "}
-                · Region {billingPricing.region}
+                Intro offer: first month {formatBillingAmount(billingPricing.introMonthlyPrice, billingPricing.currency)}
               </p>
             ) : null}
+            <p className="text-xs text-foreground/50">Prices may vary depending on your region.</p>
           </div>
           <ul className="space-y-2 text-sm text-foreground/80">
             {PREMIUM_FEATURES.map((feature) => (
