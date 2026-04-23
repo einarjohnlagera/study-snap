@@ -181,12 +181,9 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
               ₱{pricingConfig.price.PH.monthly}/month{" "}
               <span className="text-sm font-normal text-foreground/60">· ₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</span>
             </p>
-            <p className="text-sm text-foreground/60">
-              ${pricingConfig.price.DEFAULT.monthly}/month · ${pricingConfig.price.DEFAULT.yearly}/year
-            </p>
-            {billingPricing?.introEligible && billingPricing.introMonthlyPrice !== null ? (
+            {billingPricing?.introEligible ? (
               <p className="text-xs text-foreground/60">
-                Intro offer: first month {formatBillingAmount(billingPricing.introMonthlyPrice, billingPricing.currency)}
+                Intro offer: first month ₱{pricingConfig.intro.PH.monthly} / ${pricingConfig.intro.DEFAULT.monthly}
               </p>
             ) : null}
             <p className="text-xs text-foreground/50">Prices may vary depending on your region.</p>

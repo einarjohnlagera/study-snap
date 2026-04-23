@@ -32,6 +32,7 @@
   - the Regional Pricing block in `PricingPlansSection` is hardcoded and does not rely on Cloudflare geo-detection headers
   - any reviewer accessing `/pricing` from outside the Philippines will still see the PHP pricing block
   - this replaces the previous approach where PHP pricing was only shown if the request region resolved to `PH`
+  - intro offer line now shows both currencies statically: `Intro offer: first month ₱199 / $3.99` — previously only the visitor's regional currency was shown, causing Xendit reviewers outside PH to see USD only
 
 - **Mobile conversion polish** — added a sticky `Start for Free` CTA on the pricing page for mobile visitors
 
