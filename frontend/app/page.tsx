@@ -56,59 +56,59 @@ export const metadata: Metadata = {
 
 const howItWorksSteps = [
   {
-    title: "Add notes",
-    description: "Paste class notes, upload reviewers, or write directly into your workspace.",
+    title: "Add your notes",
+    description: "Paste notes, upload reviewers, or write directly.",
     icon: FileText,
   },
   {
-    title: "Generate study pack",
-    description: "Turn one saved note into a summary, key concepts, and quiz material when review starts.",
+    title: "Generate a study pack",
+    description: "Get a summary, key concepts, and quiz from a single note.",
     icon: Sparkles,
   },
   {
-    title: "Test yourself",
-    description: "Use Quiz and Board Exam Mode to practice active recall instead of passive rereading.",
+    title: "Review actively",
+    description: "Practice using quizzes and exam-style formats.",
     icon: Trophy,
   },
 ];
 
 const differentiationRows = [
   {
-    label: "Starts from your own material",
-    generic: "Usually needs a fresh prompt every time.",
-    noteLib: "Keeps your notes in one place, then builds review tools from them.",
+    label: "Built around your own notes",
+    generic: "Requires a fresh prompt every session.",
+    noteLib: "Your notes stay in one place and drive every study tool.",
   },
   {
-    label: "Built for active recall",
-    generic: "Often stops at a single answer or summary.",
-    noteLib: "Moves from note to study pack to quiz practice in one workflow.",
+    label: "Designed for active recall",
+    generic: "Usually ends at a summary or single answer.",
+    noteLib: "Goes from note to study pack to quiz practice in one flow.",
   },
   {
-    label: "Exam-style practice",
-    generic: "Rarely feels like a real review session.",
-    noteLib: "Includes Quiz and Board Exam Mode for structured self-testing.",
+    label: "Helps you review faster before exams",
+    generic: "Rarely structured around your actual exam prep needs.",
+    noteLib: "Summaries, key concepts, and quizzes ready from one saved note.",
   },
   {
-    label: "Designed for repeated review",
-    generic: "Outputs are easy to lose after one session.",
-    noteLib: "Your notes stay reusable, editable, and ready for the next review cycle.",
+    label: "Reuse notes anytime",
+    generic: "Previous outputs are easy to lose or start over.",
+    noteLib: "Notes stay reusable and ready for the next review cycle.",
   },
 ];
 
 const targetUsers = [
   {
     title: "Students",
-    description: "Turn lecture notes and reviewers into summaries and quizzes before quizzes and major exams.",
+    description: "Stay organized and review smarter.",
     icon: BookOpen,
   },
   {
-    title: "Board exam reviewees",
-    description: "Practice from your own notes with timed quizzes and Board Exam Mode sessions.",
+    title: "Board Exam Takers",
+    description: "Practice topics and test your understanding.",
     icon: Trophy,
   },
   {
-    title: "Teachers and tutors",
-    description: "Convert lesson notes into structured review material students can revisit and test themselves on.",
+    title: "Teachers",
+    description: "Turn notes into ready-to-use quizzes and materials.",
     icon: Library,
   },
 ];
@@ -158,10 +158,10 @@ function HeroSection() {
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Your notes, transformed into study tools.
+              Turn your notes into real study tools.
             </h1>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Build a notes library, browse what others share, and turn saved notes into summaries, key concepts, and quizzes when review starts.
+              Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it&apos;s time to review.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -174,12 +174,12 @@ function HeroSection() {
               Start for Free
             </TrackedLink>
             <TrackedLink
-              href="/how-it-works"
+              href="/public/library"
               className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
               eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_secondary", destination: "/how-it-works" }}
+              eventMetadata={{ placement: "hero_secondary", destination: "/public/library" }}
             >
-              See how it works
+              Browse Public Library
             </TrackedLink>
           </div>
           <div className="flex flex-wrap items-center gap-4 text-sm text-foreground/70">
@@ -224,7 +224,7 @@ function PublicLibrarySection() {
               <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Public Library</p>
               <h2 className="text-2xl font-semibold sm:text-3xl">Explore notes worth studying</h2>
               <p className="max-w-xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-                Browse public notes by subject, discover popular topics, and copy useful notes into your own library to study them your way.
+                Browse notes shared by others. Copy them into your library and turn them into summaries, key concepts, and quizzes.
               </p>
             </div>
             <ul className="space-y-2 text-sm text-foreground/75">
@@ -397,9 +397,12 @@ function PricingPreviewSection() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-            Pricing Preview
+            Pricing
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Start free, then upgrade when review gets serious</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Simple pricing. Start free.</h2>
+          <p className="max-w-3xl text-sm text-foreground/75">
+            Use NoteLib for free, and upgrade when you need more quizzes and deeper practice.
+          </p>
         </div>
         <TrackedLink
           href="/pricing"

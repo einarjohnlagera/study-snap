@@ -8,7 +8,7 @@ import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Pricing — Free and Premium Plans",
-  description: "Compare Free and Premium plans for Study Packs, Quiz, Adaptive Practice, and Board Exam Mode.",
+  description: "Simple plans for everyday study and serious review. Start free. Upgrade for more quizzes, Adaptive Practice, and Board Exam Mode.",
   path: "/pricing",
 });
 
@@ -26,13 +26,7 @@ export default function PricingPage() {
             Simple plans for everyday study and serious review.
           </h1>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Start with Free to turn notes into Study Packs, summaries, key concepts, and quizzes.
-          </p>
-          <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Upgrade to Premium when you need higher limits, Adaptive Practice, and more control during heavy exam weeks.
-          </p>
-          <p className="max-w-3xl rounded-2xl border border-blue-500/15 bg-background/80 px-4 py-3 text-sm text-foreground/75 backdrop-blur">
-            Board Exam Mode is included with Premium for stricter exam-style practice.
+            Start free for core features. Upgrade when you need more quizzes, deeper practice, and higher limits.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/auth" className="w-full sm:w-auto">
@@ -55,9 +49,9 @@ export default function PricingPage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Free vs Premium
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Choose the study flow that fits your review season.</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Premium for deeper exam prep.</h2>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Free covers the core NoteLib workflow. Premium is positioned for students who need deeper quiz practice and higher monthly limits.
+            Free covers the full note-to-study-pack workflow. Premium adds higher limits and deeper practice tools.
           </p>
         </div>
         <PricingPlansSection showHeading={false} />
