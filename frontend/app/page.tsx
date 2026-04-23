@@ -178,16 +178,16 @@ function HeroSection() {
                 Start for Free
               </TrackedLink>
               <TrackedLink
-                href="/public/library"
+                href="/demo"
                 className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
                 eventType="LANDING_CTA_CLICKED"
-                eventMetadata={{ placement: "hero_secondary", destination: "/public/library" }}
+                eventMetadata={{ placement: "hero_secondary", destination: "/demo" }}
               >
-                Browse Public Library
+                Try Demo
               </TrackedLink>
             </div>
             <p className="text-sm text-foreground/65">
-              No setup needed. Start with your notes.
+              Free to start · No credit card required
             </p>
           </div>
         </div>
@@ -299,6 +299,17 @@ function HowItWorksSection() {
           </Card>
         ))}
       </div>
+      <p className="text-sm text-foreground/65">
+        Not ready to sign up?{" "}
+        <TrackedLink
+          href="/demo"
+          className="font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+          eventType="LANDING_CTA_CLICKED"
+          eventMetadata={{ placement: "how_it_works_demo", destination: "/demo" }}
+        >
+          Try the demo first — no account needed.
+        </TrackedLink>
+      </p>
     </section>
   );
 }
