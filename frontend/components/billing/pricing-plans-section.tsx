@@ -336,25 +336,9 @@ export function SimplePricingSection() {
           </Link>
         </Card>
       </div>
-      <Card className="space-y-4 p-4 sm:p-6">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Regional Pricing</p>
-          <h3 className="text-lg font-semibold">Pricing shown clearly</h3>
-          <p className="text-sm leading-relaxed text-foreground/70">Prices are shown for Philippines (PHP) and international (USD).</p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
-            <p className="text-sm font-semibold text-foreground">🇵🇭 Philippines pricing (PHP)</p>
-            <p className="text-2xl font-semibold text-foreground">₱{pricingConfig.price.PH.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
-            <p className="text-sm text-foreground/70">₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</p>
-          </div>
-          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
-            <p className="text-sm font-semibold text-foreground">🌍 International pricing</p>
-            <p className="text-2xl font-semibold text-foreground">${pricingConfig.price.DEFAULT.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
-            <p className="text-sm text-foreground/70">${pricingConfig.price.DEFAULT.yearly}/year</p>
-          </div>
-        </div>
-      </Card>
+      <p className="text-sm text-foreground/60">
+        Simple pricing. Start free, upgrade when you need more.
+      </p>
     </section>
   );
 }
