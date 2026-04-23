@@ -1,5 +1,41 @@
 # RELEASES.md - NoteLib
 
+## v0.10.1 - Landing & Pricing Conversion Polish
+
+### Improvements
+
+- **Landing page conversion polish** — refined the public homepage to reduce hesitation and drive signups:
+  - hero headline updated to `Turn your notes into real study tools`
+  - hero subheadline updated to `Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it's time to review.`
+  - hero secondary CTA changed from `Browse Public Library` to `Try Demo` (proper outline button) so the no-commitment path is front and center
+  - hero trust line changed to `Free to start · No credit card required` to directly address signup hesitation
+  - added a demo nudge beneath the How It Works steps: `Not ready to sign up? Try the demo first — no account needed.`
+  - How It Works step copy simplified to be more direct and scannable
+  - Why NoteLib differentiation rows reframed around workflow clarity rather than AI comparison
+  - target user descriptions shortened; `Board exam reviewees` renamed to `Board Exam Takers`, `Teachers and tutors` renamed to `Teachers`
+  - Public Library body text updated to `Browse notes shared by others. Copy them into your library and turn them into summaries, key concepts, and quizzes.`
+  - Pricing Preview heading updated to `Simple pricing. Start free.` with supporting body copy
+  - removed redundant `See full pricing` link from the landing pricing preview (covered by the `View Pricing` button on the Premium card)
+  - removed the standalone regional pricing block from the landing pricing preview to keep the page clean
+
+- **Pricing page refinements** — improved clarity and compliance on the full pricing page:
+  - hero description simplified to `Start free for core features. Upgrade when you need more quizzes, deeper practice, and higher limits.`
+  - plan subtitles updated: Free → `For everyday study`, Premium → `For focused exam preparation`
+  - feature label normalised: `AI Summary + Key Concepts` → `Summary + Key Concepts`
+  - added a static **Regional Pricing** block showing both currencies explicitly without geo-detection:
+    - Philippines: `₱249/month` · `₱2,499/year`
+    - International: `$4.99/month` · `$39.99/year`
+  - added an **FAQ** section covering free access, upgrade timing, regional pricing, and Board Exam Mode
+  - comparison table Adaptive Practice row now shows a checkmark instead of session count for consistency
+
+- **PHP pricing compliance (Xendit)** — PHP pricing is now statically visible on the pricing page regardless of the visitor's region:
+  - the Regional Pricing block in `PricingPlansSection` is hardcoded and does not rely on Cloudflare geo-detection headers
+  - any reviewer accessing `/pricing` from outside the Philippines will still see the PHP pricing block
+  - this replaces the previous approach where PHP pricing was only shown if the request region resolved to `PH`
+  - intro offer line now shows both currencies statically: `Intro offer: first month ₱199 / $3.99` — previously only the visitor's regional currency was shown, causing Xendit reviewers outside PH to see USD only
+
+- **Mobile conversion polish** — added a sticky `Start for Free` CTA on the pricing page for mobile visitors
+
 ## v0.10.0 - Profile Type System & Teacher Flow Phase 1 (In Progress)
 
 ### New Features

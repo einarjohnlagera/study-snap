@@ -39,7 +39,11 @@ Primary CTA:
 - Difficulty selection
 - Board Exam Mode
 
-Premium pricing must still come from the backend pricing API / shared pricing components.
+Premium pricing on the full pricing page shows PHP as the primary price (`₱249/month · ₱2,499/year`) statically, regardless of the visitor's region. This ensures Xendit reviewers always see PHP pricing during payment provider verification. A separate Regional Pricing block below shows both PHP and international USD prices explicitly.
+
+Intro offer, when eligible, displays both currencies: `₱199 / $3.99`. Values come from `pricingConfig.intro` (static, not geo-detected).
+
+Premium pricing on the landing page preview (`SimplePricingSection`) also shows PHP as primary with USD as secondary, both hardcoded.
 
 Primary CTA:
 
@@ -57,6 +61,8 @@ The pricing page should stay clean and mobile-friendly:
 1. Hero / framing
 2. Free and Premium pricing cards
 3. Feature comparison table
+4. Regional Pricing block (static, both PHP and USD, always visible)
+5. FAQ
 
 Avoid adding payment-step UI, dense billing details, or aggressive conversion copy.
 

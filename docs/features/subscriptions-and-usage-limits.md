@@ -116,7 +116,9 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Controller/service layer is provider-agnostic (`BillingService` interface).
 - Active runtime provider is `PAYMONGO`.
 - Backend is the single source of truth for Premium pricing, region resolution, voucher eligibility, and PayMongo plan selection.
-- Frontend pricing surfaces must read pricing from `GET /api/billing/pricing` and must not hardcode subscription amounts.
+- Frontend pricing surfaces read pricing from `GET /api/billing/pricing` for dynamic intro eligibility and supplementary display.
+- Static PHP and USD prices are hardcoded in `pricingConfig` (frontend) so that PHP pricing is always visible regardless of Cloudflare geo-detection. This is required for Xendit payment provider verification.
+- Intro offer pricing is displayed statically as both currencies (`₱199 / $3.99`) from `pricingConfig.intro` whenever `introEligible` is true, instead of relying on the region-specific `introMonthlyPrice` from the API.
 - Premium checkout plumbing may remain in place behind the provider abstraction, but the current user-facing conversion flow is waitlist-first until payment launch is enabled.
 
 ## Premium waitlist

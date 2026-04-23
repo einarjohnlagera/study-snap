@@ -38,31 +38,32 @@ describe("LandingPage", () => {
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Your notes, transformed into study tools.",
+        name: "Turn your notes into real study tools",
       }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Stop rereading. Start remembering.")).toBeInTheDocument();
     expect(
-      screen.getByText("Build a notes library, browse what others share, and turn saved notes into summaries, key concepts, and quizzes when review starts."),
+      screen.getByText("Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it's time to review."),
     ).toBeInTheDocument();
+    expect(screen.getByText("No setup needed. Start with your notes.")).toBeInTheDocument();
     expect(screen.getByText("Board Exam Mode · Premium")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
-    expect(screen.getByRole("link", { name: "See how it works" })).toHaveAttribute("href", "/how-it-works");
-    expect(screen.getByRole("link", { name: "Try demo access" })).toHaveAttribute("href", "/demo");
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(2);
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })[0]).toHaveAttribute("href", "/public/library");
     expect(screen.getByAltText("NoteLib note detail showing summary of the note")).toBeInTheDocument();
 
     expect(screen.getByText("How It Works")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Go from notes to self-testing in three steps" })).toBeInTheDocument();
-    expect(screen.getByText("Add notes")).toBeInTheDocument();
-    expect(screen.getByText("Generate study pack")).toBeInTheDocument();
-    expect(screen.getByText("Test yourself")).toBeInTheDocument();
+    expect(screen.getByText("From notes → to quiz → to exam-ready review")).toBeInTheDocument();
+    expect(screen.getByText("Add your notes")).toBeInTheDocument();
+    expect(screen.getByText("Generate a study pack")).toBeInTheDocument();
+    expect(screen.getByText("Review actively")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View the full walkthrough" })).toHaveAttribute("href", "/how-it-works");
 
     expect(screen.getByText("Features")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Built for quick understanding and repeated review" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "From notes to structured study packs" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Practice like a real exam" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Turn one note into a full study session" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Practice like the real exam" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Know exactly what to improve" })).toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib Study Pack view showing generated summary and key concepts")).not.toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib Board Exam Mode and Challenge Quiz in-progress screen")).not.toBeInTheDocument();
@@ -70,7 +71,8 @@ describe("LandingPage", () => {
 
     expect(screen.getByText("Public Library")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Explore notes worth studying" })).toBeInTheDocument();
-    expect(screen.getByText("Browse public notes by subject, discover popular topics, and copy useful notes into your own library to study them your way.")).toBeInTheDocument();
+    expect(screen.getByText("Browse notes shared by others. Copy them into your library and turn them into summaries, key concepts, and quizzes.")).toBeInTheDocument();
+    expect(screen.getByText("Start even if you don't have notes yet.")).toBeInTheDocument();
     expect(screen.getByText("Live product preview")).toBeInTheDocument();
     expect(screen.getByText("Discover curated public notes")).toBeInTheDocument();
     expect(screen.getByText("Copy notes into your own library")).toBeInTheDocument();
@@ -80,23 +82,23 @@ describe("LandingPage", () => {
     ).toBeInTheDocument();
 
     expect(screen.getByText("Why NoteLib")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "More useful than a generic AI answer box" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Built for study, not just answers" })).toBeInTheDocument();
     expect(screen.getByText("Generic AI tools")).toBeInTheDocument();
     expect(screen.getAllByText("NoteLib")).not.toHaveLength(0);
-    expect(screen.getByText("Starts from your own material")).toBeInTheDocument();
-    expect(screen.getByText("Designed for repeated review")).toBeInTheDocument();
+    expect(screen.getByText("Built around your own notes")).toBeInTheDocument();
+    expect(screen.getByText("Designed for active recall")).toBeInTheDocument();
 
     expect(screen.getByText("Who It's For")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Made for learners who need more than passive notes" })).toBeInTheDocument();
     expect(screen.getByText("Students")).toBeInTheDocument();
-    expect(screen.getByText("Board exam reviewees")).toBeInTheDocument();
-    expect(screen.getByText("Teachers and tutors")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Takers")).toBeInTheDocument();
+    expect(screen.getByText("Teachers")).toBeInTheDocument();
 
     expect(screen.getByText("Pricing section placeholder")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "See full pricing" })).toHaveAttribute("href", "/pricing");
 
-    expect(screen.getByRole("heading", { name: "Build a study system from the notes you already have." })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "View Pricing" })).toHaveAttribute("href", "/pricing");
+    expect(screen.getByRole("heading", { name: "Start building your study system today" })).toBeInTheDocument();
+    expect(screen.getByText("Takes less than a minute.")).toBeInTheDocument();
 
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy");
     expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute("href", "/terms");

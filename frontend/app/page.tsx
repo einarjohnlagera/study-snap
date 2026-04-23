@@ -56,59 +56,59 @@ export const metadata: Metadata = {
 
 const howItWorksSteps = [
   {
-    title: "Add notes",
-    description: "Paste class notes, upload reviewers, or write directly into your workspace.",
+    title: "Add your notes",
+    description: "Paste notes, upload reviewers, or write directly.",
     icon: FileText,
   },
   {
-    title: "Generate study pack",
-    description: "Turn one saved note into a summary, key concepts, and quiz material when review starts.",
+    title: "Generate a study pack",
+    description: "Get a summary, key concepts, and quiz from a single note.",
     icon: Sparkles,
   },
   {
-    title: "Test yourself",
-    description: "Use Quiz and Board Exam Mode to practice active recall instead of passive rereading.",
+    title: "Review actively",
+    description: "Practice using quizzes and exam-style formats.",
     icon: Trophy,
   },
 ];
 
 const differentiationRows = [
   {
-    label: "Starts from your own material",
-    generic: "Usually needs a fresh prompt every time.",
-    noteLib: "Keeps your notes in one place, then builds review tools from them.",
+    label: "Built around your own notes",
+    generic: "Requires a fresh prompt every session.",
+    noteLib: "Your notes stay in one place and drive every study tool.",
   },
   {
-    label: "Built for active recall",
-    generic: "Often stops at a single answer or summary.",
-    noteLib: "Moves from note to study pack to quiz practice in one workflow.",
+    label: "Designed for active recall",
+    generic: "Usually ends at a summary or single answer.",
+    noteLib: "Goes from note to study pack to quiz practice in one flow.",
   },
   {
-    label: "Exam-style practice",
-    generic: "Rarely feels like a real review session.",
-    noteLib: "Includes Quiz and Board Exam Mode for structured self-testing.",
+    label: "Helps you review faster before exams",
+    generic: "Rarely structured around your actual exam prep needs.",
+    noteLib: "Summaries, key concepts, and quizzes ready from one saved note.",
   },
   {
-    label: "Designed for repeated review",
-    generic: "Outputs are easy to lose after one session.",
-    noteLib: "Your notes stay reusable, editable, and ready for the next review cycle.",
+    label: "Reuse notes anytime",
+    generic: "Previous outputs are easy to lose or start over.",
+    noteLib: "Notes stay reusable and ready for the next review cycle.",
   },
 ];
 
 const targetUsers = [
   {
     title: "Students",
-    description: "Turn lecture notes and reviewers into summaries and quizzes before quizzes and major exams.",
+    description: "Stay organized and review smarter.",
     icon: BookOpen,
   },
   {
-    title: "Board exam reviewees",
-    description: "Practice from your own notes with timed quizzes and Board Exam Mode sessions.",
+    title: "Board Exam Takers",
+    description: "Practice topics and test your understanding.",
     icon: Trophy,
   },
   {
-    title: "Teachers and tutors",
-    description: "Convert lesson notes into structured review material students can revisit and test themselves on.",
+    title: "Teachers",
+    description: "Turn notes into ready-to-use quizzes and materials.",
     icon: Library,
   },
 ];
@@ -126,12 +126,12 @@ const landingScreenshots = {
 
 const valueSummaryCards = [
   {
-    title: "From notes to structured study packs",
-    description: "Turn saved notes into summaries, key concepts, and quiz material without rebuilding your workflow from scratch.",
+    title: "Turn one note into a full study session",
+    description: "Turn a saved note into a summary, key concepts, and quiz material without rebuilding your workflow.",
     icon: Sparkles,
   },
   {
-    title: "Practice like a real exam",
+    title: "Practice like the real exam",
     description: "Use Quiz and Board Exam Mode for timed, focused self-testing that feels closer to real review conditions.",
     icon: Trophy,
   },
@@ -158,49 +158,37 @@ function HeroSection() {
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Your notes, transformed into study tools.
+              Turn your notes into real study tools
             </h1>
+            <p className="text-base font-medium text-foreground/85 sm:text-lg">
+              Stop rereading. Start remembering.
+            </p>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Build a notes library, browse what others share, and turn saved notes into summaries, key concepts, and quizzes when review starts.
+              Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it&apos;s time to review.
             </p>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <TrackedLink
-              href="/signup"
-              className={buttonVariants({ className: "w-full sm:w-auto" })}
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
-            >
-              Start for Free
-            </TrackedLink>
-            <TrackedLink
-              href="/how-it-works"
-              className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_secondary", destination: "/how-it-works" }}
-            >
-              See how it works
-            </TrackedLink>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-foreground/70">
-            <TrackedLink
-              href="/demo"
-              className="inline-flex items-center gap-2 font-medium text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_demo", destination: "/demo" }}
-            >
-              Try demo access
-              <ArrowRight className="h-4 w-4" />
-            </TrackedLink>
-            <TrackedLink
-              href="/public/library"
-              className="inline-flex items-center gap-2 font-medium text-foreground/75 transition hover:text-foreground dark:text-foreground/75 dark:hover:text-foreground"
-              eventType="LANDING_CTA_CLICKED"
-              eventMetadata={{ placement: "hero_public_library", destination: "/public/library" }}
-            >
-              Browse Public Library
-              <ArrowRight className="h-4 w-4" />
-            </TrackedLink>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <TrackedLink
+                href="/signup"
+                className={buttonVariants({ className: "w-full sm:w-auto" })}
+                eventType="LANDING_CTA_CLICKED"
+                eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
+              >
+                Start for Free
+              </TrackedLink>
+              <TrackedLink
+                href="/demo"
+                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                eventType="LANDING_CTA_CLICKED"
+                eventMetadata={{ placement: "hero_secondary", destination: "/demo" }}
+              >
+                Try Demo
+              </TrackedLink>
+            </div>
+            <p className="text-sm text-foreground/65">
+              Free to start · No credit card required
+            </p>
           </div>
         </div>
 
@@ -224,7 +212,10 @@ function PublicLibrarySection() {
               <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Public Library</p>
               <h2 className="text-2xl font-semibold sm:text-3xl">Explore notes worth studying</h2>
               <p className="max-w-xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-                Browse public notes by subject, discover popular topics, and copy useful notes into your own library to study them your way.
+                Browse notes shared by others. Copy them into your library and turn them into summaries, key concepts, and quizzes.
+              </p>
+              <p className="text-sm font-medium text-foreground/75">
+                Start even if you don&apos;t have notes yet.
               </p>
             </div>
             <ul className="space-y-2 text-sm text-foreground/75">
@@ -276,8 +267,11 @@ function HowItWorksSection() {
     <section className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">How It Works</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Go from notes to self-testing in three steps</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">How It Works</p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Go from notes to self-testing in three steps</h2>
+          <p className="text-sm leading-relaxed text-foreground/70">
+            From notes → to quiz → to exam-ready review
+          </p>
         </div>
         <TrackedLink
           href="/how-it-works"
@@ -305,6 +299,17 @@ function HowItWorksSection() {
           </Card>
         ))}
       </div>
+      <p className="text-sm text-foreground/65">
+        Not ready to sign up?{" "}
+        <TrackedLink
+          href="/demo"
+          className="font-medium text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+          eventType="LANDING_CTA_CLICKED"
+          eventMetadata={{ placement: "how_it_works_demo", destination: "/demo" }}
+        >
+          Try the demo first — no account needed.
+        </TrackedLink>
+      </p>
     </section>
   );
 }
@@ -338,7 +343,7 @@ function DifferentiationSection() {
         <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
           Why NoteLib
         </p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">More useful than a generic AI answer box</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for study, not just answers</h2>
       </div>
       <Card className="overflow-hidden p-0">
         <div className="grid border-b border-border bg-muted/20 text-sm font-medium sm:grid-cols-[0.9fr_1fr_1fr]">
@@ -397,9 +402,12 @@ function PricingPreviewSection() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
-            Pricing Preview
+            Pricing
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Start free, then upgrade when review gets serious</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Simple pricing. Start free.</h2>
+          <p className="max-w-3xl text-sm text-foreground/75">
+            Use NoteLib for free, and upgrade only when your review gets serious.
+          </p>
         </div>
         <TrackedLink
           href="/pricing"
@@ -424,7 +432,7 @@ function FinalCtaSection() {
           <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
             Start Today
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Build a study system from the notes you already have.</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Start building your study system today</h2>
           <p className="mx-auto max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
             Turn saved notes into summaries, quizzes, and Board Exam Mode sessions that keep you reviewing with
             purpose.
@@ -439,15 +447,8 @@ function FinalCtaSection() {
           >
             Start for Free
           </TrackedLink>
-          <TrackedLink
-            href="/pricing"
-            className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-            eventType="LANDING_CTA_CLICKED"
-            eventMetadata={{ placement: "bottom_cta_secondary", destination: "/pricing" }}
-          >
-            View Pricing
-          </TrackedLink>
         </div>
+        <p className="text-sm text-foreground/65">Takes less than a minute.</p>
       </div>
     </section>
   );
@@ -455,7 +456,7 @@ function FinalCtaSection() {
 
 export default function Home() {
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 sm:px-6 sm:py-12">
+    <main className="mx-auto w-full max-w-6xl space-y-10 px-4 py-8 pb-28 sm:px-6 sm:py-12 sm:pb-12">
       <StructuredDataScript
         id="landing-page-structured-data"
         data={buildWebsiteStructuredData(landingPageDescription)}
@@ -470,6 +471,16 @@ export default function Home() {
       <PricingPreviewSection />
       <FinalCtaSection />
       <PublicFooter />
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
+        <TrackedLink
+          href="/signup"
+          className={buttonVariants({ className: "w-full" })}
+          eventType="LANDING_CTA_CLICKED"
+          eventMetadata={{ placement: "mobile_sticky_cta", destination: "/signup" }}
+        >
+          Start for Free
+        </TrackedLink>
+      </div>
     </main>
   );
 }

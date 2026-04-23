@@ -24,6 +24,10 @@ export const pricingConfig = {
       yearly: 39.99,
     },
   },
+  intro: {
+    PH: { monthly: 199 },
+    DEFAULT: { monthly: 3.99 },
+  },
 } as const;
 
 export function resolvePricingDisplayRegion(region: string | null | undefined): PricingDisplayRegion {
