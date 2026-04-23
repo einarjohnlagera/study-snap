@@ -4,31 +4,36 @@
 
 ### Improvements
 
-- **Landing page conversion polish** — refined the public homepage messaging without changing the core layout:
-  - hero now keeps `Turn your notes into real study tools` and adds the clearer emotional hook `Stop rereading. Start remembering.`
-  - removed the extra hero demo CTA so the primary action stays focused on `Start for Free` with `Browse Public Library` as the only secondary action
-  - added supporting trust microcopy under the hero CTA: `No setup needed. Start with your notes.`
-  - clarified `How It Works` with the line `From notes → to quiz → to exam-ready review`
-  - updated feature and comparison headings to sound more study-focused and less confrontational
-  - added `Start even if you don't have notes yet.` under the Public Library section to reduce first-use hesitation
-  - simplified the final CTA to `Start building your study system today` with `Takes less than a minute.`
+- **Landing page conversion polish** — refined the public homepage to reduce hesitation and drive signups:
+  - hero headline updated to `Turn your notes into real study tools`
+  - hero subheadline updated to `Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it's time to review.`
+  - hero secondary CTA changed from `Browse Public Library` to `Try Demo` (proper outline button) so the no-commitment path is front and center
+  - hero trust line changed to `Free to start · No credit card required` to directly address signup hesitation
+  - added a demo nudge beneath the How It Works steps: `Not ready to sign up? Try the demo first — no account needed.`
+  - How It Works step copy simplified to be more direct and scannable
+  - Why NoteLib differentiation rows reframed around workflow clarity rather than AI comparison
+  - target user descriptions shortened; `Board exam reviewees` renamed to `Board Exam Takers`, `Teachers and tutors` renamed to `Teachers`
+  - Public Library body text updated to `Browse notes shared by others. Copy them into your library and turn them into summaries, key concepts, and quizzes.`
+  - Pricing Preview heading updated to `Simple pricing. Start free.` with supporting body copy
+  - removed redundant `See full pricing` link from the landing pricing preview (covered by the `View Pricing` button on the Premium card)
+  - removed the standalone regional pricing block from the landing pricing preview to keep the page clean
 
-- **Pricing clarity and trust polish** — improved pricing visibility and conversion messaging on both the landing preview and full pricing page:
-  - added trust copy that makes Free feel complete and Premium feel like the step for deeper practice rather than an immediate upsell
-  - pricing hero now explicitly reassures users that most can stay on Free until review gets serious
-  - Premium cards now use a subtle visual emphasis and both plan cards have restrained hover feedback
-  - pricing copy now consistently uses `Quiz` wording and keeps the tone approachable rather than aggressive
+- **Pricing page refinements** — improved clarity and compliance on the full pricing page:
+  - hero description simplified to `Start free for core features. Upgrade when you need more quizzes, deeper practice, and higher limits.`
+  - plan subtitles updated: Free → `For everyday study`, Premium → `For focused exam preparation`
+  - feature label normalised: `AI Summary + Key Concepts` → `Summary + Key Concepts`
+  - added a static **Regional Pricing** block showing both currencies explicitly without geo-detection:
+    - Philippines: `₱249/month` · `₱2,499/year`
+    - International: `$4.99/month` · `$39.99/year`
+  - added an **FAQ** section covering free access, upgrade timing, regional pricing, and Board Exam Mode
+  - comparison table Adaptive Practice row now shows a checkmark instead of session count for consistency
 
-- **PHP pricing visibility for compliance** — PHP pricing is now always visible instead of implied through region detection:
-  - landing pricing preview and pricing page now both show:
-    - `🇵🇭 Philippines pricing (PHP)` with `₱249/month` and `₱2,499/year`
-    - `🌍 International pricing` with `$4.99/month` and `$39.99/year`
-  - replaced vague region text with `Prices are shown for Philippines (PHP) and international (USD).`
+- **PHP pricing compliance (Xendit)** — PHP pricing is now statically visible on the pricing page regardless of the visitor's region:
+  - the Regional Pricing block in `PricingPlansSection` is hardcoded and does not rely on Cloudflare geo-detection headers
+  - any reviewer accessing `/pricing` from outside the Philippines will still see the PHP pricing block
+  - this replaces the previous approach where PHP pricing was only shown if the request region resolved to `PH`
 
-- **Mobile conversion polish** — improved the public marketing experience on small screens:
-  - hero and pricing pages now reserve bottom space so content does not sit behind the mobile CTA
-  - added a simple sticky mobile `Start for Free` CTA on landing and pricing pages
-  - tightened spacing and readability so the hero content feels less cramped on mobile
+- **Mobile conversion polish** — added a sticky `Start for Free` CTA on the pricing page for mobile visitors
 
 ## v0.10.0 - Profile Type System & Teacher Flow Phase 1 (In Progress)
 
