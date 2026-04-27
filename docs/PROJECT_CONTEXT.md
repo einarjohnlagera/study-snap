@@ -2,7 +2,7 @@
 
 ## What NoteLib Is
 
-NoteLib is an AI-powered study workspace that turns user-authored notes into structured study materials and review modes.
+NoteLib is a study workspace built around a guided learning loop: input, understand, practice, challenge, and improve.
 
 ## Core Product Model
 
@@ -16,6 +16,10 @@ NoteLib is an AI-powered study workspace that turns user-authored notes into str
   - `PUBLIC`
 
 ## Learning Loop
+
+Input -> Study Pack -> Quiz -> Exam -> Reinforcement
+
+Supporting product loop:
 
 Capture -> Generate -> Review -> Improve -> Copy -> Repeat
 
@@ -60,6 +64,7 @@ Primary routes:
 - Unverified users are blocked from Study Pack generation.
 - Unverified users are blocked from OCR upload.
 - OCR is optional in Create/Edit Note and populates Note content for manual review before save/generate.
+- Generate Note from topic is available in Create Note and fills editable note content before save.
 
 ## Tech Stack
 

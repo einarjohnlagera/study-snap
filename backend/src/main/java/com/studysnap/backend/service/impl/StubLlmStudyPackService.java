@@ -14,6 +14,26 @@ import java.util.stream.IntStream;
 @ConditionalOnProperty(prefix = "studysnap.llm.api", name = "provider", havingValue = "stub")
 public class StubLlmStudyPackService implements LlmStudyPackService {
 
+    private static final String GENERATED_NOTE_TEMPLATE = """
+            Overview
+            %s is an important study topic. Use this draft as a starting point, then edit it to match your class notes.
+
+            Core ideas
+            - Define the main concept in simple terms.
+            - Break the topic into the major parts or principles learners need to remember.
+            - Connect the topic to why it matters in class or exams.
+
+            Key details to review
+            - Important definitions
+            - Common examples or applications
+            - Mistakes or misconceptions to avoid
+
+            Quick review prompts
+            - What is %s?
+            - Why does %s matter?
+            - How would you explain %s in your own words?
+            """;
+
     @Override
     public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
         String preview = normalizedNotesText.length() > 80
@@ -52,6 +72,12 @@ public class StubLlmStudyPackService implements LlmStudyPackService {
                 null,
                 null
         );
+    }
+
+    @Override
+    public String generateNoteFromTopic(String topic, StudyPackGenerationContext context) {
+        String normalizedTopic = topic == null || topic.isBlank() ? "this topic" : topic.trim();
+        return GENERATED_NOTE_TEMPLATE.formatted(normalizedTopic, normalizedTopic, normalizedTopic, normalizedTopic);
     }
 
     @Override

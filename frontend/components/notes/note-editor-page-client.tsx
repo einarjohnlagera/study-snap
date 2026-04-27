@@ -11,6 +11,7 @@ import {
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
+  generateNoteFromTopic,
   getMe,
   getNote,
   isEmailNotVerifiedError,
@@ -38,7 +39,11 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { AiSuggestionModal } from "@/components/notes/ai-suggestion-modal";
-import { NoteEditorForm, type NoteEditorDraft } from "@/components/notes/note-editor-form";
+import {
+  NoteEditorForm,
+  type NoteEditorDraft,
+  type NoteEditorEntryOption,
+} from "@/components/notes/note-editor-form";
 import {
   clearFirstStudyOnboardingStep,
   getFirstStudyOnboardingStep,
@@ -57,6 +62,7 @@ import {
   mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
+import { hasSeenTip, markTipSeen } from "@/lib/guidance";
 import {
   isTeacherSelectableNoteTarget,
   mapProfileTypeToNoteTargetProfile,
@@ -93,12 +99,14 @@ function toDraft(note: NoteResponse): NoteEditorDraft {
 }
 
 function resolveGenerateLabel(_profileType: string | null | undefined): string {
-  return "Generate";
+  return "Generate Study Pack";
 }
 
 function resolveGenerateHelperText(_profileType: string | null | undefined): string {
-  return "Generates a Study Pack from your material.";
+  return "Turn this note into summaries, key concepts, quizzes, and practice.";
 }
+
+const GENERATE_NOTE_TIP_ID = "create-note-generate-topic";
 
 export function NoteEditorPageClient({
   noteId,
@@ -118,11 +126,14 @@ export function NoteEditorPageClient({
     content: "",
     tags: [],
   });
+  const [entryOption, setEntryOption] = useState<NoteEditorEntryOption>("write");
+  const [generateTopic, setGenerateTopic] = useState("");
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(noteId ?? null);
   const [loadingNote, setLoadingNote] = useState(isEditMode);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingNote, setIsGeneratingNote] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const [saveStateLabel, setSaveStateLabel] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -136,6 +147,7 @@ export function NoteEditorPageClient({
   const [importReviewMessage, setImportReviewMessage] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(Boolean(getAuthUser()?.emailVerifiedAt));
   const [firstStudyStep, setFirstStudyStep] = useState<FirstStudyOnboardingStep | null>(null);
+  const [showGenerateNoteTip, setShowGenerateNoteTip] = useState(false);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
@@ -151,11 +163,7 @@ export function NoteEditorPageClient({
   const targetProfileTypeHelperText = isEditMode
     ? "Changing audience will affect future quiz generation."
     : "Choose the learner audience for this note.";
-  const generatingLabel = currentProfileType === "BOARD_EXAM"
-    ? "Preparing practice..."
-    : currentProfileType === "TEACHER"
-      ? "Creating quiz..."
-      : "Generating...";
+  const generatingLabel = "Generating Study Pack...";
 
   useEffect(() => {
     const syncAuthState = () => {
@@ -183,6 +191,14 @@ export function NoteEditorPageClient({
     }, 3200);
     return () => globalThis.clearTimeout(timeout);
   }, [toastMessage]);
+
+  useEffect(() => {
+    if (isEditMode || hasSeenTip(GENERATE_NOTE_TIP_ID)) {
+      return;
+    }
+    setShowGenerateNoteTip(true);
+    markTipSeen(GENERATE_NOTE_TIP_ID);
+  }, [isEditMode]);
 
   useEffect(() => {
     let active = true;
@@ -234,6 +250,15 @@ export function NoteEditorPageClient({
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     setToastTone(tone);
     setToastMessage(message);
+  }, []);
+
+  const focusContentEditor = useCallback(() => {
+    globalThis.requestAnimationFrame(() => {
+      const contentElement = globalThis.document.getElementById("note-content");
+      if (contentElement instanceof HTMLTextAreaElement) {
+        contentElement.focus();
+      }
+    });
   }, []);
 
   const appendExtractedTextToContent = useCallback((extractedText: string) => {
@@ -651,9 +676,61 @@ export function NoteEditorPageClient({
     }
   }, [currentNoteId, isCopying, noteId, router, showToast]);
 
+  const handleGenerateNote = useCallback(async () => {
+    if (isGeneratingNote || isSaving || isGenerating) {
+      return;
+    }
+
+    const normalizedTopic = generateTopic.trim();
+    if (normalizedTopic.length === 0) {
+      showToast("Please enter a topic first.", "info");
+      return;
+    }
+    if (!isEmailVerified) {
+      showToast("Email verification is required before generating notes.", "info");
+      return;
+    }
+
+    const isReplacingContent = draft.content.trim().length > 0;
+    setIsGeneratingNote(true);
+    try {
+      const response = await generateNoteFromTopic(normalizedTopic);
+      setDraft((previous) => ({
+        ...previous,
+        title: previous.title.trim().length > 0 ? previous.title : normalizedTopic,
+        content: response.content,
+      }));
+      showToast(
+        isReplacingContent
+          ? "Generated note replaced the current content. Review and edit it before saving."
+          : "Generated note added. Review and edit it before saving.",
+        "success",
+      );
+      focusContentEditor();
+    } catch (error) {
+      if (isEmailNotVerifiedError(error)) {
+        showToast("Email verification is required before generating notes.", "info");
+      } else {
+        const message = error instanceof Error ? error.message : "Could not generate note.";
+        showToast(message, "error");
+      }
+    } finally {
+      setIsGeneratingNote(false);
+    }
+  }, [
+    draft.content,
+    focusContentEditor,
+    generateTopic,
+    isEmailVerified,
+    isGenerating,
+    isGeneratingNote,
+    isSaving,
+    showToast,
+  ]);
+
   const pageTitle = isEditMode ? "Edit Note" : "New Note";
   const pageTitleLabel = !isEditMode && initialMode === "quiz"
-    ? "Create Quiz"
+    ? "Generate Study Pack"
     : !isEditMode && initialSource === "paste"
       ? "Paste Material"
       : !isEditMode && initialSource === "upload"
@@ -681,6 +758,7 @@ export function NoteEditorPageClient({
   const showFirstStudyHint = !isEditMode && firstStudyStep === "create-note";
   const autoFocusContent = !isEditMode && (initialMode === "quiz" || initialSource === "paste");
   const autoFocusImport = !isEditMode && initialSource === "upload";
+  const showGenerateNoteEntry = !isEditMode;
 
   const dismissFirstStudyHint = useCallback(async () => {
     const authUser = getAuthUser();
@@ -780,6 +858,17 @@ export function NoteEditorPageClient({
         onImportFileChange={(file) => {
           void handleImportFileChange(file);
         }}
+        entryOption={entryOption}
+        onEntryOptionChange={(value) => setEntryOption(value)}
+        generateTopic={generateTopic}
+        onGenerateTopicChange={(value) => setGenerateTopic(value)}
+        onGenerateNote={() => {
+          void handleGenerateNote();
+        }}
+        isGeneratingNote={isGeneratingNote}
+        disableGenerateNote={!isEmailVerified}
+        showGenerateNoteEntry={showGenerateNoteEntry}
+        showGenerateNoteTip={showGenerateNoteTip}
         disableContentEditing={contentLocked}
         contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."
         disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}

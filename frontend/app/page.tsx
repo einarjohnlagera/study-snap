@@ -20,8 +20,8 @@ import { SITE_NAME } from "@/lib/site-metadata";
 import { buildWebsiteStructuredData } from "@/lib/structured-data";
 
 const landingPageDescription =
-  "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.";
-const landingPageTitle = "NoteLib — Build your notes library and turn notes into quizzes";
+  "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.";
+const landingPageTitle = "NoteLib - Turn anything into a complete study flow";
 const landingPageUrl = "https://www.notelib.app";
 const landingPageOgImage = "https://www.notelib.app/og-image.png";
 
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
         url: landingPageOgImage,
         width: 1200,
         height: 630,
-        alt: "Build your notes library. Turn your notes into summaries and quizzes.",
+        alt: "Turn anything into a complete study flow with NoteLib.",
       },
     ],
   },
@@ -56,19 +56,29 @@ export const metadata: Metadata = {
 
 const howItWorksSteps = [
   {
-    title: "Add your notes",
-    description: "Paste notes, upload reviewers, or write directly.",
+    title: "Create",
+    description: "Write your own notes or generate them instantly.",
     icon: FileText,
   },
   {
-    title: "Generate a study pack",
-    description: "Get a summary, key concepts, and quiz from a single note.",
+    title: "Understand",
+    description: "Break them into summaries and key concepts.",
+    icon: BookOpen,
+  },
+  {
+    title: "Practice",
+    description: "Test yourself with quizzes.",
     icon: Sparkles,
   },
   {
-    title: "Review actively",
-    description: "Practice using quizzes and exam-style formats.",
+    title: "Challenge",
+    description: "Simulate real exam scenarios.",
     icon: Trophy,
+  },
+  {
+    title: "Improve",
+    description: "Focus on weak areas and reinforce learning.",
+    icon: ArrowRight,
   },
 ];
 
@@ -126,18 +136,18 @@ const landingScreenshots = {
 
 const valueSummaryCards = [
   {
-    title: "Turn one note into a full study session",
-    description: "Turn a saved note into a summary, key concepts, and quiz material without rebuilding your workflow.",
+    title: "Move from input to understanding faster",
+    description: "Write, paste, upload, or generate a note, then turn it into structured review without restarting your workflow.",
     icon: Sparkles,
   },
   {
-    title: "Practice like the real exam",
-    description: "Use Quiz and Board Exam Mode for timed, focused self-testing that feels closer to real review conditions.",
+    title: "Practice in layers",
+    description: "Use summaries, key concepts, quizzes, and challenge flows to review the same topic from understanding to exam prep.",
     icon: Trophy,
   },
   {
-    title: "Know exactly what to improve",
-    description: "Use results and weak-concept guidance to focus your next study session on what you still miss.",
+    title: "Keep improving, not restarting",
+    description: "Use weak areas and repeat review cycles to sharpen what still needs work before your next study session.",
     icon: ArrowRight,
   },
 ] as const;
@@ -158,13 +168,10 @@ function HeroSection() {
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Turn your notes into real study tools
+              Turn anything into a complete study flow
             </h1>
-            <p className="text-base font-medium text-foreground/85 sm:text-lg">
-              Stop rereading. Start remembering.
-            </p>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it&apos;s time to review.
+              Write, paste, or generate notes - then turn them into summaries, key concepts, quizzes, and exam-ready practice.
             </p>
           </div>
           <div className="space-y-2">
@@ -267,10 +274,10 @@ function HowItWorksSection() {
     <section className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">How It Works</p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Go from notes to self-testing in three steps</h2>
+          <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Learning Loop</p>
+          <h2 className="text-2xl font-semibold sm:text-3xl">How NoteLib helps you study</h2>
           <p className="text-sm leading-relaxed text-foreground/70">
-            From notes → to quiz → to exam-ready review
+            Create - Understand - Practice - Challenge - Improve
           </p>
         </div>
         <TrackedLink
@@ -283,7 +290,7 @@ function HowItWorksSection() {
           <ArrowRight className="h-4 w-4" />
         </TrackedLink>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {howItWorksSteps.map((step, index) => (
           <Card key={step.title} className="space-y-4 p-5 sm:p-6">
             <div className="flex items-center justify-between">
@@ -319,7 +326,10 @@ function ValueSummarySection() {
     <section className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Features</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Built for quick understanding and repeated review</h2>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for a guided study flow</h2>
+        <p className="max-w-3xl text-sm text-foreground/75">
+          Built for studying, not just exploring information.
+        </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         {valueSummaryCards.map((item) => (
@@ -434,8 +444,7 @@ function FinalCtaSection() {
           </p>
           <h2 className="text-2xl font-semibold sm:text-3xl">Start building your study system today</h2>
           <p className="mx-auto max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Turn saved notes into summaries, quizzes, and Board Exam Mode sessions that keep you reviewing with
-            purpose.
+            Guide every topic from note input to understanding, practice, challenge, and improvement in one study loop.
           </p>
         </div>
         <div className="flex flex-col justify-center gap-3 sm:flex-row">

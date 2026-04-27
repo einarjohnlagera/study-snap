@@ -19,6 +19,8 @@ export type NoteEditorDraft = {
   tags: string[];
 };
 
+export type NoteEditorEntryOption = "write" | "generate";
+
 type NoteEditorFormProps = {
   pageTitle: string;
   note: NoteEditorDraft;
@@ -44,6 +46,15 @@ type NoteEditorFormProps = {
   importStatusMessage: string | null;
   importReviewMessage?: string | null;
   onImportFileChange: (file: File | null) => void;
+  entryOption?: NoteEditorEntryOption;
+  onEntryOptionChange?: (value: NoteEditorEntryOption) => void;
+  generateTopic?: string;
+  onGenerateTopicChange?: (value: string) => void;
+  onGenerateNote?: () => void;
+  isGeneratingNote?: boolean;
+  disableGenerateNote?: boolean;
+  showGenerateNoteEntry?: boolean;
+  showGenerateNoteTip?: boolean;
   disableContentEditing?: boolean;
   contentLockHint?: string | null;
   disableGenerateAction?: boolean;
@@ -99,6 +110,15 @@ export function NoteEditorForm({
   importStatusMessage,
   importReviewMessage,
   onImportFileChange,
+  entryOption = "write",
+  onEntryOptionChange,
+  generateTopic = "",
+  onGenerateTopicChange,
+  onGenerateNote,
+  isGeneratingNote = false,
+  disableGenerateNote = false,
+  showGenerateNoteEntry = false,
+  showGenerateNoteTip = false,
   disableContentEditing = false,
   contentLockHint = null,
   disableGenerateAction = false,
@@ -131,6 +151,7 @@ export function NoteEditorForm({
   const actionsDisabled = contentEmpty || isSaving || isGenerating || isCopying;
   const actionInFlight = isGenerating || isCopying;
   const importInFlight = importFlowState === "uploading" || importFlowState === "extracting";
+  const generateNoteDisabled = disableGenerateNote || isGeneratingNote || isSaving || isGenerating || isCopying;
   const ImportStatusIcon = importFlowState === "failure"
     ? AlertCircle
     : importFlowState === "success"
@@ -305,6 +326,108 @@ export function NoteEditorForm({
               </div>
             ) : null}
           </div>
+
+          {showGenerateNoteEntry ? (
+            <div className="space-y-4 rounded-lg border border-border/80 bg-muted/20 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Choose how to start</p>
+                <p className="text-xs text-foreground/65">
+                  Start from a blank note or generate a first draft from a topic.
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  aria-pressed={entryOption === "write"}
+                  onClick={() => onEntryOptionChange?.("write")}
+                  className={`rounded-xl border px-4 py-3 text-left transition ${
+                    entryOption === "write"
+                      ? "border-sky-500 bg-sky-50 text-sky-950 shadow-sm dark:bg-sky-950/30 dark:text-sky-100"
+                      : "border-border bg-background text-foreground/80 hover:border-sky-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <FileText className="h-4 w-4" />
+                    Write your own note
+                  </div>
+                  <p className="mt-1 text-xs text-current/75">
+                    Start from scratch and write or paste what you already know.
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={entryOption === "generate"}
+                  onClick={() => onEntryOptionChange?.("generate")}
+                  className={`rounded-xl border px-4 py-3 text-left transition ${
+                    entryOption === "generate"
+                      ? "border-sky-500 bg-sky-50 text-sky-950 shadow-sm dark:bg-sky-950/30 dark:text-sky-100"
+                      : "border-border bg-background text-foreground/80 hover:border-sky-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <Sparkles className="h-4 w-4" />
+                    Generate from topic
+                  </div>
+                  <p className="mt-1 text-xs text-current/75">
+                    Create a study-ready first draft, then edit it before saving.
+                  </p>
+                </button>
+              </div>
+              {showGenerateNoteTip ? (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+                  Tip: You can generate notes instantly by typing a topic above.
+                </div>
+              ) : null}
+              {entryOption === "generate" ? (
+                <div className="space-y-3 rounded-xl border border-sky-500/20 bg-background p-4">
+                  <div className="space-y-1">
+                    <label htmlFor="generate-note-topic" className="text-sm font-medium text-foreground">
+                      Topic
+                    </label>
+                    <p className="text-xs text-foreground/65">
+                      Built for studying, not just exploring information.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      id="generate-note-topic"
+                      type="text"
+                      value={generateTopic}
+                      onChange={(event) => onGenerateTopicChange?.(event.target.value)}
+                      placeholder="Create a note about Newton's Laws of Motion..."
+                      className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+                    />
+                    <Button
+                      type="button"
+                      onClick={onGenerateNote}
+                      disabled={generateNoteDisabled}
+                      className="w-full sm:w-auto"
+                    >
+                      {isGeneratingNote ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Generating Note...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Generate Note
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-foreground/60">
+                    Generate a first draft here, then review and edit the content below before saving or generating a Study Pack.
+                  </p>
+                  {note.content.trim().length > 0 ? (
+                    <p className="text-xs text-foreground/55">
+                      Generating a note will replace the current content in the editor.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {showTagsSection ? (
             <div className="space-y-2">

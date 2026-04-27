@@ -744,6 +744,10 @@ export type UpsertNoteRequest = {
   content: string;
 };
 
+export type GenerateNoteFromTopicResponse = {
+  content: string;
+};
+
 export type NoteResponse = {
   id: string;
   title: string | null;
@@ -1403,6 +1407,22 @@ export async function createStudyPackFromNote(noteId: string): Promise<NoteRespo
   return parseApiResponse<NoteResponse>(
     response,
     "We could not generate your study pack right now. Please try again.",
+  );
+}
+
+export async function generateNoteFromTopic(topic: string): Promise<GenerateNoteFromTopicResponse> {
+  const response = await fetchWithAuth(
+    "/notes/generate",
+    {
+      method: "POST",
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({ topic }),
+    },
+    true,
+  );
+  return parseApiResponse<GenerateNoteFromTopicResponse>(
+    response,
+    "We could not generate a note right now. Please try again.",
   );
 }
 
