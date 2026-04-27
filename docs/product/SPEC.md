@@ -1218,20 +1218,21 @@ Page responsibilities:
 - After the first Study Pack is generated, Note Detail should show a success banner that points the user to `Start Challenge Quiz`.
 - After the first Challenge Quiz is completed, the result screen should show a weak-concepts guidance banner with `View Weak Concepts`.
 
-### Preferences Onboarding
+### Onboarding (v0.11.0)
 
 Route: `/onboarding`
 
-Preferences onboarding is reused and extended rather than duplicated.
+Full spec: `docs/features/onboarding.md`
 
-Current onboarding order:
+Onboarding is experience-first. The goal is for users to leave with a generated Study Pack, not an empty dashboard.
 
-1. `Profile Type`
-2. `Learning Profile`
-3. `Learning Style`
-4. `Study Reminder Frequency`
-5. `Exam Date` only when `profileType = BOARD_EXAM`
-6. finish and redirect to `Dashboard`
+Onboarding order:
+
+1. `Profile Type` — Student, Board Taker, or Teacher
+2. `Study Goal` — persona-filtered goal selection; Board Taker also sets optional `Exam Date` inline
+3. `Input Method` — generate a note from a topic, or paste/write own note
+4. `Study Pack Generation` — Study Pack is generated and previewed (summary, key concepts, quiz teaser)
+5. `Completion` — learning loop position shown; options to Continue Studying or Go to Dashboard
 
 Profile Type options:
 
@@ -1241,17 +1242,13 @@ Profile Type options:
 
 Rules:
 
-- `Learning Profile` collects:
-  - required `learnerLevel`
-  - required `courseProgram`
-  - optional `bio`
-- learner metadata inputs should reuse the same combobox pattern as the Note Editor `Subject` field instead of plain browser datalists
-- Course / Program uses the same real-time autocomplete filtering and learner-level helper text as the Profile learning-profile card.
-- `Learning Style` and `Study Reminder Frequency` remain the existing onboarding steps
-- `Exam Date` is conditional and must be skipped for `STUDENT` and `TEACHER`
 - onboarding state is loaded from `GET /auth/me`
-- onboarding completion is persisted through the existing onboarding completion flow
-- users who already completed onboarding should be redirected to `Dashboard`
+- onboarding completion is persisted via the existing completion flow; sets `onboardingCompletedAt`
+- users who already completed onboarding must be redirected to `Dashboard`
+- `Exam Date` is optional and shown inline on Step 2 for Board Takers only
+- `learnerLevel`, `courseProgram`, `bio`, `engagementMode`, and reminder preferences are deferred — collected in Profile and Settings after the user's first session
+- the note created during onboarding is saved to the user's library as a normal Draft note
+- the Study Pack generated during onboarding follows the standard Study Pack generation flow
 
 ### Profile
 
