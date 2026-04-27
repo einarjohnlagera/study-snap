@@ -200,9 +200,19 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(await screen.findByText("How do you want to start?")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Generate a note/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
     fireEvent.change(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion..."), {
       target: { value: "Newton's Laws of Motion" },
+    });
+    expect(screen.getByRole("button", { name: "Generate Study Pack →" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Generate Note/ }));
+
+    const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
+    expect(generatedNoteEditor).toHaveValue("Newton's Laws study content");
+    expect(createStudyPackFromNote).not.toHaveBeenCalled();
+
+    fireEvent.change(generatedNoteEditor, {
+      target: { value: "Edited Newton note content for onboarding so the study pack can start." },
     });
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack →" }));
 
@@ -226,10 +236,27 @@ describe("OnboardingPage", () => {
     expect(createNote).toHaveBeenCalledWith({
       title: "Newton's Laws of Motion",
       targetProfileType: "STUDENT",
-      content: "Newton's Laws study content",
+      content: "Edited Newton note content for onboarding so the study pack can start.",
     });
     expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
     expect(routerMock.push).toHaveBeenCalledWith("/study-packs/study-pack-1");
+  });
+
+  it("switches between modes and only shows the active input surface", async () => {
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review notes I already have" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
+    expect(screen.getByPlaceholderText("Create a note about Newton’s Laws of Motion...")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Paste or write your notes here...")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Write or paste my own note" }));
+    expect(screen.getByPlaceholderText("Paste or write your notes here...")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Create a note about Newton’s Laws of Motion...")).not.toBeInTheDocument();
   });
 
   it("allows board takers to finish without an exam date", async () => {
@@ -268,7 +295,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Practice under exam-style conditions" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.click(await screen.findByRole("button", { name: /Write or paste my own note/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));
     fireEvent.change(screen.getByPlaceholderText("Paste or write your notes here..."), {
       target: { value: longNote },
     });
@@ -293,7 +320,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Create study material for students" }));
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.click(await screen.findByRole("button", { name: /Write or paste my own note/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Write or paste my own note" }));
     fireEvent.change(screen.getByPlaceholderText("Paste or write your notes here..."), {
       target: { value: "Short onboarding note draft." },
     });

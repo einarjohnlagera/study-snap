@@ -35,7 +35,7 @@ type GenerationSectionKey = "summary" | "concepts" | "quiz";
 type StepName = "profile" | "goal" | "input" | "study-pack" | "completion";
 
 const TOPIC_MIN_LENGTH = 3;
-const OWN_NOTE_MIN_LENGTH = 50;
+const NOTE_CONTENT_MIN_LENGTH = 50;
 const DESKTOP_BREAKPOINT_PX = 768;
 const STUDY_PACK_GENERATION_POLL_INTERVAL_MS = 2000;
 const MAX_CONCEPT_PREVIEW_COUNT = 4;
@@ -143,6 +143,38 @@ function buildContinueStudyHref(note: NoteResponse | null): string {
   return "/dashboard";
 }
 
+function ModeOptionButton({
+  icon,
+  label,
+  description,
+  selected,
+  onClick,
+}: Readonly<{
+  icon: "✨" | "📝";
+  label: string;
+  description: string;
+  selected: boolean;
+  onClick: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      className={getSelectionCardClassName({
+        selected,
+        className: "min-h-24 p-4 sm:min-h-28 sm:p-5",
+      })}
+      onClick={onClick}
+      aria-pressed={selected}
+      aria-label={label}
+    >
+      <div className="space-y-2 text-left">
+        <div className="text-base font-semibold text-foreground sm:text-lg">{icon} {label}</div>
+        <p className="text-sm leading-relaxed text-foreground/70 sm:text-base">{description}</p>
+      </div>
+    </button>
+  );
+}
+
 function GenerationSection({
   title,
   sectionKey,
@@ -194,7 +226,8 @@ export default function OnboardingPage() {
   const [draft, setDraft] = useState<OnboardingDraft>(createEmptyOnboardingDraft());
   const [note, setNote] = useState<NoteResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [isGeneratingNote, setIsGeneratingNote] = useState(false);
+  const [startingStudyPack, setStartingStudyPack] = useState(false);
   const [retryingGeneration, setRetryingGeneration] = useState(false);
   const [completingOnboarding, setCompletingOnboarding] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -221,6 +254,7 @@ export default function OnboardingPage() {
   const goalOptions = profileType ? GOAL_OPTIONS[profileType] : [];
   const selectedGoal = draft.goal;
   const selectedInputMethod = draft.inputMethod;
+  const generatedNoteReady = draft.generatedNoteReady;
   const topicLength = draft.topic.trim().length;
   const noteLength = draft.noteContent.trim().length;
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
@@ -233,11 +267,18 @@ export default function OnboardingPage() {
 
   const canContinueFromStepOne = profileType !== null;
   const canContinueFromStepTwo = selectedGoal !== null;
-  const canGenerateFromTopic = selectedInputMethod === "generate" && topicLength >= TOPIC_MIN_LENGTH;
-  const canGenerateFromOwnNote = selectedInputMethod === "own_note" && noteLength >= OWN_NOTE_MIN_LENGTH;
-  const canGenerateStudyPack = canGenerateFromTopic || canGenerateFromOwnNote;
+  const canGenerateNoteDraft = selectedInputMethod === "generate" && topicLength >= TOPIC_MIN_LENGTH;
+  const canStartStudyPack = selectedInputMethod === "generate"
+    ? generatedNoteReady && noteLength >= NOTE_CONTENT_MIN_LENGTH
+    : selectedInputMethod === "own_note" && noteLength >= NOTE_CONTENT_MIN_LENGTH;
+  const stepTransitionKey = currentStep === 3
+    ? `step-3-${selectedInputMethod ?? "none"}-${generatedNoteReady ? "generated" : "initial"}`
+    : `step-${currentStep}`;
 
-  const trackOnboardingEvent = (eventType: Parameters<typeof trackAnalyticsEvent>[0]["eventType"], metadata?: Record<string, unknown>) => {
+  const trackOnboardingEvent = (
+    eventType: Parameters<typeof trackAnalyticsEvent>[0]["eventType"],
+    metadata?: Record<string, unknown>,
+  ) => {
     void trackAnalyticsEvent({
       eventType,
       metadata: metadata ?? {},
@@ -298,7 +339,19 @@ export default function OnboardingPage() {
         if (!nextDraft.examDate && me.examDate) {
           nextDraft.examDate = me.examDate;
         }
+        if (nextDraft.currentStep > 3 && !nextDraft.noteId) {
+          nextDraft.currentStep = 3;
+        }
+        if (
+          nextDraft.inputMethod === "generate"
+          && nextDraft.noteContent.trim().length > 0
+          && !nextDraft.generatedNoteReady
+          && !nextDraft.noteId
+        ) {
+          nextDraft.generatedNoteReady = true;
+        }
         setDraft(nextDraft);
+
         if (!startedTrackedRef.current) {
           startedTrackedRef.current = true;
           trackOnboardingEvent("ONBOARDING_V2_STARTED", {
@@ -306,25 +359,23 @@ export default function OnboardingPage() {
           });
         }
 
-        if (nextDraft.noteId) {
-          const loadedNote = await getNote(nextDraft.noteId).catch(() => null);
-          if (!loadedNote || cancelled) {
-            return;
-          }
-          setNote(loadedNote);
-          if (loadedNote.studyPackStatus === "FAILED") {
-            setGenerationError(STEP_FOUR_ERROR_MESSAGE);
-          }
-          setDraft((previous) => ({
-            ...previous,
-            studyPackId: loadedNote.studyPackId ?? previous.studyPackId,
-            currentStep: previous.currentStep >= 5
-              ? 5
-              : loadedNote.studyPackStatus === "STUDY_PACK_READY" || loadedNote.studyPackStatus === "FAILED"
-                ? 4
-                : 4,
-          }));
+        if (!nextDraft.noteId) {
+          return;
         }
+
+        const loadedNote = await getNote(nextDraft.noteId).catch(() => null);
+        if (!loadedNote || cancelled) {
+          return;
+        }
+        setNote(loadedNote);
+        if (loadedNote.studyPackStatus === "FAILED") {
+          setGenerationError(STEP_FOUR_ERROR_MESSAGE);
+        }
+        setDraft((previous) => ({
+          ...previous,
+          studyPackId: loadedNote.studyPackId ?? previous.studyPackId,
+          currentStep: previous.currentStep >= 5 ? 5 : 4,
+        }));
       })
       .catch((error) => {
         if (cancelled) {
@@ -390,7 +441,10 @@ export default function OnboardingPage() {
             noteId: loadedNote.id,
             studyPackId: loadedNote.studyPackId ?? previous.studyPackId,
           }));
-          if (loadedNote.studyPackStatus === "STUDY_PACK_READY" && generationTrackedRef.current !== loadedNote.id) {
+          if (
+            loadedNote.studyPackStatus === "STUDY_PACK_READY"
+            && generationTrackedRef.current !== loadedNote.id
+          ) {
             generationTrackedRef.current = loadedNote.id;
             trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_GENERATED", {
               method: draft.inputMethod,
@@ -512,9 +566,11 @@ export default function OnboardingPage() {
     if (currentStep <= 1) {
       return;
     }
+
     trackOnboardingEvent("ONBOARDING_V2_BACK_NAVIGATED", {
       from_step: currentStep,
     });
+
     if (currentStep === 4) {
       setGenerationError(null);
       setNote(null);
@@ -527,65 +583,83 @@ export default function OnboardingPage() {
       }));
       return;
     }
+
     goToStep(currentStep - 1);
   };
 
-  const handleContinueFromStepThree = async () => {
-    if (!profileType || !selectedInputMethod || submitting || !canGenerateStudyPack) {
+  const handleGenerateNoteDraft = async () => {
+    if (!canGenerateNoteDraft || isGeneratingNote) {
       return;
     }
 
-    setSubmitting(true);
+    setIsGeneratingNote(true);
+    setStepThreeError(null);
+    setGenerationError(null);
+    trackOnboardingEvent("ONBOARDING_V2_TOPIC_SUBMITTED", {
+      topic_length: topicLength,
+    });
+
+    try {
+      const generated = await generateNoteFromTopic(draft.topic.trim());
+      setNote(null);
+      setDraft((previous) => ({
+        ...previous,
+        noteContent: generated.content,
+        generatedNoteReady: true,
+        noteId: null,
+        studyPackId: null,
+      }));
+    } catch (error) {
+      setStepThreeError(
+        error instanceof Error ? error.message : "We could not generate a note right now. Please try again.",
+      );
+    } finally {
+      setIsGeneratingNote(false);
+    }
+  };
+
+  const handleStartStudyPack = async () => {
+    if (!profileType || !selectedInputMethod || startingStudyPack || !canStartStudyPack) {
+      return;
+    }
+
+    setStartingStudyPack(true);
     setStepThreeError(null);
     setGenerationError(null);
 
-    let enteredStepFour = false;
-    try {
-      let content = draft.noteContent;
-      if (selectedInputMethod === "generate") {
-        trackOnboardingEvent("ONBOARDING_V2_TOPIC_SUBMITTED", {
-          topic_length: topicLength,
-        });
-        const generated = await generateNoteFromTopic(draft.topic.trim());
-        content = generated.content;
-        setDraft((previous) => ({
-          ...previous,
-          noteContent: generated.content,
-        }));
-      } else {
-        trackOnboardingEvent("ONBOARDING_V2_OWN_NOTE_SUBMITTED", {
-          note_length: noteLength,
-        });
-      }
+    if (selectedInputMethod === "own_note") {
+      trackOnboardingEvent("ONBOARDING_V2_OWN_NOTE_SUBMITTED", {
+        note_length: noteLength,
+      });
+    }
 
-      enteredStepFour = true;
-      goToStep(4);
-      const savedNote = await createNote({
+    let savedNote: NoteResponse | null = null;
+    try {
+      savedNote = await createNote({
         title: selectedInputMethod === "generate" ? draft.topic.trim() : null,
         targetProfileType: mapProfileTypeToNoteTargetProfile(profileType),
-        content,
+        content: draft.noteContent,
       });
       setNote(savedNote);
       setDraft((previous) => ({
         ...previous,
+        currentStep: 4,
         noteId: savedNote.id,
         studyPackId: savedNote.studyPackId ?? null,
-        noteContent: content,
       }));
 
       const queuedNote = await createStudyPackFromNote(savedNote.id);
       setNote(queuedNote);
       setDraft((previous) => ({
         ...previous,
+        currentStep: 4,
         noteId: queuedNote.id,
-        studyPackId: queuedNote.studyPackId ?? null,
-        noteContent: content,
+        studyPackId: queuedNote.studyPackId ?? previous.studyPackId,
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : STEP_FOUR_ERROR_MESSAGE;
-      if (!enteredStepFour) {
+      if (!savedNote) {
         setStepThreeError(message);
-        goToStep(3);
       } else {
         setGenerationError(STEP_FOUR_ERROR_MESSAGE);
         trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
@@ -594,7 +668,7 @@ export default function OnboardingPage() {
         });
       }
     } finally {
-      setSubmitting(false);
+      setStartingStudyPack(false);
     }
   };
 
@@ -602,6 +676,7 @@ export default function OnboardingPage() {
     if (!note?.id || retryingGeneration) {
       return;
     }
+
     setRetryingGeneration(true);
     setGenerationError(null);
     generationTrackedRef.current = null;
@@ -610,6 +685,7 @@ export default function OnboardingPage() {
       setNote(queuedNote);
       setDraft((previous) => ({
         ...previous,
+        currentStep: 4,
         noteId: queuedNote.id,
         studyPackId: queuedNote.studyPackId ?? previous.studyPackId,
       }));
@@ -650,11 +726,11 @@ export default function OnboardingPage() {
     }));
   };
 
-  const renderStepContent = (() => {
+  const renderStepContent = () => {
     if (currentStep === 1) {
       return (
-        <Card className="space-y-6 p-5 sm:p-8">
-          <div className="space-y-2">
+        <div className="mx-auto flex min-h-full w-full max-w-[680px] flex-col justify-center space-y-6">
+          <div className="space-y-2 text-center sm:text-left">
             <CardTitle className="text-2xl sm:text-3xl">Welcome to NoteLib. Let&apos;s set things up.</CardTitle>
             <CardDescription>Select the profile that best matches how you&apos;ll use NoteLib.</CardDescription>
           </div>
@@ -672,21 +748,21 @@ export default function OnboardingPage() {
                 aria-pressed={profileType === option.value}
                 aria-label={option.label}
               >
-                <div className="space-y-1">
+                <div className="space-y-1 text-left">
                   <div className="text-base font-semibold text-foreground sm:text-lg">{option.label}</div>
                   <p className="text-sm text-foreground/70 sm:text-base">{option.description}</p>
                 </div>
               </button>
             ))}
           </div>
-        </Card>
+        </div>
       );
     }
 
     if (currentStep === 2) {
       return (
-        <Card className="space-y-6 p-5 sm:p-8">
-          <div className="space-y-2">
+        <div className="mx-auto flex min-h-full w-full max-w-[680px] flex-col justify-center space-y-6">
+          <div className="space-y-2 text-center sm:text-left">
             <CardTitle className="text-2xl sm:text-3xl">What&apos;s your goal right now?</CardTitle>
             <CardDescription>Choose the goal that fits your first study session.</CardDescription>
           </div>
@@ -731,38 +807,38 @@ export default function OnboardingPage() {
               />
             </label>
           ) : null}
-        </Card>
+        </div>
       );
     }
 
     if (currentStep === 3) {
       return (
-        <Card className="space-y-6 p-5 sm:p-8">
-          <div className="space-y-2">
+        <div className="mx-auto flex min-h-full w-full max-w-[680px] flex-col justify-center space-y-6">
+          <div className="space-y-2 text-center sm:text-left">
             <CardTitle className="text-2xl sm:text-3xl">How do you want to start?</CardTitle>
-            <CardDescription>Pick one path, then generate your first Study Pack.</CardDescription>
+            <CardDescription>Pick one path, then continue from your note into a Study Pack.</CardDescription>
           </div>
 
-          <div className="grid gap-3">
-            <button
-              type="button"
-              className={getSelectionCardClassName({
-                selected: selectedInputMethod === "generate",
-                className: "p-4 sm:p-5",
-              })}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ModeOptionButton
+              icon="✨"
+              label="Generate a note"
+              description="Start with a topic, review the draft, then generate your Study Pack."
+              selected={selectedInputMethod === "generate"}
               onClick={() => selectInputMethod("generate")}
-              aria-pressed={selectedInputMethod === "generate"}
-            >
-              <div className="space-y-1 text-left">
-                <div className="text-base font-semibold text-foreground sm:text-lg">Generate a note</div>
-                <p className="text-sm text-foreground/70 sm:text-base">
-                  Enter a topic and NoteLib will draft a note before generating your Study Pack.
-                </p>
-              </div>
-            </button>
+            />
+            <ModeOptionButton
+              icon="📝"
+              label="Write or paste my own note"
+              description="Write or paste your material first, then generate your Study Pack."
+              selected={selectedInputMethod === "own_note"}
+              onClick={() => selectInputMethod("own_note")}
+            />
+          </div>
 
-            {selectedInputMethod === "generate" ? (
-              <label className="block space-y-2 rounded-xl border border-border bg-background p-4">
+          {selectedInputMethod === "generate" ? (
+            <div className="motion-onboarding-step space-y-4 rounded-2xl border border-border bg-surface-alt/80 p-4 sm:p-5">
+              <label className="block space-y-2">
                 <span className="text-sm font-medium text-foreground">Topic</span>
                 <input
                   type="text"
@@ -778,27 +854,36 @@ export default function OnboardingPage() {
                   className="min-h-12 w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500"
                 />
               </label>
-            ) : null}
 
-            <button
-              type="button"
-              className={getSelectionCardClassName({
-                selected: selectedInputMethod === "own_note",
-                className: "p-4 sm:p-5",
-              })}
-              onClick={() => selectInputMethod("own_note")}
-              aria-pressed={selectedInputMethod === "own_note"}
-            >
-              <div className="space-y-1 text-left">
-                <div className="text-base font-semibold text-foreground sm:text-lg">Write or paste my own note</div>
-                <p className="text-sm text-foreground/70 sm:text-base">
-                  Paste your material or write a fresh note, then generate your Study Pack.
+              {generatedNoteReady ? (
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-foreground">Generated note</span>
+                  <textarea
+                    value={draft.noteContent}
+                    onChange={(event) => {
+                      setDraft((previous) => ({
+                        ...previous,
+                        noteContent: event.target.value,
+                      }));
+                      setStepThreeError(null);
+                    }}
+                    rows={10}
+                    className="min-h-[220px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[260px]"
+                    placeholder="Your generated note will appear here."
+                  />
+                  <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>
+                </label>
+              ) : (
+                <p className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-foreground/70 sm:text-base">
+                  Generate a note first, then review and edit it before creating your Study Pack.
                 </p>
-              </div>
-            </button>
+              )}
+            </div>
+          ) : null}
 
-            {selectedInputMethod === "own_note" ? (
-              <label className="block space-y-2 rounded-xl border border-border bg-background p-4">
+          {selectedInputMethod === "own_note" ? (
+            <div className="motion-onboarding-step space-y-4 rounded-2xl border border-border bg-surface-alt/80 p-4 sm:p-5">
+              <label className="block space-y-2">
                 <span className="text-sm font-medium text-foreground">Your note</span>
                 <textarea
                   value={draft.noteContent}
@@ -810,53 +895,59 @@ export default function OnboardingPage() {
                     setStepThreeError(null);
                   }}
                   rows={10}
-                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500"
+                  className="min-h-[220px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[260px]"
                   placeholder="Paste or write your notes here..."
                 />
                 <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>
               </label>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {stepThreeError ? <p className="text-sm text-red-600 dark:text-red-400">{stepThreeError}</p> : null}
-        </Card>
+        </div>
       );
     }
 
     if (currentStep === 4) {
       return (
-        <div className="space-y-4">
-          <Card className="space-y-4 p-5 sm:p-8">
-            <div className="space-y-2">
-              <CardTitle className="text-2xl sm:text-3xl">
-                {studyPackReady ? "Your Study Pack is ready." : "Building your Study Pack..."}
-              </CardTitle>
-              <CardDescription>
-                {studyPackReady
-                  ? "Preview what NoteLib generated before you continue."
-                  : "We’re turning your first note into a guided study flow."}
-              </CardDescription>
+        <div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col justify-center space-y-4">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-2xl sm:text-3xl">
+              {studyPackReady ? "Your Study Pack is ready." : "Building your Study Pack..."}
+            </CardTitle>
+            <CardDescription>
+              {studyPackReady
+                ? "Preview what NoteLib generated before you continue."
+                : "We’re turning your note into a complete study flow."}
+            </CardDescription>
+          </div>
+
+          <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+            {STEP_FOUR_BACK_NOTICE}
+          </p>
+
+          {generationError ? (
+            <div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
+              <p>{generationError}</p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleRetryGeneration()}
+                loading={retryingGeneration}
+                loadingText="Retrying..."
+              >
+                Retry
+              </Button>
             </div>
+          ) : null}
 
-            <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
-              {STEP_FOUR_BACK_NOTICE}
-            </p>
-
-            {generationError ? (
-              <div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
-                <p>{generationError}</p>
-                <Button type="button" variant="outline" onClick={() => void handleRetryGeneration()} loading={retryingGeneration} loadingText="Retrying...">
-                  Retry
-                </Button>
-              </div>
-            ) : null}
-
-            {studyPackGenerating ? (
-              <div className="rounded-xl border border-border bg-background px-4 py-5 text-sm text-foreground/75 sm:text-base">
+          {studyPackGenerating ? (
+            <Card className="p-4 sm:p-5">
+              <p className="text-sm text-foreground/75 sm:text-base">
                 Your Study Pack is generating. This usually takes a few moments.
-              </div>
-            ) : null}
-          </Card>
+              </p>
+            </Card>
+          ) : null}
 
           {studyPackReady ? (
             <div className="grid gap-4">
@@ -932,8 +1023,8 @@ export default function OnboardingPage() {
     }
 
     return (
-      <Card className="space-y-6 p-5 sm:p-8">
-        <div className="space-y-2">
+      <div className="mx-auto flex min-h-full w-full max-w-[680px] flex-col justify-center space-y-6">
+        <div className="space-y-2 text-center sm:text-left">
           <CardTitle className="text-2xl sm:text-3xl">You just started your study loop.</CardTitle>
           <CardDescription>Create ✓ → Understand ● → Practice → Challenge → Improve</CardDescription>
         </div>
@@ -953,110 +1044,232 @@ export default function OnboardingPage() {
           <p className="text-sm text-foreground/60">Saving your profile...</p>
         ) : null}
         {completionError ? <p className="text-sm text-red-600 dark:text-red-400">{completionError}</p> : null}
-      </Card>
+      </div>
     );
-  })();
+  };
 
-  if (loading) {
-    return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        <Card className="space-y-4 p-5 sm:p-8">
-          <div className="h-8 w-52 animate-pulse rounded bg-foreground/10" />
-          <div className="h-4 w-full animate-pulse rounded bg-foreground/10" />
-          <div className="h-32 w-full animate-pulse rounded bg-foreground/10" />
-        </Card>
-      </main>
-    );
-  }
+  const renderFooterActions = () => {
+    if (currentStep === 5) {
+      return null;
+    }
 
-  if (loadError) {
-    return (
-      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        <Card className="space-y-4 p-5 sm:p-8">
-          <CardTitle>Could not load onboarding</CardTitle>
-          <CardDescription>{loadError}</CardDescription>
-          <Button type="button" variant="outline" onClick={() => router.refresh()}>
+    if (currentStep === 1) {
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            className="min-h-12 text-base sm:min-w-40"
+            onClick={() => goToStep(2)}
+            disabled={!canContinueFromStepOne}
+          >
+            Continue
+          </Button>
+        </div>
+      );
+    }
+
+    if (currentStep === 2) {
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="min-h-12 text-base sm:min-w-40"
+            onClick={() => goToStep(3)}
+            disabled={!canContinueFromStepTwo}
+          >
+            Continue
+          </Button>
+        </div>
+      );
+    }
+
+    if (currentStep === 3) {
+      if (selectedInputMethod === "generate" && !generatedNoteReady) {
+        return (
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+              Back
+            </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12 text-base sm:min-w-48"
+                disabled
+              >
+                Generate Study Pack →
+              </Button>
+              <Button
+                type="button"
+                className="min-h-12 text-base sm:min-w-40"
+                onClick={() => void handleGenerateNoteDraft()}
+                disabled={!canGenerateNoteDraft}
+                loading={isGeneratingNote}
+                loadingText="Generating..."
+              >
+                Generate Note ✨
+              </Button>
+            </div>
+          </div>
+        );
+      }
+
+      if (selectedInputMethod === "generate" && generatedNoteReady) {
+        return (
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+            <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+              Back
+            </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-12 text-base sm:min-w-44"
+                onClick={() => void handleGenerateNoteDraft()}
+                disabled={!canGenerateNoteDraft}
+                loading={isGeneratingNote}
+                loadingText="Generating..."
+              >
+                Regenerate Note ✨
+              </Button>
+              <Button
+                type="button"
+                className="min-h-12 text-base sm:min-w-48"
+                onClick={() => void handleStartStudyPack()}
+                disabled={!canStartStudyPack}
+                loading={startingStudyPack}
+                loadingText="Starting..."
+              >
+                Generate Study Pack →
+              </Button>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="min-h-12 text-base sm:min-w-48"
+            onClick={() => void handleStartStudyPack()}
+            disabled={!canStartStudyPack}
+            loading={startingStudyPack}
+            loadingText="Starting..."
+          >
+            Generate Study Pack →
+          </Button>
+        </div>
+      );
+    }
+
+    if (studyPackReady) {
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+          <Button type="button" className="min-h-12 text-base sm:min-w-40" onClick={() => goToStep(5)}>
+            Continue
+          </Button>
+        </div>
+      );
+    }
+
+    if (generationError && note?.id) {
+      return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="min-h-12 text-base sm:min-w-40"
+            onClick={() => void handleRetryGeneration()}
+            loading={retryingGeneration}
+            loadingText="Retrying..."
+          >
             Retry
           </Button>
-        </Card>
-      </main>
-    );
-  }
+        </div>
+      );
+    }
 
-  return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <p className="text-sm font-medium uppercase tracking-[0.18em] text-foreground/50">
-            Step {currentStep} of 5
-          </p>
-          <div className="h-2 overflow-hidden rounded-full bg-foreground/10">
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-200"
-              style={{ width: `${(currentStep / 5) * 100}%` }}
-            />
+    return (
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+        <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
+          Back
+        </Button>
+        <Button type="button" className="min-h-12 text-base sm:min-w-44" disabled>
+          {startingStudyPack ? "Starting..." : "Building your Study Pack..."}
+        </Button>
+      </div>
+    );
+  };
+
+  const renderCardShell = (content: ReactNode, footer: ReactNode | null) => (
+    <main className="mx-auto flex min-h-[calc(100dvh-1.5rem)] w-full max-w-[820px] flex-col justify-center px-4 py-3 sm:px-6 md:min-h-[calc(100dvh-5rem)] md:overflow-hidden md:py-5">
+      <div className="flex flex-1 flex-col overflow-hidden rounded-[28px] border border-border bg-background shadow-[0_24px_80px_rgba(15,23,42,0.08)] md:h-[calc(100dvh-5rem)] md:max-h-[780px]">
+        <div className="border-b border-border px-5 py-5 sm:px-6 sm:py-6">
+          <div className="space-y-3">
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-foreground/50">
+              Step {currentStep} of 5
+            </p>
+            <div className="h-2 overflow-hidden rounded-full bg-foreground/10">
+              <div
+                className="motion-progress-bar h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+                style={{ width: `${(currentStep / 5) * 100}%` }}
+              />
+            </div>
           </div>
         </div>
 
-        {renderStepContent}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
+          <div key={stepTransitionKey} className="motion-onboarding-step min-h-full">
+            {content}
+          </div>
+        </div>
 
-        {currentStep < 5 ? (
-          <div className="sticky bottom-0 z-10 -mx-4 border-t border-border bg-background/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
-            <div className="mx-auto flex max-w-3xl items-center gap-3">
-              {currentStep > 1 ? (
-                <Button type="button" variant="outline" className="min-h-12 flex-1 text-base" onClick={handleBack}>
-                  Back
-                </Button>
-              ) : null}
-
-              {currentStep === 1 ? (
-                <Button
-                  type="button"
-                  className="min-h-12 flex-1 text-base"
-                  onClick={() => goToStep(2)}
-                  disabled={!canContinueFromStepOne}
-                >
-                  Continue
-                </Button>
-              ) : null}
-
-              {currentStep === 2 ? (
-                <Button
-                  type="button"
-                  className="min-h-12 flex-1 text-base"
-                  onClick={() => goToStep(3)}
-                  disabled={!canContinueFromStepTwo}
-                >
-                  Continue
-                </Button>
-              ) : null}
-
-              {currentStep === 3 ? (
-                <Button
-                  type="button"
-                  className="min-h-12 flex-1 text-base"
-                  onClick={() => void handleContinueFromStepThree()}
-                  disabled={!canGenerateStudyPack}
-                  loading={submitting}
-                  loadingText="Generating..."
-                >
-                  Generate Study Pack →
-                </Button>
-              ) : null}
-
-              {currentStep === 4 && studyPackReady ? (
-                <Button
-                  type="button"
-                  className="min-h-12 flex-1 text-base"
-                  onClick={() => goToStep(5)}
-                >
-                  Continue
-                </Button>
-              ) : null}
-            </div>
+        {footer ? (
+          <div className="border-t border-border bg-background/95 px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-6 sm:py-5">
+            {footer}
           </div>
         ) : null}
       </div>
     </main>
   );
+
+  if (loading) {
+    return renderCardShell(
+      <div className="mx-auto flex min-h-full w-full max-w-[680px] flex-col justify-center space-y-4">
+        <div className="h-8 w-52 animate-pulse rounded bg-foreground/10" />
+        <div className="h-4 w-full animate-pulse rounded bg-foreground/10" />
+        <div className="h-40 w-full animate-pulse rounded-2xl bg-foreground/10" />
+      </div>,
+      null,
+    );
+  }
+
+  if (loadError) {
+    return renderCardShell(
+      <div className="mx-auto flex min-h-full w-full max-w-[680px] flex-col justify-center space-y-4">
+        <CardTitle>Could not load onboarding</CardTitle>
+        <CardDescription>{loadError}</CardDescription>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button type="button" variant="outline" className="min-h-12 text-base" onClick={() => router.refresh()}>
+            Retry
+          </Button>
+        </div>
+      </div>,
+      null,
+    );
+  }
+
+  return renderCardShell(renderStepContent(), renderFooterActions());
 }

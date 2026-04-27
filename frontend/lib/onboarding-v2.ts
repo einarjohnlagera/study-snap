@@ -22,6 +22,7 @@ export type OnboardingDraft = {
   inputMethod: OnboardingInputMethod | null;
   topic: string;
   noteContent: string;
+  generatedNoteReady: boolean;
   noteId: string | null;
   studyPackId: string | null;
 };
@@ -43,6 +44,7 @@ export function createEmptyOnboardingDraft(): OnboardingDraft {
     inputMethod: null,
     topic: "",
     noteContent: "",
+    generatedNoteReady: false,
     noteId: null,
     studyPackId: null,
   };
