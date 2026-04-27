@@ -161,15 +161,15 @@ function ModeOptionButton({
       type="button"
       className={getSelectionCardClassName({
         selected,
-        className: "min-h-20 p-3.5 sm:min-h-24 sm:p-4",
+        className: "min-h-24 p-4 sm:min-h-28 sm:p-5",
       })}
       onClick={onClick}
       aria-pressed={selected}
       aria-label={label}
     >
       <div className="space-y-1.5 text-left">
-        <div className="text-base font-semibold text-foreground sm:text-[1.05rem]">{icon} {label}</div>
-        <p className="text-sm leading-6 text-foreground/70">{description}</p>
+        <div className="text-base font-semibold text-foreground sm:text-lg">{icon} {label}</div>
+        <p className="text-sm leading-relaxed text-foreground/70 sm:text-base">{description}</p>
       </div>
     </button>
   );
@@ -191,15 +191,15 @@ function GenerationSection({
   children: ReactNode;
 }>) {
   const content = (
-    <div className="pt-2.5 text-sm text-foreground/80 sm:text-[0.95rem]">
+    <div className="pt-3 text-sm text-foreground/80 sm:text-base">
       {children}
     </div>
   );
 
   if (isDesktop) {
     return (
-      <Card className="p-4">
-        <CardTitle className="text-base sm:text-[1.05rem]">{title}</CardTitle>
+      <Card className="p-4 sm:p-5">
+        <CardTitle className="text-base sm:text-lg">{title}</CardTitle>
         {content}
       </Card>
     );
@@ -274,6 +274,7 @@ export default function OnboardingPage() {
   const stepTransitionKey = currentStep === 3
     ? `step-3-${selectedInputMethod ?? "none"}-${generatedNoteReady ? "generated" : "initial"}`
     : `step-${currentStep}`;
+  const stepUsesScrollableShell = currentStep === 3;
 
   const trackOnboardingEvent = (
     eventType: Parameters<typeof trackAnalyticsEvent>[0]["eventType"],
@@ -730,12 +731,12 @@ export default function OnboardingPage() {
   const renderStepContent = () => {
     if (currentStep === 1) {
       return (
-        <div className="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center space-y-5">
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-[1.75rem] leading-tight sm:text-[2rem]">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
               Welcome to NoteLib. Let&apos;s set things up.
             </CardTitle>
-            <CardDescription className="text-sm sm:text-base">
+            <CardDescription className="text-sm">
               Select the profile that best matches how you&apos;ll use NoteLib.
             </CardDescription>
           </div>
@@ -747,15 +748,15 @@ export default function OnboardingPage() {
                 type="button"
                 className={getSelectionCardClassName({
                   selected: profileType === option.value,
-                  className: "p-3.5 sm:p-4",
+                  className: "p-4 sm:p-5",
                 })}
                 onClick={() => selectProfileType(option.value)}
                 aria-pressed={profileType === option.value}
                 aria-label={option.label}
               >
                 <div className="space-y-1 text-left">
-                  <div className="text-base font-semibold text-foreground sm:text-[1.05rem]">{option.label}</div>
-                  <p className="text-sm leading-6 text-foreground/70">{option.description}</p>
+                  <div className="text-base font-semibold text-foreground sm:text-lg">{option.label}</div>
+                  <p className="text-sm text-foreground/70 sm:text-base">{option.description}</p>
                 </div>
               </button>
             ))}
@@ -766,12 +767,12 @@ export default function OnboardingPage() {
 
     if (currentStep === 2) {
       return (
-        <div className="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center space-y-5">
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-[1.75rem] leading-tight sm:text-[2rem]">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
               What&apos;s your goal right now?
             </CardTitle>
-            <CardDescription className="text-sm sm:text-base">
+            <CardDescription className="text-sm">
               Choose the goal that fits your first study session.
             </CardDescription>
           </div>
@@ -783,12 +784,12 @@ export default function OnboardingPage() {
                 type="button"
                 className={getSelectionCardClassName({
                   selected: selectedGoal === option.value,
-                  className: "p-3.5 sm:p-4",
+                  className: "p-4 sm:p-5",
                 })}
                 onClick={() => selectGoal(option.value)}
                 aria-pressed={selectedGoal === option.value}
               >
-                <div className="text-left text-base font-medium text-foreground sm:text-[1.05rem]">{option.label}</div>
+                <div className="text-left text-base font-medium text-foreground sm:text-lg">{option.label}</div>
               </button>
             ))}
           </div>
@@ -822,12 +823,12 @@ export default function OnboardingPage() {
 
     if (currentStep === 3) {
       return (
-        <div className="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center space-y-5">
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-[1.75rem] leading-tight sm:text-[2rem]">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
               How do you want to start?
             </CardTitle>
-            <CardDescription className="text-sm sm:text-base">
+            <CardDescription className="text-sm">
               Pick one path, then continue from your note into a Study Pack.
             </CardDescription>
           </div>
@@ -923,12 +924,12 @@ export default function OnboardingPage() {
 
     if (currentStep === 4) {
       return (
-        <div className="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center space-y-3.5">
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-4">
           <div className="space-y-2 text-center sm:text-left">
-            <CardTitle className="text-[1.75rem] leading-tight sm:text-[2rem]">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
               {studyPackReady ? "Your Study Pack is ready." : "Building your Study Pack..."}
             </CardTitle>
-            <CardDescription className="text-sm sm:text-base">
+            <CardDescription className="text-sm">
               {studyPackReady
                 ? "Preview what NoteLib generated before you continue."
                 : "We’re turning your note into a complete study flow."}
@@ -1036,12 +1037,12 @@ export default function OnboardingPage() {
     }
 
     return (
-      <div className="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center space-y-5">
+      <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
         <div className="space-y-2 text-center sm:text-left">
-          <CardTitle className="text-[1.75rem] leading-tight sm:text-[2rem]">
+          <CardTitle className="text-2xl leading-tight sm:text-3xl">
             You just started your study loop.
           </CardTitle>
-          <CardDescription className="text-sm sm:text-base">
+          <CardDescription className="text-sm">
             Create ✓ → Understand ● → Practice → Challenge → Improve
           </CardDescription>
         </div>
@@ -1231,9 +1232,13 @@ export default function OnboardingPage() {
   };
 
   const renderCardShell = (content: ReactNode, footer: ReactNode | null) => (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-[640px] flex-col justify-center px-4 py-4 sm:min-h-[calc(100dvh-1.5rem)] sm:px-5 sm:py-5 md:overflow-hidden">
-      <div className="flex flex-1 flex-col overflow-hidden rounded-[24px] border border-border bg-background shadow-[0_18px_56px_rgba(15,23,42,0.08)] md:max-h-[720px]">
-        <div className="border-b border-border px-5 py-4 sm:px-6 sm:py-[18px]">
+    <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[620px] flex-col justify-center px-4 py-4 sm:px-5 sm:py-5">
+      <div
+        className={`flex w-full flex-col rounded-[24px] border border-border bg-background shadow-[0_16px_48px_rgba(15,23,42,0.08)] ${
+          stepUsesScrollableShell ? "h-[calc(100dvh-6rem)] max-h-[720px] overflow-hidden" : "overflow-visible"
+        }`}
+      >
+        <div className="border-b border-border px-5 py-4 sm:px-6 sm:py-4">
           <div className="space-y-2.5">
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-foreground/50">
               Step {currentStep} of 5
@@ -1247,14 +1252,18 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
-          <div key={stepTransitionKey} className="motion-onboarding-step min-h-full">
+        <div
+          className={`px-5 py-4 sm:px-6 sm:py-5 ${
+            stepUsesScrollableShell ? "min-h-0 flex-1 overflow-y-auto" : "overflow-visible"
+          }`}
+        >
+          <div key={stepTransitionKey} className="motion-onboarding-step">
             {content}
           </div>
         </div>
 
         {footer ? (
-          <div className="border-t border-border bg-background/95 px-5 py-3.5 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-6 sm:py-4">
+          <div className="border-t border-border bg-background/95 px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/90 sm:px-6 sm:py-4">
             {footer}
           </div>
         ) : null}
@@ -1264,7 +1273,7 @@ export default function OnboardingPage() {
 
   if (loading) {
     return renderCardShell(
-      <div className="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center space-y-4">
+      <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-4">
         <div className="h-8 w-52 animate-pulse rounded bg-foreground/10" />
         <div className="h-4 w-full animate-pulse rounded bg-foreground/10" />
         <div className="h-40 w-full animate-pulse rounded-2xl bg-foreground/10" />
@@ -1275,7 +1284,7 @@ export default function OnboardingPage() {
 
   if (loadError) {
     return renderCardShell(
-      <div className="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center space-y-4">
+      <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-4">
         <CardTitle>Could not load onboarding</CardTitle>
         <CardDescription>{loadError}</CardDescription>
         <div className="flex flex-col gap-3 sm:flex-row">
