@@ -186,7 +186,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void completeOnboarding_savesProfileTypeLearningStyleReminderPreferencesAndCompletionTimestamp() {
+    void completeOnboarding_savesProfileTypeAndCompletionTimestamp() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -213,29 +213,23 @@ class AuthServiceTest {
             userId,
             new CompleteOnboardingRequest(
                 ProfileType.TEACHER,
-                LearnerLevel.PROFESSIONAL,
-                "Education",
-                "Sharing classroom review materials.",
-                EngagementMode.STREAK,
-                true,
-                false,
                 null
             )
         );
 
         assertThat(response.profileType()).isEqualTo(ProfileType.TEACHER);
-        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.PROFESSIONAL);
-        assertThat(response.courseProgram()).isEqualTo("Education");
-        assertThat(response.bio()).isEqualTo("Sharing classroom review materials.");
-        assertThat(response.engagementMode()).isEqualTo(EngagementMode.STREAK);
-        assertThat(response.inactivityRemindersEnabled()).isTrue();
+        assertThat(response.learnerLevel()).isNull();
+        assertThat(response.courseProgram()).isNull();
+        assertThat(response.bio()).isNull();
+        assertThat(response.engagementMode()).isEqualTo(EngagementMode.FOCUSED);
+        assertThat(response.inactivityRemindersEnabled()).isFalse();
         assertThat(response.weakConceptRemindersEnabled()).isFalse();
         assertThat(response.onboardingCompletedAt()).isNotNull();
         assertThat(user.getOnboardingCompletedAt()).isNotNull();
     }
 
     @Test
-    void completeOnboarding_savesExamDateForBoardExamUsers() {
+    void completeOnboarding_savesOptionalExamDateForBoardExamUsers() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -263,25 +257,17 @@ class AuthServiceTest {
             userId,
             new CompleteOnboardingRequest(
                 ProfileType.BOARD_EXAM,
-                LearnerLevel.BOARD_EXAM_REVIEW,
-                "Nursing",
-                "Focused on board exam preparation.",
-                EngagementMode.CONSISTENCY,
-                true,
-                true,
                 examDate
             )
         );
 
         assertThat(response.profileType()).isEqualTo(ProfileType.BOARD_EXAM);
-        assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
-        assertThat(response.courseProgram()).isEqualTo("Nursing");
         assertThat(response.examDate()).isEqualTo(examDate);
         assertThat(user.getExamDate()).isEqualTo(examDate);
     }
 
     @Test
-    void completeOnboarding_requiresLearnerLevel() {
+    void completeOnboarding_allowsBoardExamUsersWithoutExamDate() {
         UUID userId = UUID.randomUUID();
         UserEntity user = new UserEntity();
         user.setId(userId);
@@ -297,51 +283,25 @@ class AuthServiceTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
-        CompleteOnboardingRequest request = new CompleteOnboardingRequest(
-            ProfileType.STUDENT,
-            null,
-            "Engineering",
-            null,
-            EngagementMode.FOCUSED,
-            false,
-            false,
-            null
+        when(subscriptionService.getPlanSnapshot(userId))
+            .thenReturn(new SubscriptionService.PlanSnapshot(
+                PlanType.FREE,
+                false,
+                null,
+                null
+            ));
+
+        MeResponse response = authService.completeOnboarding(
+            userId,
+            new CompleteOnboardingRequest(
+                ProfileType.BOARD_EXAM,
+                null
+            )
         );
-        assertThatThrownBy(() -> authService.completeOnboarding(userId, request))
-            .isInstanceOf(AppException.class)
-            .hasMessage("Please select your learner level.");
-    }
 
-    @Test
-    void completeOnboarding_requiresCourseProgram() {
-        UUID userId = UUID.randomUUID();
-        UserEntity user = new UserEntity();
-        user.setId(userId);
-        user.setEmail("current@example.com");
-        user.setFirstName("Note");
-        user.setDisplayName("note");
-        user.setRole(com.studysnap.backend.entity.UserRole.USER);
-        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
-        user.setTokenVersion(0);
-        user.setFailedLoginAttempts(0);
-        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-24T08:00:00Z"));
-        user.setEngagementMode(EngagementMode.FOCUSED);
-
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-
-        CompleteOnboardingRequest request = new CompleteOnboardingRequest(
-            ProfileType.STUDENT,
-            LearnerLevel.COLLEGE,
-            "   ",
-            null,
-            EngagementMode.FOCUSED,
-            false,
-            false,
-            null
-        );
-        assertThatThrownBy(() -> authService.completeOnboarding(userId, request))
-            .isInstanceOf(AppException.class)
-            .hasMessage("Please select or enter your course / program.");
+        assertThat(response.profileType()).isEqualTo(ProfileType.BOARD_EXAM);
+        assertThat(response.examDate()).isNull();
+        assertThat(user.getExamDate()).isNull();
     }
 
     @Test
