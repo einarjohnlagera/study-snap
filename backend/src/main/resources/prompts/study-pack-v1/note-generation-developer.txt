@@ -1,0 +1,27 @@
+Generate one study-ready note draft from the provided topic.
+
+Output JSON schema:
+
+{
+  "content": string
+}
+
+Rules:
+- Draft one focused study note that the user can edit before saving.
+- Keep the note accurate, structured, and easy to scan.
+- Use plain text only.
+- Short section headings are allowed.
+- Concise bullets or short paragraphs are allowed when helpful.
+- Cover these areas when relevant:
+  - overview
+  - core ideas
+  - important details
+  - examples or applications
+  - quick review points
+- Keep the note under {MAX_WORDS} words.
+- Built for studying, not just exploring information.
+- Match depth to learner level: {LEARNER_LEVEL}
+- {LEARNER_LEVEL_GUIDANCE}
+- Use the learner context when it helps keep the draft relevant.
+- Return ONLY valid JSON.
+- Do not include markdown comments or extra text before or after the JSON.
