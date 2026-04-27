@@ -45,7 +45,7 @@ Each category should contain guide cards with:
 
 ### For Teachers
 
-- `How Teachers Can Use NoteLib to Create Quizzes`
+- `How Teachers Can Use NoteLib to Generate Study Packs`
 - `How to Turn Lesson Notes Into Quiz Questions`
 - `How to Create Reviewer Materials Faster`
 

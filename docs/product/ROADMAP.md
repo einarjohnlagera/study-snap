@@ -20,6 +20,21 @@ Completed in `v0.5.0`:
 
 ## Next Release
 
+### v0.11.0 - Learning Flow Foundation
+
+Primary focus:
+
+- learning loop positioning across the landing page and product messaging
+- Generate Note from topic
+- Create Note UX improvements with write vs generate entry options
+- copy alignment around `Generate Study Pack`
+
+Implementation stance:
+
+- reposition NoteLib as a guided study system, not only a note-to-quiz utility
+- keep Generate Note lightweight and reuse the existing LLM infrastructure
+- avoid heavy backend refactors while making the learning loop more visible in product UX
+
 ### v0.6.0 - Landing Revamp & Positioning
 
 Primary focus:

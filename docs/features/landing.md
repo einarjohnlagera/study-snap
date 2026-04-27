@@ -20,9 +20,9 @@ Landing-page goals:
 
 NoteLib should still read as:
 
-- a notes library
-- a study workspace
-- a product that turns saved notes into active-recall review tools
+- a study system
+- a note-based study workspace
+- a product that guides users from input -> understanding -> practice -> mastery
 
 The public homepage may lead with summaries, quizzes, and exam simulations, but the supporting copy should still make it clear that the workflow starts from the user’s own notes.
 
@@ -30,14 +30,14 @@ The public homepage may lead with summaries, quizzes, and exam simulations, but 
 
 Primary landing headline:
 
-`Turn your notes into summaries, key concepts, and quizzes`
+`Turn anything into a complete study flow`
 
 Supporting copy should explain the active-learning benefit:
 
-- `NoteLib helps you study faster by transforming your notes into structured learning tools.`
-- notes are saved first
-- Study Packs and quizzes are generated when review starts
-- active recall is the value, not passive rereading
+- `Write, paste, or generate notes — then turn them into summaries, key concepts, quizzes, and exam-ready practice.`
+- notes still remain the reusable core workspace
+- Study Packs and quizzes stay connected to the user's learning loop
+- active recall and reinforcement are the value, not passive rereading
 
 Hero CTA rules:
 
@@ -61,17 +61,21 @@ Board Exam Mode must be visible in the hero with:
 6. Pricing Preview
 7. Final CTA
 
-## How It Works
+## Learning Loop Section
 
-Landing should keep only the tighter 3-step explanation:
+Landing should add a clear learning-loop section directly below the hero:
 
-1. `Add notes`
-2. `Generate study pack`
-3. `Test yourself`
+1. `Create`
+2. `Understand`
+3. `Practice`
+4. `Challenge`
+5. `Improve`
 
-The third step should explicitly connect quiz practice and Board Exam Mode to active recall.
+Section title:
 
-The section should also include a clear CTA into `/how-it-works` for users who want the full visual walkthrough.
+`How NoteLib helps you study`
+
+The section should still include a CTA into `/how-it-works` for users who want the fuller walkthrough.
 
 ## Features
 

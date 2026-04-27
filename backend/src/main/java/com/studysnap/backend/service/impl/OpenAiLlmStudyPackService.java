@@ -46,6 +46,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int STUDY_PACK_QUIZ_QUESTION_COUNT = 5;
     private static final int MAX_SUMMARY_WORDS = 120;
     private static final int MAX_STUDY_TIP_WORDS = 20;
+    private static final int MAX_GENERATED_NOTE_WORDS = 700;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
@@ -69,6 +70,27 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     public GeneratedStudyPackContent generateStudyPack(String normalizedNotesText, StudyPackGenerationContext context) {
         Objects.requireNonNull(context, "context");
         return retryOnceOnInvalidOutput(() -> generateStudyPackOnce(normalizedNotesText, context));
+    }
+
+    @Override
+    public String generateNoteFromTopic(String topic, StudyPackGenerationContext context) {
+        String normalizedTopic = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(topic);
+        if (normalizedTopic == null) {
+            throw invalidOutput("The note generation service returned invalid content. Please try again.");
+        }
+        String model = requireConfiguredModel();
+        JsonSchemaResponse<PromptGeneratedNote> response = executeJsonSchemaOperation(
+                model,
+                buildGenerateNoteInputMessages(normalizedTopic, context),
+                noteGenerationOperation(),
+                buildGeneratedNoteSchema(),
+                PromptGeneratedNote.class
+        );
+        String generatedContent = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(response.payload().content());
+        if (!StringNormalizationUtils.containsAlphaNumeric(generatedContent)) {
+            throw invalidOutput("The note generation service returned invalid content. Please try again.");
+        }
+        return response.payload().content().trim();
     }
 
     private GeneratedStudyPackContent generateStudyPackOnce(
@@ -333,6 +355,30 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return input;
     }
 
+    private ArrayNode buildGenerateNoteInputMessages(String topic, StudyPackGenerationContext context) {
+        ArrayNode input = objectMapper.createArrayNode();
+        input.add(buildTextMessage("system", promptResources.noteGenerationSystemPrompt()));
+        input.add(buildTextMessage(
+                "developer",
+                buildNoteGenerationDeveloperPrompt(context)
+        ));
+        input.add(buildTextMessage(
+                "user",
+                buildLearnerContextBlock(context) + "\n"
+                        + "Topic: " + topic + "\n"
+                        + "Create a study note draft for this topic."
+        ));
+        return input;
+    }
+
+    private String buildNoteGenerationDeveloperPrompt(StudyPackGenerationContext context) {
+        LearnerLevel learnerLevel = resolveLearnerLevel(context);
+        return promptResources.noteGenerationDeveloperPromptTemplate()
+                .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS))
+                .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(learnerLevel))
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(learnerLevel, QuizMode.QUICK_REVIEW));
+    }
+
     private ArrayNode buildAdaptivePracticeInputMessages(
             String studyPackSummary,
             List<String> keyConcepts,
@@ -468,6 +514,19 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .put("type", "string")
                 .put("minLength", 1)
                 .put("maxLength", 180);
+        return root;
+    }
+
+    private JsonNode buildGeneratedNoteSchema() {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("type", "object");
+        root.put("additionalProperties", false);
+        root.putArray("required").add("content");
+        root.putObject("properties")
+                .putObject("content")
+                .put("type", "string")
+                .put("minLength", 1)
+                .put("maxLength", 6000);
         return root;
     }
 
@@ -1021,6 +1080,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         );
     }
 
+    private JsonSchemaOperation noteGenerationOperation() {
+        return new JsonSchemaOperation(
+                "note_lib_generated_note",
+                "openai_generated_note_request_failed",
+                "openai_generated_note_unavailable",
+                "The note generation service returned an empty response. Please try again.",
+                "The note generation service returned an unexpected format. Please try again.",
+                "Note generation failed. Please try again in a moment.",
+                "Note generation is temporarily unavailable. Please try again."
+        );
+    }
+
     private JsonSchemaOperation quizOperation(String schemaName, String operationLabel) {
         return new JsonSchemaOperation(
                 schemaName,
@@ -1095,6 +1166,9 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     }
 
     private record PromptStudyTip(String tip) {
+    }
+
+    private record PromptGeneratedNote(String content) {
     }
 
     private record JsonSchemaOperation(

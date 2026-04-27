@@ -18,7 +18,7 @@ describe("LearnPage", () => {
 
     expect(screen.getByText("How to Turn Notes Into Reviewers")).toBeInTheDocument();
     expect(screen.getByText("How to Use NoteLib for Board Exam Review")).toBeInTheDocument();
-    expect(screen.getByText("How Teachers Can Use NoteLib to Create Quizzes")).toBeInTheDocument();
+    expect(screen.getByText("How Teachers Can Use NoteLib to Generate Study Packs")).toBeInTheDocument();
     expect(screen.getByText("Why Practice Questions Are Effective")).toBeInTheDocument();
 
     expect(

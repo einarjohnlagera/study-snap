@@ -1,5 +1,16 @@
 # RELEASES.md - NoteLib
 
+## v0.11.0 - Learning Flow Foundation
+
+### Improvements
+
+- repositioned NoteLib as a structured learning system built around the study loop from input to mastery
+- updated the landing page hero and learning-loop section to explain the flow: Create -> Understand -> Practice -> Challenge -> Improve
+- added Generate Note from topic so users can draft editable notes before saving or generating a Study Pack
+- improved Create Note UX with dual entry options: write your own note or generate from topic
+- aligned create-note action copy around `Generate Study Pack`
+- updated product context, roadmap, spec, and release documentation for the new positioning
+
 ## v0.10.1 - Landing & Pricing Conversion Polish
 
 ### Improvements

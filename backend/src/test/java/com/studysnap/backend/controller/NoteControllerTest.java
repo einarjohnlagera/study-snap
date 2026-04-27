@@ -1,6 +1,8 @@
 package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
+import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
+import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.NoteListItemResponse;
 import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
@@ -13,6 +15,7 @@ import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteService;
+import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewSessionService;
@@ -45,6 +48,8 @@ class NoteControllerTest {
     @Mock
     private NoteService noteService;
     @Mock
+    private NoteGenerationService noteGenerationService;
+    @Mock
     private NoteTextExtractionService noteTextExtractionService;
     @Mock
     private StudyPackService studyPackService;
@@ -66,6 +71,7 @@ class NoteControllerTest {
         noteController = new NoteController(
                 authService,
                 noteService,
+                noteGenerationService,
                 noteTextExtractionService,
                 studyPackService,
                 quickReviewSessionService,
@@ -115,6 +121,21 @@ class NoteControllerTest {
         verify(authService).requireEmailVerified(userId);
         verify(studyPackService).startAsyncGenerationFromNote("note-1", userId);
         verify(noteService).getById("note-1", userId);
+        assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void generateNoteFromTopic_callsEmailVerificationBeforeGeneration() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest("Newton's Laws of Motion");
+        GenerateNoteFromTopicResponse expected = new GenerateNoteFromTopicResponse("Generated note content");
+        when(noteGenerationService.generateFromTopic(request, userId)).thenReturn(expected);
+
+        GenerateNoteFromTopicResponse response = noteController.generateNoteFromTopic(request, user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(noteGenerationService).generateFromTopic(request, userId);
         assertThat(response).isEqualTo(expected);
     }
 

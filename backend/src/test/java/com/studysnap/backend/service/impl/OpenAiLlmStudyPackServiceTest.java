@@ -64,6 +64,8 @@ class OpenAiLlmStudyPackServiceTest {
                 "System prompt",
                 "Developer prompt with {QUIZ_COUNT} questions for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 objectMapper.createObjectNode(),
+                "Note generation system prompt",
+                "Note generation developer prompt for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} Built for studying, not just exploring information. Max {MAX_WORDS} words.",
                 "Challenge quiz system prompt",
                 "Challenge quiz developer prompt for {QUESTION_COUNT} at {DIFFICULTY} for {LEARNER_LEVEL}. {LEARNER_LEVEL_GUIDANCE} {COMPUTATION_GUIDANCE} {TIME_EXPECTATION}",
                 "Teacher quiz system prompt",
@@ -221,6 +223,35 @@ class OpenAiLlmStudyPackServiceTest {
                 assertThat(appException.getMessage()).isEqualTo(
                     "Study pack generation failed. Please try again in a moment.");
             });
+    }
+
+    @Test
+    void generateNoteFromTopic_usesLearnerContextAndReturnsContent() throws JsonProcessingException {
+        stubResponsesCall();
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("content", "Overview\nNewton's Laws of Motion explain how force and motion relate.");
+        when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
+
+        String content = service.generateNoteFromTopic(
+                "Newton's Laws of Motion",
+                new StudyPackGenerationContext(
+                        LearnerLevel.SENIOR_HIGH,
+                        "Senior High – STEM",
+                        null,
+                        List.of("physics")
+                )
+        );
+
+        assertThat(content).contains("Newton's Laws of Motion");
+
+        ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
+        verify(requestSpec).body(requestCaptor.capture());
+        String requestBody = requestCaptor.getValue();
+
+        assertThat(requestBody).contains("Topic: Newton's Laws of Motion")
+                .contains("Learner level: Senior High School")
+                .contains("Course / Program: Senior High – STEM")
+                .contains("Built for studying, not just exploring information.");
     }
 
     @Test

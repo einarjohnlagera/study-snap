@@ -38,33 +38,34 @@ describe("LandingPage", () => {
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Turn your notes into real study tools",
+        name: "Turn anything into a complete study flow",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Stop rereading. Start remembering.")).toBeInTheDocument();
     expect(
-      screen.getByText("Write or upload your notes, then turn them into summaries, key concepts, and quizzes when it's time to review."),
+      screen.getByText("Write, paste, or generate notes - then turn them into summaries, key concepts, quizzes, and exam-ready practice."),
     ).toBeInTheDocument();
-    expect(screen.getByText("No setup needed. Start with your notes.")).toBeInTheDocument();
     expect(screen.getByText("Board Exam Mode · Premium")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
-    expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(2);
-    expect(screen.getAllByRole("link", { name: "Browse Public Library" })[0]).toHaveAttribute("href", "/public/library");
+    expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
     expect(screen.getByAltText("NoteLib note detail showing summary of the note")).toBeInTheDocument();
 
-    expect(screen.getByText("How It Works")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Go from notes to self-testing in three steps" })).toBeInTheDocument();
-    expect(screen.getByText("From notes → to quiz → to exam-ready review")).toBeInTheDocument();
-    expect(screen.getByText("Add your notes")).toBeInTheDocument();
-    expect(screen.getByText("Generate a study pack")).toBeInTheDocument();
-    expect(screen.getByText("Review actively")).toBeInTheDocument();
+    expect(screen.getByText("Learning Loop")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "How NoteLib helps you study" })).toBeInTheDocument();
+    expect(screen.getByText("Create - Understand - Practice - Challenge - Improve")).toBeInTheDocument();
+    expect(screen.getByText("Create")).toBeInTheDocument();
+    expect(screen.getByText("Understand")).toBeInTheDocument();
+    expect(screen.getByText("Practice")).toBeInTheDocument();
+    expect(screen.getByText("Challenge")).toBeInTheDocument();
+    expect(screen.getByText("Improve")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View the full walkthrough" })).toHaveAttribute("href", "/how-it-works");
 
     expect(screen.getByText("Features")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Built for quick understanding and repeated review" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Turn one note into a full study session" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Practice like the real exam" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Know exactly what to improve" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Built for a guided study flow" })).toBeInTheDocument();
+    expect(screen.getByText("Built for studying, not just exploring information.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Move from input to understanding faster" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Practice in layers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Keep improving, not restarting" })).toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib Study Pack view showing generated summary and key concepts")).not.toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib Board Exam Mode and Challenge Quiz in-progress screen")).not.toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib quiz results and weak concept review screen")).not.toBeInTheDocument();
@@ -115,31 +116,31 @@ describe("LandingPage", () => {
 
   it("exports landing page SEO metadata", () => {
     expect(metadata).toMatchObject({
-      title: "NoteLib — Build your notes library and turn notes into quizzes",
+      title: "NoteLib - Turn anything into a complete study flow",
       description:
-        "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
+        "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.",
       alternates: {
         canonical: "https://www.notelib.app",
       },
       openGraph: expect.objectContaining({
-        title: "NoteLib — Build your notes library and turn notes into quizzes",
+        title: "NoteLib - Turn anything into a complete study flow",
         description:
-          "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
+          "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.",
         type: "website",
         url: "https://www.notelib.app",
         siteName: "NoteLib",
         images: expect.arrayContaining([
           expect.objectContaining({
             url: "https://www.notelib.app/og-image.png",
-            alt: "Build your notes library. Turn your notes into summaries and quizzes.",
+            alt: "Turn anything into a complete study flow with NoteLib.",
           }),
         ]),
       }),
       twitter: expect.objectContaining({
         card: "summary_large_image",
-        title: "NoteLib — Build your notes library and turn notes into quizzes",
+        title: "NoteLib - Turn anything into a complete study flow",
         description:
-          "NoteLib is a notes library where you can organize notes and turn them into summaries, key concepts, and practice quizzes to review more effectively.",
+          "NoteLib is a study system that guides users from input to understanding, practice, and mastery with notes, summaries, key concepts, quizzes, and exam-ready review.",
         images: ["https://www.notelib.app/og-image.png"],
       }),
     });

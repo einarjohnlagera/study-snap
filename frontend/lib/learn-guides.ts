@@ -243,8 +243,8 @@ const learnGuideSeeds: LearnGuideSeed[] = [
   {
     slug: "how-teachers-can-use-notelib-to-create-quizzes",
     category: "teachers",
-    title: "How Teachers Can Use NoteLib to Create Quizzes",
-    description: "Turn lesson notes into quiz questions and reviewer materials faster.",
+    title: "How Teachers Can Use NoteLib to Generate Study Packs",
+    description: "Turn lesson notes into study packs, quiz questions, and reviewer materials faster.",
     intro:
       "Teachers can use NoteLib as a faster first draft for quiz and reviewer creation. The workflow stays simple: start with the lesson note, generate the study pack, then refine the quiz output for class use.",
     sections: [

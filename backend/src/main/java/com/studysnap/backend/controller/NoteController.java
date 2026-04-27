@@ -6,6 +6,8 @@ import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.ExtractedNoteTextResponse;
 import com.studysnap.backend.dto.GeneratedQuizResponse;
+import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
+import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.dto.QuickReviewPerformanceSummaryResponse;
 import com.studysnap.backend.dto.QuickReviewSessionResponse;
 import com.studysnap.backend.dto.QuickReviewSessionStartResponse;
@@ -25,6 +27,7 @@ import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.ChallengeQuizService;
 import com.studysnap.backend.service.GeneratedQuizService;
 import com.studysnap.backend.service.NoteService;
+import com.studysnap.backend.service.NoteGenerationService;
 import com.studysnap.backend.service.NoteTextExtractionService;
 import com.studysnap.backend.service.QuickReviewAdaptivePracticeService;
 import com.studysnap.backend.service.QuickReviewSessionService;
@@ -57,6 +60,7 @@ public class NoteController {
 
     private final AuthService authService;
     private final NoteService noteService;
+    private final NoteGenerationService noteGenerationService;
     private final NoteTextExtractionService noteTextExtractionService;
     private final StudyPackService studyPackService;
     private final QuickReviewSessionService quickReviewSessionService;
@@ -73,6 +77,17 @@ public class NoteController {
     ) {
         UUID userId = user.userId();
         return noteService.create(request, userId);
+    }
+
+    @PostMapping("/generate")
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public GenerateNoteFromTopicResponse generateNoteFromTopic(
+            @Valid @RequestBody GenerateNoteFromTopicRequest request,
+            @AuthenticationPrincipal AuthenticatedUser user
+    ) {
+        UUID userId = user.userId();
+        authService.requireEmailVerified(userId);
+        return noteGenerationService.generateFromTopic(request, userId);
     }
 
     @PostMapping(value = "/extract-text", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

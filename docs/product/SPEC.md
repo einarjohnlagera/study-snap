@@ -2,23 +2,28 @@
 
 Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table names remain unchanged unless explicitly requested.
 
-Current documentation baseline: `v0.10.0 - Profile Type System & Teacher Flow Phase 1 (In Progress)`
+Current documentation baseline: `v0.11.0 - Learning Flow Foundation`
 
-Current in-progress release: `v0.10.0 - Profile Type System & Teacher Flow Phase 1`
+Current in-progress release: `v0.11.0 - Learning Flow Foundation`
 
 ## Product Overview
 
-NoteLib is a notes library and study workspace that helps students, board exam reviewees, and teachers organize notes, then turn those notes into summaries, key concepts, and quizzes when review starts.
+NoteLib is a study system that guides students, board exam reviewees, and teachers from input to understanding, practice, challenge, and improvement.
 
-The goal is to support active recall and repeated practice through a calm, iterative learning workflow built around summaries, key concepts, quiz practice, weak concepts, and adaptive review.
+The goal is to support active recall and repeated practice through a calm, iterative learning workflow built around note capture, topic generation, summaries, key concepts, quiz practice, weak concepts, and adaptive review.
 
 ## Core Concept
 
-Note-first model:
+Learning-loop model:
 
 - Note is the main entity.
+- Users can start by writing notes, pasting notes, uploading content, or generating a first draft from a topic.
 - Study Pack is the AI-generated enhancement of a Note.
 - Users first save Notes, then generate Study Packs from those Notes.
+
+Core loop:
+
+- `Input -> Understand -> Practice -> Challenge -> Improve`
 
 Note states:
 
@@ -64,7 +69,7 @@ This supports iterative learning and avoids accidental overwrites.
 
 ## User Flow
 
-1. User creates or saves a Note.
+1. User writes, pastes, uploads, or generates a Note draft from a topic.
 2. Note is stored in the system.
 3. User clicks `Generate Study Pack`.
 4. NoteLib redirects the user to Note Detail while generation runs asynchronously.
@@ -74,6 +79,18 @@ This supports iterative learning and avoids accidental overwrites.
 8. If the user wants to improve the note, they make a copy, edit it, and generate a new Study Pack from the copy.
 9. If the note should be shared broadly, user sets visibility to `PUBLIC` and it appears in Public Library.
 10. Public notes can be copied into Library as new Draft notes.
+
+### Generate Note from topic
+
+Create Note includes a lightweight topic-to-note draft flow.
+
+Rules:
+
+- endpoint: `POST /api/notes/generate`
+- input: topic string
+- output: generated note content for the editor
+- generated note content is editable before save
+- this flow reuses the existing LLM service and does not create a saved Note until the user chooses `Save Note` or `Generate Study Pack`
 
 ## Architecture Overview
 
@@ -452,14 +469,10 @@ Favicon requirements:
 - Note metadata helper text for Course / Program should adapt to the user's saved `learnerLevel` so note authors see examples that match their study stage.
 - When a note already has a Study Pack, Note Editor keeps `title`, `courseProgram`, `subject`, and `tags` editable but locks `content` with the helper:
   - `Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags.`
-- Generate button copy should stay short and may vary by `profileType` without changing backend generation:
-  - `STUDENT` -> `Generate`
-  - `BOARD_EXAM` -> `Practice`
-  - `TEACHER` -> `Create Quiz`
+- Generate button copy should stay consistent with the shared Study Pack action:
+  - all active profile types -> `Generate Study Pack`
 - The longer explanation belongs in helper text below the primary generate button:
-  - `STUDENT` -> `Creates summary, key concepts, and quiz.`
-  - `BOARD_EXAM` -> `Generates a new quiz from your material.`
-  - `TEACHER` -> `Generates quiz questions from your material.`
+  - all active profile types -> `Turn this note into summaries, key concepts, quizzes, and practice.`
 - Default behavior after generation stays on the same unified note route:
   - `STUDENT` -> open `tab=summary`
   - `BOARD_EXAM` -> open `tab=quiz`

@@ -41,6 +41,8 @@ For implementation:
 For feature work:
 
 - relevant file under `docs/features/`
+- learning loop positioning: `docs/product/SPEC.md` and `docs/PROJECT_CONTEXT.md`
+- Generate Note from topic: `docs/product/SPEC.md` and `docs/features/study-pack-generation.md`
 
 For prompt work:
 
