@@ -635,20 +635,21 @@ export default function OnboardingPage() {
 
     let savedNote: NoteResponse | null = null;
     try {
-      savedNote = await createNote({
+      const createdNote = await createNote({
         title: selectedInputMethod === "generate" ? draft.topic.trim() : null,
         targetProfileType: mapProfileTypeToNoteTargetProfile(profileType),
         content: draft.noteContent,
       });
-      setNote(savedNote);
+      savedNote = createdNote;
+      setNote(createdNote);
       setDraft((previous) => ({
         ...previous,
         currentStep: 4,
-        noteId: savedNote.id,
-        studyPackId: savedNote.studyPackId ?? null,
+        noteId: createdNote.id,
+        studyPackId: createdNote.studyPackId ?? null,
       }));
 
-      const queuedNote = await createStudyPackFromNote(savedNote.id);
+      const queuedNote = await createStudyPackFromNote(createdNote.id);
       setNote(queuedNote);
       setDraft((previous) => ({
         ...previous,
