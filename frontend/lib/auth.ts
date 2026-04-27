@@ -1,6 +1,10 @@
 "use client";
 
 import type { MePlanResponse } from "./me-plan";
+import {
+  clearDeferredOnboardingCompletion,
+  hasDeferredOnboardingCompletion,
+} from "./onboarding-v2";
 import type { ThemePreference } from "./theme-preferences";
 
 export type AuthUser = {
@@ -121,6 +125,9 @@ export function setAuthUser(user: AuthUser): void {
   hasTriggeredSessionExpiryRedirect = false;
   hasManualLogoutRedirectIntent = false;
   clearSessionExpiredUserId();
+  if (user.onboardingCompletedAt) {
+    clearDeferredOnboardingCompletion(user.id);
+  }
   globalThis.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   emitAuthChangeEvent();
 }
@@ -167,6 +174,9 @@ export function needsOnboarding(authUser: AuthUser | null): boolean {
     return false;
   }
   if (authUser.onboardingCompletedAt === undefined) {
+    return false;
+  }
+  if (hasDeferredOnboardingCompletion(authUser.id)) {
     return false;
   }
   return authUser.onboardingCompletedAt === null;

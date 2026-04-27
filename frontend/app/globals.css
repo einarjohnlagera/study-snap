@@ -196,6 +196,22 @@ body *::after {
   overflow: hidden;
 }
 
+.motion-onboarding-step {
+  animation: motion-onboarding-step-enter 200ms ease-out;
+}
+
+@keyframes motion-onboarding-step-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(12px, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   body,
   body *,
@@ -213,7 +229,8 @@ body *::after {
   .motion-dropdown-panel,
   .motion-export-panel,
   .motion-fade-enter,
-  .motion-modal-enter {
+  .motion-modal-enter,
+  .motion-onboarding-step {
     animation: none !important;
   }
 

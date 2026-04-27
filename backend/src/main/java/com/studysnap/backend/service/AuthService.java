@@ -198,13 +198,7 @@ public class AuthService {
 
         OffsetDateTime now = OffsetDateTime.now();
         user.setProfileType(request.profileType());
-        user.setLearnerLevel(requireLearnerLevel(request.learnerLevel()));
-        user.setCourseProgram(normalizeRequiredCourseProgram(request.courseProgram()));
-        user.setBio(normalizeOptionalText(request.bio()));
         user.setExamDate(resolveExamDate(request));
-        user.setEngagementMode(request.engagementMode());
-        user.setInactivityRemindersEnabled(request.inactivityRemindersEnabled());
-        user.setWeakConceptRemindersEnabled(request.weakConceptRemindersEnabled());
         if (user.getOnboardingCompletedAt() == null) {
             user.setOnboardingCompletedAt(now);
         }
@@ -354,13 +348,6 @@ public class AuthService {
         if (request.profileType() != com.studysnap.backend.entity.ProfileType.BOARD_EXAM) {
             return null;
         }
-        if (request.examDate() == null) {
-            throw new AppException(
-                    "EXAM_DATE_REQUIRED",
-                    "Select your exam date to finish board exam setup.",
-                    HttpStatus.BAD_REQUEST
-            );
-        }
         return request.examDate();
     }
 
@@ -373,29 +360,6 @@ public class AuthService {
             throw new AppException(
                     "INVALID_COURSE_PROGRAM",
                     "Course / Program must be 120 characters or less.",
-                    HttpStatus.BAD_REQUEST
-            );
-        }
-        return normalized;
-    }
-
-    private LearnerLevel requireLearnerLevel(LearnerLevel learnerLevel) {
-        if (learnerLevel == null) {
-            throw new AppException(
-                    "INVALID_LEARNER_LEVEL",
-                    "Please select your learner level.",
-                    HttpStatus.BAD_REQUEST
-            );
-        }
-        return learnerLevel;
-    }
-
-    private String normalizeRequiredCourseProgram(String value) {
-        String normalized = normalizeOptionalCourseProgram(value);
-        if (normalized == null) {
-            throw new AppException(
-                    "INVALID_COURSE_PROGRAM",
-                    "Please select or enter your course / program.",
                     HttpStatus.BAD_REQUEST
             );
         }

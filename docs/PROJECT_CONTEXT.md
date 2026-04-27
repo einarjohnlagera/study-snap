@@ -2,7 +2,11 @@
 
 ## What NoteLib Is
 
-NoteLib is a study workspace built around a guided learning loop: input, understand, practice, challenge, and improve.
+NoteLib is a structured study system, not a notes app. It guides users through a repeating learning loop:
+
+`Create → Understand → Practice → Challenge → Improve`
+
+Users can start with their own notes or generate a draft note from a topic. NoteLib converts that input into a Study Pack — summary, key concepts, and quiz material — and then supports repeated practice, challenge quizzes, and improvement through weak-concept tracking.
 
 ## Core Product Model
 
@@ -17,11 +21,15 @@ NoteLib is a study workspace built around a guided learning loop: input, underst
 
 ## Learning Loop
 
-Input -> Study Pack -> Quiz -> Exam -> Reinforcement
+Primary loop (user-facing positioning):
 
-Supporting product loop:
+`Create → Understand → Practice → Challenge → Improve`
 
-Capture -> Generate -> Review -> Improve -> Copy -> Repeat
+Supporting product loop (internal model):
+
+`Capture → Generate → Review → Improve → Copy → Repeat`
+
+Onboarding is the entry point into the loop. Users complete a 5-step onboarding flow that ends with a generated Study Pack, placing them at the `Understand` stage before they touch the dashboard. This eliminates the empty-state activation problem.
 
 ## Versioning Rule
 
@@ -86,6 +94,7 @@ All generated outputs and quiz/practice sessions are note-scoped (`noteId`).
 
 ## Feature Documentation
 
+- docs/features/onboarding.md
 - docs/features/study-pack-generation.md
 - docs/features/quick-review.md
 - docs/features/dashboard-recommendation.md

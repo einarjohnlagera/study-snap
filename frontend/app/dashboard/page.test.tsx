@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import DashboardPage from "./page";
 import {
   completeProductOnboarding,
@@ -158,6 +158,67 @@ describe("DashboardPage profile variants", () => {
     expect(screen.getByText("Usage / Progress")).toBeInTheDocument();
     expect(screen.queryByText("Exam Countdown")).not.toBeInTheDocument();
     expect(screen.queryByText("Create Quiz")).not.toBeInTheDocument();
+  });
+
+  it("shows the personalization prompt after onboarding and routes to settings", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText("Make NoteLib work better for you")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Set Preferences" }));
+
+    expect(routerMock.push).toHaveBeenCalledWith("/settings");
+  });
+
+  it("persists dismissal of the personalization prompt per user", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      firstName: "Note",
+      displayName: "Note",
+      emailVerifiedAt: "2026-03-20T00:00:00Z",
+      productOnboardingCompletedAt: "2026-03-21T00:00:00Z",
+      studyPackCount: 2,
+      profileType: "STUDENT",
+      onboardingCompletedAt: "2026-03-20T00:00:00Z",
+    });
+    (useBillingUsageSummary as jest.Mock).mockReturnValue({
+      usageSummary: {
+        plan: "FREE",
+        limits: { studyPacksPerMonth: 10, challengeQuizzesPerMonth: 5, adaptivePracticePerMonth: 0 },
+        usage: { studyPacksUsed: 2, challengeQuizzesUsed: 1, adaptivePracticeUsed: 0 },
+      },
+    });
+
+    const { unmount } = render(<DashboardPage />);
+
+    expect(await screen.findByText("Make NoteLib work better for you")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss personalization prompt" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Make NoteLib work better for you")).not.toBeInTheDocument();
+    });
+    expect(window.localStorage.getItem("notelib-dashboard-personalization-prompt:user-1")).toBe("1");
+
+    unmount();
+    render(<DashboardPage />);
+
+    await screen.findByText("Continue Studying");
+    expect(screen.queryByText("Make NoteLib work better for you")).not.toBeInTheDocument();
   });
 
   it("renders the board exam dashboard with countdown and challenge-quiz CTA", async () => {

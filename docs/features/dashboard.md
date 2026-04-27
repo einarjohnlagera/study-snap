@@ -4,6 +4,17 @@
 
 Dashboard helps users decide what to do next without turning into a management page.
 
+## Personalization Prompt
+
+After onboarding completes, Dashboard should show a lightweight personalization card near the top of the page.
+
+- title: `Make NoteLib work better for you`
+- description: `Set your learning style and reminders in seconds.`
+- primary action: `Set Preferences` -> `/settings`
+- secondary behavior: dismissible, with dismissal stored per user on the frontend when backend persistence is not required
+
+This prompt is a post-onboarding nudge. Learning Style and Study Reminders should not move back into onboarding.
+
 ## Profile-specific priorities
 
 - `Student` dashboard should prioritize `Continue Studying`, `Weak Concepts`, `Recent Notes`, `Quick Review`, and `Usage / Progress`.

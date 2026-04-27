@@ -41,6 +41,7 @@ For implementation:
 For feature work:
 
 - relevant file under `docs/features/`
+- onboarding flow (v0.11.0): `docs/features/onboarding.md`
 - learning loop positioning: `docs/product/SPEC.md` and `docs/PROJECT_CONTEXT.md`
 - Generate Note from topic: `docs/product/SPEC.md` and `docs/features/study-pack-generation.md`
 
