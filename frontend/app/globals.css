@@ -197,13 +197,13 @@ body *::after {
 }
 
 .motion-onboarding-step {
-  animation: motion-onboarding-step-enter 200ms var(--motion-ease-standard);
+  animation: motion-onboarding-step-enter 200ms ease-out;
 }
 
 @keyframes motion-onboarding-step-enter {
   from {
     opacity: 0;
-    transform: translate3d(0, 8px, 0);
+    transform: translate3d(12px, 0, 0);
   }
 
   to {

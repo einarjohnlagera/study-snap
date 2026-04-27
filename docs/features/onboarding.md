@@ -109,6 +109,15 @@ Actions:
 
 These fields remain in the system but are not collected during onboarding. They are surfaced in profile settings and preferences after the user's first session.
 
+Dashboard follow-up prompt:
+
+- after onboarding completes, Dashboard should show a lightweight personalization card that points users to `Settings`
+- card copy:
+  - title: `Make NoteLib work better for you`
+  - body: `Set your learning style and reminders in seconds.`
+  - CTA: `Set Preferences`
+- the prompt must be dismissible and may persist dismissal in frontend local storage per user
+
 | Field | Deferred to |
 |---|---|
 | `learnerLevel` | Profile → Learning Profile |

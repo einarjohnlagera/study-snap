@@ -29,6 +29,7 @@ import {
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
 import { ContinueSpotlight } from "./continue-spotlight";
+import { DashboardPersonalizationPrompt } from "./dashboard-personalization-prompt";
 import { DashboardHero } from "./dashboard-hero";
 import { DashboardMonthlyUsageCard } from "./dashboard-monthly-usage-card";
 import { DashboardFocusAreasCard } from "./dashboard-focus-areas-card";
@@ -46,6 +47,10 @@ import {
   isFirstStudyOnboardingEligible,
   setFirstStudyOnboardingStep,
 } from "@/lib/first-study-onboarding";
+import {
+  dismissDashboardPersonalizationPrompt,
+  hasDismissedDashboardPersonalizationPrompt,
+} from "@/lib/dashboard-personalization-prompt";
 
 type SupportedDashboardProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
 type TeacherGeneratedQuizSummary = {
@@ -267,6 +272,7 @@ export default function DashboardPage() {
   const [contentVisible, setContentVisible] = useState(false);
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
   const [showFirstStudyWelcomeModal, setShowFirstStudyWelcomeModal] = useState(false);
+  const [showPersonalizationPrompt, setShowPersonalizationPrompt] = useState(false);
   const { usageSummary } = useBillingUsageSummary();
 
   const loadDashboard = useCallback(async () => {
@@ -392,6 +398,15 @@ export default function DashboardPage() {
     setShowWelcomeMessage(!alreadyShown);
   }, []);
 
+  useEffect(() => {
+    const authUser = getAuthUser();
+    if (!authUser?.id || !profile?.onboardingCompletedAt) {
+      setShowPersonalizationPrompt(false);
+      return;
+    }
+    setShowPersonalizationPrompt(!hasDismissedDashboardPersonalizationPrompt(authUser.id));
+  }, [profile?.onboardingCompletedAt]);
+
   const dismissWelcomeMessage = useCallback(() => {
     const authUser = getAuthUser();
     if (authUser) {
@@ -400,6 +415,18 @@ export default function DashboardPage() {
     }
     setShowWelcomeMessage(false);
   }, []);
+
+  const dismissPersonalizationPrompt = useCallback(() => {
+    const authUser = getAuthUser();
+    if (authUser?.id) {
+      dismissDashboardPersonalizationPrompt(authUser.id);
+    }
+    setShowPersonalizationPrompt(false);
+  }, []);
+
+  const handleOpenPreferences = useCallback(() => {
+    router.push("/settings");
+  }, [router]);
 
   const handleSkipFirstStudyOnboarding = useCallback(async () => {
     const authUser = getAuthUser();
@@ -511,6 +538,12 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
+          {showPersonalizationPrompt ? (
+            <DashboardPersonalizationPrompt
+              onDismiss={dismissPersonalizationPrompt}
+              onOpenPreferences={handleOpenPreferences}
+            />
+          ) : null}
           {shouldShowNearLimitBanner ? (
             <NearLimitBanner
               planType={usageSummary?.plan ?? "FREE"}
