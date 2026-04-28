@@ -31,6 +31,7 @@ const FREE_LIMITATIONS = [
   "Adaptive Practice (Premium)",
   "Difficulty selection (Premium)",
   "Board Exam Mode (Premium)",
+  "Higher note generation limits (Premium)",
 ];
 
 const PREMIUM_FEATURES = [
@@ -39,6 +40,7 @@ const PREMIUM_FEATURES = [
   `${pricingConfig.premium.adaptivePracticePerMonth} Adaptive Practice sessions / month`,
   "Difficulty selection",
   "Board Exam Mode",
+  "Higher note generation limits",
 ];
 
 const COMPARISON_ROWS: ComparisonRow[] = [
@@ -76,6 +78,11 @@ const COMPARISON_ROWS: ComparisonRow[] = [
     label: "Board Exam Mode",
     free: null,
     premium: "check",
+  },
+  {
+    label: "Topic note generation",
+    free: "Limited",
+    premium: "Higher",
   },
 ];
 

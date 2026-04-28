@@ -41,9 +41,9 @@ class MeControllerTest {
                         OffsetDateTime.parse("2026-03-10T00:00:00Z"),
                         OffsetDateTime.parse("2026-04-10T00:00:00Z")
                 ),
-                new MePlanResponse.Limits(10, 5, 0, 20),
-                new MePlanResponse.Usage(3, 2, 0, 5),
-                new MePlanResponse.Remaining(7, 3, 0, 15),
+                new MePlanResponse.Limits(10, 5, 0, 20, 5),
+                new MePlanResponse.Usage(3, 2, 0, 5, 1),
+                new MePlanResponse.Remaining(7, 3, 0, 15, 4),
                 new MePlanResponse.Features(false, false, true, true)
         );
         when(mePlanService.getPlan(userId)).thenReturn(expected);

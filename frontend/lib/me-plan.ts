@@ -11,18 +11,21 @@ export type MePlanResponse = {
     challengeQuizzesPerMonth: number;
     adaptivePracticePerMonth: number;
     ocrPerMonth: number;
+    noteGenerationsPerMonth?: number;
   };
   usage: {
     studyPacksUsed: number;
     challengeQuizzesUsed: number;
     adaptivePracticeUsed: number;
     ocrUsed: number;
+    noteGenerationsUsed?: number;
   };
   remaining: {
     studyPacksRemaining: number;
     challengeQuizzesRemaining: number;
     adaptivePracticeRemaining: number;
     ocrRemaining: number;
+    noteGenerationsRemaining?: number;
   };
   features: {
     adaptivePracticeAvailable: boolean;

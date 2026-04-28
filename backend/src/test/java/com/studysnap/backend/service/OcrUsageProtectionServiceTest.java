@@ -82,7 +82,8 @@ class OcrUsageProtectionServiceTest {
                         0,
                         0,
                         0,
-                        2
+                        2,
+                        0
                 ));
 
         AppException error = assertThrows(AppException.class, () -> service.assertQuotaAvailable(userId, PlanType.FREE));
@@ -100,7 +101,8 @@ class OcrUsageProtectionServiceTest {
                         0,
                         0,
                         0,
-                        3
+                        3,
+                        0
                 ));
 
         assertDoesNotThrow(() -> service.assertQuotaAvailable(userId, PlanType.PREMIUM));

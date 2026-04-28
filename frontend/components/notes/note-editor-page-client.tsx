@@ -15,6 +15,7 @@ import {
   getMe,
   getNote,
   isEmailNotVerifiedError,
+  isNoteGenerationLimitReachedError,
   isOcrLimitReachedError,
   listCoursePrograms,
   listSubjects,
@@ -150,6 +151,7 @@ export function NoteEditorPageClient({
   const [showGenerateNoteTip, setShowGenerateNoteTip] = useState(false);
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
+  const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
@@ -290,11 +292,19 @@ export function NoteEditorPageClient({
     ),
     [courseProgramSuggestions, draft.courseProgram],
   );
-  const openLockedFeaturePaywall = useCallback((variant: "study-pack-limit" | "ocr-limit", source: string) => {
+  const openLockedFeaturePaywall = useCallback((
+    variant: "study-pack-limit" | "ocr-limit" | "note-generation-limit",
+    source: string,
+  ) => {
+    const feature = variant === "study-pack-limit"
+      ? "study_pack_limit"
+      : variant === "ocr-limit"
+        ? "ocr_limit"
+        : "note_generation_limit";
     void trackAnalyticsEvent({
       eventType: "FEATURE_LOCKED_CLICKED",
       metadata: {
-        feature: variant === "study-pack-limit" ? "study_pack_limit" : "ocr_limit",
+        feature,
         source,
         path: pathname,
         noteId: currentNoteId,
@@ -304,7 +314,11 @@ export function NoteEditorPageClient({
       setShowLimitReachedModal(true);
       return;
     }
-    setShowOcrLimitModal(true);
+    if (variant === "ocr-limit") {
+      setShowOcrLimitModal(true);
+      return;
+    }
+    setShowNoteGenerationLimitModal(true);
   }, [currentNoteId, pathname]);
 
   const handleImportFileChange = useCallback(async (file: File | null) => {
@@ -445,11 +459,26 @@ export function NoteEditorPageClient({
       usageSummary.remaining?.studyPacksRemaining,
     )
     : null;
+  const noteGenerationLimit = usageSummary?.limits.noteGenerationsPerMonth;
+  const noteGenerationsUsed = usageSummary?.usage.noteGenerationsUsed;
+  const noteGenerationsRemaining = usageSummary
+    && typeof noteGenerationLimit === "number"
+    && typeof noteGenerationsUsed === "number"
+    ? resolveRemainingUsageCredits(
+      noteGenerationsUsed,
+      noteGenerationLimit,
+      usageSummary.remaining?.noteGenerationsRemaining,
+    )
+    : null;
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
+  const hasReachedNoteGenerationLimit = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining <= 0;
   const shouldShowNearLimitBanner = usageSummary
     ? shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
+  const noteGenerationRemainingLabel = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining > 0
+    ? `${noteGenerationsRemaining} note generation${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
+    : null;
 
   const resolveTargetProfileType = useCallback((): NoteTargetProfileType | null => {
     if (showTargetProfileTypeField) {
@@ -690,6 +719,14 @@ export function NoteEditorPageClient({
       showToast("Email verification is required before generating notes.", "info");
       return;
     }
+    if (hasReachedNoteGenerationLimit) {
+      if (currentPlan === "FREE") {
+        openLockedFeaturePaywall("note-generation-limit", "note_editor_note_generation_limit");
+      } else {
+        setShowNoteGenerationLimitModal(true);
+      }
+      return;
+    }
 
     const isReplacingContent = draft.content.trim().length > 0;
     setIsGeneratingNote(true);
@@ -707,9 +744,18 @@ export function NoteEditorPageClient({
         "success",
       );
       focusContentEditor();
+      void refreshUsageSummary();
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
         showToast("Email verification is required before generating notes.", "info");
+      } else if (isNoteGenerationLimitReachedError(error)) {
+        const latestUsageSummary = await refreshUsageSummary();
+        const limitPlan = latestUsageSummary?.plan ?? currentPlan;
+        if (limitPlan === "FREE") {
+          openLockedFeaturePaywall("note-generation-limit", "note_editor_note_generation_limit");
+        } else {
+          setShowNoteGenerationLimitModal(true);
+        }
       } else {
         const message = error instanceof Error ? error.message : "Could not generate note.";
         showToast(message, "error");
@@ -725,8 +771,37 @@ export function NoteEditorPageClient({
     isGenerating,
     isGeneratingNote,
     isSaving,
+    hasReachedNoteGenerationLimit,
+    currentPlan,
+    openLockedFeaturePaywall,
+    refreshUsageSummary,
     showToast,
   ]);
+
+  const generateNoteFooter = hasReachedNoteGenerationLimit ? (
+    currentPlan === "FREE" ? (
+      <div className="flex flex-col gap-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-3 text-xs text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
+        <p>You&apos;ve reached your topic note generation limit for this month.</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full sm:w-fit"
+          onClick={() => openLockedFeaturePaywall("note-generation-limit", "note_editor_note_generation_limit")}
+        >
+          Upgrade to Premium
+        </Button>
+      </div>
+    ) : (
+      <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-xs text-foreground/70">
+        You&apos;ve reached your topic note generation limit for this billing cycle. Your limit resets on your next billing date.
+      </div>
+    )
+  ) : noteGenerationRemainingLabel ? (
+    <p className="text-xs text-foreground/60">
+      {noteGenerationRemainingLabel}
+    </p>
+  ) : null;
 
   const pageTitle = isEditMode ? "Edit Note" : "New Note";
   const pageTitleLabel = !isEditMode && initialMode === "quiz"
@@ -866,7 +941,8 @@ export function NoteEditorPageClient({
           void handleGenerateNote();
         }}
         isGeneratingNote={isGeneratingNote}
-        disableGenerateNote={!isEmailVerified}
+        disableGenerateNote={!isEmailVerified || hasReachedNoteGenerationLimit}
+        generateNoteFooter={generateNoteFooter}
         showGenerateNoteEntry={showGenerateNoteEntry}
         showGenerateNoteTip={showGenerateNoteTip}
         disableContentEditing={contentLocked}
@@ -922,6 +998,34 @@ export function NoteEditorPageClient({
           planType={currentPlan}
           resetDateLabel={usageResetDateLabel}
           onClose={() => setShowLimitReachedModal(false)}
+        />
+      )}
+
+      {currentPlan === "FREE" ? (
+        <PaywallModal
+          isOpen={showNoteGenerationLimitModal}
+          variant="note-generation-limit"
+          source="note_editor_note_generation_limit"
+          onClose={() => setShowNoteGenerationLimitModal(false)}
+        />
+      ) : (
+        <AppModal
+          isOpen={showNoteGenerationLimitModal}
+          title="Note generation limit reached"
+          description="You’ve reached your topic-based note generation limit for this billing cycle. Your limits will reset on your next billing date."
+          onClose={() => setShowNoteGenerationLimitModal(false)}
+          actions={(
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => setShowNoteGenerationLimitModal(false)}
+              >
+                OK
+              </Button>
+            </div>
+          )}
         />
       )}
 

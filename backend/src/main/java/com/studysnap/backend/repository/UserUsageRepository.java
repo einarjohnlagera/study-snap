@@ -11,14 +11,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID> {
-    Optional<UserUsageEntity> findByUserIdAndYearAndMonth(UUID userId, Integer year, Integer month);
-    Optional<UserUsageEntity> findByUserIdAndPeriodStart(UUID userId, OffsetDateTime periodStart);
 
-    Optional<UserUsageEntity> findByUserIdAndPeriodStartLessThanEqualAndPeriodEndGreaterThan(
-            UUID userId,
-            OffsetDateTime periodStartInclusive,
-            OffsetDateTime periodEndExclusive
-    );
+    Optional<UserUsageEntity> findByUserIdAndPeriodStart(UUID userId, OffsetDateTime periodStart);
 
     @Modifying
     @Query(value = """
@@ -33,6 +27,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 challenge_quiz_generations,
                 adaptive_quiz_generations,
                 ocr_extractions,
+                note_generations,
                 created_at
             )
             VALUES (
@@ -46,6 +41,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 :challengeDelta,
                 :adaptiveDelta,
                 :ocrDelta,
+                :noteGenerationDelta,
                 :createdAt
             )
             ON CONFLICT (user_id, period_start)
@@ -54,7 +50,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 study_pack_generations = user_usage.study_pack_generations + EXCLUDED.study_pack_generations,
                 challenge_quiz_generations = user_usage.challenge_quiz_generations + EXCLUDED.challenge_quiz_generations,
                 adaptive_quiz_generations = user_usage.adaptive_quiz_generations + EXCLUDED.adaptive_quiz_generations,
-                ocr_extractions = user_usage.ocr_extractions + EXCLUDED.ocr_extractions
+                ocr_extractions = user_usage.ocr_extractions + EXCLUDED.ocr_extractions,
+                note_generations = user_usage.note_generations + EXCLUDED.note_generations
             """, nativeQuery = true)
     int incrementUsage(
             @Param("userId") UUID userId,
@@ -66,6 +63,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
             @Param("challengeDelta") Integer challengeDelta,
             @Param("adaptiveDelta") Integer adaptiveDelta,
             @Param("ocrDelta") Integer ocrDelta,
+            @Param("noteGenerationDelta") Integer noteGenerationDelta,
             @Param("createdAt") OffsetDateTime createdAt
     );
 }

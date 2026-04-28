@@ -3,6 +3,7 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.GenerateNoteFromTopicRequest;
 import com.studysnap.backend.dto.GenerateNoteFromTopicResponse;
 import com.studysnap.backend.entity.LearnerLevel;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -29,11 +30,22 @@ class NoteGenerationServiceTest {
     @Mock
     private LlmStudyPackService llmStudyPackService;
 
+    @Mock
+    private SubscriptionService subscriptionService;
+
+    @Mock
+    private NoteGenerationUsageProtectionService noteGenerationUsageProtectionService;
+
     private NoteGenerationService noteGenerationService;
 
     @BeforeEach
     void setUp() {
-        noteGenerationService = new NoteGenerationService(userRepository, llmStudyPackService);
+        noteGenerationService = new NoteGenerationService(
+                userRepository,
+                subscriptionService,
+                noteGenerationUsageProtectionService,
+                llmStudyPackService
+        );
     }
 
     @Test
@@ -44,6 +56,7 @@ class NoteGenerationServiceTest {
         user.setLearnerLevel(LearnerLevel.COLLEGE);
         user.setCourseProgram("Senior High-STEM");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(llmStudyPackService.generateNoteFromTopic(
                 org.mockito.ArgumentMatchers.eq("Newton's Laws of Motion"),
                 org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
@@ -55,7 +68,9 @@ class NoteGenerationServiceTest {
         );
 
         ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(noteGenerationUsageProtectionService).assertQuotaAvailable(userId, PlanType.FREE);
         verify(llmStudyPackService).generateNoteFromTopic(org.mockito.ArgumentMatchers.eq("Newton's Laws of Motion"), contextCaptor.capture());
+        verify(noteGenerationUsageProtectionService).recordUsage(org.mockito.ArgumentMatchers.eq(userId), org.mockito.ArgumentMatchers.any());
         assertThat(response).isEqualTo(new GenerateNoteFromTopicResponse("Generated note content"));
         assertThat(contextCaptor.getValue().learnerLevel()).isEqualTo(LearnerLevel.COLLEGE);
         assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Senior High – STEM");

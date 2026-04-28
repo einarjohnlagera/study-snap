@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import type { LearnerLevel, NoteTargetProfileType } from "@/lib/api";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
@@ -53,6 +53,7 @@ type NoteEditorFormProps = {
   onGenerateNote?: () => void;
   isGeneratingNote?: boolean;
   disableGenerateNote?: boolean;
+  generateNoteFooter?: ReactNode;
   showGenerateNoteEntry?: boolean;
   showGenerateNoteTip?: boolean;
   disableContentEditing?: boolean;
@@ -117,6 +118,7 @@ export function NoteEditorForm({
   onGenerateNote,
   isGeneratingNote = false,
   disableGenerateNote = false,
+  generateNoteFooter = null,
   showGenerateNoteEntry = false,
   showGenerateNoteTip = false,
   disableContentEditing = false,
@@ -419,6 +421,7 @@ export function NoteEditorForm({
                   <p className="text-xs text-foreground/60">
                     Generate a first draft here, then review and edit the content below before saving or generating a Study Pack.
                   </p>
+                  {generateNoteFooter}
                   {note.content.trim().length > 0 ? (
                     <p className="text-xs text-foreground/55">
                       Generating a note will replace the current content in the editor.

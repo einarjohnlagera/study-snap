@@ -2458,6 +2458,10 @@ export function isOcrLimitReachedError(error: unknown): error is ApiRequestError
   return error instanceof ApiRequestError && error.code === "OCR_LIMIT_REACHED";
 }
 
+export function isNoteGenerationLimitReachedError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "NOTE_GENERATION_LIMIT_REACHED";
+}
+
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {
   const response = await fetchWithAuth(
     `/notes/${noteId}/visibility`,

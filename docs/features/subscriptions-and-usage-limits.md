@@ -8,6 +8,7 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 
 ### Free
 - 10 Study Packs per month
+- Topic note generation (5/month by default, backend-configurable)
 - OCR (20/month by default, backend-configurable)
 - File uploads available
 - Library and Public Library access
@@ -20,6 +21,7 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 
 ### Premium
 - 100 Study Packs per month
+- Topic note generation (100/month by default, backend-configurable)
 - Challenge Quiz (50/month)
 - Adaptive Practice (30/month)
 - OCR (100/month by default, backend-configurable)
@@ -74,6 +76,11 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `You're on the list! We'll notify you when Premium launches.`
 - Challenge Quiz, Adaptive Practice, Settings billing, pricing CTAs, and dashboard upgrade cards should all route through this pre-launch waitlist flow.
 - Study Pack limit blocks should keep `Generate Study Pack` clickable instead of disabling it.
+- Topic note generation is a separate gated action from Study Pack generation and OCR.
+- When topic note generation quota is exhausted:
+  - Free users see the shared Premium/upgrade modal
+  - Premium users see a reset-on-next-billing-date modal
+- Note Editor and product onboarding may disable `Generate Note` when `GET /api/me/plan` reports `noteGenerationsRemaining=0`, but backend must still enforce the quota server-side.
 - Near-limit Study Pack banners should appear on Dashboard, Note Detail, and Study Pack generation/editor surfaces when:
   - Free remaining is `2` or `1`
   - Premium remaining is `2` or `1`
@@ -221,14 +228,17 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `limits.challengeQuizzesPerMonth`
   - `limits.adaptivePracticePerMonth`
   - `limits.ocrPerMonth`
+  - `limits.noteGenerationsPerMonth`
   - `usage.studyPacksUsed`
   - `usage.challengeQuizzesUsed`
   - `usage.adaptivePracticeUsed`
   - `usage.ocrUsed`
+  - `usage.noteGenerationsUsed`
   - `remaining.studyPacksRemaining`
   - `remaining.challengeQuizzesRemaining`
   - `remaining.adaptivePracticeRemaining`
   - `remaining.ocrRemaining`
+  - `remaining.noteGenerationsRemaining`
   - `features.adaptivePracticeAvailable`
   - `features.difficultySelectionAvailable`
   - `features.fileUploadAvailable`

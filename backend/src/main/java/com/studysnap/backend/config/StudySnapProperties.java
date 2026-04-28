@@ -102,6 +102,8 @@ public class StudySnapProperties {
         private int premiumMonthlyAdaptivePracticeLimit = 30;
         private int freeMonthlyOcrLimit = 20;
         private int premiumMonthlyOcrLimit = 100;
+        private int freeMonthlyNoteGenerationLimit = 5;
+        private int premiumMonthlyNoteGenerationLimit = 100;
         private boolean adaptivePracticePremiumOnly = true;
         private boolean difficultySelectionPremiumOnly = true;
 
@@ -128,6 +130,12 @@ public class StudySnapProperties {
             return planType == PlanType.PREMIUM
                     ? premiumMonthlyOcrLimit
                     : freeMonthlyOcrLimit;
+        }
+
+        public int resolveMonthlyNoteGenerationLimit(PlanType planType) {
+            return planType == PlanType.PREMIUM
+                    ? premiumMonthlyNoteGenerationLimit
+                    : freeMonthlyNoteGenerationLimit;
         }
 
         public boolean isAdaptivePracticeAvailable(PlanType planType) {

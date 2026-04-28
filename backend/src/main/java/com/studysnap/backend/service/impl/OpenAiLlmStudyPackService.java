@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -47,10 +48,24 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_SUMMARY_WORDS = 120;
     private static final int MAX_STUDY_TIP_WORDS = 20;
     private static final int MAX_GENERATED_NOTE_WORDS = 700;
+    private static final int MAX_GENERATED_NOTE_TITLE_WORDS = 12;
+    private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
+    private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
     private static final String INVALID_OUTPUT_CODE = "LLM_INVALID_OUTPUT";
     private static final int MAX_LOG_VALUE_LENGTH = 80;
+    private static final List<String> DISALLOWED_NOTE_GENERATION_PHRASES = List.of(
+            "important study topic",
+            "important topic",
+            "use this as a starting point",
+            "starting point for",
+            "this topic is",
+            "this note is",
+            "you can use this",
+            "remember to",
+            "help you understand"
+    );
     private static final List<String> QUANTITATIVE_KEYWORDS = List.of(
             "accounting", "algebra", "algorithm", "algorithms", "amortization", "analysis", "anatomy",
             "balance", "calculus", "cash flow", "chemistry", "circuit", "circuits", "computation",
@@ -74,6 +89,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     @Override
     public String generateNoteFromTopic(String topic, StudyPackGenerationContext context) {
+        return retryOnceOnInvalidOutput(() -> generateNoteFromTopicOnce(topic, context));
+    }
+
+    private String generateNoteFromTopicOnce(String topic, StudyPackGenerationContext context) {
         String normalizedTopic = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(topic);
         if (normalizedTopic == null) {
             throw invalidOutput("The note generation service returned invalid content. Please try again.");
@@ -86,11 +105,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 buildGeneratedNoteSchema(),
                 PromptGeneratedNote.class
         );
-        String generatedContent = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(response.payload().content());
-        if (!StringNormalizationUtils.containsAlphaNumeric(generatedContent)) {
+        String generatedContent = buildGeneratedNoteContent(response.payload(), normalizedTopic);
+        String normalizedGeneratedContent = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(generatedContent);
+        if (!StringNormalizationUtils.containsAlphaNumeric(normalizedGeneratedContent)) {
             throw invalidOutput("The note generation service returned invalid content. Please try again.");
         }
-        return response.payload().content().trim();
+        return generatedContent;
     }
 
     private GeneratedStudyPackContent generateStudyPackOnce(
@@ -376,7 +396,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         return promptResources.noteGenerationDeveloperPromptTemplate()
                 .replace("{MAX_WORDS}", String.valueOf(MAX_GENERATED_NOTE_WORDS))
                 .replace("{LEARNER_LEVEL}", toLearnerLevelLabel(learnerLevel))
-                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelGuidance(learnerLevel, QuizMode.QUICK_REVIEW));
+                .replace("{LEARNER_LEVEL_GUIDANCE}", buildLearnerLevelNoteGuidance(learnerLevel));
     }
 
     private ArrayNode buildAdaptivePracticeInputMessages(
@@ -521,13 +541,38 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("type", "object");
         root.put("additionalProperties", false);
-        root.putArray("required").add("content");
-        root.putObject("properties")
-                .putObject("content")
+        ArrayNode required = root.putArray("required");
+        required.add("title");
+        required.add("overview");
+        required.add("coreConcepts");
+        required.add("keyDetails");
+        required.add("examples");
+
+        ObjectNode properties = root.putObject("properties");
+        properties.putObject("title")
                 .put("type", "string")
                 .put("minLength", 1)
-                .put("maxLength", 6000);
+                .put("maxLength", 160);
+        properties.putObject("overview")
+                .put("type", "string")
+                .put("minLength", 1)
+                .put("maxLength", 1200);
+        properties.set("coreConcepts", buildGeneratedNoteArraySchema(2, 6));
+        properties.set("keyDetails", buildGeneratedNoteArraySchema(2, 6));
+        properties.set("examples", buildGeneratedNoteArraySchema(0, 4));
         return root;
+    }
+
+    private ObjectNode buildGeneratedNoteArraySchema(int minItems, int maxItems) {
+        ObjectNode arraySchema = objectMapper.createObjectNode();
+        arraySchema.put("type", "array");
+        arraySchema.put("minItems", minItems);
+        arraySchema.put("maxItems", maxItems);
+        arraySchema.putObject("items")
+                .put("type", "string")
+                .put("minLength", 1)
+                .put("maxLength", 240);
+        return arraySchema;
     }
 
     private ObjectNode buildTextMessage(String role, String text) {
@@ -742,6 +787,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                     : "Use board-exam style questions with situational framing, plausible distractors, multi-step thinking, and computations when the topic requires them.";
             case PROFESSIONAL -> "Use applied knowledge, case-based framing, and real-world scenarios. Computations are appropriate when the topic is quantitative or formula-based.";
             case PERSONAL_LEARNING -> "Use practical, accessible explanations with clear wording and real-world relevance. Keep difficulty around a solid college foundation unless the notes clearly suggest otherwise.";
+        };
+    }
+
+    private String buildLearnerLevelNoteGuidance(LearnerLevel learnerLevel) {
+        return switch (learnerLevel) {
+            case GRADE_SCHOOL -> "Use simple definitions, concrete wording, and familiar examples without heavy jargon.";
+            case JUNIOR_HIGH -> "Keep the note foundational and direct. Highlight the main ideas, basic relationships, and a few concrete examples.";
+            case SENIOR_HIGH -> "Use clear academic language with moderate detail, cause-and-effect links, and key terms the learner should remember.";
+            case COLLEGE -> "Assume basic subject familiarity and include deeper concepts, distinctions, mechanisms, or formulas when they are genuinely relevant.";
+            case BOARD_EXAM_REVIEW -> "Prioritize high-yield distinctions, mechanisms, and review-worthy details that matter for exam preparation.";
+            case PROFESSIONAL -> "Use concise applied language, emphasizing practical implications, systems, and real-world decision points when relevant.";
+            case PERSONAL_LEARNING -> "Keep the note accessible and practical while still preserving the essential terminology and structure of the topic.";
         };
     }
 
@@ -1030,10 +1087,120 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 if (attempt == MAX_INVALID_OUTPUT_ATTEMPTS) {
                     throw ex;
                 }
-                log.info("Retrying OpenAI quiz validation after invalid output on attempt {}", attempt);
+                log.info("Retrying OpenAI response validation after invalid output on attempt {}", attempt);
             }
         }
         throw Objects.requireNonNull(lastInvalidOutput, "lastInvalidOutput");
+    }
+
+    private String buildGeneratedNoteContent(PromptGeneratedNote generatedNote, String normalizedTopic) {
+        String title = normalizeGeneratedNoteText(
+                generatedNote.title(),
+                1,
+                MAX_GENERATED_NOTE_TITLE_WORDS,
+                "The note generation service returned an invalid title. Please try again."
+        );
+        String overview = normalizeGeneratedNoteText(
+                generatedNote.overview(),
+                8,
+                MAX_GENERATED_NOTE_OVERVIEW_WORDS,
+                "The note generation service returned an invalid overview. Please try again."
+        );
+        List<String> coreConcepts = normalizeGeneratedNoteItems(
+                generatedNote.coreConcepts(),
+                2,
+                "The note generation service returned invalid core concepts. Please try again."
+        );
+        List<String> keyDetails = normalizeGeneratedNoteItems(
+                generatedNote.keyDetails(),
+                2,
+                "The note generation service returned invalid key details. Please try again."
+        );
+        List<String> examples = normalizeGeneratedNoteItems(
+                generatedNote.examples(),
+                0,
+                "The note generation service returned invalid examples. Please try again."
+        );
+
+        assertGeneratedNoteAvoidsFiller(normalizedTopic, title, overview, coreConcepts, keyDetails, examples);
+
+        StringBuilder builder = new StringBuilder();
+        builder.append(title).append("\n\n");
+        builder.append("Overview:\n");
+        builder.append(overview).append("\n\n");
+        appendGeneratedNoteSection(builder, "Core Concepts", coreConcepts);
+        builder.append("\n\n");
+        appendGeneratedNoteSection(builder, "Key Details", keyDetails);
+        if (!examples.isEmpty()) {
+            builder.append("\n\n");
+            appendGeneratedNoteSection(builder, "Examples", examples);
+        }
+
+        String content = builder.toString().trim();
+        if (StringNormalizationUtils.countWords(content) > MAX_GENERATED_NOTE_WORDS) {
+            throw invalidOutput("The note generation service returned an overly long note. Please try again.");
+        }
+        return content;
+    }
+
+    private void appendGeneratedNoteSection(StringBuilder builder, String heading, List<String> items) {
+        builder.append(heading).append(":\n");
+        for (String item : items) {
+            builder.append("- ").append(item).append('\n');
+        }
+        if (!items.isEmpty()) {
+            builder.setLength(builder.length() - 1);
+        }
+    }
+
+    private String normalizeGeneratedNoteText(String value, int minWords, int maxWords, String errorMessage) {
+        String normalized = StringNormalizationUtils.normalizeWhitespaceToSingleSpaceOrNull(value);
+        if (normalized == null || !StringNormalizationUtils.hasWordCountBetween(normalized, minWords, maxWords)) {
+            throw invalidOutput(errorMessage);
+        }
+        return normalized;
+    }
+
+    private List<String> normalizeGeneratedNoteItems(List<String> values, int minItems, String errorMessage) {
+        List<String> normalized = sanitizeStringList(values).stream()
+                .map(value -> normalizeGeneratedNoteText(value, 1, MAX_GENERATED_NOTE_ITEM_WORDS, errorMessage))
+                .toList();
+        if (normalized.size() < minItems) {
+            throw invalidOutput(errorMessage);
+        }
+        return normalized;
+    }
+
+    private void assertGeneratedNoteAvoidsFiller(
+            String topic,
+            String title,
+            String overview,
+            List<String> coreConcepts,
+            List<String> keyDetails,
+            List<String> examples
+    ) {
+        String normalizedTopic = topic.toLowerCase(Locale.ROOT);
+        String noteText = String.join(
+                "\n",
+                List.of(
+                        title,
+                        overview,
+                        String.join("\n", coreConcepts),
+                        String.join("\n", keyDetails),
+                        String.join("\n", examples)
+                )
+        ).toLowerCase(Locale.ROOT);
+        for (String phrase : DISALLOWED_NOTE_GENERATION_PHRASES) {
+            if (noteText.contains(phrase)) {
+                throw invalidOutput("The note generation service returned generic filler. Please try again.");
+            }
+        }
+        if (noteText.contains("create a note about")) {
+            throw invalidOutput("The note generation service returned prompt-like filler. Please try again.");
+        }
+        if (!title.toLowerCase(Locale.ROOT).contains(normalizedTopic) && title.split("\\s+").length <= 2) {
+            throw invalidOutput("The note generation service returned a weak title. Please try again.");
+        }
     }
 
     private List<String> sanitizeConceptList(List<String> values) {
@@ -1168,7 +1335,20 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private record PromptStudyTip(String tip) {
     }
 
-    private record PromptGeneratedNote(String content) {
+    private record PromptGeneratedNote(
+            String title,
+            String overview,
+            List<String> coreConcepts,
+            List<String> keyDetails,
+            List<String> examples
+    ) {
+        PromptGeneratedNote {
+            Objects.requireNonNull(title, "title");
+            Objects.requireNonNull(overview, "overview");
+            Objects.requireNonNull(coreConcepts, "coreConcepts");
+            Objects.requireNonNull(keyDetails, "keyDetails");
+            Objects.requireNonNull(examples, "examples");
+        }
     }
 
     private record JsonSchemaOperation(

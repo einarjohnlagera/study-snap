@@ -21,7 +21,8 @@ export type PaywallModalVariant =
   | "challenge-quiz-limit"
   | "quiz-generation-limit"
   | "study-pack-limit"
-  | "ocr-limit";
+  | "ocr-limit"
+  | "note-generation-limit";
 
 type PaywallModalProps = {
   isOpen: boolean;
@@ -62,6 +63,7 @@ function resolvePaywallAction(variant: PaywallModalVariant): PaywallAction | nul
     case "quiz-generation-limit": return "QUIZ_GENERATION";
     case "board-exam-mode": return "BOARD_EXAM";
     case "adaptive-practice": return "ADAPTIVE_PRACTICE";
+    case "note-generation-limit": return "NOTE_GENERATION";
     default: return null;
   }
 }

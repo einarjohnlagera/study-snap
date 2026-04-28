@@ -47,6 +47,9 @@ public class UserUsageEntity {
     @Column(name = "ocr_extractions", nullable = false)
     private Integer ocrExtractions;
 
+    @Column(name = "note_generations", nullable = false)
+    private Integer noteGenerations;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 }

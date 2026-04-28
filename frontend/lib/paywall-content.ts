@@ -14,7 +14,8 @@ export type PaywallAction =
   | "QUIZ"
   | "BOARD_EXAM"
   | "QUIZ_GENERATION"
-  | "ADAPTIVE_PRACTICE";
+  | "ADAPTIVE_PRACTICE"
+  | "NOTE_GENERATION";
 
 type PaywallProfileType =
   | "STUDENT"
@@ -69,6 +70,12 @@ const BASE_FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
     feature: "adaptive",
     dismissLabel: "Maybe Later",
   },
+  NOTE_GENERATION: {
+    title: "You’ve reached your note generation limit",
+    body: "You’ve used all your topic-based note generations for this month. Upgrade to Premium to generate more notes from topics.",
+    feature: "note_generation_limit",
+    dismissLabel: "Maybe Later",
+  },
 };
 
 export const PREMIUM_EXHAUSTED_CONTENT: Record<PaywallAction, PremiumExhaustedContent> = {
@@ -91,6 +98,10 @@ export const PREMIUM_EXHAUSTED_CONTENT: Record<PaywallAction, PremiumExhaustedCo
   ADAPTIVE_PRACTICE: {
     title: "You’ve reached your quiz limit for this month",
     body: "Adaptive Practice will be available again after your next billing cycle.",
+  },
+  NOTE_GENERATION: {
+    title: "You’ve reached your note generation limit for this month",
+    body: "Your topic-based note generation limit resets on your next billing cycle.",
   },
 };
 

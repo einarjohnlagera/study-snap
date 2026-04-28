@@ -48,6 +48,7 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
   listCoursePrograms: jest.fn(),
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
@@ -115,18 +116,21 @@ describe("NoteEditorPageClient", () => {
         challengeQuizzesPerMonth: 5,
         adaptivePracticePerMonth: 0,
         ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
       },
       usage: {
         studyPacksUsed: 2,
         challengeQuizzesUsed: 0,
         adaptivePracticeUsed: 0,
         ocrUsed: 0,
+        noteGenerationsUsed: 1,
       },
       remaining: {
         studyPacksRemaining: 8,
         challengeQuizzesRemaining: 5,
         adaptivePracticeRemaining: 0,
         ocrRemaining: 20,
+        noteGenerationsRemaining: 4,
       },
       features: {
         adaptivePracticeAvailable: false,
@@ -366,6 +370,51 @@ describe("NoteEditorPageClient", () => {
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
       expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     });
+  });
+
+  it("disables topic note generation at the free plan limit and opens the paywall", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+        noteGenerationsUsed: 5,
+      },
+      remaining: {
+        studyPacksRemaining: 8,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+        noteGenerationsRemaining: 0,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+
+    expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+
+    expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
   });
 
   it("uses the student generate label and helper text by default", async () => {
