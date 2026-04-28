@@ -67,8 +67,11 @@ Create mode:
 
 - route: `/notes/new`
 - actions: `Save`, `Generate Study Pack`
+- optional topic-first helper: `Generate Note`
 - `Generate Study Pack` first saves the note, queues Study Pack generation, then redirects immediately to Note Detail with the requested default tab.
 - the editor must not wait for the LLM request to finish before navigation.
+- `Generate Note` creates a structured first draft from a topic with clear sections (`Overview`, `Core Concepts`, `Key Details`, optional `Examples`) and should avoid meta filler or instructional language.
+- topic note generation is plan-gated separately from Study Pack generation and OCR.
 
 Edit mode for draft notes:
 

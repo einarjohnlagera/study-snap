@@ -27,6 +27,7 @@ Free-plan limitations that should stay visible on pricing:
 
 - Adaptive Practice is Premium-only
 - Difficulty selection is Premium-only
+- Higher note generation limits are Premium-only
 
 Primary CTA:
 
@@ -35,6 +36,7 @@ Primary CTA:
 ### Premium
 
 - higher monthly limits
+- higher note generation limits
 - Adaptive Practice
 - Difficulty selection
 - Board Exam Mode
@@ -88,6 +90,7 @@ Current rows:
 
 - Study Packs / month
 - Challenge Quizzes / month
+- Topic note generation
 - AI Summary + Key Concepts
 - Weak Concepts tracking
 - Adaptive Practice

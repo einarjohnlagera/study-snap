@@ -86,6 +86,8 @@ studysnap:
     premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}
     free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
     premium-monthly-ocr-limit: ${PREMIUM_MONTHLY_OCR_LIMIT:100}
+    free-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_FREE:5}
+    premium-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}
     adaptive-practice-premium-only: ${ADAPTIVE_PRACTICE_PREMIUM_ONLY:true}
     difficulty-selection-premium-only: ${DIFFICULTY_SELECTION_PREMIUM_ONLY:true}
   limits:

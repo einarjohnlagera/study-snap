@@ -229,7 +229,19 @@ class OpenAiLlmStudyPackServiceTest {
     void generateNoteFromTopic_usesLearnerContextAndReturnsContent() throws JsonProcessingException {
         stubResponsesCall();
         ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("content", "Overview\nNewton's Laws of Motion explain how force and motion relate.");
+        payload.put("title", "Newton's Laws of Motion");
+        payload.put("overview", "Newton's Laws of Motion describe how forces affect the motion of objects.");
+        payload.putArray("coreConcepts")
+                .add("First Law: inertia keeps an object at rest or in uniform motion unless a net force acts on it.")
+                .add("Second Law: acceleration depends on net force and mass.")
+                .add("Third Law: forces occur in equal and opposite pairs.");
+        payload.putArray("keyDetails")
+                .add("The second law is summarized by F = ma.")
+                .add("Mass resists changes in motion.")
+                .add("Net force determines whether motion changes.");
+        payload.putArray("examples")
+                .add("A seatbelt counters inertia when a car stops suddenly.")
+                .add("Pushing a cart harder increases its acceleration.");
         when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
 
         String content = service.generateNoteFromTopic(
@@ -242,7 +254,12 @@ class OpenAiLlmStudyPackServiceTest {
                 )
         );
 
-        assertThat(content).contains("Newton's Laws of Motion");
+        assertThat(content)
+                .contains("Newton's Laws of Motion")
+                .contains("Overview:")
+                .contains("Core Concepts:")
+                .contains("Key Details:")
+                .contains("Examples:");
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());

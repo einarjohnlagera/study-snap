@@ -22,7 +22,8 @@ public record MePlanResponse(
             int studyPacksPerMonth,
             int challengeQuizzesPerMonth,
             int adaptivePracticePerMonth,
-            int ocrPerMonth
+            int ocrPerMonth,
+            int noteGenerationsPerMonth
     ) {
     }
 
@@ -30,7 +31,8 @@ public record MePlanResponse(
             int studyPacksUsed,
             int challengeQuizzesUsed,
             int adaptivePracticeUsed,
-            int ocrUsed
+            int ocrUsed,
+            int noteGenerationsUsed
     ) {
     }
 
@@ -38,7 +40,8 @@ public record MePlanResponse(
             int studyPacksRemaining,
             int challengeQuizzesRemaining,
             int adaptivePracticeRemaining,
-            int ocrRemaining
+            int ocrRemaining,
+            int noteGenerationsRemaining
     ) {
     }
 

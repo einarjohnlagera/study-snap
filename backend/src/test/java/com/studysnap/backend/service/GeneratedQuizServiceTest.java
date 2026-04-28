@@ -91,7 +91,7 @@ class GeneratedQuizServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
-                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0)
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0)
         );
         when(generationContextResolver.resolve(userId, note)).thenReturn(
                 new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))
@@ -186,7 +186,8 @@ class GeneratedQuizServiceTest {
         UserEntity student = buildUser(userId, UserRole.USER, ProfileType.STUDENT);
         when(userRepository.findById(userId)).thenReturn(Optional.of(student));
 
-        assertThatThrownBy(() -> generatedQuizService.exportDocx(UUID.randomUUID().toString(), userId, QuizDocxExportMode.QUIZ_ONLY))
+        String uuidStr = UUID.randomUUID().toString();
+        assertThatThrownBy(() -> generatedQuizService.exportDocx(uuidStr, userId, QuizDocxExportMode.QUIZ_ONLY))
                 .isInstanceOf(GeneratedQuizExportNotAllowedException.class);
 
         verify(generatedQuizRepository, never()).findByIdAndOwnerUserId(any(UUID.class), eq(userId));

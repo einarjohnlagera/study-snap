@@ -48,6 +48,7 @@ jest.mock("@/lib/api", () => ({
   getMe: jest.fn(),
   getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
   listCoursePrograms: jest.fn(),
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
@@ -115,18 +116,21 @@ describe("NoteEditorPageClient", () => {
         challengeQuizzesPerMonth: 5,
         adaptivePracticePerMonth: 0,
         ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
       },
       usage: {
         studyPacksUsed: 2,
         challengeQuizzesUsed: 0,
         adaptivePracticeUsed: 0,
         ocrUsed: 0,
+        noteGenerationsUsed: 1,
       },
       remaining: {
         studyPacksRemaining: 8,
         challengeQuizzesRemaining: 5,
         adaptivePracticeRemaining: 0,
         ocrRemaining: 20,
+        noteGenerationsRemaining: 4,
       },
       features: {
         adaptivePracticeAvailable: false,
@@ -366,6 +370,108 @@ describe("NoteEditorPageClient", () => {
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
       expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     });
+    expect(screen.getByRole("button", { name: "Generate Again" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Not quite right? Try refining your topic before generating again."),
+    ).toBeInTheDocument();
+  });
+
+  it("resets the topic-generation button label when the topic is cleared", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    const topicInput = screen.getByLabelText("Topic");
+
+    fireEvent.change(topicInput, { target: { value: "Newton's Laws of Motion" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+
+    await screen.findByRole("button", { name: "Generate Again" });
+
+    fireEvent.change(topicInput, { target: { value: "" } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Generate Note" })).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("Not quite right? Try refining your topic before generating again."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows repeat-generation loading feedback without adding another action", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    let resolveSecondGeneration: ((value: { content: string }) => void) | null = null;
+    const secondGenerationPromise = new Promise<{ content: string }>((resolve) => {
+      resolveSecondGeneration = resolve;
+    });
+    (generateNoteFromTopic as jest.Mock)
+      .mockResolvedValueOnce({ content: "First generated topic note" })
+      .mockReturnValueOnce(secondGenerationPromise);
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Newton's Laws of Motion" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    await screen.findByDisplayValue("First generated topic note");
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Again" }));
+
+    expect(screen.getByRole("button", { name: "Generating..." })).toBeInTheDocument();
+    expect(screen.getByText("Creating a new version...")).toBeInTheDocument();
+
+    resolveSecondGeneration?.({ content: "Second generated topic note" });
+
+    await screen.findByDisplayValue("Second generated topic note");
+    expect(screen.getAllByRole("button", { name: "Generate Again" })).toHaveLength(1);
+  });
+
+  it("disables topic note generation at the free plan limit and opens the paywall", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
+      },
+      usage: {
+        studyPacksUsed: 2,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+        noteGenerationsUsed: 5,
+      },
+      remaining: {
+        studyPacksRemaining: 8,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+        noteGenerationsRemaining: 0,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+
+    expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+
+    expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
   });
 
   it("uses the student generate label and helper text by default", async () => {

@@ -197,13 +197,17 @@ body *::after {
 }
 
 .motion-onboarding-step {
-  animation: motion-onboarding-step-enter 200ms ease-out;
+  animation: motion-note-content-enter 200ms ease-out;
 }
 
-@keyframes motion-onboarding-step-enter {
+.motion-note-content-enter {
+  animation: motion-note-content-enter 200ms ease-out;
+}
+
+@keyframes motion-note-content-enter {
   from {
     opacity: 0;
-    transform: translate3d(12px, 0, 0);
+    transform: translate3d(0, 8px, 0);
   }
 
   to {
@@ -230,6 +234,7 @@ body *::after {
   .motion-export-panel,
   .motion-fade-enter,
   .motion-modal-enter,
+  .motion-note-content-enter,
   .motion-onboarding-step {
     animation: none !important;
   }

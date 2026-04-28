@@ -6,6 +6,7 @@ import {
   createStudyPackFromNote,
   generateNoteFromTopic,
   getMe,
+  getMyPlan,
   getNote,
   trackAnalyticsEvent,
 } from "@/lib/api";
@@ -87,6 +88,7 @@ const readyNote = {
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  usePathname: () => "/onboarding",
 }));
 
 jest.mock("@/lib/route-guards", () => ({
@@ -104,7 +106,9 @@ jest.mock("@/lib/api", () => ({
   createStudyPackFromNote: jest.fn(),
   generateNoteFromTopic: jest.fn(),
   getMe: jest.fn(),
+  getMyPlan: jest.fn(),
   getNote: jest.fn(),
+  isNoteGenerationLimitReachedError: (error: unknown) => error instanceof Error && error.message === "NOTE_GENERATION_LIMIT_REACHED",
   trackAnalyticsEvent: jest.fn(),
 }));
 
@@ -118,6 +122,7 @@ describe("OnboardingPage", () => {
     (getAuthUser as jest.Mock).mockReset();
     (setAuthUser as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
+    (getMyPlan as jest.Mock).mockReset();
     (generateNoteFromTopic as jest.Mock).mockReset();
     (createNote as jest.Mock).mockReset();
     (createStudyPackFromNote as jest.Mock).mockReset();
@@ -139,6 +144,36 @@ describe("OnboardingPage", () => {
       refreshTokenExpiresAt: "2026-05-27T01:00:00Z",
     });
     (getMe as jest.Mock).mockResolvedValue(baseMe);
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
+      },
+      usage: {
+        studyPacksUsed: 0,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+        noteGenerationsUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 10,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+        noteGenerationsRemaining: 5,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
     (completeOnboarding as jest.Mock).mockResolvedValue({
       ...baseMe,
       profileType: "STUDENT",
@@ -209,6 +244,11 @@ describe("OnboardingPage", () => {
 
     const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
     expect(generatedNoteEditor).toHaveValue("Newton's Laws study content");
+    expect(
+      screen.getByText("Your note is ready. You can edit it before generating your Study Pack."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate Again" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Regenerate Note/i })).not.toBeInTheDocument();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
 
     fireEvent.change(generatedNoteEditor, {
@@ -257,6 +297,54 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Write or paste my own note" }));
     expect(screen.getByPlaceholderText("Paste or write your notes here...")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Create a note about Newton’s Laws of Motion...")).not.toBeInTheDocument();
+  });
+
+  it("disables topic note generation at the free plan limit and opens the paywall", async () => {
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
+      },
+      usage: {
+        studyPacksUsed: 0,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+        noteGenerationsUsed: 5,
+      },
+      remaining: {
+        studyPacksRemaining: 10,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+        noteGenerationsRemaining: 0,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByLabelText("Student"));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Understand a topic in depth" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
+
+    expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+
+    expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
   });
 
   it("allows board takers to finish without an exam date", async () => {

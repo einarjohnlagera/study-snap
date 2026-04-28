@@ -30,11 +30,13 @@ public class MePlanService {
         int challengeQuizLimit = properties.getPricing().resolveMonthlyChallengeQuizLimit(planType);
         int adaptivePracticeLimit = properties.getPricing().resolveMonthlyAdaptivePracticeLimit(planType);
         int ocrLimit = properties.getPricing().resolveMonthlyOcrLimit(planType);
+        int noteGenerationLimit = properties.getPricing().resolveMonthlyNoteGenerationLimit(planType);
 
         int studyPackUsed = studyPackUsage.usedCount();
         int challengeQuizUsed = usage.challengeQuizGenerations();
         int adaptivePracticeUsed = usage.adaptiveQuizGenerations();
         int ocrUsed = usage.ocrExtractions();
+        int noteGenerationUsed = usage.noteGenerations();
 
         return new MePlanResponse(
                 planType,
@@ -46,19 +48,22 @@ public class MePlanService {
                         studyPackLimit,
                         challengeQuizLimit,
                         adaptivePracticeLimit,
-                        ocrLimit
+                        ocrLimit,
+                        noteGenerationLimit
                 ),
                 new MePlanResponse.Usage(
                         studyPackUsed,
                         challengeQuizUsed,
                         adaptivePracticeUsed,
-                        ocrUsed
+                        ocrUsed,
+                        noteGenerationUsed
                 ),
                 new MePlanResponse.Remaining(
                         remaining(studyPackLimit, studyPackUsed),
                         remaining(challengeQuizLimit, challengeQuizUsed),
                         remaining(adaptivePracticeLimit, adaptivePracticeUsed),
-                        remaining(ocrLimit, ocrUsed)
+                        remaining(ocrLimit, ocrUsed),
+                        remaining(noteGenerationLimit, noteGenerationUsed)
                 ),
                 new MePlanResponse.Features(
                         properties.getPricing().isAdaptivePracticeAvailable(planType),

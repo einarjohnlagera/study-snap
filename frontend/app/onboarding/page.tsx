@@ -2,7 +2,9 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { PaywallModal } from "@/components/billing/paywall-modal";
 import { Button } from "@/components/ui/button";
+import { AppModal } from "@/components/ui/app-modal";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   completeOnboarding,
@@ -10,11 +12,13 @@ import {
   createStudyPackFromNote,
   generateNoteFromTopic,
   getMe,
+  isNoteGenerationLimitReachedError,
   getNote,
   trackAnalyticsEvent,
   type NoteResponse,
 } from "@/lib/api";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
+import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
@@ -29,6 +33,7 @@ import {
   type OnboardingInputMethod,
   type OnboardingProfileType,
 } from "@/lib/onboarding-v2";
+import { resolveRemainingUsageCredits } from "@/lib/plans";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
@@ -38,6 +43,7 @@ const TOPIC_MIN_LENGTH = 3;
 const NOTE_CONTENT_MIN_LENGTH = 50;
 const DESKTOP_BREAKPOINT_PX = 768;
 const STUDY_PACK_GENERATION_POLL_INTERVAL_MS = 2000;
+const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
 const MAX_CONCEPT_PREVIEW_COUNT = 4;
 const STEP_FOUR_ERROR_MESSAGE =
   "Something went wrong generating your Study Pack. Try a shorter topic or check your connection.";
@@ -234,12 +240,16 @@ export default function OnboardingPage() {
   const [stepThreeError, setStepThreeError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [completionError, setCompletionError] = useState<string | null>(null);
+  const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
   const [previewOpen, setPreviewOpen] = useState<Record<GenerationSectionKey, boolean>>({
     summary: true,
     concepts: true,
     quiz: true,
   });
+  const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
+  const generatedNoteSectionRef = useRef<HTMLDivElement | null>(null);
+  const [generatedNoteRefreshToken, setGeneratedNoteRefreshToken] = useState(0);
 
   const startedTrackedRef = useRef(false);
   const completionTrackedRef = useRef(false);
@@ -258,6 +268,22 @@ export default function OnboardingPage() {
   const topicLength = draft.topic.trim().length;
   const noteLength = draft.noteContent.trim().length;
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
+  const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
+  const noteGenerationLimit = usageSummary?.limits.noteGenerationsPerMonth;
+  const noteGenerationsUsed = usageSummary?.usage.noteGenerationsUsed;
+  const noteGenerationsRemaining = usageSummary
+    && typeof noteGenerationLimit === "number"
+    && typeof noteGenerationsUsed === "number"
+    ? resolveRemainingUsageCredits(
+      noteGenerationsUsed,
+      noteGenerationLimit,
+      usageSummary.remaining?.noteGenerationsRemaining,
+    )
+    : null;
+  const hasReachedNoteGenerationLimit = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining <= 0;
+  const noteGenerationRemainingLabel = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining > 0
+    ? `${noteGenerationsRemaining} note generation${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
+    : null;
   const studyPackReady = studyPackStatus === "STUDY_PACK_READY";
   const studyPackGenerating = studyPackStatus === "GENERATING";
   const completionCopy = profileType ? COMPLETION_COPY[profileType] : COMPLETION_COPY.STUDENT;
@@ -304,6 +330,25 @@ export default function OnboardingPage() {
         : { summary: true, concepts: false, quiz: false },
     );
   }, [isDesktop]);
+
+  useEffect(() => {
+    if (generatedNoteRefreshToken === 0) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      generatedNoteSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      const generatedNoteInput = generatedNoteSectionRef.current?.querySelector("textarea");
+      if (generatedNoteInput instanceof HTMLTextAreaElement) {
+        generatedNoteInput.scrollTop = 0;
+      }
+    }, NOTE_CONTENT_SCROLL_DELAY_MS);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [generatedNoteRefreshToken]);
 
   useEffect(() => {
     const authUser = getAuthUser();
@@ -589,7 +634,11 @@ export default function OnboardingPage() {
   };
 
   const handleGenerateNoteDraft = async () => {
-    if (!canGenerateNoteDraft || isGeneratingNote) {
+    if (!canGenerateNoteDraft || isGeneratingNote || generatedNoteReady) {
+      return;
+    }
+    if (hasReachedNoteGenerationLimit) {
+      setShowNoteGenerationLimitModal(true);
       return;
     }
 
@@ -610,10 +659,17 @@ export default function OnboardingPage() {
         noteId: null,
         studyPackId: null,
       }));
+      setGeneratedNoteRefreshToken((previous) => previous + 1);
+      void refreshUsageSummary();
     } catch (error) {
-      setStepThreeError(
-        error instanceof Error ? error.message : "We could not generate a note right now. Please try again.",
-      );
+      if (isNoteGenerationLimitReachedError(error)) {
+        await refreshUsageSummary();
+        setShowNoteGenerationLimitModal(true);
+      } else {
+        setStepThreeError(
+          error instanceof Error ? error.message : "We could not generate a note right now. Please try again.",
+        );
+      }
     } finally {
       setIsGeneratingNote(false);
     }
@@ -869,24 +925,57 @@ export default function OnboardingPage() {
                 />
               </label>
 
+              {hasReachedNoteGenerationLimit ? (
+                currentPlan === "FREE" ? (
+                  <div className="flex flex-col gap-2 rounded-xl border border-amber-300/70 bg-amber-50/80 p-3 text-sm text-amber-950 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100">
+                    <p>You&apos;ve reached your topic note generation limit for this month.</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full sm:w-fit"
+                      onClick={() => setShowNoteGenerationLimitModal(true)}
+                    >
+                      Upgrade to Premium
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-sm text-foreground/70">
+                    You&apos;ve reached your topic note generation limit for this billing cycle. Your limit resets on your next billing date.
+                  </div>
+                )
+              ) : noteGenerationRemainingLabel ? (
+                <p className="text-sm text-foreground/60">{noteGenerationRemainingLabel}</p>
+              ) : null}
+
               {generatedNoteReady ? (
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-foreground">Generated note</span>
-                  <textarea
-                    value={draft.noteContent}
-                    onChange={(event) => {
-                      setDraft((previous) => ({
-                        ...previous,
-                        noteContent: event.target.value,
-                      }));
-                      setStepThreeError(null);
-                    }}
-                    rows={8}
-                    className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
-                    placeholder="Your generated note will appear here."
-                  />
-                  <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>
-                </label>
+                <div
+                  key={`onboarding-generated-note-${generatedNoteRefreshToken}`}
+                  ref={generatedNoteSectionRef}
+                  className={generatedNoteRefreshToken > 0 ? "motion-note-content-enter" : undefined}
+                >
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-foreground">Generated note</span>
+                    <textarea
+                      value={draft.noteContent}
+                      onChange={(event) => {
+                        setDraft((previous) => ({
+                          ...previous,
+                          noteContent: event.target.value,
+                        }));
+                        setStepThreeError(null);
+                      }}
+                      rows={8}
+                      className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
+                      placeholder="Your generated note will appear here."
+                    />
+                    <div className="space-y-1">
+                      <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>
+                      <p className="text-sm text-foreground/55">
+                        Your note is ready. You can edit it before generating your Study Pack.
+                      </p>
+                    </div>
+                  </label>
+                </div>
               ) : (
                 <p className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-foreground/70 sm:text-base">
                   Generate a note first, then review and edit it before creating your Study Pack.
@@ -1124,11 +1213,11 @@ export default function OnboardingPage() {
                 type="button"
                 className="min-h-12 text-base sm:min-w-40"
                 onClick={() => void handleGenerateNoteDraft()}
-                disabled={!canGenerateNoteDraft}
+                disabled={!canGenerateNoteDraft || hasReachedNoteGenerationLimit}
                 loading={isGeneratingNote}
                 loadingText="Generating..."
               >
-                Generate Note ✨
+                Generate Note
               </Button>
             </div>
           </div>
@@ -1141,29 +1230,16 @@ export default function OnboardingPage() {
             <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
               Back
             </Button>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-12 text-base sm:min-w-44"
-                onClick={() => void handleGenerateNoteDraft()}
-                disabled={!canGenerateNoteDraft}
-                loading={isGeneratingNote}
-                loadingText="Generating..."
-              >
-                Regenerate Note ✨
-              </Button>
-              <Button
-                type="button"
-                className="min-h-12 text-base sm:min-w-48"
-                onClick={() => void handleStartStudyPack()}
-                disabled={!canStartStudyPack}
-                loading={startingStudyPack}
-                loadingText="Starting..."
-              >
-                Generate Study Pack →
-              </Button>
-            </div>
+            <Button
+              type="button"
+              className="min-h-12 text-base sm:min-w-48"
+              onClick={() => void handleStartStudyPack()}
+              disabled={!canStartStudyPack}
+              loading={startingStudyPack}
+              loadingText="Starting..."
+            >
+              Generate Study Pack →
+            </Button>
           </div>
         );
       }
@@ -1297,5 +1373,36 @@ export default function OnboardingPage() {
     );
   }
 
-  return renderCardShell(renderStepContent(), renderFooterActions());
+  return (
+    <>
+      {renderCardShell(renderStepContent(), renderFooterActions())}
+      {currentPlan === "FREE" ? (
+        <PaywallModal
+          isOpen={showNoteGenerationLimitModal}
+          variant="note-generation-limit"
+          source="onboarding_note_generation_limit"
+          onClose={() => setShowNoteGenerationLimitModal(false)}
+        />
+      ) : (
+        <AppModal
+          isOpen={showNoteGenerationLimitModal}
+          title="Note generation limit reached"
+          description="You’ve reached your topic-based note generation limit for this billing cycle. Your limits will reset on your next billing date."
+          onClose={() => setShowNoteGenerationLimitModal(false)}
+          actions={(
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => setShowNoteGenerationLimitModal(false)}
+              >
+                OK
+              </Button>
+            </div>
+          )}
+        />
+      )}
+    </>
+  );
 }
