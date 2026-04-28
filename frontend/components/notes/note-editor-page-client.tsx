@@ -109,6 +109,12 @@ function resolveGenerateHelperText(_profileType: string | null | undefined): str
 
 const GENERATE_NOTE_TIP_ID = "create-note-generate-topic";
 const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
+const IMPORT_LOADING_MESSAGE = "Extracting text from your file...";
+const IMPORT_SUCCESS_MESSAGE = "Text imported. Review and edit it before continuing.";
+const IMPORT_EMPTY_MESSAGE = "This file is empty or has no readable text.";
+const IMPORT_GENERIC_ERROR_MESSAGE = "We couldn’t extract text from this file. Try another image or file.";
+const IMPORT_UNSUPPORTED_FILE_MESSAGE = "Unsupported file type. Upload PNG, JPG, JPEG, WEBP, TXT, PDF, or DOCX.";
+const IMPORT_SCANNED_PDF_MESSAGE = "This PDF appears to be scanned or image-based. Please upload images for OCR instead.";
 
 export function NoteEditorPageClient({
   noteId,
@@ -128,7 +134,7 @@ export function NoteEditorPageClient({
     content: "",
     tags: [],
   });
-  const [entryOption, setEntryOption] = useState<NoteEditorEntryOption>("write");
+  const [entryOption, setEntryOption] = useState<NoteEditorEntryOption>(initialSource === "upload" ? "import" : "write");
   const [generateTopic, setGenerateTopic] = useState("");
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(noteId ?? null);
   const [loadingNote, setLoadingNote] = useState(isEditMode);
@@ -345,11 +351,11 @@ export function NoteEditorPageClient({
     setImportFile(file);
     setImportReviewMessage(null);
     setImportFlowState("uploading");
-    setImportStatusMessage("Uploading file...");
+    setImportStatusMessage(IMPORT_LOADING_MESSAGE);
 
     const extractingTimer = globalThis.setTimeout(() => {
       setImportFlowState("extracting");
-      setImportStatusMessage("Extracting text into your notes...");
+      setImportStatusMessage(IMPORT_LOADING_MESSAGE);
     }, 350);
 
     try {
@@ -359,14 +365,15 @@ export function NoteEditorPageClient({
       const didAppend = appendExtractedTextToContent(extracted.extractedText);
       if (!didAppend) {
         setImportFlowState("failure");
-        setImportStatusMessage("This file is empty or has no readable text.");
+        setImportStatusMessage(IMPORT_EMPTY_MESSAGE);
         resetImportInput();
-        showToast("This file is empty or has no readable text.", "info");
+        showToast(IMPORT_EMPTY_MESSAGE, "info");
         return;
       }
 
       setImportFlowState("success");
-      setImportStatusMessage("File content added to Content.");
+      setImportStatusMessage(IMPORT_SUCCESS_MESSAGE);
+      setGeneratedContentRefreshToken((previous) => previous + 1);
       if (extracted.meta.lowConfidence) {
         resetImportInput();
         setImportReviewMessage(
@@ -380,7 +387,6 @@ export function NoteEditorPageClient({
       showToast("Extracted text added to Content.", "success");
     } catch (error) {
       globalThis.clearTimeout(extractingTimer);
-      const message = error instanceof Error ? error.message : "Could not import this file.";
       if (isEmailNotVerifiedError(error)) {
         const verificationMessage = "Verify your email before using OCR upload.";
         setImportFlowState("failure");
@@ -402,11 +408,15 @@ export function NoteEditorPageClient({
         }
         return;
       }
+      const rawMessage = error instanceof Error ? error.message : IMPORT_GENERIC_ERROR_MESSAGE;
+      const resolvedMessage = rawMessage === IMPORT_UNSUPPORTED_FILE_MESSAGE || rawMessage === IMPORT_SCANNED_PDF_MESSAGE
+        ? rawMessage
+        : IMPORT_GENERIC_ERROR_MESSAGE;
       setImportFlowState("failure");
-      setImportStatusMessage(message);
+      setImportStatusMessage(resolvedMessage);
       setImportReviewMessage(null);
       resetImportInput();
-      showToast(message, "error");
+      showToast(resolvedMessage, "error");
     }
   }, [appendExtractedTextToContent, contentLocked, currentPlan, openLockedFeaturePaywall, showToast]);
 
@@ -509,11 +519,13 @@ export function NoteEditorPageClient({
   const generateNoteButtonLabel = hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
     ? "Generate Again"
     : "Generate Note";
-  const generateNoteStatusText = entryOption === "generate" && hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
+  const contentStatusText = entryOption === "generate" && hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
     ? (isGeneratingNote
       ? "Creating a new version..."
       : "Not quite right? Try refining your topic before generating again.")
-    : null;
+    : importFlowState === "success"
+      ? IMPORT_SUCCESS_MESSAGE
+      : null;
 
   const resolveTargetProfileType = useCallback((): NoteTargetProfileType | null => {
     if (showTargetProfileTypeField) {
@@ -1012,7 +1024,7 @@ export function NoteEditorPageClient({
         revealOptionalDetailsSignal={revealOptionalDetailsSignal}
         contentSectionRef={generatedContentSectionRef}
         contentAnimationKey={generatedContentRefreshToken}
-        contentStatusText={generateNoteStatusText}
+        contentStatusText={contentStatusText}
         disableContentEditing={contentLocked}
         contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."
         disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}
