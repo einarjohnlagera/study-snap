@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import type { LearnerLevel, NoteTargetProfileType } from "@/lib/api";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
@@ -53,9 +53,14 @@ type NoteEditorFormProps = {
   onGenerateNote?: () => void;
   isGeneratingNote?: boolean;
   disableGenerateNote?: boolean;
+  generateNoteLabel?: string;
+  generateNoteLoadingLabel?: string;
   generateNoteFooter?: ReactNode;
   showGenerateNoteEntry?: boolean;
   showGenerateNoteTip?: boolean;
+  contentSectionRef?: RefObject<HTMLElement | null>;
+  contentAnimationKey?: string | number;
+  contentStatusText?: string | null;
   disableContentEditing?: boolean;
   contentLockHint?: string | null;
   disableGenerateAction?: boolean;
@@ -118,9 +123,14 @@ export function NoteEditorForm({
   onGenerateNote,
   isGeneratingNote = false,
   disableGenerateNote = false,
+  generateNoteLabel = "Generate Note",
+  generateNoteLoadingLabel = "Generating...",
   generateNoteFooter = null,
   showGenerateNoteEntry = false,
   showGenerateNoteTip = false,
+  contentSectionRef,
+  contentAnimationKey,
+  contentStatusText = null,
   disableContentEditing = false,
   contentLockHint = null,
   disableGenerateAction = false,
@@ -381,7 +391,7 @@ export function NoteEditorForm({
                 </div>
               ) : null}
               {entryOption === "generate" ? (
-                <div className="space-y-3 rounded-xl border border-sky-500/20 bg-background p-4">
+                <div className="motion-note-content-enter space-y-3 rounded-xl border border-sky-500/20 bg-background p-4">
                   <div className="space-y-1">
                     <label htmlFor="generate-note-topic" className="text-sm font-medium text-foreground">
                       Topic
@@ -408,12 +418,12 @@ export function NoteEditorForm({
                       {isGeneratingNote ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating Note...
+                          {generateNoteLoadingLabel}
                         </>
                       ) : (
                         <>
                           <Sparkles className="mr-2 h-4 w-4" />
-                          Generate Note
+                          {generateNoteLabel}
                         </>
                       )}
                     </Button>
@@ -522,7 +532,15 @@ export function NoteEditorForm({
           </div>
         ) : null}
 
-        <section className="space-y-2">
+        <section
+          ref={contentSectionRef}
+          key={contentAnimationKey === undefined ? undefined : `note-content-section-${contentAnimationKey}`}
+          className={`space-y-2 ${
+            contentAnimationKey !== undefined && Number(contentAnimationKey) > 0
+              ? "motion-note-content-enter"
+              : ""
+          }`}
+        >
           <label htmlFor="note-content" className="text-sm font-medium text-foreground">Content</label>
           <textarea
             ref={contentRef}
@@ -554,6 +572,11 @@ export function NoteEditorForm({
               <p className="text-xs text-foreground/60">
                 Keep this note focused on one topic for better Study Pack quality.
               </p>
+              {contentStatusText ? (
+                <p className="text-xs text-foreground/55">
+                  {contentStatusText}
+                </p>
+              ) : null}
             </>
           )}
         </section>

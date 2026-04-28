@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { PaywallModal } from "@/components/billing/paywall-modal";
@@ -108,6 +108,7 @@ function resolveGenerateHelperText(_profileType: string | null | undefined): str
 }
 
 const GENERATE_NOTE_TIP_ID = "create-note-generate-topic";
+const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
 
 export function NoteEditorPageClient({
   noteId,
@@ -156,6 +157,9 @@ export function NoteEditorPageClient({
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
   const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
+  const generatedContentSectionRef = useRef<HTMLElement | null>(null);
+  const [generatedContentRefreshToken, setGeneratedContentRefreshToken] = useState(0);
+  const [hasGeneratedTopicDraft, setHasGeneratedTopicDraft] = useState(false);
   const currentPlan = usageSummary?.plan ?? (authUser?.planType ?? "FREE");
   const currentProfileType = authUser?.profileType ?? "STUDENT";
   const currentUserRole = authUser?.role ?? "USER";
@@ -252,15 +256,6 @@ export function NoteEditorPageClient({
   const showToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     setToastTone(tone);
     setToastMessage(message);
-  }, []);
-
-  const focusContentEditor = useCallback(() => {
-    globalThis.requestAnimationFrame(() => {
-      const contentElement = globalThis.document.getElementById("note-content");
-      if (contentElement instanceof HTMLTextAreaElement) {
-        contentElement.focus();
-      }
-    });
   }, []);
 
   const appendExtractedTextToContent = useCallback((extractedText: string) => {
@@ -452,6 +447,33 @@ export function NoteEditorPageClient({
     // `router` identity is not stable in tests, and the effect only needs the current note id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [noteId]);
+
+  useEffect(() => {
+    if (generateTopic.trim().length > 0 || !hasGeneratedTopicDraft) {
+      return;
+    }
+    setHasGeneratedTopicDraft(false);
+  }, [generateTopic, hasGeneratedTopicDraft]);
+
+  useEffect(() => {
+    if (generatedContentRefreshToken === 0) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      generatedContentSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      const contentElement = globalThis.document.getElementById("note-content");
+      if (contentElement instanceof HTMLTextAreaElement) {
+        contentElement.scrollTop = 0;
+      }
+    }, NOTE_CONTENT_SCROLL_DELAY_MS);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [generatedContentRefreshToken]);
+
   const studyPacksRemaining = usageSummary
     ? resolveRemainingUsageCredits(
       usageSummary.usage.studyPacksUsed,
@@ -478,6 +500,15 @@ export function NoteEditorPageClient({
     : false;
   const noteGenerationRemainingLabel = typeof noteGenerationsRemaining === "number" && noteGenerationsRemaining > 0
     ? `${noteGenerationsRemaining} note generation${noteGenerationsRemaining === 1 ? "" : "s"} left this month.`
+    : null;
+  const normalizedGenerateTopic = generateTopic.trim();
+  const generateNoteButtonLabel = hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
+    ? "Generate Again"
+    : "Generate Note";
+  const generateNoteStatusText = entryOption === "generate" && hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
+    ? (isGeneratingNote
+      ? "Creating a new version..."
+      : "Not quite right? Try refining your topic before generating again.")
     : null;
 
   const resolveTargetProfileType = useCallback((): NoteTargetProfileType | null => {
@@ -710,7 +741,7 @@ export function NoteEditorPageClient({
       return;
     }
 
-    const normalizedTopic = generateTopic.trim();
+    const normalizedTopic = normalizedGenerateTopic;
     if (normalizedTopic.length === 0) {
       showToast("Please enter a topic first.", "info");
       return;
@@ -737,13 +768,14 @@ export function NoteEditorPageClient({
         title: previous.title.trim().length > 0 ? previous.title : normalizedTopic,
         content: response.content,
       }));
+      setHasGeneratedTopicDraft(true);
+      setGeneratedContentRefreshToken((previous) => previous + 1);
       showToast(
         isReplacingContent
           ? "Generated note replaced the current content. Review and edit it before saving."
           : "Generated note added. Review and edit it before saving.",
         "success",
       );
-      focusContentEditor();
       void refreshUsageSummary();
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
@@ -765,8 +797,7 @@ export function NoteEditorPageClient({
     }
   }, [
     draft.content,
-    focusContentEditor,
-    generateTopic,
+    normalizedGenerateTopic,
     isEmailVerified,
     isGenerating,
     isGeneratingNote,
@@ -942,9 +973,14 @@ export function NoteEditorPageClient({
         }}
         isGeneratingNote={isGeneratingNote}
         disableGenerateNote={!isEmailVerified || hasReachedNoteGenerationLimit}
+        generateNoteLabel={generateNoteButtonLabel}
+        generateNoteLoadingLabel="Generating..."
         generateNoteFooter={generateNoteFooter}
         showGenerateNoteEntry={showGenerateNoteEntry}
         showGenerateNoteTip={showGenerateNoteTip}
+        contentSectionRef={generatedContentSectionRef}
+        contentAnimationKey={generatedContentRefreshToken}
+        contentStatusText={generateNoteStatusText}
         disableContentEditing={contentLocked}
         contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."
         disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}

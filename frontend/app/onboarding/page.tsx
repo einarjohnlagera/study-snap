@@ -43,6 +43,7 @@ const TOPIC_MIN_LENGTH = 3;
 const NOTE_CONTENT_MIN_LENGTH = 50;
 const DESKTOP_BREAKPOINT_PX = 768;
 const STUDY_PACK_GENERATION_POLL_INTERVAL_MS = 2000;
+const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
 const MAX_CONCEPT_PREVIEW_COUNT = 4;
 const STEP_FOUR_ERROR_MESSAGE =
   "Something went wrong generating your Study Pack. Try a shorter topic or check your connection.";
@@ -247,6 +248,8 @@ export default function OnboardingPage() {
     quiz: true,
   });
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
+  const generatedNoteSectionRef = useRef<HTMLDivElement | null>(null);
+  const [generatedNoteRefreshToken, setGeneratedNoteRefreshToken] = useState(0);
 
   const startedTrackedRef = useRef(false);
   const completionTrackedRef = useRef(false);
@@ -327,6 +330,25 @@ export default function OnboardingPage() {
         : { summary: true, concepts: false, quiz: false },
     );
   }, [isDesktop]);
+
+  useEffect(() => {
+    if (generatedNoteRefreshToken === 0) {
+      return;
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      generatedNoteSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      const generatedNoteInput = generatedNoteSectionRef.current?.querySelector("textarea");
+      if (generatedNoteInput instanceof HTMLTextAreaElement) {
+        generatedNoteInput.scrollTop = 0;
+      }
+    }, NOTE_CONTENT_SCROLL_DELAY_MS);
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [generatedNoteRefreshToken]);
 
   useEffect(() => {
     const authUser = getAuthUser();
@@ -612,7 +634,7 @@ export default function OnboardingPage() {
   };
 
   const handleGenerateNoteDraft = async () => {
-    if (!canGenerateNoteDraft || isGeneratingNote) {
+    if (!canGenerateNoteDraft || isGeneratingNote || generatedNoteReady) {
       return;
     }
     if (hasReachedNoteGenerationLimit) {
@@ -637,6 +659,7 @@ export default function OnboardingPage() {
         noteId: null,
         studyPackId: null,
       }));
+      setGeneratedNoteRefreshToken((previous) => previous + 1);
       void refreshUsageSummary();
     } catch (error) {
       if (isNoteGenerationLimitReachedError(error)) {
@@ -925,23 +948,34 @@ export default function OnboardingPage() {
               ) : null}
 
               {generatedNoteReady ? (
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-foreground">Generated note</span>
-                  <textarea
-                    value={draft.noteContent}
-                    onChange={(event) => {
-                      setDraft((previous) => ({
-                        ...previous,
-                        noteContent: event.target.value,
-                      }));
-                      setStepThreeError(null);
-                    }}
-                    rows={8}
-                    className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
-                    placeholder="Your generated note will appear here."
-                  />
-                  <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>
-                </label>
+                <div
+                  key={`onboarding-generated-note-${generatedNoteRefreshToken}`}
+                  ref={generatedNoteSectionRef}
+                  className={generatedNoteRefreshToken > 0 ? "motion-note-content-enter" : undefined}
+                >
+                  <label className="block space-y-2">
+                    <span className="text-sm font-medium text-foreground">Generated note</span>
+                    <textarea
+                      value={draft.noteContent}
+                      onChange={(event) => {
+                        setDraft((previous) => ({
+                          ...previous,
+                          noteContent: event.target.value,
+                        }));
+                        setStepThreeError(null);
+                      }}
+                      rows={8}
+                      className="min-h-[180px] w-full rounded-xl border border-border bg-background px-4 py-3 text-base text-foreground outline-none ring-0 transition-colors focus:border-blue-500 md:min-h-[210px]"
+                      placeholder="Your generated note will appear here."
+                    />
+                    <div className="space-y-1">
+                      <p className="text-sm text-foreground/60">{noteLength} / 50 minimum</p>
+                      <p className="text-sm text-foreground/55">
+                        Your note is ready. You can edit it before generating your Study Pack.
+                      </p>
+                    </div>
+                  </label>
+                </div>
               ) : (
                 <p className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-foreground/70 sm:text-base">
                   Generate a note first, then review and edit it before creating your Study Pack.
@@ -1183,7 +1217,7 @@ export default function OnboardingPage() {
                 loading={isGeneratingNote}
                 loadingText="Generating..."
               >
-                Generate Note ✨
+                Generate Note
               </Button>
             </div>
           </div>
@@ -1196,29 +1230,16 @@ export default function OnboardingPage() {
             <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
               Back
             </Button>
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                className="min-h-12 text-base sm:min-w-44"
-                onClick={() => void handleGenerateNoteDraft()}
-                disabled={!canGenerateNoteDraft || hasReachedNoteGenerationLimit}
-                loading={isGeneratingNote}
-                loadingText="Generating..."
-              >
-                Regenerate Note ✨
-              </Button>
-              <Button
-                type="button"
-                className="min-h-12 text-base sm:min-w-48"
-                onClick={() => void handleStartStudyPack()}
-                disabled={!canStartStudyPack}
-                loading={startingStudyPack}
-                loadingText="Starting..."
-              >
-                Generate Study Pack →
-              </Button>
-            </div>
+            <Button
+              type="button"
+              className="min-h-12 text-base sm:min-w-48"
+              onClick={() => void handleStartStudyPack()}
+              disabled={!canStartStudyPack}
+              loading={startingStudyPack}
+              loadingText="Starting..."
+            >
+              Generate Study Pack →
+            </Button>
           </div>
         );
       }

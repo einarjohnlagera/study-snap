@@ -244,6 +244,11 @@ describe("OnboardingPage", () => {
 
     const generatedNoteEditor = await screen.findByPlaceholderText("Your generated note will appear here.");
     expect(generatedNoteEditor).toHaveValue("Newton's Laws study content");
+    expect(
+      screen.getByText("Your note is ready. You can edit it before generating your Study Pack."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generate Again" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Regenerate Note/i })).not.toBeInTheDocument();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
 
     fireEvent.change(generatedNoteEditor, {
@@ -335,7 +340,7 @@ describe("OnboardingPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate a note" }));
 
     expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate Note ✨" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
 

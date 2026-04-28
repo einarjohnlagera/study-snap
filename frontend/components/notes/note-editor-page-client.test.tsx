@@ -370,6 +370,63 @@ describe("NoteEditorPageClient", () => {
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
       expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     });
+    expect(screen.getByRole("button", { name: "Generate Again" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Not quite right? Try refining your topic before generating again."),
+    ).toBeInTheDocument();
+  });
+
+  it("resets the topic-generation button label when the topic is cleared", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    const topicInput = screen.getByLabelText("Topic");
+
+    fireEvent.change(topicInput, { target: { value: "Newton's Laws of Motion" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+
+    await screen.findByRole("button", { name: "Generate Again" });
+
+    fireEvent.change(topicInput, { target: { value: "" } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Generate Note" })).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText("Not quite right? Try refining your topic before generating again."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows repeat-generation loading feedback without adding another action", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    let resolveSecondGeneration: ((value: { content: string }) => void) | null = null;
+    const secondGenerationPromise = new Promise<{ content: string }>((resolve) => {
+      resolveSecondGeneration = resolve;
+    });
+    (generateNoteFromTopic as jest.Mock)
+      .mockResolvedValueOnce({ content: "First generated topic note" })
+      .mockReturnValueOnce(secondGenerationPromise);
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Newton's Laws of Motion" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+    await screen.findByDisplayValue("First generated topic note");
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Again" }));
+
+    expect(screen.getByRole("button", { name: "Generating..." })).toBeInTheDocument();
+    expect(screen.getByText("Creating a new version...")).toBeInTheDocument();
+
+    resolveSecondGeneration?.({ content: "Second generated topic note" });
+
+    await screen.findByDisplayValue("Second generated topic note");
+    expect(screen.getAllByRole("button", { name: "Generate Again" })).toHaveLength(1);
   });
 
   it("disables topic note generation at the free plan limit and opens the paywall", async () => {
