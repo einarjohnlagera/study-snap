@@ -233,10 +233,38 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByText("Create or import your notes first, then generate a Study Pack when you are ready.")).not.toBeInTheDocument();
   });
 
+  it("keeps Add details collapsed by default on the new note page", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    const addDetailsButton = await screen.findByRole("button", { name: "Add details (optional)" });
+    expect(addDetailsButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Title (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Subject (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Course / Program (optional)")).not.toBeInTheDocument();
+  });
+
+  it("shows optional metadata fields when Add details is expanded", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+
+    expect(await screen.findByLabelText("Title (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Subject (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Course / Program (optional)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
+  });
+
   it("defaults create-note course/program from the user profile", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
 
     render(<NoteEditorPageClient />);
+
+    const addDetailsButton = await screen.findByRole("button", { name: "Add details (optional)" });
+    fireEvent.click(addDetailsButton);
 
     const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
     await waitFor(() => {
@@ -286,6 +314,8 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+
     const subjectInput = await screen.findByLabelText("Subject (optional)");
     const contentInput = screen.getByLabelText("Content");
     await waitFor(() => {
@@ -305,35 +335,50 @@ describe("NoteEditorPageClient", () => {
     }));
   });
 
-  it("saves the note, starts generation, and redirects to the generating note detail state", async () => {
+  it("saves a new note without expanding Add details", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.change(await screen.findByLabelText("Content"), { target: { value: "Simple note content" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
+        title: null,
+        subject: null,
+        courseProgram: "Nursing",
+        tags: [],
+        targetProfileType: "STUDENT",
+        content: "Simple note content",
+      }));
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created");
+    });
+  });
+
+  it("saves the note, starts generation, and redirects without requiring Add details", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (createNote as jest.Mock).mockResolvedValueOnce({
       ...baseNote,
       id: "note-created",
-      title: "My Notes",
-      subject: "General Science",
+      title: "",
+      subject: null,
       courseProgram: "Nursing",
-      tags: ["review"],
       content: "Cell structure content",
     });
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.change(await screen.findByLabelText("Title (optional)"), { target: { value: "My Notes" } });
-    fireEvent.change(screen.getByLabelText("Subject (optional)"), { target: { value: "General Science" } });
     fireEvent.change(screen.getByLabelText("Content"), { target: { value: "Cell structure content" } });
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add Tag/i }));
-    fireEvent.change(screen.getByPlaceholderText("Add a tag"), { target: { value: "review" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
-        title: "My Notes",
-        subject: "General Science",
+        title: null,
+        subject: null,
         courseProgram: "Nursing",
-        tags: ["review"],
+        tags: [],
         targetProfileType: "STUDENT",
       }));
       expect(createStudyPackFromNote).toHaveBeenCalledWith("note-created");
@@ -368,8 +413,9 @@ describe("NoteEditorPageClient", () => {
     await waitFor(() => {
       expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion");
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
-      expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     });
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     expect(screen.getByRole("button", { name: "Generate Again" })).toBeInTheDocument();
     expect(
       screen.getByText("Not quite right? Try refining your topic before generating again."),
@@ -489,6 +535,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient initialMode="quiz" />);
 
     expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
     expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
@@ -505,6 +552,8 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
     expect(await screen.findByText("Please select an audience")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add details (optional)" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
     expect(createNote).not.toHaveBeenCalled();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
@@ -515,6 +564,17 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
+  });
+
+  it("shows target audience inside Add details for admin note creation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", role: "ADMIN" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
   });
 
   it("locks content editing for generated notes but keeps metadata fields editable", async () => {
@@ -922,6 +982,7 @@ describe("NoteEditorPageClient", () => {
 
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
     fireEvent.change(screen.getByLabelText("Who is this note for?"), { target: { value: "STUDENT" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));

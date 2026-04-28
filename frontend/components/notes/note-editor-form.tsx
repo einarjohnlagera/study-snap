@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, Copy, FileText, Loader2, Sparkles, Tag, UploadCloud } from "lucide-react";
 import type { LearnerLevel, NoteTargetProfileType } from "@/lib/api";
 import { CourseProgramCombobox } from "@/components/metadata/course-program-combobox";
 import { SubjectCombobox } from "@/components/notes/subject-combobox";
@@ -58,6 +58,8 @@ type NoteEditorFormProps = {
   generateNoteFooter?: ReactNode;
   showGenerateNoteEntry?: boolean;
   showGenerateNoteTip?: boolean;
+  collapseOptionalDetailsByDefault?: boolean;
+  revealOptionalDetailsSignal?: number;
   contentSectionRef?: RefObject<HTMLElement | null>;
   contentAnimationKey?: string | number;
   contentStatusText?: string | null;
@@ -128,6 +130,8 @@ export function NoteEditorForm({
   generateNoteFooter = null,
   showGenerateNoteEntry = false,
   showGenerateNoteTip = false,
+  collapseOptionalDetailsByDefault = false,
+  revealOptionalDetailsSignal = 0,
   contentSectionRef,
   contentAnimationKey,
   contentStatusText = null,
@@ -157,6 +161,7 @@ export function NoteEditorForm({
 }: Readonly<NoteEditorFormProps>) {
   const [tagDraft, setTagDraft] = useState("");
   const [addingTag, setAddingTag] = useState(false);
+  const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(!collapseOptionalDetailsByDefault);
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const contentEmpty = note.content.trim().length === 0;
@@ -207,6 +212,17 @@ export function NoteEditorForm({
     }
     importInputRef.current?.focus();
   }, [autoFocusImport, disableContentEditing, importFileInputKey]);
+
+  useEffect(() => {
+    setOptionalDetailsOpen(!collapseOptionalDetailsByDefault);
+  }, [collapseOptionalDetailsByDefault]);
+
+  useEffect(() => {
+    if (revealOptionalDetailsSignal <= 0) {
+      return;
+    }
+    setOptionalDetailsOpen(true);
+  }, [revealOptionalDetailsSignal]);
 
   const renderSaveButton = (className: string) => (
     <Button
@@ -260,6 +276,176 @@ export function NoteEditorForm({
     </div>
   );
 
+  const renderMetadataFields = () => (
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <label htmlFor="note-title" className="text-sm font-medium text-foreground">Title (optional)</label>
+        <input
+          id="note-title"
+          type="text"
+          value={note.title}
+          onChange={(event) => onTitleChange(event.target.value)}
+          placeholder="Untitled note"
+          disabled={isCopying}
+          className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject (optional)</label>
+          <SubjectCombobox
+            id="note-subject"
+            value={note.subject}
+            suggestions={subjectSuggestions}
+            onChange={onSubjectChange}
+            disabled={isCopying}
+          />
+          <p className="text-xs text-foreground/60">Helps organize notes and filter by topic in your Library.</p>
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program (optional)</label>
+          <CourseProgramCombobox
+            id="note-course-program"
+            value={note.courseProgram}
+            suggestions={courseProgramSuggestions}
+            learnerLevel={learnerLevel}
+            onChange={onCourseProgramChange}
+            disabled={isCopying}
+            context="note"
+          />
+          <p className="text-xs text-foreground/60">Used to personalize content and quiz recommendations.</p>
+        </div>
+
+        {showTargetProfileTypeField ? (
+          <div className="space-y-2 sm:col-span-2">
+            <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
+              Who is this note for?
+            </label>
+            <select
+              id="note-target-profile-type"
+              value={note.targetProfileType}
+              onChange={(event) => onTargetProfileTypeChange?.(event.target.value as NoteTargetProfileType | "")}
+              disabled={isCopying}
+              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
+            >
+              <option value="">Select an audience</option>
+              <option value="STUDENT">{getNoteTargetProfileLabel("STUDENT")}</option>
+              <option value="BOARD_TAKER">{getNoteTargetProfileLabel("BOARD_TAKER")}</option>
+            </select>
+            <p className="text-xs text-foreground/60">
+              {targetProfileTypeHelperText}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      {showTagsSection ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-foreground">Tags</p>
+            {!addingTag && !isCopying ? (
+              <button
+                type="button"
+                onClick={() => setAddingTag(true)}
+                className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+              >
+                + Add Tag
+              </button>
+            ) : null}
+          </div>
+          {addingTag ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={tagDraft}
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleAddTag();
+                  }
+                  if (event.key === "Escape") {
+                    setAddingTag(false);
+                    setTagDraft("");
+                  }
+                }}
+                placeholder="Add a tag"
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+              />
+              <Button type="button" size="sm" variant="outline" onClick={handleAddTag} disabled={isCopying}>
+                Add
+              </Button>
+            </div>
+          ) : null}
+          <p className="text-xs text-foreground/60">
+            Tags help you organize and find your notes later. Add 3-5 keywords like: formulas, anatomy, derivatives, grammar.
+          </p>
+          <div className="flex min-h-9 flex-wrap gap-2">
+            {note.tags.length > 0 ? (
+              note.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80"
+                >
+                  <Tag className="h-3 w-3" />
+                  {tag}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${tag}`}
+                    className="text-foreground/60 hover:text-foreground"
+                    disabled={isCopying}
+                    onClick={() => {
+                      if (!onTagsChange) {
+                        return;
+                      }
+                      onTagsChange(note.tags.filter((value) => value !== tag));
+                    }}
+                  >
+                    x
+                  </button>
+                </span>
+              ))
+            ) : (
+              <p className="text-xs text-foreground/55">No tags yet.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const renderOptionalDetailsSection = () => (
+    <section className="rounded-2xl border border-border/80 bg-muted/15">
+      <button
+        type="button"
+        aria-label="Add details (optional)"
+        aria-controls="note-optional-details"
+        aria-expanded={optionalDetailsOpen}
+        onClick={() => setOptionalDetailsOpen((previous) => !previous)}
+        className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left sm:px-5"
+      >
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">Add details (optional)</p>
+          <p className="max-w-2xl text-xs text-foreground/65">
+            You can organize this note now or later. These details help with search, filtering, and recommendations.
+          </p>
+        </div>
+        <ChevronDown
+          className={`mt-0.5 h-4 w-4 shrink-0 text-foreground/55 transition-transform ${
+            optionalDetailsOpen ? "rotate-180" : ""
+          }`}
+          aria-hidden="true"
+        />
+      </button>
+      {optionalDetailsOpen ? (
+        <div id="note-optional-details" className="motion-note-content-enter border-t border-border/70 px-4 py-4 sm:px-5">
+          {renderMetadataFields()}
+        </div>
+      ) : null}
+    </section>
+  );
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 pb-36 sm:px-6 sm:py-8 sm:pb-40">
       {backHref && backLabel ? <BackLink href={backHref} label={backLabel} /> : null}
@@ -276,245 +462,112 @@ export function NoteEditorForm({
       </header>
 
       <Card className="space-y-6 p-4 sm:p-6">
-        <section className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="note-title" className="text-sm font-medium text-foreground">Title (optional)</label>
-            <input
-              id="note-title"
-              type="text"
-              value={note.title}
-              onChange={(event) => onTitleChange(event.target.value)}
-              placeholder="Untitled note"
-              disabled={isCopying}
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="note-subject" className="text-sm font-medium text-foreground">Subject (optional)</label>
-              <SubjectCombobox
-                id="note-subject"
-                value={note.subject}
-                suggestions={subjectSuggestions}
-                onChange={onSubjectChange}
-                disabled={isCopying}
-              />
-              <p className="text-xs text-foreground/60">Helps organize notes and filter by topic in your Library.</p>
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="note-course-program" className="text-sm font-medium text-foreground">Course / Program (optional)</label>
-              <CourseProgramCombobox
-                id="note-course-program"
-                value={note.courseProgram}
-                suggestions={courseProgramSuggestions}
-                learnerLevel={learnerLevel}
-                onChange={onCourseProgramChange}
-                disabled={isCopying}
-                context="note"
-              />
-              <p className="text-xs text-foreground/60">Used to personalize content and quiz recommendations.</p>
-            </div>
-
-            {showTargetProfileTypeField ? (
-              <div className="space-y-2">
-              <label htmlFor="note-target-profile-type" className="text-sm font-medium text-foreground">
-                Who is this note for?
-              </label>
-              <select
-                id="note-target-profile-type"
-                value={note.targetProfileType}
-                onChange={(event) => onTargetProfileTypeChange?.(event.target.value as NoteTargetProfileType | "")}
-                disabled={isCopying}
-                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-blue-600"
-              >
-                <option value="">Select an audience</option>
-                <option value="STUDENT">{getNoteTargetProfileLabel("STUDENT")}</option>
-                <option value="BOARD_TAKER">{getNoteTargetProfileLabel("BOARD_TAKER")}</option>
-              </select>
-              <p className="text-xs text-foreground/60">
-                {targetProfileTypeHelperText}
+        {showGenerateNoteEntry ? (
+          <section className="space-y-4 rounded-2xl border border-border/80 bg-muted/20 p-4 sm:p-5">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Choose how to start</p>
+              <p className="text-xs text-foreground/65">
+                Start from a blank note or generate a first draft from a topic.
               </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={entryOption === "write"}
+                onClick={() => onEntryOptionChange?.("write")}
+                className={`rounded-xl border px-4 py-3 text-left transition ${
+                  entryOption === "write"
+                    ? "border-sky-500 bg-sky-50 text-sky-950 shadow-sm dark:bg-sky-950/30 dark:text-sky-100"
+                    : "border-border bg-background text-foreground/80 hover:border-sky-300"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <FileText className="h-4 w-4" />
+                  Write your own note
+                </div>
+                <p className="mt-1 text-xs text-current/75">
+                  Start from scratch and write or paste what you already know.
+                </p>
+              </button>
+              <button
+                type="button"
+                aria-pressed={entryOption === "generate"}
+                onClick={() => onEntryOptionChange?.("generate")}
+                className={`rounded-xl border px-4 py-3 text-left transition ${
+                  entryOption === "generate"
+                    ? "border-sky-500 bg-sky-50 text-sky-950 shadow-sm dark:bg-sky-950/30 dark:text-sky-100"
+                    : "border-border bg-background text-foreground/80 hover:border-sky-300"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Sparkles className="h-4 w-4" />
+                  Generate from topic
+                </div>
+                <p className="mt-1 text-xs text-current/75">
+                  Create a study-ready first draft, then edit it before saving.
+                </p>
+              </button>
+            </div>
+            {showGenerateNoteTip ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+                Tip: You can generate notes instantly by typing a topic above.
               </div>
             ) : null}
-          </div>
-
-          {showGenerateNoteEntry ? (
-            <div className="space-y-4 rounded-lg border border-border/80 bg-muted/20 p-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Choose how to start</p>
-                <p className="text-xs text-foreground/65">
-                  Start from a blank note or generate a first draft from a topic.
-                </p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  aria-pressed={entryOption === "write"}
-                  onClick={() => onEntryOptionChange?.("write")}
-                  className={`rounded-xl border px-4 py-3 text-left transition ${
-                    entryOption === "write"
-                      ? "border-sky-500 bg-sky-50 text-sky-950 shadow-sm dark:bg-sky-950/30 dark:text-sky-100"
-                      : "border-border bg-background text-foreground/80 hover:border-sky-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <FileText className="h-4 w-4" />
-                    Write your own note
-                  </div>
-                  <p className="mt-1 text-xs text-current/75">
-                    Start from scratch and write or paste what you already know.
+            {entryOption === "generate" ? (
+              <div className="motion-note-content-enter space-y-3 rounded-xl border border-sky-500/20 bg-background p-4">
+                <div className="space-y-1">
+                  <label htmlFor="generate-note-topic" className="text-sm font-medium text-foreground">
+                    Topic
+                  </label>
+                  <p className="text-xs text-foreground/65">
+                    Built for studying, not just exploring information.
                   </p>
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={entryOption === "generate"}
-                  onClick={() => onEntryOptionChange?.("generate")}
-                  className={`rounded-xl border px-4 py-3 text-left transition ${
-                    entryOption === "generate"
-                      ? "border-sky-500 bg-sky-50 text-sky-950 shadow-sm dark:bg-sky-950/30 dark:text-sky-100"
-                      : "border-border bg-background text-foreground/80 hover:border-sky-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    <Sparkles className="h-4 w-4" />
-                    Generate from topic
-                  </div>
-                  <p className="mt-1 text-xs text-current/75">
-                    Create a study-ready first draft, then edit it before saving.
-                  </p>
-                </button>
-              </div>
-              {showGenerateNoteTip ? (
-                <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
-                  Tip: You can generate notes instantly by typing a topic above.
                 </div>
-              ) : null}
-              {entryOption === "generate" ? (
-                <div className="motion-note-content-enter space-y-3 rounded-xl border border-sky-500/20 bg-background p-4">
-                  <div className="space-y-1">
-                    <label htmlFor="generate-note-topic" className="text-sm font-medium text-foreground">
-                      Topic
-                    </label>
-                    <p className="text-xs text-foreground/65">
-                      Built for studying, not just exploring information.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <input
-                      id="generate-note-topic"
-                      type="text"
-                      value={generateTopic}
-                      onChange={(event) => onGenerateTopicChange?.(event.target.value)}
-                      placeholder="Create a note about Newton's Laws of Motion..."
-                      className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
-                    />
-                    <Button
-                      type="button"
-                      onClick={onGenerateNote}
-                      disabled={generateNoteDisabled}
-                      className="w-full sm:w-auto"
-                    >
-                      {isGeneratingNote ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {generateNoteLoadingLabel}
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="mr-2 h-4 w-4" />
-                          {generateNoteLabel}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-foreground/60">
-                    Generate a first draft here, then review and edit the content below before saving or generating a Study Pack.
-                  </p>
-                  {generateNoteFooter}
-                  {note.content.trim().length > 0 ? (
-                    <p className="text-xs text-foreground/55">
-                      Generating a note will replace the current content in the editor.
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {showTagsSection ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-foreground">Tags</p>
-                {!addingTag && !isCopying ? (
-                  <button
-                    type="button"
-                    onClick={() => setAddingTag(true)}
-                    className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    + Add Tag
-                  </button>
-                ) : null}
-              </div>
-              {addingTag ? (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
+                    id="generate-note-topic"
                     type="text"
-                    value={tagDraft}
-                    onChange={(event) => setTagDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        handleAddTag();
-                      }
-                      if (event.key === "Escape") {
-                        setAddingTag(false);
-                        setTagDraft("");
-                      }
-                    }}
-                    placeholder="Add a tag"
-                    className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
+                    value={generateTopic}
+                    onChange={(event) => onGenerateTopicChange?.(event.target.value)}
+                    placeholder="Create a note about Newton's Laws of Motion..."
+                    className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus-visible:ring-2 focus-visible:ring-blue-600"
                   />
-                  <Button type="button" size="sm" variant="outline" onClick={handleAddTag} disabled={isCopying}>
-                    Add
+                  <Button
+                    type="button"
+                    onClick={onGenerateNote}
+                    disabled={generateNoteDisabled}
+                    className="w-full sm:w-auto"
+                  >
+                    {isGeneratingNote ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {generateNoteLoadingLabel}
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        {generateNoteLabel}
+                      </>
+                    )}
                   </Button>
                 </div>
-              ) : null}
-              <p className="text-xs text-foreground/60">
-                Tags help you organize and find your notes later. Add 3-5 keywords like: formulas, anatomy, derivatives, grammar.
-              </p>
-              <div className="flex min-h-9 flex-wrap gap-2">
-                {note.tags.length > 0 ? (
-                  note.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-foreground/80"
-                    >
-                      <Tag className="h-3 w-3" />
-                      {tag}
-                      <button
-                        type="button"
-                        aria-label={`Remove ${tag}`}
-                        className="text-foreground/60 hover:text-foreground"
-                        disabled={isCopying}
-                        onClick={() => {
-                          if (!onTagsChange) {
-                            return;
-                          }
-                          onTagsChange(note.tags.filter((value) => value !== tag));
-                        }}
-                      >
-                        x
-                      </button>
-                    </span>
-                  ))
-                ) : (
-                  <p className="text-xs text-foreground/55">No tags yet.</p>
-                )}
+                <p className="text-xs text-foreground/60">
+                  Generate a first draft here, then review and edit the content below before saving or generating a Study Pack.
+                </p>
+                {generateNoteFooter}
+                {note.content.trim().length > 0 ? (
+                  <p className="text-xs text-foreground/55">
+                    Generating a note will replace the current content in the editor.
+                  </p>
+                ) : null}
               </div>
-            </div>
-          ) : null}
-        </section>
+            ) : null}
+          </section>
+        ) : (
+          <section className="space-y-5">
+            {renderMetadataFields()}
+          </section>
+        )}
 
         {firstStudyHintVisible ? (
           <div className="rounded-lg border border-blue-500/30 bg-blue-50/80 p-4 text-sm text-blue-950 dark:bg-blue-950/30 dark:text-blue-100">
@@ -630,6 +683,8 @@ export function NoteEditorForm({
             Supported formats: PNG, JPG, JPEG, WEBP, TXT, PDF, DOCX.
           </p>
         </section>
+
+        {showGenerateNoteEntry ? renderOptionalDetailsSection() : null}
       </Card>
 
       <Card className="space-y-2 border-border p-4 sm:p-5">
