@@ -8,6 +8,13 @@
 - updated the landing page hero and learning-loop section to explain the flow: Create -> Understand -> Practice -> Challenge -> Improve
 - added Generate Note from topic so users can draft editable notes before saving or generating a Study Pack
 - improved Create Note UX with dual entry options: write your own note or generate from topic
+- upgraded topic note generation so drafts are more study-ready and structured instead of stub-like filler
+- added monthly note-generation limits with Premium-aware gating so topic drafting follows the same protection pattern as other credit-based AI actions
+- refined the first-study onboarding flow so topic generation stays guided and single-use there, while the standalone New Note page keeps iterative `Generate Again` behavior
+- redesigned the New Note page to focus on content creation first and moved `Title`, `Subject`, `Course / Program`, `Tags`, and teacher/admin audience selection into collapsed `Add details (optional)`
+- kept Create Note and Study Pack generation low-friction by preserving profile-based defaults and allowing save/generate actions without opening optional metadata
+- polished onboarding and generated-note transitions with lighter motion and better scroll-to-content behavior
+- added a post-onboarding Dashboard prompt that encourages users to set learning style and reminder preferences from Settings
 - aligned create-note action copy around `Generate Study Pack`
 - updated product context, roadmap, spec, and release documentation for the new positioning
 

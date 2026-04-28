@@ -109,6 +109,12 @@ function resolveGenerateHelperText(_profileType: string | null | undefined): str
 
 const GENERATE_NOTE_TIP_ID = "create-note-generate-topic";
 const NOTE_CONTENT_SCROLL_DELAY_MS = 140;
+const IMPORT_LOADING_MESSAGE = "Extracting text from your file...";
+const IMPORT_SUCCESS_MESSAGE = "Text imported. Review and edit it before continuing.";
+const IMPORT_EMPTY_MESSAGE = "This file is empty or has no readable text.";
+const IMPORT_GENERIC_ERROR_MESSAGE = "We couldn’t extract text from this file. Try another image or file.";
+const IMPORT_UNSUPPORTED_FILE_MESSAGE = "Unsupported file type. Upload PNG, JPG, JPEG, WEBP, TXT, PDF, or DOCX.";
+const IMPORT_SCANNED_PDF_MESSAGE = "This PDF appears to be scanned or image-based. Please upload images for OCR instead.";
 
 export function NoteEditorPageClient({
   noteId,
@@ -128,7 +134,7 @@ export function NoteEditorPageClient({
     content: "",
     tags: [],
   });
-  const [entryOption, setEntryOption] = useState<NoteEditorEntryOption>("write");
+  const [entryOption, setEntryOption] = useState<NoteEditorEntryOption>(initialSource === "upload" ? "import" : "write");
   const [generateTopic, setGenerateTopic] = useState("");
   const [currentNoteId, setCurrentNoteId] = useState<string | null>(noteId ?? null);
   const [loadingNote, setLoadingNote] = useState(isEditMode);
@@ -153,8 +159,10 @@ export function NoteEditorPageClient({
   const [showLimitReachedModal, setShowLimitReachedModal] = useState(false);
   const [showOcrLimitModal, setShowOcrLimitModal] = useState(false);
   const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
+  const [revealOptionalDetailsSignal, setRevealOptionalDetailsSignal] = useState(0);
   const [subjectSuggestions, setSubjectSuggestions] = useState<string[]>([]);
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [profileCourseProgram, setProfileCourseProgram] = useState("");
   const [profileLearnerLevel, setProfileLearnerLevel] = useState<LearnerLevel | "">("");
   const { usageSummary, refreshUsageSummary } = useBillingUsageSummary();
   const generatedContentSectionRef = useRef<HTMLElement | null>(null);
@@ -233,6 +241,7 @@ export function NoteEditorPageClient({
           return;
         }
         setProfileLearnerLevel(me.learnerLevel ?? "");
+        setProfileCourseProgram(me.courseProgram ?? "");
         if (!isEditMode) {
           setDraft((previous) => (
             previous.courseProgram.trim().length > 0
@@ -244,6 +253,7 @@ export function NoteEditorPageClient({
       .catch(() => {
         // Best-effort defaults. Note creation and editing still work without profile metadata.
         if (active) {
+          setProfileCourseProgram("");
           setProfileLearnerLevel("");
         }
       });
@@ -341,11 +351,11 @@ export function NoteEditorPageClient({
     setImportFile(file);
     setImportReviewMessage(null);
     setImportFlowState("uploading");
-    setImportStatusMessage("Uploading file...");
+    setImportStatusMessage(IMPORT_LOADING_MESSAGE);
 
     const extractingTimer = globalThis.setTimeout(() => {
       setImportFlowState("extracting");
-      setImportStatusMessage("Extracting text into your notes...");
+      setImportStatusMessage(IMPORT_LOADING_MESSAGE);
     }, 350);
 
     try {
@@ -355,14 +365,15 @@ export function NoteEditorPageClient({
       const didAppend = appendExtractedTextToContent(extracted.extractedText);
       if (!didAppend) {
         setImportFlowState("failure");
-        setImportStatusMessage("This file is empty or has no readable text.");
+        setImportStatusMessage(IMPORT_EMPTY_MESSAGE);
         resetImportInput();
-        showToast("This file is empty or has no readable text.", "info");
+        showToast(IMPORT_EMPTY_MESSAGE, "info");
         return;
       }
 
       setImportFlowState("success");
-      setImportStatusMessage("File content added to Content.");
+      setImportStatusMessage(IMPORT_SUCCESS_MESSAGE);
+      setGeneratedContentRefreshToken((previous) => previous + 1);
       if (extracted.meta.lowConfidence) {
         resetImportInput();
         setImportReviewMessage(
@@ -376,7 +387,6 @@ export function NoteEditorPageClient({
       showToast("Extracted text added to Content.", "success");
     } catch (error) {
       globalThis.clearTimeout(extractingTimer);
-      const message = error instanceof Error ? error.message : "Could not import this file.";
       if (isEmailNotVerifiedError(error)) {
         const verificationMessage = "Verify your email before using OCR upload.";
         setImportFlowState("failure");
@@ -398,11 +408,15 @@ export function NoteEditorPageClient({
         }
         return;
       }
+      const rawMessage = error instanceof Error ? error.message : IMPORT_GENERIC_ERROR_MESSAGE;
+      const resolvedMessage = rawMessage === IMPORT_UNSUPPORTED_FILE_MESSAGE || rawMessage === IMPORT_SCANNED_PDF_MESSAGE
+        ? rawMessage
+        : IMPORT_GENERIC_ERROR_MESSAGE;
       setImportFlowState("failure");
-      setImportStatusMessage(message);
+      setImportStatusMessage(resolvedMessage);
       setImportReviewMessage(null);
       resetImportInput();
-      showToast(message, "error");
+      showToast(resolvedMessage, "error");
     }
   }, [appendExtractedTextToContent, contentLocked, currentPlan, openLockedFeaturePaywall, showToast]);
 
@@ -505,15 +519,18 @@ export function NoteEditorPageClient({
   const generateNoteButtonLabel = hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
     ? "Generate Again"
     : "Generate Note";
-  const generateNoteStatusText = entryOption === "generate" && hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
+  const contentStatusText = entryOption === "generate" && hasGeneratedTopicDraft && normalizedGenerateTopic.length > 0
     ? (isGeneratingNote
       ? "Creating a new version..."
       : "Not quite right? Try refining your topic before generating again.")
-    : null;
+    : importFlowState === "success"
+      ? IMPORT_SUCCESS_MESSAGE
+      : null;
 
   const resolveTargetProfileType = useCallback((): NoteTargetProfileType | null => {
     if (showTargetProfileTypeField) {
       if (!draft.targetProfileType) {
+        setRevealOptionalDetailsSignal((previous) => previous + 1);
         showToast("Please select an audience", "info");
         return null;
       }
@@ -522,20 +539,45 @@ export function NoteEditorPageClient({
     return mapProfileTypeToNoteTargetProfile(currentProfileType);
   }, [currentProfileType, draft.targetProfileType, showTargetProfileTypeField, showToast]);
 
-  const buildRequest = useCallback(() => {
+  const buildRequest = useCallback(async () => {
     const targetProfileType = resolveTargetProfileType();
     if (!targetProfileType) {
       return null;
     }
+    let resolvedCourseProgram = normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram);
+    if (!resolvedCourseProgram && !isEditMode) {
+      try {
+        const me = await getMe();
+        resolvedCourseProgram = normalizeOptional(me.courseProgram ?? "");
+        setProfileCourseProgram(me.courseProgram ?? "");
+        setProfileLearnerLevel(me.learnerLevel ?? "");
+        setDraft((previous) => (
+          previous.courseProgram.trim().length > 0
+            ? previous
+            : { ...previous, courseProgram: me.courseProgram ?? "" }
+        ));
+      } catch {
+        resolvedCourseProgram = null;
+      }
+    }
     return {
       title: normalizeOptional(draft.title),
       subject: normalizeOptional(draft.subject),
-      courseProgram: normalizeOptional(draft.courseProgram),
+      courseProgram: resolvedCourseProgram,
       tags: draft.tags,
       targetProfileType,
       content: draft.content,
     };
-  }, [draft.content, draft.courseProgram, draft.subject, draft.tags, draft.title, resolveTargetProfileType]);
+  }, [
+    draft.content,
+    draft.courseProgram,
+    draft.subject,
+    draft.tags,
+    draft.title,
+    profileCourseProgram,
+    isEditMode,
+    resolveTargetProfileType,
+  ]);
 
   const upsertNote = useCallback(async (): Promise<NoteResponse | null> => {
     if (contentEmpty) {
@@ -543,7 +585,7 @@ export function NoteEditorPageClient({
       return null;
     }
 
-    const payload = buildRequest();
+    const payload = await buildRequest();
     if (!payload) {
       return null;
     }
@@ -847,10 +889,10 @@ export function NoteEditorPageClient({
     : initialMode === "quiz"
     ? "Start with your material, then generate a Study Pack to open quiz practice first."
     : initialSource === "paste"
-      ? "Paste your material into Content, then generate a Study Pack to open quiz practice first."
+      ? "Paste your material into Content first. You can add details later, then generate a Study Pack to open quiz practice first."
       : initialSource === "upload"
-        ? "Upload your material first, then generate a Study Pack to open quiz practice first."
-        : "Create your note first, then generate a Study Pack when you're ready.";
+        ? "Upload your material first. You can add details later, then generate a Study Pack to open quiz practice first."
+        : "Start with your note content. You can add details now or later, then generate a Study Pack when you're ready.";
   const studyPackMessage = hasGeneratedStudyPack
     ? "This note already has a Study Pack. Save metadata changes here, or make a copy to create a new editable version."
     : isEditMode
@@ -978,9 +1020,11 @@ export function NoteEditorPageClient({
         generateNoteFooter={generateNoteFooter}
         showGenerateNoteEntry={showGenerateNoteEntry}
         showGenerateNoteTip={showGenerateNoteTip}
+        collapseOptionalDetailsByDefault={!isEditMode}
+        revealOptionalDetailsSignal={revealOptionalDetailsSignal}
         contentSectionRef={generatedContentSectionRef}
         contentAnimationKey={generatedContentRefreshToken}
-        contentStatusText={generateNoteStatusText}
+        contentStatusText={contentStatusText}
         disableContentEditing={contentLocked}
         contentLockHint="Note content cannot be edited after generating a Study Pack. You can still update the title, course/program, subject, and tags."
         disableGenerateAction={!hasGeneratedStudyPack && !isEmailVerified}

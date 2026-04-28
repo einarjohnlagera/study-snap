@@ -87,6 +87,10 @@ const baseNote = {
   difficultySelectionAvailable: false,
 };
 
+async function selectImportNotesMode() {
+  fireEvent.click(await screen.findByRole("button", { name: /Import notes/i }));
+}
+
 describe("NoteEditorPageClient", () => {
   beforeEach(() => {
     pushMock.mockReset();
@@ -233,10 +237,59 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByText("Create or import your notes first, then generate a Study Pack when you are ready.")).not.toBeInTheDocument();
   });
 
+  it("keeps Add details collapsed by default on the new note page", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    const addDetailsButton = await screen.findByRole("button", { name: "Add details (optional)" });
+    expect(addDetailsButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Title (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Subject (optional)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Course / Program (optional)")).not.toBeInTheDocument();
+  });
+
+  it("shows write, generate, and import start options on the new note page", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    expect(await screen.findByRole("button", { name: /Write your own note/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Generate from topic/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Import notes/i })).toBeInTheDocument();
+  });
+
+  it("shows optional metadata fields when Add details is expanded", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+
+    expect(await screen.findByLabelText("Title (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Subject (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Course / Program (optional)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
+  });
+
+  it("expands Add details from the sticky helper link", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details like title, subject, course, or tags anytime." }));
+
+    expect(await screen.findByLabelText("Title (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Subject (optional)")).toBeInTheDocument();
+  });
+
   it("defaults create-note course/program from the user profile", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
 
     render(<NoteEditorPageClient />);
+
+    const addDetailsButton = await screen.findByRole("button", { name: "Add details (optional)" });
+    fireEvent.click(addDetailsButton);
 
     const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
     await waitFor(() => {
@@ -286,6 +339,8 @@ describe("NoteEditorPageClient", () => {
 
     render(<NoteEditorPageClient />);
 
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+
     const subjectInput = await screen.findByLabelText("Subject (optional)");
     const contentInput = screen.getByLabelText("Content");
     await waitFor(() => {
@@ -305,35 +360,50 @@ describe("NoteEditorPageClient", () => {
     }));
   });
 
-  it("saves the note, starts generation, and redirects to the generating note detail state", async () => {
+  it("saves a new note without expanding Add details", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.change(await screen.findByLabelText("Content"), { target: { value: "Simple note content" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
+        title: null,
+        subject: null,
+        courseProgram: "Nursing",
+        tags: [],
+        targetProfileType: "STUDENT",
+        content: "Simple note content",
+      }));
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created");
+    });
+  });
+
+  it("saves the note, starts generation, and redirects without requiring Add details", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (createNote as jest.Mock).mockResolvedValueOnce({
       ...baseNote,
       id: "note-created",
-      title: "My Notes",
-      subject: "General Science",
+      title: "",
+      subject: null,
       courseProgram: "Nursing",
-      tags: ["review"],
       content: "Cell structure content",
     });
 
     render(<NoteEditorPageClient />);
 
-    fireEvent.change(await screen.findByLabelText("Title (optional)"), { target: { value: "My Notes" } });
-    fireEvent.change(screen.getByLabelText("Subject (optional)"), { target: { value: "General Science" } });
     fireEvent.change(screen.getByLabelText("Content"), { target: { value: "Cell structure content" } });
-    fireEvent.click(screen.getByRole("button", { name: /\+ Add Tag/i }));
-    fireEvent.change(screen.getByPlaceholderText("Add a tag"), { target: { value: "review" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
-        title: "My Notes",
-        subject: "General Science",
+        title: null,
+        subject: null,
         courseProgram: "Nursing",
-        tags: ["review"],
+        tags: [],
         targetProfileType: "STUDENT",
       }));
       expect(createStudyPackFromNote).toHaveBeenCalledWith("note-created");
@@ -368,8 +438,9 @@ describe("NoteEditorPageClient", () => {
     await waitFor(() => {
       expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion");
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
-      expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     });
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    expect(screen.getByLabelText("Title (optional)")).toHaveValue("Newton's Laws of Motion");
     expect(screen.getByRole("button", { name: "Generate Again" })).toBeInTheDocument();
     expect(
       screen.getByText("Not quite right? Try refining your topic before generating again."),
@@ -489,6 +560,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient initialMode="quiz" />);
 
     expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
     expect(screen.getByLabelText("Who is this note for?")).toHaveValue("");
     expect(screen.getByText("Choose the learner audience for this note.")).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: "Teacher" })).not.toBeInTheDocument();
@@ -505,6 +577,8 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
     expect(await screen.findByText("Please select an audience")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add details (optional)" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
     expect(createNote).not.toHaveBeenCalled();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
@@ -515,6 +589,17 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     expect(await screen.findByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
+    expect(screen.queryByLabelText("Who is this note for?")).not.toBeInTheDocument();
+  });
+
+  it("shows target audience inside Add details for admin note creation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", role: "ADMIN" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    expect(screen.getByLabelText("Who is this note for?")).toBeInTheDocument();
   });
 
   it("locks content editing for generated notes but keeps metadata fields editable", async () => {
@@ -577,12 +662,14 @@ describe("NoteEditorPageClient", () => {
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
 
-    const generateButtons = screen.getAllByRole("button", { name: /Generate Study Pack|Generate Note/i });
+    expect(screen.getByRole("button", { name: "Generate Study Pack" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate from topic/i }));
+    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+
+    await selectImportNotesMode();
     const uploadInput = document.getElementById("note-import-file") as HTMLInputElement | null;
 
-    generateButtons.forEach((button) => {
-      expect(button).toBeDisabled();
-    });
     expect(uploadInput).not.toBeNull();
     expect(uploadInput).not.toBeDisabled();
   });
@@ -661,6 +748,23 @@ describe("NoteEditorPageClient", () => {
     expect(await screen.findByText("You have 1 Study Pack left this month on the Free plan.")).toBeInTheDocument();
   });
 
+  it("shows the import panel only when Import notes is selected", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+
+    render(<NoteEditorPageClient />);
+
+    expect(document.getElementById("note-import-file")).toBeNull();
+
+    await selectImportNotesMode();
+
+    expect(document.getElementById("note-import-file")).toBeInTheDocument();
+    expect(screen.getByText("Supported formats: PNG, JPG, JPEG, WEBP, TXT, PDF, DOCX.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Write your own note/i }));
+
+    expect(document.getElementById("note-import-file")).toBeNull();
+  });
+
   it("imports image OCR text into Content without generating a Study Pack and shows an inline warning for low confidence", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
@@ -675,6 +779,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const uploadInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const image = new File(["fake"], "note.png", { type: "image/png" });
     fireEvent.change(uploadInput as HTMLInputElement, { target: { files: [image] } });
@@ -686,6 +791,7 @@ describe("NoteEditorPageClient", () => {
     expect(
       screen.getByText("OCR may be inaccurate. Please review and edit the extracted text before saving or generating a Study Pack."),
     ).toBeInTheDocument();
+    expect(screen.getByText("Text imported. Review and edit it before continuing.")).toBeInTheDocument();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
 
@@ -703,6 +809,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const uploadInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const image = new File(["fake"], "note.png", { type: "image/png" });
     fireEvent.change(uploadInput as HTMLInputElement, { target: { files: [image] } });
@@ -711,6 +818,7 @@ describe("NoteEditorPageClient", () => {
       expect(screen.getByLabelText("Content")).toHaveValue("High confidence OCR text");
     });
 
+    expect(screen.getByText("Text imported. Review and edit it before continuing.")).toBeInTheDocument();
     expect(createStudyPackFromNote).not.toHaveBeenCalled();
   });
 
@@ -725,6 +833,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["text"], "notes.txt", { type: "text/plain" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
@@ -745,6 +854,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["docx"], "notes.docx", {
       type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -767,6 +877,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["pdf"], "notes.pdf", { type: "application/pdf" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
@@ -785,6 +896,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["bad"], "notes.csv", { type: "text/csv" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
@@ -803,6 +915,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["pdf"], "scan.pdf", { type: "application/pdf" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
@@ -825,11 +938,12 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const firstInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["text"], "notes.txt", { type: "text/plain" });
     fireEvent.change(firstInput as HTMLInputElement, { target: { files: [file] } });
 
-    expect(await screen.findAllByText("Could not import this file.")).not.toHaveLength(0);
+    expect(await screen.findAllByText("We couldn’t extract text from this file. Try another image or file.")).not.toHaveLength(0);
     expect(extractNoteTextFromFile).toHaveBeenCalledTimes(1);
 
     const secondInput = document.getElementById("note-import-file") as HTMLInputElement | null;
@@ -848,6 +962,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["img"], "note.png", { type: "image/png" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
@@ -862,6 +977,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["img"], "note.png", { type: "image/png" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
@@ -906,6 +1022,7 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     await screen.findByLabelText("Content");
+    await selectImportNotesMode();
     const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
     const file = new File(["img"], "note.png", { type: "image/png" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
@@ -915,6 +1032,67 @@ describe("NoteEditorPageClient", () => {
     expect(screen.queryByRole("button", { name: "Upgrade to Premium" })).not.toBeInTheDocument();
   });
 
+  it("saves a new note after importing content", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
+      inputType: "txt",
+      extractedText: "Imported save-ready content",
+      meta: { ocrConfidence: null, lowConfidence: false },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    await selectImportNotesMode();
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["text"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported save-ready content");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Note" }));
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
+        content: "Imported save-ready content",
+      }));
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created");
+    });
+  });
+
+  it("generates a Study Pack after importing content", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (extractNoteTextFromFile as jest.Mock).mockResolvedValue({
+      inputType: "txt",
+      extractedText: "Imported content for generation",
+      meta: { ocrConfidence: null, lowConfidence: false },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    await screen.findByLabelText("Content");
+    await selectImportNotesMode();
+    const fileInput = document.getElementById("note-import-file") as HTMLInputElement | null;
+    const file = new File(["text"], "notes.txt", { type: "text/plain" });
+    fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Content")).toHaveValue("Imported content for generation");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalledWith(expect.objectContaining({
+        content: "Imported content for generation",
+      }));
+      expect(createStudyPackFromNote).toHaveBeenCalledWith("note-created");
+      expect(pushMock).toHaveBeenCalledWith("/notes/note-created?from=notes&generating=1&tab=summary");
+    });
+  });
+
   it("redirects queued quiz-focused generation to the practice quiz section", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
 
@@ -922,6 +1100,7 @@ describe("NoteEditorPageClient", () => {
 
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Generated from teacher flow" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
     fireEvent.change(screen.getByLabelText("Who is this note for?"), { target: { value: "STUDENT" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
