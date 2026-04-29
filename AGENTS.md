@@ -346,6 +346,8 @@ Teacher flow rule:
 
 - Never grant Premium access from frontend logic, success pages, or redirect callbacks.
 - Only validated webhook-confirmed payments may update user Premium status.
+- All plan and entitlement logic must use the `subscriptions` table as the source of truth.
+- Do not introduce plan flags or Premium state fields on `users`.
 - Always validate the Xendit `x-callback-token` before processing webhook payloads.
 - Webhook handling must stay idempotent through persisted provider event records and payment transaction lookups.
 - Payment-flow doc updates are required whenever checkout, webhook, returnUrl, or Premium-expiry behavior changes.
@@ -1026,6 +1028,7 @@ Rules:
 - Voucher/promotion rules decide whether intro pricing is shown, but checkout itself stays on the current hosted Xendit invoice flow.
 - Intro/first-time subscriber discounts must flow through voucher eligibility and voucher redemption records.
 - Premium activation is controlled by webhook-confirmed invoice outcomes only.
+- Webhook-confirmed payments must create or extend `subscriptions`; they must not update plan state on `users`.
 - Success/failure redirect pages may help users return to their previous page, but those redirects never activate Premium.
 - Xendit webhook statuses currently handled are:
   - `PAID`

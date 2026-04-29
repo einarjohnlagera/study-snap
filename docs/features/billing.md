@@ -51,10 +51,11 @@
 ### Premium Access Model
 
 - Current billing model is manual renewal, not auto-renewal.
-- A successful `PAID` webhook sets:
-  - `premiumActivatedAt`
-  - `premiumExpiresAt = activatedAt + 30 days`
-- A user counts as Premium only while `premiumExpiresAt` is still in the future.
+- `subscriptions` is the only source of truth for plan state and Premium access.
+- A successful `PAID` webhook creates or extends the active `PREMIUM` subscription row.
+- First successful payment creates a `PREMIUM` subscription with an `end_at` value `30` days in the future.
+- A later successful renewal extends the existing active Premium `end_at` instead of creating a duplicate active Premium row.
+- A user counts as Premium only while an active `PREMIUM` subscription exists and `(end_at IS NULL OR end_at > now())`.
 - Redirecting to `/billing/success` does not grant Premium access by itself.
 
 ### Draft Preservation During Upgrade

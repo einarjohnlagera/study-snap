@@ -101,9 +101,6 @@ public class AuthService {
         user.setLastStudyDate(null);
         user.setOnboardingCompletedAt(null);
         user.setProductOnboardingCompletedAt(null);
-        user.setIsPremium(false);
-        user.setPremiumActivatedAt(null);
-        user.setPremiumExpiresAt(null);
         user.setCreatedAt(now);
         user.setUpdatedAt(now);
         user.setLastPasswordChangeAt(now);

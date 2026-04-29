@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getSafeRedirectPath } from "@/lib/auth";
 
 type BillingFailedPageProps = {
   searchParams?: Promise<{
@@ -11,7 +10,8 @@ type BillingFailedPageProps = {
 
 function resolveReturnUrl(rawReturnUrl: string | string[] | undefined): string | null {
   const value = Array.isArray(rawReturnUrl) ? rawReturnUrl[0] : rawReturnUrl;
-  return getSafeRedirectPath(value);
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  return value;
 }
 
 export default async function BillingFailedPage({ searchParams }: Readonly<BillingFailedPageProps>) {

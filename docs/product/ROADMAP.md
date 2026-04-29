@@ -35,6 +35,7 @@ Primary focus:
   - safe internal `returnUrl` support back to the interrupted page
   - polished billing success and failed result pages
   - manual-renewal Premium expiry after `30` days
+  - subscriptions-table source of truth for plan state and webhook-driven renewal extension
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard
@@ -154,6 +155,7 @@ Potential expansion areas after `v0.8.0`:
 - invoices / receipts UI
 - billing history UI improvements
 - plan switching and downgrade flows
+- provider-managed recurring billing via `provider_subscription_id`
 
 ### Public Library persona filtering (roadmap)
 

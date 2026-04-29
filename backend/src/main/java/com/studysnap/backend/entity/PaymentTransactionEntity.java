@@ -29,6 +29,10 @@ public class PaymentTransactionEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
+    @ManyToOne
+    @JoinColumn(name = "subscription_id")
+    private SubscriptionEntity subscription;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private BillingProvider provider;

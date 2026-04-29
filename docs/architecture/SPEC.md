@@ -4,8 +4,9 @@
 
 - Payment provider: `XENDIT`
 - Checkout style: hosted invoice checkout
-- Premium activation source of truth: webhook only
+- Premium activation source of truth: webhook-confirmed subscription state only
 - Current Premium model: manual renewal with `30` days of access per successful payment
+- `subscriptions` is the only entitlement source of truth
 
 ### Flow
 
@@ -18,7 +19,7 @@
 7. Frontend redirects the user to the hosted Xendit invoice page.
 8. Xendit redirects the user to `/billing/success` or `/billing/failed`, preserving the validated `returnUrl` when present.
 9. Xendit sends `POST /api/webhooks/xendit`.
-10. Backend validates `x-callback-token`, applies idempotency, updates payment status, and activates Premium when status is `PAID`.
+10. Backend validates `x-callback-token`, applies idempotency, marks the payment transaction, and creates or extends the active `PREMIUM` subscription when status is `PAID`.
 
 ### Endpoints
 
@@ -34,6 +35,7 @@
   - Xendit `external_id`
   - hosted `checkoutUrl`
   - invoice expiry timestamp when available
+  - optional `subscription_id` link on the payment transaction after webhook activation
 
 ### Return URL Rules
 
@@ -61,9 +63,9 @@
 ### Premium Access Window
 
 - Premium access begins only after a validated `PAID` webhook.
-- `premiumActivatedAt = now`
-- `premiumExpiresAt = now + 30 days`
-- Access is considered Premium only while `premiumExpiresAt` is in the future.
+- Webhook activation creates or extends the active `PREMIUM` subscription row in `subscriptions`.
+- A user counts as Premium only while `plan_type = PREMIUM`, `status = ACTIVE`, and `(end_at IS NULL OR end_at > now())`.
+- Manual renewals extend `end_at` from `max(current_end_at, now)`.
 - Manual renewal means the user may start checkout again after expiry; there is no recurring renewal job yet.
 
 ### Local Test Mode

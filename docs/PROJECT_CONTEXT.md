@@ -87,6 +87,8 @@ Payments: Xendit hosted checkout
 
 - Premium upgrades use Xendit hosted invoice checkout.
 - Current Premium billing model is manual renewal with `30` days of access per successful payment.
+- All plans and entitlements must be represented through the `subscriptions` table.
+- User records must not store Premium flags or plan state.
 - Frontend starts checkout through `POST /api/payments/create` and redirects to the returned hosted URL.
 - Premium access is activated only after the backend receives and validates `POST /api/webhooks/xendit`.
 - Success and failure pages are user-facing status pages only; they do not grant Premium access.

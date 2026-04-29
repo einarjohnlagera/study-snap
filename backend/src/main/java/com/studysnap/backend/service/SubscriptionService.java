@@ -18,6 +18,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +33,7 @@ public class SubscriptionService {
     private final SubscriptionRepository subscriptionRepository;
     private final UserRepository userRepository;
     private final AnalyticsService analyticsService;
+    private final Clock clock;
 
     public record ProviderMetadata(
             String providerCustomerId,
@@ -50,16 +53,14 @@ public class SubscriptionService {
     }
 
     public SubscriptionEntity createDefaultFreeSubscription(UserEntity user) {
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setId(UUID.randomUUID());
         subscription.setUser(user);
         applyFreeAccess(subscription, now);
         subscription.setCreatedAt(now);
         subscription.setUpdatedAt(now);
-        SubscriptionEntity saved = subscriptionRepository.save(subscription);
-        syncDirectPremiumFlags(user, false, null, null, now);
-        return saved;
+        return subscriptionRepository.save(subscription);
     }
 
     @Transactional(readOnly = true)
@@ -69,33 +70,34 @@ public class SubscriptionService {
 
     @Transactional(readOnly = true)
     public PlanSnapshot getPlanSnapshot(UUID userId) {
-        UserEntity user = requireUser(userId);
-        OffsetDateTime now = OffsetDateTime.now();
-        Optional<PlanSnapshot> subscriptionSnapshot = subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
-                        userId,
-                        PlanType.PREMIUM,
-                        SubscriptionStatus.ACTIVE
-                ).stream()
-                .filter(subscription -> hasActivePremiumAccess(subscription, now))
-                .findFirst()
-                .map(subscription -> new PlanSnapshot(
-                        PlanType.PREMIUM,
-                        subscription.isCancelAtPeriodEnd(),
-                        subscription.getEndAt(),
-                        subscription.getCancelledAt()
-                ));
-        if (subscriptionSnapshot.isPresent()) {
-            return subscriptionSnapshot.get();
-        }
-        if (hasDirectPremiumAccess(user, now)) {
+        requireUser(userId);
+        Optional<SubscriptionEntity> activePremiumSubscription = findActiveSubscription(
+                userId,
+                PlanType.PREMIUM,
+                OffsetDateTime.now(clock)
+        );
+        if (activePremiumSubscription.isPresent()) {
+            SubscriptionEntity subscription = activePremiumSubscription.get();
             return new PlanSnapshot(
                     PlanType.PREMIUM,
-                    false,
-                    user.getPremiumExpiresAt(),
-                    null
+                    subscription.isCancelAtPeriodEnd(),
+                    subscription.getEndAt(),
+                    subscription.getCancelledAt()
             );
         }
         return new PlanSnapshot(PlanType.FREE, false, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasActiveSubscription(UUID userId, PlanType planType) {
+        requireUser(userId);
+        return findActiveSubscription(userId, planType, OffsetDateTime.now(clock)).isPresent();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<SubscriptionEntity> findActiveSubscription(UUID userId, PlanType planType) {
+        requireUser(userId);
+        return findActiveSubscription(userId, planType, OffsetDateTime.now(clock));
     }
 
     public String ensureProviderCustomerId(
@@ -145,7 +147,7 @@ public class SubscriptionService {
         }
         requireBillableProvider(provider, "Billing provider is required for Premium activation.");
 
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         OffsetDateTime effectiveStartAt = startAt == null ? now : startAt;
         if (endAt != null && !endAt.isAfter(effectiveStartAt)) {
             throw new AppException(
@@ -156,8 +158,8 @@ public class SubscriptionService {
         }
 
         UserEntity user = requireUser(userId);
-        SubscriptionEntity target = ensureLatestSubscription(user);
-        boolean wasActivePremium = hasActivePremiumAccess(target, now);
+        Optional<SubscriptionEntity> activePremiumSubscription = findActiveSubscription(userId, PlanType.PREMIUM, now);
+        boolean wasActivePremium = activePremiumSubscription.isPresent();
 
         String normalizedProviderCustomerId = providerMetadata == null
                 ? null
@@ -165,6 +167,26 @@ public class SubscriptionService {
         String normalizedProviderSubscriptionId = providerMetadata == null
                 ? null
                 : normalizeReference(providerMetadata.providerSubscriptionId());
+
+        SubscriptionEntity target = activePremiumSubscription.orElseGet(() -> {
+            SubscriptionEntity subscription = new SubscriptionEntity();
+            subscription.setId(UUID.randomUUID());
+            subscription.setUser(user);
+            subscription.setCreatedAt(now);
+            return subscription;
+        });
+
+        Duration subscriptionDuration = endAt == null ? null : Duration.between(effectiveStartAt, endAt);
+        OffsetDateTime effectiveEndAt = endAt;
+        if (wasActivePremium) {
+            OffsetDateTime currentEndAt = target.getEndAt();
+            OffsetDateTime extensionAnchor = currentEndAt != null && currentEndAt.isAfter(now)
+                    ? currentEndAt
+                    : now;
+            effectiveEndAt = subscriptionDuration == null || subscriptionDuration.isNegative()
+                    ? currentEndAt
+                    : extensionAnchor.plus(subscriptionDuration);
+        }
 
         target.setPlanType(PlanType.PREMIUM);
         target.setStatus(SubscriptionStatus.ACTIVE);
@@ -176,8 +198,10 @@ public class SubscriptionService {
         if (normalizedProviderSubscriptionId != null) {
             target.setProviderSubscriptionId(normalizedProviderSubscriptionId);
         }
-        target.setStartAt(effectiveStartAt);
-        target.setEndAt(endAt);
+        target.setStartAt(wasActivePremium
+                ? (target.getStartAt() == null ? effectiveStartAt : target.getStartAt())
+                : effectiveStartAt);
+        target.setEndAt(effectiveEndAt);
         target.setCancelAtPeriodEnd(cancelAtPeriodEnd);
         if (!cancelAtPeriodEnd) {
             clearCancellationDetails(target);
@@ -186,7 +210,6 @@ public class SubscriptionService {
         }
         target.setUpdatedAt(now);
         SubscriptionEntity saved = subscriptionRepository.save(target);
-        syncDirectPremiumFlags(user, true, effectiveStartAt, endAt, now);
         if (!wasActivePremium) {
             analyticsService.trackEvent(userId, AnalyticsEventType.SUBSCRIPTION_STARTED, saved.getId(), buildSubscriptionMetadata(
                     billingType,
@@ -211,7 +234,7 @@ public class SubscriptionService {
             );
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         return activatePremiumSubscription(
                 userId,
                 BillingType.PREPAID,
@@ -228,13 +251,16 @@ public class SubscriptionService {
             SubscriptionCancellationReason reason,
             String feedback
     ) {
-        UserEntity user = requireUser(userId);
-        SubscriptionEntity target = ensureLatestSubscription(user);
-        OffsetDateTime now = OffsetDateTime.now();
+        requireUser(userId);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        SubscriptionEntity target = findActiveSubscription(userId, PlanType.PREMIUM, now)
+                .orElseThrow(() -> new AppException(
+                        "PREMIUM_SUBSCRIPTION_NOT_ACTIVE",
+                        "There is no active Premium subscription to cancel.",
+                        HttpStatus.CONFLICT
+                ));
 
-        if (target.getPlanType() != PlanType.PREMIUM
-                || target.getStatus() != SubscriptionStatus.ACTIVE
-                || !hasActivePremiumAccess(target, now)) {
+        if (!hasActivePremiumAccess(target, now)) {
             throw new AppException(
                     "PREMIUM_SUBSCRIPTION_NOT_ACTIVE",
                     "There is no active Premium subscription to cancel.",
@@ -260,14 +286,14 @@ public class SubscriptionService {
 
     public SubscriptionEntity downgradeToFree(UUID userId) {
         UserEntity user = requireUser(userId);
-        SubscriptionEntity target = ensureLatestSubscription(user);
-
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        SubscriptionEntity target = new SubscriptionEntity();
+        target.setId(UUID.randomUUID());
+        target.setUser(user);
         applyFreeAccess(target, now);
+        target.setCreatedAt(now);
         target.setUpdatedAt(now);
-        SubscriptionEntity saved = subscriptionRepository.save(target);
-        syncDirectPremiumFlags(user, false, null, null, now);
-        return saved;
+        return subscriptionRepository.save(target);
     }
 
     public void expireSubscriptionAndDowngradeToFree(UUID subscriptionId) {
@@ -280,7 +306,7 @@ public class SubscriptionService {
             return;
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = OffsetDateTime.now(clock);
         if (subscription.getEndAt() == null || !subscription.getEndAt().isBefore(now)) {
             return;
         }
@@ -311,24 +337,22 @@ public class SubscriptionService {
     }
 
     private boolean hasActivePremiumAccess(SubscriptionEntity subscription, OffsetDateTime now) {
-        if (subscription.getPlanType() != PlanType.PREMIUM || subscription.getStatus() != SubscriptionStatus.ACTIVE) {
-            return false;
-        }
-        OffsetDateTime endAt = subscription.getEndAt();
-        return endAt == null || now.isBefore(endAt);
-    }
-
-    private boolean hasDirectPremiumAccess(UserEntity user, OffsetDateTime now) {
-        if (!Boolean.TRUE.equals(user.getIsPremium())) {
-            return false;
-        }
-        OffsetDateTime premiumExpiresAt = user.getPremiumExpiresAt();
-        return premiumExpiresAt == null || now.isBefore(premiumExpiresAt);
+        return subscription.getPlanType() == PlanType.PREMIUM && isWithinActiveWindow(subscription, now);
     }
 
     private SubscriptionEntity ensureLatestSubscription(UserEntity user) {
         return subscriptionRepository.findFirstByUser_IdOrderByCreatedAtDesc(user.getId())
                 .orElseGet(() -> createDefaultFreeSubscription(user));
+    }
+
+    private Optional<SubscriptionEntity> findActiveSubscription(UUID userId, PlanType planType, OffsetDateTime referenceTime) {
+        return subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+                        userId,
+                        planType,
+                        SubscriptionStatus.ACTIVE
+                ).stream()
+                .filter(subscription -> isWithinActiveWindow(subscription, referenceTime))
+                .findFirst();
     }
 
     private UserEntity requireUser(UUID userId) {
@@ -371,7 +395,9 @@ public class SubscriptionService {
     }
 
     private boolean isBillableProvider(BillingProvider provider) {
-        return provider != null && provider != BillingProvider.NONE;
+        return provider != null
+                && provider != BillingProvider.NONE
+                && provider != BillingProvider.INTERNAL_MIGRATION;
     }
 
     private Optional<UUID> findUserIdByProviderReference(
@@ -399,18 +425,16 @@ public class SubscriptionService {
         clearCancellationDetails(target);
     }
 
-    private void syncDirectPremiumFlags(
-            UserEntity user,
-            boolean premiumActive,
-            OffsetDateTime premiumActivatedAt,
-            OffsetDateTime premiumExpiresAt,
-            OffsetDateTime updatedAt
-    ) {
-        user.setIsPremium(premiumActive);
-        user.setPremiumActivatedAt(premiumActive ? premiumActivatedAt : null);
-        user.setPremiumExpiresAt(premiumActive ? premiumExpiresAt : null);
-        user.setUpdatedAt(updatedAt);
-        userRepository.save(user);
+    private boolean isWithinActiveWindow(SubscriptionEntity subscription, OffsetDateTime referenceTime) {
+        if (subscription.getStatus() != SubscriptionStatus.ACTIVE) {
+            return false;
+        }
+        OffsetDateTime startAt = subscription.getStartAt();
+        OffsetDateTime endAt = subscription.getEndAt();
+        if (startAt != null && referenceTime.isBefore(startAt)) {
+            return false;
+        }
+        return endAt == null || referenceTime.isBefore(endAt);
     }
 
     private void clearCancellationDetails(SubscriptionEntity target) {

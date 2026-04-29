@@ -1,5 +1,14 @@
 package com.studysnap.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.studysnap.backend.config.StudySnapProperties;
@@ -9,19 +18,13 @@ import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.WebhookEventEntity;
 import com.studysnap.backend.exception.InvalidCheckoutReturnUrlException;
 import com.studysnap.backend.exception.InvalidPaymentWebhookTokenException;
 import com.studysnap.backend.exception.PremiumAlreadyActiveException;
 import com.studysnap.backend.repository.UserRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -29,22 +32,18 @@ import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Flow;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
@@ -94,7 +93,7 @@ class PaymentServiceTest {
         UserEntity user = new UserEntity();
         user.setId(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(subscriptionService.hasActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(false);
         when(paymentTransactionService.findLatestPendingTransaction(userId, BillingProvider.XENDIT, PlanType.PREMIUM))
                 .thenReturn(Optional.empty());
         when(httpResponse.statusCode()).thenReturn(200);
@@ -143,7 +142,7 @@ class PaymentServiceTest {
         UserEntity user = new UserEntity();
         user.setId(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(subscriptionService.hasActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(false);
 
         PaymentTransactionEntity pendingTransaction = new PaymentTransactionEntity();
         pendingTransaction.setId(UUID.randomUUID());
@@ -166,7 +165,7 @@ class PaymentServiceTest {
         UserEntity user = new UserEntity();
         user.setId(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(subscriptionService.hasActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(false);
 
         PaymentTransactionEntity expiredPending = new PaymentTransactionEntity();
         expiredPending.setId(UUID.randomUUID());
@@ -204,7 +203,7 @@ class PaymentServiceTest {
         UserEntity user = new UserEntity();
         user.setId(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+        when(subscriptionService.hasActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(true);
 
         assertThatThrownBy(() -> paymentService.createCheckoutSession(userId, "/dashboard"))
                 .isInstanceOf(PremiumAlreadyActiveException.class);
@@ -219,7 +218,7 @@ class PaymentServiceTest {
         UserEntity user = new UserEntity();
         user.setId(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(subscriptionService.hasActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(false);
 
         assertThatThrownBy(() -> paymentService.createCheckoutSession(userId, "https://evil.example/notes/new"))
                 .isInstanceOf(InvalidCheckoutReturnUrlException.class);
@@ -232,6 +231,8 @@ class PaymentServiceTest {
     void handleWebhook_paidUpgradesUserForThirtyDays() {
         UUID userId = UUID.randomUUID();
         PaymentTransactionEntity transaction = buildTransaction(userId, PaymentTransactionStatus.PENDING, "notelib-user-1");
+        SubscriptionEntity subscription = new SubscriptionEntity();
+        subscription.setId(UUID.randomUUID());
         WebhookEventEntity reservedEvent = new WebhookEventEntity();
         reservedEvent.setId(UUID.randomUUID());
 
@@ -239,6 +240,15 @@ class PaymentServiceTest {
                 .thenReturn(Optional.of(reservedEvent));
         when(paymentTransactionService.findByProviderReferenceId(BillingProvider.XENDIT, "notelib-user-1"))
                 .thenReturn(Optional.of(transaction));
+        when(subscriptionService.activatePremiumSubscription(
+                eq(userId),
+                eq(BillingType.PREPAID),
+                eq(BillingProvider.XENDIT),
+                any(OffsetDateTime.class),
+                any(OffsetDateTime.class),
+                eq(false),
+                any(SubscriptionService.ProviderMetadata.class)
+        )).thenReturn(subscription);
 
         paymentService.handleWebhook(
                 "{\"id\":\"inv_123\",\"external_id\":\"notelib-user-1\",\"status\":\"PAID\"}",
@@ -259,6 +269,7 @@ class PaymentServiceTest {
         );
         assertThat(startCaptor.getValue()).isEqualTo(FIXED_TIME);
         assertThat(endCaptor.getValue()).isEqualTo(FIXED_TIME.plusDays(30));
+        verify(paymentTransactionService).attachSubscription(transaction.getId(), subscription);
         verify(webhookEventService).markProcessed(reservedEvent.getId());
     }
 
@@ -333,12 +344,10 @@ class PaymentServiceTest {
         StringBuilder bodyBuilder = new StringBuilder();
 
         bodyPublisher.subscribe(new Flow.Subscriber<>() {
-            private Flow.Subscription subscription;
 
             @Override
             public void onSubscribe(Flow.Subscription subscription) {
-                this.subscription = subscription;
-                this.subscription.request(Long.MAX_VALUE);
+                subscription.request(Long.MAX_VALUE);
             }
 
             @Override

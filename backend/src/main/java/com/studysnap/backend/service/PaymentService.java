@@ -10,6 +10,7 @@ import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.exception.InvalidCheckoutReturnUrlException;
 import com.studysnap.backend.exception.InvalidPaymentWebhookTokenException;
 import com.studysnap.backend.exception.PaymentCheckoutUnavailableException;
@@ -75,7 +76,7 @@ public class PaymentService {
 
     public BillingCheckoutSessionResponse createCheckoutSession(UUID userId, String requestedReturnUrl) {
         userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
-        if (subscriptionService.resolvePlan(userId) == PlanType.PREMIUM) {
+        if (subscriptionService.hasActiveSubscription(userId, PLAN_TYPE)) {
             throw new PremiumAlreadyActiveException();
         }
 
@@ -207,8 +208,7 @@ public class PaymentService {
         }
         OffsetDateTime activatedAt = OffsetDateTime.now(clock);
         OffsetDateTime premiumExpiresAt = activatedAt.plusDays(PREMIUM_ACCESS_DAYS);
-        paymentTransactionService.markSuccess(paymentTransaction.getId());
-        subscriptionService.activatePremiumSubscription(
+        SubscriptionEntity subscription = subscriptionService.activatePremiumSubscription(
                 paymentTransaction.getUser().getId(),
                 BILLING_TYPE,
                 BILLING_PROVIDER,
@@ -217,6 +217,8 @@ public class PaymentService {
                 false,
                 new SubscriptionService.ProviderMetadata(null, externalId)
         );
+        paymentTransactionService.markSuccess(paymentTransaction.getId());
+        paymentTransactionService.attachSubscription(paymentTransaction.getId(), subscription);
         log.info(
                 "billing.xendit.webhook premiumActivated externalId={} userId={} premiumExpiresAt={}",
                 externalId,

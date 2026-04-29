@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
@@ -84,6 +85,14 @@ public class PaymentTransactionService {
         paymentTransactionRepository.findById(transactionId)
                 .ifPresent(transaction -> {
                     transaction.setStatus(PaymentTransactionStatus.SUCCESS);
+                    paymentTransactionRepository.save(transaction);
+                });
+    }
+
+    public void attachSubscription(UUID transactionId, SubscriptionEntity subscription) {
+        paymentTransactionRepository.findById(transactionId)
+                .ifPresent(transaction -> {
+                    transaction.setSubscription(subscription);
                     paymentTransactionRepository.save(transaction);
                 });
     }
