@@ -4,6 +4,7 @@ import {
   createStudyPackFromNote,
   completeProductOnboarding,
   copyNote,
+  createPremiumCheckoutSession,
   deleteNote,
   generateGeneratedQuiz,
   getBillingPricing,
@@ -19,12 +20,15 @@ import {
   listCoursePrograms,
   listRecentQuickReviewSessions,
   listSubjects,
-  joinPremiumWaitlist,
   startQuickReviewSession,
   updateNote,
   updateNoteVisibility,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+
+jest.mock("@/lib/checkout-redirect", () => ({
+  redirectToCheckoutUrl: jest.fn(),
+}));
 
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
@@ -60,6 +64,7 @@ jest.mock("@/lib/auth", () => ({
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
+  createPremiumCheckoutSession: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   deleteNote: jest.fn(),
   generateGeneratedQuiz: jest.fn(),
@@ -75,7 +80,6 @@ jest.mock("@/lib/api", () => ({
   listRecentQuickReviewSessions: jest.fn(),
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: () => false,
-  joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
   updateNoteVisibility: jest.fn(),
@@ -140,7 +144,7 @@ describe("PrivateNoteDetailPageClient", () => {
     (listCoursePrograms as jest.Mock).mockReset();
     (listRecentQuickReviewSessions as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
-    (joinPremiumWaitlist as jest.Mock).mockReset();
+    (createPremiumCheckoutSession as jest.Mock).mockReset();
     (startQuickReviewSession as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (updateNoteVisibility as jest.Mock).mockReset();
@@ -235,8 +239,8 @@ describe("PrivateNoteDetailPageClient", () => {
       hasIntroPromo: true,
       introEligible: true,
     });
-    (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
-      message: "You're on the list! We'll notify you when Premium launches.",
+    (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
+      checkoutUrl: "https://checkout.xendit.test/invoice_123",
     });
     (createStudyPackFromNote as jest.Mock).mockResolvedValue({
       ...baseNote,

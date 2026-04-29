@@ -42,8 +42,6 @@ class BillingHistoryServiceTest {
     @Test
     void getHistory_returnsSummaryAndSortedTransactions() {
         StudySnapProperties properties = new StudySnapProperties();
-        properties.getBilling().getPaymongo().setMonthlyAmount(new BigDecimal("4.99"));
-        properties.getBilling().getPaymongo().setYearlyAmount(new BigDecimal("39.99"));
         StudySnapProperties.RegionPricing regionPricing = new StudySnapProperties.RegionPricing();
         regionPricing.setCurrency("USD");
         regionPricing.setMonthlyPrice(new BigDecimal("4.99"));
@@ -162,7 +160,7 @@ class BillingHistoryServiceTest {
     ) {
         PaymentTransactionEntity transaction = new PaymentTransactionEntity();
         transaction.setId(UUID.randomUUID());
-        transaction.setProvider(BillingProvider.PAYMONGO);
+        transaction.setProvider(BillingProvider.XENDIT);
         transaction.setBillingType(BillingType.SUBSCRIPTION);
         transaction.setPlanType(PlanType.PREMIUM);
         transaction.setAmount(amount);

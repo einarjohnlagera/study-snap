@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { PremiumWaitlistModal } from "@/components/billing/premium-waitlist-modal";
+import { usePathname, useRouter } from "next/navigation";
+import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
@@ -13,14 +13,16 @@ import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   cancelPremiumSubscription,
+  createPremiumCheckoutSession,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
   getMe,
+  isEmailNotVerifiedError,
   logout,
+  trackAnalyticsEvent,
   updateEngagementMode,
   updateStudyReminders,
-  type BillingCycle,
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
@@ -32,6 +34,7 @@ import {
 } from "@/lib/api";
 import { buildLoginPath, getAuthUser, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
   PLAN_BILLING_SECTION_ID,
@@ -121,6 +124,7 @@ const CANCELLATION_REASONS: Array<{
 ];
 
 export default function SettingsPage() {
+  const pathname = usePathname();
   const router = useRouter();
   const startRouteProgress = useRouteProgress();
   const [loading, setLoading] = useState(true);
@@ -130,8 +134,6 @@ export default function SettingsPage() {
   const [billingHistory, setBillingHistory] = useState<BillingHistoryResponse | null>(null);
   const [billingPricing, setBillingPricing] = useState<BillingPricingResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const [selectedBillingCycle, setSelectedBillingCycle] = useState<BillingCycle>("MONTHLY");
-  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [savingEngagementMode, setSavingEngagementMode] = useState(false);
   const [engagementModeMessage, setEngagementModeMessage] = useState<string | null>(null);
@@ -143,6 +145,9 @@ export default function SettingsPage() {
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
 
   const scrollToPlanBillingSection = useCallback(() => {
     if (globalThis.window === undefined) {
@@ -278,6 +283,38 @@ export default function SettingsPage() {
     }
   };
 
+  const handleStartCheckout = async () => {
+    const authUser = getAuthUser();
+    if (authUser && !authUser.emailVerifiedAt) {
+      setVerifyEmailModalOpen(true);
+      return;
+    }
+
+    setStartingCheckout(true);
+    setCheckoutError(null);
+    try {
+      void trackAnalyticsEvent({
+        eventType: "UPGRADE_CLICKED",
+        metadata: {
+          source: "settings_plan_billing",
+          feature: "premium_checkout",
+          path: pathname,
+          target: "xendit_checkout",
+        },
+      });
+      const response = await createPremiumCheckoutSession();
+      redirectToCheckoutUrl(response.checkoutUrl);
+    } catch (error) {
+      if (isEmailNotVerifiedError(error)) {
+        setVerifyEmailModalOpen(true);
+      } else {
+        setCheckoutError(error instanceof Error ? error.message : "Could not start Premium checkout. Please try again.");
+      }
+    } finally {
+      setStartingCheckout(false);
+    }
+  };
+
   const handleOpenCancellationModal = () => {
     setSelectedCancellationReason(null);
     setCancellationFeedback("");
@@ -344,7 +381,6 @@ export default function SettingsPage() {
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
   const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
-  const yearlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
   const billingTransactions = billingHistory?.transactions ?? [];
 
   const formatBillingDate = (rawDate: string | null) => {
@@ -431,7 +467,9 @@ export default function SettingsPage() {
     ? billingHistory.cancellationEffectiveAt ?? billingHistory.currentPeriodEnd
     : billingHistory?.currentPeriodEnd;
   const subscriptionSummaryDateLabel =
-    subscriptionSummaryPlan === "PREMIUM" ? (billingHistory?.cancelAtPeriodEnd ? "Ends on" : "Renews on") : "Status";
+    subscriptionSummaryPlan === "PREMIUM"
+      ? (billingHistory?.cancelAtPeriodEnd ? "Ends on" : subscriptionSummaryDate ? "Renews on" : "Renewal")
+      : "Status";
   const subscriptionBillingCycleLabel = billingHistory?.billingType
     ? billingHistory.billingType === "YEARLY"
       ? "Yearly"
@@ -620,7 +658,7 @@ export default function SettingsPage() {
                     limit={studyPacksLimit}
                     resetDateLabel={usageResetDateLabel}
                     showUpgradeCta={!isPremiumPlan}
-                    onUpgradeClick={() => setIsWaitlistModalOpen(true)}
+                    onUpgradeClick={() => void handleStartCheckout()}
                   />
                   <UsageMetric
                     label="Quiz"
@@ -628,7 +666,7 @@ export default function SettingsPage() {
                     limit={challengeQuizLimit}
                     resetDateLabel={usageResetDateLabel}
                     showUpgradeCta={!isPremiumPlan}
-                    onUpgradeClick={() => setIsWaitlistModalOpen(true)}
+                    onUpgradeClick={() => void handleStartCheckout()}
                   />
                   {isPremiumPlan ? (
                     <UsageMetric
@@ -680,51 +718,39 @@ export default function SettingsPage() {
                     </ul>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing Cycle</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium Checkout</p>
                     {billingPricing ? (
                       <p className="text-xs text-foreground/60">
                         Regional pricing: {billingPricing.region} · {billingPricing.currency}
                       </p>
                     ) : null}
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBillingCycle("MONTHLY")}
-                        className={`rounded-md border p-3 text-left text-sm transition ${
-                          selectedBillingCycle === "MONTHLY"
-                            ? "border-blue-500 bg-blue-500/5"
-                            : "border-border bg-background"
-                        }`}
-                      >
-                        <p className="font-medium">Monthly</p>
-                        <p className="text-xs text-foreground/60">{monthlyPriceLabel}</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBillingCycle("YEARLY")}
-                        className={`rounded-md border p-3 text-left text-sm transition ${
-                          selectedBillingCycle === "YEARLY"
-                            ? "border-blue-500 bg-blue-500/5"
-                            : "border-border bg-background"
-                        }`}
-                      >
-                        <p className="font-medium">Yearly</p>
-                        <p className="text-xs text-foreground/60">{yearlyPriceLabel}</p>
-                      </button>
+                    <div className="rounded-md border border-border bg-background p-3 text-sm">
+                      <p className="font-medium text-foreground">Hosted checkout via Xendit</p>
+                      <p className="mt-1 text-xs text-foreground/60">
+                        Premium access activates after Xendit confirms payment by webhook.
+                      </p>
+                      <p className="mt-2 text-xs text-foreground/60">
+                        Current checkout amount: {monthlyPriceLabel}
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <ResponsiveActionButton
                       type="button"
                       className="w-full sm:w-auto"
-                      onClick={() => setIsWaitlistModalOpen(true)}
+                      onClick={() => void handleStartCheckout()}
+                      loading={startingCheckout}
+                      loadingText="Redirecting..."
                       action="studyPack"
                       label="Upgrade to Premium"
                     />
+                    {checkoutError ? (
+                      <p className="text-xs text-red-600 dark:text-red-300">{checkoutError}</p>
+                    ) : null}
                   </div>
                 </div>
               )}
-              {isPremiumPlan && !isCancellationScheduled ? (
+              {isPremiumPlan && billingHistory?.currentPeriodEnd && !isCancellationScheduled ? (
                 <div className="rounded-md border border-border bg-background p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
@@ -770,7 +796,7 @@ export default function SettingsPage() {
                     </p>
                     <p className="text-sm font-medium text-foreground">
                       {subscriptionSummaryPlan === "PREMIUM"
-                        ? formatBillingDate(subscriptionSummaryDate ?? null)
+                        ? (subscriptionSummaryDate ? formatBillingDate(subscriptionSummaryDate) : "No scheduled renewal")
                         : "No active subscription"}
                     </p>
                   </div>
@@ -791,7 +817,9 @@ export default function SettingsPage() {
                   </div>
                 ) : subscriptionSummaryPlan === "PREMIUM" ? (
                   <p className="text-sm text-foreground/75">
-                    Your Premium plan renews on {formatBillingDate(subscriptionSummaryDate ?? null)}.
+                    {subscriptionSummaryDate
+                      ? `Your Premium plan renews on ${formatBillingDate(subscriptionSummaryDate)}.`
+                      : "Your Premium access is active. Renewal scheduling is not enabled yet."}
                   </p>
                 ) : (
                   <p className="text-sm text-foreground/75">
@@ -956,11 +984,9 @@ export default function SettingsPage() {
           </label>
         </div>
       </AppModal>
-      <PremiumWaitlistModal
-        isOpen={isWaitlistModalOpen}
-        onClose={() => setIsWaitlistModalOpen(false)}
-        source="settings_plan_billing"
-        feature={selectedBillingCycle.toLowerCase()}
+      <VerifyEmailRequiredModal
+        isOpen={verifyEmailModalOpen}
+        onClose={() => setVerifyEmailModalOpen(false)}
       />
     </main>
   );

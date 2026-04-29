@@ -33,12 +33,12 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
+  createPremiumCheckoutSession: jest.fn(),
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
-  joinPremiumWaitlist: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
   listNotes: jest.fn(),
   trackAnalyticsEvent: jest.fn(),

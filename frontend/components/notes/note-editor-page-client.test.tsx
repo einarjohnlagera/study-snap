@@ -3,6 +3,7 @@ import { NoteEditorPageClient } from "./note-editor-page-client";
 import {
   completeProductOnboarding,
   copyNote,
+  createPremiumCheckoutSession,
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
@@ -13,10 +14,10 @@ import {
   getNote,
   listCoursePrograms,
   listSubjects,
-  joinPremiumWaitlist,
   updateNote,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 const pushMock = jest.fn();
 
@@ -37,9 +38,14 @@ jest.mock("@/lib/auth", () => ({
   setAuthUser: jest.fn(),
 }));
 
+jest.mock("@/lib/checkout-redirect", () => ({
+  redirectToCheckoutUrl: jest.fn(),
+}));
+
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
+  createPremiumCheckoutSession: jest.fn(),
   createNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   extractNoteTextFromFile: jest.fn(),
@@ -53,7 +59,6 @@ jest.mock("@/lib/api", () => ({
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
-  joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
 }));
@@ -108,7 +113,8 @@ describe("NoteEditorPageClient", () => {
     (getNote as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
-    (joinPremiumWaitlist as jest.Mock).mockReset();
+    (createPremiumCheckoutSession as jest.Mock).mockReset();
+    (redirectToCheckoutUrl as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Anatomy", "Biology", "Chemistry"]);
@@ -152,8 +158,8 @@ describe("NoteEditorPageClient", () => {
       hasIntroPromo: true,
       introEligible: true,
     });
-    (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
-      message: "You're on the list! We'll notify you when Premium launches.",
+    (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
+      checkoutUrl: "https://checkout.xendit.test/invoice_123",
     });
     (getMe as jest.Mock).mockResolvedValue({
       learnerLevel: "COLLEGE",
@@ -985,7 +991,9 @@ describe("NoteEditorPageClient", () => {
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/You've reached your image-to-text limit for this month\./i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
-    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+    await waitFor(() => {
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
   });
 
   it("shows the premium OCR limit modal without upgrade CTA", async () => {

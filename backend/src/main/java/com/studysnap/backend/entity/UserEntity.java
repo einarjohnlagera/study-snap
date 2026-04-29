@@ -120,6 +120,15 @@ public class UserEntity {
     @Column(name = "product_onboarding_completed_at")
     private OffsetDateTime productOnboardingCompletedAt;
 
+    @Column(name = "is_premium", nullable = false)
+    private Boolean isPremium;
+
+    @Column(name = "premium_activated_at")
+    private OffsetDateTime premiumActivatedAt;
+
+    @Column(name = "premium_expires_at")
+    private OffsetDateTime premiumExpiresAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

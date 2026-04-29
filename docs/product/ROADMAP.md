@@ -28,6 +28,8 @@ Primary focus:
 - onboarding flow redesign: experience-first 5-step flow that ends with a generated Study Pack
 - Generate Note from topic available in both onboarding and Create Note
 - Create Note UX improvements with write vs generate entry options
+- Xendit payment integration with hosted checkout and webhook-confirmed Premium activation
+- legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard
 
@@ -136,6 +138,13 @@ Potential expansion areas after `v0.8.0`:
 - board-exam-specific recommendations and weak-area planning
 - optional public-profile enhancements such as followers, likes, and creator bios
 - optional snapshot/history tables if product value is proven
+
+### Billing Improvements (Future)
+
+- recurring subscription support
+- Premium expiry handling
+- billing history UI improvements
+- plan switching and downgrade flows
 
 ### Public Library persona filtering (roadmap)
 

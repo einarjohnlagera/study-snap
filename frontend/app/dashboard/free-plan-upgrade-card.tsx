@@ -1,5 +1,5 @@
 import { Crown } from "lucide-react";
-import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
+import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { Card } from "@/components/ui/card";
 
 export function FreePlanUpgradeCard() {
@@ -19,7 +19,7 @@ export function FreePlanUpgradeCard() {
           </p>
         </div>
         <div className="w-full sm:w-auto">
-          <PremiumWaitlistButton
+          <PremiumUpgradeButton
             label="Upgrade to Premium"
             source="dashboard_free_plan_card"
             className="w-full sm:w-auto"

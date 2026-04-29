@@ -128,6 +128,9 @@ Recommended fields:
 - `learner_level` (nullable enum: `GRADE_SCHOOL`, `JUNIOR_HIGH`, `SENIOR_HIGH`, `COLLEGE`, `BOARD_EXAM_REVIEW`, `PROFESSIONAL`, `PERSONAL_LEARNING`)
 - `course_program` (nullable, up to 120 chars)
 - `public_profile_visible` (boolean, default true)
+- `is_premium` (boolean, default false)
+- `premium_activated_at` (nullable)
+- `premium_expires_at` (nullable, future use)
 - `country_code` (optional)
 - `profile_type` (nullable enum)
 - `role` (`USER` | `ADMIN`)
@@ -161,10 +164,29 @@ Recommended fields:
 
 Billing notes:
 
-- Active provider is currently `PAYMONGO` (provider-agnostic interface remains in backend).
-- Recurring cadence (`MONTHLY` vs `YEARLY`) is selected at checkout and mapped to external plan IDs.
-- Plan cadence IDs stay in configuration/environment (`PAYMONGO_MONTHLY_PLAN_ID`, `PAYMONGO_YEARLY_PLAN_ID`), not as a required schema change.
-- Webhook event idempotency is enforced through `payment_transactions(provider, provider_reference_id)` uniqueness.
+- Active provider is currently `XENDIT`.
+- Current Premium activation uses a hosted invoice checkout and webhook-confirmed premium upgrade rather than recurring subscriptions.
+- `subscriptions` still stores plan state history and remains the place for future recurring billing or expiry logic.
+- Webhook event idempotency is enforced through persisted webhook events plus `payment_transactions(provider, provider_reference_id)` uniqueness.
+
+## Payment Transactions
+
+Purpose:
+
+- store hosted checkout attempts and webhook-resolved payment outcomes
+
+Recommended fields:
+
+- `id`
+- `user_id`
+- `provider` (`XENDIT`)
+- `billing_type` (`PREPAID`)
+- `plan_type` (`PREMIUM`)
+- `amount`
+- `currency`
+- `status` (`PENDING` | `SUCCESS` | `FAILED`)
+- `provider_reference_id` (Xendit `external_id`)
+- `created_at`
 
 ## OCR Confirmation Drafts
 

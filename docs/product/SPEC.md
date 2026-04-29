@@ -269,7 +269,7 @@ Shared rules:
 
 Required usage:
 
-- important async actions such as auth submit, profile/settings saves, quiz generation, regeneration, export, sign-out, and upgrade/waitlist actions must use the shared button-loading pattern
+- important async actions such as auth submit, profile/settings saves, quiz generation, regeneration, export, sign-out, and upgrade actions must use the shared button-loading pattern
 - programmatic `router.push` / `router.replace` flows that may feel delayed should start the shared route-progress feedback before navigation
 - dashboards, note-detail dependent sections, quiz preview loading states, and public-library result loading should use skeleton placeholders rather than blank space
 
@@ -1338,23 +1338,17 @@ Route: `/settings`
 Settings route section: `Plan & Billing`
 
 - show plan (`FREE` or `PREMIUM`)
-- support Premium billing cycle selection:
-  - `MONTHLY`
-  - `YEARLY`
 - show usage buckets separately:
   - Study Packs (monthly quota)
   - Challenge Quiz (plan-based monthly quota)
   - Adaptive Practice (Premium-only, plan-based monthly quota)
   - OCR (tracked internally, hidden from user-facing usage UI)
-- PayMongo recurring subscription checkout for upgrade
+- start hosted Xendit checkout for verified upgrade attempts
 - Billing webhook sync keeps plan state aligned (webhook-driven source of truth)
-  - `subscription.activated`
-  - `subscription.invoice.paid`
-  - `subscription.invoice.payment_failed`
-  - `subscription.past_due`
-  - `subscription.unpaid`
-  - `subscription.updated`
-- Premium-gated upgrade prompts should link to `/settings#plan-billing`
+  - `PAID`
+  - `FAILED`
+  - `EXPIRED`
+- Premium-gated upgrade prompts may open shared paywalls first, but frontend must never grant Premium directly
 
 Plan limits:
 

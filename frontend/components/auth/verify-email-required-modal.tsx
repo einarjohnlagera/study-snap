@@ -13,7 +13,7 @@ type VerifyEmailRequiredModalProps = {
 export function VerifyEmailRequiredModal({
   isOpen,
   onClose,
-}: VerifyEmailRequiredModalProps) {
+}: Readonly<VerifyEmailRequiredModalProps>) {
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +58,8 @@ export function VerifyEmailRequiredModal({
     >
       <div className="space-y-4 text-sm leading-relaxed text-foreground/85">
         <p>
-          Please verify your email before upgrading or joining the premium waitlist. This helps us secure your account
-          and send important updates.
+          Please verify your email before upgrading to Premium. This helps us secure your account and send important
+          updates.
         </p>
         {message ? (
           <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-sm text-foreground">

@@ -1,20 +1,16 @@
 package com.studysnap.backend.controller;
 
-import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
-import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.dto.BillingHistoryResponse;
 import com.studysnap.backend.dto.BillingPricingResponse;
 import com.studysnap.backend.dto.BillingUsageSummaryResponse;
 import com.studysnap.backend.dto.CancelPremiumSubscriptionRequest;
 import com.studysnap.backend.dto.MeResponse;
-import com.studysnap.backend.dto.SimpleMessageResponse;
-import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
 import com.studysnap.backend.service.BillingHistoryService;
 import com.studysnap.backend.service.PricingService;
-import com.studysnap.backend.service.BillingService;
 import com.studysnap.backend.service.BillingUsageService;
+import com.studysnap.backend.service.SubscriptionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,26 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/billing")
 @RequiredArgsConstructor
 public class BillingController {
-    private final BillingService billingService;
     private final BillingUsageService billingUsageService;
     private final BillingHistoryService billingHistoryService;
     private final PricingService pricingService;
     private final AuthService authService;
-
-    @PostMapping({"/checkout-session", "/checkout/premium"})
-    @PreAuthorize("hasAnyRole('USER','ADMIN')")
-    public BillingCheckoutSessionResponse createCheckoutSession(
-            @AuthenticationPrincipal AuthenticatedUser user,
-            @RequestBody(required = false) BillingCheckoutSessionRequest request,
-            @RequestHeader(value = "CF-IPCountry", required = false) String cfIpCountry
-    ) {
-        authService.requireEmailVerified(user.userId());
-        BillingCycle billingCycle = request == null || request.billingCycle() == null
-                ? BillingCycle.MONTHLY
-                : request.billingCycle();
-        String voucherCode = request == null ? null : request.voucherCode();
-        return billingService.createPremiumCheckoutSession(user.userId(), billingCycle, voucherCode, cfIpCountry);
-    }
+    private final SubscriptionService subscriptionService;
 
     @GetMapping("/pricing")
     public BillingPricingResponse getPricing(
@@ -84,37 +65,11 @@ public class BillingController {
         CancelPremiumSubscriptionRequest payload = request == null
                 ? new CancelPremiumSubscriptionRequest(null, null)
                 : request;
-        billingService.cancelPremiumSubscription(user.userId(), payload);
+        subscriptionService.scheduleCancellationAtPeriodEnd(
+                user.userId(),
+                payload.reason(),
+                payload.feedback()
+        );
         return authService.getMe(user.userId());
-    }
-
-    @PostMapping("/webhook")
-    public SimpleMessageResponse handleBillingWebhook(
-            @RequestBody String payload,
-            @RequestHeader(value = "X-Billing-Signature", required = false) String billingSignature,
-            @RequestHeader(value = "Stripe-Signature", required = false) String stripeSignature,
-            @RequestHeader(value = "Paymongo-Signature", required = false) String payMongoSignature,
-            @RequestHeader(value = "X-Paymongo-Signature", required = false) String payMongoSignatureAlt
-    ) {
-        String signature = resolveSignature(billingSignature, stripeSignature, payMongoSignature, payMongoSignatureAlt);
-        return billingService.handleWebhook(payload, signature);
-    }
-
-    private String resolveSignature(
-            String billingSignature,
-            String stripeSignature,
-            String payMongoSignature,
-            String payMongoSignatureAlt
-    ) {
-        if (billingSignature != null && !billingSignature.isBlank()) {
-            return billingSignature;
-        }
-        if (stripeSignature != null && !stripeSignature.isBlank()) {
-            return stripeSignature;
-        }
-        if (payMongoSignature != null && !payMongoSignature.isBlank()) {
-            return payMongoSignature;
-        }
-        return payMongoSignatureAlt;
     }
 }

@@ -5,9 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
-import { trackAnalyticsEvent } from "@/lib/api";
+import { createPremiumCheckoutSession, isEmailNotVerifiedError, trackAnalyticsEvent } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import {
   type FreePaywallContent,
   type PaywallAction,
@@ -87,6 +87,8 @@ export function PaywallModal({
   const pathname = usePathname();
   const hasTrackedOpenRef = useRef(false);
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
+  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const authUser = getAuthUser();
 
   const config = useMemo((): LegacyPaywallConfig => {
@@ -106,6 +108,8 @@ export function PaywallModal({
     if (!isOpen) {
       hasTrackedOpenRef.current = false;
       setVerifyEmailModalOpen(false);
+      setStartingCheckout(false);
+      setCheckoutError(null);
       return;
     }
     if (hasTrackedOpenRef.current) {
@@ -136,23 +140,42 @@ export function PaywallModal({
     onClose();
   };
 
-  const handleUpgrade = () => {
+  const handleUpgrade = async () => {
     if (authUser && !authUser.emailVerifiedAt) {
       setVerifyEmailModalOpen(true);
       return;
     }
-    void trackAnalyticsEvent({
-      eventType: "UPGRADE_CLICKED",
-      metadata: {
-        source,
-        feature: config.feature,
-        path: pathname,
-        variant,
-        target: PLAN_BILLING_PATH,
-      },
-    });
-    onClose();
-    router.push(PLAN_BILLING_PATH);
+    if (!authUser) {
+      onClose();
+      router.push("/signup");
+      return;
+    }
+
+    setStartingCheckout(true);
+    setCheckoutError(null);
+    try {
+      void trackAnalyticsEvent({
+        eventType: "UPGRADE_CLICKED",
+        metadata: {
+          source,
+          feature: config.feature,
+          path: pathname,
+          variant,
+          target: "xendit_checkout",
+        },
+      });
+      const response = await createPremiumCheckoutSession();
+      onClose();
+      redirectToCheckoutUrl(response.checkoutUrl);
+    } catch (error) {
+      if (isEmailNotVerifiedError(error)) {
+        setVerifyEmailModalOpen(true);
+      } else {
+        setCheckoutError(error instanceof Error ? error.message : "Could not start Premium checkout. Please try again.");
+      }
+    } finally {
+      setStartingCheckout(false);
+    }
   };
 
   return (
@@ -168,12 +191,23 @@ export function PaywallModal({
             <Button type="button" variant="outline" onClick={handleDismiss}>
               {config.dismissLabel}
             </Button>
-            <Button type="button" onClick={handleUpgrade}>
+            <Button
+              type="button"
+              onClick={() => void handleUpgrade()}
+              loading={startingCheckout}
+              loadingText="Redirecting..."
+            >
               Upgrade to Premium
             </Button>
           </div>
         )}
-      />
+      >
+        {checkoutError ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-50/70 p-3 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-300">
+            {checkoutError}
+          </div>
+        ) : null}
+      </AppModal>
       <VerifyEmailRequiredModal
         isOpen={verifyEmailModalOpen}
         onClose={() => setVerifyEmailModalOpen(false)}

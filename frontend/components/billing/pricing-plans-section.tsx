@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Check, Crown, Minus } from "lucide-react";
-import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
+import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
@@ -204,13 +204,13 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             ))}
           </ul>
           <div className="space-y-2">
-            <PremiumWaitlistButton
+            <PremiumUpgradeButton
               label="Upgrade to Premium"
               source="pricing_plans_section"
               className="w-full sm:w-auto"
             />
             <p className="text-sm text-foreground/65">
-              Premium pricing is shown now, but upgrades currently join the waitlist while checkout is still being prepared.
+              Upgrade opens a secure Xendit hosted checkout and Premium activates after webhook confirmation.
             </p>
           </div>
         </Card>

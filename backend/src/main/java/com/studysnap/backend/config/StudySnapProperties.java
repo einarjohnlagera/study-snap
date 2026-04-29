@@ -1,6 +1,5 @@
 package com.studysnap.backend.config;
 
-import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.PlanType;
 import lombok.Getter;
 import lombok.Setter;
@@ -187,35 +186,19 @@ public class StudySnapProperties {
     @Getter
     @Setter
     public static class Billing {
-        private BillingProvider provider = BillingProvider.PAYMONGO;
-        private final Stripe stripe = new Stripe();
-        private final Paymongo paymongo = new Paymongo();
+        private String frontendBaseUrl = "http://localhost:3000";
+        private String backendBaseUrl = "http://localhost:8080";
+        private String priceIdPlaceholder = "not_used_for_now";
+        private final Xendit xendit = new Xendit();
         private Map<String, RegionPricing> pricingRegions = new LinkedHashMap<>();
     }
 
     @Getter
     @Setter
-    public static class Stripe {
-        private String apiBaseUrl = "https://api.stripe.com/v1";
+    public static class Xendit {
+        private String baseUrl = "https://api.xendit.co";
         private String secretKey = "";
-        private String webhookSecret = "";
-        private String premiumPriceId = "";
-        private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
-        private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
-    }
-
-    @Getter
-    @Setter
-    public static class Paymongo {
-        private String apiBaseUrl = "https://api.paymongo.com/v1";
-        private String secretKey = "";
-        private String webhookSecret = "";
-        private String monthlyPlanId = "";
-        private String yearlyPlanId = "";
-        private BigDecimal monthlyAmount = new BigDecimal("4.99");
-        private BigDecimal yearlyAmount = new BigDecimal("39.99");
-        private String checkoutSuccessUrl = "http://localhost:3000/settings?checkout=success";
-        private String checkoutCancelUrl = "http://localhost:3000/settings?checkout=cancel";
+        private String webhookToken = "";
     }
 
     @Getter
@@ -224,10 +207,6 @@ public class StudySnapProperties {
         private String currency = "USD";
         private BigDecimal monthlyPrice = new BigDecimal("4.99");
         private BigDecimal yearlyPrice = new BigDecimal("39.99");
-        private String paymongoMonthlyPlanId = "";
-        private String paymongoYearlyPlanId = "";
-        private String paymongoIntroMonthlyPlanId = "";
-        private String paymongoIntroYearlyPlanId = "";
         private boolean active = true;
     }
 

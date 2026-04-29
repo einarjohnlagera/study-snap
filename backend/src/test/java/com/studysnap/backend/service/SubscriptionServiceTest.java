@@ -53,7 +53,7 @@ class SubscriptionServiceTest {
         activePremium.setPlanType(PlanType.PREMIUM);
         activePremium.setStatus(SubscriptionStatus.ACTIVE);
         activePremium.setBillingType(BillingType.SUBSCRIPTION);
-        activePremium.setProvider(BillingProvider.PAYMONGO);
+        activePremium.setProvider(BillingProvider.XENDIT);
         activePremium.setStartAt(OffsetDateTime.now().minusMonths(1));
         activePremium.setEndAt(OffsetDateTime.now().minusDays(1));
         activePremium.setCreatedAt(OffsetDateTime.now().minusMonths(1));
@@ -90,7 +90,7 @@ class SubscriptionServiceTest {
         activePremium.setPlanType(PlanType.PREMIUM);
         activePremium.setStatus(SubscriptionStatus.ACTIVE);
         activePremium.setBillingType(BillingType.SUBSCRIPTION);
-        activePremium.setProvider(BillingProvider.PAYMONGO);
+        activePremium.setProvider(BillingProvider.XENDIT);
         activePremium.setStartAt(OffsetDateTime.now().minusDays(10));
         activePremium.setEndAt(OffsetDateTime.now().plusDays(20));
         activePremium.setCreatedAt(OffsetDateTime.now().minusDays(10));
@@ -128,7 +128,7 @@ class SubscriptionServiceTest {
         activePremium.setPlanType(PlanType.PREMIUM);
         activePremium.setStatus(SubscriptionStatus.ACTIVE);
         activePremium.setBillingType(BillingType.SUBSCRIPTION);
-        activePremium.setProvider(BillingProvider.PAYMONGO);
+        activePremium.setProvider(BillingProvider.XENDIT);
         activePremium.setStartAt(OffsetDateTime.now().minusDays(5));
         activePremium.setEndAt(OffsetDateTime.now().plusDays(10));
         activePremium.setCancelAtPeriodEnd(true);
@@ -146,7 +146,7 @@ class SubscriptionServiceTest {
         SubscriptionEntity saved = service.activatePremiumSubscription(
                 userId,
                 BillingType.SUBSCRIPTION,
-                BillingProvider.PAYMONGO,
+                BillingProvider.XENDIT,
                 OffsetDateTime.now(),
                 OffsetDateTime.now().plusDays(30),
                 false,
