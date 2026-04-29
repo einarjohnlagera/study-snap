@@ -33,7 +33,7 @@ Overview cards should show:
 - total users
 - verified users
 - premium users
-- premium waitlist count
+- premium waitlist count (legacy interest metric, separate from live checkout)
 - total notes
 - total Study Packs generated
 - total public notes
@@ -78,9 +78,9 @@ Admin v1 tables should include:
 Reuse existing data sources where possible:
 
 - `analytics_events` for funnel, paywall, upgrade, and public-note metrics
-- `premium_waitlist` for pre-launch Premium interest
+- `premium_waitlist` for legacy Premium-interest reporting when that data still exists
 - `subscriptions` for active Premium state and cancel-at-period-end status
-- `payment_transactions` for failed payments and recurring-revenue estimates
+- `payment_transactions` for upgrade history, failed payments, and billing estimates
 - `feedback` for recent user feedback during soft launch
 - `notes` and `study_packs` for library and generation counts
 

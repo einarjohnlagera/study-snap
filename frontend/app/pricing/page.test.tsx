@@ -1,11 +1,28 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PricingPage, { metadata } from "./page";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
+
+const pushMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   usePathname: () => "/pricing",
+  useRouter: () => ({
+    push: pushMock,
+  }),
+}));
+
+jest.mock("@/lib/auth", () => ({
+  getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
+}));
+
+jest.mock("@/lib/checkout-redirect", () => ({
+  redirectToCheckoutUrl: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => ({
+  createPremiumCheckoutSession: jest.fn().mockResolvedValue({
+    checkoutUrl: "https://checkout.xendit.test/invoice_123",
+  }),
   getBillingPricing: jest.fn().mockResolvedValue({
     region: "PH",
     currency: "PHP",
@@ -15,14 +32,17 @@ jest.mock("@/lib/api", () => ({
     hasIntroPromo: true,
     introEligible: true,
   }),
-  joinPremiumWaitlist: jest.fn().mockResolvedValue({
-    message: "You're on the list! We'll notify you when Premium launches.",
-  }),
+  isEmailNotVerifiedError: () => false,
   requestEmailVerification: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
 
 describe("PricingPage", () => {
+  beforeEach(() => {
+    pushMock.mockReset();
+    (redirectToCheckoutUrl as jest.Mock).mockReset();
+  });
+
   it("renders the simplified Free vs Premium pricing layout", async () => {
     render(<PricingPage />);
 
@@ -34,8 +54,9 @@ describe("PricingPage", () => {
     expect(
       screen.getAllByText("Most users stay on Free while studying casually. Upgrade when your review gets serious.")[0],
     ).toBeInTheDocument();
-    expect(await screen.findByText("First month ₱199, then ₱249/month")).toBeInTheDocument();
-    expect(screen.getByText("₱1,999/year (Save ₱989)")).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "") === "₱249/month")).not.toHaveLength(0);
+    expect(screen.getAllByText("₱2,499/year")).not.toHaveLength(0);
+    expect(await screen.findByText(/Intro offer: first month/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Free for everyday study. Premium for deeper exam prep." })).toBeInTheDocument();
     expect(screen.getByText("Free covers the full note-to-study-pack workflow. Premium adds higher limits and deeper practice tools.")).toBeInTheDocument();
     expect(screen.getByText("For everyday study")).toBeInTheDocument();
@@ -58,7 +79,7 @@ describe("PricingPage", () => {
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
     expect(
       screen.getByText(
-        "Premium pricing is shown now, but upgrades currently join the waitlist while checkout is still being prepared.",
+        "Upgrade opens a secure Xendit hosted checkout and Premium activates after webhook confirmation.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("🇵🇭 Philippines pricing (PHP)")).toBeInTheDocument();
@@ -85,17 +106,15 @@ describe("PricingPage", () => {
     expect(pricingText).not.toContain("Free for limited time");
   });
 
-  it("links signup CTA and opens the premium waitlist flow", async () => {
+  it("links signup CTA and starts checkout for authenticated users", async () => {
     render(<PricingPage />);
 
     expect((await screen.findAllByRole("link", { name: "Start for Free" }))[0]).toHaveAttribute("href", "/signup");
 
     fireEvent.click((await screen.findAllByRole("button", { name: "Upgrade to Premium" }))[0]);
 
-    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
     await waitFor(() => {
-      expect(screen.getByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
 

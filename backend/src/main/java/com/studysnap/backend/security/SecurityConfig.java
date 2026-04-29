@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh", "/auth/verify-email").permitAll()
                         .requestMatchers("/analytics/events").permitAll()
-                        .requestMatchers("/billing/webhook").permitAll()
+                        .requestMatchers("/webhooks/xendit").permitAll()
                         .requestMatchers("/billing/pricing").permitAll()
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/notes/public/**").permitAll()

@@ -86,10 +86,10 @@ public class PricingService {
                 voucherCode
         ).orElse(null);
 
-        String planId = resolvePlanId(context.regionPricing(), normalizedCycle, appliedVoucher);
+        String planId = resolveCheckoutPriceId();
         if (planId == null) {
             throw new AppException(
-                    "PAYMONGO_PLAN_NOT_CONFIGURED",
+                    "CHECKOUT_PRICE_ID_NOT_CONFIGURED",
                     "Premium pricing is not configured for your region yet.",
                     HttpStatus.SERVICE_UNAVAILABLE
             );
@@ -260,27 +260,8 @@ public class PricingService {
         return billingCycle == BillingCycle.YEARLY ? regionPricing.getYearlyPrice() : regionPricing.getMonthlyPrice();
     }
 
-    private String resolvePlanId(
-            StudySnapProperties.RegionPricing regionPricing,
-            BillingCycle billingCycle,
-            AppliedVoucher appliedVoucher
-    ) {
-        if (billingCycle == BillingCycle.YEARLY) {
-            if (appliedVoucher != null) {
-                String introYearlyPlanId = normalizeText(regionPricing.getPaymongoIntroYearlyPlanId());
-                if (introYearlyPlanId != null) {
-                    return introYearlyPlanId;
-                }
-            }
-            return normalizeText(regionPricing.getPaymongoYearlyPlanId());
-        }
-        if (appliedVoucher != null) {
-            String introMonthlyPlanId = normalizeText(regionPricing.getPaymongoIntroMonthlyPlanId());
-            if (introMonthlyPlanId != null) {
-                return introMonthlyPlanId;
-            }
-        }
-        return normalizeText(regionPricing.getPaymongoMonthlyPlanId());
+    private String resolveCheckoutPriceId() {
+        return normalizeText(properties.getBilling().getPriceIdPlaceholder());
     }
 
     private StudySnapProperties.RegionPricing resolveRegionPricing(String region) {

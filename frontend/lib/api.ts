@@ -300,7 +300,7 @@ export type AdminRecentUpgradeItemResponse = {
   subscriptionId: string;
   userEmail: string;
   billingCycle: "MONTHLY" | "YEARLY";
-  provider: "NONE" | "STRIPE" | "PAYMONGO";
+  provider: "NONE" | "XENDIT";
   cancelAtPeriodEnd: boolean;
   startedAt: string;
 };
@@ -310,7 +310,7 @@ export type AdminRecentFailedPaymentItemResponse = {
   userEmail: string;
   amount: number;
   currency: string;
-  provider: "NONE" | "STRIPE" | "PAYMONGO";
+  provider: "NONE" | "XENDIT";
   createdAt: string;
 };
 
@@ -724,7 +724,7 @@ export type BillingHistoryItemResponse = {
   amount: number;
   currency: string;
   status: "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
-  provider: "NONE" | "STRIPE" | "PAYMONGO";
+  provider: "NONE" | "XENDIT";
   providerReferenceId: string;
 };
 
@@ -2094,37 +2094,18 @@ export async function getMasterySnapshot(): Promise<MasterySnapshotResponse> {
   return parseApiResponse<MasterySnapshotResponse>(response, "Could not load mastery snapshot.");
 }
 
-export async function createPremiumCheckoutSession(
-  billingCycle: BillingCycle = "MONTHLY",
-  voucherCode?: string | null,
-): Promise<BillingCheckoutSessionResponse> {
+export async function createPremiumCheckoutSession(): Promise<BillingCheckoutSessionResponse> {
   const response = await fetchWithAuth(
-    "/billing/checkout-session",
+    "/payments/create",
     {
       method: "POST",
-      headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ billingCycle, voucherCode: voucherCode ?? null }),
+      headers: buildAuthHeaders(),
     },
     true,
   );
   return parseApiResponse<BillingCheckoutSessionResponse>(
     response,
     "Could not start Premium checkout. Please try again.",
-  );
-}
-
-export async function joinPremiumWaitlist(): Promise<SimpleMessageResponse> {
-  const response = await fetchWithAuth(
-    "/premium/waitlist",
-    {
-      method: "POST",
-      headers: buildAuthHeaders("application/json"),
-    },
-    true,
-  );
-  return parseApiResponse<SimpleMessageResponse>(
-    response,
-    "Could not join the Premium waitlist right now. Please try again.",
   );
 }
 

@@ -7,6 +7,7 @@ import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
@@ -76,6 +77,15 @@ public class BillingHistoryService {
     }
 
     private String resolveDescription(PaymentTransactionEntity transaction, UUID firstSuccessfulTransactionId) {
+        if (transaction.getBillingType() == BillingType.PREPAID) {
+            if (transaction.getStatus() == PaymentTransactionStatus.FAILED) {
+                return "Failed Premium upgrade";
+            }
+            if (transaction.getStatus() == PaymentTransactionStatus.PENDING) {
+                return "Pending Premium upgrade";
+            }
+            return "Premium Upgrade";
+        }
         if (transaction.getStatus() == PaymentTransactionStatus.FAILED) {
             return "Failed payment";
         }
@@ -125,10 +135,6 @@ public class BillingHistoryService {
             }
         }
 
-        BigDecimal yearlyAmount = properties.getBilling().getPaymongo().getYearlyAmount();
-        if (yearlyAmount != null && isWithinTolerance(transaction.getAmount(), yearlyAmount)) {
-            return BillingCycle.YEARLY;
-        }
         return BillingCycle.MONTHLY;
     }
 

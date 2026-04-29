@@ -91,7 +91,7 @@ export default function PrivacyPage() {
           title: "7. Subscription and Payments",
           content: (
             <>
-              <p>Payments are processed via PayMongo.</p>
+              <p>Payments are processed via Xendit.</p>
               <p>We do not store full credit card information.</p>
             </>
           ),

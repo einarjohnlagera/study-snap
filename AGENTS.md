@@ -87,12 +87,11 @@ Teacher flow rule:
 ### Premium Upgrade Prompt Rule
 
 - Free users should see a soft paywall modal before any Premium-only quiz feature or Study Pack limit block attempts a paid conversion flow.
-- During the current pre-launch phase, `Upgrade to Premium` should open a `Premium is coming soon` modal and offer `Join Waitlist`, not payment.
-- Waitlist joins should call `POST /api/premium/waitlist` and remain idempotent per authenticated user.
+- Verified users who choose to upgrade should start the hosted checkout flow via `POST /api/payments/create`.
+- Frontend upgrade actions should redirect only to the backend-returned Xendit checkout URL.
 - When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 - When Study Pack remaining reaches `0`, keep `Generate Study Pack` enabled and show a student-friendly monthly-limit modal on click instead of disabling the action.
 - Upgrade messaging should position Premium as an exam-preparation and mastery tool for students.
-- Pre-launch modal copy should make it clear that payments are still being enabled and that users can join the waitlist for launch access.
 - Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, and the `100` Study Pack Premium limit.
 - Pricing page should clearly compare Free vs Premium with localized backend pricing and student-oriented value messaging.
 
@@ -338,11 +337,17 @@ Teacher flow rule:
 
 ### Pricing Rule
 
-- Backend owns subscription pricing, region detection, voucher eligibility, and PayMongo plan selection.
+- Backend owns subscription pricing, region detection, voucher eligibility, and Xendit checkout creation.
 - Frontend must use the billing pricing API for pricing display in Settings, pricing surfaces, and upgrade prompts.
-- Do not hardcode Premium prices in frontend code.
+- Shared pricing surfaces may keep the existing reviewer-safe PHP and USD display config, but checkout creation and upgrade eligibility stay backend-owned.
 - Intro pricing and first-time promos must be implemented through the voucher/promotion system, not as a boolean on `User`.
-- While Premium checkout is pre-launch, pricing surfaces should still show backend pricing but route upgrade intent into the Premium waitlist modal instead of payment.
+
+### Payments Safety Rule
+
+- Never grant Premium access from frontend logic, success pages, or redirect callbacks.
+- Only validated webhook-confirmed payments may update user Premium status.
+- Always validate the Xendit `x-callback-token` before processing webhook payloads.
+- Webhook handling must stay idempotent through persisted provider event records and payment transaction lookups.
 
 ### Billing History Rule
 
@@ -1012,25 +1017,21 @@ Rules:
 
 ## Billing Provider (Current)
 
-- Active billing provider is `PAYMONGO` (provider-agnostic billing interface remains in place).
-- Premium recurring plans are selected by backend from region pricing config, not from frontend assumptions.
+- Active billing provider is `XENDIT`.
+- Premium checkout is currently a hosted Xendit invoice flow, not a recurring subscription flow.
 - Regional pricing is resolved from `CF-IPCountry` and mapped into pricing regions.
-- Region pricing config contains localized currency/amounts plus standard and optional intro PayMongo plan IDs.
-- Voucher/promotion rules decide whether checkout should use an intro plan ID or a standard plan ID.
+- Region pricing config contains localized currency/amounts plus optional intro pricing metadata used for display and eligibility.
+- Voucher/promotion rules decide whether intro pricing is shown, but checkout itself stays on the current hosted Xendit invoice flow.
 - Intro/first-time subscriber discounts must flow through voucher eligibility and voucher redemption records.
-- Premium launch is currently gated by the waitlist flow:
-  - upgrade CTAs join `premium_waitlist`
-  - admin dashboard tracks waitlist count
-  - checkout plumbing remains provider-ready but is not the active user-facing path
-- Webhook lifecycle is the source of truth for subscription state:
-  - `subscription.activated`
-  - `subscription.invoice.paid`
-  - `subscription.invoice.payment_failed`
-  - `subscription.past_due`
-  - `subscription.unpaid`
-  - `subscription.updated`
+- Premium activation is controlled by webhook-confirmed invoice outcomes only.
+- Xendit webhook statuses currently handled are:
+  - `PAID`
+  - `FAILED`
+  - `EXPIRED`
 - Do not create/update webhook registrations dynamically in app code.
-- Controllers must stay provider-agnostic; provider services map external events to `SubscriptionService` and `PaymentTransactionService`.
+- Payment endpoints are:
+  - `POST /api/payments/create`
+  - `POST /api/webhooks/xendit`
 - Webhook processing safety:
   - store provider webhook events in `webhook_events` with unique `(provider, event_id)`
   - duplicate events must return success without reprocessing

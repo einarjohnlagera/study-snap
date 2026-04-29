@@ -226,10 +226,14 @@ Profile Type does not affect:
 
 ### Billing Architecture
 
-- `BillingController` exposes provider-agnostic billing endpoints:
-  - `POST /api/billing/checkout/premium`
-  - `POST /api/billing/webhook`
+- `BillingController` exposes pricing, usage, and history endpoints:
+  - `GET /api/billing/pricing`
+  - `GET /api/billing/history`
   - `GET /api/billing/usage`
+- `PaymentController` exposes checkout creation:
+  - `POST /api/payments/create`
+- `XenditWebhookController` exposes the public payment callback endpoint:
+  - `POST /api/webhooks/xendit`
 - `MeController` exposes the authenticated plan summary endpoint:
   - `GET /api/me/plan`
 - `GET /api/me/plan` is the single frontend-facing source of truth for:
@@ -240,24 +244,22 @@ Profile Type does not affect:
   - Premium feature flags such as Adaptive Practice and Difficulty Selection
 - Usage periods are enforced from `BillingUsagePeriodService`:
   - Free users anchor monthly cycles to `users.created_at`
-  - Premium users use the active subscription `startAt/endAt` billing window
+  - Premium users use the active subscription billing window or the direct Premium-activation fallback window when no renewable subscription record exists yet
   - `user_usage.period_start` and `user_usage.period_end` are the persisted cycle boundaries used for quota checks
-- `BillingService` is the provider abstraction used by the controller.
-- Active provider is resolved by configuration (`studysnap.billing.provider`).
-- Current active provider: `PAYMONGO`.
-- Premium checkout supports billing cycle selection:
-  - `MONTHLY` -> configured `PAYMONGO_MONTHLY_PLAN_ID`
-  - `YEARLY` -> configured `PAYMONGO_YEARLY_PLAN_ID`
-- Subscription state changes are webhook-driven (source of truth):
-  - `subscription.activated`
-  - `subscription.invoice.paid`
-  - `subscription.invoice.payment_failed`
-  - `subscription.past_due`
-  - `subscription.unpaid`
-  - `subscription.updated`
-- Provider service maps external events to internal domain services only:
+- `PaymentService` owns hosted checkout creation and Xendit webhook processing.
+- Current active provider: `XENDIT`.
+- Checkout creation flow:
+  - validate the user is not already Premium
+  - create a Xendit invoice at `/v2/invoices`
+  - persist a pending `payment_transactions` row with provider reference `external_id`
+  - return the hosted `invoice_url` to frontend
+- Webhook state changes are the source of truth for Premium activation:
+  - `PAID`
+  - `FAILED`
+  - `EXPIRED`
+- Payment services map external events to internal domain services only:
   - `SubscriptionService` (activate/downgrade + provider IDs)
-  - `PaymentTransactionService` (transaction recording + idempotency by provider reference)
+  - `PaymentTransactionService` (transaction recording + provider-reference lookup)
 - Webhook idempotency:
   - incoming provider events are persisted to `webhook_events`
   - duplicate `(provider, event_id)` deliveries are acknowledged and skipped

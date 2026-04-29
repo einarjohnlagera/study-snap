@@ -27,8 +27,8 @@ public class PaymentTransactionService {
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public boolean isAlreadyProcessed(BillingProvider provider, String providerReferenceId) {
-        return paymentTransactionRepository.findByProviderAndProviderReferenceId(provider, providerReferenceId).isPresent();
+    public Optional<PaymentTransactionEntity> findByProviderReferenceId(BillingProvider provider, String providerReferenceId) {
+        return paymentTransactionRepository.findByProviderAndProviderReferenceId(provider, providerReferenceId);
     }
 
     public Optional<PaymentTransactionEntity> createPending(

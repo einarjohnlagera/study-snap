@@ -2,14 +2,14 @@
 
 ## Goal
 
-Explain the difference between Free and Premium clearly, without turning the pricing page into a payment flow.
+Explain the difference between Free and Premium clearly while keeping upgrade flow simple and trustworthy.
 
 The pricing page is a positioning surface first:
 
 - show the core Free workflow
 - make Premium value easy to understand
 - keep upgrade messaging student-friendly
-- route upgrade intent into the Premium waitlist flow until checkout launches
+- let verified users move into hosted checkout without embedding payment UI on the page
 
 ## Plans
 
@@ -53,8 +53,8 @@ Primary CTA:
 
 Current rollout rule:
 
-- Pricing is for positioning only
-- upgrade CTAs open the Premium waitlist modal instead of checkout
+- Pricing remains a positioning-first surface
+- upgrade CTAs start hosted Xendit checkout through the backend payment API
 
 ## Pricing page structure
 
@@ -66,7 +66,7 @@ The pricing page should stay clean and mobile-friendly:
 4. Regional Pricing block (static, both PHP and USD, always visible)
 5. FAQ
 
-Avoid adding payment-step UI, dense billing details, or aggressive conversion copy.
+Avoid adding embedded payment-step UI, dense billing details, or aggressive conversion copy.
 
 ## Board Exam Mode positioning
 
@@ -106,7 +106,7 @@ Current rows:
   - `Premium`
   - `Start for Free`
   - `Upgrade to Premium`
-- Avoid introducing payment-specific friction until checkout is ready
+- Keep checkout trust signals short and clear
 
 ## Mobile UX
 

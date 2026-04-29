@@ -232,7 +232,7 @@ class AdminDashboardServiceTest {
         subscription.setPlanType(PlanType.PREMIUM);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setBillingType(BillingType.SUBSCRIPTION);
-        subscription.setProvider(BillingProvider.PAYMONGO);
+        subscription.setProvider(BillingProvider.XENDIT);
         subscription.setStartAt(startAt);
         subscription.setEndAt(endAt);
         subscription.setCancelAtPeriodEnd(cancelAtPeriodEnd);
@@ -248,7 +248,7 @@ class AdminDashboardServiceTest {
         PaymentTransactionEntity transaction = new PaymentTransactionEntity();
         transaction.setId(UUID.randomUUID());
         transaction.setUser(user);
-        transaction.setProvider(BillingProvider.PAYMONGO);
+        transaction.setProvider(BillingProvider.XENDIT);
         transaction.setBillingType(BillingType.SUBSCRIPTION);
         transaction.setPlanType(PlanType.PREMIUM);
         transaction.setAmount(amount);

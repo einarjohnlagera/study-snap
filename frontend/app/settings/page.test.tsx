@@ -2,15 +2,16 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import SettingsPage from "./page";
 import {
   cancelPremiumSubscription,
+  createPremiumCheckoutSession,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
   getMe,
-  joinPremiumWaitlist,
   requestEmailVerification,
   updateEngagementMode,
   updateStudyReminders,
 } from "@/lib/api";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { PLAN_BILLING_SECTION_ID } from "@/lib/plans";
 
 const routerMock = {
@@ -33,13 +34,18 @@ jest.mock("@/lib/route-guards", () => ({
   redirectToLoginWithCurrentDestination: jest.fn(),
 }));
 
+jest.mock("@/lib/checkout-redirect", () => ({
+  redirectToCheckoutUrl: jest.fn(),
+}));
+
 jest.mock("@/lib/api", () => ({
   cancelPremiumSubscription: jest.fn(),
+  createPremiumCheckoutSession: jest.fn(),
   getBillingPricing: jest.fn(),
   getBillingHistory: jest.fn(),
   getMyPlan: jest.fn(),
   getMe: jest.fn(),
-  joinPremiumWaitlist: jest.fn(),
+  isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   logout: jest.fn(),
   requestEmailVerification: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -84,12 +90,13 @@ const scheduledCancellationProfile = {
 describe("Settings page cancellation flow", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/settings");
+    (redirectToCheckoutUrl as jest.Mock).mockReset();
     (getMe as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getBillingHistory as jest.Mock).mockReset();
     (getBillingPricing as jest.Mock).mockReset();
     (cancelPremiumSubscription as jest.Mock).mockReset();
-    (joinPremiumWaitlist as jest.Mock).mockReset();
+    (createPremiumCheckoutSession as jest.Mock).mockReset();
     (updateEngagementMode as jest.Mock).mockReset();
     (updateStudyReminders as jest.Mock).mockReset();
 
@@ -144,8 +151,8 @@ describe("Settings page cancellation flow", () => {
       hasIntroPromo: true,
       introEligible: true,
     });
-    (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
-      message: "You're on the list! We'll notify you when Premium launches.",
+    (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
+      checkoutUrl: "https://checkout.xendit.test/invoice_123",
     });
     (requestEmailVerification as jest.Mock).mockResolvedValue({
       message: "Verification email sent. Please check your inbox.",
@@ -164,7 +171,7 @@ describe("Settings page cancellation flow", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens the Premium coming soon modal and joins the waitlist from Settings", async () => {
+  it("starts hosted checkout from Settings", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...premiumProfile,
       planType: "FREE",
@@ -179,14 +186,10 @@ describe("Settings page cancellation flow", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
 
-    expect(await screen.findByText("Premium is coming soon")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Join Waitlist" }));
-
     await waitFor(() => {
-      expect(joinPremiumWaitlist).toHaveBeenCalled();
+      expect(createPremiumCheckoutSession).toHaveBeenCalled();
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
-    expect(await screen.findByText("You're on the list! We'll notify you when Premium launches.")).toBeInTheDocument();
   });
 
   it("opens the cancellation confirmation modal from Settings", async () => {
@@ -311,7 +314,7 @@ describe("Settings page cancellation flow", () => {
           amount: 249,
           currency: "PHP",
           status: "FAILED",
-          provider: "PAYMONGO",
+          provider: "XENDIT",
           providerReferenceId: "evt_new",
         },
         {
@@ -321,7 +324,7 @@ describe("Settings page cancellation flow", () => {
           amount: 249,
           currency: "PHP",
           status: "SUCCESS",
-          provider: "PAYMONGO",
+          provider: "XENDIT",
           providerReferenceId: "evt_old",
         },
       ],

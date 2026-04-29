@@ -2,11 +2,12 @@
 
 ## Goal
 
-Support freemium usage control and recurring Premium subscriptions with webhook-driven lifecycle sync.
+Support freemium usage control and webhook-confirmed Premium upgrades without making paywalls or billing feel heavy.
 
 ## Plan behavior
 
 ### Free
+
 - 10 Study Packs per month
 - Topic note generation (5/month by default, backend-configurable)
 - OCR (20/month by default, backend-configurable)
@@ -17,9 +18,9 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Weak concepts remain visible after quiz/review completion
 - Adaptive Practice is Premium-only
 - Difficulty selection is Premium-only
-- Soft paywall messaging for Premium-only features and Study Pack limit blocks
 
 ### Premium
+
 - 100 Study Packs per month
 - Topic note generation (100/month by default, backend-configurable)
 - Challenge Quiz (50/month)
@@ -29,142 +30,79 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Priority AI
 - Weak Concept Detection
 
-## Premium cancellation
-
-- Canceling Premium is a confirm-first flow in `Settings`.
-- Cancellation is scheduled for the end of the current billing period, not immediate.
-- Premium features remain active until the stored billing-period end date.
-- After the period ends, subscription lifecycle logic downgrades the account to Free.
-- Canceling Premium does not remove notes or generated Study Packs from the user library.
-- Optional cancellation feedback can be stored:
-  - `cancellationReason`
-  - `cancellationFeedback`
-
-## Billing history in Settings
-
-- `Settings -> Plan & Billing` should show a subscription summary card above payment history.
-- The summary card should display:
-  - `currentPlan`
-  - `subscriptionStatus`
-  - `billingType`
-  - renewal date when Premium is active
-  - end date and non-renewal messaging when `cancelAtPeriodEnd=true`
-- Payment history is sourced from `payment_transactions` and sorted newest first.
-- Transaction descriptions should stay user-friendly:
-  - `Premium Monthly`
-  - `Premium Yearly`
-  - `Subscription Renewal`
-  - `Failed payment`
-- Empty state copy:
-  - title: `No billing history yet`
-  - body: `Your payment history will appear here once you subscribe to Premium.`
-
 ## Soft paywall UX
 
-- Free users should not be redirected immediately into payment when they click Premium-only quiz actions.
-- During the current pre-launch billing phase, upgrade CTAs open a reusable `Premium is coming soon` modal instead of checkout.
-- The coming-soon modal should list:
+- Free users should see a shared explanatory paywall before a Premium-only quiz action or a hard quota block attempts paid conversion.
+- The paywall should explain:
   - `Challenge Quiz`
   - `Adaptive Practice`
   - `Weak Concept Training`
   - `Higher monthly limits`
-- Modal actions are:
-  - `Join Waitlist`
+- Modal actions:
+  - `Upgrade to Premium`
   - `Maybe Later`
-- Joining the waitlist calls `POST /api/premium/waitlist`.
-- Waitlist joins are idempotent per authenticated user and should return:
-  - `You're on the list! We'll notify you when Premium launches.`
-- Challenge Quiz, Adaptive Practice, Settings billing, pricing CTAs, and dashboard upgrade cards should all route through this pre-launch waitlist flow.
+- Verified users who continue should start hosted checkout through `POST /api/payments/create`.
 - Study Pack limit blocks should keep `Generate Study Pack` clickable instead of disabling it.
-- Topic note generation is a separate gated action from Study Pack generation and OCR.
+- Topic note generation and OCR stay separately gated from Study Pack generation.
+
+## Topic note generation and OCR gating
+
+- Topic note generation is a distinct monthly quota from Study Packs and OCR.
 - When topic note generation quota is exhausted:
   - Free users see the shared Premium/upgrade modal
   - Premium users see a reset-on-next-billing-date modal
-- Note Editor and product onboarding may disable `Generate Note` when `GET /api/me/plan` reports `noteGenerationsRemaining=0`, but backend must still enforce the quota server-side.
-- Near-limit Study Pack banners should appear on Dashboard, Note Detail, and Study Pack generation/editor surfaces when:
-  - Free remaining is `2` or `1`
-  - Premium remaining is `2` or `1`
-- Limit-reached Study Pack messaging should appear when remaining is `0`:
-  - Free: `You’ve reached your Free plan limit for this month. You can generate more again on {resetDate}.`
-  - Premium: `You’ve used all your Study Packs this month. Limit resets on {resetDate}.`
-- Free users at `0` remaining Study Packs should see the Premium/upgrade modal when they try to generate.
-- Premium users at `0` remaining Study Packs should see the dedicated Study Pack monthly-limit modal with:
-  - `Upgrade Plan`
-  - `Get More Study Packs`
-  - `Maybe Later`
-- Shared gating rule for study/quiz actions:
-  - free user + premium-only feature -> Premium/upgrade modal
-  - free user + exhausted free quota -> Premium/upgrade modal
-  - premium user + exhausted monthly quota -> dedicated monthly-limit state
-- Upgrade actions from these flows may land on pricing or plan surfaces, but the current conversion path should still feed the Premium waitlist experience until checkout launches.
+- OCR exhaustion follows the same split:
+  - Free users see an upgrade path
+  - Premium users see a reset-date explanation
+- Backend must enforce all limits even when frontend disables actions.
 
-## Pricing page and upgrade positioning
+## Pricing and upgrade surfaces
 
-- NoteLib pricing copy should position Premium as an exam preparation and mastery plan, not only as an AI upgrade.
-- Pricing page hero copy:
-  - title: `Study smarter. Pass exams faster.`
-  - subtitle: `Turn your notes into summaries, quizzes, and reviewers in seconds.`
-  - identity line: `NoteLib is a notes library and review tool in one — you build your own reviewers, then turn them into summaries, key concepts, and practice quizzes.`
-  - actions: `Start Free` and `Upgrade to Premium`
-- Pricing page should include a `Why Go Premium` section with:
-  - title: `For serious review and exam preparation`
-  - explanation that Premium is for students preparing for exams, board exams, or major tests
-  - practice-focused benefits: more Study Packs, more Challenge Quizzes, and Adaptive Practice for weak topics
-  - positioning that NoteLib becomes a full review and practice tool, not only a notes app
-- Pricing page must display localized pricing from `GET /api/billing/pricing`.
-- Until payments are enabled, pricing CTAs should open the Premium waitlist modal rather than redirect directly into checkout.
-- Pricing page should compare Free vs Premium clearly for student workflows:
-  - Free: core NoteLib workflow, `10` Study Packs/month, Quick Review, `5` Challenge Quizzes/month, Weak concepts
-  - Premium: heavier exam-review workflow, `100` Study Packs/month, `50` Challenge Quizzes/month, `30` Adaptive Practice sessions/month, Difficulty selection, Priority AI generation
-- Dashboard should show a Free-only upgrade card with Premium exam-prep messaging and the same waitlist modal entry point.
+- Pricing page, Settings billing, dashboard upgrade cards, and shared paywall surfaces may start the same hosted checkout flow.
+- Frontend pricing surfaces should still read pricing context from `GET /api/billing/pricing`.
+- Shared PHP and USD pricing labels may remain in `pricingConfig` so reviewer-safe pricing stays visible before the pricing API resolves.
+- Success and failure pages are informational only and must never activate Premium directly.
 
 ## Billing architecture
 
-- Controller/service layer is provider-agnostic (`BillingService` interface).
-- Active runtime provider is `PAYMONGO`.
-- Backend is the single source of truth for Premium pricing, region resolution, voucher eligibility, and PayMongo plan selection.
-- Frontend pricing surfaces read pricing from `GET /api/billing/pricing` for dynamic intro eligibility and supplementary display.
-- Static PHP and USD prices are hardcoded in `pricingConfig` (frontend) so that PHP pricing is always visible regardless of Cloudflare geo-detection. This is required for Xendit payment provider verification.
-- Intro offer pricing is displayed statically as both currencies (`₱199 / $3.99`) from `pricingConfig.intro` whenever `introEligible` is true, instead of relying on the region-specific `introMonthlyPrice` from the API.
-- Premium checkout plumbing may remain in place behind the provider abstraction, but the current user-facing conversion flow is waitlist-first until payment launch is enabled.
+- Active runtime provider is `XENDIT`.
+- Backend is the source of truth for pricing, upgrade eligibility, checkout creation, webhook validation, and Premium activation.
+- `POST /api/payments/create` creates a hosted Xendit invoice and returns `checkoutUrl`.
+- `POST /api/webhooks/xendit` validates `x-callback-token`, applies idempotency through `webhook_events`, updates `payment_transactions`, and activates Premium only when status is `PAID`.
+- `premium_waitlist` may remain in the system for legacy reporting, but it is not part of the active checkout flow.
 
-## Premium waitlist
+## Hosted checkout flow
 
-- Waitlist persistence lives in `premium_waitlist`.
-- Stored fields:
-  - `id`
-  - `user_id`
-  - `email`
-  - `created_at`
-- Only one waitlist row is allowed per user.
-- Admin reporting should surface the waitlist total as a core Premium-interest metric.
+1. User clicks `Upgrade to Premium`.
+2. Frontend calls `POST /api/payments/create`.
+3. Backend creates a Xendit invoice with a unique `external_id`.
+4. Backend persists a pending `payment_transactions` row.
+5. Frontend redirects to the hosted Xendit checkout URL.
+6. Xendit calls `POST /api/webhooks/xendit`.
+7. Backend marks the payment transaction `SUCCESS` or `FAILED`.
+8. Backend activates Premium only after a validated `PAID` webhook.
+
+## Current billing limitations
+
+- Current implementation is a hosted one-time Premium payment flow.
+- Recurring subscriptions are not implemented yet.
+- Premium expiry handling is not implemented yet.
+- Billing history is read-only.
 
 ## Regional pricing
 
 - Region detection uses the `CF-IPCountry` request header.
-- `PricingRegionResolver` maps country codes into pricing regions:
-  - `PH -> PH`
-  - `US -> US`
-  - `GB -> GB`
-  - EU member countries -> `EU`
-  - `AU -> AU`
-  - `CA -> CA`
-  - `SG -> SG`
-  - `IN -> IN`
-  - fallback -> `US`
-- Backend pricing config is stored per region and includes:
+- `PricingRegionResolver` maps country codes into supported display regions.
+- Backend pricing config includes:
   - `currency`
   - `monthlyPrice`
   - `yearlyPrice`
-  - `paymongoMonthlyPlanId`
-  - `paymongoYearlyPlanId`
-  - `paymongoIntroMonthlyPlanId` (optional)
-  - `paymongoIntroYearlyPlanId` (optional)
+  - `introMonthlyPrice` (optional)
   - `isActive`
 
 ## Voucher and promotion rules
 
-- Intro pricing is implemented as voucher logic, not a boolean on `User`.
+- Intro pricing is implemented through voucher logic, not a boolean on `User`.
 - Voucher records support:
   - `discountType`
   - `discountValue`
@@ -175,14 +113,6 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `newSubscribersOnly`
   - `requiresCode`
   - redemption limits and validity windows
-- Voucher eligibility checks:
-  - voucher is active
-  - current time is within `validFrom` and `validUntil`
-  - redemption limit is not exhausted
-  - region, billing cycle, plan, and currency match
-  - if `newSubscribersOnly=true`, the user has no prior Premium subscription and has not redeemed that voucher before
-- Automatic intro promos use `requiresCode=false`.
-- Future promo codes use the same voucher system with `requiresCode=true`.
 
 ## Pricing API
 
@@ -195,11 +125,10 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `introMonthlyPrice`
   - `hasIntroPromo`
   - `introEligible`
-- Pricing page, upgrade modal, and Settings billing UI must all use this API response.
 
 ## Billing history API
 
-- `GET /api/billing/history` returns subscription summary data plus payment history.
+- `GET /api/billing/history` returns the current plan summary plus payment history.
 - Response contract:
   - `currentPlan`
   - `subscriptionStatus`
@@ -209,15 +138,6 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `cancelAtPeriodEnd`
   - `cancellationEffectiveAt`
   - `transactions[]`
-- Each transaction item includes:
-  - `id`
-  - `date`
-  - `description`
-  - `amount`
-  - `currency`
-  - `status`
-  - `provider`
-  - `providerReferenceId`
 
 ## Centralized plan API
 
@@ -243,8 +163,7 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
   - `features.difficultySelectionAvailable`
   - `features.fileUploadAvailable`
   - `features.ocrAvailable`
-- Frontend gating and usage UI should rely on this API instead of hardcoded limits or Premium flags.
-- `usageCycle.startsAt` and `usageCycle.endsAt` define the current billing-period window used for quota reset messaging.
+- Frontend gating and usage UI should rely on this API instead of local recalculation.
 
 ## Settings usage UI
 
@@ -255,78 +174,15 @@ Support freemium usage control and recurring Premium subscriptions with webhook-
 - Premium users also see:
   - `Adaptive Practice`
 - OCR usage remains hidden from the Settings UI even though it is still tracked and enforced in backend.
-- Progress bar colors:
-  - `0-60%`: blue
-  - `60-85%`: orange
-  - `85-100%`: red
-- When a visible limit is reached:
-  - show `You've reached your limit for this cycle.`
-  - show the reset date from `usageCycle.endsAt`
-  - show `Upgrade to Premium` for Free users only
 
 ## Usage reset windows
 
 - Quotas do not reset on calendar month boundaries.
 - Free users reset monthly from the account creation date anchor.
-- Premium users reset from the active subscription billing window.
+- Premium usage windows follow the active billing period model returned by backend.
 - Persisted `user_usage.period_start` and `user_usage.period_end` define the active quota cycle for:
   - Study Packs
   - Challenge Quiz
   - Adaptive Practice
   - OCR
-
-## OCR display and limit UX
-
-- Landing/pricing surfaces should not show numeric OCR quotas.
-  - Free: `Limited`
-  - Premium: `Higher Limits`
-- Settings should not show OCR usage counters even though OCR usage is tracked internally.
-- When OCR quota is exhausted in note import:
-  - Free users see an `OCR limit reached` modal with an upgrade path
-  - Premium users see an `OCR limit reached` modal that explains reset happens on the next billing date
-
-## PayMongo plan selection
-
-- Checkout plan selection is backend-driven.
-- When creating a subscription, backend chooses the PayMongo plan ID using:
-  - resolved pricing region
-  - selected billing cycle
-  - eligible automatic or code-based voucher
-- If an eligible voucher is applied and the region config has a matching intro plan ID, backend uses that intro PayMongo plan ID.
-- Otherwise backend uses the standard monthly or yearly PayMongo plan ID for the region.
-- Successful subscription activation records a voucher redemption tied to the user, subscription, and payment transaction.
-
-## Webhook lifecycle events
-
-Backend handles:
-
-- `subscription.activated`
-- `subscription.invoice.paid`
-- `subscription.invoice.payment_failed`
-- `subscription.past_due`
-- `subscription.unpaid`
-- `subscription.updated`
-
-Webhook processing maps to:
-
-- `SubscriptionService` for activate/downgrade transitions
-- `PaymentTransactionService` for payment attempt recording
-
-## Idempotency and safety
-
-- Duplicate webhook delivery is expected.
-- Use provider reference IDs to avoid duplicate transaction inserts.
-- Keep webhook processing fast and deterministic.
-- Webhook registration is managed outside application runtime.
-- Store processed provider events in `webhook_events` and skip duplicate `event_id` values.
-
-## Lifecycle jobs
-
-- `SubscriptionExpiryJob` (daily):
-  - finds active Premium subscriptions past `endAt`
-  - marks them expired and downgrades users to Free
-  - scheduled cancellations use the existing billing-period end date for downgrade timing
-- `BillingUsageResetJob` (daily):
-  - ensures each user has a usage row for the current billing period
-  - free users follow calendar month windows
-  - premium users follow their subscription billing window (`startAt` to `endAt`)
+  - Topic note generation

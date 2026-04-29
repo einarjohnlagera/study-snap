@@ -1,11 +1,16 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PaywallModal } from "./paywall-modal";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 const pushMock = jest.fn();
 const requestEmailVerificationMock = jest.fn();
 const getAuthUserMock = jest.fn();
 
 jest.mock("@/lib/api", () => ({
+  createPremiumCheckoutSession: jest.fn().mockResolvedValue({
+    checkoutUrl: "https://checkout.xendit.test/invoice_123",
+  }),
+  isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   trackAnalyticsEvent: jest.fn(),
   requestEmailVerification: (...args: unknown[]) => requestEmailVerificationMock(...args),
 }));
@@ -21,9 +26,14 @@ jest.mock("@/lib/auth", () => ({
   getAuthUser: () => getAuthUserMock(),
 }));
 
+jest.mock("@/lib/checkout-redirect", () => ({
+  redirectToCheckoutUrl: jest.fn(),
+}));
+
 describe("PaywallModal", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    (redirectToCheckoutUrl as jest.Mock).mockReset();
     requestEmailVerificationMock.mockReset();
     getAuthUserMock.mockReset();
     getAuthUserMock.mockReturnValue({
@@ -49,7 +59,7 @@ describe("PaywallModal", () => {
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
   });
 
-  it("routes to Settings plan when Upgrade to Premium is clicked", async () => {
+  it("starts checkout when Upgrade to Premium is clicked", async () => {
     render(
       <PaywallModal
         isOpen
@@ -62,7 +72,7 @@ describe("PaywallModal", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
 
     await waitFor(() => {
-      expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
 

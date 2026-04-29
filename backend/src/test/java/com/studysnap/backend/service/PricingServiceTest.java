@@ -55,13 +55,11 @@ class PricingServiceTest {
     @BeforeEach
     void setUp() {
         StudySnapProperties properties = new StudySnapProperties();
+        properties.getBilling().setPriceIdPlaceholder("xendit_premium_checkout");
         StudySnapProperties.RegionPricing phPricing = new StudySnapProperties.RegionPricing();
         phPricing.setCurrency("PHP");
         phPricing.setMonthlyPrice(new BigDecimal("249.00"));
         phPricing.setYearlyPrice(new BigDecimal("1999.00"));
-        phPricing.setPaymongoMonthlyPlanId("plan_ph_monthly");
-        phPricing.setPaymongoYearlyPlanId("plan_ph_yearly");
-        phPricing.setPaymongoIntroMonthlyPlanId("plan_ph_intro_monthly");
         phPricing.setActive(true);
         properties.getBilling().setPricingRegions(Map.of("PH", phPricing));
 
@@ -123,7 +121,7 @@ class PricingServiceTest {
         assertThat(selection.region()).isEqualTo("PH");
         assertThat(selection.countryCode()).isEqualTo("PH");
         assertThat(selection.currency()).isEqualTo("PHP");
-        assertThat(selection.planId()).isEqualTo("plan_ph_intro_monthly");
+        assertThat(selection.planId()).isEqualTo("xendit_premium_checkout");
         assertThat(selection.voucherId()).isEqualTo(introVoucher.getId());
         assertThat(selection.voucherCode()).isEqualTo("PH-INTRO");
         assertThat(selection.effectivePrice()).isEqualByComparingTo("199.00");
@@ -148,7 +146,7 @@ class PricingServiceTest {
                 "PH"
         );
 
-        assertThat(selection.planId()).isEqualTo("plan_ph_monthly");
+        assertThat(selection.planId()).isEqualTo("xendit_premium_checkout");
         assertThat(selection.voucherId()).isNull();
         assertThat(selection.voucherCode()).isNull();
         assertThat(selection.effectivePrice()).isEqualByComparingTo("249.00");
@@ -177,7 +175,7 @@ class PricingServiceTest {
                 "PH"
         );
 
-        assertThat(selection.planId()).isEqualTo("plan_ph_yearly");
+        assertThat(selection.planId()).isEqualTo("xendit_premium_checkout");
         assertThat(selection.voucherCode()).isEqualTo("SAVE10");
         assertThat(selection.effectivePrice()).isEqualByComparingTo("1799.10");
     }

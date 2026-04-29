@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
+import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { PricingPlansSection } from "@/components/billing/pricing-plans-section";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,7 @@ export default function PricingPage() {
                 Start for Free
               </Button>
             </Link>
-            <PremiumWaitlistButton
+            <PremiumUpgradeButton
               label="Upgrade to Premium"
               source="pricing_hero"
               variant="outline"
