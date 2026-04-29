@@ -13,6 +13,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
+  getCurrentPathWithQuery: () => `${window.location.pathname}${window.location.search}`,
+  getSafeRedirectPath: (path: string | null | undefined) => (
+    path && path.startsWith("/") && !path.startsWith("//") ? path : null
+  ),
 }));
 
 jest.mock("@/lib/checkout-redirect", () => ({

@@ -27,6 +27,10 @@ jest.mock("next/navigation", () => ({
 jest.mock("@/lib/auth", () => ({
   buildLoginPath: jest.fn(() => "/login?reason=logged_out"),
   getAuthUser: () => ({ id: "user-1", emailVerifiedAt: "2026-03-20T00:00:00Z" }),
+  getCurrentPathWithQuery: () => `${window.location.pathname}${window.location.search}`,
+  getSafeRedirectPath: (path: string | null | undefined) => (
+    path && path.startsWith("/") && !path.startsWith("//") ? path : null
+  ),
   LOGIN_REASON_LOGGED_OUT: "logged_out",
 }));
 
@@ -187,55 +191,19 @@ describe("Settings page cancellation flow", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
 
     await waitFor(() => {
-      expect(createPremiumCheckoutSession).toHaveBeenCalled();
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ returnUrl: "/settings" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
 
-  it("opens the cancellation confirmation modal from Settings", async () => {
+  it("shows manual renewal wording for active Premium access", async () => {
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel Subscription" }));
-
-    expect(screen.getByText("Cancel Premium?")).toBeInTheDocument();
+    expect(await screen.findByText("Manual renewal")).toBeInTheDocument();
+    expect(screen.getByText("Valid until")).toBeInTheDocument();
     expect(
-      screen.getByText(/Your Premium access will remain active until the end of your current billing period\./i),
+      screen.getByText("Your Premium access is active until Apr 1, 2026. Renew manually whenever you're ready."),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Keep Premium" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirm Cancellation" })).toBeInTheDocument();
-  });
-
-  it("submits the optional cancellation reason and updates the scheduled-cancellation state", async () => {
-    (cancelPremiumSubscription as jest.Mock).mockResolvedValue(scheduledCancellationProfile);
-    (getBillingHistory as jest.Mock).mockResolvedValue({
-      currentPlan: "PREMIUM",
-      subscriptionStatus: "ACTIVE",
-      billingType: "MONTHLY",
-      currentPeriodStart: "2026-03-01T00:00:00Z",
-      currentPeriodEnd: "2026-04-20T00:00:00Z",
-      cancelAtPeriodEnd: false,
-      cancellationEffectiveAt: null,
-      transactions: [],
-    });
-
-    render(<SettingsPage />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel Subscription" }));
-    fireEvent.click(screen.getByLabelText("Missing features I need"));
-    fireEvent.change(screen.getByLabelText("Anything we can improve?"), {
-      target: { value: "Please add better exports." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm Cancellation" }));
-
-    await waitFor(() => {
-      expect(cancelPremiumSubscription).toHaveBeenCalledWith({
-        reason: "MISSING_FEATURES",
-        feedback: "Please add better exports.",
-      });
-    });
-
-    expect(await screen.findByText(/Your Premium plan will end on .* and will not renew\./i)).toBeInTheDocument();
-    expect(screen.getByText("Your notes and Study Packs will remain in your library.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel Subscription" })).not.toBeInTheDocument();
   });
 

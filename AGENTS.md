@@ -348,6 +348,7 @@ Teacher flow rule:
 - Only validated webhook-confirmed payments may update user Premium status.
 - Always validate the Xendit `x-callback-token` before processing webhook payloads.
 - Webhook handling must stay idempotent through persisted provider event records and payment transaction lookups.
+- Payment-flow doc updates are required whenever checkout, webhook, returnUrl, or Premium-expiry behavior changes.
 
 ### Billing History Rule
 
@@ -1019,11 +1020,13 @@ Rules:
 
 - Active billing provider is `XENDIT`.
 - Premium checkout is currently a hosted Xendit invoice flow, not a recurring subscription flow.
+- The current Premium billing model is manual renewal: one successful payment grants `30` days of Premium access.
 - Regional pricing is resolved from `CF-IPCountry` and mapped into pricing regions.
 - Region pricing config contains localized currency/amounts plus optional intro pricing metadata used for display and eligibility.
 - Voucher/promotion rules decide whether intro pricing is shown, but checkout itself stays on the current hosted Xendit invoice flow.
 - Intro/first-time subscriber discounts must flow through voucher eligibility and voucher redemption records.
 - Premium activation is controlled by webhook-confirmed invoice outcomes only.
+- Success/failure redirect pages may help users return to their previous page, but those redirects never activate Premium.
 - Xendit webhook statuses currently handled are:
   - `PAID`
   - `FAILED`
@@ -1036,6 +1039,7 @@ Rules:
   - store provider webhook events in `webhook_events` with unique `(provider, event_id)`
   - duplicate events must return success without reprocessing
   - keep provider transaction inserts idempotent via provider reference IDs
+  - reject external or protocol-relative checkout `returnUrl` values
 - Billing lifecycle safety jobs:
   - `SubscriptionExpiryJob` (daily): expire overdue active Premium subscriptions and downgrade to Free
   - `BillingUsageResetJob` (daily): ensure usage rows exist for the current billing period window

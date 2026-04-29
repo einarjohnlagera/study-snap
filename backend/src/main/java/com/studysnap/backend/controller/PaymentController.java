@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,9 +23,13 @@ public class PaymentController {
     @PostMapping("/create")
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public BillingCheckoutSessionResponse createCheckoutSession(
-            @AuthenticationPrincipal AuthenticatedUser user
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @RequestBody(required = false) BillingCheckoutSessionRequest request
     ) {
         authService.requireEmailVerified(user.userId());
-        return paymentService.createCheckoutSession(user.userId());
+        return paymentService.createCheckoutSession(
+                user.userId(),
+                request == null ? null : request.returnUrl()
+        );
     }
 }

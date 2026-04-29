@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PaywallModal } from "./paywall-modal";
+import { createPremiumCheckoutSession } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 const pushMock = jest.fn();
@@ -24,6 +25,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: () => getAuthUserMock(),
+  getCurrentPathWithQuery: () => `${window.location.pathname}${window.location.search}`,
+  getSafeRedirectPath: (path: string | null | undefined) => (
+    path && path.startsWith("/") && !path.startsWith("//") ? path : null
+  ),
 }));
 
 jest.mock("@/lib/checkout-redirect", () => ({
@@ -32,6 +37,7 @@ jest.mock("@/lib/checkout-redirect", () => ({
 
 describe("PaywallModal", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/notes/note-1");
     pushMock.mockReset();
     (redirectToCheckoutUrl as jest.Mock).mockReset();
     requestEmailVerificationMock.mockReset();
@@ -72,6 +78,7 @@ describe("PaywallModal", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
 
     await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ returnUrl: "/notes/note-1" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });

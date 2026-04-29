@@ -6,7 +6,7 @@ import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-require
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import { createPremiumCheckoutSession, isEmailNotVerifiedError, trackAnalyticsEvent } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import {
   type FreePaywallContent,
@@ -29,6 +29,8 @@ type PaywallModalProps = {
   variant: PaywallModalVariant;
   onClose: () => void;
   source: string;
+  returnUrl?: string | null;
+  resolveReturnUrl?: () => Promise<string | null> | string | null;
 };
 
 /** Variants with no PaywallAction mapping keep their own inline content. */
@@ -82,6 +84,8 @@ export function PaywallModal({
   variant,
   onClose,
   source,
+  returnUrl = null,
+  resolveReturnUrl,
 }: Readonly<PaywallModalProps>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -154,6 +158,9 @@ export function PaywallModal({
     setStartingCheckout(true);
     setCheckoutError(null);
     try {
+      const resolvedReturnUrl = getSafeRedirectPath(
+        (await resolveReturnUrl?.()) ?? returnUrl ?? getCurrentPathWithQuery(),
+      );
       void trackAnalyticsEvent({
         eventType: "UPGRADE_CLICKED",
         metadata: {
@@ -164,7 +171,9 @@ export function PaywallModal({
           target: "xendit_checkout",
         },
       });
-      const response = await createPremiumCheckoutSession();
+      const response = await createPremiumCheckoutSession({
+        returnUrl: resolvedReturnUrl,
+      });
       onClose();
       redirectToCheckoutUrl(response.checkoutUrl);
     } catch (error) {

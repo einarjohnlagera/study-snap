@@ -130,7 +130,7 @@ Recommended fields:
 - `public_profile_visible` (boolean, default true)
 - `is_premium` (boolean, default false)
 - `premium_activated_at` (nullable)
-- `premium_expires_at` (nullable, future use)
+- `premium_expires_at` (nullable, current manual-renewal expiry timestamp)
 - `country_code` (optional)
 - `profile_type` (nullable enum)
 - `role` (`USER` | `ADMIN`)
@@ -166,6 +166,7 @@ Billing notes:
 
 - Active provider is currently `XENDIT`.
 - Current Premium activation uses a hosted invoice checkout and webhook-confirmed premium upgrade rather than recurring subscriptions.
+- Current Premium billing model is prepaid/manual-renewal for `30` days of access per successful payment.
 - `subscriptions` still stores plan state history and remains the place for future recurring billing or expiry logic.
 - Webhook event idempotency is enforced through persisted webhook events plus `payment_transactions(provider, provider_reference_id)` uniqueness.
 
@@ -186,7 +187,15 @@ Recommended fields:
 - `currency`
 - `status` (`PENDING` | `SUCCESS` | `FAILED`)
 - `provider_reference_id` (Xendit `external_id`)
+- `checkout_url` (nullable stored Xendit hosted invoice URL)
+- `expires_at` (nullable invoice expiry timestamp)
 - `created_at`
+
+Behavior notes:
+
+- Pending transactions may be reused when the same user starts upgrade again before the invoice expires.
+- Expired pending transactions should not remain reusable.
+- Premium activation is derived from validated webhook outcomes, not from frontend redirect completion.
 
 ## OCR Confirmation Drafts
 

@@ -31,6 +31,20 @@ public class PaymentTransactionService {
         return paymentTransactionRepository.findByProviderAndProviderReferenceId(provider, providerReferenceId);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<PaymentTransactionEntity> findLatestPendingTransaction(
+            UUID userId,
+            BillingProvider provider,
+            PlanType planType
+    ) {
+        return paymentTransactionRepository.findFirstByUser_IdAndProviderAndPlanTypeAndStatusOrderByCreatedAtDesc(
+                userId,
+                provider,
+                planType,
+                PaymentTransactionStatus.PENDING
+        );
+    }
+
     public Optional<PaymentTransactionEntity> createPending(
             UUID userId,
             BillingProvider provider,
@@ -38,7 +52,9 @@ public class PaymentTransactionService {
             PlanType planType,
             BigDecimal amount,
             String currency,
-            String providerReferenceId
+            String providerReferenceId,
+            String checkoutUrl,
+            OffsetDateTime expiresAt
     ) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
@@ -53,6 +69,8 @@ public class PaymentTransactionService {
         transaction.setCurrency(normalizeCurrency(currency));
         transaction.setStatus(PaymentTransactionStatus.PENDING);
         transaction.setProviderReferenceId(providerReferenceId);
+        transaction.setCheckoutUrl(normalizeCheckoutUrl(checkoutUrl));
+        transaction.setExpiresAt(expiresAt);
         transaction.setCreatedAt(OffsetDateTime.now());
 
         try {
@@ -83,5 +101,13 @@ public class PaymentTransactionService {
             return "USD";
         }
         return rawCurrency.trim().toUpperCase();
+    }
+
+    private String normalizeCheckoutUrl(String rawCheckoutUrl) {
+        if (rawCheckoutUrl == null) {
+            return null;
+        }
+        String normalized = rawCheckoutUrl.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }

@@ -1,6 +1,7 @@
 package com.studysnap.backend.repository;
 
 import com.studysnap.backend.entity.BillingProvider;
+import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,13 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     Optional<PaymentTransactionEntity> findByProviderAndProviderReferenceId(
             BillingProvider provider,
             String providerReferenceId
+    );
+
+    Optional<PaymentTransactionEntity> findFirstByUser_IdAndProviderAndPlanTypeAndStatusOrderByCreatedAtDesc(
+            UUID userId,
+            BillingProvider provider,
+            PlanType planType,
+            PaymentTransactionStatus status
     );
 
     List<PaymentTransactionEntity> findByUser_IdOrderByCreatedAtDesc(UUID userId);

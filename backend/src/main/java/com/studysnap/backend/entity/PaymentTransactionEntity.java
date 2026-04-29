@@ -54,6 +54,12 @@ public class PaymentTransactionEntity {
     @Column(name = "provider_reference_id", nullable = false, length = 191)
     private String providerReferenceId;
 
+    @Column(name = "checkout_url", length = 1000)
+    private String checkoutUrl;
+
+    @Column(name = "expires_at")
+    private OffsetDateTime expiresAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 }
