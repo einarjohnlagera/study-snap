@@ -1,6 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingHistoryResponse;
 import com.studysnap.backend.dto.BillingHistoryItemResponse;
 import com.studysnap.backend.entity.BillingCycle;
@@ -39,16 +38,9 @@ class BillingHistoryServiceTest {
 
     @Test
     void getHistory_returnsSummaryAndSortedTransactions() {
-        StudySnapProperties properties = new StudySnapProperties();
-        StudySnapProperties.RegionPricing regionPricing = new StudySnapProperties.RegionPricing();
-        regionPricing.setCurrency("USD");
-        regionPricing.setMonthlyPrice(new BigDecimal("4.99"));
-        regionPricing.setYearlyPrice(new BigDecimal("39.99"));
-        properties.getBilling().getPricingRegions().put("US", regionPricing);
         BillingHistoryService service = new BillingHistoryService(
                 paymentTransactionRepository,
                 subscriptionService,
-                properties,
                 Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
         );
 
@@ -107,18 +99,16 @@ class BillingHistoryServiceTest {
         assertThat(history.cancelAtPeriodEnd()).isTrue();
         assertThat(history.cancellationEffectiveAt()).isEqualTo(endAt);
         assertThat(history.transactions()).extracting(BillingHistoryItemResponse::description)
-                .containsExactly("Failed payment", "Subscription Renewal", "Premium Monthly");
+                .containsExactly("Failed payment", "Premium Renewal", "Premium Monthly");
         assertThat(history.transactions()).extracting(BillingHistoryItemResponse::providerReferenceId)
                 .containsExactly("evt_failed", "evt_renewal", "evt_initial");
     }
 
     @Test
     void getHistory_returnsFreeSummaryWhenThereAreNoTransactions() {
-        StudySnapProperties properties = new StudySnapProperties();
         BillingHistoryService service = new BillingHistoryService(
                 paymentTransactionRepository,
                 subscriptionService,
-                properties,
                 Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
         );
 
@@ -151,6 +141,9 @@ class BillingHistoryServiceTest {
         transaction.setProvider(BillingProvider.XENDIT);
         transaction.setBillingType(BillingType.SUBSCRIPTION);
         transaction.setPlanType(PlanType.PREMIUM);
+        transaction.setBillingCycle(BillingCycle.MONTHLY);
+        transaction.setOriginalAmount(amount);
+        transaction.setDiscountAmount(BigDecimal.ZERO);
         transaction.setAmount(amount);
         transaction.setCurrency("USD");
         transaction.setStatus(status);

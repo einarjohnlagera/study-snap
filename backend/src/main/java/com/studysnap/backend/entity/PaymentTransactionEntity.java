@@ -33,6 +33,10 @@ public class PaymentTransactionEntity {
     @JoinColumn(name = "subscription_id")
     private SubscriptionEntity subscription;
 
+    @ManyToOne
+    @JoinColumn(name = "voucher_id")
+    private DiscountVoucherEntity voucher;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private BillingProvider provider;
@@ -44,6 +48,16 @@ public class PaymentTransactionEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_type", nullable = false, length = 32)
     private PlanType planType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_cycle", nullable = false, length = 16)
+    private BillingCycle billingCycle;
+
+    @Column(name = "original_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal originalAmount;
+
+    @Column(name = "discount_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal discountAmount;
 
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal amount;

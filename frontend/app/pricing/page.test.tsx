@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import PricingPage, { metadata } from "./page";
+import { createPremiumCheckoutSession } from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 const pushMock = jest.fn();
@@ -43,7 +44,9 @@ jest.mock("@/lib/api", () => ({
 
 describe("PricingPage", () => {
   beforeEach(() => {
+    window.history.replaceState(null, "", "/pricing");
     pushMock.mockReset();
+    (createPremiumCheckoutSession as jest.Mock).mockClear();
     (redirectToCheckoutUrl as jest.Mock).mockReset();
   });
 
@@ -58,9 +61,9 @@ describe("PricingPage", () => {
     expect(
       screen.getAllByText("Most users stay on Free while studying casually. Upgrade when your review gets serious.")[0],
     ).toBeInTheDocument();
-    expect(screen.getAllByText((_, element) => (element?.textContent ?? "") === "₱249/month")).not.toHaveLength(0);
-    expect(screen.getAllByText("₱2,499/year")).not.toHaveLength(0);
-    expect(await screen.findByText(/Intro offer: first month/i)).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱249/month"))).not.toHaveLength(0);
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱1,999/year"))).not.toHaveLength(0);
+    expect(await screen.findByText(/Intro offer:/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Free for everyday study. Premium for deeper exam prep." })).toBeInTheDocument();
     expect(screen.getByText("Free covers the full note-to-study-pack workflow. Premium adds higher limits and deeper practice tools.")).toBeInTheDocument();
     expect(screen.getByText("For everyday study")).toBeInTheDocument();
@@ -81,6 +84,8 @@ describe("PricingPage", () => {
     expect(screen.getByText("30 Adaptive Practice sessions / month")).toBeInTheDocument();
     expect(screen.getAllByText("Difficulty selection")).not.toHaveLength(0);
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Choose Monthly" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose Annual" })).toBeInTheDocument();
     expect(
       screen.getByText(
         "Upgrade opens a secure Xendit hosted checkout and Premium activates after webhook confirmation.",
@@ -88,8 +93,8 @@ describe("PricingPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("🇵🇭 Philippines pricing (PHP)")).toBeInTheDocument();
     expect(screen.getByText("🌍 International pricing")).toBeInTheDocument();
-    expect(screen.getByText((_, element) => element?.textContent === "₱249/month")).toBeInTheDocument();
-    expect(screen.getByText("₱2,499/year")).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱249/month"))).not.toHaveLength(0);
+    expect(screen.getByText("₱1,999/year")).toBeInTheDocument();
     expect(screen.getByText((_, element) => element?.textContent === "$4.99/month")).toBeInTheDocument();
     expect(screen.getByText("$39.99/year")).toBeInTheDocument();
     expect(screen.getAllByText("Prices are shown for Philippines (PHP) and international (USD).")[0]).toBeInTheDocument();
@@ -118,6 +123,17 @@ describe("PricingPage", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: "Upgrade to Premium" }))[0]);
 
     await waitFor(() => {
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
+  });
+
+  it("starts annual checkout from the pricing comparison card", async () => {
+    render(<PricingPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Annual" }));
+
+    await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ billingCycle: "YEARLY", returnUrl: "/pricing" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });

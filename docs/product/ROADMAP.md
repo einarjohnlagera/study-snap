@@ -32,10 +32,13 @@ Primary focus:
 - Xendit payment hardening:
   - correct PHP invoice amount handling
   - pending checkout reuse instead of duplicate pending payments
+  - config-driven Monthly and Annual manual checkout amounts
+  - automatic intro-offer and voucher application during checkout
+  - voucher redemption persistence only after successful `PAID` webhook
   - safe internal `returnUrl` support back to the interrupted page
   - success-page routing that returns Settings/Billing upgrades to Dashboard and paywall upgrades to the interrupted flow
   - polished billing success and failed result pages
-  - manual-renewal Premium expiry after `30` days
+  - manual-renewal Premium expiry windows after Monthly (`30` days) and Annual (`365` days) payments
   - subscriptions-table source of truth for plan state, active-subscription history preservation, and webhook-driven renewal extension
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
@@ -150,6 +153,7 @@ Potential expansion areas after `v0.8.0`:
 ### Billing Improvements (Future)
 
 - recurring subscription support
+- coupon-code entry UI
 - cancel subscription flow
 - billing portal / self-serve billing management
 - automatic renewal

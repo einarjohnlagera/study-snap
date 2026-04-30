@@ -1,6 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingHistoryItemResponse;
 import com.studysnap.backend.dto.BillingHistoryResponse;
 import com.studysnap.backend.entity.BillingCycle;
@@ -10,11 +9,9 @@ import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,12 +21,20 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BillingHistoryService {
-    private static final BigDecimal DESCRIPTION_AMOUNT_TOLERANCE = new BigDecimal("0.01");
     private static final long YEARLY_SUBSCRIPTION_DAYS_THRESHOLD = 330;
+    private static final String PREMIUM_MONTHLY_DESCRIPTION = "Premium Monthly";
+    private static final String PREMIUM_ANNUAL_DESCRIPTION = "Premium Annual";
+    private static final String PREMIUM_MONTHLY_DISCOUNT_DESCRIPTION = "Premium Monthly (Discount applied)";
+    private static final String PREMIUM_ANNUAL_DISCOUNT_DESCRIPTION = "Premium Annual (Discount applied)";
+    private static final String PREMIUM_RENEWAL_DESCRIPTION = "Premium Renewal";
+    private static final String PREMIUM_RENEWAL_DISCOUNT_DESCRIPTION = "Premium Renewal (Discount applied)";
+    private static final String FAILED_PREMIUM_UPGRADE_DESCRIPTION = "Failed Premium upgrade";
+    private static final String PENDING_PREMIUM_UPGRADE_DESCRIPTION = "Pending Premium upgrade";
+    private static final String FAILED_PAYMENT_DESCRIPTION = "Failed payment";
+    private static final String PENDING_PAYMENT_DESCRIPTION = "Pending payment";
 
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final SubscriptionService subscriptionService;
-    private final StudySnapProperties properties;
     private final Clock clock;
 
     public BillingHistoryResponse getHistory(UUID userId) {
@@ -70,25 +75,43 @@ public class BillingHistoryService {
     private String resolveDescription(PaymentTransactionEntity transaction, UUID firstSuccessfulTransactionId) {
         if (transaction.getBillingType() == BillingType.PREPAID) {
             if (transaction.getStatus() == PaymentTransactionStatus.FAILED) {
-                return "Failed Premium upgrade";
+                return FAILED_PREMIUM_UPGRADE_DESCRIPTION;
             }
             if (transaction.getStatus() == PaymentTransactionStatus.PENDING) {
-                return "Pending Premium upgrade";
+                return PENDING_PREMIUM_UPGRADE_DESCRIPTION;
             }
-            return "Premium Upgrade";
+            return resolveSuccessfulPremiumDescription(transaction, firstSuccessfulTransactionId);
         }
         if (transaction.getStatus() == PaymentTransactionStatus.FAILED) {
-            return "Failed payment";
+            return FAILED_PAYMENT_DESCRIPTION;
         }
         if (transaction.getStatus() == PaymentTransactionStatus.PENDING) {
-            return "Pending payment";
+            return PENDING_PAYMENT_DESCRIPTION;
         }
+        return resolveSuccessfulPremiumDescription(transaction, firstSuccessfulTransactionId);
+    }
+
+    private String resolveSuccessfulPremiumDescription(
+            PaymentTransactionEntity transaction,
+            UUID firstSuccessfulTransactionId
+    ) {
+        BillingCycle billingCycle = resolveTransactionBillingCycle(transaction);
+        boolean discounted = transaction.getDiscountAmount() != null
+                && transaction.getDiscountAmount().signum() > 0;
         if (firstSuccessfulTransactionId != null && firstSuccessfulTransactionId.equals(transaction.getId())) {
-            return inferTransactionBillingCycle(transaction) == BillingCycle.YEARLY
-                    ? "Premium Yearly"
-                    : "Premium Monthly";
+            if (discounted) {
+                return billingCycle == BillingCycle.YEARLY
+                        ? PREMIUM_ANNUAL_DISCOUNT_DESCRIPTION
+                        : PREMIUM_MONTHLY_DISCOUNT_DESCRIPTION;
+            }
+            return billingCycle == BillingCycle.YEARLY
+                    ? PREMIUM_ANNUAL_DESCRIPTION
+                    : PREMIUM_MONTHLY_DESCRIPTION;
         }
-        return "Subscription Renewal";
+        if (discounted) {
+            return PREMIUM_RENEWAL_DISCOUNT_DESCRIPTION;
+        }
+        return PREMIUM_RENEWAL_DESCRIPTION;
     }
 
     private UUID findFirstSuccessfulTransactionId(List<PaymentTransactionEntity> transactions) {
@@ -107,33 +130,10 @@ public class BillingHistoryService {
         return durationDays >= YEARLY_SUBSCRIPTION_DAYS_THRESHOLD ? BillingCycle.YEARLY : BillingCycle.MONTHLY;
     }
 
-    private BillingCycle inferTransactionBillingCycle(PaymentTransactionEntity transaction) {
-        if (transaction == null || transaction.getAmount() == null) {
+    private BillingCycle resolveTransactionBillingCycle(PaymentTransactionEntity transaction) {
+        if (transaction == null || transaction.getBillingCycle() == null) {
             return BillingCycle.MONTHLY;
         }
-
-        String currency = normalizeCurrency(transaction.getCurrency());
-        for (Map.Entry<String, StudySnapProperties.RegionPricing> entry : properties.getBilling().getPricingRegions().entrySet()) {
-            StudySnapProperties.RegionPricing regionPricing = entry.getValue();
-            if (regionPricing == null || !currency.equals(normalizeCurrency(regionPricing.getCurrency()))) {
-                continue;
-            }
-            if (regionPricing.getYearlyPrice() != null && isWithinTolerance(transaction.getAmount(), regionPricing.getYearlyPrice())) {
-                return BillingCycle.YEARLY;
-            }
-            if (regionPricing.getMonthlyPrice() != null && isWithinTolerance(transaction.getAmount(), regionPricing.getMonthlyPrice())) {
-                return BillingCycle.MONTHLY;
-            }
-        }
-
-        return BillingCycle.MONTHLY;
-    }
-
-    private String normalizeCurrency(String value) {
-        return value == null ? "" : value.trim().toUpperCase();
-    }
-
-    private boolean isWithinTolerance(BigDecimal left, BigDecimal right) {
-        return left.subtract(right).abs().compareTo(DESCRIPTION_AMOUNT_TOLERANCE) <= 0;
+        return transaction.getBillingCycle();
     }
 }

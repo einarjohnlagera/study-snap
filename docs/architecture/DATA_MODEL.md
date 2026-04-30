@@ -163,7 +163,7 @@ Billing notes:
 
 - Active provider is currently `XENDIT`.
 - Current Premium activation uses a hosted invoice checkout and webhook-confirmed premium upgrade rather than recurring subscriptions.
-- Current Premium billing model is prepaid/manual-renewal for `30` days of access per successful payment.
+- Current Premium billing model is prepaid/manual-renewal for `30`-day Monthly access or `365`-day Annual access per successful payment.
 - `subscriptions` is the only source of truth for plans and entitlements.
 - `users` must not store Premium flags or plan state.
 - `subscriptions` stores full plan history; users may have multiple historical rows.
@@ -187,10 +187,14 @@ Recommended fields:
 - `provider` (`XENDIT`)
 - `billing_type` (`PREPAID`)
 - `plan_type` (`PREMIUM`)
-- `amount`
+- `billing_cycle` (`MONTHLY` | `YEARLY`)
+- `original_amount`
+- `discount_amount`
+- `amount` (final charged amount)
 - `currency`
 - `status` (`PENDING` | `SUCCESS` | `FAILED`)
 - `provider_reference_id` (Xendit `external_id`)
+- `voucher_id` (nullable applied `discount_vouchers` reference)
 - `subscription_id` (nullable reference to the subscription activated by the payment)
 - `checkout_url` (nullable stored Xendit hosted invoice URL)
 - `expires_at` (nullable invoice expiry timestamp)
@@ -199,9 +203,55 @@ Recommended fields:
 Behavior notes:
 
 - Pending transactions may be reused when the same user starts upgrade again before the invoice expires.
+- Reuse requires matching plan, billing cycle, final amount, and voucher state.
 - Expired pending transactions should not remain reusable.
 - Payment transactions are billing-event history only; they are not the source of truth for plan access.
 - Premium activation is derived from validated webhook outcomes, not from frontend redirect completion.
+
+## Discount Vouchers
+
+Purpose:
+
+- define automatic and code-based checkout discounts without hardcoding billing exceptions
+
+Key fields:
+
+- `id`
+- `code`
+- `discount_type` (`FIXED_AMOUNT` | `PERCENTAGE` | `OVERRIDE_PRICE`)
+- `discount_value`
+- `currency`
+- `billing_cycle_scope`
+- `plan_scope`
+- `region_scope`
+- `new_subscribers_only`
+- `requires_code`
+- `max_redemptions`
+- `valid_from`
+- `valid_until`
+- `is_active`
+
+## Voucher Redemptions
+
+Purpose:
+
+- preserve successful discount usage history without treating pending checkout as redeemed
+
+Key fields:
+
+- `id`
+- `voucher_id`
+- `user_id`
+- `subscription_id`
+- `payment_transaction_id`
+- `redeemed_at`
+- `applied_amount`
+- `currency`
+
+Behavior notes:
+
+- Voucher redemptions are created only after a validated `PAID` webhook.
+- `payment_transaction_id` should stay idempotent for webhook retries.
 
 ## OCR Confirmation Drafts
 

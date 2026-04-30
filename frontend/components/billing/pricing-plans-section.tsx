@@ -124,6 +124,9 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
   const yearlyLabel = billingPricing
     ? getBillingCyclePriceLabel(billingPricing, "YEARLY")
     : `${formatBillingAmount(fallbackPrice.yearly, fallbackPrice.currency)}/year`;
+  const introLabel = billingPricing?.introEligible && billingPricing.introMonthlyPrice !== null
+    ? formatBillingAmount(billingPricing.introMonthlyPrice, billingPricing.currency)
+    : null;
 
   return (
     <section className="space-y-4">
@@ -184,13 +187,13 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             </CardDescription>
           </div>
           <div className="space-y-1">
-            <p className="text-xl font-semibold text-foreground">
-              ₱{pricingConfig.price.PH.monthly}/month{" "}
-              <span className="text-sm font-normal text-foreground/60">· ₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</span>
-            </p>
-            {billingPricing?.introEligible ? (
+            <div className="space-y-1 text-sm text-foreground/80">
+              <p className="text-xl font-semibold text-foreground">{monthlyLabel}</p>
+              <p>{yearlyLabel}</p>
+            </div>
+            {introLabel ? (
               <p className="text-xs text-foreground/60">
-                Intro offer: first month ₱{pricingConfig.intro.PH.monthly} / ${pricingConfig.intro.DEFAULT.monthly}
+                Intro offer: eligible first monthly checkout starts at {introLabel}.
               </p>
             ) : null}
             <p className="text-xs text-foreground/50">Prices may vary depending on your region.</p>
@@ -204,11 +207,21 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             ))}
           </ul>
           <div className="space-y-2">
-            <PremiumUpgradeButton
-              label="Upgrade to Premium"
-              source="pricing_plans_section"
-              className="w-full sm:w-auto"
-            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <PremiumUpgradeButton
+                label="Choose Monthly"
+                source="pricing_plans_section_monthly"
+                billingCycle="MONTHLY"
+                className="w-full"
+              />
+              <PremiumUpgradeButton
+                label="Choose Annual"
+                source="pricing_plans_section_annual"
+                billingCycle="YEARLY"
+                variant="outline"
+                className="w-full"
+              />
+            </div>
             <p className="text-sm text-foreground/65">
               Upgrade opens a secure Xendit hosted checkout and Premium activates after webhook confirmation.
             </p>
@@ -265,6 +278,7 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             <p className="text-sm font-semibold text-foreground">🇵🇭 Philippines pricing (PHP)</p>
             <p className="text-2xl font-semibold text-foreground">₱{pricingConfig.price.PH.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
             <p className="text-sm text-foreground/70">₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</p>
+            <p className="text-xs text-foreground/60">Intro monthly offer: ₱{pricingConfig.intro.PH.monthly}</p>
           </div>
           <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
             <p className="text-sm font-semibold text-foreground">🌍 International pricing</p>

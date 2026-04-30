@@ -2,6 +2,7 @@ package com.studysnap.backend.controller;
 
 import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
+import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.AuthenticatedUser;
 import com.studysnap.backend.service.AuthService;
@@ -43,15 +44,16 @@ class PaymentControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         BillingCheckoutSessionResponse expected = new BillingCheckoutSessionResponse("https://checkout.xendit.test/invoice_123");
-        when(paymentService.createCheckoutSession(userId, "/notes/new")).thenReturn(expected);
+        when(paymentService.createCheckoutSession(userId, BillingCycle.MONTHLY, "/notes/new", "PH")).thenReturn(expected);
 
         BillingCheckoutSessionResponse response = paymentController.createCheckoutSession(
                 user,
-                new BillingCheckoutSessionRequest("/notes/new")
+                new BillingCheckoutSessionRequest(BillingCycle.MONTHLY, "/notes/new"),
+                "PH"
         );
 
         verify(authService).requireEmailVerified(userId);
-        verify(paymentService).createCheckoutSession(userId, "/notes/new");
+        verify(paymentService).createCheckoutSession(userId, BillingCycle.MONTHLY, "/notes/new", "PH");
         assertThat(response).isEqualTo(expected);
     }
 
@@ -66,9 +68,9 @@ class PaymentControllerTest {
         );
         doThrow(verificationError).when(authService).requireEmailVerified(userId);
 
-        assertThatThrownBy(() -> paymentController.createCheckoutSession(user, null))
+        assertThatThrownBy(() -> paymentController.createCheckoutSession(user, null, null))
                 .isSameAs(verificationError);
 
-        verify(paymentService, never()).createCheckoutSession(userId, null);
+        verify(paymentService, never()).createCheckoutSession(userId, null, null, null);
     }
 }

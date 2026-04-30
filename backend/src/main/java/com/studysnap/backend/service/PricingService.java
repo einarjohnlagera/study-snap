@@ -98,6 +98,10 @@ public class PricingService {
         BigDecimal effectivePrice = appliedVoucher == null
                 ? basePriceForCycle(context.regionPricing(), normalizedCycle)
                 : appliedVoucher.effectivePrice();
+        BigDecimal basePrice = basePriceForCycle(context.regionPricing(), normalizedCycle);
+        BigDecimal discountAmount = appliedVoucher == null
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : appliedVoucher.discountAmount();
 
         return new CheckoutSelection(
                 context.region(),
@@ -105,6 +109,8 @@ public class PricingService {
                 context.regionPricing().getCurrency(),
                 normalizedCycle,
                 planId,
+                basePrice,
+                discountAmount,
                 appliedVoucher == null ? null : appliedVoucher.voucher().getId(),
                 appliedVoucher == null ? null : appliedVoucher.voucher().getCode(),
                 effectivePrice
@@ -112,31 +118,32 @@ public class PricingService {
     }
 
     public void recordVoucherRedemption(
-            UUID voucherId,
-            UUID userId,
             SubscriptionEntity subscription,
             PaymentTransactionEntity paymentTransaction
     ) {
-        if (voucherId == null || paymentTransaction == null) {
+        if (paymentTransaction == null || paymentTransaction.getVoucher() == null) {
             return;
         }
-        if (voucherRedemptionRepository.existsByVoucher_IdAndUser_Id(voucherId, userId)) {
+        if (paymentTransaction.getDiscountAmount() == null
+                || paymentTransaction.getDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
-
-        DiscountVoucherEntity voucher = discountVoucherRepository.findById(voucherId)
-                .orElseThrow(() -> new AppException("VOUCHER_NOT_FOUND", "Voucher not found.", HttpStatus.NOT_FOUND));
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(UserNotFoundException::new);
+        if (voucherRedemptionRepository.existsByPaymentTransaction_Id(paymentTransaction.getId())) {
+            return;
+        }
+        UserEntity user = paymentTransaction.getUser();
+        if (user == null) {
+            throw new UserNotFoundException();
+        }
 
         VoucherRedemptionEntity redemption = new VoucherRedemptionEntity();
         redemption.setId(UUID.randomUUID());
-        redemption.setVoucher(voucher);
+        redemption.setVoucher(paymentTransaction.getVoucher());
         redemption.setUser(user);
         redemption.setSubscription(subscription);
         redemption.setPaymentTransaction(paymentTransaction);
         redemption.setRedeemedAt(OffsetDateTime.now());
-        redemption.setAppliedAmount(paymentTransaction.getAmount());
+        redemption.setAppliedAmount(paymentTransaction.getDiscountAmount());
         redemption.setCurrency(paymentTransaction.getCurrency());
         voucherRedemptionRepository.save(redemption);
     }
@@ -310,6 +317,8 @@ public class PricingService {
             String currency,
             BillingCycle billingCycle,
             String planId,
+            BigDecimal basePrice,
+            BigDecimal discountAmount,
             UUID voucherId,
             String voucherCode,
             BigDecimal effectivePrice

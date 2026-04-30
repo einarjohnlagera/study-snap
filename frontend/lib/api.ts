@@ -706,6 +706,7 @@ export type BillingCheckoutSessionResponse = {
 };
 
 export type BillingCheckoutSessionRequest = {
+  billingCycle?: BillingCycle | null;
   returnUrl?: string | null;
 };
 
@@ -2107,6 +2108,7 @@ export async function createPremiumCheckoutSession(
       method: "POST",
       headers: buildAuthHeaders("application/json"),
       body: JSON.stringify({
+        billingCycle: request?.billingCycle ?? null,
         returnUrl: request?.returnUrl ?? null,
       }),
     },

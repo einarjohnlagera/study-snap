@@ -2,11 +2,14 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
+import com.studysnap.backend.entity.BillingCycle;
+import com.studysnap.backend.entity.DiscountVoucherEntity;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.UserEntity;
+import com.studysnap.backend.repository.DiscountVoucherRepository;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -17,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +30,7 @@ import java.util.UUID;
 public class PaymentTransactionService {
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final UserRepository userRepository;
+    private final DiscountVoucherRepository discountVoucherRepository;
 
     @Transactional(readOnly = true)
     public Optional<PaymentTransactionEntity> findByProviderReferenceId(BillingProvider provider, String providerReferenceId) {
@@ -46,32 +51,43 @@ public class PaymentTransactionService {
         );
     }
 
-    public Optional<PaymentTransactionEntity> createPending(
+    @Transactional(readOnly = true)
+    public List<PaymentTransactionEntity> findPendingTransactions(
             UUID userId,
             BillingProvider provider,
-            BillingType billingType,
-            PlanType planType,
-            BigDecimal amount,
-            String currency,
-            String providerReferenceId,
-            String checkoutUrl,
-            OffsetDateTime expiresAt
+            PlanType planType
     ) {
-        UserEntity user = userRepository.findById(userId)
+        return paymentTransactionRepository.findByUser_IdAndProviderAndPlanTypeAndStatusOrderByCreatedAtDesc(
+                userId,
+                provider,
+                planType,
+                PaymentTransactionStatus.PENDING
+        );
+    }
+
+    public Optional<PaymentTransactionEntity> createPending(PendingPaymentTransactionRequest request) {
+        UserEntity user = userRepository.findById(request.userId())
                 .orElseThrow(UserNotFoundException::new);
+        DiscountVoucherEntity voucher = request.voucherId() == null
+                ? null
+                : discountVoucherRepository.findById(request.voucherId()).orElse(null);
 
         PaymentTransactionEntity transaction = new PaymentTransactionEntity();
         transaction.setId(UUID.randomUUID());
         transaction.setUser(user);
-        transaction.setProvider(provider);
-        transaction.setBillingType(billingType);
-        transaction.setPlanType(planType);
-        transaction.setAmount(amount == null ? BigDecimal.ZERO : amount);
-        transaction.setCurrency(normalizeCurrency(currency));
+        transaction.setVoucher(voucher);
+        transaction.setProvider(request.provider());
+        transaction.setBillingType(request.billingType());
+        transaction.setPlanType(request.planType());
+        transaction.setBillingCycle(request.billingCycle());
+        transaction.setOriginalAmount(normalizeAmount(request.originalAmount()));
+        transaction.setDiscountAmount(normalizeAmount(request.discountAmount()));
+        transaction.setAmount(normalizeAmount(request.finalAmount()));
+        transaction.setCurrency(normalizeCurrency(request.currency()));
         transaction.setStatus(PaymentTransactionStatus.PENDING);
-        transaction.setProviderReferenceId(providerReferenceId);
-        transaction.setCheckoutUrl(normalizeCheckoutUrl(checkoutUrl));
-        transaction.setExpiresAt(expiresAt);
+        transaction.setProviderReferenceId(request.providerReferenceId());
+        transaction.setCheckoutUrl(normalizeCheckoutUrl(request.checkoutUrl()));
+        transaction.setExpiresAt(request.expiresAt());
         transaction.setCreatedAt(OffsetDateTime.now());
 
         try {
@@ -105,6 +121,10 @@ public class PaymentTransactionService {
                 });
     }
 
+    private BigDecimal normalizeAmount(BigDecimal rawAmount) {
+        return rawAmount == null ? BigDecimal.ZERO : rawAmount;
+    }
+
     private String normalizeCurrency(String rawCurrency) {
         if (rawCurrency == null || rawCurrency.isBlank()) {
             return "USD";
@@ -118,5 +138,22 @@ public class PaymentTransactionService {
         }
         String normalized = rawCheckoutUrl.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    public record PendingPaymentTransactionRequest(
+            UUID userId,
+            BillingProvider provider,
+            BillingType billingType,
+            PlanType planType,
+            BillingCycle billingCycle,
+            BigDecimal originalAmount,
+            BigDecimal discountAmount,
+            BigDecimal finalAmount,
+            String currency,
+            String providerReferenceId,
+            String checkoutUrl,
+            OffsetDateTime expiresAt,
+            UUID voucherId
+    ) {
     }
 }
