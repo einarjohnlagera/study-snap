@@ -39,6 +39,33 @@ Turn your notes into exam-ready study materials in seconds.
 - Exports enable offline and classroom use (PDF/DOCX)
 - Free → Plus → Pro follows the natural arc of a growing learner
 
+## Plans
+
+NoteLib uses a 3-tier learning-focused plan structure:
+
+- Free
+  - 10 Study Packs / month
+  - 5 Quizzes / month
+  - 2 exports / month
+  - Summary + Key Concepts
+- Plus
+  - ₱149 first month, then ₱179/month in the Philippines when intro pricing applies
+  - 50 Study Packs / month
+  - 25 Quizzes / month
+  - 15 exports / month
+  - Adaptive Practice (10 sessions / month)
+  - Higher note generation limits
+- Pro
+  - ₱199 first month, then ₱249/month in the Philippines when intro pricing applies
+  - 100 Study Packs / month
+  - 50 Quizzes / month
+  - Unlimited exports
+  - Adaptive Practice (30 sessions / month)
+  - Difficulty selection
+  - Board Exam Mode
+
+Pricing UI is kept consistent across the app through a shared frontend plan config, while checkout amounts remain backend-owned.
+
 ## Brand Assets
 
 Primary brand assets live in `frontend/public`:

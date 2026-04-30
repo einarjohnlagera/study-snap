@@ -1374,7 +1374,7 @@ Settings route section: `Plan & Billing`
 
 Plans: `FREE`, `PLUS`, `PRO`
 
-- show billing-cycle usage bars (Study Packs, Quizzes, Exports; Adaptive Practice for Pro only)
+- show billing-cycle usage bars (Study Packs, Quizzes, Exports, and Adaptive Practice when the current plan includes it)
 - billing cycle toggle (Monthly / Annual) with savings badge
 - three side-by-side plan cards (Free, Plus, Pro)
   - current plan shows "Current plan" badge and disabled button
@@ -1390,11 +1390,20 @@ Plans: `FREE`, `PLUS`, `PRO`
 Plan limits:
 
 - Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 2 exports/month, Summary + Key Concepts
-- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, higher note generation limits
+- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, 10 Adaptive Practice/month on pricing surfaces, higher note generation limits
 - Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, difficulty selection, Board Exam Mode
+- Pricing surfaces must keep the Adaptive Practice limit messaging aligned:
+  - Plus: `Train on weak areas (limited sessions)` and `Adaptive Practice (10 sessions / month)`
+  - Pro: `Train on weak areas until you master them` and `Adaptive Practice (30 sessions / month)`
 - Usage windows are billing-cycle-based:
   - Free resets monthly from account creation date
   - Plus and Pro reset from the active subscription billing window
+
+Pricing UI source of truth:
+
+- frontend pricing surfaces must use the centralized shared plan config at `frontend/src/config/plans.ts`
+- shared config owns plan names, descriptions, CTA labels, and feature lists
+- backend billing pricing APIs remain the source of truth for checkout amounts and regional pricing eligibility
 
 ---
 

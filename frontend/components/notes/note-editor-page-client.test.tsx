@@ -550,7 +550,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Plus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
 
     expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
   });
@@ -796,7 +796,7 @@ describe("NoteEditorPageClient", () => {
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Saved before checkout" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Plus" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Plus" }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalled();
@@ -1041,7 +1041,7 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/You've reached your image-to-text limit for this month\./i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Plus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
     await waitFor(() => {
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
@@ -1088,7 +1088,7 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/Your limits will reset on your next billing date\./i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Upgrade to Plus" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choose Plus" })).not.toBeInTheDocument();
   });
 
   it("saves a new note after importing content", async () => {

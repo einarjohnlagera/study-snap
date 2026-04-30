@@ -268,7 +268,7 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Choose Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Go Pro" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({
@@ -300,9 +300,9 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    await screen.findByRole("button", { name: "Choose Pro" });
+    await screen.findByRole("button", { name: "Go Pro" });
     fireEvent.click(screen.getByRole("button", { name: /Annual/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Choose Pro" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go Pro" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({

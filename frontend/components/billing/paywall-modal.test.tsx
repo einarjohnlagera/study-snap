@@ -65,7 +65,7 @@ describe("PaywallModal", () => {
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
   });
 
-  it("starts checkout when Upgrade to Pro is clicked", async () => {
+  it("starts checkout when Go Pro is clicked", async () => {
     render(
       <PaywallModal
         isOpen
@@ -75,7 +75,7 @@ describe("PaywallModal", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Go Pro" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", returnUrl: "/notes/note-1" });
@@ -120,7 +120,7 @@ describe("PaywallModal", () => {
 
     expect(await screen.findByText("You’ve reached your quiz limit")).toBeInTheDocument();
     expect(
-      screen.getByText("You’ve used all your quizzes for this month. Upgrade to Plus or Pro to continue practicing and unlock higher limits."),
+      screen.getByText("You’ve used all your quizzes for this month. Choose Plus or go Pro to continue practicing and unlock higher limits."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
   });
@@ -141,7 +141,7 @@ describe("PaywallModal", () => {
     );
 
     expect(
-      await screen.findByText("You’ve used all your quizzes for this month. Upgrade to Pro to continue practicing and access Board Exam mode."),
+      await screen.findByText("You’ve used all your quizzes for this month. Go Pro to continue practicing and access Board Exam mode."),
     ).toBeInTheDocument();
   });
 
@@ -161,7 +161,7 @@ describe("PaywallModal", () => {
     );
 
     expect(
-      await screen.findByText("You’ve used all your quiz generations for this month. Upgrade to Plus or Pro to generate more quizzes and export materials for your class."),
+      await screen.findByText("You’ve used all your quiz generations for this month. Choose Plus or go Pro to generate more quizzes and export materials for your class."),
     ).toBeInTheDocument();
   });
 
@@ -183,7 +183,7 @@ describe("PaywallModal", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Go Pro" }));
 
     expect(await screen.findByText("Verify your email first")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();

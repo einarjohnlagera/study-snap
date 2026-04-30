@@ -34,11 +34,11 @@ export default function PricingPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/signup" className="w-full sm:w-auto">
               <Button type="button" className="w-full sm:w-auto">
-                Start for Free
+                Get Started Free
               </Button>
             </Link>
             <PremiumUpgradeButton
-              label="Upgrade to Pro"
+              label="Go Pro"
               source="pricing_hero"
               planType="PRO"
               variant="outline"
@@ -66,7 +66,7 @@ export default function PricingPage() {
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
         <Link href="/signup" className="block">
           <Button type="button" className="w-full">
-            Start for Free
+            Get Started Free
           </Button>
         </Link>
       </div>

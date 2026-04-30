@@ -25,8 +25,8 @@ describe("StudyPackLimitModal", () => {
     );
 
     expect(screen.getByText("You’ve reached your study pack limit")).toBeInTheDocument();
-    expect(screen.getByText(/Upgrade to Plus or Pro to create more study packs/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upgrade to Plus" })).toBeInTheDocument();
+    expect(screen.getByText(/Choose Plus or go Pro to create more study packs/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose Plus" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View My Plan" })).toBeInTheDocument();
   });
@@ -42,7 +42,7 @@ describe("StudyPackLimitModal", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Plus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
     expect(pushMock).toHaveBeenCalledWith("/pricing");
 
     pushMock.mockReset();

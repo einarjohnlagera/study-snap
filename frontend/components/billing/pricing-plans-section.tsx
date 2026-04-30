@@ -9,69 +9,16 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
 import { formatBillingAmount, getBillingCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
+import {
+  type ComparisonValue,
+  PLAN_COMPARISON_ROWS,
+  getPaidPlanCtaLabel,
+  getPlanConfig,
+} from "@/src/config/plans";
 
 type PricingPlansSectionProps = {
   showHeading?: boolean;
 };
-
-type ComparisonValue = "check" | string | null;
-type ComparisonRow = {
-  label: string;
-  free: ComparisonValue;
-  plus: ComparisonValue;
-  pro: ComparisonValue;
-};
-
-const COMPARISON_ROWS: ComparisonRow[] = [
-  {
-    label: "Study Packs / month",
-    free: String(pricingConfig.free.studyPacksPerMonth),
-    plus: String(pricingConfig.plus.studyPacksPerMonth),
-    pro: String(pricingConfig.pro.studyPacksPerMonth),
-  },
-  {
-    label: "Quizzes / month",
-    free: String(pricingConfig.free.challengeQuizzesPerMonth),
-    plus: String(pricingConfig.plus.challengeQuizzesPerMonth),
-    pro: String(pricingConfig.pro.challengeQuizzesPerMonth),
-  },
-  {
-    label: "Exports / month",
-    free: String(pricingConfig.free.exportsPerMonth),
-    plus: String(pricingConfig.plus.exportsPerMonth),
-    pro: "Unlimited",
-  },
-  {
-    label: "Summary + Key Concepts",
-    free: "check",
-    plus: "check",
-    pro: "check",
-  },
-  {
-    label: "Topic note generation",
-    free: "Limited",
-    plus: "Higher",
-    pro: "Highest",
-  },
-  {
-    label: "Adaptive Practice",
-    free: null,
-    plus: null,
-    pro: "check",
-  },
-  {
-    label: "Difficulty selection",
-    free: null,
-    plus: null,
-    pro: "check",
-  },
-  {
-    label: "Board Exam Mode",
-    free: null,
-    plus: null,
-    pro: "check",
-  },
-];
 
 function ComparisonCell({ value, emphasize = false }: Readonly<{ value: ComparisonValue; emphasize?: boolean }>) {
   const baseClassName = emphasize ? "text-foreground" : "text-foreground/85";
@@ -99,6 +46,22 @@ function ComparisonCell({ value, emphasize = false }: Readonly<{ value: Comparis
   );
 }
 
+function FeatureList({ features }: Readonly<{ features: ReadonlyArray<{ label: string; helper?: string }> }>) {
+  return (
+    <ul className="space-y-2 text-sm text-foreground/80">
+      {features.map((feature) => (
+        <li key={feature.label} className="flex items-start gap-2">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <span>
+            {feature.label}
+            {feature.helper ? <span className="block text-xs text-foreground/50">{feature.helper}</span> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function resolveFallbackCycleLabel(planType: PaidPlanType, region: ReturnType<typeof resolvePricingDisplayRegion>) {
   const regionPricing = pricingConfig.price[region];
   const introPricing = pricingConfig.intro[region];
@@ -108,7 +71,7 @@ function resolveFallbackCycleLabel(planType: PaidPlanType, region: ReturnType<ty
   return {
     monthly: introAmount === null
       ? `${formatBillingAmount(planPricing.monthly, regionPricing.currency)}/month`
-      : `First month ${formatBillingAmount(introAmount, regionPricing.currency)}, then ${formatBillingAmount(planPricing.monthly, regionPricing.currency)}/month`,
+      : `${formatBillingAmount(introAmount, regionPricing.currency)} first month, then ${formatBillingAmount(planPricing.monthly, regionPricing.currency)}/month`,
     yearly: planPricing.yearly === null
       ? null
       : `${formatBillingAmount(planPricing.yearly, regionPricing.currency)}/year`,
@@ -124,6 +87,7 @@ function PlanCard({
   yearlyLabel,
   introHint,
   highlights,
+  ctaLabel,
   planType,
   accent = false,
 }: Readonly<{
@@ -134,7 +98,8 @@ function PlanCard({
   monthlyLabel: string;
   yearlyLabel?: string | null;
   introHint?: string | null;
-  highlights: string[];
+  highlights: ReadonlyArray<{ label: string; helper?: string }>;
+  ctaLabel: string;
   planType: PaidPlanType;
   accent?: boolean;
 }>) {
@@ -159,17 +124,10 @@ function PlanCard({
         {yearlyLabel ? <p className="text-sm text-foreground/70">{yearlyLabel}</p> : null}
         {introHint ? <p className="text-xs text-foreground/60">{introHint}</p> : null}
       </div>
-      <ul className="space-y-2 text-sm text-foreground/80">
-        {highlights.map((feature) => (
-          <li key={feature} className="flex items-start gap-2">
-            <Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
-            {feature}
-          </li>
-        ))}
-      </ul>
+      <FeatureList features={highlights} />
       <div className="space-y-2">
         <PremiumUpgradeButton
-          label={planType === "PLUS" ? "Choose Plus" : "Choose Pro"}
+          label={ctaLabel}
           source={`pricing_plans_section_${planType.toLowerCase()}_monthly`}
           planType={planType}
           billingCycle="MONTHLY"
@@ -177,7 +135,7 @@ function PlanCard({
         />
         {yearlyLabel ? (
           <PremiumUpgradeButton
-            label={planType === "PLUS" ? "Choose Plus Yearly" : "Choose Pro Yearly"}
+            label={planType === "PLUS" ? `${ctaLabel} Yearly` : "Go Pro Yearly"}
             source={`pricing_plans_section_${planType.toLowerCase()}_yearly`}
             planType={planType}
             billingCycle="YEARLY"
@@ -193,8 +151,10 @@ function PlanCard({
 export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlansSectionProps>) {
   const { billingPricing } = useBillingPricing(true);
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
-  const freeFallback = pricingConfig.free;
   const regionFallback = pricingConfig.price[displayRegion];
+  const freePlan = getPlanConfig("FREE");
+  const plusPlan = getPlanConfig("PLUS");
+  const proPlan = getPlanConfig("PRO");
   const plusFallback = resolveFallbackCycleLabel("PLUS", displayRegion);
   const proFallback = resolveFallbackCycleLabel("PRO", displayRegion);
 
@@ -239,65 +199,50 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="space-y-5 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-            <CardTitle>For getting started</CardTitle>
-            <CardDescription className="leading-relaxed">
-              Start building your note library, generate Study Packs, and review without paying upfront.
-            </CardDescription>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlan.name}</p>
+            <CardTitle>{freePlan.title}</CardTitle>
+            <CardDescription className="leading-relaxed">{freePlan.description}</CardDescription>
           </div>
-          <p className="text-3xl font-semibold">Free</p>
-          <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{freeFallback.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{freeFallback.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{freeFallback.exportsPerMonth} exports / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Summary + Key Concepts</li>
-          </ul>
+          <p className="text-3xl font-semibold">{freePlan.name}</p>
+          <FeatureList features={freePlan.features} />
           <div className="space-y-2 rounded-lg border border-dashed border-border bg-background/70 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Paid upgrades</p>
             <ul className="space-y-2 text-sm text-foreground/75">
-              <li className="flex items-start gap-2"><Minus className="mt-0.5 h-4 w-4 text-foreground/55" />Adaptive Practice</li>
-              <li className="flex items-start gap-2"><Minus className="mt-0.5 h-4 w-4 text-foreground/55" />Difficulty selection</li>
-              <li className="flex items-start gap-2"><Minus className="mt-0.5 h-4 w-4 text-foreground/55" />Board Exam Mode</li>
-              <li className="flex items-start gap-2"><Minus className="mt-0.5 h-4 w-4 text-foreground/55" />Higher note generation limits</li>
+              {freePlan.upgradeHighlights?.map((feature) => (
+                <li key={feature} className="flex items-start gap-2">
+                  <Minus className="mt-0.5 h-4 w-4 text-foreground/55" />
+                  {feature}
+                </li>
+              ))}
             </ul>
           </div>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-            Start for Free
+            {freePlan.ctaLabel}
           </Link>
         </Card>
 
         <PlanCard
-          label="Plus"
-          title="For regular study"
-          description="Raise your monthly limits, export more, and keep your day-to-day review flowing."
+          label={plusPlan.name}
+          title={plusPlan.title}
+          description={plusPlan.description}
           monthlyLabel={plusMonthlyLabel}
           yearlyLabel={plusYearlyLabel}
           introHint={plusIntroHint}
-          highlights={[
-            `${pricingConfig.plus.studyPacksPerMonth} Study Packs / month`,
-            `${pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month`,
-            `${pricingConfig.plus.exportsPerMonth} exports / month`,
-            "Higher topic note generation limits",
-          ]}
+          highlights={plusPlan.features}
+          ctaLabel={getPaidPlanCtaLabel("PLUS")}
           planType="PLUS"
         />
 
         <PlanCard
-          label="Pro"
-          eyebrow="Most popular"
-          title="Best for exam prep"
-          description="Get the highest limits plus Adaptive Practice, difficulty selection, Board Exam Mode, and unlimited exports."
+          label={proPlan.name}
+          eyebrow={proPlan.eyebrow}
+          title={proPlan.title}
+          description={proPlan.description}
           monthlyLabel={proMonthlyLabel}
           yearlyLabel={proYearlyLabel}
           introHint={proIntroHint}
-          highlights={[
-            `${pricingConfig.pro.studyPacksPerMonth} Study Packs / month`,
-            `${pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month`,
-            "Unlimited exports",
-            "Adaptive Practice",
-            "Difficulty selection",
-            "Board Exam Mode",
-          ]}
+          highlights={proPlan.features}
+          ctaLabel={getPaidPlanCtaLabel("PRO")}
           planType="PRO"
           accent
         />
@@ -321,12 +266,12 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
               </tr>
             </thead>
             <tbody>
-              {COMPARISON_ROWS.map((row, rowIndex) => (
-                <tr key={row.label} className={`border-b border-border ${rowIndex === COMPARISON_ROWS.length - 1 ? "border-b-0" : ""}`}>
+              {PLAN_COMPARISON_ROWS.map((row, rowIndex) => (
+                <tr key={row.label} className={`border-b border-border ${rowIndex === PLAN_COMPARISON_ROWS.length - 1 ? "border-b-0" : ""}`}>
                   <td className="px-4 py-3 font-medium sm:px-6">{row.label}</td>
-                  <td className="px-4 py-3 text-center align-middle sm:px-6"><ComparisonCell value={row.free} /></td>
-                  <td className="px-4 py-3 text-center align-middle sm:px-6"><ComparisonCell value={row.plus} /></td>
-                  <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12"><ComparisonCell value={row.pro} emphasize /></td>
+                  <td className="px-4 py-3 text-center align-middle sm:px-6"><ComparisonCell value={row.values.FREE} /></td>
+                  <td className="px-4 py-3 text-center align-middle sm:px-6"><ComparisonCell value={row.values.PLUS} /></td>
+                  <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12"><ComparisonCell value={row.values.PRO} emphasize /></td>
                 </tr>
               ))}
             </tbody>
@@ -381,63 +326,46 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
 }
 
 export function SimplePricingSection() {
+  const freePlan = getPlanConfig("FREE");
+  const plusPlan = getPlanConfig("PLUS");
+  const proPlan = getPlanConfig("PRO");
+
   return (
     <section className="space-y-5">
       <div className="grid gap-4 xl:grid-cols-3">
         {/* Free */}
         <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-            <CardTitle>For getting started</CardTitle>
-            <CardDescription className="text-sm leading-relaxed">
-              Create notes, generate Study Packs, and review basic concepts.
-            </CardDescription>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlan.name}</p>
+            <CardTitle>{freePlan.title}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{freePlan.description}</CardDescription>
           </div>
-          <p className="text-3xl font-semibold">Free</p>
-          <ul className="grow space-y-2.5 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-              <span>{pricingConfig.free.exportsPerMonth} exports / month
-                <span className="block text-xs text-foreground/50">PDF/DOCX for offline or classroom use</span>
-              </span>
-            </li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Summary + Key Concepts</li>
-          </ul>
+          <p className="text-3xl font-semibold">{freePlan.name}</p>
+          <div className="grow">
+            <FeatureList features={freePlan.features} />
+          </div>
           <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
-            Get Started Free
+            {freePlan.ctaLabel}
           </Link>
         </Card>
 
         {/* Plus */}
         <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Plus</p>
-            <CardTitle>For regular study</CardTitle>
-            <CardDescription className="text-sm leading-relaxed">
-              Perfect for students who want consistent review and better retention.
-            </CardDescription>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{plusPlan.name}</p>
+            <CardTitle>{plusPlan.title}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{plusPlan.description}</CardDescription>
           </div>
           <div className="space-y-0.5">
             <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.plus.monthly} first month</p>
             <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.plus.monthly}/month</p>
           </div>
-          <ul className="grow space-y-2.5 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-              <span>{pricingConfig.plus.exportsPerMonth} exports / month
-                <span className="block text-xs text-foreground/50">PDF/DOCX for offline or classroom use</span>
-              </span>
-            </li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.adaptivePracticePerMonth} Adaptive Practice sessions / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Higher note generation limits</li>
-          </ul>
-          <p className="text-xs text-foreground/55">Train on weak areas until you master them</p>
+          <div className="grow">
+            <FeatureList features={plusPlan.features} />
+          </div>
+          <p className="text-xs text-foreground/55">{plusPlan.adaptivePracticeMessage}</p>
           <Link href="/signup" className={buttonVariants({ variant: "outline", className: "w-full" })}>
-            Upgrade to Plus
+            {plusPlan.ctaLabel}
           </Link>
         </Card>
 
@@ -446,33 +374,21 @@ export function SimplePricingSection() {
           <div className="space-y-1">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
               <Sparkles className="h-3.5 w-3.5" />
-              Most Popular
+              {proPlan.eyebrow}
             </div>
-            <CardTitle>Best for exam prep</CardTitle>
-            <CardDescription className="text-sm leading-relaxed">
-              Designed for serious learners preparing for board and entrance exams.
-            </CardDescription>
+            <CardTitle>{proPlan.title}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{proPlan.description}</CardDescription>
           </div>
           <div className="space-y-0.5">
             <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.pro.monthly} first month</p>
             <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.pro.monthly}/month</p>
           </div>
-          <ul className="grow space-y-2.5 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-              <span>Unlimited exports
-                <span className="block text-xs text-foreground/50">PDF/DOCX for offline or classroom use</span>
-              </span>
-            </li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Adaptive Practice ({pricingConfig.pro.adaptivePracticePerMonth} sessions / month)</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Difficulty selection</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Board Exam Mode</li>
-          </ul>
-          <p className="text-xs text-foreground/55">Train on weak areas until you master them</p>
+          <div className="grow">
+            <FeatureList features={proPlan.features} />
+          </div>
+          <p className="text-xs text-foreground/55">{proPlan.adaptivePracticeMessage}</p>
           <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
-            Go Pro
+            {proPlan.ctaLabel}
           </Link>
         </Card>
       </div>

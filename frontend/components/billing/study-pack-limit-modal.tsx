@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import type { PlanType } from "@/lib/api";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
+import { getPaidPlanCtaLabel } from "@/src/config/plans";
 
 type StudyPackLimitModalProps = {
   isOpen: boolean;
@@ -38,9 +39,9 @@ export function StudyPackLimitModal({
       ? "You’ve reached your study pack limit for Plus"
       : "You’ve reached your study pack limit for this month";
   const description = isFreePlan
-    ? `Upgrade to Plus or Pro to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.\n\nYou can still create and save notes. Your limit resets on ${resetDateLabel}.`
+    ? `Choose Plus or go Pro to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.\n\nYou can still create and save notes. Your limit resets on ${resetDateLabel}.`
     : isPlusPlan
-      ? `Upgrade to Pro for higher study-pack limits, or wait until ${resetDateLabel} for your next reset.\n\nYou can still review your existing notes and quizzes while you wait.`
+      ? `Go Pro for higher study-pack limits, or wait until ${resetDateLabel} for your next reset.\n\nYou can still review your existing notes and quizzes while you wait.`
       : `Your study pack limit resets on ${resetDateLabel}.\n\nYou can still review your existing notes and quizzes while you wait.`;
 
   return (
@@ -56,7 +57,7 @@ export function StudyPackLimitModal({
           {isFreePlan ? (
             <>
               <Button type="button" onClick={() => handleNavigate("/pricing")}>
-                Upgrade to Plus
+                {getPaidPlanCtaLabel("PLUS")}
               </Button>
               <Button type="button" variant="outline" onClick={onClose}>
                 Maybe Later
@@ -68,7 +69,7 @@ export function StudyPackLimitModal({
           ) : (
             <>
               <Button type="button" onClick={() => handleNavigate("/pricing")}>
-                {isPlusPlan ? "Upgrade to Pro" : "View Plans"}
+                {isPlusPlan ? getPaidPlanCtaLabel("PRO") : "View Plans"}
               </Button>
               <Button type="button" variant="outline" onClick={() => handleNavigate(PLAN_BILLING_PATH)}>
                 Get More Study Packs

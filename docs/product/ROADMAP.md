@@ -28,6 +28,7 @@ Completed in `v0.11.0`:
   - subscriptions-table source of truth for plan state, active-subscription history preservation, and webhook-driven renewal extension
 - Free / Plus / Pro multi-plan billing model replacing the legacy single-tier paid plan
 - Settings Plan & Billing redesign: billing cycle toggle + 3-column plan cards (Free, Plus, Pro)
+- pricing system unification through a shared frontend plan config used by landing, pricing, and settings surfaces
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard

@@ -25,7 +25,7 @@ export function NearLimitBanner({
       : `You have ${normalizedRemaining} Study Pack${normalizedRemaining === 1 ? "" : "s"} left this month on the Free plan.`
     : planType === "PLUS"
       ? isLimitReached
-        ? `You’ve used all your Study Packs this month on Plus. Upgrade to Pro or wait until ${resetDateLabel} to generate more.`
+        ? `You’ve used all your Study Packs this month on Plus. Go Pro or wait until ${resetDateLabel} to generate more.`
         : `You have ${normalizedRemaining} Study Pack${normalizedRemaining === 1 ? "" : "s"} left this month on Plus.`
     : isLimitReached
       ? `You’ve used all your Study Packs this month. Limit resets on ${resetDateLabel}.`

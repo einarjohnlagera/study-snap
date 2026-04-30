@@ -341,6 +341,8 @@ Teacher flow rule:
 - Backend owns subscription pricing, region detection, voucher eligibility, and Xendit checkout creation.
 - Never hardcode backend checkout pricing; always load billable amounts from billing config or pricing services.
 - Frontend must use the billing pricing API for pricing display in Settings, pricing surfaces, and upgrade prompts.
+- Pricing UI copy, plan descriptions, CTA labels, and feature lists must come from the centralized frontend plan config.
+- Never hardcode pricing-card features or plan CTA labels directly in UI components when the shared plan config already owns them.
 - Shared pricing surfaces may keep the existing reviewer-safe PHP and USD display config, but checkout creation and upgrade eligibility stay backend-owned.
 - Intro pricing and first-time promos must be implemented through the voucher/promotion system, not as a boolean on `User`.
 

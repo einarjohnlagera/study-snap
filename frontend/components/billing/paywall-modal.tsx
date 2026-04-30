@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
+import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import {
   type FreePaywallContent,
   type PaywallAction,
@@ -111,13 +112,13 @@ export function PaywallModal({
     }
     return "PLUS";
   }, [currentPlan, variant]);
-  const upgradeLabel = upgradePlanType === "PRO" ? "Upgrade to Pro" : "Upgrade to Plus";
+  const upgradeLabel = getPaidPlanCtaLabel(upgradePlanType);
 
   const config = useMemo((): LegacyPaywallConfig => {
     if (variant === "export-limit" && currentPlan === "PLUS") {
       return {
         title: "You’ve reached your monthly export limit for Plus",
-        message: "Upgrade to Pro to keep exporting quizzes and exams this month.",
+        message: "Go Pro to keep exporting quizzes and exams this month.",
         dismissLabel: "Maybe Later",
         feature: "export_limit",
       };
@@ -128,7 +129,7 @@ export function PaywallModal({
     }
     return LEGACY_PAYWALL_CONTENT[variant] ?? {
       title: "Paid feature",
-      message: "Upgrade to Plus or Pro to access this feature.",
+      message: "Choose Plus or go Pro to access this feature.",
       dismissLabel: "Maybe Later",
       feature: variant,
     };

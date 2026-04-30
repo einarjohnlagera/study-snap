@@ -54,7 +54,7 @@ export function getYearlySavings(
   const monthlyAmount = planPricing.monthly.amount ?? 0;
   const yearlyAmount = planPricing.yearly.amount ?? 0;
   const savings = monthlyAmount * 12 - yearlyAmount;
-  return savings > 0 ? savings : 0;
+  return Math.max(savings, 0);
 }
 
 export function getBillingCyclePriceLabel(
@@ -72,7 +72,7 @@ export function getBillingCyclePriceLabel(
     const monthlyAmount = formatBillingAmount(cyclePricing.amount, currency);
     if (cyclePricing.introEligible && cyclePricing.introAmount !== null) {
       const introAmount = formatBillingAmount(cyclePricing.introAmount, currency);
-      return `First month ${introAmount}, then ${monthlyAmount}/month`;
+      return `${introAmount} first month, then ${monthlyAmount}/month`;
     }
     return `${monthlyAmount}/month`;
   }
