@@ -75,25 +75,25 @@ Teacher flow rule:
 - Copy does not include: generated `summary`, `key concepts`, `quiz`, session history, or performance history.
 - Copy result is a new `DRAFT` note.
 
-### Premium Cancellation Rule
+### Paid Plan Cancellation Rule
 
-- Premium cancellation must be confirmed in Settings before submission.
+- Paid-plan cancellation must be confirmed in Settings before submission.
 - Cancellation is scheduled at the end of the current billing period, not immediate.
-- Premium access remains active until that period ends.
+- Paid access remains active until that period ends.
 - Downgrade to Free happens through subscription lifecycle logic at period end.
-- Canceling Premium must not remove notes or generated Study Packs from the user library.
+- Canceling a paid plan must not remove notes or generated Study Packs from the user library.
 - Settings billing should show scheduled end-of-period cancellation clearly in the subscription summary and must not imply immediate loss of access.
 
-### Premium Upgrade Prompt Rule
+### Paid Upgrade Prompt Rule
 
-- Free users should see a soft paywall modal before any Premium-only quiz feature or Study Pack limit block attempts a paid conversion flow.
+- Free users should see a soft paywall modal before any paid-plan quiz feature or Study Pack limit block attempts a paid conversion flow.
 - Verified users who choose to upgrade should start the hosted checkout flow via `POST /api/payments/create`.
 - Frontend upgrade actions should redirect only to the backend-returned Xendit checkout URL.
 - When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 - When Study Pack remaining reaches `0`, keep `Generate Study Pack` enabled and show a student-friendly monthly-limit modal on click instead of disabling the action.
-- Upgrade messaging should position Premium as an exam-preparation and mastery tool for students.
-- Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, and the `100` Study Pack Premium limit.
-- Pricing page should clearly compare Free vs Premium with localized backend pricing and student-oriented value messaging.
+- Upgrade messaging should position Plus as the practical step-up for regular study and Pro as the exam-preparation and mastery tier.
+- Dashboard should show a Free-only upgrade card highlighting Challenge Quiz, Adaptive Practice, Board Exam Mode, and the `100` Study Pack Pro limit.
+- Pricing page should clearly compare Free vs Plus vs Pro with localized backend pricing and student-oriented value messaging.
 
 ### Study Pack Usage Rule
 
@@ -130,7 +130,7 @@ Teacher flow rule:
   - `Get Started` as the primary action
 - On mobile public nav, keep the theme toggle in the top-header utility cluster and keep the opened menu focused on navigation links plus `Login` and `Get Started`.
 - Do not duplicate the theme toggle or primary CTA between the public header and the opened mobile menu.
-- Keep the home page focused on hero, how-it-works, features, Free vs Premium pricing, demo access, and signup CTA.
+- Keep the home page focused on hero, how-it-works, features, Free vs Plus vs Pro pricing, demo access, and signup CTA.
 - Demo access must be available without signup.
 - Public Library should be treated as a public discovery feature and must remain accessible without login.
 - The landing page Public Library feature section should pair discovery copy with a framed screenshot preview using `public/landing/feature-public-library.jpg` in a responsive text-left / preview-right layout; keep the screenshot constrained so it supports the section instead of dominating it.
@@ -174,7 +174,7 @@ Teacher flow rule:
 
 ### Onboarding Rule
 
-- Onboarding is active again for all verified users, not only Premium users.
+- Onboarding is active again for all verified users, not only paid-plan users.
 - Onboarding should happen once after email verification / first verified entry into the app.
 - Onboarding must stay short and reuse the existing step flow.
 - Preferences onboarding order is:
@@ -315,10 +315,11 @@ Teacher flow rule:
   - `— NoteLib`
   - `Turn Notes Into Quizzes`
   - `https://notelib.app`
-- Welcome email copy must reflect the current Free vs Premium plan:
+- Welcome email copy must reflect the current Free / Plus / Pro plan:
   - Free includes `10` Study Packs/month, Quick Review, limited Challenge Quiz, and Public Library access
-  - Premium messaging highlights Adaptive Practice, Weak Concept Training, Difficulty Selection, and higher limits
-- Do not describe Challenge Quiz as Premium-only in onboarding, welcome, or reminder emails.
+  - Plus messaging highlights higher monthly limits and exports for regular study
+  - Pro messaging highlights Adaptive Practice, Weak Concept Training, Difficulty Selection, Board Exam Mode, and the highest limits
+- Do not describe Challenge Quiz as paid-only in onboarding, welcome, or reminder emails.
 
 ### Admin Dashboard Rule
 
@@ -345,22 +346,22 @@ Teacher flow rule:
 
 ### Payments Safety Rule
 
-- Never grant Premium access from frontend logic, success pages, or redirect callbacks.
-- Only validated webhook-confirmed payments may update user Premium status.
+- Never grant paid access from frontend logic, success pages, or redirect callbacks.
+- Only validated webhook-confirmed payments may update user paid-plan status.
 - All plan and entitlement logic must use the `subscriptions` table as the source of truth.
 - Preserve subscription history in `subscriptions`; do not collapse the table to one row per user.
 - Only one `ACTIVE` subscription row should exist per user at a time.
-- Do not introduce plan flags or Premium state fields on `users`.
+- Do not introduce plan flags or paid-state fields on `users`.
 - Always validate the Xendit `x-callback-token` before processing webhook payloads.
 - Webhook handling must stay idempotent through persisted provider event records and payment transaction lookups.
 - Voucher redemption history must be written only after a confirmed `PAID` webhook, never while checkout is still pending.
-- Payment-flow doc updates are required whenever checkout, webhook, returnUrl, or Premium-expiry behavior changes.
+- Payment-flow doc updates are required whenever checkout, webhook, returnUrl, or paid-plan expiry behavior changes.
 
 ### Billing History Rule
 
 - `Settings -> Plan & Billing` should include a read-only billing history section below the current plan and usage card.
 - The billing summary card should show current plan, subscription status, billing cycle, and renewal or end date.
-- If `cancelAtPeriodEnd=true`, show that Premium will end on the stored date and will not renew.
+- If `cancelAtPeriodEnd=true`, show that the active paid plan will end on the stored date and will not renew.
 - Payment history must come from `PaymentTransactionEntity` data via `GET /api/billing/history`.
 - Billing history rows should stay user-friendly and must not expose raw webhook event names.
 
@@ -616,7 +617,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 ### Challenge Quiz — Exam Mode Rule
 
 - Challenge Quiz must behave as an exam: **no correctness feedback during answering**.
-- Board Exam Mode is the explicit strict-exam presentation of the Challenge Quiz engine and must be available as a distinct Challenge mode for both Free and Premium users.
+- Board Exam Mode is the explicit strict-exam presentation of the Challenge Quiz engine and must be available as a distinct Challenge mode for Pro users.
 - Challenge Quiz entry must present both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices rather than inferring Board Exam from billing or difficulty-selection capability.
 - Board Exam Mode must use a formal `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
 - Board Exam setup must also explain that the mode is a focused, distraction-free exam simulation, results are delayed until completion, and navigation will be limited intentionally during the session.
@@ -871,7 +872,7 @@ Required behavior:
 - Note import/extraction is backend-owned; frontend should not be the source of truth for OCR/PDF/DOCX parsing.
 - OCR usage must be protected by backend-configured billing-period limits plus per-minute rate limiting.
 - If OCR quota is exhausted, return:
-  - `You have reached your OCR limit for now. Please try again later or upgrade to Premium.`
+  - `You have reached your OCR limit for now. Please try again later or upgrade to Plus or Pro.`
 - If OCR request rate limit is exceeded, return:
   - `Too many requests. Please wait a moment and try again.`
 
@@ -911,11 +912,11 @@ Unverified users CANNOT:
 - Take Challenge Quiz
 - Use Adaptive Practice
 - Make notes public
-- Purchase Premium
+- Purchase a paid plan
 - Use any LLM-powered feature
 
 Verified users:
-- Have full access based on plan (Free or Premium)
+- Have full access based on plan (Free, Plus, or Pro)
 
 This gating must be enforced both in frontend and backend.
 
@@ -1005,36 +1006,39 @@ Rules:
 - Free: 10 Study Packs/month
 - Free Challenge Quiz: 5/month
 - Free OCR: backend-configured monthly quota
-- Premium: 100 Study Packs/month
-- Premium Challenge Quiz: 50/month
-- Premium Adaptive Practice: 30/month
-- Premium OCR: backend-configured monthly quota
-- Adaptive Practice is Premium-only and still quota-limited.
-- Difficulty Selection is Premium-only and feature-gated.
+- Plus: 50 Study Packs/month
+- Plus Challenge Quiz: 25/month
+- Plus OCR: backend-configured monthly quota
+- Pro: 100 Study Packs/month
+- Pro Challenge Quiz: 50/month
+- Pro Adaptive Practice: 30/month
+- Pro OCR: backend-configured monthly quota
+- Adaptive Practice is Pro-only and still quota-limited.
+- Difficulty Selection is Pro-only and feature-gated.
 - Weak concepts remain visible to Free users.
-- File upload is available on both Free and Premium.
+- File upload is available on Free, Plus, and Pro.
 - Study Pack, Challenge Quiz, and Adaptive Practice quotas are separate from each other.
 - OCR usage has its own backend-configured monthly quota by plan.
 - Frontend plan limits and feature availability must come from `GET /api/me/plan`, not hardcoded values.
 - Settings usage UI should not show OCR counters; OCR remains backend-tracked and enforced.
 - OCR limit UX in note import should use a modal:
-  - Free: explain OCR is limited and offer `Upgrade to Premium`
-  - Premium: explain reset happens on the next billing date
+  - Free: explain OCR is limited and offer `Upgrade`
+  - Plus / Pro: explain reset happens on the next billing date
 - Expensive OCR and AI generation endpoints must also enforce backend request-rate limits and return `429` with a friendly retry message.
 
 ## Billing Provider (Current)
 
 - Active billing provider is `XENDIT`.
-- Premium checkout is currently a hosted Xendit invoice flow, not a recurring subscription flow.
-- The current Premium billing model is manual renewal: Monthly checkout grants `30` days and Yearly checkout grants `365` days of Premium access.
+- Paid-plan checkout is currently a hosted Xendit invoice flow, not a recurring subscription flow.
+- The current manual-renewal billing model is: Monthly checkout grants `30` days and Yearly checkout grants `365` days of paid access for the selected plan.
 - Regional pricing is resolved from `CF-IPCountry` and mapped into pricing regions.
 - Region pricing config contains localized currency/amounts plus optional intro pricing metadata used for display and eligibility.
 - Voucher/promotion rules decide whether intro pricing is shown, but checkout itself stays on the current hosted Xendit invoice flow.
 - Intro/first-time subscriber discounts must flow through voucher eligibility and voucher redemption records.
-- Premium activation is controlled by webhook-confirmed invoice outcomes only.
+- Paid-plan activation is controlled by webhook-confirmed invoice outcomes only.
 - Webhook-confirmed payments must create or extend `subscriptions`; they must not update plan state on `users`.
 - If an upgrade starts from Settings/Billing, billing success should send the user to Dashboard instead of back to Settings.
-- Success/failure redirect pages may help users return to their previous page, but those redirects never activate Premium.
+- Success/failure redirect pages may help users return to their previous page, but those redirects never activate a paid plan.
 - Xendit webhook statuses currently handled are:
   - `PAID`
   - `FAILED`
@@ -1049,7 +1053,7 @@ Rules:
   - keep provider transaction inserts idempotent via provider reference IDs
   - reject external or protocol-relative checkout `returnUrl` values
 - Billing lifecycle safety jobs:
-  - `SubscriptionExpiryJob` (daily): expire overdue active Premium subscriptions and downgrade to Free
+  - `SubscriptionExpiryJob` (daily): expire overdue active paid subscriptions and downgrade to Free
   - `BillingUsageResetJob` (daily): ensure usage rows exist for the current billing period window
 
 ## Dashboard and Library Guardrails
@@ -1074,7 +1078,7 @@ Rules:
   - board-exam flow -> `tab=quiz`
   - teacher quiz-focused entry modes -> `tab=quiz`
 - Dashboard statistics and weak-concept insights must be computed from stored quiz sessions and activity logs only, never by LLM calls.
-- `Focus Areas` should surface top weak concepts for all users, but Adaptive Practice CTA remains Premium-gated through the shared soft paywall for Free users.
+- `Focus Areas` should surface top weak concepts for all users, but Adaptive Practice CTA remains Pro-gated through the shared soft paywall for Free and Plus users.
 - Keep destructive actions (delete) in Note Detail/Library with explicit confirmation.
 
 ## Context Usage Rule

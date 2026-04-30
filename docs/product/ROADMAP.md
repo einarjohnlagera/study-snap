@@ -26,7 +26,7 @@ Completed in `v0.11.0`:
   - polished billing success and failed result pages
   - manual-renewal expiry windows after Monthly (`30` days) and Annual (`365` days) payments
   - subscriptions-table source of truth for plan state, active-subscription history preservation, and webhook-driven renewal extension
-- Free / Plus / Pro multi-plan billing model replacing legacy Premium
+- Free / Plus / Pro multi-plan billing model replacing the legacy single-tier paid plan
 - Settings Plan & Billing redesign: billing cycle toggle + 3-column plan cards (Free, Plus, Pro)
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`

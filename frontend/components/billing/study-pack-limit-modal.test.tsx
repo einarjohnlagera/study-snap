@@ -25,8 +25,8 @@ describe("StudyPackLimitModal", () => {
     );
 
     expect(screen.getByText("You’ve reached your study pack limit")).toBeInTheDocument();
-    expect(screen.getByText(/Upgrade to Premium to create more study packs/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upgrade to Premium" })).toBeInTheDocument();
+    expect(screen.getByText(/Upgrade to Plus or Pro to create more study packs/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Upgrade to Plus" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View My Plan" })).toBeInTheDocument();
   });
@@ -42,7 +42,7 @@ describe("StudyPackLimitModal", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Plus" }));
     expect(pushMock).toHaveBeenCalledWith("/pricing");
 
     pushMock.mockReset();
@@ -50,11 +50,11 @@ describe("StudyPackLimitModal", () => {
     expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
   });
 
-  it("renders premium-limit copy and actions", () => {
+  it("renders pro-limit copy and actions", () => {
     render(
       <StudyPackLimitModal
         isOpen
-        planType="PREMIUM"
+        planType="PRO"
         resetDateLabel="April 20"
         onClose={jest.fn()}
       />,
@@ -62,7 +62,7 @@ describe("StudyPackLimitModal", () => {
 
     expect(screen.getByText("You’ve reached your study pack limit for this month")).toBeInTheDocument();
     expect(screen.getByText(/Your study pack limit resets on April 20\./)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Upgrade Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View Plans" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Get More Study Packs" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
   });

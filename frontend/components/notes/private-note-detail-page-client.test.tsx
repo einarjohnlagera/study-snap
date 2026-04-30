@@ -351,7 +351,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("for generated notes, Edit enables inline metadata editing instead of routing", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z", profileType: "TEACHER" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
@@ -380,7 +380,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("navigates to the dedicated session review page from Recent Sessions on note detail", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
@@ -465,7 +465,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("keeps the same dedicated session review route behavior on smaller screens", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
@@ -504,7 +504,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("shows private-share modal and then opens share-link modal after making note public", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT", visibility: "PRIVATE" });
     (updateNoteVisibility as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT", visibility: "PUBLIC" });
 
@@ -523,7 +523,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("supports Make a Copy and Delete from the note actions menu", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({ ...baseNote, studyPackStatus: "DRAFT", visibility: "PRIVATE" });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
@@ -559,7 +559,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz?entry=mode-selection");
-    expect(screen.queryByText("Adaptive Practice is a Premium feature")).not.toBeInTheDocument();
+    expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
   it("shows the paywall modal immediately when a free user exhausted Challenge Quiz credits", async () => {
@@ -623,13 +623,13 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
-    expect(await screen.findByText("Adaptive Practice is a Premium feature")).toBeInTheDocument();
+    expect(await screen.findByText("Adaptive Practice is a Pro feature")).toBeInTheDocument();
   });
 
   it("routes premium users with exhausted Adaptive Practice usage into the limit flow", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
-      plan: "PREMIUM",
+      plan: "PRO",
       limits: {
         studyPacksPerMonth: 100,
         challengeQuizzesPerMonth: 50,
@@ -676,12 +676,12 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
     expect(pushMock).toHaveBeenCalledWith("/notes/note-1/adaptive-practice");
-    expect(screen.queryByText("Adaptive Practice is a Premium feature")).not.toBeInTheDocument();
+    expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
   it("renders teacher note detail with Study Pack tabs visible and student-only sections hidden", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
       profileType: "TEACHER",
     });
@@ -767,7 +767,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
   it("renders teacher note detail with View Quiz and regenerate confirmation", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
       profileType: "TEACHER",
     });
@@ -1039,12 +1039,12 @@ describe("PrivateNoteDetailPageClient", () => {
   it("shows the premium monthly-limit modal when Generate is clicked at the premium limit", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
       profileType: "STUDENT",
     });
     (getMyPlan as jest.Mock).mockResolvedValue({
-      plan: "PREMIUM",
+      plan: "PRO",
       limits: {
         studyPacksPerMonth: 100,
         challengeQuizzesPerMonth: 50,
@@ -1134,7 +1134,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
   it("shows quiz view when tab=quiz is requested", async () => {
     searchParamValues = { tab: "quiz" };
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
@@ -1164,7 +1164,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("switches study pack views through tabs without reloading", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       studyPackStatus: "STUDY_PACK_READY",
@@ -1204,7 +1204,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("uses the summary CTA to switch to Full Notes without refetching", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       content: "Original note body for review.",
@@ -1239,7 +1239,7 @@ describe("PrivateNoteDetailPageClient", () => {
   });
 
   it("shows the full original note content in the Full Notes tab without refetching", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getNote as jest.Mock).mockResolvedValue({
       ...baseNote,
       content: "Line one of the original note.\n\nLine two stays visible.",
@@ -1275,10 +1275,10 @@ describe("PrivateNoteDetailPageClient", () => {
     expect(screen.getByText(/Line two stays visible\./i)).toBeInTheDocument();
   });
 
-  it("routes Premium users into the shared Challenge Quiz mode-selection entry without showing the paywall modal", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+  it("routes paid users into the shared Challenge Quiz mode-selection entry without showing the paywall modal", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
-      plan: "PREMIUM",
+      plan: "PRO",
       limits: {
         studyPacksPerMonth: 100,
         challengeQuizzesPerMonth: 50,

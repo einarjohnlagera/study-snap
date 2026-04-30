@@ -1,10 +1,10 @@
 Hi {{firstName}},
 
-Thanks for your interest in NoteLib Premium.
+Thanks for your interest in NoteLib paid plans.
 
-Premium adds adaptive practice, weak concept training, difficulty selection, and higher monthly limits.
+Paid plans add higher monthly limits, more exports, adaptive practice, and stronger exam-prep tools.
 
-We're currently enabling payments. We'll let you know as soon as Premium becomes available.
+This is a legacy waitlist confirmation. We'll let you know if upgraded billing access is opened again for this channel.
 
 You can keep studying anytime from your dashboard:
 {{dashboardUrl}}

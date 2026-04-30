@@ -86,8 +86,8 @@ Display:
 
 Behavior:
 
-- Premium users get `Practice Weak Concepts`
-- Free users get `Unlock Adaptive Practice` and the shared Premium paywall modal
+- Pro users get `Practice Weak Concepts`
+- Free and Plus users get `Unlock Adaptive Practice` and the shared Pro upsell modal
 
 ## This Week
 
@@ -108,7 +108,7 @@ Display:
 
 - Study Packs usage
 - Challenge Quiz usage
-- Adaptive Practice usage for Premium only
+- Adaptive Practice usage for Pro only
 
 Guardrails:
 
@@ -136,7 +136,7 @@ Priority order:
 
 1. Resume unfinished review
 2. Retry incorrect questions
-3. Practice weak concepts (Premium only)
+3. Practice weak concepts (Pro only)
 4. Review a specific note
 5. Study suggestion when no notes exist
 

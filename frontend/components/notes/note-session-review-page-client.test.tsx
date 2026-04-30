@@ -171,7 +171,7 @@ describe("NoteSessionReviewPageClient", () => {
     await waitFor(() => {
       expect(screen.getAllByRole("button", { name: /^Full Review/ }).length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getByText(/Adaptive Practice is available after completing a session \(Premium feature\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Adaptive Practice is available after completing a session \(Pro feature\)/i)).toBeInTheDocument();
   });
 
   it("exports the full review PDF with clear feedback when Full Review is selected", async () => {

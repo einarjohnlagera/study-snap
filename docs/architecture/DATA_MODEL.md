@@ -150,7 +150,7 @@ Recommended fields:
 
 - `id`
 - `user_id`
-- `plan_type` (`FREE` | `PREMIUM`)
+- `plan_type` (`FREE` | `PLUS` | `PRO`)
 - `status`
 - `start_at`
 - `end_at` (nullable)
@@ -162,15 +162,15 @@ Recommended fields:
 Billing notes:
 
 - Active provider is currently `XENDIT`.
-- Current Premium activation uses a hosted invoice checkout and webhook-confirmed premium upgrade rather than recurring subscriptions.
-- Current Premium billing model is prepaid/manual-renewal for `30`-day Monthly access or `365`-day Annual access per successful payment.
+- Current paid-plan activation uses hosted invoice checkout and webhook-confirmed upgrades rather than recurring subscriptions.
+- Current manual-renewal model is `30`-day Monthly access for `PLUS` and `PRO`, plus `365`-day Annual access for `PRO`.
 - `subscriptions` is the only source of truth for plans and entitlements.
-- `users` must not store Premium flags or plan state.
+- `users` must not store plan flags or plan state.
 - `subscriptions` stores full plan history; users may have multiple historical rows.
 - Only one `ACTIVE` subscription row should exist per user at a time.
 - The current plan is resolved from the active valid subscription row for that user.
-- A paid Premium activation expires the currently active non-Premium row when needed and creates a new active Premium history row.
-- Manual renewals extend the active Premium `end_at` rather than creating duplicate active Premium rows.
+- A paid activation expires the currently active other-plan row when needed and creates a new active paid history row.
+- Manual renewals extend the active row when the purchased plan matches the current active paid plan.
 - `subscriptions` remains the place for future recurring billing, expiry logic, and provider-managed renewals.
 - Webhook event idempotency is enforced through persisted webhook events plus `payment_transactions(provider, provider_reference_id)` uniqueness.
 
@@ -186,7 +186,7 @@ Recommended fields:
 - `user_id`
 - `provider` (`XENDIT`)
 - `billing_type` (`PREPAID`)
-- `plan_type` (`PREMIUM`)
+- `plan_type` (`PLUS` | `PRO`)
 - `billing_cycle` (`MONTHLY` | `YEARLY`)
 - `original_amount`
 - `discount_amount`
@@ -206,7 +206,7 @@ Behavior notes:
 - Reuse requires matching plan, billing cycle, final amount, and voucher state.
 - Expired pending transactions should not remain reusable.
 - Payment transactions are billing-event history only; they are not the source of truth for plan access.
-- Premium activation is derived from validated webhook outcomes, not from frontend redirect completion.
+- Paid-plan activation is derived from validated webhook outcomes, not from frontend redirect completion.
 
 ## Discount Vouchers
 

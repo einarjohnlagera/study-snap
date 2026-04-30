@@ -4,21 +4,22 @@
 
 ### Current Implementation (`v0.11.0`)
 
-- Premium upgrades use Xendit hosted invoice checkout
-- Checkout supports manual `Monthly` and `Annual` Premium payments
-- Monthly checkout grants `30` days of Premium access
-- Annual checkout grants `365` days of Premium access
+- Paid upgrades use Xendit hosted invoice checkout
+- Checkout supports manual `Monthly` checkout for `Plus` and `Pro`
+- Checkout supports manual `Annual` checkout for `Pro`
+- Monthly checkout grants `30` days of paid access
+- Annual checkout grants `365` days of paid access
 - Renewal is manual; there is no recurring billing yet
 - Checkout pricing is loaded from backend billing config
 - Automatic intro offers and discounts use `discount_vouchers`
 - Voucher redemption history is written only after a successful `PAID` webhook
-- Premium activation is webhook-confirmed only
+- Paid-plan activation is webhook-confirmed only
 - Frontend success and failure pages are informational only
 
 ### Flow
 
-1. User clicks `Upgrade to Premium`.
-2. Frontend sends `POST /api/payments/create` with the selected billing cycle and an optional safe internal `returnUrl`.
+1. User clicks `Choose Plus`, `Choose Pro`, or a paywall upgrade CTA.
+2. Frontend sends `POST /api/payments/create` with the selected `planType`, selected billing cycle, and an optional safe internal `returnUrl`.
 3. Backend validates the user, loads region pricing from config, and resolves any eligible automatic voucher before checkout creation.
 4. Backend checks for an unexpired pending Xendit invoice for the same user, plan, billing cycle, final amount, and voucher state.
 5. If a reusable pending invoice exists, backend returns its existing `checkoutUrl` instead of creating another pending row.
@@ -26,7 +27,7 @@
 7. Frontend redirects to the hosted Xendit checkout page.
 8. Xendit redirects the user to `/billing/success` or `/billing/failed` after checkout.
 9. Xendit calls `POST /api/webhooks/xendit`.
-10. Backend validates the callback token, applies idempotency, updates the payment transaction, activates or extends Premium only on `PAID`, and records voucher redemption only after payment confirmation.
+10. Backend validates the callback token, applies idempotency, updates the payment transaction, activates or extends the selected paid plan only on `PAID`, and records voucher redemption only after payment confirmation.
 
 ### Endpoints
 
@@ -57,18 +58,19 @@
 - Success prefers `Continue where you left off` for interrupted study flows such as notes, quizzes, and review.
 - Success falls back to `Go to Dashboard` when the upgrade started from Settings/Billing or when no usable `returnUrl` was provided.
 
-### Premium Access Model
+### Paid Access Model
 
 - Current billing model is manual renewal, not auto-renewal.
-- `subscriptions` is the only source of truth for plan state and Premium access.
+- `subscriptions` is the only source of truth for plan state and entitlements.
 - `subscriptions` preserves billing history; users may have many historical rows over time.
 - Only one `ACTIVE` subscription row should exist per user at a time.
-- A successful Monthly `PAID` webhook expires the current active non-Premium subscription when needed, then creates or extends active `PREMIUM` access for `30` days.
-- A successful Annual `PAID` webhook creates or extends active `PREMIUM` access for `365` days.
-- If the user already has an active Premium subscription, the same active Premium row is extended instead of creating a duplicate active Premium row.
-- A user counts as Premium only while an active `PREMIUM` subscription exists and `(end_at IS NULL OR end_at > now())`.
-- When Premium expires, the lifecycle falls back to an active `FREE` subscription record.
-- Redirecting to `/billing/success` does not grant Premium access by itself.
+- A successful Monthly `PAID` webhook creates or updates active `PLUS` or `PRO` access for `30` days depending on the purchased plan.
+- A successful Annual `PAID` webhook currently creates or updates active `PRO` access for `365` days.
+- If the user renews the same active paid plan, the same active row is extended instead of creating a duplicate active row.
+- If the user switches from one paid plan to another, the current active paid row is ended and a new active row is created for the purchased plan.
+- A user counts as paid only while an active `PLUS` or `PRO` subscription exists and `(end_at IS NULL OR end_at > now())`.
+- When a paid plan expires, the lifecycle falls back to an active `FREE` subscription record.
+- Redirecting to `/billing/success` does not grant paid access by itself.
 
 ### Draft Preservation During Upgrade
 

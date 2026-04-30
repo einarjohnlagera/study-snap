@@ -220,13 +220,13 @@ Rules:
 - The alternate quiz mode must remain accessible from the same shared mode-selection step.
 - The `Challenge Quiz` CTA on Note Detail must route into that same shared `mode-selection` entry instead of bypassing it.
 - The shared Note Detail entry must keep users on the initial mode-selection screen even when prior quiz-session recovery data exists; session recovery must not override that entry into setup or running state.
-- Free users who select premium-only `Board Exam Mode` must see the Premium upsell modal instead of entering setup.
-- Free users who exhaust Challenge Quiz credits must see the Premium upsell modal instead of the monthly-limit page.
-- Premium users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
-- Free users who click `Adaptive Practice` must see the Premium upsell modal.
-- Premium users who exhaust `Adaptive Practice` credits should see the dedicated monthly-limit state.
-- Premium-only feature gating and monthly-limit gating must stay separate UI states.
-- `Board Exam Mode` remains Premium-only at quiz entry.
+- Free and Plus users who select Pro-only `Board Exam Mode` must see the Pro upsell modal instead of entering setup.
+- Free users who exhaust Challenge Quiz credits must see the shared paid-plan upsell modal instead of the monthly-limit page.
+- Plus and Pro users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
+- Free and Plus users who click `Adaptive Practice` must see the Pro upsell modal.
+- Pro users who exhaust `Adaptive Practice` credits should see the dedicated monthly-limit state.
+- Pro-only feature gating and monthly-limit gating must stay separate UI states.
+- `Board Exam Mode` remains Pro-only at quiz entry.
 
 ### Profile type effects
 
@@ -388,7 +388,7 @@ Public landing content:
 - Final CTA should include:
   - `Get Started`
   - `View Public Library`
-- Public Library must remain accessible without login and must not be marketed as a Premium-only feature
+- Public Library must remain accessible without login and must not be marketed as a paid-only feature
 
 SEO and social metadata:
 
@@ -1003,8 +1003,8 @@ Dashboard guidance rules:
   - `/notes/new` remains the normal note-creation flow and should open note detail with `tab=summary`
 - Dashboard performance and weak-concept insights must be computed from existing quiz session data only.
 - Dashboard must not use LLM calls for statistics or recommendations.
-- `Focus Areas` should show the top weak concepts and route Premium users to Adaptive Practice through `noteId`.
-- Free users should see the same weak concepts but hit the soft Premium paywall when trying to start Adaptive Practice from Dashboard.
+- `Focus Areas` should show the top weak concepts and route Pro users to Adaptive Practice through `noteId`.
+- Free and Plus users should see the same weak concepts but hit the soft Pro paywall when trying to start Adaptive Practice from Dashboard.
 - Board Taker dashboard should still use the shared note, quiz-session, activity, and usage data even when Board Exam is the default emphasis.
 - Teacher dashboard must hide student-only analytics widgets such as performance overview, recent quiz sessions, weak concepts, and score-tracking cards.
 - Teacher dashboard should keep the shared note / Study Pack workspace visible while changing intent toward creation, preview, and export.
@@ -1013,7 +1013,7 @@ Dashboard guidance rules:
 - Dashboard monthly usage should show for learning personas:
   - Study Packs
   - Challenge Quiz
-  - Adaptive Practice for Premium only
+  - Adaptive Practice for Pro only
 - OCR usage must stay hidden from the dashboard UI.
 
 ### Shareable Study Packs
@@ -1074,11 +1074,11 @@ Page responsibilities:
 
 - Timed exam-style mode (10 minutes)
 - Generated from Study Pack summary + key concepts, plus learner-level and note-context metadata
-- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine and is available as a distinct Challenge mode for both Free and Premium users in the current rollout stage.
+- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine and is available as a distinct Challenge mode for Pro users in the current rollout stage.
 - The Challenge Quiz screen presents both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices.
 - Board Exam Mode uses a dedicated `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
 - Board Exam Mode may request fullscreen/focus mode as a best-effort browser enhancement.
-- Difficulty selection remains Premium-gated, but Board Exam Mode still runs for Free users with recommended difficulty/question count.
+- Difficulty selection remains Pro-gated, and Board Exam Mode remains a Pro feature.
 - Difficulty and question count adapt by latest Quick Review score:
   - `<50`: 10 questions, easy-medium
   - `<80`: 12 questions, medium
@@ -1095,7 +1095,7 @@ Page responsibilities:
   - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
   - backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
 
-### Adaptive Practice (Premium)
+### Adaptive Practice (Pro)
 
 - Generated from Study Pack summary + key concepts + weak concepts, plus learner-level and note-context metadata
 - Question count by weak-concept volume:
@@ -1336,7 +1336,7 @@ Current user-facing template set:
 - inactivity reminder
 - weak concept reminder
 - weekly summary
-- premium waitlist confirmation
+- legacy upgrade-waitlist confirmation
 
 Welcome email requirements:
 
@@ -1346,12 +1346,17 @@ Welcome email requirements:
   - Quick Review
   - Challenge Quiz with a monthly limit
   - Public Library access
-- Premium includes:
+- Plus includes:
+  - Higher monthly limits
+  - More exports
+  - More topic-note generations
+- Pro includes:
   - Adaptive Practice
   - Weak Concept Training
   - Difficulty Selection
-  - Higher monthly limits
-- welcome copy must not say Challenge Quiz is Premium-only
+  - Board Exam Mode
+  - Highest monthly limits
+- welcome copy must not say Challenge Quiz is paid-only
 
 ### Settings Preferences
 

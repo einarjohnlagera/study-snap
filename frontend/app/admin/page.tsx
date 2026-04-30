@@ -57,7 +57,7 @@ type MetricCardProps = {
   detail?: string;
 };
 
-function MetricCard({ label, value, detail }: MetricCardProps) {
+function MetricCard({ label, value, detail }: Readonly<MetricCardProps>) {
   return (
     <Card className="space-y-2 p-4 sm:p-5">
       <p className="text-xs font-semibold uppercase tracking-wide text-foreground/55">{label}</p>
@@ -74,7 +74,7 @@ type SimpleTableProps = {
   rows: string[][];
 };
 
-function SimpleTable({ title, columns, emptyMessage, rows }: SimpleTableProps) {
+function SimpleTable({ title, columns, emptyMessage, rows }: Readonly<SimpleTableProps>) {
   return (
     <Card className="overflow-hidden">
       <div className="border-b border-border/70 px-4 py-3 sm:px-5">
@@ -159,7 +159,7 @@ export default function AdminPage() {
       { label: "Total Users", value: formatMetric(summary.overview.totalUsers) },
       { label: "Verified Users", value: formatMetric(summary.overview.verifiedUsers) },
       { label: "Paid Users", value: formatMetric(summary.overview.premiumUsers) },
-      { label: "Premium Waitlist", value: formatMetric(summary.overview.premiumWaitlistCount) },
+      { label: "Legacy Upgrade Waitlist", value: formatMetric(summary.overview.premiumWaitlistCount) },
       { label: "Total Notes", value: formatMetric(summary.overview.totalNotes) },
       { label: "Study Packs", value: formatMetric(summary.overview.totalStudyPacksGenerated) },
       { label: "Public Notes", value: formatMetric(summary.overview.totalPublicNotes) },

@@ -31,11 +31,16 @@ jest.mock("@/lib/api", () => ({
   getBillingPricing: jest.fn().mockResolvedValue({
     region: "PH",
     currency: "PHP",
-    monthlyPrice: 249,
-    yearlyPrice: 1999,
-    introMonthlyPrice: 199,
-    hasIntroPromo: true,
-    introEligible: true,
+    plus: {
+      planType: "PLUS",
+      monthly: { amount: 179, durationDays: 30, introAmount: 149, introEligible: true, available: true },
+      yearly: { amount: null, durationDays: null, introAmount: null, introEligible: false, available: false },
+    },
+    pro: {
+      planType: "PRO",
+      monthly: { amount: 249, durationDays: 30, introAmount: 199, introEligible: true, available: true },
+      yearly: { amount: 1999, durationDays: 365, introAmount: null, introEligible: false, available: true },
+    },
   }),
   isEmailNotVerifiedError: () => false,
   requestEmailVerification: jest.fn(),
@@ -50,98 +55,90 @@ describe("PricingPage", () => {
     (redirectToCheckoutUrl as jest.Mock).mockReset();
   });
 
-  it("renders the simplified Free vs Premium pricing layout", async () => {
+  it("renders the Free, Plus, and Pro pricing layout", async () => {
     render(<PricingPage />);
 
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(screen.getByText("Simple plans for everyday study and serious review.")).toBeInTheDocument();
     expect(
-      screen.getByText("Start free for core features. Upgrade when you need more quizzes, deeper practice, and higher limits."),
+      screen.getByText("Start free for core features. Move to Plus for higher limits, or choose Pro for deeper practice and exam-ready tools."),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText("Most users stay on Free while studying casually. Upgrade when your review gets serious.")[0],
+      screen.getAllByText("Most users stay on Free while studying casually. Plus fits regular review, and Pro is built for serious exam prep.")[0],
     ).toBeInTheDocument();
+    expect(await screen.findAllByText(/Intro offer:/i)).not.toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Free for everyday study. Plus for regular review. Pro for deeper exam prep." })).toBeInTheDocument();
+    expect(screen.getByText("Free covers the core note-to-study-pack workflow. Plus expands your monthly limits. Pro adds the highest limits and advanced practice tools.")).toBeInTheDocument();
+    expect(screen.getByText("For getting started")).toBeInTheDocument();
+    expect(screen.getByText("For regular study")).toBeInTheDocument();
+    expect(screen.getByText("Best for exam prep")).toBeInTheDocument();
+    expect(screen.getByText("Most popular")).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱249/month"))).not.toHaveLength(0);
     expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱1,999/year"))).not.toHaveLength(0);
-    expect(await screen.findByText(/Intro offer:/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Free for everyday study. Premium for deeper exam prep." })).toBeInTheDocument();
-    expect(screen.getByText("Free covers the full note-to-study-pack workflow. Premium adds higher limits and deeper practice tools.")).toBeInTheDocument();
-    expect(screen.getByText("For everyday study")).toBeInTheDocument();
-    expect(
-      screen.getByText("Build notes, generate Study Packs, and review with quizzes without paying upfront."),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱179/month"))).not.toHaveLength(0);
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱149"))).not.toHaveLength(0);
+    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱199"))).not.toHaveLength(0);
     expect(screen.getAllByText("10 Study Packs / month")).not.toHaveLength(0);
+    expect(screen.getByText("50 Study Packs / month")).toBeInTheDocument();
+    expect(screen.getByText("100 Study Packs / month")).toBeInTheDocument();
     expect(screen.getAllByText("5 Quizzes / month")).not.toHaveLength(0);
-    expect(screen.getAllByText("Summary + Key Concepts")).not.toHaveLength(0);
-    expect(screen.getAllByText("Weak Concepts tracking")).not.toHaveLength(0);
-    expect(screen.getByText("Board Exam Mode (Premium)")).toBeInTheDocument();
-    expect(screen.getByText("Adaptive Practice (Premium)")).toBeInTheDocument();
-    expect(screen.getByText("Difficulty selection (Premium)")).toBeInTheDocument();
-    expect(screen.getByText("For focused exam preparation")).toBeInTheDocument();
-    expect(screen.getByText("10")).toBeInTheDocument();
-    expect(screen.getAllByText("100")).not.toHaveLength(0);
+    expect(screen.getByText("25 Quizzes / month")).toBeInTheDocument();
     expect(screen.getByText("50 Quizzes / month")).toBeInTheDocument();
-    expect(screen.getByText("30 Adaptive Practice sessions / month")).toBeInTheDocument();
+    expect(screen.getByText("2 exports / month")).toBeInTheDocument();
+    expect(screen.getByText("15 exports / month")).toBeInTheDocument();
+    expect(screen.getAllByText("Unlimited exports")).not.toHaveLength(0);
+    expect(screen.getAllByText("Summary + Key Concepts")).not.toHaveLength(0);
+    expect(screen.getByText("Higher topic note generation limits")).toBeInTheDocument();
+    expect(screen.getAllByText("Adaptive Practice")).not.toHaveLength(0);
     expect(screen.getAllByText("Difficulty selection")).not.toHaveLength(0);
     expect(screen.getAllByText("Board Exam Mode")).not.toHaveLength(0);
-    expect(screen.getByRole("button", { name: "Choose Monthly" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Choose Annual" })).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Upgrade opens a secure Xendit hosted checkout and Premium activates after webhook confirmation.",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose Plus" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose Pro" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose Pro Yearly" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choose Plus Yearly" })).not.toBeInTheDocument();
     expect(screen.getByText("🇵🇭 Philippines pricing (PHP)")).toBeInTheDocument();
     expect(screen.getByText("🌍 International pricing")).toBeInTheDocument();
-    expect(screen.getAllByText((_, element) => (element?.textContent ?? "").includes("₱249/month"))).not.toHaveLength(0);
-    expect(screen.getByText("₱1,999/year")).toBeInTheDocument();
-    expect(screen.getByText((_, element) => element?.textContent === "$4.99/month")).toBeInTheDocument();
-    expect(screen.getByText("$39.99/year")).toBeInTheDocument();
-    expect(screen.getAllByText("Prices are shown for Philippines (PHP) and international (USD).")[0]).toBeInTheDocument();
+    expect(screen.getByText("Plus: ₱179/month")).toBeInTheDocument();
+    expect(screen.getByText("Pro: ₱249/month")).toBeInTheDocument();
+    expect(screen.getByText("Pro yearly: ₱1,999")).toBeInTheDocument();
+    expect(screen.getByText("Pro: $4.99/month")).toBeInTheDocument();
+    expect(screen.getByText("Pro yearly: $39.99/year")).toBeInTheDocument();
+    expect(screen.getByText("Prices are shown for Philippines (PHP) and international (USD) using backend pricing data when available.")).toBeInTheDocument();
     expect(screen.getByText("Plan comparison")).toBeInTheDocument();
     expect(
-      screen.getByText("Free covers the core study loop. Premium expands limits and unlocks deeper quiz training."),
+      screen.getByText("Free covers the core study loop. Plus expands your limits. Pro adds the full exam-prep toolkit."),
     ).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Not included")).toHaveLength(3);
-
-    const comparisonTable = screen.getByRole("table");
-    const pricingText = comparisonTable.textContent ?? "";
-    expect(pricingText.indexOf("Study Packs / month")).toBeLessThan(pricingText.indexOf("Quizzes / month"));
-    expect(pricingText.indexOf("Quizzes / month")).toBeLessThan(pricingText.indexOf("Summary + Key Concepts"));
-    expect(pricingText.indexOf("Summary + Key Concepts")).toBeLessThan(pricingText.indexOf("Weak Concepts tracking"));
-    expect(pricingText.indexOf("Weak Concepts tracking")).toBeLessThan(pricingText.indexOf("Adaptive Practice"));
-    expect(pricingText.indexOf("Adaptive Practice")).toBeLessThan(pricingText.indexOf("Difficulty selection"));
-    expect(pricingText.indexOf("Difficulty selection")).toBeLessThan(pricingText.indexOf("Board Exam Mode"));
-    expect(pricingText).not.toContain("Free for limited time");
+    expect(screen.getAllByLabelText("Not included")).toHaveLength(6);
   });
 
-  it("links signup CTA and starts checkout for authenticated users", async () => {
+  it("links signup CTA and starts Pro checkout for authenticated users", async () => {
     render(<PricingPage />);
 
     expect((await screen.findAllByRole("link", { name: "Start for Free" }))[0]).toHaveAttribute("href", "/signup");
 
-    fireEvent.click((await screen.findAllByRole("button", { name: "Upgrade to Premium" }))[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Pro" }));
 
     await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", billingCycle: null, returnUrl: "/pricing" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
 
-  it("starts annual checkout from the pricing comparison card", async () => {
+  it("starts yearly Pro checkout from the pricing card", async () => {
     render(<PricingPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Choose Annual" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Pro Yearly" }));
 
     await waitFor(() => {
-      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ billingCycle: "YEARLY", returnUrl: "/pricing" });
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", billingCycle: "YEARLY", returnUrl: "/pricing" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
 
   it("exports pricing metadata with canonical and social preview fields", () => {
     expect(metadata).toMatchObject({
-      title: "NoteLib Pricing — Free and Premium Plans",
-      description: "Simple plans for everyday study and serious review. Start free, and upgrade when your review gets serious.",
+      title: "NoteLib Pricing — Free, Plus, and Pro Plans",
+      description: "Simple plans for everyday study and serious review. Start free, move to Plus for higher limits, or choose Pro for exam prep.",
       alternates: {
         canonical: "https://notelib.app/pricing",
       },

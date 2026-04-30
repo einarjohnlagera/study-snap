@@ -32,6 +32,6 @@ Runtime/session rules:
 ## Gating
 
 - `Adaptive Practice` should remain visible on Note Detail when weak concepts exist.
-- Free users who click `Adaptive Practice` must see the shared Premium/upgrade modal.
-- Premium users who exhausted their monthly `Adaptive Practice` quota must see the dedicated monthly-limit state instead of the Premium upsell.
-- Do not silently fail or redirect free users into unrelated pages when `Adaptive Practice` is gated.
+- Free and Plus users who click `Adaptive Practice` must see the shared Pro upsell modal.
+- Pro users who exhausted their monthly `Adaptive Practice` quota must see the dedicated monthly-limit state instead of the upgrade upsell.
+- Do not silently fail or redirect users into unrelated pages when `Adaptive Practice` is gated.

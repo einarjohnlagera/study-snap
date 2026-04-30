@@ -79,8 +79,8 @@ Admin v1 tables should include:
 Reuse existing data sources where possible:
 
 - `analytics_events` for funnel, paywall, upgrade, and public-note metrics
-- `premium_waitlist` for legacy Premium-interest reporting when that data still exists
-- `subscriptions` for active Premium state and cancel-at-period-end status
+- `premium_waitlist` for legacy paid-plan interest reporting when that data still exists
+- `subscriptions` for active paid-plan state and cancel-at-period-end status
 - `payment_transactions` for upgrade history, failed payments, and billing estimates
 - `feedback` for recent user feedback during soft launch
 - `notes` and `study_packs` for library and generation counts

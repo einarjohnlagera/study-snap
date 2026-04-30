@@ -55,7 +55,7 @@ describe("AdaptivePracticePage", () => {
     (useBillingUsageSummary as jest.Mock).mockReset();
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
-        plan: "PREMIUM",
+        plan: "PRO",
         limits: {
           studyPacksPerMonth: 100,
           challengeQuizzesPerMonth: 50,
@@ -234,7 +234,7 @@ describe("AdaptivePracticePage", () => {
   it("shows the monthly limit state for premium users who exhausted Adaptive Practice usage", async () => {
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
-        plan: "PREMIUM",
+        plan: "PRO",
         limits: {
           studyPacksPerMonth: 100,
           challengeQuizzesPerMonth: 50,
@@ -258,7 +258,7 @@ describe("AdaptivePracticePage", () => {
       refreshUsageSummary: jest.fn(),
     });
     (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -272,7 +272,7 @@ describe("AdaptivePracticePage", () => {
 
     expect(await screen.findByRole("heading", { name: "You’ve reached your quiz limit for this month" })).toBeInTheDocument();
     expect(screen.getByText("Your Adaptive Practice limit resets on your next billing cycle.")).toBeInTheDocument();
-    expect(screen.queryByText("Adaptive Practice is a Premium feature")).not.toBeInTheDocument();
+    expect(screen.queryByText("Adaptive Practice is a Pro feature")).not.toBeInTheDocument();
   });
 
   it('result screen shows "Generate New Set" as the primary action', async () => {

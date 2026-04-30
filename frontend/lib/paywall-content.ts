@@ -3,7 +3,7 @@
  *
  * Centralises copy for two distinct gating surfaces:
  *   FREE_PAYWALL_CONTENT      — shown to free users when an action is gated (upgrade prompt)
- *   PREMIUM_EXHAUSTED_CONTENT — shown to premium users when monthly usage is exhausted
+ *   PAID_EXHAUSTED_CONTENT — shown to paid users when monthly usage is exhausted
  *
  * Use `PaywallAction` as the canonical key so call sites are decoupled from
  * the modal variant string.
@@ -35,7 +35,7 @@ export type FreePaywallContent = {
   dismissLabel: string;
 };
 
-export type PremiumExhaustedContent = {
+export type PaidExhaustedContent = {
   title: string;
   body: string;
 };
@@ -85,7 +85,7 @@ const BASE_FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
   },
 };
 
-export const PREMIUM_EXHAUSTED_CONTENT: Record<PaywallAction, PremiumExhaustedContent> = {
+export const PAID_EXHAUSTED_CONTENT: Record<PaywallAction, PaidExhaustedContent> = {
   STUDY_PACK: {
     title: "You’ve reached your study pack limit for this month",
     body: "Your study pack limit resets on your next billing cycle.",

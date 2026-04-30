@@ -234,7 +234,7 @@ describe("DashboardPage profile variants", () => {
     });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
-        plan: "PREMIUM",
+        plan: "PRO",
         limits: { studyPacksPerMonth: 100, challengeQuizzesPerMonth: 50, adaptivePracticePerMonth: 30 },
         usage: { studyPacksUsed: 12, challengeQuizzesUsed: 8, adaptivePracticeUsed: 3 },
       },

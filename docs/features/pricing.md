@@ -2,54 +2,72 @@
 
 ## Goal
 
-Explain the difference between Free and Premium clearly while keeping upgrade flow simple and trustworthy.
+Explain the difference between Free, Plus, and Pro clearly while keeping upgrade flow simple and trustworthy.
 
 The pricing page is a positioning surface first:
 
 - show the core Free workflow
-- make Premium value easy to understand
+- make Plus and Pro value easy to understand
 - keep upgrade messaging student-friendly
 - let verified users move into hosted checkout without embedding payment UI on the page
 
 ## Plans
 
-NoteLib currently presents two plans only:
+NoteLib currently presents three plans:
 
 ### Free
 
 - `10` Study Packs / month
 - `5` Challenge Quizzes / month
-- AI Summary + Key Concepts
-- Weak Concepts tracking
-- Board Exam Mode is available on Free for a limited time
+- `2` exports / month
+- Summary + Key Concepts
 
 Free-plan limitations that should stay visible on pricing:
 
-- Adaptive Practice is Premium-only
-- Difficulty selection is Premium-only
-- Higher note generation limits are Premium-only
+- Adaptive Practice is Pro-only
+- Difficulty selection is Pro-only
+- Board Exam Mode is Pro-only
+- Higher note generation limits are on paid plans
 
 Primary CTA:
 
 - `Start for Free`
 
-### Premium
+### Plus
 
-- higher monthly limits
+- `₱149` intro first month (PH) when eligible
+- `₱179/month` regular price (PH)
+- `50` Study Packs / month
+- `25` Challenge Quizzes / month
+- `15` exports / month
 - higher note generation limits
+
+Primary CTA:
+
+- `Choose Plus`
+
+### Pro
+
+- `₱199` intro first month (PH) when eligible
+- `₱249/month` regular price (PH)
+- `₱1,999/year` regular price (PH)
+- `100` Study Packs / month
+- `50` Challenge Quizzes / month
+- unlimited exports
 - Adaptive Practice
 - Difficulty selection
 - Board Exam Mode
 
-Premium pricing on the full pricing page shows PHP as the primary price (`₱249/month · ₱2,499/year`) statically, regardless of the visitor's region. This ensures Xendit reviewers always see PHP pricing during payment provider verification. A separate Regional Pricing block below shows both PHP and international USD prices explicitly.
-
-Intro offer, when eligible, displays both currencies: `₱199 / $3.99`. Values come from `pricingConfig.intro` (static, not geo-detected).
-
-Premium pricing on the landing page preview (`SimplePricingSection`) also shows PHP as primary with USD as secondary, both hardcoded.
-
 Primary CTA:
 
-- `Upgrade to Premium`
+- `Choose Pro`
+
+### Pricing Source
+
+- Backend pricing is config-driven and resolved from billing config plus pricing services.
+- Intro offers come from the voucher system, not frontend-only flags.
+- Pricing page display may use backend pricing data when available and safe frontend fallbacks when not.
+- PHP pricing stays visible for Xendit reviewer clarity, and the Regional Pricing block shows PHP plus international USD values.
 
 Current rollout rule:
 
@@ -61,51 +79,39 @@ Current rollout rule:
 The pricing page should stay clean and mobile-friendly:
 
 1. Hero / framing
-2. Free and Premium pricing cards
+2. Free, Plus, and Pro pricing cards
 3. Feature comparison table
-4. Regional Pricing block (static, both PHP and USD, always visible)
+4. Regional Pricing block (PHP and USD visible)
 5. FAQ
 
 Avoid adding embedded payment-step UI, dense billing details, or aggressive conversion copy.
 
-## Board Exam Mode positioning
-
-Board Exam Mode must be visible in:
-
-- pricing cards
-- comparison table
-
-Current pricing-page rule:
-
-- Free card should show `Board Exam Mode (Free for limited time)`
-- comparison table should make the limited-time Free access explicit
-
-This helps users understand that Board Exam Mode exists today without implying a separate billing product.
-
 ## Comparison table
 
-The pricing page comparison table should use a simple `Feature | Free | Premium` structure.
+The pricing page comparison table should use a simple `Feature | Free | Plus | Pro` structure.
 
 Current rows:
 
 - Study Packs / month
 - Challenge Quizzes / month
+- Exports / month
 - Topic note generation
-- AI Summary + Key Concepts
-- Weak Concepts tracking
+- Summary + Key Concepts
 - Adaptive Practice
 - Difficulty selection
 - Board Exam Mode
 
 ## Messaging rules
 
-- Position Premium as deeper quiz practice and heavier exam-week support, not just an AI upsell
+- Position Plus as the practical step-up for regular study and Pro as the full exam-prep tier
 - Keep Free useful and respectful; do not make the Free plan feel broken
 - Use simple labels:
   - `Free`
-  - `Premium`
+  - `Plus`
+  - `Pro`
   - `Start for Free`
-  - `Upgrade to Premium`
+  - `Choose Plus`
+  - `Choose Pro`
 - Keep checkout trust signals short and clear
 
 ## Mobile UX
@@ -113,4 +119,4 @@ Current rows:
 - Pricing cards should stack cleanly on mobile
 - CTAs should remain full-width and easy to tap
 - The comparison table may scroll horizontally, but it must remain readable
-- Board Exam limited-time messaging should remain visible without requiring a tooltip or hidden disclosure
+- Intro pricing and regular monthly pricing should remain readable without hiding the renewal amount

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Support freemium usage control and webhook-confirmed Premium upgrades without making paywalls or billing feel heavy.
+Support freemium usage control and webhook-confirmed paid-plan upgrades without making paywalls or billing feel heavy.
 
 ## Plan behavior
 
@@ -16,30 +16,40 @@ Support freemium usage control and webhook-confirmed Premium upgrades without ma
 - Quick Review
 - Challenge Quiz (5/month)
 - Weak concepts remain visible after quiz/review completion
-- Adaptive Practice is Premium-only
-- Difficulty selection is Premium-only
+- Adaptive Practice is Pro-only
+- Difficulty selection is Pro-only
 
-### Premium
+### Plus
+
+- 50 Study Packs per month
+- Topic note generation (25/month by default, backend-configurable)
+- Challenge Quiz (25/month)
+- OCR (50/month by default, backend-configurable)
+- Exports (15/month)
+- Higher usage limits than Free
+
+### Pro
 
 - 100 Study Packs per month
 - Topic note generation (100/month by default, backend-configurable)
 - Challenge Quiz (50/month)
 - Adaptive Practice (30/month)
 - OCR (100/month by default, backend-configurable)
+- Exports (unlimited)
 - Difficulty selection
-- Priority AI
-- Weak Concept Detection
+- Board Exam Mode
+- Highest usage limits
 
 ## Soft paywall UX
 
-- Free users should see a shared explanatory paywall before a Premium-only quiz action or a hard quota block attempts paid conversion.
+- Free users should see a shared explanatory paywall before a paid-plan quiz action or a hard quota block attempts paid conversion.
 - The paywall should explain:
   - `Challenge Quiz`
   - `Adaptive Practice`
   - `Weak Concept Training`
   - `Higher monthly limits`
 - Modal actions:
-  - `Upgrade to Premium`
+  - `View Plans`
   - `Maybe Later`
 - Verified users who continue should start hosted checkout through `POST /api/payments/create`.
 - Study Pack limit blocks should keep `Generate Study Pack` clickable instead of disabling it.
@@ -49,11 +59,11 @@ Support freemium usage control and webhook-confirmed Premium upgrades without ma
 
 - Topic note generation is a distinct monthly quota from Study Packs and OCR.
 - When topic note generation quota is exhausted:
-  - Free users see the shared Premium/upgrade modal
-  - Premium users see a reset-on-next-billing-date modal
+  - Free users see the shared upgrade modal
+  - Plus / Pro users see a reset-on-next-billing-date modal
 - OCR exhaustion follows the same split:
   - Free users see an upgrade path
-  - Premium users see a reset-date explanation
+  - Plus / Pro users see a reset-date explanation
 - Backend must enforce all limits even when frontend disables actions.
 
 ## Pricing and upgrade surfaces
@@ -61,32 +71,32 @@ Support freemium usage control and webhook-confirmed Premium upgrades without ma
 - Pricing page, Settings billing, dashboard upgrade cards, and shared paywall surfaces may start the same hosted checkout flow.
 - Frontend pricing surfaces should still read pricing context from `GET /api/billing/pricing`.
 - Shared PHP and USD pricing labels may remain in `pricingConfig` so reviewer-safe pricing stays visible before the pricing API resolves.
-- Success and failure pages are informational only and must never activate Premium directly.
+- Success and failure pages are informational only and must never activate a paid plan directly.
 
 ## Billing architecture
 
 - Active runtime provider is `XENDIT`.
-- Backend is the source of truth for pricing, upgrade eligibility, checkout creation, webhook validation, and Premium activation.
+- Backend is the source of truth for pricing, upgrade eligibility, checkout creation, webhook validation, and paid-plan activation.
 - `POST /api/payments/create` creates a hosted Xendit invoice and returns `checkoutUrl`.
-- `POST /api/webhooks/xendit` validates `x-callback-token`, applies idempotency through `webhook_events`, updates `payment_transactions`, and activates Premium only when status is `PAID`.
+- `POST /api/webhooks/xendit` validates `x-callback-token`, applies idempotency through `webhook_events`, updates `payment_transactions`, and activates the selected paid plan only when status is `PAID`.
 - `premium_waitlist` may remain in the system for legacy reporting, but it is not part of the active checkout flow.
 
 ## Hosted checkout flow
 
-1. User clicks `Upgrade to Premium`.
+1. User clicks `Choose Plus`, `Choose Pro`, or a paywall upgrade CTA.
 2. Frontend calls `POST /api/payments/create`.
 3. Backend creates a Xendit invoice with a unique `external_id`.
 4. Backend persists a pending `payment_transactions` row.
 5. Frontend redirects to the hosted Xendit checkout URL.
 6. Xendit calls `POST /api/webhooks/xendit`.
 7. Backend marks the payment transaction `SUCCESS` or `FAILED`.
-8. Backend activates Premium only after a validated `PAID` webhook.
+8. Backend activates the selected paid plan only after a validated `PAID` webhook.
 
 ## Current billing limitations
 
-- Current implementation is a hosted one-time Premium payment flow.
+- Current implementation is a hosted one-time paid-plan checkout flow.
 - Recurring subscriptions are not implemented yet.
-- Premium expiry handling is not implemented yet.
+- Paid access is manual renewal with subscription-table expiry handling.
 - Billing history is read-only.
 
 ## Regional pricing
@@ -171,7 +181,7 @@ Support freemium usage control and webhook-confirmed Premium upgrades without ma
 - Free users see:
   - `Study Packs`
   - `Challenge Quiz`
-- Premium users also see:
+- Pro users also see:
   - `Adaptive Practice`
 - OCR usage remains hidden from the Settings UI even though it is still tracked and enforced in backend.
 
@@ -179,7 +189,7 @@ Support freemium usage control and webhook-confirmed Premium upgrades without ma
 
 - Quotas do not reset on calendar month boundaries.
 - Free users reset monthly from the account creation date anchor.
-- Premium usage windows follow the active billing period model returned by backend.
+- Paid-plan usage windows follow the active billing period model returned by backend.
 - Persisted `user_usage.period_start` and `user_usage.period_end` define the active quota cycle for:
   - Study Packs
   - Challenge Quiz
