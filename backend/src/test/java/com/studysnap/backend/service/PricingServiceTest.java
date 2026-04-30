@@ -122,6 +122,8 @@ class PricingServiceTest {
         assertThat(selection.countryCode()).isEqualTo("PH");
         assertThat(selection.currency()).isEqualTo("PHP");
         assertThat(selection.planId()).isEqualTo("xendit_premium_checkout");
+        assertThat(selection.basePrice()).isEqualByComparingTo("249.00");
+        assertThat(selection.discountAmount()).isEqualByComparingTo("50.00");
         assertThat(selection.voucherId()).isEqualTo(introVoucher.getId());
         assertThat(selection.voucherCode()).isEqualTo("PH-INTRO");
         assertThat(selection.effectivePrice()).isEqualByComparingTo("199.00");
@@ -147,6 +149,8 @@ class PricingServiceTest {
         );
 
         assertThat(selection.planId()).isEqualTo("xendit_premium_checkout");
+        assertThat(selection.basePrice()).isEqualByComparingTo("249.00");
+        assertThat(selection.discountAmount()).isEqualByComparingTo("0.00");
         assertThat(selection.voucherId()).isNull();
         assertThat(selection.voucherCode()).isNull();
         assertThat(selection.effectivePrice()).isEqualByComparingTo("249.00");
@@ -176,29 +180,58 @@ class PricingServiceTest {
         );
 
         assertThat(selection.planId()).isEqualTo("xendit_premium_checkout");
+        assertThat(selection.basePrice()).isEqualByComparingTo("1999.00");
         assertThat(selection.voucherCode()).isEqualTo("SAVE10");
+        assertThat(selection.discountAmount()).isEqualByComparingTo("199.90");
         assertThat(selection.effectivePrice()).isEqualByComparingTo("1799.10");
     }
 
     @Test
-    void recordVoucherRedemption_savesOnceForSuccessfulPayment() {
+    void resolveCheckoutSelection_appliesFixedAmountVoucherWithoutGoingBelowZero() {
         UUID userId = UUID.randomUUID();
-        UUID voucherId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        DiscountVoucherEntity fixedAmountVoucher = buildVoucher("SAVE500", new BigDecimal("500.00"));
+        fixedAmountVoucher.setDiscountType(VoucherDiscountType.FIXED_AMOUNT);
+        fixedAmountVoucher.setBillingCycleScope(VoucherBillingCycleScope.MONTHLY);
+        fixedAmountVoucher.setRegionScope("ANY");
+        fixedAmountVoucher.setNewSubscribersOnly(false);
+        fixedAmountVoucher.setRequiresCode(true);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(pricingRegionResolver.normalizeCountryCode("PH")).thenReturn("PH");
+        when(pricingRegionResolver.resolveRegion("PH")).thenReturn("PH");
+        when(discountVoucherRepository.findByCodeIgnoreCase("SAVE500")).thenReturn(Optional.of(fixedAmountVoucher));
+
+        PricingService.CheckoutSelection selection = pricingService.resolveCheckoutSelection(
+                userId,
+                BillingCycle.MONTHLY,
+                "SAVE500",
+                "PH"
+        );
+
+        assertThat(selection.basePrice()).isEqualByComparingTo("249.00");
+        assertThat(selection.discountAmount()).isEqualByComparingTo("249.00");
+        assertThat(selection.effectivePrice()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void recordVoucherRedemption_savesDiscountAmountOncePerSuccessfulPayment() {
+        UUID userId = UUID.randomUUID();
         DiscountVoucherEntity voucher = buildVoucher("PH-INTRO", new BigDecimal("199.00"));
-        voucher.setId(voucherId);
         UserEntity user = buildUser(userId);
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setId(UUID.randomUUID());
         PaymentTransactionEntity paymentTransaction = new PaymentTransactionEntity();
         paymentTransaction.setId(UUID.randomUUID());
+        paymentTransaction.setUser(user);
+        paymentTransaction.setVoucher(voucher);
+        paymentTransaction.setDiscountAmount(new BigDecimal("50.00"));
         paymentTransaction.setAmount(new BigDecimal("199.00"));
         paymentTransaction.setCurrency("PHP");
 
-        when(voucherRedemptionRepository.existsByVoucher_IdAndUser_Id(voucherId, userId)).thenReturn(false);
-        when(discountVoucherRepository.findById(voucherId)).thenReturn(Optional.of(voucher));
-        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(voucherRedemptionRepository.existsByPaymentTransaction_Id(paymentTransaction.getId())).thenReturn(false);
 
-        pricingService.recordVoucherRedemption(voucherId, userId, subscription, paymentTransaction);
+        pricingService.recordVoucherRedemption(subscription, paymentTransaction);
 
         ArgumentCaptor<VoucherRedemptionEntity> redemptionCaptor = ArgumentCaptor.forClass(VoucherRedemptionEntity.class);
         verify(voucherRedemptionRepository).save(redemptionCaptor.capture());
@@ -207,13 +240,27 @@ class PricingServiceTest {
         assertThat(saved.getUser()).isEqualTo(user);
         assertThat(saved.getSubscription()).isEqualTo(subscription);
         assertThat(saved.getPaymentTransaction()).isEqualTo(paymentTransaction);
-        assertThat(saved.getAppliedAmount()).isEqualByComparingTo("199.00");
+        assertThat(saved.getAppliedAmount()).isEqualByComparingTo("50.00");
         assertThat(saved.getCurrency()).isEqualTo("PHP");
     }
 
     @Test
     void recordVoucherRedemption_skipsWhenTransactionIsMissing() {
-        pricingService.recordVoucherRedemption(UUID.randomUUID(), UUID.randomUUID(), new SubscriptionEntity(), null);
+        pricingService.recordVoucherRedemption(new SubscriptionEntity(), null);
+
+        verify(voucherRedemptionRepository, never()).save(any());
+    }
+
+    @Test
+    void recordVoucherRedemption_skipsDuplicateWebhookRedemptionForSamePayment() {
+        PaymentTransactionEntity paymentTransaction = new PaymentTransactionEntity();
+        paymentTransaction.setId(UUID.randomUUID());
+        paymentTransaction.setVoucher(buildVoucher("PH-INTRO", new BigDecimal("199.00")));
+        paymentTransaction.setDiscountAmount(new BigDecimal("50.00"));
+
+        when(voucherRedemptionRepository.existsByPaymentTransaction_Id(paymentTransaction.getId())).thenReturn(true);
+
+        pricingService.recordVoucherRedemption(new SubscriptionEntity(), paymentTransaction);
 
         verify(voucherRedemptionRepository, never()).save(any());
     }

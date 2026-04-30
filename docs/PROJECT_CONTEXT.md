@@ -86,7 +86,10 @@ Payments: Xendit hosted checkout
 ## Payments
 
 - Premium upgrades use Xendit hosted invoice checkout.
-- Current Premium billing model is manual renewal with `30` days of access per successful payment.
+- Current Premium billing model is manual renewal with `30`-day Monthly access or `365`-day Annual access per successful payment.
+- Billing checkout pricing is config-driven from backend billing region settings.
+- Intro offers and automatic discounts use `discount_vouchers`.
+- Successful discount usage is recorded in `voucher_redemptions` only after a confirmed `PAID` webhook.
 - All plans and entitlements must be represented through the `subscriptions` table.
 - Subscription history is preserved in `subscriptions`; only one active subscription row should exist per user at a time.
 - User records must not store Premium flags or plan state.

@@ -338,6 +338,7 @@ Teacher flow rule:
 ### Pricing Rule
 
 - Backend owns subscription pricing, region detection, voucher eligibility, and Xendit checkout creation.
+- Never hardcode backend checkout pricing; always load billable amounts from billing config or pricing services.
 - Frontend must use the billing pricing API for pricing display in Settings, pricing surfaces, and upgrade prompts.
 - Shared pricing surfaces may keep the existing reviewer-safe PHP and USD display config, but checkout creation and upgrade eligibility stay backend-owned.
 - Intro pricing and first-time promos must be implemented through the voucher/promotion system, not as a boolean on `User`.
@@ -352,6 +353,7 @@ Teacher flow rule:
 - Do not introduce plan flags or Premium state fields on `users`.
 - Always validate the Xendit `x-callback-token` before processing webhook payloads.
 - Webhook handling must stay idempotent through persisted provider event records and payment transaction lookups.
+- Voucher redemption history must be written only after a confirmed `PAID` webhook, never while checkout is still pending.
 - Payment-flow doc updates are required whenever checkout, webhook, returnUrl, or Premium-expiry behavior changes.
 
 ### Billing History Rule
@@ -1024,7 +1026,7 @@ Rules:
 
 - Active billing provider is `XENDIT`.
 - Premium checkout is currently a hosted Xendit invoice flow, not a recurring subscription flow.
-- The current Premium billing model is manual renewal: one successful payment grants `30` days of Premium access.
+- The current Premium billing model is manual renewal: Monthly checkout grants `30` days and Yearly checkout grants `365` days of Premium access.
 - Regional pricing is resolved from `CF-IPCountry` and mapped into pricing regions.
 - Region pricing config contains localized currency/amounts plus optional intro pricing metadata used for display and eligibility.
 - Voucher/promotion rules decide whether intro pricing is shown, but checkout itself stays on the current hosted Xendit invoice flow.

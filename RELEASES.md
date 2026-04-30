@@ -16,6 +16,9 @@
 - polished onboarding and generated-note transitions with lighter motion and better scroll-to-content behavior
 - added a post-onboarding Dashboard prompt that encourages users to set learning style and reminder preferences from Settings
 - aligned create-note action copy around `Generate Study Pack`
+- expanded manual Premium checkout to support both Monthly and Annual Xendit flows using config-driven pricing
+- fixed intro-offer voucher application so eligible first checkouts use discounted pricing and successful payments record voucher redemption history
+- hardened pending checkout reuse so billing cycle, final amount, and voucher state must still match before an existing Xendit invoice is reused
 - updated product context, roadmap, spec, and release documentation for the new positioning
 
 ## v0.10.1 - Landing & Pricing Conversion Polish

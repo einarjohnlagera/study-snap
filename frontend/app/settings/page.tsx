@@ -26,6 +26,7 @@ import {
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
+  type BillingCycle,
   type CancelPremiumSubscriptionRequest,
   type EngagementMode,
   type MePlanResponse,
@@ -33,7 +34,7 @@ import {
   type SubscriptionCancellationReason,
 } from "@/lib/api";
 import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
-import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
+import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
@@ -145,7 +146,7 @@ export default function SettingsPage() {
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
-  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [startingCheckoutCycle, setStartingCheckoutCycle] = useState<BillingCycle | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
 
@@ -283,26 +284,27 @@ export default function SettingsPage() {
     }
   };
 
-  const handleStartCheckout = async () => {
+  const handleStartCheckout = async (billingCycle: BillingCycle = "MONTHLY") => {
     const authUser = getAuthUser();
     if (authUser && !authUser.emailVerifiedAt) {
       setVerifyEmailModalOpen(true);
       return;
     }
 
-    setStartingCheckout(true);
+    setStartingCheckoutCycle(billingCycle);
     setCheckoutError(null);
     try {
       void trackAnalyticsEvent({
         eventType: "UPGRADE_CLICKED",
         metadata: {
           source: "settings_plan_billing",
-          feature: "premium_checkout",
+          feature: `premium_checkout_${billingCycle.toLowerCase()}`,
           path: pathname,
           target: "xendit_checkout",
         },
       });
       const response = await createPremiumCheckoutSession({
+        billingCycle,
         returnUrl: getSafeRedirectPath(getCurrentPathWithQuery()),
       });
       redirectToCheckoutUrl(response.checkoutUrl);
@@ -313,7 +315,7 @@ export default function SettingsPage() {
         setCheckoutError(error instanceof Error ? error.message : "Could not start Premium checkout. Please try again.");
       }
     } finally {
-      setStartingCheckout(false);
+      setStartingCheckoutCycle(null);
     }
   };
 
@@ -383,6 +385,10 @@ export default function SettingsPage() {
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
   const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
+  const annualPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
+  const introMonthlyPriceLabel = billingPricing?.introEligible && billingPricing.introMonthlyPrice !== null
+    ? formatPricingAmount(billingPricing.introMonthlyPrice, billingPricing.currency)
+    : null;
   const billingTransactions = billingHistory?.transactions ?? [];
 
   const formatBillingDate = (rawDate: string | null) => {
@@ -723,23 +729,48 @@ export default function SettingsPage() {
                         Premium access activates after Xendit confirms payment by webhook.
                       </p>
                       <p className="mt-2 text-xs text-foreground/60">
-                        Current checkout amount: {monthlyPriceLabel}
+                        Choose Monthly or Annual checkout. Premium access still renews manually.
                       </p>
-                      <p className="mt-1 text-xs text-foreground/60">
-                        Premium currently lasts 30 days per payment and renews manually.
-                      </p>
+                      {introMonthlyPriceLabel ? (
+                        <p className="mt-1 text-xs text-foreground/60">
+                          Eligible first monthly checkout starts at {introMonthlyPriceLabel}.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">Premium Monthly</p>
+                        <p className="text-xs text-foreground/60">{monthlyPriceLabel}</p>
+                      </div>
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("MONTHLY")}
+                        loading={startingCheckoutCycle === "MONTHLY"}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label="Choose Monthly"
+                      />
+                    </div>
+                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">Premium Annual</p>
+                        <p className="text-xs text-foreground/60">{annualPriceLabel}</p>
+                      </div>
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("YEARLY")}
+                        loading={startingCheckoutCycle === "YEARLY"}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label="Choose Annual"
+                      />
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <ResponsiveActionButton
-                      type="button"
-                      className="w-full sm:w-auto"
-                      onClick={() => void handleStartCheckout()}
-                      loading={startingCheckout}
-                      loadingText="Redirecting..."
-                      action="studyPack"
-                      label="Upgrade to Premium"
-                    />
                     {checkoutError ? (
                       <p className="text-xs text-red-600 dark:text-red-300">{checkoutError}</p>
                     ) : null}

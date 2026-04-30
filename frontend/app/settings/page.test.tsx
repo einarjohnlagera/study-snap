@@ -175,7 +175,7 @@ describe("Settings page cancellation flow", () => {
     ).toBeInTheDocument();
   });
 
-  it("starts hosted checkout from Settings", async () => {
+  it("starts monthly hosted checkout from Settings", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       ...premiumProfile,
       planType: "FREE",
@@ -188,10 +188,31 @@ describe("Settings page cancellation flow", () => {
 
     render(<SettingsPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Monthly" }));
 
     await waitFor(() => {
-      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ returnUrl: "/settings" });
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ billingCycle: "MONTHLY", returnUrl: "/settings" });
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
+  });
+
+  it("starts annual hosted checkout from Settings", async () => {
+    (getMe as jest.Mock).mockResolvedValue({
+      ...premiumProfile,
+      planType: "FREE",
+      subscription: {
+        cancelAtPeriodEnd: false,
+        premiumEndsAt: null,
+        cancelledAt: null,
+      },
+    });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Annual" }));
+
+    await waitFor(() => {
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ billingCycle: "YEARLY", returnUrl: "/settings" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });

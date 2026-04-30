@@ -5,13 +5,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
-import { createPremiumCheckoutSession, isEmailNotVerifiedError, trackAnalyticsEvent } from "@/lib/api";
+import { createPremiumCheckoutSession, isEmailNotVerifiedError, trackAnalyticsEvent, type BillingCycle } from "@/lib/api";
 import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 type PremiumUpgradeButtonProps = {
   label: string;
   source: string;
+  billingCycle?: BillingCycle;
   feature?: string | null;
   variant?: ComponentProps<typeof Button>["variant"];
   size?: ComponentProps<typeof Button>["size"];
@@ -21,6 +22,7 @@ type PremiumUpgradeButtonProps = {
 export function PremiumUpgradeButton({
   label,
   source,
+  billingCycle,
   feature = null,
   variant = "default",
   size = "default",
@@ -56,6 +58,7 @@ export function PremiumUpgradeButton({
         },
       });
       const response = await createPremiumCheckoutSession({
+        billingCycle: billingCycle ?? null,
         returnUrl: getSafeRedirectPath(getCurrentPathWithQuery()),
       });
       redirectToCheckoutUrl(response.checkoutUrl);

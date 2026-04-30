@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
+import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.BillingProvider;
 import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
@@ -14,7 +15,6 @@ import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.exception.InvalidCheckoutReturnUrlException;
 import com.studysnap.backend.exception.InvalidPaymentWebhookTokenException;
 import com.studysnap.backend.exception.PaymentCheckoutUnavailableException;
-import com.studysnap.backend.exception.PremiumAlreadyActiveException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,9 +45,12 @@ public class PaymentService {
     private static final BillingProvider BILLING_PROVIDER = BillingProvider.XENDIT;
     private static final BillingType BILLING_TYPE = BillingType.PREPAID;
     private static final PlanType PLAN_TYPE = PlanType.PREMIUM;
+    private static final BillingCycle DEFAULT_BILLING_CYCLE = BillingCycle.MONTHLY;
     private static final String INVOICE_ENDPOINT = "/v2/invoices";
-    private static final String CURRENCY = "PHP";
-    private static final String DESCRIPTION = "NoteLib Premium Monthly";
+    private static final String DESCRIPTION_PREFIX = "NoteLib Premium ";
+    private static final String DESCRIPTION_INTRO_SUFFIX = " - Intro offer applied";
+    private static final String BILLING_CYCLE_MONTHLY_LABEL = "Monthly";
+    private static final String BILLING_CYCLE_ANNUAL_LABEL = "Annual";
     private static final String SUCCESS_REDIRECT_PATH = "/billing/success";
     private static final String FAILURE_REDIRECT_PATH = "/billing/failed";
     private static final String RETURN_URL_QUERY_KEY = "returnUrl";
@@ -62,78 +66,104 @@ public class PaymentService {
     private static final String FIELD_INVOICE_URL = "invoice_url";
     private static final String FIELD_EXPIRY_DATE = "expiry_date";
     private static final int INVOICE_DURATION_SECONDS = 86_400;
-    private static final int PREMIUM_ACCESS_DAYS = 30;
-    private static final BigDecimal PREMIUM_MONTHLY_AMOUNT_MAJOR = new BigDecimal("249.00");
+    private static final int PREMIUM_MONTHLY_ACCESS_DAYS = 30;
+    private static final int PREMIUM_YEARLY_ACCESS_DAYS = 365;
 
     private final StudySnapProperties properties;
     private final UserRepository userRepository;
     private final PaymentTransactionService paymentTransactionService;
     private final SubscriptionService subscriptionService;
+    private final PricingService pricingService;
     private final WebhookEventService webhookEventService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final Clock clock;
 
-    public BillingCheckoutSessionResponse createCheckoutSession(UUID userId, String requestedReturnUrl) {
+    public BillingCheckoutSessionResponse createCheckoutSession(
+            UUID userId,
+            BillingCycle requestedBillingCycle,
+            String requestedReturnUrl,
+            String cfIpCountry
+    ) {
         userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
-        if (subscriptionService.hasActiveSubscription(userId, PLAN_TYPE)) {
-            throw new PremiumAlreadyActiveException();
-        }
 
         ensureCheckoutConfigured();
+        BillingCycle billingCycle = requestedBillingCycle == null ? DEFAULT_BILLING_CYCLE : requestedBillingCycle;
         String returnUrl = sanitizeReturnUrl(requestedReturnUrl);
         OffsetDateTime now = OffsetDateTime.now(clock);
+        PricingService.CheckoutSelection checkoutSelection = pricingService.resolveCheckoutSelection(
+                userId,
+                billingCycle,
+                null,
+                cfIpCountry
+        );
 
-        Optional<PaymentTransactionEntity> latestPendingTransaction = paymentTransactionService.findLatestPendingTransaction(
+        List<PaymentTransactionEntity> pendingTransactions = paymentTransactionService.findPendingTransactions(
                 userId,
                 BILLING_PROVIDER,
                 PLAN_TYPE
         );
-        if (latestPendingTransaction.isPresent()) {
-            PaymentTransactionEntity transaction = latestPendingTransaction.get();
-            if (canReusePendingTransaction(transaction, now)) {
+        for (PaymentTransactionEntity transaction : pendingTransactions) {
+            if (transaction.getBillingCycle() != checkoutSelection.billingCycle()) {
+                continue;
+            }
+            if (canReusePendingTransaction(transaction, checkoutSelection, now)) {
                 log.info(
-                        "billing.xendit.checkout reused userId={} externalId={} expiresAt={}",
+                        "billing.xendit.checkout reused userId={} externalId={} billingCycle={} amount={} expiresAt={}",
                         userId,
                         transaction.getProviderReferenceId(),
+                        transaction.getBillingCycle(),
+                        transaction.getAmount(),
                         transaction.getExpiresAt()
                 );
                 return new BillingCheckoutSessionResponse(transaction.getCheckoutUrl());
             }
             paymentTransactionService.markFailed(transaction.getId());
             log.info(
-                    "billing.xendit.checkout expiredPendingMarkedFailed userId={} externalId={} expiresAt={}",
+                    "billing.xendit.checkout stalePendingMarkedFailed userId={} externalId={} billingCycle={} amount={} expiresAt={}",
                     userId,
                     transaction.getProviderReferenceId(),
+                    transaction.getBillingCycle(),
+                    transaction.getAmount(),
                     transaction.getExpiresAt()
             );
         }
 
         String externalId = buildExternalId(userId, now);
-        InvoiceCheckout invoiceCheckout = createInvoice(externalId, returnUrl, now);
+        InvoiceCheckout invoiceCheckout = createInvoice(externalId, returnUrl, now, checkoutSelection);
         if (invoiceCheckout.checkoutUrl() == null) {
             throw new PaymentCheckoutUnavailableException("Could not start the payment checkout right now.");
         }
 
         Optional<PaymentTransactionEntity> pendingTransaction = paymentTransactionService.createPending(
-                userId,
-                BILLING_PROVIDER,
-                BILLING_TYPE,
-                PLAN_TYPE,
-                PREMIUM_MONTHLY_AMOUNT_MAJOR,
-                CURRENCY,
-                externalId,
-                invoiceCheckout.checkoutUrl(),
-                invoiceCheckout.expiresAt()
+                new PaymentTransactionService.PendingPaymentTransactionRequest(
+                        userId,
+                        BILLING_PROVIDER,
+                        BILLING_TYPE,
+                        PLAN_TYPE,
+                        checkoutSelection.billingCycle(),
+                        checkoutSelection.basePrice(),
+                        checkoutSelection.discountAmount(),
+                        checkoutSelection.effectivePrice(),
+                        checkoutSelection.currency(),
+                        externalId,
+                        invoiceCheckout.checkoutUrl(),
+                        invoiceCheckout.expiresAt(),
+                        checkoutSelection.voucherId()
+                )
         );
         if (pendingTransaction.isEmpty()) {
             throw new PaymentCheckoutUnavailableException("Could not reserve the payment transaction.");
         }
 
         log.info(
-                "billing.xendit.checkout created userId={} externalId={} expiresAt={} returnUrl={}",
+                "billing.xendit.checkout created userId={} externalId={} billingCycle={} originalAmount={} finalAmount={} voucherId={} expiresAt={} returnUrl={}",
                 userId,
                 externalId,
+                checkoutSelection.billingCycle(),
+                checkoutSelection.basePrice(),
+                checkoutSelection.effectivePrice(),
+                checkoutSelection.voucherId(),
                 invoiceCheckout.expiresAt(),
                 returnUrl == null ? "none" : returnUrl
         );
@@ -207,7 +237,10 @@ public class PaymentService {
             return;
         }
         OffsetDateTime activatedAt = OffsetDateTime.now(clock);
-        OffsetDateTime premiumExpiresAt = activatedAt.plusDays(PREMIUM_ACCESS_DAYS);
+        BillingCycle billingCycle = paymentTransaction.getBillingCycle() == null
+                ? DEFAULT_BILLING_CYCLE
+                : paymentTransaction.getBillingCycle();
+        OffsetDateTime premiumExpiresAt = activatedAt.plusDays(resolveAccessDurationDays(billingCycle));
         SubscriptionEntity subscription = subscriptionService.activatePremiumSubscription(
                 paymentTransaction.getUser().getId(),
                 BILLING_TYPE,
@@ -219,10 +252,12 @@ public class PaymentService {
         );
         paymentTransactionService.markSuccess(paymentTransaction.getId());
         paymentTransactionService.attachSubscription(paymentTransaction.getId(), subscription);
+        pricingService.recordVoucherRedemption(subscription, paymentTransaction);
         log.info(
-                "billing.xendit.webhook premiumActivated externalId={} userId={} premiumExpiresAt={}",
+                "billing.xendit.webhook premiumActivated externalId={} userId={} billingCycle={} premiumExpiresAt={}",
                 externalId,
                 paymentTransaction.getUser().getId(),
+                billingCycle,
                 premiumExpiresAt
         );
     }
@@ -238,13 +273,18 @@ public class PaymentService {
         );
     }
 
-    private InvoiceCheckout createInvoice(String externalId, String returnUrl, OffsetDateTime now) {
+    private InvoiceCheckout createInvoice(
+            String externalId,
+            String returnUrl,
+            OffsetDateTime now,
+            PricingService.CheckoutSelection checkoutSelection
+    ) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put(FIELD_EXTERNAL_ID, externalId);
-        payload.put("amount", PREMIUM_MONTHLY_AMOUNT_MAJOR);
-        payload.put("description", DESCRIPTION);
+        payload.put("amount", checkoutSelection.effectivePrice());
+        payload.put("description", buildInvoiceDescription(checkoutSelection));
         payload.put("invoice_duration", INVOICE_DURATION_SECONDS);
-        payload.put("currency", CURRENCY);
+        payload.put("currency", checkoutSelection.currency());
         payload.put("success_redirect_url", buildFrontendRedirectUrl(SUCCESS_REDIRECT_PATH, returnUrl));
         payload.put("failure_redirect_url", buildFrontendRedirectUrl(FAILURE_REDIRECT_PATH, returnUrl));
 
@@ -289,9 +329,31 @@ public class PaymentService {
         }
     }
 
-    private boolean canReusePendingTransaction(PaymentTransactionEntity transaction, OffsetDateTime now) {
+    private boolean canReusePendingTransaction(
+            PaymentTransactionEntity transaction,
+            PricingService.CheckoutSelection checkoutSelection,
+            OffsetDateTime now
+    ) {
         String checkoutUrl = normalizeText(transaction.getCheckoutUrl());
         if (checkoutUrl == null) {
+            return false;
+        }
+        if (!isSameAmount(transaction.getAmount(), checkoutSelection.effectivePrice())) {
+            return false;
+        }
+        if (!isSameAmount(transaction.getOriginalAmount(), checkoutSelection.basePrice())) {
+            return false;
+        }
+        if (!isSameAmount(transaction.getDiscountAmount(), checkoutSelection.discountAmount())) {
+            return false;
+        }
+        if (!matchesVoucherState(transaction, checkoutSelection.voucherId())) {
+            return false;
+        }
+        String transactionCurrency = normalizeText(transaction.getCurrency());
+        String checkoutCurrency = normalizeText(checkoutSelection.currency());
+        if (transactionCurrency == null
+            || !transactionCurrency.equalsIgnoreCase(checkoutCurrency)) {
             return false;
         }
         OffsetDateTime expiresAt = transaction.getExpiresAt();
@@ -300,6 +362,45 @@ public class PaymentService {
             expiresAt = createdAt == null ? now : createdAt.plusSeconds(INVOICE_DURATION_SECONDS);
         }
         return expiresAt.isAfter(now);
+    }
+
+    private boolean matchesVoucherState(PaymentTransactionEntity transaction, UUID voucherId) {
+        UUID existingVoucherId = transaction.getVoucher() == null ? null : transaction.getVoucher().getId();
+        if (existingVoucherId == null && voucherId == null) {
+            return true;
+        }
+        if (existingVoucherId == null || voucherId == null) {
+            return false;
+        }
+        return existingVoucherId.equals(voucherId);
+    }
+
+    private boolean isSameAmount(BigDecimal left, BigDecimal right) {
+        BigDecimal normalizedLeft = left == null ? BigDecimal.ZERO : left;
+        BigDecimal normalizedRight = right == null ? BigDecimal.ZERO : right;
+        return normalizedLeft.compareTo(normalizedRight) == 0;
+    }
+
+    private int resolveAccessDurationDays(BillingCycle billingCycle) {
+        return billingCycle == BillingCycle.YEARLY
+                ? PREMIUM_YEARLY_ACCESS_DAYS
+                : PREMIUM_MONTHLY_ACCESS_DAYS;
+    }
+
+    private String buildInvoiceDescription(PricingService.CheckoutSelection checkoutSelection) {
+        StringBuilder description = new StringBuilder(DESCRIPTION_PREFIX)
+                .append(resolveBillingCycleLabel(checkoutSelection.billingCycle()));
+        if (checkoutSelection.discountAmount() != null
+                && checkoutSelection.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
+            description.append(DESCRIPTION_INTRO_SUFFIX);
+        }
+        return description.toString();
+    }
+
+    private String resolveBillingCycleLabel(BillingCycle billingCycle) {
+        return billingCycle == BillingCycle.YEARLY
+                ? BILLING_CYCLE_ANNUAL_LABEL
+                : BILLING_CYCLE_MONTHLY_LABEL;
     }
 
     private String buildExternalId(UUID userId, OffsetDateTime now) {

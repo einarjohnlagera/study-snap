@@ -5,21 +5,21 @@
 - Payment provider: `XENDIT`
 - Checkout style: hosted invoice checkout
 - Premium activation source of truth: webhook-confirmed subscription state only
-- Current Premium model: manual renewal with `30` days of access per successful payment
+- Current Premium model: manual renewal with `30`-day Monthly access or `365`-day Annual access per successful payment
 - `subscriptions` is the only entitlement source of truth
 
 ### Flow
 
 1. User clicks an upgrade CTA.
-2. Frontend calls `POST /api/payments/create` with an optional safe internal `returnUrl`.
-3. Backend validates the user and rejects checkout creation if Premium is already active.
-4. Backend checks for an existing unexpired pending Xendit transaction for the same user and plan.
+2. Frontend calls `POST /api/payments/create` with the selected billing cycle and an optional safe internal `returnUrl`.
+3. Backend validates the user, resolves config-backed regional pricing, and applies any eligible automatic voucher before invoice creation.
+4. Backend checks for an existing unexpired pending Xendit transaction for the same user, plan, billing cycle, final amount, and voucher state.
 5. If a reusable pending transaction exists, backend returns its stored `checkoutUrl`.
 6. Otherwise backend creates a Xendit invoice through `POST /v2/invoices`, stores a pending `payment_transactions` row, and returns `checkoutUrl`.
 7. Frontend redirects the user to the hosted Xendit invoice page.
 8. Xendit redirects the user to `/billing/success` or `/billing/failed`, preserving the validated `returnUrl` when present.
 9. Xendit sends `POST /api/webhooks/xendit`.
-10. Backend validates `x-callback-token`, applies idempotency, marks the payment transaction, and updates `subscriptions` when status is `PAID`.
+10. Backend validates `x-callback-token`, applies idempotency, marks the payment transaction, updates `subscriptions` when status is `PAID`, and writes voucher redemption history only after payment confirmation.
 
 ### Endpoints
 
@@ -29,10 +29,15 @@
 ### Invoice Creation Notes
 
 - Xendit invoice creation uses the hosted Invoice API (`POST /v2/invoices`).
-- The amount sent to Xendit must be the actual major-currency PHP amount expected by the API.
-- Current Premium monthly checkout amount is `249.00 PHP`.
+- The amount sent to Xendit must be the config-driven major-currency amount expected by the API.
+- Current supported manual billing cycles are `MONTHLY` and `YEARLY`.
 - Backend stores:
   - Xendit `external_id`
+  - selected `billing_cycle`
+  - `original_amount`
+  - `discount_amount`
+  - final charged `amount`
+  - optional applied `voucher_id`
   - hosted `checkoutUrl`
   - invoice expiry timestamp when available
   - optional `subscription_id` link on the payment transaction after webhook activation
@@ -60,6 +65,7 @@
 - Webhooks must validate `x-callback-token` against `XENDIT_WEBHOOK_TOKEN`.
 - Duplicate webhook deliveries must be acknowledged without reapplying Premium.
 - Duplicate `PAID` webhook deliveries must not extend access repeatedly for the same transaction.
+- Voucher redemptions must only be created after a validated `PAID` webhook.
 - Unknown `external_id` webhook payloads should be logged and acknowledged safely.
 - Payment-flow documentation must be updated whenever checkout, webhook, or Premium-expiry behavior changes.
 
@@ -73,7 +79,7 @@
 - A user counts as Premium only while `plan_type = PREMIUM`, `status = ACTIVE`, and `(end_at IS NULL OR end_at > now())`.
 - Premium expiry falls back to an active `FREE` subscription record through lifecycle handling.
 - Manual renewals extend `end_at` from `max(current_end_at, now)`.
-- Manual renewal means the user may start checkout again after expiry; there is no recurring renewal job yet.
+- Manual renewals may be Monthly or Yearly; there is no recurring renewal job yet.
 
 ### Local Test Mode
 

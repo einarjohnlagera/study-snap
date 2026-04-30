@@ -5,22 +5,28 @@
 ### Current Implementation (`v0.11.0`)
 
 - Premium upgrades use Xendit hosted invoice checkout
-- Each successful payment grants `30` days of Premium access
+- Checkout supports manual `Monthly` and `Annual` Premium payments
+- Monthly checkout grants `30` days of Premium access
+- Annual checkout grants `365` days of Premium access
 - Renewal is manual; there is no recurring billing yet
+- Checkout pricing is loaded from backend billing config
+- Automatic intro offers and discounts use `discount_vouchers`
+- Voucher redemption history is written only after a successful `PAID` webhook
 - Premium activation is webhook-confirmed only
 - Frontend success and failure pages are informational only
 
 ### Flow
 
 1. User clicks `Upgrade to Premium`.
-2. Frontend sends `POST /api/payments/create` with an optional safe internal `returnUrl`.
-3. Backend validates the user, rejects already-active Premium users, and checks for an unexpired pending Xendit invoice.
-4. If a reusable pending invoice exists, backend returns its existing `checkoutUrl` instead of creating another pending row.
-5. Otherwise backend creates a Xendit invoice, stores a pending `payment_transactions` row, and returns `checkoutUrl`.
-6. Frontend redirects to the hosted Xendit checkout page.
-7. Xendit redirects the user to `/billing/success` or `/billing/failed` after checkout.
-8. Xendit calls `POST /api/webhooks/xendit`.
-9. Backend validates the callback token, applies idempotency, updates the payment transaction, and activates Premium only on `PAID`.
+2. Frontend sends `POST /api/payments/create` with the selected billing cycle and an optional safe internal `returnUrl`.
+3. Backend validates the user, loads region pricing from config, and resolves any eligible automatic voucher before checkout creation.
+4. Backend checks for an unexpired pending Xendit invoice for the same user, plan, billing cycle, final amount, and voucher state.
+5. If a reusable pending invoice exists, backend returns its existing `checkoutUrl` instead of creating another pending row.
+6. Otherwise backend creates a Xendit invoice, stores a pending `payment_transactions` row, and returns `checkoutUrl`.
+7. Frontend redirects to the hosted Xendit checkout page.
+8. Xendit redirects the user to `/billing/success` or `/billing/failed` after checkout.
+9. Xendit calls `POST /api/webhooks/xendit`.
+10. Backend validates the callback token, applies idempotency, updates the payment transaction, activates or extends Premium only on `PAID`, and records voucher redemption only after payment confirmation.
 
 ### Endpoints
 
@@ -32,10 +38,11 @@
 
 ### Checkout Behavior
 
-- The Xendit invoice amount uses the real major-currency PHP value expected by Xendit.
-- Premium monthly checkout should display `PHP 249.00`, not `PHP 24,900.00`.
-- Repeated upgrade clicks reuse the same pending checkout when the existing invoice has not expired.
-- If the pending invoice has expired, backend marks that transaction failed and creates a fresh checkout.
+- The Xendit invoice amount uses the configured final major-currency amount expected by Xendit.
+- Backend payment code must not hardcode checkout amounts; changing billing config changes checkout amount.
+- Repeated upgrade clicks reuse the same pending checkout only when cycle, final amount, and voucher state still match.
+- If pricing or voucher eligibility changes for that cycle, backend marks the stale pending transaction failed and creates a fresh checkout.
+- Monthly pending checkout does not block Annual checkout, and Annual does not block Monthly.
 
 ### Return URL Support
 
@@ -56,7 +63,8 @@
 - `subscriptions` is the only source of truth for plan state and Premium access.
 - `subscriptions` preserves billing history; users may have many historical rows over time.
 - Only one `ACTIVE` subscription row should exist per user at a time.
-- A successful `PAID` webhook expires the current active non-Premium subscription when needed, then creates a new active `PREMIUM` row for `30` days.
+- A successful Monthly `PAID` webhook expires the current active non-Premium subscription when needed, then creates or extends active `PREMIUM` access for `30` days.
+- A successful Annual `PAID` webhook creates or extends active `PREMIUM` access for `365` days.
 - If the user already has an active Premium subscription, the same active Premium row is extended instead of creating a duplicate active Premium row.
 - A user counts as Premium only while an active `PREMIUM` subscription exists and `(end_at IS NULL OR end_at > now())`.
 - When Premium expires, the lifecycle falls back to an active `FREE` subscription record.

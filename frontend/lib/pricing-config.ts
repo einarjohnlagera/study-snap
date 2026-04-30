@@ -16,7 +16,7 @@ export const pricingConfig = {
     PH: {
       currency: "PHP",
       monthly: 249,
-      yearly: 2499,
+      yearly: 1999,
     },
     DEFAULT: {
       currency: "USD",
