@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Check, Sparkles } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
@@ -35,6 +36,7 @@ import {
 } from "@/lib/api";
 import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
+import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
@@ -70,17 +72,11 @@ function UsageMetric({
   used,
   limit,
   resetDateLabel,
-  showUpgradeCta,
-  upgradeLabel,
-  onUpgradeClick,
 }: Readonly<{
   label: string;
   used: number;
   limit: number;
   resetDateLabel: string;
-  showUpgradeCta: boolean;
-  upgradeLabel: string;
-  onUpgradeClick: () => void;
 }>) {
   const progressPercent = getUsageProgressPercent(used, limit);
   const hasReachedLimit = limit > 0 && used >= limit;
@@ -100,16 +96,9 @@ function UsageMetric({
         />
       </div>
       {hasReachedLimit ? (
-        <div className="space-y-2">
-          <p className="text-xs text-foreground/70">
-            You&apos;ve reached your limit for this cycle. Limits reset on: {resetDateLabel}
-          </p>
-          {showUpgradeCta ? (
-            <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={onUpgradeClick}>
-              {upgradeLabel}
-            </Button>
-          ) : null}
-        </div>
+        <p className="text-xs text-foreground/70">
+          You&apos;ve reached your limit for this cycle. Limits reset on: {resetDateLabel}
+        </p>
       ) : null}
     </div>
   );
@@ -152,6 +141,7 @@ export default function SettingsPage() {
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
   const [startingCheckoutKey, setStartingCheckoutKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("MONTHLY");
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
 
   const scrollToPlanBillingSection = useCallback(() => {
@@ -383,10 +373,6 @@ export default function SettingsPage() {
   };
 
   const currentPlan = usageSummary?.plan ?? profile?.planType ?? "FREE";
-  const isPaidPlan = isPaidPlanType(currentPlan);
-  const isProPlan = currentPlan === "PRO";
-  const upgradePlanType = currentPlan === "PLUS" ? "PRO" : "PLUS";
-  const upgradePlanLabel = currentPlan === "PLUS" ? "Upgrade to Pro" : "Upgrade to Plus";
   const isCancellationScheduled = Boolean(
     billingHistory?.cancelAtPeriodEnd ?? (profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt),
   );
@@ -408,6 +394,25 @@ export default function SettingsPage() {
   const proMonthlyPricing = resolveCyclePricing(billingPricing, "PRO", "MONTHLY");
   const proAnnualPricing = resolveCyclePricing(billingPricing, "PRO", "YEARLY");
   const billingTransactions = billingHistory?.transactions ?? [];
+
+  const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
+  const annualAvailableForPro = proAnnualPricing?.available ?? (pricingConfig.price[displayRegion].pro.yearly !== null);
+  const annualAvailableForPlus = plusAnnualPricing?.available ?? (pricingConfig.price[displayRegion].plus.yearly !== null);
+  const hasAnnualOption = annualAvailableForPro || annualAvailableForPlus;
+  const proYearlySavingsPct = (() => {
+    const monthly = billingPricing?.pro.monthly.amount ?? pricingConfig.price[displayRegion].pro.monthly;
+    const yearly = billingPricing?.pro.yearly.amount ?? pricingConfig.price[displayRegion].pro.yearly;
+    if (!yearly || !monthly) return null;
+    return Math.round((1 - yearly / (monthly * 12)) * 100);
+  })();
+  const proAnnualLabelForDisplay = (() => {
+    if (proAnnualPricing?.available) return proAnnualPriceLabel;
+    const yearly = pricingConfig.price[displayRegion].pro.yearly;
+    if (!yearly) return null;
+    return `${formatPricingAmount(yearly, pricingConfig.price[displayRegion].currency)}/year`;
+  })();
+  const effectivePlusCycle: BillingCycle = "MONTHLY";
+  const effectiveProCycle: BillingCycle = selectedCycle === "YEARLY" && annualAvailableForPro ? "YEARLY" : "MONTHLY";
 
   const formatBillingDate = (rawDate: string | null) => {
     if (!rawDate) {
@@ -660,206 +665,233 @@ export default function SettingsPage() {
 
           <Card id={PLAN_BILLING_SECTION_ID} className="scroll-mt-24 space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Plan &amp; Billing</h2>
+
+            {/* Monthly Usage */}
+            <div className="space-y-2 rounded-md border border-border bg-background p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
+              <p className="text-xs text-foreground/60">Usage resets on: {usageResetDateLabel}</p>
+              <div className="space-y-3">
+                <UsageMetric
+                  label="Study Packs"
+                  used={studyPacksUsed}
+                  limit={studyPacksLimit}
+                  resetDateLabel={usageResetDateLabel}
+                />
+                <UsageMetric
+                  label="Quiz"
+                  used={challengeQuizUsed}
+                  limit={challengeQuizLimit}
+                  resetDateLabel={usageResetDateLabel}
+                />
+                {exportsLimit !== null && exportsLimit !== undefined ? (
+                  <UsageMetric
+                    label="Exports"
+                    used={exportsUsed}
+                    limit={exportsLimit}
+                    resetDateLabel={usageResetDateLabel}
+                  />
+                ) : null}
+                {adaptivePracticeLimit > 0 ? (
+                  <UsageMetric
+                    label="Adaptive Practice"
+                    used={adaptivePracticeUsed}
+                    limit={adaptivePracticeLimit}
+                    resetDateLabel={usageResetDateLabel}
+                  />
+                ) : null}
+              </div>
+            </div>
+
+            {/* Plan Cards */}
             <div className="space-y-4 rounded-md border border-border bg-background p-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current Plan</p>
-                <p className="mt-2 inline-flex rounded-full border border-border px-3 py-1 text-sm font-semibold">
-                  {getPlanDisplayName(currentPlan)}
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Choose Your Plan</p>
+                {hasAnnualOption ? (
+                  <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCycle("MONTHLY")}
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                        selectedCycle === "MONTHLY"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-foreground/60 hover:text-foreground"
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCycle("YEARLY")}
+                      className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                        selectedCycle === "YEARLY"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-foreground/60 hover:text-foreground"
+                      }`}
+                    >
+                      Annual
+                      {proYearlySavingsPct ? (
+                        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                          Save {proYearlySavingsPct}%
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                ) : null}
               </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
-                <p className="text-xs text-foreground/60">Usage resets on: {usageResetDateLabel}</p>
-                <div className="space-y-3">
-                  <UsageMetric
-                    label="Study Packs"
-                    used={studyPacksUsed}
-                    limit={studyPacksLimit}
-                    resetDateLabel={usageResetDateLabel}
-                    showUpgradeCta={!isProPlan}
-                    upgradeLabel={upgradePlanLabel}
-                    onUpgradeClick={() => void handleStartCheckout(upgradePlanType)}
-                  />
-                  <UsageMetric
-                    label="Quiz"
-                    used={challengeQuizUsed}
-                    limit={challengeQuizLimit}
-                    resetDateLabel={usageResetDateLabel}
-                    showUpgradeCta={!isProPlan}
-                    upgradeLabel={upgradePlanLabel}
-                    onUpgradeClick={() => void handleStartCheckout(upgradePlanType)}
-                  />
-                  {exportsLimit !== null && exportsLimit !== undefined ? (
-                    <UsageMetric
-                      label="Exports"
-                      used={exportsUsed}
-                      limit={exportsLimit}
-                      resetDateLabel={usageResetDateLabel}
-                      showUpgradeCta={!isProPlan}
-                      upgradeLabel={upgradePlanLabel}
-                      onUpgradeClick={() => void handleStartCheckout(upgradePlanType)}
-                    />
-                  ) : null}
-                  {adaptivePracticeLimit > 0 ? (
-                    <UsageMetric
-                      label="Adaptive Practice"
-                      used={adaptivePracticeUsed}
-                      limit={adaptivePracticeLimit}
-                      resetDateLabel={usageResetDateLabel}
-                      showUpgradeCta={false}
-                      upgradeLabel="Upgrade"
-                      onUpgradeClick={() => {}}
-                    />
-                  ) : null}
-                </div>
-              </div>
-              {isPaidPlan ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Features</p>
-                  <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                    <li>Weak concepts visible</li>
-                    <li>Higher monthly limits</li>
-                    <li>{exportsLimit === null ? "Unlimited exports" : `${exportsLimit} exports per month`}</li>
-                    <li>{isProPlan ? "Adaptive Practice available" : "Upgrade to Pro for Adaptive Practice"}</li>
-                    {adaptivePracticeLimit > 0 ? <li>{adaptivePracticeLimit} Adaptive Practice sessions per month</li> : null}
-                    <li>{difficultySelectionAvailable ? "Difficulty selection enabled" : "Upgrade to Pro for difficulty selection"}</li>
-                    <li>{isProPlan ? "Board Exam Mode included" : "Upgrade to Pro for Board Exam Mode"}</li>
-                    <li>{isProPlan ? "Highest note-generation and OCR limits" : "Expanded note-generation and OCR limits"}</li>
-                    <li>Higher limits</li>
-                    <li>Priority AI enabled</li>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                {/* Free card */}
+                <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "FREE" ? "border-blue-300 bg-blue-50/20 dark:border-blue-700 dark:bg-blue-950/10" : "border-border bg-muted/20"}`}>
+                  <div className="mb-4 space-y-2">
+                    {currentPlan === "FREE" ? (
+                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        Current plan
+                      </span>
+                    ) : null}
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
+                    <p className="text-2xl font-bold">Free</p>
+                    <p className="text-sm leading-snug text-foreground/70">Start building your note library without paying.</p>
+                  </div>
+                  <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.free.exportsPerMonth} exports / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Quick Review &amp; Quizzes</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Unlimited note library</li>
                   </ul>
+                  {currentPlan === "FREE" ? (
+                    <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="space-y-4 rounded-md border border-border bg-background p-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free Features</p>
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                      <li>Save unlimited notes</li>
-                      <li>{studyPacksLimit} Study Packs per month</li>
-                      <li>Quick Review</li>
-                      <li>{challengeQuizLimit} Quizzes per month</li>
-                      <li>{exportsLimit ?? 0} exports per month</li>
-                      <li>Weak concepts visible</li>
-                      <li>File uploads available</li>
-                      <li>Image to Text (OCR) - Limited</li>
-                      <li>Public Library access</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Paid Plan Highlights</p>
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                      <li>Plus: higher monthly limits and more exports</li>
-                      <li>Pro: highest limits for serious exam prep</li>
-                      <li>Adaptive Practice and Difficulty Selection on Pro</li>
-                      <li>Board Exam Mode on Pro</li>
-                      <li>Higher OCR and note-generation limits</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Checkout Options</p>
-                    {billingPricing ? (
+
+                {/* Plus card */}
+                <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "PLUS" ? "border-blue-300 bg-blue-50/30 dark:border-blue-700 dark:bg-blue-950/15" : "border-border bg-background"}`}>
+                  <div className="mb-4 space-y-2">
+                    {currentPlan === "PLUS" ? (
+                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        Current plan
+                      </span>
+                    ) : null}
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Plus</p>
+                    <p className="text-xl font-semibold">{plusMonthlyPriceLabel}</p>
+                    {selectedCycle === "YEARLY" && !annualAvailableForPlus ? (
+                      <p className="text-xs text-foreground/50">Monthly billing only</p>
+                    ) : null}
+                    {selectedCycle === "MONTHLY" && plusMonthlyPricing?.introEligible && plusMonthlyPricing.introAmount !== null ? (
                       <p className="text-xs text-foreground/60">
-                        Regional pricing: {billingPricing.region} · {billingPricing.currency}
+                        Intro: {formatPricingAmount(plusMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
                       </p>
                     ) : null}
-                    <div className="rounded-md border border-border bg-background p-3 text-sm">
-                      <p className="font-medium text-foreground">Hosted checkout via Xendit</p>
-                      <p className="mt-1 text-xs text-foreground/60">
-                        Paid access activates after Xendit confirms payment by webhook.
-                      </p>
-                      <p className="mt-2 text-xs text-foreground/60">
-                        Choose the plan that fits your study pace. Renewal stays manual for now.
-                      </p>
-                    </div>
                   </div>
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">Plus Monthly</p>
-                        <p className="text-xs text-foreground/60">{plusMonthlyPriceLabel}</p>
-                        {plusMonthlyPricing?.introEligible && plusMonthlyPricing.introAmount !== null ? (
-                          <p className="text-xs text-foreground/60">
-                            Intro offer: {formatPricingAmount(plusMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
-                          </p>
-                        ) : null}
-                      </div>
+                  <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.plus.studyPacksPerMonth} Study Packs / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.plus.exportsPerMonth} exports / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Higher note-generation limits</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Priority AI</li>
+                  </ul>
+                  <div className="space-y-2">
+                    {currentPlan === "FREE" ? (
                       <ResponsiveActionButton
                         type="button"
                         className="w-full"
-                        onClick={() => void handleStartCheckout("PLUS", "MONTHLY")}
-                        loading={startingCheckoutKey === "PLUS-MONTHLY"}
+                        onClick={() => void handleStartCheckout("PLUS", effectivePlusCycle)}
+                        loading={startingCheckoutKey === `PLUS-${effectivePlusCycle}`}
                         loadingText="Redirecting..."
                         action="studyPack"
                         label="Choose Plus"
                       />
-                    </div>
-                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">Pro Monthly</p>
-                        <p className="text-xs text-foreground/60">{proMonthlyPriceLabel}</p>
-                        {proMonthlyPricing?.introEligible && proMonthlyPricing.introAmount !== null ? (
-                          <p className="text-xs text-foreground/60">
-                            Intro offer: {formatPricingAmount(proMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
-                          </p>
-                        ) : null}
-                      </div>
-                      <ResponsiveActionButton
-                        type="button"
-                        className="w-full"
-                        onClick={() => void handleStartCheckout("PRO", "MONTHLY")}
-                        loading={startingCheckoutKey === "PRO-MONTHLY"}
-                        loadingText="Redirecting..."
-                        action="studyPack"
-                        label="Choose Pro"
-                      />
-                    </div>
-                  </div>
-                  {plusAnnualPricing?.available || proAnnualPricing?.available ? (
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      {plusAnnualPricing?.available ? (
-                        <div className="space-y-3 rounded-md border border-border bg-background p-4">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-foreground">Plus Annual</p>
-                            <p className="text-xs text-foreground/60">{plusAnnualPriceLabel}</p>
-                          </div>
-                          <ResponsiveActionButton
+                    ) : currentPlan === "PLUS" ? (
+                      <>
+                        <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                        {!isCancellationScheduled ? (
+                          <button
                             type="button"
-                            className="w-full"
-                            onClick={() => void handleStartCheckout("PLUS", "YEARLY")}
-                            loading={startingCheckoutKey === "PLUS-YEARLY"}
-                            loadingText="Redirecting..."
-                            action="studyPack"
-                            label="Choose Plus Annual"
-                          />
-                        </div>
-                      ) : null}
-                      {proAnnualPricing?.available ? (
-                        <div className="space-y-3 rounded-md border border-border bg-background p-4">
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-foreground">Pro Annual</p>
-                            <p className="text-xs text-foreground/60">{proAnnualPriceLabel}</p>
-                          </div>
-                          <ResponsiveActionButton
-                            type="button"
-                            className="w-full"
-                            onClick={() => void handleStartCheckout("PRO", "YEARLY")}
-                            loading={startingCheckoutKey === "PRO-YEARLY"}
-                            loadingText="Redirecting..."
-                            action="studyPack"
-                            label="Choose Pro Annual"
-                          />
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    {checkoutError ? (
-                      <p className="text-xs text-red-600 dark:text-red-300">{checkoutError}</p>
+                            className="w-full text-center text-xs text-foreground/50 transition-colors hover:text-foreground/70"
+                            onClick={handleOpenCancellationModal}
+                          >
+                            Cancel plan
+                          </button>
+                        ) : (
+                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">Cancellation scheduled</p>
+                        )}
+                      </>
                     ) : null}
                   </div>
                 </div>
-              )}
-              {null}
+
+                {/* Pro card */}
+                <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "PRO" ? "border-blue-400 bg-blue-50/40 dark:border-blue-600 dark:bg-blue-950/20" : "border-blue-200 bg-blue-50/20 dark:border-blue-800/60 dark:bg-blue-950/10"}`}>
+                  <div className="mb-4 space-y-2">
+                    {currentPlan === "PRO" ? (
+                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        Current plan
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        <Sparkles className="h-3 w-3" aria-hidden="true" />
+                        Most popular
+                      </span>
+                    )}
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Pro</p>
+                    <p className="text-xl font-semibold">
+                      {selectedCycle === "YEARLY" && annualAvailableForPro
+                        ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
+                        : proMonthlyPriceLabel}
+                    </p>
+                    {selectedCycle === "MONTHLY" && proMonthlyPricing?.introEligible && proMonthlyPricing.introAmount !== null ? (
+                      <p className="text-xs text-foreground/60">
+                        Intro: {formatPricingAmount(proMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
+                      </p>
+                    ) : null}
+                  </div>
+                  <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.pro.studyPacksPerMonth} Study Packs / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Unlimited exports</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Adaptive Practice</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Difficulty selection</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Board Exam Mode</li>
+                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Highest note-generation limits</li>
+                  </ul>
+                  <div className="space-y-2">
+                    {currentPlan !== "PRO" ? (
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
+                        loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label={currentPlan === "PLUS" ? "Upgrade to Pro" : "Choose Pro"}
+                      />
+                    ) : (
+                      <>
+                        <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                        {!isCancellationScheduled ? (
+                          <button
+                            type="button"
+                            className="w-full text-center text-xs text-foreground/50 transition-colors hover:text-foreground/70"
+                            onClick={handleOpenCancellationModal}
+                          >
+                            Cancel plan
+                          </button>
+                        ) : (
+                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">Cancellation scheduled</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground/60">
+                Hosted checkout via Xendit. Access activates after payment confirmation. Manual renewal.
+                {billingPricing ? <span> · {billingPricing.region} · {billingPricing.currency}</span> : null}
+              </div>
+              {checkoutError ? (
+                <p className="text-xs text-red-600 dark:text-red-300">{checkoutError}</p>
+              ) : null}
             </div>
 
             <div className="space-y-4 rounded-md border border-border bg-background p-4">
