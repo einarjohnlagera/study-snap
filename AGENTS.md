@@ -1231,6 +1231,61 @@ Design for mobile-first or mobile-safe behavior, even when implementing desktop 
 
 UI should feel clean, usable, and visually stable across screen sizes.
 
+## Product-First UI/UX Principles
+
+These principles apply to all frontend work — landing page, demo, pricing, and in-product features.
+
+### Clarity over feature density
+
+- Show what matters to a student or board exam taker first.
+- Do not stack features to make a page look impressive; a shorter, clearer page converts better.
+- Visual hierarchy: content > actions > secondary info.
+- Avoid competing CTAs on the same screen. One primary action per section.
+
+### Align features with learning outcomes
+
+Every visible feature must connect to a student's goal:
+
+| Feature | Learning outcome |
+|---|---|
+| Study Pack | Understand and organize notes |
+| Quizzes | Test retention and find gaps |
+| Adaptive Practice | Reinforce weak concepts |
+| Board Exam Mode | Simulate high-stakes exam conditions |
+| Exports | Use materials offline or in class |
+
+When writing copy for features, always frame them in terms of what the user gains or achieves — not what the system does.
+
+### Avoid generic AI tool positioning
+
+NoteLib is NOT:
+- a general-purpose chatbot
+- a one-shot summarizer
+- a prompt playground
+
+NoteLib IS:
+- a structured study tool for students and board exam takers
+- a note-first learning workspace with a repeating review loop
+- a system for moving from notes → understanding → exam readiness
+
+Do not write headlines or descriptions that could apply to any AI tool. Always anchor copy to study, retention, and exam preparation.
+
+### Demo is a conversion tool
+
+The `/demo` page is the strongest conversion driver on the site. Treat it as a guided learning experience, not a feature preview:
+- Each step should feel like progress toward a learning goal.
+- The quiz section must feel like a real exam mini-experience (interactive, not just showing answers).
+- End the demo with a clear CTA that connects the experience to real use.
+
+### Pricing copy must show progression
+
+FREE → PLUS → PRO should feel like natural steps for a growing student:
+- Free = getting started, not "limited"
+- Plus = consistent, regular review
+- Pro = serious exam preparation
+
+Avoid describing lower plans as crippled. Describe them as suited for their stage.
+
 ## Prompting Mode Guidelines
 
 Use two prompt modes depending on the type of task.

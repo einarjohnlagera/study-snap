@@ -384,62 +384,93 @@ export function SimplePricingSection() {
   return (
     <section className="space-y-5">
       <div className="grid gap-4 xl:grid-cols-3">
+        {/* Free */}
         <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
             <CardTitle>For getting started</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">
+              Create notes, generate Study Packs, and review basic concepts.
+            </CardDescription>
           </div>
           <p className="text-3xl font-semibold">Free</p>
-          <ul className="grow space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.exportsPerMonth} exports / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Summary + Key Concepts</li>
+          <ul className="grow space-y-2.5 text-sm text-foreground/80">
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <span>{pricingConfig.free.exportsPerMonth} exports / month
+                <span className="block text-xs text-foreground/50">PDF/DOCX for offline or classroom use</span>
+              </span>
+            </li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Summary + Key Concepts</li>
           </ul>
           <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
             Get Started Free
           </Link>
         </Card>
 
+        {/* Plus */}
         <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Plus</p>
             <CardTitle>For regular study</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">
+              Perfect for students who want consistent review and better retention.
+            </CardDescription>
           </div>
           <div className="space-y-0.5">
             <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.plus.monthly} first month</p>
             <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.plus.monthly}/month</p>
           </div>
-          <ul className="grow space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.exportsPerMonth} exports / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher note generation limits</li>
+          <ul className="grow space-y-2.5 text-sm text-foreground/80">
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.studyPacksPerMonth} Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month</li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <span>{pricingConfig.plus.exportsPerMonth} exports / month
+                <span className="block text-xs text-foreground/50">PDF/DOCX for offline or classroom use</span>
+              </span>
+            </li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.adaptivePracticePerMonth} Adaptive Practice sessions / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Higher note generation limits</li>
           </ul>
+          <p className="text-xs text-foreground/55">Train on weak areas until you master them</p>
           <Link href="/signup" className={buttonVariants({ variant: "outline", className: "w-full" })}>
             Upgrade to Plus
           </Link>
         </Card>
 
+        {/* Pro */}
         <Card className="flex flex-col space-y-4 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
               <Sparkles className="h-3.5 w-3.5" />
               Most Popular
             </div>
             <CardTitle>Best for exam prep</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">
+              Designed for serious learners preparing for board and entrance exams.
+            </CardDescription>
           </div>
           <div className="space-y-0.5">
             <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.pro.monthly} first month</p>
             <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.pro.monthly}/month</p>
           </div>
-          <ul className="grow space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty selection</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Board Exam Mode</li>
+          <ul className="grow space-y-2.5 text-sm text-foreground/80">
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.studyPacksPerMonth} Study Packs / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month</li>
+            <li className="flex items-start gap-2">
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <span>Unlimited exports
+                <span className="block text-xs text-foreground/50">PDF/DOCX for offline or classroom use</span>
+              </span>
+            </li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Adaptive Practice ({pricingConfig.pro.adaptivePracticePerMonth} sessions / month)</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Difficulty selection</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />Board Exam Mode</li>
           </ul>
+          <p className="text-xs text-foreground/55">Train on weak areas until you master them</p>
           <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
             Go Pro
           </Link>

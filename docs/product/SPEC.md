@@ -4,13 +4,41 @@ Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table nam
 
 Current documentation baseline: `v0.11.0 - Learning Flow Foundation`
 
-Current in-progress release: `v0.11.0 - Learning Flow Foundation`
+Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
 
 ## Product Overview
 
 NoteLib is a study system that guides students, board exam reviewees, and teachers from input to understanding, practice, challenge, and improvement.
 
 The goal is to support active recall and repeated practice through a calm, iterative learning workflow built around note capture, topic generation, summaries, key concepts, quiz practice, weak concepts, and adaptive review.
+
+### Product Positioning
+
+NoteLib is not a generic AI tool — it is a structured study system aimed at learners who need to retain and apply knowledge, especially for board and entrance exams.
+
+- Primary audience: students and board exam takers who want to move from passive reading to active recall
+- Secondary audience: teachers who create quiz materials and review resources
+- Positioning: "Turn your notes into exam-ready study materials"
+- Not positioned as: general-purpose AI, chatbot, summarizer
+
+Every feature must connect to a measurable learning outcome:
+- Study Pack → understand and organize content
+- Quizzes → test retention and identify gaps
+- Adaptive Practice → reinforce weak areas
+- Board Exam Mode → simulate high-stakes exam conditions
+- Export → use materials offline or in a classroom
+
+### Demo as a Conversion Driver
+
+The `/demo` page is the strongest conversion tool on the site.
+
+Rules:
+- Demo must feel like a guided learning experience, not a feature preview
+- Each step must create a sense of progress toward a study goal
+- The quiz section must be interactive — users select answers before seeing results
+- After the quiz, a CTA connects the demo experience to real account creation
+- Demo uses static prebuilt content only — no backend or LLM calls
+- Demo copy: "This is a sample Study Pack to show how NoteLib works. Your own notes will generate similar results."
 
 ## Core Concept
 

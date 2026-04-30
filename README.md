@@ -2,44 +2,42 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.5.0 - Public Profiles & Public Notes`
+Current release baseline: `v0.11.0 - Learning Flow Foundation`
 
 Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
 
-NoteLib is a notes library and study workspace where students, board exam reviewees, and teachers can organize notes, turn them into summaries and key concepts, and practice with quizzes built around active recall.
+NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
-It can be used by:
+It is built for:
 
-- students for reviewing notes
-- board exam takers for practice quizzes
-- teachers for creating quiz materials
+- students who want to move from passive reading to active recall
+- board exam takers who need structured practice and weak-area drilling
+- teachers who create quiz materials and classroom review resources
 
-Users can paste notes or upload photos of their study material, and NoteLib can generate:
+## Key features
 
-- AI-generated title (optional)
-- subject (optional)
-- tags (optional)
-- summary
-- key concepts
-- practice quiz questions
-- Challenge Quiz sets
-- Adaptive Practice sets
+| Feature | What it does |
+|---|---|
+| **Study Packs** | Generate a summary, key concepts, and a practice quiz from any note |
+| **Adaptive Practice** | Focus your review on the concepts you're weakest at |
+| **Board Exam Mode** | Simulate high-stakes exam conditions with timed Challenge Quizzes |
+| **Exports** | Download quizzes as PDF or DOCX for offline review or classroom use |
+| **Public Library** | Discover and copy publicly shared notes into your own library |
 
 ## One-liner
 
-Build your notes library, then turn notes into summaries and quizzes when you are ready to review.
+Turn your notes into exam-ready study materials in seconds.
 
 ## Public Positioning
 
-- Notes library first, Study Pack generation second
-- Build a reusable study workspace instead of using a one-time generator
-- Turn class notes into summaries, key concepts, and quizzes when review starts
-- Practice with questions instead of only rereading
-- Find weak concepts and keep improving through active recall
-- Support students, board exam reviewees, and teachers with one shared workflow
-- Public Library is a public discovery surface, not a paid-plan feature
-- Learn page reinforces active recall as the study method behind the product
-- Landing page now presents the Public Library with a framed screenshot preview using `public/landing/feature-public-library.jpg` in a balanced text-and-product layout, so users can immediately see the note-discovery experience without the image overpowering the page.
+- Exam-focused study tool, not a generic AI utility
+- Every feature connects to a learning outcome: understand, practice, improve
+- Study Pack generation is structured for retention, not one-shot output
+- Adaptive Practice trains on weak concepts until they stick
+- Board Exam Mode simulates real exam pressure for serious prep
+- Public Library is a discovery surface for shared notes, not a paid feature
+- Exports enable offline and classroom use (PDF/DOCX)
+- Free → Plus → Pro follows the natural arc of a growing learner
 
 ## Brand Assets
 

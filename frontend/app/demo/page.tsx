@@ -4,9 +4,11 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BookOpen, FileText, Loader2, Sparkles } from "lucide-react";
 import { DEMO_GENERATION_DELAY_MS, DEMO_NOTES, DEMO_STUDY_PACK_RESULT } from "@/app/study/demo-content";
-import { PracticeQuizCard } from "@/components/study-pack/practice-quiz-card";
+import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import type { QuizItem } from "@/lib/api";
+import { resolveQuizCorrectIndex } from "@/lib/quiz";
 
 type DemoStep = "choose" | "input" | "note" | "pack-loading" | "results";
 
@@ -224,6 +226,33 @@ function NoteStep({
   );
 }
 
+function DemoQuizQuestion({ item, index }: Readonly<{ item: QuizItem; index: number }>) {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const revealed = selectedIndex !== null;
+  const correctIndex = resolveQuizCorrectIndex(item);
+
+  return (
+    <Card className="space-y-3 p-4 sm:p-6">
+      <CardTitle className="text-base">
+        {index + 1}. {item.question}
+      </CardTitle>
+      <QuizChoiceList
+        questionKey={item.question}
+        choices={item.choices}
+        correctIndex={correctIndex}
+        selectedChoiceIndex={selectedIndex}
+        revealAnswer={revealed}
+        onSelectChoice={revealed ? undefined : setSelectedIndex}
+      />
+      {revealed ? (
+        <CardDescription className="text-sm">
+          <span className="font-medium text-foreground">Explanation:</span> {item.explanation}
+        </CardDescription>
+      ) : null}
+    </Card>
+  );
+}
+
 function ResultsStep() {
   const pack = DEMO_STUDY_PACK_RESULT;
 
@@ -231,23 +260,11 @@ function ResultsStep() {
     <section className="space-y-4">
       <h2 className="text-lg font-semibold">Your Study Pack</h2>
 
-      <Card className="space-y-3 border-blue-500/40 bg-blue-50/70 p-4 dark:bg-blue-950/20 sm:p-5">
+      <Card className="space-y-2 border-blue-500/40 bg-blue-50/70 p-4 dark:bg-blue-950/20 sm:p-5">
         <CardDescription className="text-blue-900 dark:text-blue-200">
           This is a sample Study Pack to show how NoteLib works. Your own notes will generate similar results.
         </CardDescription>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Link href="/signup" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-            Create your own Study Pack
-          </Link>
-          <Link href="/demo/quick-review" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-            Try Demo Quick Review
-          </Link>
-        </div>
       </Card>
-
-      <p className="text-sm text-foreground/65">
-        {pack.quiz.length} quiz questions · Topic: {pack.tags.join(", ")}
-      </p>
 
       <Card className="p-4 sm:p-6">
         <CardTitle className="mb-2">Summary</CardTitle>
@@ -263,7 +280,38 @@ function ResultsStep() {
         </ul>
       </Card>
 
-      <PracticeQuizCard quiz={pack.quiz} />
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <p className="font-semibold text-foreground">Now test what you remember (like a real exam)</p>
+          <p className="text-sm text-foreground/65">
+            No instant feedback in real exams — select your answer first, then see if you got it right.
+          </p>
+        </div>
+
+        <Card className="space-y-4 border-emerald-500/40 p-4 sm:p-6">
+          <CardTitle>Practice Quiz</CardTitle>
+          <div className="space-y-6">
+            {pack.quiz.map((item, index) => (
+              <DemoQuizQuestion key={`${item.question}-${index}`} item={item} index={index} />
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card className="space-y-4 border-sky-500/30 bg-sky-50/50 p-4 dark:bg-sky-950/20 sm:p-6">
+        <div className="space-y-1">
+          <CardTitle>Ready to create your own Study Pack?</CardTitle>
+          <CardDescription>Start free — no credit card required.</CardDescription>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link href="/signup" className={buttonVariants({ className: "w-full sm:w-auto" })}>
+            Start for Free
+          </Link>
+          <Link href="/signup" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
+            Create your own Study Pack
+          </Link>
+        </div>
+      </Card>
     </section>
   );
 }
