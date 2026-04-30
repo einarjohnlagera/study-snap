@@ -550,7 +550,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
 
     expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
   });
@@ -796,11 +796,11 @@ describe("NoteEditorPageClient", () => {
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Saved before checkout" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Plus" }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalled();
-      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ returnUrl: "/notes/note-created/edit" });
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PLUS", returnUrl: "/notes/note-created/edit" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
@@ -1041,16 +1041,16 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/You've reached your image-to-text limit for this month\./i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
     await waitFor(() => {
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
 
   it("shows the premium OCR limit modal without upgrade CTA", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
-      plan: "PREMIUM",
+      plan: "PRO",
       limits: {
         studyPacksPerMonth: 100,
         challengeQuizzesPerMonth: 50,
@@ -1088,7 +1088,7 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/Your limits will reset on your next billing date\./i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Upgrade to Premium" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choose Plus" })).not.toBeInTheDocument();
   });
 
   it("saves a new note after importing content", async () => {

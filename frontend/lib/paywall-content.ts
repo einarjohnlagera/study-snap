@@ -3,7 +3,7 @@
  *
  * Centralises copy for two distinct gating surfaces:
  *   FREE_PAYWALL_CONTENT      — shown to free users when an action is gated (upgrade prompt)
- *   PREMIUM_EXHAUSTED_CONTENT — shown to premium users when monthly usage is exhausted
+ *   PAID_EXHAUSTED_CONTENT — shown to paid users when monthly usage is exhausted
  *
  * Use `PaywallAction` as the canonical key so call sites are decoupled from
  * the modal variant string.
@@ -35,7 +35,7 @@ export type FreePaywallContent = {
   dismissLabel: string;
 };
 
-export type PremiumExhaustedContent = {
+export type PaidExhaustedContent = {
   title: string;
   body: string;
 };
@@ -43,49 +43,49 @@ export type PremiumExhaustedContent = {
 const BASE_FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
   STUDY_PACK: {
     title: "You’ve reached your study pack limit",
-    body: "You’ve used all your Study Packs for this month. Upgrade to Plus or Pro to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.",
+    body: "You’ve used all your Study Packs for this month. Choose Plus or go Pro to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.",
     feature: "study_pack_limit",
     dismissLabel: "Maybe Later",
   },
   QUIZ: {
     title: "You’ve reached your quiz limit",
-    body: "You’ve used all your quizzes for this month. Upgrade to Plus or Pro to continue practicing with more quizzes and keep your review going.",
+    body: "You’ve used all your quizzes for this month. Choose Plus or go Pro to continue practicing with more quizzes and keep your review going.",
     feature: "quiz_limit",
     dismissLabel: "Maybe Later",
   },
   BOARD_EXAM: {
     title: "Board Exam Mode is a Pro feature",
-    body: "Upgrade to Pro to access stricter exam-style practice designed for focused prep.",
+    body: "Go Pro to access stricter exam-style practice designed for focused prep.",
     feature: "board_exam",
     dismissLabel: "Maybe Later",
   },
   QUIZ_GENERATION: {
     title: "You’ve reached your quiz generation limit",
-    body: "You’ve used all your quiz generations for this month. Upgrade to Plus or Pro to generate more quizzes and prepare materials for your class.",
+    body: "You’ve used all your quiz generations for this month. Choose Plus or go Pro to generate more quizzes and prepare materials for your class.",
     feature: "quiz_generation_limit",
     dismissLabel: "Maybe Later",
   },
   ADAPTIVE_PRACTICE: {
     title: "Adaptive Practice is a Pro feature",
-    body: "Adaptive Practice focuses on your weak concepts. Upgrade to Pro to unlock targeted practice built around them.",
+    body: "Adaptive Practice focuses on your weak concepts. Go Pro to unlock targeted practice built around them.",
     feature: "adaptive",
     dismissLabel: "Maybe Later",
   },
   NOTE_GENERATION: {
     title: "You’ve reached your note generation limit",
-    body: "You’ve used all your topic-based note generations for this month. Upgrade to Plus or Pro to generate more notes from topics.",
+    body: "You’ve used all your topic-based note generations for this month. Choose Plus or go Pro to generate more notes from topics.",
     feature: "note_generation_limit",
     dismissLabel: "Maybe Later",
   },
   EXPORT: {
     title: "You’ve reached your monthly export limit",
-    body: "Upgrade to Plus or Pro to export more quizzes and exams this month.",
+    body: "Choose Plus or go Pro to export more quizzes and exams this month.",
     feature: "export_limit",
     dismissLabel: "Maybe Later",
   },
 };
 
-export const PREMIUM_EXHAUSTED_CONTENT: Record<PaywallAction, PremiumExhaustedContent> = {
+export const PAID_EXHAUSTED_CONTENT: Record<PaywallAction, PaidExhaustedContent> = {
   STUDY_PACK: {
     title: "You’ve reached your study pack limit for this month",
     body: "Your study pack limit resets on your next billing cycle.",
@@ -126,19 +126,19 @@ export function resolveFreePaywallContent(
     if (profileType === "BOARD_EXAM") {
       return {
         ...BASE_FREE_PAYWALL_CONTENT.QUIZ,
-        body: "You’ve used all your quizzes for this month. Upgrade to Pro to continue practicing and access Board Exam mode.",
+        body: "You’ve used all your quizzes for this month. Go Pro to continue practicing and access Board Exam mode.",
       };
     }
     return {
       ...BASE_FREE_PAYWALL_CONTENT.QUIZ,
-      body: "You’ve used all your quizzes for this month. Upgrade to Plus or Pro to continue practicing and unlock higher limits.",
+      body: "You’ve used all your quizzes for this month. Choose Plus or go Pro to continue practicing and unlock higher limits.",
     };
   }
   if (action === "QUIZ_GENERATION") {
     return {
       ...BASE_FREE_PAYWALL_CONTENT.QUIZ_GENERATION,
       body: profileType === "TEACHER"
-        ? "You’ve used all your quiz generations for this month. Upgrade to Plus or Pro to generate more quizzes and export materials for your class."
+        ? "You’ve used all your quiz generations for this month. Choose Plus or go Pro to generate more quizzes and export materials for your class."
         : BASE_FREE_PAYWALL_CONTENT.QUIZ_GENERATION.body,
     };
   }

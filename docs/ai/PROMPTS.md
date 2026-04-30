@@ -175,7 +175,7 @@ Plants absorb sunlight using chlorophyll in their leaves. Carbon dioxide and wat
 
 - Demo: 3 questions
 - Free: 5 questions
-- Premium: 10–20 questions
+- Paid plans: 10–20 questions
 
 ---
 
@@ -202,4 +202,3 @@ Before sending OCR text to the LLM:
 
 Pipeline:
 Image → OCR → text normalization → LLM prompt
-

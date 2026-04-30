@@ -39,7 +39,7 @@ Examples of actions that should keep text on mobile:
 - `Public Library`
 - `Profile`
 - `Settings`
-- `Upgrade to Premium`
+- `Upgrade`
 - `Save`
 - `Log in`
 - `Sign up`

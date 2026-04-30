@@ -144,11 +144,11 @@ The copy should stay broad enough for the public homepage while still reflecting
 
 ## Pricing Preview
 
-Landing should preview Free vs Premium without becoming a payment page.
+Landing should preview Free vs Plus vs Pro without becoming a payment page.
 
 Pricing preview rules:
 
-- show Free and Premium at a glance
+- show Free, Plus, and Pro at a glance
 - keep Board Exam Mode visible in the preview
 - include a clear link to `/pricing`
 - keep upgrade language student-friendly and non-aggressive

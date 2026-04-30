@@ -45,6 +45,7 @@ import {
   getUsageProgressPercent,
   isPaidPlanType,
 } from "@/lib/plans";
+import { PLANS, getPaidPlanCtaLabel } from "@/src/config/plans";
 
 function SettingsLoading() {
   return (
@@ -101,6 +102,26 @@ function UsageMetric({
         </p>
       ) : null}
     </div>
+  );
+}
+
+function PlanFeatureList({
+  features,
+}: Readonly<{
+  features: ReadonlyArray<{ label: string; helper?: string }>;
+}>) {
+  return (
+    <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
+      {features.map((feature) => (
+        <li key={feature.label} className="flex items-start gap-2">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+          <span>
+            {feature.label}
+            {feature.helper ? <span className="block text-xs text-foreground/50">{feature.helper}</span> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -386,12 +407,9 @@ export default function SettingsPage() {
   const exportsLimit = usageSummary?.limits.exportsPerMonth ?? null;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
   const plusMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
-  const plusAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "YEARLY");
   const proMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
   const proAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY");
-  const plusMonthlyPricing = resolveCyclePricing(billingPricing, "PLUS", "MONTHLY");
   const plusAnnualPricing = resolveCyclePricing(billingPricing, "PLUS", "YEARLY");
-  const proMonthlyPricing = resolveCyclePricing(billingPricing, "PRO", "MONTHLY");
   const proAnnualPricing = resolveCyclePricing(billingPricing, "PRO", "YEARLY");
   const billingTransactions = billingHistory?.transactions ?? [];
 
@@ -399,6 +417,9 @@ export default function SettingsPage() {
   const annualAvailableForPro = proAnnualPricing?.available ?? (pricingConfig.price[displayRegion].pro.yearly !== null);
   const annualAvailableForPlus = plusAnnualPricing?.available ?? (pricingConfig.price[displayRegion].plus.yearly !== null);
   const hasAnnualOption = annualAvailableForPro || annualAvailableForPlus;
+  const freePlanConfig = PLANS.FREE;
+  const plusPlanConfig = PLANS.PLUS;
+  const proPlanConfig = PLANS.PRO;
   const proYearlySavingsPct = (() => {
     const monthly = billingPricing?.pro.monthly.amount ?? pricingConfig.price[displayRegion].pro.monthly;
     const yearly = billingPricing?.pro.yearly.amount ?? pricingConfig.price[displayRegion].pro.yearly;
@@ -748,17 +769,11 @@ export default function SettingsPage() {
                         Current plan
                       </span>
                     ) : null}
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-                    <p className="text-2xl font-bold">Free</p>
-                    <p className="text-sm leading-snug text-foreground/70">Start building your note library without paying.</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlanConfig.name}</p>
+                    <p className="text-2xl font-bold">{freePlanConfig.title}</p>
+                    <p className="text-sm leading-snug text-foreground/70">{freePlanConfig.description}</p>
                   </div>
-                  <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.free.exportsPerMonth} exports / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Quick Review &amp; Quizzes</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Unlimited note library</li>
-                  </ul>
+                  <PlanFeatureList features={freePlanConfig.features} />
                   {currentPlan === "FREE" ? (
                     <Button variant="outline" className="w-full" disabled>Current Plan</Button>
                   ) : null}
@@ -772,24 +787,16 @@ export default function SettingsPage() {
                         Current plan
                       </span>
                     ) : null}
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Plus</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{plusPlanConfig.name}</p>
+                    <p className="text-lg font-semibold text-foreground">{plusPlanConfig.title}</p>
+                    <p className="text-sm leading-snug text-foreground/70">{plusPlanConfig.description}</p>
                     <p className="text-xl font-semibold">{plusMonthlyPriceLabel}</p>
                     {selectedCycle === "YEARLY" && !annualAvailableForPlus ? (
                       <p className="text-xs text-foreground/50">Monthly billing only</p>
                     ) : null}
-                    {selectedCycle === "MONTHLY" && plusMonthlyPricing?.introEligible && plusMonthlyPricing.introAmount !== null ? (
-                      <p className="text-xs text-foreground/60">
-                        Intro: {formatPricingAmount(plusMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
-                      </p>
-                    ) : null}
                   </div>
-                  <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.plus.studyPacksPerMonth} Study Packs / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.plus.exportsPerMonth} exports / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Higher note-generation limits</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Priority AI</li>
-                  </ul>
+                  <PlanFeatureList features={plusPlanConfig.features} />
+                  <p className="mb-5 text-xs text-foreground/55">{plusPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan === "FREE" ? (
                       <ResponsiveActionButton
@@ -799,7 +806,7 @@ export default function SettingsPage() {
                         loading={startingCheckoutKey === `PLUS-${effectivePlusCycle}`}
                         loadingText="Redirecting..."
                         action="studyPack"
-                        label="Choose Plus"
+                        label={getPaidPlanCtaLabel("PLUS")}
                       />
                     ) : currentPlan === "PLUS" ? (
                       <>
@@ -830,30 +837,20 @@ export default function SettingsPage() {
                     ) : (
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
                         <Sparkles className="h-3 w-3" aria-hidden="true" />
-                        Most popular
+                        {proPlanConfig.eyebrow}
                       </span>
                     )}
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Pro</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{proPlanConfig.name}</p>
+                    <p className="text-lg font-semibold text-foreground">{proPlanConfig.title}</p>
+                    <p className="text-sm leading-snug text-foreground/70">{proPlanConfig.description}</p>
                     <p className="text-xl font-semibold">
                       {selectedCycle === "YEARLY" && annualAvailableForPro
                         ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
                         : proMonthlyPriceLabel}
                     </p>
-                    {selectedCycle === "MONTHLY" && proMonthlyPricing?.introEligible && proMonthlyPricing.introAmount !== null ? (
-                      <p className="text-xs text-foreground/60">
-                        Intro: {formatPricingAmount(proMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
-                      </p>
-                    ) : null}
                   </div>
-                  <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.pro.studyPacksPerMonth} Study Packs / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />{pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Unlimited exports</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Adaptive Practice</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Difficulty selection</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Board Exam Mode</li>
-                    <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />Highest note-generation limits</li>
-                  </ul>
+                  <PlanFeatureList features={proPlanConfig.features} />
+                  <p className="mb-5 text-xs text-foreground/55">{proPlanConfig.adaptivePracticeMessage}</p>
                   <div className="space-y-2">
                     {currentPlan !== "PRO" ? (
                       <ResponsiveActionButton
@@ -863,7 +860,7 @@ export default function SettingsPage() {
                         loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
                         loadingText="Redirecting..."
                         action="studyPack"
-                        label={currentPlan === "PLUS" ? "Upgrade to Pro" : "Choose Pro"}
+                        label={getPaidPlanCtaLabel("PRO")}
                       />
                     ) : (
                       <>

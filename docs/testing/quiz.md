@@ -24,10 +24,10 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 
 - Challenge Quiz start screen shows two explicit mode options: `Challenge Quiz` and `Board Exam Mode`
 - entering Challenge Quiz does not auto-start generation; the user must choose a mode first and then land on a mode-specific prescreen
-- Premium users who choose `Challenge Quiz` see `Challenge Quiz Setup` before generation with visible difficulty controls
-- Free users who choose `Challenge Quiz` also see `Challenge Quiz Setup` before generation, but only as a recommended-difficulty summary with subtle Premium upsell copy
+- Pro users who choose `Challenge Quiz` see `Challenge Quiz Setup` before generation with visible difficulty controls
+- Free and Plus users who choose `Challenge Quiz` also see `Challenge Quiz Setup` before generation, but only as a recommended-difficulty summary with subtle Pro upsell copy
 - `Challenge Quiz Setup` shows timer, question-count, and attempt-usage sections in addition to the mode-specific difficulty section
-- Board Exam Mode is available on both Free and Premium plans and still consumes the standard Challenge Quiz quota
+- Board Exam Mode is available on Pro and still consumes the standard Challenge Quiz quota
 - Board Exam Mode shows a dedicated `Board Exam Setup` confirmation state with `Cancel` and `Start Exam`
 - Board Exam Setup includes:
   - focused exam simulation description
@@ -36,7 +36,7 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
   - attempt-usage summary
 - tapping `Start Exam` first opens the `Start Board Exam Mode?` confirmation modal and generation does not begin until the user confirms
 - Board Exam Mode never shows difficulty selection in the UI and always uses mixed difficulty with the fixed Board Exam question count
-- Free users can still enter Board Exam Mode without a separate Premium lock or dead-end disabled controls
+- Free and Plus users should hit the Pro upsell instead of a dead-end disabled state when they choose Board Exam Mode
 - no correctness indication shown during the answering phase (no green/red, no "Correct"/"Incorrect" labels)
 - selected choice shows neutral exam-style highlight only
 - question-number navigation during Board Exam Mode shows current/answered/unanswered states only and never correctness
@@ -114,7 +114,7 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - switching tabs preserves the same note route and updates query state without full reload
 - desktop quiz actions show icon + text
 - mobile quiz actions keep accessible labels
-- paywall/plan gating still applies to Premium-only quiz flows where configured
+- paywall/plan gating still applies to Pro-only quiz flows where configured
 
 ## `lib/challenge-quiz-results.ts` unit tests (covered in `challenge-quiz-results.test.ts`)
 

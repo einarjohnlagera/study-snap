@@ -15,6 +15,7 @@ import { QuizChoiceList } from "@/components/study-pack/quiz-choice-list";
 import { useQuizSessionGuard } from "@/components/study-pack/quiz-session-guard";
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import {
   completeProductOnboarding,
   completeQuickReviewSession,
@@ -111,11 +112,11 @@ function ScoreProgressBlock({
   score,
   totalQuestions,
   scorePercentage,
-}: {
+}: Readonly<{
   score: number;
   totalQuestions: number;
   scorePercentage: number;
-}) {
+}>) {
   return (
     <div className="space-y-1">
       <p className="text-base font-medium text-foreground">Score: {score} / {totalQuestions} correct</p>
@@ -338,7 +339,7 @@ export default function QuickReviewPage() {
           return null;
         }
         const concept = item.concept?.trim();
-        return concept ? concept : null;
+        return concept || null;
       })
       .filter((concept): concept is string => concept !== null);
     return Array.from(new Set(concepts));
@@ -373,9 +374,9 @@ export default function QuickReviewPage() {
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
     };
     syncAuthState();
-    window.addEventListener("studysnap-auth-change", syncAuthState);
+    globalThis.addEventListener("studysnap-auth-change", syncAuthState);
     return () => {
-      window.removeEventListener("studysnap-auth-change", syncAuthState);
+      globalThis.removeEventListener("studysnap-auth-change", syncAuthState);
     };
   }, []);
 
@@ -411,7 +412,7 @@ export default function QuickReviewPage() {
       activeQuestionIndexes: next.activeQuestionIndexes,
       roundSelections: serializeSelectedChoiceIndexRecord(next.roundSelections),
     };
-    void updateQuickReviewSessionProgress(currentSessionId, {
+    updateQuickReviewSessionProgress(currentSessionId, {
       currentQuestionIndex: next.currentQuestionIndex,
       currentRound: next.currentRound,
       retryCount: next.retryCount,
@@ -545,7 +546,7 @@ export default function QuickReviewPage() {
     }
 
     let isMounted = true;
-    void generateQuickReviewStudyTip(note.id, {
+    generateQuickReviewStudyTip(note.id, {
       incorrectQuestions: incorrectQuestionsForStudyTip,
     })
       .then((response) => {
@@ -668,7 +669,7 @@ export default function QuickReviewPage() {
     resetQuickReviewState(allIndexes);
     setSessionStartedAt(Date.now());
     if (note) {
-      void startQuickReviewSession(note.id)
+      startQuickReviewSession(note.id)
         .then((result: QuickReviewSessionStartResponse) => {
           if (!result.sessionId) {
             setCurrentSessionId(null);
@@ -857,7 +858,7 @@ export default function QuickReviewPage() {
                   size="sm"
                   onClick={() => openAdaptivePracticePaywall("quick_review_results_upgrade")}
                 >
-                    Upgrade to Pro
+                    {getPaidPlanCtaLabel("PRO")}
                 </Button>
               </div>
             ) : null}

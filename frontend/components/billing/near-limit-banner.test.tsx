@@ -16,8 +16,8 @@ describe("NearLimitBanner", () => {
     );
   });
 
-  it("renders premium reached-limit messaging with reset date", () => {
-    render(<NearLimitBanner planType="PREMIUM" remainingCredits={0} resetDateLabel="April 20" />);
+  it("renders pro reached-limit messaging with reset date", () => {
+    render(<NearLimitBanner planType="PRO" remainingCredits={0} resetDateLabel="April 20" />);
 
     expect(screen.getByRole("status")).toHaveTextContent(
       "You’ve used all your Study Packs this month. Limit resets on April 20.",

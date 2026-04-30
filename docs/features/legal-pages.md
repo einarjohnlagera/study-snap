@@ -38,7 +38,7 @@ The Terms page should cover:
 - user responsibility for uploaded content
 - account responsibility and abuse suspension
 - acceptable use restrictions
-- Premium subscription and cancellation-at-period-end
+- paid-plan manual renewal and cancellation-at-period-end
 - service availability and feature changes
 - contact at `support@mail.notelib.app`
 

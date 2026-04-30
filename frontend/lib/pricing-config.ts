@@ -12,6 +12,7 @@ export const pricingConfig = {
     challengeQuizzesPerMonth: 25,
     noteGenerationsPerMonth: 25,
     exportsPerMonth: 15,
+    adaptivePracticePerMonth: 10,
   },
   pro: {
     studyPacksPerMonth: 100,

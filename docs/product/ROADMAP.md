@@ -6,29 +6,15 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.5.0 - Public Profiles & Public Notes` is complete and is now the documentation baseline.
+`v0.11.0 - Learning Flow Foundation` is complete and is now the documentation baseline.
 
-Completed in `v0.5.0`:
-
-- note-first Library and Public Library flows
-- public-note discovery and canonical public note routes
-- public creator profiles with owner-only public-page controls
-- shared note-card previews across Library, Public Library, Public Profile, and public subject pages
-- profile/public-profile responsibility split
-- standardized icon/button/tab interaction rules
-- auth recovery that returns users to the interrupted or last visited page after login
-
-## Next Release
-
-### v0.11.0 - Learning Flow Foundation
-
-Primary focus:
+Completed in `v0.11.0`:
 
 - learning loop positioning across the landing page and product messaging
 - onboarding flow redesign: experience-first 5-step flow that ends with a generated Study Pack
 - Generate Note from topic available in both onboarding and Create Note
 - Create Note UX improvements with write vs generate entry options
-- Xendit payment integration with hosted checkout and webhook-confirmed Premium activation
+- Xendit payment integration with hosted checkout and webhook-confirmed activation
 - Xendit payment hardening:
   - correct PHP invoice amount handling
   - pending checkout reuse instead of duplicate pending payments
@@ -38,20 +24,14 @@ Primary focus:
   - safe internal `returnUrl` support back to the interrupted page
   - success-page routing that returns Settings/Billing upgrades to Dashboard and paywall upgrades to the interrupted flow
   - polished billing success and failed result pages
-  - manual-renewal Premium expiry windows after Monthly (`30` days) and Annual (`365` days) payments
+  - manual-renewal expiry windows after Monthly (`30` days) and Annual (`365` days) payments
   - subscriptions-table source of truth for plan state, active-subscription history preservation, and webhook-driven renewal extension
+- Free / Plus / Pro multi-plan billing model replacing the legacy single-tier paid plan
+- Settings Plan & Billing redesign: billing cycle toggle + 3-column plan cards (Free, Plus, Pro)
+- pricing system unification through a shared frontend plan config used by landing, pricing, and settings surfaces
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard
-
-Implementation stance:
-
-- reposition NoteLib as a guided study system, not only a note-to-quiz utility
-- keep Generate Note lightweight and reuse the existing LLM infrastructure
-- defer learner level, course/program, engagement mode, and reminders to post-onboarding settings
-- avoid heavy backend refactors while making the learning loop more visible in product UX
-
-See `docs/features/onboarding.md` for the full onboarding flow spec.
 
 ### v0.6.0 - Landing Revamp & Positioning
 
@@ -63,10 +43,20 @@ Primary focus:
 - Public navbar alignment across landing, learn, pricing, login, and Public Library
 - SEO title, meta description, and Open Graph metadata alignment with the new positioning
 - Open Graph image refresh to match the new messaging before the release is cut
+- Landing pricing section updated to Free / Plus / Pro cards with intro offer pricing and "Manual renewal. No automatic charges." footer
+- Demo page redesigned as a 5-step interactive flow (choose start → input → generated note → Study Pack CTA → Study Pack results) using static prebuilt content only — no backend or LLM calls
+- Landing hero repositioned around exam-readiness: "Turn your notes into exam-ready study materials in seconds"
+- "Why NoteLib" section updated with 3 benefit cards (Built for studying, Learn from your weak points, From notes to mastery)
+- Demo enhanced with interactive per-question quiz (select before reveal), exam context copy, and post-quiz conversion CTA
+- Pricing cards updated with plan descriptions tied to learner stage; export feature description added; Plus includes Adaptive Practice (10/month)
+- Product positioning principles added to AGENTS.md: learning-outcome framing, demo as conversion driver, clear plan progression
 
 Implementation stance:
 
-- keep NoteLib positioned as `Notes Library first, Study Pack second`
+- position NoteLib as an exam-focused study tool, not a generic AI utility
+- hero and pricing copy must frame features in terms of learning outcomes
+- demo must feel like a guided experience that creates an "aha moment" before the CTA
+- Free → Plus → Pro should feel like natural progression for a growing student
 - treat Public Library as a public growth and discovery feature, not a paid feature
 - keep public marketing pages accessible without login
 - align landing, SEO, and README messaging around the same product identity before `v0.6.0` is tagged

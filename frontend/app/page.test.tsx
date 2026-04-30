@@ -38,13 +38,14 @@ describe("LandingPage", () => {
     expect(screen.getAllByAltText("NoteLib")).not.toHaveLength(0);
     expect(
       screen.getByRole("heading", {
-        name: "Turn anything into a complete study flow",
+        name: "Turn your notes into exam-ready study materials in seconds",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Write, paste, or generate notes - then turn them into summaries, key concepts, quizzes, and exam-ready practice."),
+      screen.getByText("Summaries, key concepts, and quizzes designed to help you understand and retain what matters."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Board Exam Mode · Premium")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Mode · Pro")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Try Demo" })).toHaveAttribute("href", "/demo");
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
@@ -60,12 +61,12 @@ describe("LandingPage", () => {
     expect(screen.getByText("Improve")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View the full walkthrough" })).toHaveAttribute("href", "/how-it-works");
 
-    expect(screen.getByText("Features")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Built for a guided study flow" })).toBeInTheDocument();
-    expect(screen.getByText("Built for studying, not just exploring information.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Move from input to understanding faster" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Practice in layers" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Keep improving, not restarting" })).toBeInTheDocument();
+    expect(screen.getAllByText("Why NoteLib")).not.toHaveLength(0);
+    expect(screen.getByRole("heading", { name: "Built for serious study" })).toBeInTheDocument();
+    expect(screen.getByText("Every feature is designed to move you from reading to remembering.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Built for studying" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Learn from your weak points" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "From notes to mastery" })).toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib Study Pack view showing generated summary and key concepts")).not.toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib Board Exam Mode and Challenge Quiz in-progress screen")).not.toBeInTheDocument();
     expect(screen.queryByAltText("NoteLib quiz results and weak concept review screen")).not.toBeInTheDocument();
@@ -82,7 +83,7 @@ describe("LandingPage", () => {
       screen.getByAltText("NoteLib Public Library preview showing note discovery cards and subject browsing"),
     ).toBeInTheDocument();
 
-    expect(screen.getByText("Why NoteLib")).toBeInTheDocument();
+    expect(screen.getAllByText("Why NoteLib")).not.toHaveLength(0);
     expect(screen.getByRole("heading", { name: "Built for study, not just answers" })).toBeInTheDocument();
     expect(screen.getByText("Generic AI tools")).toBeInTheDocument();
     expect(screen.getAllByText("NoteLib")).not.toHaveLength(0);

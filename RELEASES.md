@@ -19,6 +19,10 @@
 - expanded manual Premium checkout to support both Monthly and Annual Xendit flows using config-driven pricing
 - fixed intro-offer voucher application so eligible first checkouts use discounted pricing and successful payments record voucher redemption history
 - hardened pending checkout reuse so billing cycle, final amount, and voucher state must still match before an existing Xendit invoice is reused
+- replaced legacy single-tier Premium billing with Free / Plus / Pro multi-plan model; plan state is now owned by the `subscriptions` table with one active row per user
+- redesigned Settings Plan & Billing with a billing cycle toggle (Monthly / Annual) and three plan cards (Free, Plus, Pro) in a responsive side-by-side layout
+- defaulted region to `PH` when the `CF-IPCountry` header is absent so checkout amounts and currency display correctly for local testing and non-Cloudflare environments
+- added a cancel plan entry point in Settings for active paid subscribers
 - updated product context, roadmap, spec, and release documentation for the new positioning
 
 ## v0.10.1 - Landing & Pricing Conversion Polish
@@ -512,9 +516,16 @@
 - Landing page now frames NoteLib as a notes library and study workspace, not just a one-time quiz generator.
 - Public marketing navigation now exposes `Home`, `Public Library`, `Learn`, `Pricing`, `Login`, and `Get Started`.
 - NoteLib now has a standardized favicon and app-icon set based on the NL monogram for desktop, mobile, and home-screen usage.
+- Demo page rewritten as a 5-step interactive flow (choose start → topic/paste input → generated note → Study Pack CTA → Study Pack results) using static Photosynthesis content only — no backend or LLM calls.
 
 ### Improvements
 
+- Landing hero repositioned around exam-readiness: headline changed to `Turn your notes into exam-ready study materials in seconds`; `Try Demo` promoted to primary CTA with `Start for Free` as secondary.
+- `Why NoteLib` feature section updated with three benefit cards framed as learning outcomes: Built for studying, Learn from your weak points, From notes to mastery.
+- Demo quiz made interactive: users select an answer before seeing correct/incorrect feedback, simulating real exam conditions; post-quiz CTA (`Ready to create your own Study Pack?`) drives conversion after the demo experience.
+- Landing pricing section updated to Free / Plus / Pro cards with plan descriptions tied to learner stage, intro pricing display, export tooltip (`PDF/DOCX for offline or classroom use`), and Plus Adaptive Practice (10 sessions/month).
+- `Plus` plan pricing config gains `adaptivePracticePerMonth: 10` so Adaptive Practice is properly reflected in plan comparison surfaces.
+- Product positioning principles added to AGENTS.md: learning-outcome framing, demo as conversion driver, clear plan progression rules.
 - Landing page now uses a tighter high-conversion structure built around:
   - a faster product headline focused on summaries, quizzes, and exam simulations
   - a 3-step `Add notes -> Generate study pack -> Test yourself` explanation

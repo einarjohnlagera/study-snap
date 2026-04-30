@@ -8,7 +8,7 @@ describe("TermsPage", () => {
     expect(screen.getByRole("heading", { name: "Terms of Service" })).toBeInTheDocument();
     expect(screen.getByText("Last updated: March 25, 2026")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "3. Acceptable Use" })).toBeInTheDocument();
-    expect(screen.getByText(/Premium is a subscription service/i)).toBeInTheDocument();
+    expect(screen.getByText(/NoteLib offers manual-renewal paid plans/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "support@mail.notelib.app" })).toHaveAttribute("href", "mailto:support@mail.notelib.app");
   });
 

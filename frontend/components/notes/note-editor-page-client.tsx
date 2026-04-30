@@ -35,6 +35,7 @@ import {
   shouldShowNearStudyPackLimitBanner,
 } from "@/lib/plans";
 import { requireAuthenticatedOnboardedUser } from "@/lib/route-guards";
+import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -941,7 +942,7 @@ export function NoteEditorPageClient({
           className="w-full sm:w-fit"
           onClick={() => openLockedFeaturePaywall("note-generation-limit", "note_editor_note_generation_limit")}
         >
-          Upgrade to Plus
+          {getPaidPlanCtaLabel("PLUS")}
         </Button>
       </div>
     ) : (

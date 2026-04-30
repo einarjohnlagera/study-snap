@@ -20,6 +20,7 @@ import {
 import { getAuthUser, setAuthUser } from "@/lib/auth";
 import { useBillingUsageSummary } from "@/hooks/use-billing-usage-summary";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
+import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import { mapProfileTypeToNoteTargetProfile } from "@/lib/note-target-profile";
 import {
   clearDeferredOnboardingCompletion,
@@ -935,7 +936,7 @@ export default function OnboardingPage() {
                       className="w-full sm:w-fit"
                       onClick={() => setShowNoteGenerationLimitModal(true)}
                     >
-                      Upgrade to Plus
+                      {getPaidPlanCtaLabel("PLUS")}
                     </Button>
                   </div>
                 ) : (

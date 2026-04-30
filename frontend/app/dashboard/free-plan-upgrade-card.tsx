@@ -1,6 +1,7 @@
 import { Crown } from "lucide-react";
 import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { Card } from "@/components/ui/card";
+import { getPaidPlanCtaLabel } from "@/src/config/plans";
 
 export function FreePlanUpgradeCard() {
   return (
@@ -15,12 +16,12 @@ export function FreePlanUpgradeCard() {
             You are using the Free Plan.
           </h2>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/80">
-            Upgrade to Plus for higher limits, or go Pro for Adaptive Practice, difficulty selection, and Board Exam Mode.
+            Choose Plus for higher limits, or go Pro for Adaptive Practice, difficulty selection, and Board Exam Mode.
           </p>
         </div>
         <div className="w-full sm:w-auto">
           <PremiumUpgradeButton
-            label="Upgrade to Plus"
+            label={getPaidPlanCtaLabel("PLUS")}
             source="dashboard_free_plan_card"
             planType="PLUS"
             className="w-full sm:w-auto"

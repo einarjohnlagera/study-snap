@@ -6,11 +6,11 @@ Verify these cases whenever Study Pack quota logic changes:
 - if the Study Pack limit is `5` and usage is `5`, generation is blocked
 - warning banners and blocking use the same effective Study Pack usage count
 - Free near-limit messaging appears when `studyPacksRemaining` is `2` or `1`
-- Premium near-limit messaging appears when `studyPacksRemaining` is `2` or `1`
+- Plus and Pro near-limit messaging appears when `studyPacksRemaining` is `2` or `1`
 - near-limit messaging shows the actual remaining-credit count
 - when remaining Study Packs reaches `0`, `Generate Study Pack` stays enabled and opens the plan-specific limit modal on click
-- Free limit modal shows `Upgrade to Premium`, `Maybe Later`, and `View My Plan`
-- Premium limit modal shows `Upgrade Plan`, `Get More Study Packs`, and `Maybe Later`
+- Free limit modal shows the current upgrade CTA, `Maybe Later`, and `View My Plan`
+- Paid-plan limit modal shows `Upgrade Plan`, `Get More Study Packs`, and `Maybe Later`
 - saving a note does not consume Study Pack quota
 - a failed Study Pack generation does not consume quota
 - retrying after a failed generation does not double-count usage

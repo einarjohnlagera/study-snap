@@ -241,19 +241,19 @@ Profile Type does not affect:
   - monthly limits for Study Packs, Challenge Quiz, Adaptive Practice, and OCR
   - current monthly usage counters
   - remaining usage counters
-  - Premium feature flags such as Adaptive Practice and Difficulty Selection
+  - Pro-only feature flags such as Adaptive Practice and Difficulty Selection
 - Usage periods are enforced from `BillingUsagePeriodService`:
   - Free users anchor monthly cycles to `users.created_at`
-  - Premium users use the active subscription billing window or the direct Premium-activation fallback window when no renewable subscription record exists yet
+  - paid users use the active subscription billing window
   - `user_usage.period_start` and `user_usage.period_end` are the persisted cycle boundaries used for quota checks
 - `PaymentService` owns hosted checkout creation and Xendit webhook processing.
 - Current active provider: `XENDIT`.
 - Checkout creation flow:
-  - validate the user is not already Premium
+  - validate the selected paid plan and current eligibility
   - create a Xendit invoice at `/v2/invoices`
   - persist a pending `payment_transactions` row with provider reference `external_id`
   - return the hosted `invoice_url` to frontend
-- Webhook state changes are the source of truth for Premium activation:
+- Webhook state changes are the source of truth for paid-plan activation:
   - `PAID`
   - `FAILED`
   - `EXPIRED`
@@ -264,7 +264,7 @@ Profile Type does not affect:
   - incoming provider events are persisted to `webhook_events`
   - duplicate `(provider, event_id)` deliveries are acknowledged and skipped
 - Safety jobs:
-  - `SubscriptionExpiryJob` downgrades expired active Premium subscriptions
+  - `SubscriptionExpiryJob` downgrades expired active paid subscriptions
   - `BillingUsageResetJob` ensures usage records exist for current period windows
 
 ## Generation Pipeline
@@ -539,7 +539,7 @@ Quick Review:
 - UI letters are presentation-only and are derived from displayed choice order at render time
 - displayed choice order must stay deterministic for a given question/session so re-renders do not change correctness
 
-Challenge Quiz (Premium):
+Challenge Quiz:
 
 - generated from summary + key concepts only
 - timed and continuously persisted
@@ -548,7 +548,7 @@ Challenge Quiz (Premium):
 - generation may start from raw LLM `answer` letters, but backend/session persistence must normalize to canonical `correctIndex`
 - session state stores selected canonical choice indexes and may normalize legacy answer-text payloads on load
 
-Adaptive Practice (Premium):
+Adaptive Practice (Pro):
 
 - generated from summary + key concepts + weak concepts only
 - resumes in-progress session if present (no duplicate generation call)
