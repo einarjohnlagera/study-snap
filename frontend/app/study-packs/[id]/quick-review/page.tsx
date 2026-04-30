@@ -849,7 +849,7 @@ export default function QuickReviewPage() {
             {!isPerfectScore && incorrectCount > 0 && !note?.adaptivePracticeAvailable ? (
               <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
                 <p className="text-sm text-foreground/85">
-                  Adaptive Practice is available on Premium. Challenge Quiz stays available up to your monthly limit.
+                  Adaptive Practice is available on Pro. Challenge Quiz stays available up to your monthly limit.
                 </p>
                 <Button
                   type="button"
@@ -857,7 +857,7 @@ export default function QuickReviewPage() {
                   size="sm"
                   onClick={() => openAdaptivePracticePaywall("quick_review_results_upgrade")}
                 >
-                    Upgrade to Premium
+                    Upgrade to Pro
                 </Button>
               </div>
             ) : null}

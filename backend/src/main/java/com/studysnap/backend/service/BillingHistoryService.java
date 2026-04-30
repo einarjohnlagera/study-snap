@@ -22,14 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class BillingHistoryService {
     private static final long YEARLY_SUBSCRIPTION_DAYS_THRESHOLD = 330;
-    private static final String PREMIUM_MONTHLY_DESCRIPTION = "Premium Monthly";
-    private static final String PREMIUM_ANNUAL_DESCRIPTION = "Premium Annual";
-    private static final String PREMIUM_MONTHLY_DISCOUNT_DESCRIPTION = "Premium Monthly (Discount applied)";
-    private static final String PREMIUM_ANNUAL_DISCOUNT_DESCRIPTION = "Premium Annual (Discount applied)";
-    private static final String PREMIUM_RENEWAL_DESCRIPTION = "Premium Renewal";
-    private static final String PREMIUM_RENEWAL_DISCOUNT_DESCRIPTION = "Premium Renewal (Discount applied)";
-    private static final String FAILED_PREMIUM_UPGRADE_DESCRIPTION = "Failed Premium upgrade";
-    private static final String PENDING_PREMIUM_UPGRADE_DESCRIPTION = "Pending Premium upgrade";
+    private static final String DISCOUNT_SUFFIX = " (Discount applied)";
+    private static final String RENEWAL_SUFFIX = " Renewal";
+    private static final String FAILED_UPGRADE_PREFIX = "Failed ";
+    private static final String PENDING_UPGRADE_PREFIX = "Pending ";
+    private static final String UPGRADE_SUFFIX = " upgrade";
     private static final String FAILED_PAYMENT_DESCRIPTION = "Failed payment";
     private static final String PENDING_PAYMENT_DESCRIPTION = "Pending payment";
 
@@ -39,18 +36,18 @@ public class BillingHistoryService {
 
     public BillingHistoryResponse getHistory(UUID userId) {
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(userId);
-        SubscriptionEntity currentPremiumSubscription = subscriptionService
-                .findActiveSubscription(userId, PlanType.PREMIUM)
-                .orElse(null);
+        SubscriptionEntity currentPaidSubscription = planSnapshot.planType().isPaid()
+                ? subscriptionService.findActiveSubscription(userId, planSnapshot.planType()).orElse(null)
+                : null;
         List<PaymentTransactionEntity> transactions = paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId);
         UUID firstSuccessfulTransactionId = findFirstSuccessfulTransactionId(transactions);
 
         return new BillingHistoryResponse(
                 planSnapshot.planType(),
-                currentPremiumSubscription == null ? null : currentPremiumSubscription.getStatus(),
-                resolveBillingCycle(currentPremiumSubscription),
-                currentPremiumSubscription == null ? null : currentPremiumSubscription.getStartAt(),
-                currentPremiumSubscription == null ? null : currentPremiumSubscription.getEndAt(),
+                currentPaidSubscription == null ? null : currentPaidSubscription.getStatus(),
+                resolveBillingCycle(currentPaidSubscription),
+                currentPaidSubscription == null ? null : currentPaidSubscription.getStartAt(),
+                currentPaidSubscription == null ? null : currentPaidSubscription.getEndAt(),
                 planSnapshot.cancelAtPeriodEnd(),
                 planSnapshot.premiumEndsAt(),
                 transactions.stream()
@@ -73,14 +70,15 @@ public class BillingHistoryService {
     }
 
     private String resolveDescription(PaymentTransactionEntity transaction, UUID firstSuccessfulTransactionId) {
+        PlanType transactionPlanType = transaction.getPlanType() == null ? PlanType.PRO : transaction.getPlanType();
         if (transaction.getBillingType() == BillingType.PREPAID) {
             if (transaction.getStatus() == PaymentTransactionStatus.FAILED) {
-                return FAILED_PREMIUM_UPGRADE_DESCRIPTION;
+                return FAILED_UPGRADE_PREFIX + transactionPlanType.getDisplayName() + UPGRADE_SUFFIX;
             }
             if (transaction.getStatus() == PaymentTransactionStatus.PENDING) {
-                return PENDING_PREMIUM_UPGRADE_DESCRIPTION;
+                return PENDING_UPGRADE_PREFIX + transactionPlanType.getDisplayName() + UPGRADE_SUFFIX;
             }
-            return resolveSuccessfulPremiumDescription(transaction, firstSuccessfulTransactionId);
+            return resolveSuccessfulPaidDescription(transaction, firstSuccessfulTransactionId);
         }
         if (transaction.getStatus() == PaymentTransactionStatus.FAILED) {
             return FAILED_PAYMENT_DESCRIPTION;
@@ -88,30 +86,26 @@ public class BillingHistoryService {
         if (transaction.getStatus() == PaymentTransactionStatus.PENDING) {
             return PENDING_PAYMENT_DESCRIPTION;
         }
-        return resolveSuccessfulPremiumDescription(transaction, firstSuccessfulTransactionId);
+        return resolveSuccessfulPaidDescription(transaction, firstSuccessfulTransactionId);
     }
 
-    private String resolveSuccessfulPremiumDescription(
+    private String resolveSuccessfulPaidDescription(
             PaymentTransactionEntity transaction,
             UUID firstSuccessfulTransactionId
     ) {
         BillingCycle billingCycle = resolveTransactionBillingCycle(transaction);
         boolean discounted = transaction.getDiscountAmount() != null
                 && transaction.getDiscountAmount().signum() > 0;
+        String planLabel = (transaction.getPlanType() == null ? PlanType.PRO : transaction.getPlanType()).getDisplayName();
+        String cycleLabel = billingCycle == BillingCycle.YEARLY ? "Annual" : "Monthly";
         if (firstSuccessfulTransactionId != null && firstSuccessfulTransactionId.equals(transaction.getId())) {
-            if (discounted) {
-                return billingCycle == BillingCycle.YEARLY
-                        ? PREMIUM_ANNUAL_DISCOUNT_DESCRIPTION
-                        : PREMIUM_MONTHLY_DISCOUNT_DESCRIPTION;
-            }
-            return billingCycle == BillingCycle.YEARLY
-                    ? PREMIUM_ANNUAL_DESCRIPTION
-                    : PREMIUM_MONTHLY_DESCRIPTION;
+            return discounted
+                    ? planLabel + " " + cycleLabel + DISCOUNT_SUFFIX
+                    : planLabel + " " + cycleLabel;
         }
-        if (discounted) {
-            return PREMIUM_RENEWAL_DISCOUNT_DESCRIPTION;
-        }
-        return PREMIUM_RENEWAL_DESCRIPTION;
+        return discounted
+                ? planLabel + RENEWAL_SUFFIX + DISCOUNT_SUFFIX
+                : planLabel + RENEWAL_SUFFIX;
     }
 
     private UUID findFirstSuccessfulTransactionId(List<PaymentTransactionEntity> transactions) {

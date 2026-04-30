@@ -45,7 +45,7 @@ public class OcrRateLimitService {
     }
 
     private int resolveRateLimitPerMinute(PlanType planType) {
-        int configured = planType == PlanType.PREMIUM
+        int configured = planType != null && planType.isPaid()
                 ? properties.getLimits().getPremiumOcrRateLimitPerMinute()
                 : properties.getLimits().getFreeOcrRateLimitPerMinute();
         return Math.max(1, configured);

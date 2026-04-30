@@ -5,28 +5,55 @@ export const pricingConfig = {
     studyPacksPerMonth: 10,
     challengeQuizzesPerMonth: 5,
     ocrPerMonth: 20,
+    exportsPerMonth: 2,
   },
-  premium: {
+  plus: {
+    studyPacksPerMonth: 50,
+    challengeQuizzesPerMonth: 25,
+    noteGenerationsPerMonth: 25,
+    exportsPerMonth: 15,
+  },
+  pro: {
     studyPacksPerMonth: 100,
     challengeQuizzesPerMonth: 50,
     adaptivePracticePerMonth: 30,
     ocrPerMonth: 100,
+    noteGenerationsPerMonth: 100,
+    exportsPerMonth: null,
   },
   price: {
     PH: {
       currency: "PHP",
-      monthly: 249,
-      yearly: 1999,
+      plus: {
+        monthly: 179,
+        yearly: null,
+      },
+      pro: {
+        monthly: 249,
+        yearly: 1999,
+      },
     },
     DEFAULT: {
       currency: "USD",
-      monthly: 4.99,
-      yearly: 39.99,
+      plus: {
+        monthly: 3.99,
+        yearly: null,
+      },
+      pro: {
+        monthly: 4.99,
+        yearly: 39.99,
+      },
     },
   },
   intro: {
-    PH: { monthly: 199 },
-    DEFAULT: { monthly: 3.99 },
+    PH: {
+      plus: { monthly: 149 },
+      pro: { monthly: 199 },
+    },
+    DEFAULT: {
+      plus: { monthly: null },
+      pro: { monthly: null },
+    },
   },
 } as const;
 

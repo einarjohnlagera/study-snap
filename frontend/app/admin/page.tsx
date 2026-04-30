@@ -158,7 +158,7 @@ export default function AdminPage() {
     return [
       { label: "Total Users", value: formatMetric(summary.overview.totalUsers) },
       { label: "Verified Users", value: formatMetric(summary.overview.verifiedUsers) },
-      { label: "Premium Users", value: formatMetric(summary.overview.premiumUsers) },
+      { label: "Paid Users", value: formatMetric(summary.overview.premiumUsers) },
       { label: "Premium Waitlist", value: formatMetric(summary.overview.premiumWaitlistCount) },
       { label: "Total Notes", value: formatMetric(summary.overview.totalNotes) },
       { label: "Study Packs", value: formatMetric(summary.overview.totalStudyPacksGenerated) },
@@ -174,7 +174,7 @@ export default function AdminPage() {
       return [] as MetricCardProps[];
     }
     return [
-      { label: "Active Premium", value: formatMetric(summary.billing.activePremiumSubscriptions) },
+      { label: "Active Paid", value: formatMetric(summary.billing.activePremiumSubscriptions) },
       { label: "Monthly Subs", value: formatMetric(summary.billing.monthlySubscriptions) },
       { label: "Yearly Subs", value: formatMetric(summary.billing.yearlySubscriptions) },
       { label: "Cancel at Period End", value: formatMetric(summary.billing.cancelAtPeriodEndSubscriptions) },
@@ -286,9 +286,9 @@ export default function AdminPage() {
 
           <section className="grid gap-6 xl:grid-cols-2">
             <SimpleTable
-              title="Recent Premium Upgrades"
+              title="Recent Paid Upgrades"
               columns={["User", "Cycle", "Provider", "Started"]}
-              emptyMessage="No Premium upgrades recorded yet."
+              emptyMessage="No paid upgrades recorded yet."
               rows={recentEvents.recentPremiumUpgrades.map((item) => [
                 item.userEmail,
                 item.billingCycle === "YEARLY" ? "Yearly" : "Monthly",

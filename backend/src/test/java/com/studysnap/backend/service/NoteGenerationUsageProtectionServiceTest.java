@@ -33,7 +33,7 @@ class NoteGenerationUsageProtectionServiceTest {
     void setUp() {
         StudySnapProperties properties = new StudySnapProperties();
         properties.getPricing().setFreeMonthlyNoteGenerationLimit(2);
-        properties.getPricing().setPremiumMonthlyNoteGenerationLimit(5);
+        properties.getPricing().setProMonthlyNoteGenerationLimit(5);
         service = new NoteGenerationUsageProtectionService(properties, userUsageService);
         userId = UUID.randomUUID();
     }
@@ -48,7 +48,8 @@ class NoteGenerationUsageProtectionServiceTest {
                         0,
                         0,
                         0,
-                        2
+                        2,
+                        0
                 ));
 
         AppException error = assertThrows(AppException.class, () -> service.assertQuotaAvailable(userId, PlanType.FREE));
@@ -67,10 +68,11 @@ class NoteGenerationUsageProtectionServiceTest {
                         0,
                         0,
                         0,
-                        3
+                        3,
+                        0
                 ));
 
-        assertDoesNotThrow(() -> service.assertQuotaAvailable(userId, PlanType.PREMIUM));
+        assertDoesNotThrow(() -> service.assertQuotaAvailable(userId, PlanType.PRO));
     }
 
     @Test

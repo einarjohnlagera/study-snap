@@ -19,6 +19,7 @@ import {
   getGeneratedQuiz,
   generateGeneratedQuiz,
   getNote,
+  isExportLimitReachedError,
   type GeneratedQuizResponse,
   type NoteResponse,
   type QuizDocxExportMode,
@@ -126,6 +127,12 @@ export function GeneratedQuizPreviewPageClient({ noteId }: Readonly<GeneratedQui
       await exportGeneratedQuizDocx(generatedQuiz.id, mode);
       setToast("DOCX ready");
     } catch (err) {
+      if (isExportLimitReachedError(err)) {
+        setError(null);
+        setToast(null);
+        setActivePaywallModal("export-limit");
+        return;
+      }
       const message = err instanceof Error ? err.message : "Could not export quiz.";
       setError(message);
       setToast(null);

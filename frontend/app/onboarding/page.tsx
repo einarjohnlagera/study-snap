@@ -935,7 +935,7 @@ export default function OnboardingPage() {
                       className="w-full sm:w-fit"
                       onClick={() => setShowNoteGenerationLimitModal(true)}
                     >
-                      Upgrade to Premium
+                      Upgrade to Plus
                     </Button>
                   </div>
                 ) : (

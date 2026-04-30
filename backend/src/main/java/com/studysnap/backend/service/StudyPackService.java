@@ -438,7 +438,7 @@ public class StudyPackService {
     }
 
     private long resolveMaxImageBytes(PlanType planType) {
-        long configured = planType == PlanType.PREMIUM
+        long configured = planType != null && planType.isPaid()
                 ? properties.getOcr().getPremiumMaxImageBytes()
                 : properties.getOcr().getFreeMaxImageBytes();
         if (configured > 0) {
@@ -496,7 +496,7 @@ public class StudyPackService {
         entity.setKeyConcepts(generated.keyConcepts());
         entity.setQuiz(generated.quiz());
         entity.setOcrConfidence(ocrConfidence);
-        entity.setModelTier(planType == PlanType.PREMIUM ? ModelTier.PREMIUM : ModelTier.FREE);
+        entity.setModelTier(planType != null && planType.isPaid() ? ModelTier.PREMIUM : ModelTier.FREE);
         entity.setModelUsed(Optional.ofNullable(generated.modelUsed())
                 .orElse(properties.getSettings().getModelFree()));
         entity.setInputTokens(generated.inputTokens());
@@ -607,9 +607,7 @@ public class StudyPackService {
                 markNoteGenerated(noteId, sourceNote);
                 return savedEntity;
             });
-            if (saved == null) {
-                return;
-            }
+
             analyticsService.trackEvent(ownerUserId, AnalyticsEventType.STUDY_PACK_GENERATED, saved.getId(), buildGenerationMetadata(
                     noteId,
                     InputType.TEXT,
@@ -821,10 +819,10 @@ public class StudyPackService {
     }
 
     private String resolveQuotaReachedMessage(PlanType planType, int limit) {
-        if (planType == PlanType.PREMIUM) {
+        if (planType != null && planType.isPaid()) {
             return "You have reached your Study Pack limit for the current billing period (" + limit + ").";
         }
-        return "You have reached your Free plan limit for the current billing period (" + limit + " Study Packs). Upgrade to Premium for higher limits.";
+        return "You have reached your Free plan limit for the current billing period (" + limit + " Study Packs). Upgrade to unlock higher limits.";
     }
 
     private void markNoteGenerated(UUID noteId, NoteEntity cachedNote) {

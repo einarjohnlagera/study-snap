@@ -16,7 +16,7 @@ export type AuthUser = {
   onboardingCompletedAt?: string | null;
   productOnboardingCompletedAt?: string | null;
   role: "USER" | "ADMIN";
-  planType: "FREE" | "PREMIUM";
+  planType: "FREE" | "PLUS" | "PRO";
   themePreference?: ThemePreference | null;
   accessToken: string;
   refreshToken: string;

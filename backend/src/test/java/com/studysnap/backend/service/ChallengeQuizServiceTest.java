@@ -741,7 +741,7 @@ class ChallengeQuizServiceTest {
         StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
 
         String id = studyPackId.toString();
         ChallengeQuizStartRequest request = new ChallengeQuizStartRequest("expert", null);

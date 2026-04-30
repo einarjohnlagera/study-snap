@@ -49,7 +49,7 @@ class BillingHistoryServiceTest {
         OffsetDateTime endAt = OffsetDateTime.parse("2026-04-01T00:00:00Z");
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setId(UUID.randomUUID());
-        subscription.setPlanType(PlanType.PREMIUM);
+        subscription.setPlanType(PlanType.PRO);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setStartAt(startAt);
         subscription.setEndAt(endAt);
@@ -76,13 +76,13 @@ class BillingHistoryServiceTest {
 
         when(subscriptionService.getPlanSnapshot(userId)).thenReturn(
                 new SubscriptionService.PlanSnapshot(
-                        PlanType.PREMIUM,
+                        PlanType.PRO,
                         true,
                         endAt,
                         OffsetDateTime.parse("2026-03-20T00:00:00Z")
                 )
         );
-        when(subscriptionService.findActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(Optional.of(subscription));
+        when(subscriptionService.findActiveSubscription(userId, PlanType.PRO)).thenReturn(Optional.of(subscription));
         when(paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(List.of(
                 failedTransaction,
                 renewalTransaction,
@@ -91,7 +91,7 @@ class BillingHistoryServiceTest {
 
         BillingHistoryResponse history = service.getHistory(userId);
 
-        assertThat(history.currentPlan()).isEqualTo(PlanType.PREMIUM);
+        assertThat(history.currentPlan()).isEqualTo(PlanType.PRO);
         assertThat(history.subscriptionStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(history.billingType()).isEqualTo(BillingCycle.MONTHLY);
         assertThat(history.currentPeriodStart()).isEqualTo(startAt);
@@ -99,7 +99,7 @@ class BillingHistoryServiceTest {
         assertThat(history.cancelAtPeriodEnd()).isTrue();
         assertThat(history.cancellationEffectiveAt()).isEqualTo(endAt);
         assertThat(history.transactions()).extracting(BillingHistoryItemResponse::description)
-                .containsExactly("Failed payment", "Premium Renewal", "Premium Monthly");
+                .containsExactly("Failed payment", "Pro Renewal", "Pro Monthly");
         assertThat(history.transactions()).extracting(BillingHistoryItemResponse::providerReferenceId)
                 .containsExactly("evt_failed", "evt_renewal", "evt_initial");
     }
@@ -116,7 +116,6 @@ class BillingHistoryServiceTest {
         when(subscriptionService.getPlanSnapshot(userId)).thenReturn(
                 new SubscriptionService.PlanSnapshot(PlanType.FREE, false, null, null)
         );
-        when(subscriptionService.findActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(Optional.empty());
         when(paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(List.of());
 
         BillingHistoryResponse history = service.getHistory(userId);
@@ -140,7 +139,7 @@ class BillingHistoryServiceTest {
         transaction.setId(UUID.randomUUID());
         transaction.setProvider(BillingProvider.XENDIT);
         transaction.setBillingType(BillingType.SUBSCRIPTION);
-        transaction.setPlanType(PlanType.PREMIUM);
+        transaction.setPlanType(PlanType.PRO);
         transaction.setBillingCycle(BillingCycle.MONTHLY);
         transaction.setOriginalAmount(amount);
         transaction.setDiscountAmount(BigDecimal.ZERO);

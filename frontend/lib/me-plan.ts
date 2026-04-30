@@ -1,7 +1,7 @@
 "use client";
 
 export type MePlanResponse = {
-  plan: "FREE" | "PREMIUM";
+  plan: "FREE" | "PLUS" | "PRO";
   usageCycle: {
     startsAt: string;
     endsAt: string;
@@ -12,6 +12,7 @@ export type MePlanResponse = {
     adaptivePracticePerMonth: number;
     ocrPerMonth: number;
     noteGenerationsPerMonth?: number;
+    exportsPerMonth?: number | null;
   };
   usage: {
     studyPacksUsed: number;
@@ -19,6 +20,7 @@ export type MePlanResponse = {
     adaptivePracticeUsed: number;
     ocrUsed: number;
     noteGenerationsUsed?: number;
+    exportsUsed?: number;
   };
   remaining: {
     studyPacksRemaining: number;
@@ -26,11 +28,13 @@ export type MePlanResponse = {
     adaptivePracticeRemaining: number;
     ocrRemaining: number;
     noteGenerationsRemaining?: number;
+    exportsRemaining?: number | null;
   };
   features: {
     adaptivePracticeAvailable: boolean;
     difficultySelectionAvailable: boolean;
     fileUploadAvailable: boolean;
     ocrAvailable: boolean;
+    exportAvailable?: boolean;
   };
 };

@@ -31,6 +31,7 @@ public class PaymentController {
         authService.requireEmailVerified(user.userId());
         return paymentService.createCheckoutSession(
                 user.userId(),
+                request == null ? null : request.planType(),
                 request == null ? null : request.billingCycle(),
                 request == null ? null : request.returnUrl(),
                 cfIpCountry

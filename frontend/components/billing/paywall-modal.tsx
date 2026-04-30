@@ -5,7 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
-import { createPremiumCheckoutSession, isEmailNotVerifiedError, trackAnalyticsEvent } from "@/lib/api";
+import {
+  createPremiumCheckoutSession,
+  isEmailNotVerifiedError,
+  trackAnalyticsEvent,
+  type PaidPlanType,
+} from "@/lib/api";
 import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import {
@@ -22,7 +27,8 @@ export type PaywallModalVariant =
   | "quiz-generation-limit"
   | "study-pack-limit"
   | "ocr-limit"
-  | "note-generation-limit";
+  | "note-generation-limit"
+  | "export-limit";
 
 type PaywallModalProps = {
   isOpen: boolean;
@@ -43,7 +49,7 @@ type LegacyPaywallConfig = {
 
 const LEGACY_PAYWALL_CONTENT: Partial<Record<PaywallModalVariant, LegacyPaywallConfig>> = {
   "difficulty-selection": {
-    title: "Difficulty Selection is a Premium feature",
+    title: "Difficulty Selection is a Pro feature",
     message:
       "Choose your quiz difficulty and challenge yourself. Great for exam preparation and mastering difficult topics.",
     dismissLabel: "Maybe Later",
@@ -52,7 +58,7 @@ const LEGACY_PAYWALL_CONTENT: Partial<Record<PaywallModalVariant, LegacyPaywallC
   "ocr-limit": {
     title: "OCR limit reached",
     message:
-      "You've reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade to Premium for higher OCR limits.",
+      "You've reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade your plan for higher OCR limits.",
     dismissLabel: "Maybe Later",
     feature: "ocr_limit",
   },
@@ -66,6 +72,7 @@ function resolvePaywallAction(variant: PaywallModalVariant): PaywallAction | nul
     case "board-exam-mode": return "BOARD_EXAM";
     case "adaptive-practice": return "ADAPTIVE_PRACTICE";
     case "note-generation-limit": return "NOTE_GENERATION";
+    case "export-limit": return "EXPORT";
     default: return null;
   }
 }
@@ -94,19 +101,38 @@ export function PaywallModal({
   const [startingCheckout, setStartingCheckout] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const authUser = getAuthUser();
+  const currentPlan = authUser?.planType ?? "FREE";
+  const upgradePlanType = useMemo<PaidPlanType>(() => {
+    if (variant === "board-exam-mode" || variant === "adaptive-practice" || variant === "difficulty-selection") {
+      return "PRO";
+    }
+    if (currentPlan === "PLUS") {
+      return "PRO";
+    }
+    return "PLUS";
+  }, [currentPlan, variant]);
+  const upgradeLabel = upgradePlanType === "PRO" ? "Upgrade to Pro" : "Upgrade to Plus";
 
   const config = useMemo((): LegacyPaywallConfig => {
+    if (variant === "export-limit" && currentPlan === "PLUS") {
+      return {
+        title: "You’ve reached your monthly export limit for Plus",
+        message: "Upgrade to Pro to keep exporting quizzes and exams this month.",
+        dismissLabel: "Maybe Later",
+        feature: "export_limit",
+      };
+    }
     const action = resolvePaywallAction(variant);
     if (action) {
       return toModalConfig(resolveFreePaywallContent(action, authUser?.profileType));
     }
     return LEGACY_PAYWALL_CONTENT[variant] ?? {
-      title: "Premium feature",
-      message: "Upgrade to Premium to access this feature.",
+      title: "Paid feature",
+      message: "Upgrade to Plus or Pro to access this feature.",
       dismissLabel: "Maybe Later",
       feature: variant,
     };
-  }, [authUser?.profileType, variant]);
+  }, [authUser?.profileType, currentPlan, variant]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -168,10 +194,12 @@ export function PaywallModal({
           feature: config.feature,
           path: pathname,
           variant,
+          planType: upgradePlanType,
           target: "xendit_checkout",
         },
       });
       const response = await createPremiumCheckoutSession({
+        planType: upgradePlanType,
         returnUrl: resolvedReturnUrl,
       });
       onClose();
@@ -180,7 +208,7 @@ export function PaywallModal({
       if (isEmailNotVerifiedError(error)) {
         setVerifyEmailModalOpen(true);
       } else {
-        setCheckoutError(error instanceof Error ? error.message : "Could not start Premium checkout. Please try again.");
+        setCheckoutError(error instanceof Error ? error.message : "Could not start checkout. Please try again.");
       }
     } finally {
       setStartingCheckout(false);
@@ -206,7 +234,7 @@ export function PaywallModal({
               loading={startingCheckout}
               loadingText="Redirecting..."
             >
-              Upgrade to Premium
+              {upgradeLabel}
             </Button>
           </div>
         )}

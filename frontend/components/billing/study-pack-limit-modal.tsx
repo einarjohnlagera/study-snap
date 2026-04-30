@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
+import type { PlanType } from "@/lib/api";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
 
 type StudyPackLimitModalProps = {
   isOpen: boolean;
-  planType: "FREE" | "PREMIUM";
+  planType: PlanType;
   resetDateLabel: string;
   onClose: () => void;
 };
@@ -30,12 +31,17 @@ export function StudyPackLimitModal({
   }
 
   const isFreePlan = planType === "FREE";
+  const isPlusPlan = planType === "PLUS";
   const title = isFreePlan
     ? "You’ve reached your study pack limit"
-    : "You’ve reached your study pack limit for this month";
+    : isPlusPlan
+      ? "You’ve reached your study pack limit for Plus"
+      : "You’ve reached your study pack limit for this month";
   const description = isFreePlan
-    ? `Upgrade to Premium to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.\n\nYou can still create and save notes. Your limit resets on ${resetDateLabel}.`
-    : `Your study pack limit resets on ${resetDateLabel}.\n\nYou can still review your existing notes and quizzes while you wait.`;
+    ? `Upgrade to Plus or Pro to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.\n\nYou can still create and save notes. Your limit resets on ${resetDateLabel}.`
+    : isPlusPlan
+      ? `Upgrade to Pro for higher study-pack limits, or wait until ${resetDateLabel} for your next reset.\n\nYou can still review your existing notes and quizzes while you wait.`
+      : `Your study pack limit resets on ${resetDateLabel}.\n\nYou can still review your existing notes and quizzes while you wait.`;
 
   return (
     <AppModal
@@ -50,7 +56,7 @@ export function StudyPackLimitModal({
           {isFreePlan ? (
             <>
               <Button type="button" onClick={() => handleNavigate("/pricing")}>
-                Upgrade to Premium
+                Upgrade to Plus
               </Button>
               <Button type="button" variant="outline" onClick={onClose}>
                 Maybe Later
@@ -62,7 +68,7 @@ export function StudyPackLimitModal({
           ) : (
             <>
               <Button type="button" onClick={() => handleNavigate("/pricing")}>
-                Upgrade Plan
+                {isPlusPlan ? "Upgrade to Pro" : "View Plans"}
               </Button>
               <Button type="button" variant="outline" onClick={() => handleNavigate(PLAN_BILLING_PATH)}>
                 Get More Study Packs

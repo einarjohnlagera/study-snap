@@ -58,7 +58,7 @@ export function VerifyEmailRequiredModal({
     >
       <div className="space-y-4 text-sm leading-relaxed text-foreground/85">
         <p>
-          Please verify your email before upgrading to Premium. This helps us secure your account and send important
+          Please verify your email before upgrading your plan. This helps us secure your account and send important
           updates.
         </p>
         {message ? (

@@ -5,13 +5,20 @@ import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
-import { createPremiumCheckoutSession, isEmailNotVerifiedError, trackAnalyticsEvent, type BillingCycle } from "@/lib/api";
+import {
+  createPremiumCheckoutSession,
+  isEmailNotVerifiedError,
+  trackAnalyticsEvent,
+  type BillingCycle,
+  type PaidPlanType,
+} from "@/lib/api";
 import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 type PremiumUpgradeButtonProps = {
   label: string;
   source: string;
+  planType?: PaidPlanType;
   billingCycle?: BillingCycle;
   feature?: string | null;
   variant?: ComponentProps<typeof Button>["variant"];
@@ -22,6 +29,7 @@ type PremiumUpgradeButtonProps = {
 export function PremiumUpgradeButton({
   label,
   source,
+  planType = "PRO",
   billingCycle,
   feature = null,
   variant = "default",
@@ -54,10 +62,12 @@ export function PremiumUpgradeButton({
           source,
           feature,
           path: pathname,
+          planType,
           target: "xendit_checkout",
         },
       });
       const response = await createPremiumCheckoutSession({
+        planType,
         billingCycle: billingCycle ?? null,
         returnUrl: getSafeRedirectPath(getCurrentPathWithQuery()),
       });
@@ -66,7 +76,7 @@ export function PremiumUpgradeButton({
       if (isEmailNotVerifiedError(error)) {
         setVerifyEmailModalOpen(true);
       } else {
-        setErrorMessage(error instanceof Error ? error.message : "Could not start Premium checkout. Please try again.");
+        setErrorMessage(error instanceof Error ? error.message : "Could not start checkout. Please try again.");
       }
     } finally {
       setStartingCheckout(false);

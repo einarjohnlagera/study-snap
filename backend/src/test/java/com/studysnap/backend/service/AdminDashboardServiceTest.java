@@ -95,7 +95,7 @@ class AdminDashboardServiceTest {
                 true
         );
 
-        when(subscriptionRepository.findCurrentlyActiveByPlanTypeAndStatus(eq(PlanType.PREMIUM), eq(SubscriptionStatus.ACTIVE), any()))
+        when(subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(eq(List.of(PlanType.PLUS, PlanType.PRO)), eq(SubscriptionStatus.ACTIVE), any()))
                 .thenReturn(List.of(monthlySubscription, yearlySubscription));
         when(paymentTransactionRepository.findByUser_IdInAndStatusOrderByCreatedAtDesc(any(), eq(PaymentTransactionStatus.SUCCESS)))
                 .thenReturn(List.of(
@@ -229,7 +229,7 @@ class AdminDashboardServiceTest {
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setId(UUID.randomUUID());
         subscription.setUser(user);
-        subscription.setPlanType(PlanType.PREMIUM);
+        subscription.setPlanType(PlanType.PRO);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setBillingType(BillingType.SUBSCRIPTION);
         subscription.setProvider(BillingProvider.XENDIT);
@@ -250,7 +250,7 @@ class AdminDashboardServiceTest {
         transaction.setUser(user);
         transaction.setProvider(BillingProvider.XENDIT);
         transaction.setBillingType(BillingType.SUBSCRIPTION);
-        transaction.setPlanType(PlanType.PREMIUM);
+        transaction.setPlanType(PlanType.PRO);
         transaction.setAmount(amount);
         transaction.setCurrency(currency);
         transaction.setStatus(status);

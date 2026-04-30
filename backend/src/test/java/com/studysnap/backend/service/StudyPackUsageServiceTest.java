@@ -38,6 +38,7 @@ class StudyPackUsageServiceTest {
                 0,
                 0,
                 0,
+                0,
                 0
         );
         when(studyPackRepository.countByOwnerUserIdAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(
@@ -58,6 +59,7 @@ class StudyPackUsageServiceTest {
                 OffsetDateTime.parse("2026-03-10T00:00:00Z"),
                 OffsetDateTime.parse("2026-04-10T00:00:00Z"),
                 4,
+                0,
                 0,
                 0,
                 0,

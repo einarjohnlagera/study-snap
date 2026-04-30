@@ -53,6 +53,9 @@ public class PaymentTransactionEntity {
     @Column(name = "billing_cycle", nullable = false, length = 16)
     private BillingCycle billingCycle;
 
+    @Column(name = "access_duration_days", nullable = false)
+    private Integer accessDurationDays;
+
     @Column(name = "original_amount", nullable = false, precision = 14, scale = 2)
     private BigDecimal originalAmount;
 
