@@ -11,6 +11,7 @@ Provide an internal, read-only Admin Dashboard for monitoring product usage, bil
   - `GET /api/admin/dashboard/summary`
   - `GET /api/admin/dashboard/top-content`
   - `GET /api/admin/dashboard/recent-events`
+  - `POST /api/admin/jobs/subscription-expiry/{subscriptionId}` — expire a specific subscription and downgrade to Free (dev/ops use; subscription `end_at` must already be in the past)
 - Access is restricted to users with the `ADMIN` role.
 - Non-admin users must not be able to use admin endpoints.
 - Frontend should redirect authenticated non-admin users away from `/admin`.

@@ -19,7 +19,7 @@ class PricingRegionResolverTest {
         assertThat(resolver.resolveRegion("IN")).isEqualTo("IN");
         assertThat(resolver.resolveRegion("DE")).isEqualTo("EU");
         assertThat(resolver.resolveRegion("BR")).isEqualTo("US");
-        assertThat(resolver.resolveRegion(null)).isEqualTo("US");
+        assertThat(resolver.resolveRegion(null)).isEqualTo("PH");
     }
 
     @Test

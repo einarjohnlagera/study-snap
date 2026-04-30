@@ -15,7 +15,7 @@ public class PricingRegionResolver {
     public String resolveRegion(String countryCode) {
         String normalized = normalizeCountryCode(countryCode);
         if (normalized == null) {
-            return "US";
+            return "PH";
         }
         return switch (normalized) {
             case "PH" -> "PH";
