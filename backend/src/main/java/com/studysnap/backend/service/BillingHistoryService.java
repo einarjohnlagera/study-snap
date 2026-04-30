@@ -1,28 +1,24 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
-import com.studysnap.backend.dto.BillingHistoryResponse;
 import com.studysnap.backend.dto.BillingHistoryItemResponse;
+import com.studysnap.backend.dto.BillingHistoryResponse;
 import com.studysnap.backend.entity.BillingCycle;
+import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.SubscriptionEntity;
-import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
-import com.studysnap.backend.repository.SubscriptionRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -32,19 +28,14 @@ public class BillingHistoryService {
     private static final long YEARLY_SUBSCRIPTION_DAYS_THRESHOLD = 330;
 
     private final PaymentTransactionRepository paymentTransactionRepository;
-    private final SubscriptionRepository subscriptionRepository;
     private final SubscriptionService subscriptionService;
     private final StudySnapProperties properties;
     private final Clock clock;
 
     public BillingHistoryResponse getHistory(UUID userId) {
-        OffsetDateTime now = OffsetDateTime.now(clock);
         SubscriptionService.PlanSnapshot planSnapshot = subscriptionService.getPlanSnapshot(userId);
-        SubscriptionEntity currentPremiumSubscription = subscriptionRepository
-                .findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(userId, PlanType.PREMIUM, SubscriptionStatus.ACTIVE)
-                .stream()
-                .filter(subscription -> hasActivePremiumAccess(subscription, now))
-                .findFirst()
+        SubscriptionEntity currentPremiumSubscription = subscriptionService
+                .findActiveSubscription(userId, PlanType.PREMIUM)
                 .orElse(null);
         List<PaymentTransactionEntity> transactions = paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId);
         UUID firstSuccessfulTransactionId = findFirstSuccessfulTransactionId(transactions);
@@ -136,18 +127,6 @@ public class BillingHistoryService {
         }
 
         return BillingCycle.MONTHLY;
-    }
-
-    private boolean hasActivePremiumAccess(SubscriptionEntity subscription, OffsetDateTime referenceTime) {
-        if (subscription == null || subscription.getPlanType() != PlanType.PREMIUM || subscription.getStatus() != SubscriptionStatus.ACTIVE) {
-            return false;
-        }
-        OffsetDateTime startAt = subscription.getStartAt();
-        OffsetDateTime endAt = subscription.getEndAt();
-        if (startAt != null && referenceTime.isBefore(startAt)) {
-            return false;
-        }
-        return endAt == null || referenceTime.isBefore(endAt);
     }
 
     private String normalizeCurrency(String value) {

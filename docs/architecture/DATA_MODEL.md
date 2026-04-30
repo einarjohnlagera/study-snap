@@ -166,8 +166,12 @@ Billing notes:
 - Current Premium billing model is prepaid/manual-renewal for `30` days of access per successful payment.
 - `subscriptions` is the only source of truth for plans and entitlements.
 - `users` must not store Premium flags or plan state.
-- manual renewals extend the active Premium `end_at` rather than creating duplicate active Premium rows.
-- `subscriptions` still stores plan state history and remains the place for future recurring billing or expiry logic.
+- `subscriptions` stores full plan history; users may have multiple historical rows.
+- Only one `ACTIVE` subscription row should exist per user at a time.
+- The current plan is resolved from the active valid subscription row for that user.
+- A paid Premium activation expires the currently active non-Premium row when needed and creates a new active Premium history row.
+- Manual renewals extend the active Premium `end_at` rather than creating duplicate active Premium rows.
+- `subscriptions` remains the place for future recurring billing, expiry logic, and provider-managed renewals.
 - Webhook event idempotency is enforced through persisted webhook events plus `payment_transactions(provider, provider_reference_id)` uniqueness.
 
 ## Payment Transactions
@@ -196,6 +200,7 @@ Behavior notes:
 
 - Pending transactions may be reused when the same user starts upgrade again before the invoice expires.
 - Expired pending transactions should not remain reusable.
+- Payment transactions are billing-event history only; they are not the source of truth for plan access.
 - Premium activation is derived from validated webhook outcomes, not from frontend redirect completion.
 
 ## OCR Confirmation Drafts

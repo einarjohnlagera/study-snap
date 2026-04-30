@@ -55,9 +55,8 @@ class SubscriptionServiceTest {
         );
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
         )).thenReturn(List.of(activePremium));
 
@@ -80,9 +79,8 @@ class SubscriptionServiceTest {
         );
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
         )).thenReturn(List.of(expiredPremium));
 
@@ -93,17 +91,17 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    void activatePremiumSubscription_createsSubscriptionWhenNoActivePremiumExists() {
+    void activatePremiumSubscription_expiresCurrentFreeSubscriptionAndCreatesPremiumHistoryRow() {
         SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository, analyticsService, FIXED_CLOCK);
         UUID userId = UUID.randomUUID();
         UserEntity user = buildUser(userId);
+        SubscriptionEntity activeFree = buildFreeSubscription(user, FIXED_TIME.minusDays(20));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
-        )).thenReturn(List.of());
+        )).thenReturn(List.of(activeFree));
         when(subscriptionRepository.save(any(SubscriptionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         SubscriptionEntity saved = service.activatePremiumSubscription(
@@ -122,6 +120,11 @@ class SubscriptionServiceTest {
         assertThat(saved.getEndAt()).isEqualTo(FIXED_TIME.plusDays(30));
         assertThat(saved.getProvider()).isEqualTo(BillingProvider.XENDIT);
         assertThat(saved.getBillingType()).isEqualTo(BillingType.PREPAID);
+        assertThat(saved.getId()).isNotEqualTo(activeFree.getId());
+        assertThat(activeFree.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
+        assertThat(activeFree.getEndAt()).isEqualTo(FIXED_TIME);
+        verify(subscriptionRepository).saveAll(List.of(activeFree));
+        verify(subscriptionRepository).flush();
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.SUBSCRIPTION_STARTED), eq(saved.getId()), any());
     }
 
@@ -139,13 +142,13 @@ class SubscriptionServiceTest {
         activePremium.setCancelledAt(FIXED_TIME.minusDays(1));
         activePremium.setCancellationReason(SubscriptionCancellationReason.TOO_EXPENSIVE);
         activePremium.setCancellationFeedback("Too much.");
+        SubscriptionEntity activeFree = buildFreeSubscription(user, FIXED_TIME.minusMonths(2));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
-        )).thenReturn(List.of(activePremium));
+        )).thenReturn(List.of(activePremium, activeFree));
         when(subscriptionRepository.save(any(SubscriptionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         SubscriptionEntity saved = service.activatePremiumSubscription(
@@ -165,6 +168,10 @@ class SubscriptionServiceTest {
         assertThat(saved.getCancelledAt()).isNull();
         assertThat(saved.getCancellationReason()).isNull();
         assertThat(saved.getCancellationFeedback()).isNull();
+        assertThat(activeFree.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
+        assertThat(activeFree.getEndAt()).isEqualTo(FIXED_TIME);
+        verify(subscriptionRepository).saveAll(List.of(activeFree));
+        verify(subscriptionRepository).flush();
         verify(subscriptionRepository, times(1)).save(activePremium);
         verify(analyticsService, never()).trackEvent(any(), eq(AnalyticsEventType.SUBSCRIPTION_STARTED), any(), any());
     }
@@ -181,9 +188,8 @@ class SubscriptionServiceTest {
         );
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
         )).thenReturn(List.of(activePremium));
         when(subscriptionRepository.save(any(SubscriptionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -215,19 +221,48 @@ class SubscriptionServiceTest {
         activePremium.setId(subscriptionId);
 
         when(subscriptionRepository.findById(subscriptionId)).thenReturn(Optional.of(activePremium));
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(userId, SubscriptionStatus.ACTIVE))
+                .thenReturn(List.of());
+        when(subscriptionRepository.saveAndFlush(any(SubscriptionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(subscriptionRepository.save(any(SubscriptionEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.expireSubscriptionAndDowngradeToFree(subscriptionId);
 
-        ArgumentCaptor<SubscriptionEntity> captor = ArgumentCaptor.forClass(SubscriptionEntity.class);
-        verify(subscriptionRepository, times(2)).save(captor.capture());
-        SubscriptionEntity expiredSaved = captor.getAllValues().get(0);
-        SubscriptionEntity freeSaved = captor.getAllValues().get(1);
+        ArgumentCaptor<SubscriptionEntity> freeCaptor = ArgumentCaptor.forClass(SubscriptionEntity.class);
+        verify(subscriptionRepository).saveAndFlush(activePremium);
+        verify(subscriptionRepository).save(freeCaptor.capture());
+        SubscriptionEntity freeSaved = freeCaptor.getValue();
 
-        assertThat(expiredSaved.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
+        assertThat(activePremium.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);
+        assertThat(activePremium.getEndAt()).isEqualTo(FIXED_TIME.minusDays(1));
         assertThat(freeSaved.getPlanType()).isEqualTo(PlanType.FREE);
         assertThat(freeSaved.getBillingType()).isEqualTo(BillingType.NONE);
         assertThat(freeSaved.getProvider()).isEqualTo(BillingProvider.NONE);
+    }
+
+    @Test
+    void getPlanSnapshot_fallsBackToFreeWhenPremiumHistoryExistsButOnlyFreeIsCurrent() {
+        SubscriptionService service = new SubscriptionService(subscriptionRepository, userRepository, analyticsService, FIXED_CLOCK);
+        UUID userId = UUID.randomUUID();
+        UserEntity user = buildUser(userId);
+        SubscriptionEntity expiredPremium = buildPremiumSubscription(
+                user,
+                FIXED_TIME.minusDays(40),
+                FIXED_TIME.minusDays(5)
+        );
+        SubscriptionEntity activeFree = buildFreeSubscription(user, FIXED_TIME.minusDays(4));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
+                userId,
+                SubscriptionStatus.ACTIVE
+        )).thenReturn(List.of(activeFree, expiredPremium));
+
+        SubscriptionService.PlanSnapshot snapshot = service.getPlanSnapshot(userId);
+
+        assertThat(snapshot.planType()).isEqualTo(PlanType.FREE);
+        assertThat(service.hasActiveSubscription(userId, PlanType.FREE)).isTrue();
+        assertThat(service.hasActiveSubscription(userId, PlanType.PREMIUM)).isFalse();
     }
 
     private UserEntity buildUser(UUID userId) {
@@ -251,6 +286,21 @@ class SubscriptionServiceTest {
         subscription.setProvider(BillingProvider.XENDIT);
         subscription.setStartAt(startAt);
         subscription.setEndAt(endAt);
+        subscription.setCreatedAt(startAt);
+        subscription.setUpdatedAt(startAt);
+        return subscription;
+    }
+
+    private SubscriptionEntity buildFreeSubscription(UserEntity user, OffsetDateTime startAt) {
+        SubscriptionEntity subscription = new SubscriptionEntity();
+        subscription.setId(UUID.randomUUID());
+        subscription.setUser(user);
+        subscription.setPlanType(PlanType.FREE);
+        subscription.setStatus(SubscriptionStatus.ACTIVE);
+        subscription.setBillingType(BillingType.NONE);
+        subscription.setProvider(BillingProvider.NONE);
+        subscription.setStartAt(startAt);
+        subscription.setEndAt(null);
         subscription.setCreatedAt(startAt);
         subscription.setUpdatedAt(startAt);
         return subscription;

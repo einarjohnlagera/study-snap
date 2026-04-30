@@ -33,9 +33,10 @@ Primary focus:
   - correct PHP invoice amount handling
   - pending checkout reuse instead of duplicate pending payments
   - safe internal `returnUrl` support back to the interrupted page
+  - success-page routing that returns Settings/Billing upgrades to Dashboard and paywall upgrades to the interrupted flow
   - polished billing success and failed result pages
   - manual-renewal Premium expiry after `30` days
-  - subscriptions-table source of truth for plan state and webhook-driven renewal extension
+  - subscriptions-table source of truth for plan state, active-subscription history preservation, and webhook-driven renewal extension
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard

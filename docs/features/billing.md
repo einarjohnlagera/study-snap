@@ -46,16 +46,20 @@
   - `/notes/{id}`
 - Backend only accepts internal paths that start with `/`.
 - External URLs and protocol-relative redirects are rejected.
-- Success and failure redirects preserve the `returnUrl` so users can continue where they left off after checkout.
+- Success and failure redirects preserve the `returnUrl`.
+- Success prefers `Continue where you left off` for interrupted study flows such as notes, quizzes, and review.
+- Success falls back to `Go to Dashboard` when the upgrade started from Settings/Billing or when no usable `returnUrl` was provided.
 
 ### Premium Access Model
 
 - Current billing model is manual renewal, not auto-renewal.
 - `subscriptions` is the only source of truth for plan state and Premium access.
-- A successful `PAID` webhook creates or extends the active `PREMIUM` subscription row.
-- First successful payment creates a `PREMIUM` subscription with an `end_at` value `30` days in the future.
-- A later successful renewal extends the existing active Premium `end_at` instead of creating a duplicate active Premium row.
+- `subscriptions` preserves billing history; users may have many historical rows over time.
+- Only one `ACTIVE` subscription row should exist per user at a time.
+- A successful `PAID` webhook expires the current active non-Premium subscription when needed, then creates a new active `PREMIUM` row for `30` days.
+- If the user already has an active Premium subscription, the same active Premium row is extended instead of creating a duplicate active Premium row.
 - A user counts as Premium only while an active `PREMIUM` subscription exists and `(end_at IS NULL OR end_at > now())`.
+- When Premium expires, the lifecycle falls back to an active `FREE` subscription record.
 - Redirecting to `/billing/success` does not grant Premium access by itself.
 
 ### Draft Preservation During Upgrade

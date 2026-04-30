@@ -497,7 +497,7 @@ export function NoteEditorPageClient({
       return;
     }
     const timeoutId = globalThis.setTimeout(() => {
-      generatedContentSectionRef.current?.scrollIntoView({
+      generatedContentSectionRef.current?.scrollIntoView?.({
         behavior: "smooth",
         block: "start",
       });

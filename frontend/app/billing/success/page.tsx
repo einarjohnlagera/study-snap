@@ -14,9 +14,23 @@ function resolveReturnUrl(rawReturnUrl: string | string[] | undefined): string |
   return value;
 }
 
+function shouldReturnToDashboard(returnUrl: string | null): boolean {
+  if (!returnUrl) {
+    return true;
+  }
+  const pathname = returnUrl.split("?")[0]?.split("#")[0] ?? returnUrl;
+  return pathname === "/settings"
+    || pathname.startsWith("/settings/")
+    || pathname === "/billing"
+    || pathname.startsWith("/billing/");
+}
+
 export default async function BillingSuccessPage({ searchParams }: Readonly<BillingSuccessPageProps>) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const returnUrl = resolveReturnUrl(resolvedSearchParams.returnUrl);
+  const useDashboardPrimary = shouldReturnToDashboard(returnUrl);
+  const primaryHref = useDashboardPrimary ? "/dashboard" : returnUrl ?? "/dashboard";
+  const primaryLabel = useDashboardPrimary ? "Go to Dashboard" : "Continue where you left off";
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-3xl items-center px-4 py-8 sm:px-6">
@@ -36,12 +50,12 @@ export default async function BillingSuccessPage({ searchParams }: Readonly<Bill
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Link href={returnUrl ?? "/dashboard"} className="w-full sm:w-auto">
+          <Link href={primaryHref} className="w-full sm:w-auto">
             <Button type="button" className="w-full sm:w-auto">
-              {returnUrl ? "Continue where you left off" : "Go to Dashboard"}
+              {primaryLabel}
             </Button>
           </Link>
-          {returnUrl ? (
+          {!useDashboardPrimary && returnUrl ? (
             <Link href="/dashboard" className="w-full sm:w-auto">
               <Button type="button" variant="outline" className="w-full sm:w-auto">
                 Go to Dashboard

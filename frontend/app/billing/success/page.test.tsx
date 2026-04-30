@@ -16,4 +16,13 @@ describe("BillingSuccessPage", () => {
 
     expect(screen.getByRole("link", { name: "Go to Dashboard" })).toHaveAttribute("href", "/dashboard");
   });
+
+  it("prefers the dashboard CTA for settings-origin upgrades", async () => {
+    render(await BillingSuccessPage({
+      searchParams: Promise.resolve({ returnUrl: "/settings?section=billing" }),
+    }));
+
+    expect(screen.getByRole("link", { name: "Go to Dashboard" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.queryByRole("link", { name: "Continue where you left off" })).not.toBeInTheDocument();
+  });
 });

@@ -12,7 +12,6 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
-import com.studysnap.backend.repository.SubscriptionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,6 +23,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,8 +34,6 @@ class BillingHistoryServiceTest {
 
     @Mock
     private PaymentTransactionRepository paymentTransactionRepository;
-    @Mock
-    private SubscriptionRepository subscriptionRepository;
     @Mock
     private SubscriptionService subscriptionService;
 
@@ -49,7 +47,6 @@ class BillingHistoryServiceTest {
         properties.getBilling().getPricingRegions().put("US", regionPricing);
         BillingHistoryService service = new BillingHistoryService(
                 paymentTransactionRepository,
-                subscriptionRepository,
                 subscriptionService,
                 properties,
                 Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
@@ -93,11 +90,7 @@ class BillingHistoryServiceTest {
                         OffsetDateTime.parse("2026-03-20T00:00:00Z")
                 )
         );
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
-                userId,
-                PlanType.PREMIUM,
-                SubscriptionStatus.ACTIVE
-        )).thenReturn(List.of(subscription));
+        when(subscriptionService.findActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(Optional.of(subscription));
         when(paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(List.of(
                 failedTransaction,
                 renewalTransaction,
@@ -124,7 +117,6 @@ class BillingHistoryServiceTest {
         StudySnapProperties properties = new StudySnapProperties();
         BillingHistoryService service = new BillingHistoryService(
                 paymentTransactionRepository,
-                subscriptionRepository,
                 subscriptionService,
                 properties,
                 Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
@@ -134,11 +126,7 @@ class BillingHistoryServiceTest {
         when(subscriptionService.getPlanSnapshot(userId)).thenReturn(
                 new SubscriptionService.PlanSnapshot(PlanType.FREE, false, null, null)
         );
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
-                userId,
-                PlanType.PREMIUM,
-                SubscriptionStatus.ACTIVE
-        )).thenReturn(List.of());
+        when(subscriptionService.findActiveSubscription(userId, PlanType.PREMIUM)).thenReturn(Optional.empty());
         when(paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(List.of());
 
         BillingHistoryResponse history = service.getHistory(userId);

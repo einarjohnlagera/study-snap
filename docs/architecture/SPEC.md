@@ -19,7 +19,7 @@
 7. Frontend redirects the user to the hosted Xendit invoice page.
 8. Xendit redirects the user to `/billing/success` or `/billing/failed`, preserving the validated `returnUrl` when present.
 9. Xendit sends `POST /api/webhooks/xendit`.
-10. Backend validates `x-callback-token`, applies idempotency, marks the payment transaction, and creates or extends the active `PREMIUM` subscription when status is `PAID`.
+10. Backend validates `x-callback-token`, applies idempotency, marks the payment transaction, and updates `subscriptions` when status is `PAID`.
 
 ### Endpoints
 
@@ -49,6 +49,9 @@
   - `https://evil.example`
   - `//evil.example`
 - Backend, not frontend, validates redirect safety before embedding it in Xendit success and failure URLs.
+- Success CTA routing is context-aware:
+  - interrupted product flows -> `Continue where you left off`
+  - Settings/Billing origins or missing `returnUrl` -> `Go to Dashboard`
 
 ### Safety Rules
 
@@ -63,8 +66,12 @@
 ### Premium Access Window
 
 - Premium access begins only after a validated `PAID` webhook.
-- Webhook activation creates or extends the active `PREMIUM` subscription row in `subscriptions`.
+- `subscriptions` preserves billing history; users may have multiple historical rows.
+- Only one `ACTIVE` subscription row should exist per user at a time.
+- If the user has no active Premium subscription, the webhook expires the current active non-Premium row and creates a new active `PREMIUM` row in `subscriptions`.
+- If the user already has an active Premium subscription, the webhook extends that active Premium row instead of creating a duplicate active Premium row.
 - A user counts as Premium only while `plan_type = PREMIUM`, `status = ACTIVE`, and `(end_at IS NULL OR end_at > now())`.
+- Premium expiry falls back to an active `FREE` subscription record through lifecycle handling.
 - Manual renewals extend `end_at` from `max(current_end_at, now)`.
 - Manual renewal means the user may start checkout again after expiry; there is no recurring renewal job yet.
 
