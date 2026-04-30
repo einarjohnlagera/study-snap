@@ -486,6 +486,7 @@ Favicon requirements:
   - `/notes/new?source=paste` -> paste-material flow
   - `/notes/new?source=upload` -> upload-material flow
 - Demo mode must not call real generation pipeline, persist data, or consume usage
+- The `/demo` page is a 5-step interactive demo (choose start → input → generated note → Study Pack CTA → Study Pack results) that uses prebuilt static content only (Photosynthesis example); no backend or LLM calls are made during the demo flow
 - Unverified users are blocked from generation with structured `403`:
   - `code=EMAIL_VERIFICATION_REQUIRED`
   - `action=RESEND_VERIFICATION`
@@ -1112,10 +1113,11 @@ Page responsibilities:
 ## Plan Usage Display
 
 - `Settings -> Plan & Billing` shows billing-cycle usage bars instead of raw counters.
-- Free users see:
+- All plan users see:
   - `Study Packs`
   - `Challenge Quiz`
-- Premium users also see:
+  - `Exports`
+- Pro users also see:
   - `Adaptive Practice`
 - OCR usage is tracked in backend but hidden from the Settings UI.
 - Usage bars use warning colors:
@@ -1123,15 +1125,15 @@ Page responsibilities:
   - `60-85%` warning
   - `85-100%` danger
 - Usage reset dates are based on the billing cycle, not the calendar month.
-- When a Free user hits a visible limit, Settings should show an `Upgrade to Premium` CTA.
+- When a Free user hits a visible limit, Settings shows the plan cards below as the upgrade path; no inline upgrade CTA inside the usage bar.
 - Study Pack enforcement and user-facing remaining counts must come from the same backend-resolved usage calculation.
 - Study Pack generation is allowed only when `used < limit` and is blocked when `used >= limit`.
 - Study Pack quota increments only after a successful Study Pack is persisted.
 - Failed Study Pack generation, note saves, opening generation screens, and failed retries must not consume quota.
 - Study Pack near-limit messaging should appear when `studyPacksRemaining <= 2` and should show the actual remaining count with plan-specific monthly-limit copy.
 - When `studyPacksRemaining == 0`, `Generate Study Pack` should remain clickable instead of rendering as a disabled action.
-- Free users at `studyPacksRemaining == 0` should see the Premium/upgrade modal.
-- Premium users at `studyPacksRemaining == 0` should see the dedicated monthly-limit modal.
+- Free users at `studyPacksRemaining == 0` should see the upgrade modal.
+- Plus and Pro users at `studyPacksRemaining == 0` should see the dedicated monthly-limit modal.
 
 ## Study Pack Generation Consistency
 
@@ -1337,26 +1339,29 @@ Route: `/settings`
 
 Settings route section: `Plan & Billing`
 
-- show plan (`FREE` or `PREMIUM`)
-- show usage buckets separately:
-  - Study Packs (monthly quota)
-  - Challenge Quiz (plan-based monthly quota)
-  - Adaptive Practice (Premium-only, plan-based monthly quota)
-  - OCR (tracked internally, hidden from user-facing usage UI)
-- start hosted Xendit checkout for verified upgrade attempts
+Plans: `FREE`, `PLUS`, `PRO`
+
+- show billing-cycle usage bars (Study Packs, Quizzes, Exports; Adaptive Practice for Pro only)
+- billing cycle toggle (Monthly / Annual) with savings badge
+- three side-by-side plan cards (Free, Plus, Pro)
+  - current plan shows "Current plan" badge and disabled button
+  - non-current paid plan shows checkout CTA
+  - active paid plan shows "Cancel plan" link below the button
+- start hosted Xendit checkout for verified upgrade attempts (Plus or Pro)
 - Billing webhook sync keeps plan state aligned (webhook-driven source of truth)
   - `PAID`
   - `FAILED`
   - `EXPIRED`
-- Premium-gated upgrade prompts may open shared paywalls first, but frontend must never grant Premium directly
+- Paid-plan gated features open shared paywalls first; frontend must never grant paid access directly
 
 Plan limits:
 
-- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, OCR quota, file uploads, weak concept visibility
-- Premium: 100 Study Packs/month, 50 Challenge Quizzes/month, 30 Adaptive Practice sessions/month, higher OCR quota, difficulty selection, priority AI
+- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 2 exports/month, Summary + Key Concepts
+- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, higher note generation limits
+- Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, difficulty selection, Board Exam Mode
 - Usage windows are billing-cycle-based:
   - Free resets monthly from account creation date
-  - Premium resets from the active subscription billing window
+  - Plus and Pro reset from the active subscription billing window
 
 ---
 

@@ -261,22 +261,25 @@ This repo currently centers on:
 - responsive action patterns, standardized icons, and tab-based note-detail navigation
 - demo mode
 - shareable Study Pack links
-- freemium plans and subscriptions (PayMongo recurring subscriptions)
+- Free / Plus / Pro plans with Xendit hosted checkout and webhook-confirmed activation
 - future user accounts and authenticated ownership
 
 ## Billing (Current)
 
-- Billing runtime is provider-agnostic (`BillingService` + provider resolver), with `PAYMONGO` as the active provider.
-- Premium plans are recurring:
-  - `MONTHLY` (configured by `PAYMONGO_MONTHLY_PLAN_ID`)
-  - `YEARLY` (configured by `PAYMONGO_YEARLY_PLAN_ID`)
-- Subscription activation/renewal is webhook-driven (backend source of truth), not redirect-only:
-  - `subscription.activated`
-  - `subscription.invoice.paid`
-  - `subscription.invoice.payment_failed`
-  - `subscription.past_due`
-  - `subscription.unpaid`
-  - `subscription.updated`
+Plans: Free, Plus, Pro. Paid upgrades use Xendit hosted invoice checkout with manual renewal (no automatic charges).
+
+| Plan | Monthly (PH) | Intro first month (PH) |
+|------|-------------|------------------------|
+| Free | ₱0 | — |
+| Plus | ₱179 | ₱149 |
+| Pro | ₱249 | ₱199 |
+
+- Annual Pro is available at ₱1,999/year (PH). Plus annual is not yet available.
+- Checkout is initiated via `POST /api/payments/create` and redirects to the Xendit hosted page.
+- Paid access is activated only after the backend receives and validates `POST /api/webhooks/xendit`.
+- Success and failure redirect pages are informational; they do not grant paid access directly.
+- `subscriptions` is the source of truth for plan state. Only one active subscription row exists per user at a time.
+- Webhook events handled: `PAID`, `FAILED`, `EXPIRED`.
 
 ## Tech stack
 

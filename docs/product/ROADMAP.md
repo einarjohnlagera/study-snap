@@ -63,6 +63,8 @@ Primary focus:
 - Public navbar alignment across landing, learn, pricing, login, and Public Library
 - SEO title, meta description, and Open Graph metadata alignment with the new positioning
 - Open Graph image refresh to match the new messaging before the release is cut
+- Landing pricing section updated to Free / Plus / Pro cards with intro offer pricing and "Manual renewal. No automatic charges." footer
+- Demo page redesigned as a 5-step interactive flow (choose start → input → generated note → Study Pack CTA → Study Pack results) using static prebuilt content only — no backend or LLM calls
 
 Implementation stance:
 

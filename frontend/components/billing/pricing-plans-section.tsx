@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Crown, Minus, Sparkles } from "lucide-react";
+import { Check, Minus, Sparkles } from "lucide-react";
 import type { PaidPlanType } from "@/lib/api";
 import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { buttonVariants } from "@/components/ui/button";
@@ -384,64 +384,69 @@ export function SimplePricingSection() {
   return (
     <section className="space-y-5">
       <div className="grid gap-4 xl:grid-cols-3">
-        <Card className="space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
+        <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
             <CardTitle>For getting started</CardTitle>
           </div>
           <p className="text-3xl font-semibold">Free</p>
-          <ul className="space-y-2 text-sm text-foreground/80">
+          <ul className="grow space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.exportsPerMonth} exports / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Summary + Key Concepts</li>
           </ul>
-          <Link href="/signup" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-            Start for Free
+          <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
+            Get Started Free
           </Link>
         </Card>
 
-        <Card className="space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
+        <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Plus</p>
             <CardTitle>For regular study</CardTitle>
           </div>
-          <p className="text-xl font-semibold">₱{pricingConfig.price.PH.plus.monthly}/month</p>
-          <ul className="space-y-2 text-sm text-foreground/80">
+          <div className="space-y-0.5">
+            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.plus.monthly} first month</p>
+            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.plus.monthly}/month</p>
+          </div>
+          <ul className="grow space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.studyPacksPerMonth} Study Packs / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.challengeQuizzesPerMonth} Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.plus.exportsPerMonth} exports / month</li>
+            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Higher note generation limits</li>
           </ul>
-          <Link href="/pricing" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-            View Pricing
+          <Link href="/signup" className={buttonVariants({ variant: "outline", className: "w-full" })}>
+            Upgrade to Plus
           </Link>
         </Card>
 
-        <Card className="space-y-4 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
+        <Card className="flex flex-col space-y-4 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
           <div className="space-y-2">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-              <Crown className="h-3.5 w-3.5" />
-              Pro
+              <Sparkles className="h-3.5 w-3.5" />
+              Most Popular
             </div>
             <CardTitle>Best for exam prep</CardTitle>
           </div>
-          <div className="space-y-1">
-            <p className="text-xl font-semibold">₱{pricingConfig.price.PH.pro.monthly}/month <span className="text-sm font-normal text-foreground/60">· ₱{pricingConfig.price.PH.pro.yearly?.toLocaleString()}/year</span></p>
-            <p className="text-sm text-foreground/60">${pricingConfig.price.DEFAULT.pro.monthly}/month · ${pricingConfig.price.DEFAULT.pro.yearly}/year</p>
+          <div className="space-y-0.5">
+            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.pro.monthly} first month</p>
+            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.pro.monthly}/month</p>
           </div>
-          <ul className="space-y-2 text-sm text-foreground/80">
+          <ul className="grow space-y-2 text-sm text-foreground/80">
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.studyPacksPerMonth} Study Packs / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.pro.challengeQuizzesPerMonth} Quizzes / month</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty selection</li>
             <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Board Exam Mode</li>
           </ul>
-          <Link href="/pricing" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-            View Pricing
+          <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
+            Go Pro
           </Link>
         </Card>
       </div>
       <p className="text-sm text-foreground/60">
-        Upgrade starts a secure Xendit hosted checkout. Paid access activates only after webhook confirmation.
+        Manual renewal. No automatic charges. Intro pricing applies to your first monthly checkout.
       </p>
     </section>
   );

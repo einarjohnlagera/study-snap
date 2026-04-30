@@ -83,21 +83,35 @@ AI: OpenAI LLM
 OCR: Google Vision
 Payments: Xendit hosted checkout
 
+## Plans
+
+NoteLib has three plans: Free, Plus, and Pro.
+
+| Plan | Monthly (PH) | Intro first month (PH) |
+|------|-------------|------------------------|
+| Free | ₱0 | — |
+| Plus | ₱179 | ₱149 |
+| Pro | ₱249 | ₱199 |
+
+- Annual Pro is available at ₱1,999/year (PH).
+- Plus annual is not yet available; Plus always uses monthly checkout.
+- Billing is manual renewal — no automatic charges.
+
 ## Payments
 
-- Premium upgrades use Xendit hosted invoice checkout.
-- Current Premium billing model is manual renewal with `30`-day Monthly access or `365`-day Annual access per successful payment.
+- Paid upgrades use Xendit hosted invoice checkout (Plus and Pro).
+- Current billing model is manual renewal with `30`-day Monthly access or `365`-day Annual access per successful payment.
 - Billing checkout pricing is config-driven from backend billing region settings.
 - Intro offers and automatic discounts use `discount_vouchers`.
 - Successful discount usage is recorded in `voucher_redemptions` only after a confirmed `PAID` webhook.
 - All plans and entitlements must be represented through the `subscriptions` table.
 - Subscription history is preserved in `subscriptions`; only one active subscription row should exist per user at a time.
-- User records must not store Premium flags or plan state.
+- User records must not store plan flags or plan state.
 - Frontend starts checkout through `POST /api/payments/create` and redirects to the returned hosted URL.
-- Premium access is activated only after the backend receives and validates `POST /api/webhooks/xendit`.
-- Success and failure pages are user-facing status pages only; they do not grant Premium access.
+- Paid access is activated only after the backend receives and validates `POST /api/webhooks/xendit`.
+- Success and failure pages are user-facing status pages only; they do not grant paid access.
 - Billing success returns users to the interrupted product flow when a safe paywall `returnUrl` exists, but Settings/Billing-origin upgrades land on Dashboard.
-- Frontend redirects after checkout never activate Premium directly.
+- Frontend redirects after checkout never activate paid access directly.
 
 ## Core Domain Models
 

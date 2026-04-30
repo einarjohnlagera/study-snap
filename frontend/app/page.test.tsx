@@ -44,7 +44,7 @@ describe("LandingPage", () => {
     expect(
       screen.getByText("Write, paste, or generate notes - then turn them into summaries, key concepts, quizzes, and exam-ready practice."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Board Exam Mode · Premium")).toBeInTheDocument();
+    expect(screen.getByText("Board Exam Mode · Pro")).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Start for Free" })[0]).toHaveAttribute("href", "/signup");
     expect(screen.getAllByRole("link", { name: "Browse Public Library" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Browse Public Library" })).toHaveAttribute("href", "/public/library");
