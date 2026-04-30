@@ -151,6 +151,7 @@ export type DashboardOverviewResponse = {
 
 export type ProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL";
 export type NoteTargetProfileType = "STUDENT" | "BOARD_TAKER";
+export type PaidPlanType = "PLUS" | "PRO";
 export type LearnerLevel =
   | "GRADE_SCHOOL"
   | "JUNIOR_HIGH"
@@ -159,7 +160,7 @@ export type LearnerLevel =
   | "BOARD_EXAM_REVIEW"
   | "PROFESSIONAL"
   | "PERSONAL_LEARNING";
-export type PlanType = "FREE" | "PREMIUM";
+export type PlanType = "FREE" | PaidPlanType;
 export type BillingCycle = "MONTHLY" | "YEARLY";
 export type UserRole = "USER" | "ADMIN";
 export type EngagementMode = "FOCUSED" | "CONSISTENCY" | "STREAK";
@@ -178,14 +179,25 @@ export type SubscriptionPlanStatusResponse = {
   cancelledAt: string | null;
 };
 
+export type BillingPricingCycleResponse = {
+  amount: number | null;
+  durationDays: number | null;
+  introAmount: number | null;
+  introEligible: boolean;
+  available: boolean;
+};
+
+export type BillingPlanPricingResponse = {
+  planType: PaidPlanType;
+  monthly: BillingPricingCycleResponse;
+  yearly: BillingPricingCycleResponse;
+};
+
 export type BillingPricingResponse = {
   region: string;
   currency: string;
-  monthlyPrice: number;
-  yearlyPrice: number;
-  introMonthlyPrice: number | null;
-  hasIntroPromo: boolean;
-  introEligible: boolean;
+  plus: BillingPlanPricingResponse;
+  pro: BillingPlanPricingResponse;
 };
 
 export type AnalyticsEventType =
@@ -706,6 +718,7 @@ export type BillingCheckoutSessionResponse = {
 };
 
 export type BillingCheckoutSessionRequest = {
+  planType?: PaidPlanType | null;
   billingCycle?: BillingCycle | null;
   returnUrl?: string | null;
 };
@@ -2108,6 +2121,7 @@ export async function createPremiumCheckoutSession(
       method: "POST",
       headers: buildAuthHeaders("application/json"),
       body: JSON.stringify({
+        planType: request?.planType ?? null,
         billingCycle: request?.billingCycle ?? null,
         returnUrl: request?.returnUrl ?? null,
       }),
@@ -2116,7 +2130,7 @@ export async function createPremiumCheckoutSession(
   );
   return parseApiResponse<BillingCheckoutSessionResponse>(
     response,
-    "Could not start Premium checkout. Please try again.",
+    "Could not start checkout. Please try again.",
   );
 }
 
@@ -2137,7 +2151,7 @@ export async function getBillingPricing(): Promise<BillingPricingResponse> {
 
   return parseApiResponse<BillingPricingResponse>(
     response,
-    "Could not load Premium pricing.",
+    "Could not load pricing.",
   );
 }
 
@@ -2155,7 +2169,7 @@ export async function cancelPremiumSubscription(
   );
   return parseApiResponse<MeResponse>(
     response,
-    "Could not schedule Premium cancellation. Please try again.",
+    "Could not schedule plan cancellation. Please try again.",
   );
 }
 
@@ -2452,6 +2466,10 @@ export function isOcrLimitReachedError(error: unknown): error is ApiRequestError
 
 export function isNoteGenerationLimitReachedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "NOTE_GENERATION_LIMIT_REACHED";
+}
+
+export function isExportLimitReachedError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "MONTHLY_EXPORT_LIMIT_REACHED";
 }
 
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {

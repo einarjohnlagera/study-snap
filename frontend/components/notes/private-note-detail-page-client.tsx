@@ -287,7 +287,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   const [shareModalUrl, setShareModalUrl] = useState("");
   const [shareModalCopied, setShareModalCopied] = useState(false);
 
-  const [isPremiumPlan, setIsPremiumPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") === "PREMIUM");
+  const [isPaidPlan, setIsPaidPlan] = useState(() => (getAuthUser()?.planType ?? "FREE") !== "FREE");
   const [isEmailVerified, setIsEmailVerified] = useState(() => Boolean(getAuthUser()?.emailVerifiedAt));
   const [userRole, setUserRole] = useState<"USER" | "ADMIN">(() => getAuthUser()?.role ?? "USER");
   const [profileType, setProfileType] = useState<"STUDENT" | "BOARD_EXAM" | "TEACHER">(() => {
@@ -426,7 +426,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
   useEffect(() => {
     const syncAuthState = () => {
       const authUser = getAuthUser();
-      setIsPremiumPlan((authUser?.planType ?? "FREE") === "PREMIUM");
+      setIsPaidPlan((authUser?.planType ?? "FREE") !== "FREE");
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
       setUserRole(authUser?.role ?? "USER");
       setProfileType(authUser?.profileType === "BOARD_EXAM" || authUser?.profileType === "TEACHER" ? authUser.profileType : "STUDENT");
@@ -626,10 +626,10 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
     )
     : null;
   const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
-  const currentPlan = usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE");
+  const currentPlan = usageSummary?.plan ?? (isPaidPlan ? (getAuthUser()?.planType ?? "FREE") : "FREE");
   const hasReachedStudyPackLimit = isStudyPackLimitReached(studyPacksRemaining);
   const hasReachedChallengeQuizLimit = currentPlan === "FREE" && challengeQuizzesRemaining !== null && challengeQuizzesRemaining <= 0;
-  const hasReachedAdaptivePracticeLimit = currentPlan === "PREMIUM" && adaptivePracticeRemaining !== null && adaptivePracticeRemaining <= 0;
+  const hasReachedAdaptivePracticeLimit = currentPlan === "PRO" && adaptivePracticeRemaining !== null && adaptivePracticeRemaining <= 0;
   const shouldShowNearLimitBanner = usageSummary
     ? !isTeacherMode && shouldShowNearStudyPackLimitBanner(usageSummary.plan, studyPacksRemaining)
     : false;
@@ -1279,7 +1279,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         <div className="space-y-6">
           {shouldShowNearLimitBanner ? (
             <NearLimitBanner
-              planType={usageSummary?.plan ?? (isPremiumPlan ? "PREMIUM" : "FREE")}
+              planType={currentPlan}
               remainingCredits={studyPacksRemaining}
               resetDateLabel={usageResetDateLabel}
             />
@@ -2064,7 +2064,7 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
       />
 
       <StudyPackLimitModal
-        isOpen={!isTeacherMode && currentPlan === "PREMIUM" && showLimitReachedModal}
+        isOpen={!isTeacherMode && currentPlan !== "FREE" && showLimitReachedModal}
         planType={currentPlan}
         resetDateLabel={usageResetDateLabel}
         onClose={() => setShowLimitReachedModal(false)}

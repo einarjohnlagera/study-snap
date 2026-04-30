@@ -60,8 +60,8 @@ public class AdminDashboardService {
 
     public AdminDashboardSummaryResponse getSummary() {
         OffsetDateTime now = OffsetDateTime.now();
-        List<SubscriptionEntity> activePremiumSubscriptions = subscriptionRepository.findCurrentlyActiveByPlanTypeAndStatus(
-                PlanType.PREMIUM,
+        List<SubscriptionEntity> activePremiumSubscriptions = subscriptionRepository.findCurrentlyActiveByPlanTypeInAndStatus(
+                List.of(PlanType.PLUS, PlanType.PRO),
                 SubscriptionStatus.ACTIVE,
                 now
         );

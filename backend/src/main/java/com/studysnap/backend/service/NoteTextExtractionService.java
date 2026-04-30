@@ -267,7 +267,7 @@ public class NoteTextExtractionService {
                 1,
                 Math.min(
                         properties.getLimits().getFileUploadMaxSizeBytes(),
-                        planType == PlanType.PREMIUM
+                        planType != null && planType.isPaid()
                                 ? properties.getOcr().getPremiumMaxImageBytes()
                                 : properties.getOcr().getFreeMaxImageBytes()
                 )

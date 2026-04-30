@@ -34,12 +34,14 @@ import {
   type SubscriptionCancellationReason,
 } from "@/lib/api";
 import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
-import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
+import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
   PLAN_BILLING_SECTION_ID,
+  getPlanDisplayName,
   getUsageProgressPercent,
+  isPaidPlanType,
 } from "@/lib/plans";
 
 function SettingsLoading() {
@@ -69,6 +71,7 @@ function UsageMetric({
   limit,
   resetDateLabel,
   showUpgradeCta,
+  upgradeLabel,
   onUpgradeClick,
 }: Readonly<{
   label: string;
@@ -76,6 +79,7 @@ function UsageMetric({
   limit: number;
   resetDateLabel: string;
   showUpgradeCta: boolean;
+  upgradeLabel: string;
   onUpgradeClick: () => void;
 }>) {
   const progressPercent = getUsageProgressPercent(used, limit);
@@ -102,7 +106,7 @@ function UsageMetric({
           </p>
           {showUpgradeCta ? (
             <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={onUpgradeClick}>
-              Upgrade to Premium
+              {upgradeLabel}
             </Button>
           ) : null}
         </div>
@@ -146,7 +150,7 @@ export default function SettingsPage() {
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
-  const [startingCheckoutCycle, setStartingCheckoutCycle] = useState<BillingCycle | null>(null);
+  const [startingCheckoutKey, setStartingCheckoutKey] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
 
@@ -284,26 +288,31 @@ export default function SettingsPage() {
     }
   };
 
-  const handleStartCheckout = async (billingCycle: BillingCycle = "MONTHLY") => {
+  const handleStartCheckout = async (
+    planType: "PLUS" | "PRO",
+    billingCycle: BillingCycle = "MONTHLY",
+  ) => {
     const authUser = getAuthUser();
     if (authUser && !authUser.emailVerifiedAt) {
       setVerifyEmailModalOpen(true);
       return;
     }
 
-    setStartingCheckoutCycle(billingCycle);
+    const checkoutKey = `${planType}-${billingCycle}`;
+    setStartingCheckoutKey(checkoutKey);
     setCheckoutError(null);
     try {
       void trackAnalyticsEvent({
         eventType: "UPGRADE_CLICKED",
         metadata: {
           source: "settings_plan_billing",
-          feature: `premium_checkout_${billingCycle.toLowerCase()}`,
+          feature: `${planType.toLowerCase()}_checkout_${billingCycle.toLowerCase()}`,
           path: pathname,
           target: "xendit_checkout",
         },
       });
       const response = await createPremiumCheckoutSession({
+        planType,
         billingCycle,
         returnUrl: getSafeRedirectPath(getCurrentPathWithQuery()),
       });
@@ -312,10 +321,10 @@ export default function SettingsPage() {
       if (isEmailNotVerifiedError(error)) {
         setVerifyEmailModalOpen(true);
       } else {
-        setCheckoutError(error instanceof Error ? error.message : "Could not start Premium checkout. Please try again.");
+        setCheckoutError(error instanceof Error ? error.message : "Could not start checkout. Please try again.");
       }
     } finally {
-      setStartingCheckoutCycle(null);
+      setStartingCheckoutKey(null);
     }
   };
 
@@ -373,7 +382,11 @@ export default function SettingsPage() {
     }
   };
 
-  const isPremiumPlan = profile?.planType === "PREMIUM";
+  const currentPlan = usageSummary?.plan ?? profile?.planType ?? "FREE";
+  const isPaidPlan = isPaidPlanType(currentPlan);
+  const isProPlan = currentPlan === "PRO";
+  const upgradePlanType = currentPlan === "PLUS" ? "PRO" : "PLUS";
+  const upgradePlanLabel = currentPlan === "PLUS" ? "Upgrade to Pro" : "Upgrade to Plus";
   const isCancellationScheduled = Boolean(
     billingHistory?.cancelAtPeriodEnd ?? (profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt),
   );
@@ -383,12 +396,17 @@ export default function SettingsPage() {
   const challengeQuizLimit = usageSummary?.limits.challengeQuizzesPerMonth ?? 0;
   const adaptivePracticeUsed = usageSummary?.usage.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
+  const exportsUsed = usageSummary?.usage.exportsUsed ?? 0;
+  const exportsLimit = usageSummary?.limits.exportsPerMonth ?? null;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
-  const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
-  const annualPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
-  const introMonthlyPriceLabel = billingPricing?.introEligible && billingPricing.introMonthlyPrice !== null
-    ? formatPricingAmount(billingPricing.introMonthlyPrice, billingPricing.currency)
-    : null;
+  const plusMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
+  const plusAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "YEARLY");
+  const proMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
+  const proAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY");
+  const plusMonthlyPricing = resolveCyclePricing(billingPricing, "PLUS", "MONTHLY");
+  const plusAnnualPricing = resolveCyclePricing(billingPricing, "PLUS", "YEARLY");
+  const proMonthlyPricing = resolveCyclePricing(billingPricing, "PRO", "MONTHLY");
+  const proAnnualPricing = resolveCyclePricing(billingPricing, "PRO", "YEARLY");
   const billingTransactions = billingHistory?.transactions ?? [];
 
   const formatBillingDate = (rawDate: string | null) => {
@@ -452,9 +470,9 @@ export default function SettingsPage() {
     }
   };
 
-  const subscriptionSummaryPlan = billingHistory?.currentPlan ?? profile?.planType ?? "FREE";
+  const subscriptionSummaryPlan = billingHistory?.currentPlan ?? currentPlan;
   const subscriptionSummaryStatus = (() => {
-    if (subscriptionSummaryPlan !== "PREMIUM") {
+    if (!isPaidPlanType(subscriptionSummaryPlan)) {
       return "Free plan";
     }
     if (billingHistory?.subscriptionStatus === "ACTIVE") {
@@ -466,14 +484,16 @@ export default function SettingsPage() {
     if (billingHistory?.subscriptionStatus === "CANCELED") {
       return "Canceled";
     }
-    return "Premium";
+    return `${getPlanDisplayName(subscriptionSummaryPlan)} plan`;
   })();
   const subscriptionSummaryDate = billingHistory?.currentPeriodEnd;
   const subscriptionSummaryDateLabel =
-    subscriptionSummaryPlan === "PREMIUM"
+    isPaidPlanType(subscriptionSummaryPlan)
       ? "Valid until"
       : "Status";
-  const subscriptionBillingCycleLabel = subscriptionSummaryPlan === "PREMIUM" ? "Manual renewal" : "—";
+  const subscriptionBillingCycleLabel = isPaidPlanType(subscriptionSummaryPlan)
+    ? `${billingHistory?.billingType === "YEARLY" ? "Yearly" : "Monthly"} · Manual renewal`
+    : "—";
   const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
 
   return (
@@ -644,7 +664,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current Plan</p>
                 <p className="mt-2 inline-flex rounded-full border border-border px-3 py-1 text-sm font-semibold">
-                  {profile.planType}
+                  {getPlanDisplayName(currentPlan)}
                 </p>
               </div>
               <div className="space-y-2">
@@ -656,37 +676,55 @@ export default function SettingsPage() {
                     used={studyPacksUsed}
                     limit={studyPacksLimit}
                     resetDateLabel={usageResetDateLabel}
-                    showUpgradeCta={!isPremiumPlan}
-                    onUpgradeClick={() => void handleStartCheckout()}
+                    showUpgradeCta={!isProPlan}
+                    upgradeLabel={upgradePlanLabel}
+                    onUpgradeClick={() => void handleStartCheckout(upgradePlanType)}
                   />
                   <UsageMetric
                     label="Quiz"
                     used={challengeQuizUsed}
                     limit={challengeQuizLimit}
                     resetDateLabel={usageResetDateLabel}
-                    showUpgradeCta={!isPremiumPlan}
-                    onUpgradeClick={() => void handleStartCheckout()}
+                    showUpgradeCta={!isProPlan}
+                    upgradeLabel={upgradePlanLabel}
+                    onUpgradeClick={() => void handleStartCheckout(upgradePlanType)}
                   />
-                  {isPremiumPlan ? (
+                  {exportsLimit !== null && exportsLimit !== undefined ? (
+                    <UsageMetric
+                      label="Exports"
+                      used={exportsUsed}
+                      limit={exportsLimit}
+                      resetDateLabel={usageResetDateLabel}
+                      showUpgradeCta={!isProPlan}
+                      upgradeLabel={upgradePlanLabel}
+                      onUpgradeClick={() => void handleStartCheckout(upgradePlanType)}
+                    />
+                  ) : null}
+                  {adaptivePracticeLimit > 0 ? (
                     <UsageMetric
                       label="Adaptive Practice"
                       used={adaptivePracticeUsed}
                       limit={adaptivePracticeLimit}
                       resetDateLabel={usageResetDateLabel}
                       showUpgradeCta={false}
+                      upgradeLabel="Upgrade"
                       onUpgradeClick={() => {}}
                     />
                   ) : null}
                 </div>
               </div>
-              {isPremiumPlan ? (
+              {isPaidPlan ? (
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Features</p>
                   <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
                     <li>Weak concepts visible</li>
-                    <li>Adaptive Practice available</li>
-                    <li>{adaptivePracticeLimit} Adaptive Practice sessions per month</li>
-                    <li>{difficultySelectionAvailable ? "Difficulty selection enabled" : "Difficulty selection locked"}</li>
+                    <li>Higher monthly limits</li>
+                    <li>{exportsLimit === null ? "Unlimited exports" : `${exportsLimit} exports per month`}</li>
+                    <li>{isProPlan ? "Adaptive Practice available" : "Upgrade to Pro for Adaptive Practice"}</li>
+                    {adaptivePracticeLimit > 0 ? <li>{adaptivePracticeLimit} Adaptive Practice sessions per month</li> : null}
+                    <li>{difficultySelectionAvailable ? "Difficulty selection enabled" : "Upgrade to Pro for difficulty selection"}</li>
+                    <li>{isProPlan ? "Board Exam Mode included" : "Upgrade to Pro for Board Exam Mode"}</li>
+                    <li>{isProPlan ? "Highest note-generation and OCR limits" : "Expanded note-generation and OCR limits"}</li>
                     <li>Higher limits</li>
                     <li>Priority AI enabled</li>
                   </ul>
@@ -700,6 +738,7 @@ export default function SettingsPage() {
                       <li>{studyPacksLimit} Study Packs per month</li>
                       <li>Quick Review</li>
                       <li>{challengeQuizLimit} Quizzes per month</li>
+                      <li>{exportsLimit ?? 0} exports per month</li>
                       <li>Weak concepts visible</li>
                       <li>File uploads available</li>
                       <li>Image to Text (OCR) - Limited</li>
@@ -707,17 +746,17 @@ export default function SettingsPage() {
                     </ul>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium Features</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Paid Plan Highlights</p>
                     <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                      <li>Higher monthly limits</li>
-                      <li>Adaptive Practice</li>
-                      <li>Difficulty selection</li>
-                      <li>Higher OCR limits</li>
-                      <li>Priority AI</li>
+                      <li>Plus: higher monthly limits and more exports</li>
+                      <li>Pro: highest limits for serious exam prep</li>
+                      <li>Adaptive Practice and Difficulty Selection on Pro</li>
+                      <li>Board Exam Mode on Pro</li>
+                      <li>Higher OCR and note-generation limits</li>
                     </ul>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium Checkout</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Checkout Options</p>
                     {billingPricing ? (
                       <p className="text-xs text-foreground/60">
                         Regional pricing: {billingPricing.region} · {billingPricing.currency}
@@ -726,50 +765,93 @@ export default function SettingsPage() {
                     <div className="rounded-md border border-border bg-background p-3 text-sm">
                       <p className="font-medium text-foreground">Hosted checkout via Xendit</p>
                       <p className="mt-1 text-xs text-foreground/60">
-                        Premium access activates after Xendit confirms payment by webhook.
+                        Paid access activates after Xendit confirms payment by webhook.
                       </p>
                       <p className="mt-2 text-xs text-foreground/60">
-                        Choose Monthly or Annual checkout. Premium access still renews manually.
+                        Choose the plan that fits your study pace. Renewal stays manual for now.
                       </p>
-                      {introMonthlyPriceLabel ? (
-                        <p className="mt-1 text-xs text-foreground/60">
-                          Eligible first monthly checkout starts at {introMonthlyPriceLabel}.
-                        </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">Plus Monthly</p>
+                        <p className="text-xs text-foreground/60">{plusMonthlyPriceLabel}</p>
+                        {plusMonthlyPricing?.introEligible && plusMonthlyPricing.introAmount !== null ? (
+                          <p className="text-xs text-foreground/60">
+                            Intro offer: {formatPricingAmount(plusMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
+                          </p>
+                        ) : null}
+                      </div>
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("PLUS", "MONTHLY")}
+                        loading={startingCheckoutKey === "PLUS-MONTHLY"}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label="Choose Plus"
+                      />
+                    </div>
+                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-foreground">Pro Monthly</p>
+                        <p className="text-xs text-foreground/60">{proMonthlyPriceLabel}</p>
+                        {proMonthlyPricing?.introEligible && proMonthlyPricing.introAmount !== null ? (
+                          <p className="text-xs text-foreground/60">
+                            Intro offer: {formatPricingAmount(proMonthlyPricing.introAmount, billingPricing?.currency ?? "PHP")} first month
+                          </p>
+                        ) : null}
+                      </div>
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("PRO", "MONTHLY")}
+                        loading={startingCheckoutKey === "PRO-MONTHLY"}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label="Choose Pro"
+                      />
+                    </div>
+                  </div>
+                  {plusAnnualPricing?.available || proAnnualPricing?.available ? (
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {plusAnnualPricing?.available ? (
+                        <div className="space-y-3 rounded-md border border-border bg-background p-4">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">Plus Annual</p>
+                            <p className="text-xs text-foreground/60">{plusAnnualPriceLabel}</p>
+                          </div>
+                          <ResponsiveActionButton
+                            type="button"
+                            className="w-full"
+                            onClick={() => void handleStartCheckout("PLUS", "YEARLY")}
+                            loading={startingCheckoutKey === "PLUS-YEARLY"}
+                            loadingText="Redirecting..."
+                            action="studyPack"
+                            label="Choose Plus Annual"
+                          />
+                        </div>
+                      ) : null}
+                      {proAnnualPricing?.available ? (
+                        <div className="space-y-3 rounded-md border border-border bg-background p-4">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">Pro Annual</p>
+                            <p className="text-xs text-foreground/60">{proAnnualPriceLabel}</p>
+                          </div>
+                          <ResponsiveActionButton
+                            type="button"
+                            className="w-full"
+                            onClick={() => void handleStartCheckout("PRO", "YEARLY")}
+                            loading={startingCheckoutKey === "PRO-YEARLY"}
+                            loadingText="Redirecting..."
+                            action="studyPack"
+                            label="Choose Pro Annual"
+                          />
+                        </div>
                       ) : null}
                     </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">Premium Monthly</p>
-                        <p className="text-xs text-foreground/60">{monthlyPriceLabel}</p>
-                      </div>
-                      <ResponsiveActionButton
-                        type="button"
-                        className="w-full"
-                        onClick={() => void handleStartCheckout("MONTHLY")}
-                        loading={startingCheckoutCycle === "MONTHLY"}
-                        loadingText="Redirecting..."
-                        action="studyPack"
-                        label="Choose Monthly"
-                      />
-                    </div>
-                    <div className="space-y-3 rounded-md border border-border bg-background p-4">
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">Premium Annual</p>
-                        <p className="text-xs text-foreground/60">{annualPriceLabel}</p>
-                      </div>
-                      <ResponsiveActionButton
-                        type="button"
-                        className="w-full"
-                        onClick={() => void handleStartCheckout("YEARLY")}
-                        loading={startingCheckoutCycle === "YEARLY"}
-                        loadingText="Redirecting..."
-                        action="studyPack"
-                        label="Choose Annual"
-                      />
-                    </div>
-                  </div>
+                  ) : null}
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     {checkoutError ? (
                       <p className="text-xs text-red-600 dark:text-red-300">{checkoutError}</p>
@@ -791,7 +873,7 @@ export default function SettingsPage() {
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current plan</p>
                     <p className="text-sm font-medium text-foreground">
-                      {subscriptionSummaryPlan === "PREMIUM" ? "Premium" : "Free"}
+                      {getPlanDisplayName(subscriptionSummaryPlan)}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -803,7 +885,7 @@ export default function SettingsPage() {
                       {subscriptionSummaryDateLabel}
                     </p>
                     <p className="text-sm font-medium text-foreground">
-                      {subscriptionSummaryPlan === "PREMIUM"
+                      {isPaidPlanType(subscriptionSummaryPlan)
                         ? (subscriptionSummaryDate ? formatBillingDate(subscriptionSummaryDate) : "Manual renewal")
                         : "No active subscription"}
                     </p>
@@ -814,15 +896,15 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {subscriptionSummaryPlan === "PREMIUM" ? (
+                {isPaidPlanType(subscriptionSummaryPlan) ? (
                   <p className="text-sm text-foreground/75">
                     {subscriptionSummaryDate
-                      ? `Your Premium access is active until ${formatBillingDate(subscriptionSummaryDate)}. Renew manually whenever you're ready.`
-                      : "Your Premium access is active. Renewal is manual in the current billing model."}
+                      ? `Your ${getPlanDisplayName(subscriptionSummaryPlan)} access is active until ${formatBillingDate(subscriptionSummaryDate)}. Renew manually whenever you're ready.`
+                      : `Your ${getPlanDisplayName(subscriptionSummaryPlan)} access is active. Renewal is manual in the current billing model.`}
                   </p>
                 ) : (
                   <p className="text-sm text-foreground/75">
-                    Your payment history will appear here once you subscribe to Premium.
+                    Your payment history will appear here once you subscribe to a paid plan.
                   </p>
                 )}
               </div>
@@ -833,7 +915,7 @@ export default function SettingsPage() {
                   <div className="rounded-md border border-dashed border-border p-4 text-sm">
                     <p className="font-medium text-foreground">No billing history yet</p>
                     <p className="mt-1 text-foreground/70">
-                      Your payment history will appear here once you subscribe to Premium.
+                      Your payment history will appear here once you subscribe to Plus or Pro.
                     </p>
                   </div>
                 ) : (
@@ -921,8 +1003,8 @@ export default function SettingsPage() {
       ) : null}
       <AppModal
         isOpen={isCancellationModalOpen}
-        title="Cancel Premium?"
-        description="Your Premium access will remain active until the end of your current billing period. After that, your account will return to the Free plan. Your notes and Study Packs will remain in your library."
+        title={`Cancel ${getPlanDisplayName(currentPlan)}?`}
+        description={`Your ${getPlanDisplayName(currentPlan)} access will remain active until the end of your current billing period. After that, your account will return to the Free plan. Your notes and Study Packs will remain in your library.`}
         onClose={handleCloseCancellationModal}
         panelClassName="max-w-[560px]"
         actions={(
@@ -934,7 +1016,7 @@ export default function SettingsPage() {
               onClick={handleCloseCancellationModal}
               disabled={cancellingSubscription}
               action="back"
-              label="Keep Premium"
+              label={`Keep ${getPlanDisplayName(currentPlan)}`}
               showTextOnMobile
             />
             <ResponsiveActionButton

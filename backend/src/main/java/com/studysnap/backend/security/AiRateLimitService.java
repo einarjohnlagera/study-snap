@@ -45,7 +45,7 @@ public class AiRateLimitService {
     }
 
     private int resolveRateLimitPerMinute(PlanType planType) {
-        int configured = planType == PlanType.PREMIUM
+        int configured = planType != null && planType.isPaid()
                 ? properties.getLimits().getPremiumAiRateLimitPerMinute()
                 : properties.getLimits().getFreeAiRateLimitPerMinute();
         return Math.max(1, configured);

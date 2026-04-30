@@ -55,6 +55,7 @@ public class GeneratedQuizService {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final UserRepository userRepository;
     private final QuizDocxExportService quizDocxExportService;
+    private final ExportUsageProtectionService exportUsageProtectionService;
 
     @Transactional(readOnly = true)
     public GeneratedQuizResponse getByNoteId(String noteIdRaw, UUID userId) {
@@ -120,10 +121,11 @@ public class GeneratedQuizService {
         }
     }
 
-    @Transactional(readOnly = true)
     public QuizDocxExportService.QuizDocxFile exportDocx(String quizIdRaw, UUID userId, QuizDocxExportMode mode) {
         authService.requireEmailVerified(userId);
         assertTeacherExportAllowed(userId);
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        exportUsageProtectionService.assertQuotaAvailable(userId, planType);
         UUID quizId = parseQuizId(quizIdRaw);
         GeneratedQuizEntity generatedQuiz = generatedQuizRepository.findByIdAndOwnerUserId(quizId, userId)
                 .orElseThrow(GeneratedQuizNotFoundException::new);
@@ -134,13 +136,14 @@ public class GeneratedQuizService {
                 generatedQuiz.getGeneratedAt(),
                 generatedQuiz.getQuestions()
         );
+        byte[] content = quizDocxExportService.exportQuizToDocx(exportableQuiz, mode);
+        exportUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new QuizDocxExportService.QuizDocxFile(
                 quizDocxExportService.buildFilename(note.getTitle(), mode),
-                quizDocxExportService.exportQuizToDocx(exportableQuiz, mode)
+                content
         );
     }
 
-    @Transactional(readOnly = true)
     public QuizDocxExportService.QuizDocxFile exportCombinedDocx(
             List<MultiNoteQuizDocxExportRequest.Section> sections,
             UUID userId,
@@ -149,6 +152,8 @@ public class GeneratedQuizService {
     ) {
         authService.requireEmailVerified(userId);
         assertTeacherExportAllowed(userId);
+        PlanType planType = subscriptionService.resolvePlan(userId);
+        exportUsageProtectionService.assertQuotaAvailable(userId, planType);
 
         List<ExportSectionRequest> requestedSections = parseSectionRequests(sections);
         List<UUID> noteIds = requestedSections.stream()
@@ -181,12 +186,14 @@ public class GeneratedQuizService {
             throw GeneratedQuizBatchExportValidationException.emptySelection();
         }
 
+        byte[] content = quizDocxExportService.exportCombinedQuizToDocx(
+                exportableSections,
+                new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations)
+        );
+        exportUsageProtectionService.recordUsage(userId, OffsetDateTime.now(ZoneOffset.UTC));
         return new QuizDocxExportService.QuizDocxFile(
                 quizDocxExportService.buildCombinedFilename(includeAnswerKey, includeExplanations),
-                quizDocxExportService.exportCombinedQuizToDocx(
-                        exportableSections,
-                        new QuizDocxExportService.CombinedQuizDocxOptions(includeAnswerKey, includeExplanations)
-                )
+                content
         );
     }
 

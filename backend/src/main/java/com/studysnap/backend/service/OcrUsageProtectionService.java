@@ -34,7 +34,7 @@ public class OcrUsageProtectionService {
 
         throw new AppException(
                 "OCR_LIMIT_REACHED",
-                "You have reached your OCR limit for now. Please try again later or upgrade to Premium.",
+                "You have reached your OCR limit for now. Please try again later or upgrade your plan.",
                 HttpStatus.FORBIDDEN
         );
     }

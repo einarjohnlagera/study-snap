@@ -23,7 +23,8 @@ public record MePlanResponse(
             int challengeQuizzesPerMonth,
             int adaptivePracticePerMonth,
             int ocrPerMonth,
-            int noteGenerationsPerMonth
+            int noteGenerationsPerMonth,
+            Integer exportsPerMonth
     ) {
     }
 
@@ -32,7 +33,8 @@ public record MePlanResponse(
             int challengeQuizzesUsed,
             int adaptivePracticeUsed,
             int ocrUsed,
-            int noteGenerationsUsed
+            int noteGenerationsUsed,
+            int exportsUsed
     ) {
     }
 
@@ -41,7 +43,8 @@ public record MePlanResponse(
             int challengeQuizzesRemaining,
             int adaptivePracticeRemaining,
             int ocrRemaining,
-            int noteGenerationsRemaining
+            int noteGenerationsRemaining,
+            Integer exportsRemaining
     ) {
     }
 
@@ -49,7 +52,8 @@ public record MePlanResponse(
             boolean adaptivePracticeAvailable,
             boolean difficultySelectionAvailable,
             boolean fileUploadAvailable,
-            boolean ocrAvailable
+            boolean ocrAvailable,
+            boolean exportAvailable
     ) {
     }
 }

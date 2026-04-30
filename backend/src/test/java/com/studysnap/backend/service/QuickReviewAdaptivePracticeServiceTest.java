@@ -111,12 +111,12 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(QuickReviewSessionMode.ADAPTIVE),
                 any()
         )).thenReturn(Optional.of(existing));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
 
         QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId);
 
         verify(authService).requireEmailVerified(userId);
-        verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
+        verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.ADAPTIVE_QUIZ);
         verify(quickReviewSessionRepository, never()).save(any(QuickReviewSessionEntity.class));
         verify(quizGenerationService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
@@ -142,14 +142,14 @@ class QuickReviewAdaptivePracticeServiceTest {
                 eq(QuickReviewSessionMode.ADAPTIVE),
                 any()
         )).thenReturn(Optional.of(generating));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
 
         QuickReviewAdaptiveQuizResponse response = adaptivePracticeService.generateAdaptiveQuiz(studyPackId.toString(), userId);
 
         assertThat(response.sessionId()).isEqualTo(sessionId.toString());
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.GENERATING);
         assertThat(response.quiz()).isEmpty();
-        verify(featureGateService).checkFeatureAccess(PlanType.PREMIUM, Feature.ADAPTIVE_QUIZ);
+        verify(featureGateService).checkFeatureAccess(PlanType.PRO, Feature.ADAPTIVE_QUIZ);
         verify(aiRateLimitService, never()).assertAllowed(any(), any(), any());
         verify(quizGenerationService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
         verify(userUsageService, never()).incrementAdaptiveQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
@@ -215,7 +215,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         latestChallenge.setSessionMetadata(Map.of("weakConcepts", List.of("Electrolyte Imbalance", "Fluid Shift")));
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PREMIUM);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.PRO);
         when(quickReviewSessionRepository.findTopByUserIdAndStudyPackIdAndSessionModeAndStatusInOrderByCreatedAtDesc(
                 eq(userId),
                 eq(studyPackId),
@@ -236,7 +236,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         )).thenReturn(List.of(latestChallenge));
         when(billingUsagePeriodService.resolveUsagePeriod(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new BillingUsagePeriodService.UsagePeriod(
-                        PlanType.PREMIUM,
+                        PlanType.PRO,
                         BillingCycle.MONTHLY,
                         OffsetDateTime.now().minusDays(5),
                         OffsetDateTime.now().plusDays(25),
@@ -274,7 +274,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 0L,
                 UserRole.USER,
                 UserStatus.ACTIVE,
-                PlanType.PREMIUM,
+                PlanType.PRO,
                 null
         ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))

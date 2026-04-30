@@ -15,7 +15,8 @@ export type PaywallAction =
   | "BOARD_EXAM"
   | "QUIZ_GENERATION"
   | "ADAPTIVE_PRACTICE"
-  | "NOTE_GENERATION";
+  | "NOTE_GENERATION"
+  | "EXPORT";
 
 type PaywallProfileType =
   | "STUDENT"
@@ -42,38 +43,44 @@ export type PremiumExhaustedContent = {
 const BASE_FREE_PAYWALL_CONTENT: Record<PaywallAction, FreePaywallContent> = {
   STUDY_PACK: {
     title: "You’ve reached your study pack limit",
-    body: "You’ve used all your Study Packs for this month. Upgrade to Premium to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.",
+    body: "You’ve used all your Study Packs for this month. Upgrade to Plus or Pro to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.",
     feature: "study_pack_limit",
     dismissLabel: "Maybe Later",
   },
   QUIZ: {
     title: "You’ve reached your quiz limit",
-    body: "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing with more quizzes and keep your review going.",
+    body: "You’ve used all your quizzes for this month. Upgrade to Plus or Pro to continue practicing with more quizzes and keep your review going.",
     feature: "quiz_limit",
     dismissLabel: "Maybe Later",
   },
   BOARD_EXAM: {
-    title: "Board Exam Mode is a Premium feature",
-    body: "Upgrade to Premium to access stricter exam-style practice designed for focused prep.",
+    title: "Board Exam Mode is a Pro feature",
+    body: "Upgrade to Pro to access stricter exam-style practice designed for focused prep.",
     feature: "board_exam",
     dismissLabel: "Maybe Later",
   },
   QUIZ_GENERATION: {
     title: "You’ve reached your quiz generation limit",
-    body: "You’ve used all your quiz generations for this month. Upgrade to Premium to generate more quizzes and prepare materials for your class.",
+    body: "You’ve used all your quiz generations for this month. Upgrade to Plus or Pro to generate more quizzes and prepare materials for your class.",
     feature: "quiz_generation_limit",
     dismissLabel: "Maybe Later",
   },
   ADAPTIVE_PRACTICE: {
-    title: "Adaptive Practice is a Premium feature",
-    body: "Adaptive Practice focuses on your weak concepts. Upgrade to Premium to unlock targeted practice built around them.",
+    title: "Adaptive Practice is a Pro feature",
+    body: "Adaptive Practice focuses on your weak concepts. Upgrade to Pro to unlock targeted practice built around them.",
     feature: "adaptive",
     dismissLabel: "Maybe Later",
   },
   NOTE_GENERATION: {
     title: "You’ve reached your note generation limit",
-    body: "You’ve used all your topic-based note generations for this month. Upgrade to Premium to generate more notes from topics.",
+    body: "You’ve used all your topic-based note generations for this month. Upgrade to Plus or Pro to generate more notes from topics.",
     feature: "note_generation_limit",
+    dismissLabel: "Maybe Later",
+  },
+  EXPORT: {
+    title: "You’ve reached your monthly export limit",
+    body: "Upgrade to Plus or Pro to export more quizzes and exams this month.",
+    feature: "export_limit",
     dismissLabel: "Maybe Later",
   },
 };
@@ -103,6 +110,10 @@ export const PREMIUM_EXHAUSTED_CONTENT: Record<PaywallAction, PremiumExhaustedCo
     title: "You’ve reached your note generation limit for this month",
     body: "Your topic-based note generation limit resets on your next billing cycle.",
   },
+  EXPORT: {
+    title: "You’ve reached your export limit for this month",
+    body: "Your export limit resets on your next billing cycle.",
+  },
 };
 
 export const FREE_PAYWALL_CONTENT = BASE_FREE_PAYWALL_CONTENT;
@@ -115,19 +126,19 @@ export function resolveFreePaywallContent(
     if (profileType === "BOARD_EXAM") {
       return {
         ...BASE_FREE_PAYWALL_CONTENT.QUIZ,
-        body: "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and access Board Exam mode.",
+        body: "You’ve used all your quizzes for this month. Upgrade to Pro to continue practicing and access Board Exam mode.",
       };
     }
     return {
       ...BASE_FREE_PAYWALL_CONTENT.QUIZ,
-      body: "You’ve used all your quizzes for this month. Upgrade to Premium to continue practicing and unlock Adaptive Practice.",
+      body: "You’ve used all your quizzes for this month. Upgrade to Plus or Pro to continue practicing and unlock higher limits.",
     };
   }
   if (action === "QUIZ_GENERATION") {
     return {
       ...BASE_FREE_PAYWALL_CONTENT.QUIZ_GENERATION,
       body: profileType === "TEACHER"
-        ? "You’ve used all your quiz generations for this month. Upgrade to Premium to generate more quizzes and export materials for your class."
+        ? "You’ve used all your quiz generations for this month. Upgrade to Plus or Pro to generate more quizzes and export materials for your class."
         : BASE_FREE_PAYWALL_CONTENT.QUIZ_GENERATION.body,
     };
   }

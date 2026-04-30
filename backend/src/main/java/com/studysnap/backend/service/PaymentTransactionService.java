@@ -38,20 +38,6 @@ public class PaymentTransactionService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<PaymentTransactionEntity> findLatestPendingTransaction(
-            UUID userId,
-            BillingProvider provider,
-            PlanType planType
-    ) {
-        return paymentTransactionRepository.findFirstByUser_IdAndProviderAndPlanTypeAndStatusOrderByCreatedAtDesc(
-                userId,
-                provider,
-                planType,
-                PaymentTransactionStatus.PENDING
-        );
-    }
-
-    @Transactional(readOnly = true)
     public List<PaymentTransactionEntity> findPendingTransactions(
             UUID userId,
             BillingProvider provider,
@@ -80,6 +66,7 @@ public class PaymentTransactionService {
         transaction.setBillingType(request.billingType());
         transaction.setPlanType(request.planType());
         transaction.setBillingCycle(request.billingCycle());
+        transaction.setAccessDurationDays(request.accessDurationDays());
         transaction.setOriginalAmount(normalizeAmount(request.originalAmount()));
         transaction.setDiscountAmount(normalizeAmount(request.discountAmount()));
         transaction.setAmount(normalizeAmount(request.finalAmount()));
@@ -146,6 +133,7 @@ public class PaymentTransactionService {
             BillingType billingType,
             PlanType planType,
             BillingCycle billingCycle,
+            Integer accessDurationDays,
             BigDecimal originalAmount,
             BigDecimal discountAmount,
             BigDecimal finalAmount,

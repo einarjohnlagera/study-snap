@@ -122,10 +122,10 @@ export function NoteSessionReviewPageClient({
 
   const adaptivePracticeExportEnabled = review?.sessionMode === "ADAPTIVE";
   const adaptiveDisabledReason = (() => {
-    const isPremium = getAuthUser()?.planType === "PREMIUM";
-    return isPremium
+    const isPro = getAuthUser()?.planType === "PRO";
+    return isPro
       ? "No adaptive practice yet — complete a session to generate one"
-      : "Adaptive Practice is available after completing a session (Premium feature)";
+      : "Adaptive Practice is available after completing a session (Pro feature)";
   })();
 
   const handleExport = async (exportType: "full" | "mistakes-only" | "weak-concepts" | "adaptive-practice") => {

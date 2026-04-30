@@ -24,6 +24,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Shuffle, Trash2 } from "lucide-react";
+import { PaywallModal, type PaywallModalVariant } from "@/components/billing/paywall-modal";
 import { AppModal } from "@/components/ui/app-modal";
 import { BackLink } from "@/components/ui/back-link";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import { getAuthUser } from "@/lib/auth";
 import {
   exportCombinedGeneratedQuizDocx,
   getGeneratedQuiz,
+  isExportLimitReachedError,
   listNotes,
   type GeneratedQuizResponse,
   type NoteListItemResponse,
@@ -449,6 +451,7 @@ export default function ExamBuilderPage() {
   const [showTemplateSelector, setShowTemplateSelector] = useState(true);
   const [exportingExam, setExportingExam] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [activeDragEntryId, setActiveDragEntryId] = useState<string | null>(null);
   const [activeDragSectionId, setActiveDragSectionId] = useState<string | null>(null);
   const [nextSectionIndex, setNextSectionIndex] = useState(1);
@@ -713,6 +716,11 @@ export default function ExamBuilderPage() {
       });
       setToast(EXAM_EXPORT_READY_MESSAGE);
     } catch (exportError) {
+      if (isExportLimitReachedError(exportError)) {
+        setError(null);
+        setActivePaywallModal("export-limit");
+        return;
+      }
       setError(exportError instanceof Error ? exportError.message : "Could not export exam.");
     } finally {
       setExportingExam(false);
@@ -1166,6 +1174,13 @@ export default function ExamBuilderPage() {
         exporting={exportingExam}
         onClose={() => setShowExportModal(false)}
         onSelect={(mode) => void handleExportExam(mode)}
+      />
+
+      <PaywallModal
+        isOpen={activePaywallModal !== null}
+        variant={activePaywallModal ?? "export-limit"}
+        source="exam_builder"
+        onClose={() => setActivePaywallModal(null)}
       />
 
       {toast ? (

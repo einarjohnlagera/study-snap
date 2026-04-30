@@ -80,16 +80,24 @@ studysnap:
       max-questions: ${QUICK_REVIEW_STUDY_TIP_MAX_QUESTIONS:3}
   pricing:
     free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:10}
-    premium-monthly-study-pack-limit: ${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}
+    plus-monthly-study-pack-limit: ${PLUS_MONTHLY_STUDY_PACK_LIMIT:50}
+    pro-monthly-study-pack-limit: ${PRO_MONTHLY_STUDY_PACK_LIMIT:${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}}
     free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:5}
-    premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
-    premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}
+    plus-monthly-challenge-quiz-limit: ${PLUS_MONTHLY_CHALLENGE_QUIZ_LIMIT:25}
+    pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}}
+    plus-monthly-adaptive-practice-limit: ${PLUS_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:0}
+    pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}}
     free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
-    premium-monthly-ocr-limit: ${PREMIUM_MONTHLY_OCR_LIMIT:100}
+    plus-monthly-ocr-limit: ${PLUS_MONTHLY_OCR_LIMIT:50}
+    pro-monthly-ocr-limit: ${PRO_MONTHLY_OCR_LIMIT:${PREMIUM_MONTHLY_OCR_LIMIT:100}}
     free-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_FREE:5}
-    premium-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}
-    adaptive-practice-premium-only: ${ADAPTIVE_PRACTICE_PREMIUM_ONLY:true}
-    difficulty-selection-premium-only: ${DIFFICULTY_SELECTION_PREMIUM_ONLY:true}
+    plus-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PLUS:25}
+    pro-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PRO:${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}}
+    free-monthly-export-limit: ${FREE_MONTHLY_EXPORT_LIMIT:2}
+    plus-monthly-export-limit: ${PLUS_MONTHLY_EXPORT_LIMIT:15}
+    pro-monthly-export-limit: ${PRO_MONTHLY_EXPORT_LIMIT:-1}
+    adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:true}
+    difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
     txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}
@@ -108,44 +116,172 @@ studysnap:
     pricing-regions:
       US:
         currency: USD
-        monthly-price: ${PRICING_US_MONTHLY_PRICE:4.99}
-        yearly-price: ${PRICING_US_YEARLY_PRICE:39.99}
         active: ${PRICING_US_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_US_PLUS_MONTHLY_PRICE:3.99}
+            duration-days: ${PRICING_US_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_US_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_US_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_US_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_US_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_US_PRO_MONTHLY_PRICE:${PRICING_US_MONTHLY_PRICE:4.99}}
+            duration-days: ${PRICING_US_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_US_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_US_PRO_YEARLY_PRICE:${PRICING_US_YEARLY_PRICE:39.99}}
+            duration-days: ${PRICING_US_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_US_PRO_YEARLY_ACTIVE:true}
       PH:
         currency: PHP
-        monthly-price: ${PRICING_PH_MONTHLY_PRICE:249}
-        yearly-price: ${PRICING_PH_YEARLY_PRICE:1999}
         active: ${PRICING_PH_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_PH_PLUS_MONTHLY_PRICE:179}
+            duration-days: ${PRICING_PH_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_PH_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_PH_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_PH_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_PH_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_PH_PRO_MONTHLY_PRICE:${PRICING_PH_MONTHLY_PRICE:249}}
+            duration-days: ${PRICING_PH_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_PH_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_PH_PRO_YEARLY_PRICE:${PRICING_PH_YEARLY_PRICE:1999}}
+            duration-days: ${PRICING_PH_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_PH_PRO_YEARLY_ACTIVE:true}
       GB:
         currency: GBP
-        monthly-price: ${PRICING_GB_MONTHLY_PRICE:4.49}
-        yearly-price: ${PRICING_GB_YEARLY_PRICE:35.99}
         active: ${PRICING_GB_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_GB_PLUS_MONTHLY_PRICE:3.49}
+            duration-days: ${PRICING_GB_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_GB_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_GB_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_GB_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_GB_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_GB_PRO_MONTHLY_PRICE:${PRICING_GB_MONTHLY_PRICE:4.49}}
+            duration-days: ${PRICING_GB_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_GB_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_GB_PRO_YEARLY_PRICE:${PRICING_GB_YEARLY_PRICE:35.99}}
+            duration-days: ${PRICING_GB_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_GB_PRO_YEARLY_ACTIVE:true}
       EU:
         currency: EUR
-        monthly-price: ${PRICING_EU_MONTHLY_PRICE:4.99}
-        yearly-price: ${PRICING_EU_YEARLY_PRICE:39.99}
         active: ${PRICING_EU_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_EU_PLUS_MONTHLY_PRICE:3.99}
+            duration-days: ${PRICING_EU_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_EU_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_EU_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_EU_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_EU_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_EU_PRO_MONTHLY_PRICE:${PRICING_EU_MONTHLY_PRICE:4.99}}
+            duration-days: ${PRICING_EU_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_EU_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_EU_PRO_YEARLY_PRICE:${PRICING_EU_YEARLY_PRICE:39.99}}
+            duration-days: ${PRICING_EU_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_EU_PRO_YEARLY_ACTIVE:true}
       AU:
         currency: AUD
-        monthly-price: ${PRICING_AU_MONTHLY_PRICE:7.49}
-        yearly-price: ${PRICING_AU_YEARLY_PRICE:59.99}
         active: ${PRICING_AU_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_AU_PLUS_MONTHLY_PRICE:5.99}
+            duration-days: ${PRICING_AU_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_AU_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_AU_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_AU_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_AU_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_AU_PRO_MONTHLY_PRICE:${PRICING_AU_MONTHLY_PRICE:7.49}}
+            duration-days: ${PRICING_AU_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_AU_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_AU_PRO_YEARLY_PRICE:${PRICING_AU_YEARLY_PRICE:59.99}}
+            duration-days: ${PRICING_AU_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_AU_PRO_YEARLY_ACTIVE:true}
       CA:
         currency: CAD
-        monthly-price: ${PRICING_CA_MONTHLY_PRICE:6.49}
-        yearly-price: ${PRICING_CA_YEARLY_PRICE:51.99}
         active: ${PRICING_CA_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_CA_PLUS_MONTHLY_PRICE:5.49}
+            duration-days: ${PRICING_CA_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_CA_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_CA_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_CA_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_CA_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_CA_PRO_MONTHLY_PRICE:${PRICING_CA_MONTHLY_PRICE:6.49}}
+            duration-days: ${PRICING_CA_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_CA_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_CA_PRO_YEARLY_PRICE:${PRICING_CA_YEARLY_PRICE:51.99}}
+            duration-days: ${PRICING_CA_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_CA_PRO_YEARLY_ACTIVE:true}
       SG:
         currency: SGD
-        monthly-price: ${PRICING_SG_MONTHLY_PRICE:6.49}
-        yearly-price: ${PRICING_SG_YEARLY_PRICE:51.99}
         active: ${PRICING_SG_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_SG_PLUS_MONTHLY_PRICE:5.49}
+            duration-days: ${PRICING_SG_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_SG_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_SG_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_SG_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_SG_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_SG_PRO_MONTHLY_PRICE:${PRICING_SG_MONTHLY_PRICE:6.49}}
+            duration-days: ${PRICING_SG_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_SG_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_SG_PRO_YEARLY_PRICE:${PRICING_SG_YEARLY_PRICE:51.99}}
+            duration-days: ${PRICING_SG_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_SG_PRO_YEARLY_ACTIVE:true}
       IN:
         currency: INR
-        monthly-price: ${PRICING_IN_MONTHLY_PRICE:399}
-        yearly-price: ${PRICING_IN_YEARLY_PRICE:3199}
         active: ${PRICING_IN_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_IN_PLUS_MONTHLY_PRICE:299}
+            duration-days: ${PRICING_IN_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_IN_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_IN_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_IN_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_IN_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_IN_PRO_MONTHLY_PRICE:${PRICING_IN_MONTHLY_PRICE:399}}
+            duration-days: ${PRICING_IN_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_IN_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_IN_PRO_YEARLY_PRICE:${PRICING_IN_YEARLY_PRICE:3199}}
+            duration-days: ${PRICING_IN_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_IN_PRO_YEARLY_ACTIVE:true}
     xendit:
       base-url: ${XENDIT_BASE_URL:https://api.xendit.co}
       secret-key: ${XENDIT_SECRET_KEY:}

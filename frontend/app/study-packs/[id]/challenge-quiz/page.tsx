@@ -64,7 +64,7 @@ type ChallengeSessionStatePayload = {
 };
 type ChallengeDifficulty = NonNullable<ChallengeQuizStartRequest["difficulty"]>;
 type ChallengeViewerProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER" | null;
-type ChallengeViewerPlanType = "FREE" | "PREMIUM" | null;
+type ChallengeViewerPlanType = "FREE" | "PLUS" | "PRO" | null;
 
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
@@ -136,7 +136,7 @@ function resolveInitialPrestartStep(): ChallengePrestartStep {
 }
 
 function shouldShowChallengeQuizLimitPage(planType: ChallengeViewerPlanType): boolean {
-  return planType === "PREMIUM";
+  return planType === "PRO";
 }
 
 function resolvePreferredChallengeMode(profileType: string | null | undefined): ChallengeQuizMode {
@@ -308,7 +308,7 @@ export default function ChallengeQuizPage() {
       const authUser = getAuthUser();
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
       setViewerId(authUser?.id ?? null);
-      setViewerPlanType(authUser?.planType === "FREE" || authUser?.planType === "PREMIUM" ? authUser.planType : null);
+      setViewerPlanType(authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO" ? authUser.planType : null);
       setViewerProfileType(isChallengeViewerProfileType(authUser?.profileType) ? authUser.profileType : null);
     };
     syncVerification();
@@ -492,7 +492,7 @@ export default function ChallengeQuizPage() {
       setNote(detail);
       const authUser = getAuthUser();
       const preferredMode = resolvePreferredChallengeMode(authUser?.profileType);
-      const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PREMIUM"
+      const resolvedViewerPlanType = authUser?.planType === "FREE" || authUser?.planType === "PLUS" || authUser?.planType === "PRO"
         ? authUser.planType
         : null;
       setIsEmailVerified(Boolean(authUser?.emailVerifiedAt));
@@ -861,7 +861,7 @@ export default function ChallengeQuizPage() {
     : "Creating personalized questions from your notes";
   const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable, selectedDifficulty);
   const canChooseChallengeDifficulty = Boolean(note?.difficultySelectionAvailable);
-  const boardExamAvailable = viewerPlanType === "PREMIUM";
+  const boardExamAvailable = viewerPlanType === "PRO";
   const prefersBoardExam = viewerProfileType === "BOARD_EXAM";
   const boardExamTimerState = useMemo(
     () => resolveBoardExamTimerState(remainingSeconds),
@@ -1075,7 +1075,7 @@ export default function ChallengeQuizPage() {
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
                   {canChooseChallengeDifficulty
-                    ? "Premium users can choose the challenge difficulty before generation."
+                    ? "Pro users can choose the challenge difficulty before generation."
                     : "Review the recommended setup before you start."}
                 </p>
               </button>
@@ -1111,7 +1111,7 @@ export default function ChallengeQuizPage() {
                 <p className="mt-3 text-xs text-foreground/60">
                   {boardExamAvailable
                     ? "Counts toward your monthly quiz limit, the same as the standard Challenge Quiz flow."
-                    : "Premium only. Upgrade to unlock a stricter board-style exam flow."}
+                    : "Pro only. Upgrade to unlock a stricter board-style exam flow."}
                 </p>
               </button>
             </div>
@@ -1136,11 +1136,11 @@ export default function ChallengeQuizPage() {
               <div className="space-y-1">
                 <p className="font-medium text-foreground">Difficulty</p>
                 {canChooseChallengeDifficulty ? (
-                  <p>Premium lets you choose the level before you start.</p>
+                  <p>Pro lets you choose the level before you start.</p>
                 ) : (
                   <>
                     <p>Recommended difficulty: Medium</p>
-                    <p className="text-foreground/65">Choose difficulty (Premium)</p>
+                    <p className="text-foreground/65">Choose difficulty (Pro)</p>
                   </>
                 )}
               </div>
@@ -1222,7 +1222,7 @@ export default function ChallengeQuizPage() {
                 <h2 className="text-base font-semibold text-foreground">Description</h2>
                 <p>Simulate a focused exam session with mixed difficulty.</p>
                 {!boardExamAvailable ? (
-                  <p className="text-amber-700 dark:text-amber-300">Premium required to start Board Exam Mode.</p>
+                  <p className="text-amber-700 dark:text-amber-300">Pro required to start Board Exam Mode.</p>
                 ) : null}
               </div>
             </div>
@@ -1243,7 +1243,7 @@ export default function ChallengeQuizPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="font-medium text-foreground">Monthly limit</p>
-                  <p>{boardExamAvailable ? "Counts toward your monthly quiz limit." : "Unlock with Premium. Challenge Quiz stays available on your current plan."}</p>
+                  <p>{boardExamAvailable ? "Counts toward your monthly quiz limit." : "Unlock with Pro. Challenge Quiz stays available on your current plan."}</p>
                 </div>
               </div>
             </div>

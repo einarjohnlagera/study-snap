@@ -62,6 +62,8 @@ class GeneratedQuizServiceTest {
     private UserRepository userRepository;
     @Mock
     private QuizDocxExportService quizDocxExportService;
+    @Mock
+    private ExportUsageProtectionService exportUsageProtectionService;
 
     private GeneratedQuizService generatedQuizService;
 
@@ -78,7 +80,8 @@ class GeneratedQuizServiceTest {
                 aiRateLimitService,
                 generationContextResolver,
                 userRepository,
-                quizDocxExportService
+                quizDocxExportService,
+                exportUsageProtectionService
         );
     }
 
@@ -91,7 +94,7 @@ class GeneratedQuizServiceTest {
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(note));
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(
-                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0)
+                new UserUsageService.MonthlyUsage(OffsetDateTime.now().minusDays(1), OffsetDateTime.now().plusDays(29), 0, 0, 0, 0, 0, 0)
         );
         when(generationContextResolver.resolve(userId, note)).thenReturn(
                 new StudyPackGenerationContext(null, "Biology", "Biology", List.of("cells"))

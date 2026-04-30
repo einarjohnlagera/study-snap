@@ -62,9 +62,9 @@ class SubscriptionServiceTest {
 
         SubscriptionService.PlanSnapshot snapshot = service.getPlanSnapshot(userId);
 
-        assertThat(snapshot.planType()).isEqualTo(PlanType.PREMIUM);
+        assertThat(snapshot.planType()).isEqualTo(PlanType.PRO);
         assertThat(snapshot.premiumEndsAt()).isEqualTo(FIXED_TIME.plusDays(25));
-        assertThat(service.hasActiveSubscription(userId, PlanType.PREMIUM)).isTrue();
+        assertThat(service.hasActiveSubscription(userId, PlanType.PRO)).isTrue();
     }
 
     @Test
@@ -87,7 +87,7 @@ class SubscriptionServiceTest {
         SubscriptionService.PlanSnapshot snapshot = service.getPlanSnapshot(userId);
 
         assertThat(snapshot.planType()).isEqualTo(PlanType.FREE);
-        assertThat(service.hasActiveSubscription(userId, PlanType.PREMIUM)).isFalse();
+        assertThat(service.hasActiveSubscription(userId, PlanType.PRO)).isFalse();
     }
 
     @Test
@@ -114,7 +114,7 @@ class SubscriptionServiceTest {
                 new SubscriptionService.ProviderMetadata(null, "invoice_123")
         );
 
-        assertThat(saved.getPlanType()).isEqualTo(PlanType.PREMIUM);
+        assertThat(saved.getPlanType()).isEqualTo(PlanType.PRO);
         assertThat(saved.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(saved.getStartAt()).isEqualTo(FIXED_TIME);
         assertThat(saved.getEndAt()).isEqualTo(FIXED_TIME.plusDays(30));
@@ -262,7 +262,7 @@ class SubscriptionServiceTest {
 
         assertThat(snapshot.planType()).isEqualTo(PlanType.FREE);
         assertThat(service.hasActiveSubscription(userId, PlanType.FREE)).isTrue();
-        assertThat(service.hasActiveSubscription(userId, PlanType.PREMIUM)).isFalse();
+        assertThat(service.hasActiveSubscription(userId, PlanType.PRO)).isFalse();
     }
 
     private UserEntity buildUser(UUID userId) {
@@ -280,7 +280,7 @@ class SubscriptionServiceTest {
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setId(UUID.randomUUID());
         subscription.setUser(user);
-        subscription.setPlanType(PlanType.PREMIUM);
+        subscription.setPlanType(PlanType.PRO);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setBillingType(BillingType.PREPAID);
         subscription.setProvider(BillingProvider.XENDIT);

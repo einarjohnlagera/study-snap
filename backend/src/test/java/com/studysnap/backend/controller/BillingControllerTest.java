@@ -73,11 +73,16 @@ class BillingControllerTest {
         BillingPricingResponse expected = new BillingPricingResponse(
                 "PH",
                 "PHP",
-                new BigDecimal("249.00"),
-                new BigDecimal("1999.00"),
-                new BigDecimal("199.00"),
-                true,
-                true
+                new BillingPricingResponse.PlanPricing(
+                        PlanType.PLUS,
+                        new BillingPricingResponse.CyclePricing(new BigDecimal("179.00"), 30, new BigDecimal("149.00"), true, true),
+                        new BillingPricingResponse.CyclePricing(null, null, null, false, false)
+                ),
+                new BillingPricingResponse.PlanPricing(
+                        PlanType.PRO,
+                        new BillingPricingResponse.CyclePricing(new BigDecimal("249.00"), 30, new BigDecimal("199.00"), true, true),
+                        new BillingPricingResponse.CyclePricing(new BigDecimal("1999.00"), 365, null, false, true)
+                )
         );
         when(pricingService.getPricing(userId, "PH")).thenReturn(expected);
 
@@ -92,7 +97,7 @@ class BillingControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         BillingHistoryResponse expected = new BillingHistoryResponse(
-                PlanType.PREMIUM,
+                PlanType.PRO,
                 SubscriptionStatus.ACTIVE,
                 BillingCycle.MONTHLY,
                 OffsetDateTime.parse("2026-03-01T00:00:00Z"),
@@ -103,7 +108,7 @@ class BillingControllerTest {
                         new BillingHistoryItemResponse(
                                 UUID.randomUUID(),
                                 OffsetDateTime.now(),
-                                "Premium Monthly",
+                                "Pro Monthly",
                                 new BigDecimal("4.99"),
                                 "USD",
                                 PaymentTransactionStatus.SUCCESS,
@@ -152,7 +157,7 @@ class BillingControllerTest {
                 0,
                 UserRole.USER,
                 UserStatus.ACTIVE,
-                PlanType.PREMIUM,
+                PlanType.PRO,
                 new SubscriptionPlanStatusResponse(
                         true,
                         OffsetDateTime.parse("2026-04-20T00:00:00Z"),

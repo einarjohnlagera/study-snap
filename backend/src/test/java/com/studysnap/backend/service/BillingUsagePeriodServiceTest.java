@@ -32,9 +32,8 @@ class BillingUsagePeriodServiceTest {
         UUID userId = UUID.randomUUID();
         OffsetDateTime referenceTime = OffsetDateTime.of(2026, 3, 22, 10, 0, 0, 0, ZoneOffset.UTC);
         OffsetDateTime accountCreatedAt = OffsetDateTime.of(2026, 3, 10, 9, 0, 0, 0, ZoneOffset.UTC);
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
         )).thenReturn(List.of());
         when(userRepository.findCreatedAtById(userId)).thenReturn(java.util.Optional.of(accountCreatedAt));
@@ -52,9 +51,8 @@ class BillingUsagePeriodServiceTest {
         UUID userId = UUID.randomUUID();
         OffsetDateTime referenceTime = OffsetDateTime.of(2026, 5, 12, 10, 0, 0, 0, ZoneOffset.UTC);
         OffsetDateTime accountCreatedAt = OffsetDateTime.of(2026, 3, 10, 9, 0, 0, 0, ZoneOffset.UTC);
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
         )).thenReturn(List.of());
         when(userRepository.findCreatedAtById(userId)).thenReturn(java.util.Optional.of(accountCreatedAt));
@@ -72,13 +70,12 @@ class BillingUsagePeriodServiceTest {
         OffsetDateTime periodStart = OffsetDateTime.of(2026, 3, 15, 0, 0, 0, 0, ZoneOffset.UTC);
         OffsetDateTime periodEnd = OffsetDateTime.of(2026, 4, 15, 0, 0, 0, 0, ZoneOffset.UTC);
         SubscriptionEntity subscription = new SubscriptionEntity();
-        subscription.setPlanType(PlanType.PREMIUM);
+        subscription.setPlanType(PlanType.PRO);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setStartAt(periodStart);
         subscription.setEndAt(periodEnd);
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        when(subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                 userId,
-                PlanType.PREMIUM,
                 SubscriptionStatus.ACTIVE
         )).thenReturn(List.of(subscription));
 
@@ -87,7 +84,7 @@ class BillingUsagePeriodServiceTest {
                 OffsetDateTime.of(2026, 3, 22, 10, 0, 0, 0, ZoneOffset.UTC)
         );
 
-        assertThat(period.planType()).isEqualTo(PlanType.PREMIUM);
+        assertThat(period.planType()).isEqualTo(PlanType.PRO);
         assertThat(period.periodStart()).isEqualTo(periodStart);
         assertThat(period.periodEnd()).isEqualTo(periodEnd);
         assertThat(period.month()).isEqualTo(3);

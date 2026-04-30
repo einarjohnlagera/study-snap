@@ -6,7 +6,7 @@ const lastUpdated = "March 25, 2026";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "NoteLib Terms of Service",
-  description: "Read the terms that apply to using NoteLib, Premium subscriptions, and acceptable use.",
+  description: "Read the terms that apply to using NoteLib, paid plans, and acceptable use.",
   path: "/terms",
 });
 
@@ -58,8 +58,8 @@ export default function TermsPage() {
           title: "4. Subscription",
           content: (
             <>
-              <p>Premium is a subscription service.</p>
-              <p>Users can cancel anytime, and subscriptions remain active until the end of the billing period.</p>
+              <p>NoteLib offers manual-renewal paid plans.</p>
+              <p>Users can cancel anytime, and paid access remains active until the end of the billing period.</p>
               <p>No refunds are provided for partial billing periods unless required by law.</p>
             </>
           ),

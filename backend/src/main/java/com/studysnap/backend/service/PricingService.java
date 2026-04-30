@@ -36,6 +36,15 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PricingService {
+    private static final List<PlanType> PAID_PLANS = List.of(PlanType.PLUS, PlanType.PRO);
+    private static final String ERROR_REGION_PRICING_INACTIVE = "REGION_PRICING_INACTIVE";
+    private static final String ERROR_REGION_PRICING_NOT_CONFIGURED = "REGION_PRICING_NOT_CONFIGURED";
+    private static final String ERROR_CHECKOUT_PLAN_NOT_SUPPORTED = "CHECKOUT_PLAN_NOT_SUPPORTED";
+    private static final String ERROR_CHECKOUT_BILLING_CYCLE_UNAVAILABLE = "CHECKOUT_BILLING_CYCLE_UNAVAILABLE";
+    private static final String MESSAGE_REGION_PRICING_UNAVAILABLE = "Paid plan pricing is not available in your region right now.";
+    private static final String MESSAGE_CHECKOUT_PLAN_NOT_SUPPORTED = "This plan is not available for checkout.";
+    private static final String MESSAGE_CHECKOUT_BILLING_CYCLE_UNAVAILABLE = "That billing cycle is not available for the selected plan.";
+
     private final StudySnapProperties properties;
     private final PricingRegionResolver pricingRegionResolver;
     private final UserRepository userRepository;
@@ -47,58 +56,45 @@ public class PricingService {
     public BillingPricingResponse getPricing(UUID userId, String cfIpCountry) {
         UserEntity user = userId == null ? null : userRepository.findById(userId).orElse(null);
         ResolvedPricingContext context = resolvePricingContext(user, cfIpCountry);
-        Optional<AppliedVoucher> introVoucher = findBestEligibleVoucher(
-                user,
-                context.region(),
-                context.regionPricing(),
-                BillingCycle.MONTHLY,
-                PlanType.PREMIUM,
-                null
-        );
         return new BillingPricingResponse(
                 context.region(),
                 context.regionPricing().getCurrency(),
-                context.regionPricing().getMonthlyPrice(),
-                context.regionPricing().getYearlyPrice(),
-                introVoucher.map(AppliedVoucher::effectivePrice).orElse(null),
-                introVoucher.isPresent(),
-                introVoucher.isPresent()
+                buildPlanPricing(user, context, PlanType.PLUS),
+                buildPlanPricing(user, context, PlanType.PRO)
         );
     }
 
     @Transactional
     public CheckoutSelection resolveCheckoutSelection(
             UUID userId,
-            BillingCycle billingCycle,
+            PlanType requestedPlanType,
+            BillingCycle requestedBillingCycle,
             String voucherCode,
             String cfIpCountry
     ) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
+        PlanType planType = normalizeRequestedPlan(requestedPlanType);
+        BillingCycle billingCycle = requestedBillingCycle == null ? BillingCycle.MONTHLY : requestedBillingCycle;
         ResolvedPricingContext context = resolvePricingContext(user, cfIpCountry);
-        BillingCycle normalizedCycle = billingCycle == null ? BillingCycle.MONTHLY : billingCycle;
+        StudySnapProperties.BillingCyclePricing cyclePricing = resolveCyclePricing(
+                context.regionPricing(),
+                planType,
+                billingCycle
+        );
+        BigDecimal basePrice = normalizeAmount(cyclePricing.getAmount());
         AppliedVoucher appliedVoucher = findBestEligibleVoucher(
                 user,
                 context.region(),
-                context.regionPricing(),
-                normalizedCycle,
-                PlanType.PREMIUM,
+                context.regionPricing().getCurrency(),
+                billingCycle,
+                planType,
+                basePrice,
                 voucherCode
         ).orElse(null);
-
-        String planId = resolveCheckoutPriceId();
-        if (planId == null) {
-            throw new AppException(
-                    "CHECKOUT_PRICE_ID_NOT_CONFIGURED",
-                    "Premium pricing is not configured for your region yet.",
-                    HttpStatus.SERVICE_UNAVAILABLE
-            );
-        }
-
         BigDecimal effectivePrice = appliedVoucher == null
-                ? basePriceForCycle(context.regionPricing(), normalizedCycle)
+                ? basePrice
                 : appliedVoucher.effectivePrice();
-        BigDecimal basePrice = basePriceForCycle(context.regionPricing(), normalizedCycle);
         BigDecimal discountAmount = appliedVoucher == null
                 ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
                 : appliedVoucher.discountAmount();
@@ -107,8 +103,10 @@ public class PricingService {
                 context.region(),
                 context.countryCode(),
                 context.regionPricing().getCurrency(),
-                normalizedCycle,
-                planId,
+                planType,
+                planType.getDisplayName(),
+                billingCycle,
+                cyclePricing.getDurationDays(),
                 basePrice,
                 discountAmount,
                 appliedVoucher == null ? null : appliedVoucher.voucher().getId(),
@@ -162,20 +160,65 @@ public class PricingService {
         StudySnapProperties.RegionPricing regionPricing = resolveRegionPricing(region);
         if (!regionPricing.isActive()) {
             throw new AppException(
-                    "REGION_PRICING_INACTIVE",
-                    "Premium pricing is not available in your region right now.",
+                    ERROR_REGION_PRICING_INACTIVE,
+                    MESSAGE_REGION_PRICING_UNAVAILABLE,
                     HttpStatus.SERVICE_UNAVAILABLE
             );
         }
         return new ResolvedPricingContext(region, effectiveCountryCode, regionPricing);
     }
 
+    private BillingPricingResponse.PlanPricing buildPlanPricing(
+            UserEntity user,
+            ResolvedPricingContext context,
+            PlanType planType
+    ) {
+        StudySnapProperties.PaidPlanPricing paidPlanPricing = context.regionPricing().resolvePlanPricing(planType);
+        return new BillingPricingResponse.PlanPricing(
+                planType,
+                toCyclePricing(user, context, planType, BillingCycle.MONTHLY, paidPlanPricing.getMonthly()),
+                toCyclePricing(user, context, planType, BillingCycle.YEARLY, paidPlanPricing.getYearly())
+        );
+    }
+
+    private BillingPricingResponse.CyclePricing toCyclePricing(
+            UserEntity user,
+            ResolvedPricingContext context,
+            PlanType planType,
+            BillingCycle billingCycle,
+            StudySnapProperties.BillingCyclePricing cyclePricing
+    ) {
+        if (cyclePricing == null || !cyclePricing.isActive()) {
+            return new BillingPricingResponse.CyclePricing(null, null, null, false, false);
+        }
+
+        BigDecimal basePrice = normalizeAmount(cyclePricing.getAmount());
+        Optional<AppliedVoucher> introVoucher = findBestEligibleVoucher(
+                user,
+                context.region(),
+                context.regionPricing().getCurrency(),
+                billingCycle,
+                planType,
+                basePrice,
+                null
+        );
+
+        return new BillingPricingResponse.CyclePricing(
+                basePrice,
+                cyclePricing.getDurationDays(),
+                introVoucher.map(AppliedVoucher::effectivePrice).orElse(null),
+                introVoucher.isPresent(),
+                basePrice.compareTo(BigDecimal.ZERO) > 0
+        );
+    }
+
     Optional<AppliedVoucher> findBestEligibleVoucher(
             UserEntity user,
             String region,
-            StudySnapProperties.RegionPricing regionPricing,
+            String currency,
             BillingCycle billingCycle,
             PlanType planType,
+            BigDecimal basePrice,
             String voucherCode
     ) {
         OffsetDateTime now = OffsetDateTime.now();
@@ -186,8 +229,8 @@ public class PricingService {
                 : discountVoucherRepository.findByCodeIgnoreCase(voucherCode.trim()).stream().toList();
 
         return candidates.stream()
-                .filter(voucher -> isEligible(voucher, user, region, regionPricing, billingCycle, planType, now))
-                .map(voucher -> applyVoucher(voucher, regionPricing, billingCycle))
+                .filter(voucher -> isEligible(voucher, user, region, currency, billingCycle, planType, now))
+                .map(voucher -> applyVoucher(voucher, basePrice))
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .max(Comparator.comparing(AppliedVoucher::discountAmount));
@@ -197,7 +240,7 @@ public class PricingService {
             DiscountVoucherEntity voucher,
             UserEntity user,
             String region,
-            StudySnapProperties.RegionPricing regionPricing,
+            String currency,
             BillingCycle billingCycle,
             PlanType planType,
             OffsetDateTime now
@@ -224,7 +267,7 @@ public class PricingService {
         if (!matchesPlan(voucher.getPlanScope(), planType)) {
             return false;
         }
-        if (!voucher.getCurrency().equalsIgnoreCase(regionPricing.getCurrency())) {
+        if (!voucher.getCurrency().equalsIgnoreCase(currency)) {
             return false;
         }
         if (!voucher.isNewSubscribersOnly()) {
@@ -233,8 +276,8 @@ public class PricingService {
         if (user == null) {
             return true;
         }
-        boolean hasPriorPremiumSubscription = subscriptionRepository.existsByUser_IdAndPlanType(user.getId(), PlanType.PREMIUM);
-        if (hasPriorPremiumSubscription) {
+        boolean hasPriorPaidSubscription = subscriptionRepository.existsByUser_IdAndPlanTypeIn(user.getId(), PAID_PLANS);
+        if (hasPriorPaidSubscription) {
             return false;
         }
         return !voucherRedemptionRepository.existsByVoucher_IdAndUser_Id(voucher.getId(), user.getId());
@@ -242,33 +285,46 @@ public class PricingService {
 
     private Optional<AppliedVoucher> applyVoucher(
             DiscountVoucherEntity voucher,
-            StudySnapProperties.RegionPricing regionPricing,
-            BillingCycle billingCycle
+            BigDecimal basePrice
     ) {
-        BigDecimal basePrice = basePriceForCycle(regionPricing, billingCycle);
+        BigDecimal normalizedBasePrice = normalizeAmount(basePrice);
         BigDecimal effectivePrice;
         if (voucher.getDiscountType() == VoucherDiscountType.OVERRIDE_PRICE) {
             effectivePrice = voucher.getDiscountValue();
         } else if (voucher.getDiscountType() == VoucherDiscountType.FIXED_AMOUNT) {
-            effectivePrice = basePrice.subtract(voucher.getDiscountValue());
+            effectivePrice = normalizedBasePrice.subtract(voucher.getDiscountValue());
         } else {
             BigDecimal percentage = voucher.getDiscountValue().divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP);
-            effectivePrice = basePrice.multiply(BigDecimal.ONE.subtract(percentage));
+            effectivePrice = normalizedBasePrice.multiply(BigDecimal.ONE.subtract(percentage));
         }
         effectivePrice = effectivePrice.max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal discountAmount = basePrice.subtract(effectivePrice).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal discountAmount = normalizedBasePrice.subtract(effectivePrice)
+                .max(BigDecimal.ZERO)
+                .setScale(2, RoundingMode.HALF_UP);
         if (discountAmount.compareTo(BigDecimal.ZERO) <= 0) {
             return Optional.empty();
         }
         return Optional.of(new AppliedVoucher(voucher, effectivePrice, discountAmount));
     }
 
-    private BigDecimal basePriceForCycle(StudySnapProperties.RegionPricing regionPricing, BillingCycle billingCycle) {
-        return billingCycle == BillingCycle.YEARLY ? regionPricing.getYearlyPrice() : regionPricing.getMonthlyPrice();
-    }
-
-    private String resolveCheckoutPriceId() {
-        return normalizeText(properties.getBilling().getPriceIdPlaceholder());
+    private StudySnapProperties.BillingCyclePricing resolveCyclePricing(
+            StudySnapProperties.RegionPricing regionPricing,
+            PlanType planType,
+            BillingCycle billingCycle
+    ) {
+        PlanType normalizedPlanType = normalizeRequestedPlan(planType);
+        StudySnapProperties.PaidPlanPricing paidPlanPricing = regionPricing.resolvePlanPricing(normalizedPlanType);
+        StudySnapProperties.BillingCyclePricing cyclePricing = billingCycle == BillingCycle.YEARLY
+                ? paidPlanPricing.getYearly()
+                : paidPlanPricing.getMonthly();
+        if (cyclePricing == null || !cyclePricing.isActive() || normalizeAmount(cyclePricing.getAmount()).compareTo(BigDecimal.ZERO) <= 0) {
+            throw new AppException(
+                    ERROR_CHECKOUT_BILLING_CYCLE_UNAVAILABLE,
+                    MESSAGE_CHECKOUT_BILLING_CYCLE_UNAVAILABLE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return cyclePricing;
     }
 
     private StudySnapProperties.RegionPricing resolveRegionPricing(String region) {
@@ -282,8 +338,8 @@ public class PricingService {
             return upperCaseRegionPricing;
         }
         throw new AppException(
-                "REGION_PRICING_NOT_CONFIGURED",
-                "Premium pricing is not configured for your region yet.",
+                ERROR_REGION_PRICING_NOT_CONFIGURED,
+                MESSAGE_REGION_PRICING_UNAVAILABLE,
                 HttpStatus.SERVICE_UNAVAILABLE
         );
     }
@@ -300,23 +356,36 @@ public class PricingService {
 
     private boolean matchesPlan(VoucherPlanScope scope, PlanType planType) {
         return scope == VoucherPlanScope.ANY
-                || (scope == VoucherPlanScope.PREMIUM && planType == PlanType.PREMIUM)
-                || (scope == VoucherPlanScope.FREE && planType == PlanType.FREE);
+                || (scope == VoucherPlanScope.FREE && planType == PlanType.FREE)
+                || (scope == VoucherPlanScope.PLUS && planType == PlanType.PLUS)
+                || (scope == VoucherPlanScope.PRO && planType == PlanType.PRO);
     }
 
-    private String normalizeText(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
+    private BigDecimal normalizeAmount(BigDecimal amount) {
+        BigDecimal normalized = amount == null ? BigDecimal.ZERO : amount;
+        return normalized.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private PlanType normalizeRequestedPlan(PlanType requestedPlanType) {
+        PlanType planType = requestedPlanType == null ? PlanType.PRO : requestedPlanType;
+        if (!planType.isPaid()) {
+            throw new AppException(
+                    ERROR_CHECKOUT_PLAN_NOT_SUPPORTED,
+                    MESSAGE_CHECKOUT_PLAN_NOT_SUPPORTED,
+                    HttpStatus.BAD_REQUEST
+            );
         }
-        return value.trim();
+        return planType;
     }
 
     public record CheckoutSelection(
             String region,
             String countryCode,
             String currency,
+            PlanType planType,
+            String planDisplayName,
             BillingCycle billingCycle,
-            String planId,
+            int accessDurationDays,
             BigDecimal basePrice,
             BigDecimal discountAmount,
             UUID voucherId,

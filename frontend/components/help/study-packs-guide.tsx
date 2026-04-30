@@ -47,10 +47,10 @@ const SECTIONS: Section[] = [
     title: "Adaptive Practice",
     description: "Focuses on concepts you missed in Challenge Quiz, targeting weak areas with questions built from recent performance.",
     bullets: [
-      "Available on the Premium plan",
+      "Available on the Pro plan",
       "Works best after completing at least one Challenge Quiz",
     ],
-    badge: "Premium",
+    badge: "Pro",
   },
   {
     icon: Brain,

@@ -30,10 +30,10 @@ export function PlanUsageCard({ usedThisMonth, monthlyLimit }: Readonly<PlanUsag
       {hasReachedLimit ? (
         <div className="space-y-3 rounded-md border border-border bg-background p-3">
           <p className="text-sm text-foreground/85">You have reached your monthly Study Pack limit.</p>
-          <PremiumUpgradeButton label="Upgrade to Premium" source="dashboard_plan_usage_limit" size="sm" />
+          <PremiumUpgradeButton label="Upgrade to Plus" source="dashboard_plan_usage_limit" planType="PLUS" size="sm" />
         </div>
       ) : (
-        <PremiumUpgradeButton label="Upgrade" source="dashboard_plan_usage_card" variant="outline" size="sm" />
+        <PremiumUpgradeButton label="See paid plans" source="dashboard_plan_usage_card" planType="PLUS" variant="outline" size="sm" />
       )}
     </Card>
   );

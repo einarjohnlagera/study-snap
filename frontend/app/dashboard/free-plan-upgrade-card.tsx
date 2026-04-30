@@ -15,13 +15,14 @@ export function FreePlanUpgradeCard() {
             You are using the Free Plan.
           </h2>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/80">
-            Upgrade to Premium to unlock Adaptive Practice, choose quiz difficulty, and access higher monthly limits.
+            Upgrade to Plus for higher limits, or go Pro for Adaptive Practice, difficulty selection, and Board Exam Mode.
           </p>
         </div>
         <div className="w-full sm:w-auto">
           <PremiumUpgradeButton
-            label="Upgrade to Premium"
+            label="Upgrade to Plus"
             source="dashboard_free_plan_card"
+            planType="PLUS"
             className="w-full sm:w-auto"
           />
         </div>

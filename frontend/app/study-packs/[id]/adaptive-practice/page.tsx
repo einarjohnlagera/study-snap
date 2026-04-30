@@ -78,7 +78,7 @@ export default function AdaptivePracticePage() {
     return Array.isArray(params.id) ? params.id[0] : params.id;
   }, [params]);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
-  const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType === "PREMIUM" ? "PREMIUM" : "FREE");
+  const currentPlan = usageSummary?.plan ?? getAuthUser()?.planType ?? "FREE";
   const adaptivePracticeRemaining = usageSummary
     ? resolveRemainingUsageCredits(
       usageSummary.usage.adaptivePracticeUsed,
@@ -86,7 +86,7 @@ export default function AdaptivePracticePage() {
       usageSummary.remaining?.adaptivePracticeRemaining,
     )
     : null;
-  const hasReachedAdaptivePracticeLimit = currentPlan === "PREMIUM"
+  const hasReachedAdaptivePracticeLimit = currentPlan === "PRO"
     && adaptivePracticeRemaining !== null
     && adaptivePracticeRemaining <= 0;
   const openAdaptivePracticePaywall = useCallback((source: string) => {
@@ -218,7 +218,7 @@ export default function AdaptivePracticePage() {
   }, [loadAdaptiveQuiz, noteId]);
 
   useEffect(() => {
-    if (currentPlan !== "PREMIUM" || !hasReachedAdaptivePracticeLimit || adaptiveQuiz?.sessionId) {
+    if (currentPlan !== "PRO" || !hasReachedAdaptivePracticeLimit || adaptiveQuiz?.sessionId) {
       return;
     }
     setPremiumLocked(false);
@@ -436,13 +436,13 @@ export default function AdaptivePracticePage() {
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Adaptive Practice
           </p>
-          <h1 className="text-xl font-semibold sm:text-2xl">Premium feature</h1>
+          <h1 className="text-xl font-semibold sm:text-2xl">Pro feature</h1>
           <p className="text-sm text-foreground/75">
-            This feature is available in the Premium plan.
+            This feature is available in the Pro plan.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" className="w-full sm:w-auto" onClick={() => openAdaptivePracticePaywall("adaptive_practice_page_card")}>
-              See Premium options
+              See Pro options
             </Button>
           </div>
         </Card>

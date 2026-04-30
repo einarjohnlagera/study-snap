@@ -941,7 +941,7 @@ export function NoteEditorPageClient({
           className="w-full sm:w-fit"
           onClick={() => openLockedFeaturePaywall("note-generation-limit", "note_editor_note_generation_limit")}
         >
-          Upgrade to Premium
+          Upgrade to Plus
         </Button>
       </div>
     ) : (

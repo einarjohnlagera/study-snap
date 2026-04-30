@@ -95,54 +95,95 @@ public class StudySnapProperties {
     @Setter
     public static class Pricing {
         private int freeMonthlyStudyPackLimit = 10;
-        private int premiumMonthlyStudyPackLimit = 100;
+        private int plusMonthlyStudyPackLimit = 50;
+        private int proMonthlyStudyPackLimit = 100;
         private int freeMonthlyChallengeQuizLimit = 5;
-        private int premiumMonthlyChallengeQuizLimit = 50;
-        private int premiumMonthlyAdaptivePracticeLimit = 30;
+        private int plusMonthlyChallengeQuizLimit = 25;
+        private int proMonthlyChallengeQuizLimit = 50;
+        private int plusMonthlyAdaptivePracticeLimit = 0;
+        private int proMonthlyAdaptivePracticeLimit = 30;
         private int freeMonthlyOcrLimit = 20;
-        private int premiumMonthlyOcrLimit = 100;
+        private int plusMonthlyOcrLimit = 50;
+        private int proMonthlyOcrLimit = 100;
         private int freeMonthlyNoteGenerationLimit = 5;
-        private int premiumMonthlyNoteGenerationLimit = 100;
-        private boolean adaptivePracticePremiumOnly = true;
-        private boolean difficultySelectionPremiumOnly = true;
+        private int plusMonthlyNoteGenerationLimit = 25;
+        private int proMonthlyNoteGenerationLimit = 100;
+        private int freeMonthlyExportLimit = 2;
+        private int plusMonthlyExportLimit = 15;
+        private int proMonthlyExportLimit = -1;
+        private boolean adaptivePracticeProOnly = true;
+        private boolean difficultySelectionProOnly = true;
 
         public int resolveMonthlyStudyPackLimit(PlanType planType) {
-            return planType == PlanType.PREMIUM
-                    ? premiumMonthlyStudyPackLimit
-                    : freeMonthlyStudyPackLimit;
+            return switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyStudyPackLimit;
+                case PRO -> proMonthlyStudyPackLimit;
+                case FREE -> freeMonthlyStudyPackLimit;
+            };
         }
 
         public int resolveMonthlyChallengeQuizLimit(PlanType planType) {
-            return planType == PlanType.PREMIUM
-                    ? premiumMonthlyChallengeQuizLimit
-                    : freeMonthlyChallengeQuizLimit;
+            return switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyChallengeQuizLimit;
+                case PRO -> proMonthlyChallengeQuizLimit;
+                case FREE -> freeMonthlyChallengeQuizLimit;
+            };
         }
 
         public int resolveMonthlyAdaptivePracticeLimit(PlanType planType) {
-            if (planType != PlanType.PREMIUM && adaptivePracticePremiumOnly) {
+            PlanType normalizedPlanType = normalizePlanType(planType);
+            if (adaptivePracticeProOnly && normalizedPlanType != PlanType.PRO) {
                 return 0;
             }
-            return premiumMonthlyAdaptivePracticeLimit;
+            return switch (normalizedPlanType) {
+                case PRO -> proMonthlyAdaptivePracticeLimit;
+                case PLUS -> plusMonthlyAdaptivePracticeLimit;
+                case FREE -> 0;
+            };
         }
 
         public int resolveMonthlyOcrLimit(PlanType planType) {
-            return planType == PlanType.PREMIUM
-                    ? premiumMonthlyOcrLimit
-                    : freeMonthlyOcrLimit;
+            return switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyOcrLimit;
+                case PRO -> proMonthlyOcrLimit;
+                case FREE -> freeMonthlyOcrLimit;
+            };
         }
 
         public int resolveMonthlyNoteGenerationLimit(PlanType planType) {
-            return planType == PlanType.PREMIUM
-                    ? premiumMonthlyNoteGenerationLimit
-                    : freeMonthlyNoteGenerationLimit;
+            return switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyNoteGenerationLimit;
+                case PRO -> proMonthlyNoteGenerationLimit;
+                case FREE -> freeMonthlyNoteGenerationLimit;
+            };
+        }
+
+        public Integer resolveMonthlyExportLimit(PlanType planType) {
+            return switch (normalizePlanType(planType)) {
+                case PLUS -> plusMonthlyExportLimit;
+                case PRO -> proMonthlyExportLimit <= 0 ? null : proMonthlyExportLimit;
+                case FREE -> freeMonthlyExportLimit;
+            };
         }
 
         public boolean isAdaptivePracticeAvailable(PlanType planType) {
-            return !adaptivePracticePremiumOnly || planType == PlanType.PREMIUM;
+            PlanType normalizedPlanType = normalizePlanType(planType);
+            if (!adaptivePracticeProOnly) {
+                return normalizedPlanType != PlanType.FREE;
+            }
+            return normalizedPlanType == PlanType.PRO;
         }
 
         public boolean isDifficultySelectionAvailable(PlanType planType) {
-            return !difficultySelectionPremiumOnly || planType == PlanType.PREMIUM;
+            PlanType normalizedPlanType = normalizePlanType(planType);
+            if (!difficultySelectionProOnly) {
+                return normalizedPlanType != PlanType.FREE;
+            }
+            return normalizedPlanType == PlanType.PRO;
+        }
+
+        private PlanType normalizePlanType(PlanType planType) {
+            return planType == null ? PlanType.FREE : planType;
         }
     }
 
@@ -205,8 +246,31 @@ public class StudySnapProperties {
     @Setter
     public static class RegionPricing {
         private String currency = "USD";
-        private BigDecimal monthlyPrice = new BigDecimal("4.99");
-        private BigDecimal yearlyPrice = new BigDecimal("39.99");
+        private boolean active = true;
+        private final PaidPlanPricing plus = new PaidPlanPricing();
+        private final PaidPlanPricing pro = new PaidPlanPricing();
+
+        public PaidPlanPricing resolvePlanPricing(PlanType planType) {
+            return switch (planType) {
+                case PLUS -> plus;
+                case PRO -> pro;
+                default -> throw new IllegalArgumentException("Pricing is only configured for paid plans.");
+            };
+        }
+    }
+
+    @Getter
+    @Setter
+    public static class PaidPlanPricing {
+        private final BillingCyclePricing monthly = new BillingCyclePricing();
+        private final BillingCyclePricing yearly = new BillingCyclePricing();
+    }
+
+    @Getter
+    @Setter
+    public static class BillingCyclePricing {
+        private BigDecimal amount = BigDecimal.ZERO.setScale(2);
+        private int durationDays = 30;
         private boolean active = true;
     }
 

@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { buildPageMetadata } from "@/lib/site-metadata";
 
 export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib Pricing — Free and Premium Plans",
-  description: "Simple plans for everyday study and serious review. Start free, and upgrade when your review gets serious.",
+  title: "NoteLib Pricing — Free, Plus, and Pro Plans",
+  description: "Simple plans for everyday study and serious review. Start free, move to Plus for higher limits, or choose Pro for exam prep.",
   path: "/pricing",
 });
 
@@ -26,10 +26,10 @@ export default function PricingPage() {
             Simple plans for everyday study and serious review.
           </h1>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Start free for core features. Upgrade when you need more quizzes, deeper practice, and higher limits.
+            Start free for core features. Move to Plus for higher limits, or choose Pro for deeper practice and exam-ready tools.
           </p>
           <p className="max-w-2xl text-sm leading-relaxed text-foreground/70 sm:text-base">
-            Most users stay on Free while studying casually. Upgrade when your review gets serious.
+            Most users stay on Free while studying casually. Plus fits regular review, and Pro is built for serious exam prep.
           </p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Link href="/signup" className="w-full sm:w-auto">
@@ -38,8 +38,9 @@ export default function PricingPage() {
               </Button>
             </Link>
             <PremiumUpgradeButton
-              label="Upgrade to Premium"
+              label="Upgrade to Pro"
               source="pricing_hero"
+              planType="PRO"
               variant="outline"
               className="w-full sm:w-auto"
             />
@@ -50,14 +51,14 @@ export default function PricingPage() {
       <section className="space-y-3">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Free vs Premium
+            Free, Plus, and Pro
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Premium for deeper exam prep.</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Plus for regular review. Pro for deeper exam prep.</h2>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-            Free covers the full note-to-study-pack workflow. Premium adds higher limits and deeper practice tools.
+            Free covers the core note-to-study-pack workflow. Plus expands your monthly limits. Pro adds the highest limits and advanced practice tools.
           </p>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/70 sm:text-base">
-            Most users stay on Free while studying casually. Upgrade when your review gets serious.
+            Most users stay on Free while studying casually. Move to Plus when you want more room, then Pro when your review gets serious.
           </p>
         </div>
         <PricingPlansSection showHeading={false} />

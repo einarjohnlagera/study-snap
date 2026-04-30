@@ -1,24 +1,23 @@
 package com.studysnap.backend.service.jobs;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.service.SubscriptionService;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.UUID;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class SubscriptionExpiryJobTest {
@@ -37,12 +36,12 @@ class SubscriptionExpiryJobTest {
         UserEntity user = new UserEntity();
         user.setId(UUID.randomUUID());
         expired.setUser(user);
-        expired.setPlanType(PlanType.PREMIUM);
+        expired.setPlanType(PlanType.PRO);
         expired.setStatus(SubscriptionStatus.ACTIVE);
         expired.setEndAt(OffsetDateTime.now().minusDays(1));
 
-        when(subscriptionRepository.findByPlanTypeAndStatusAndEndAtBefore(
-                eq(PlanType.PREMIUM),
+        when(subscriptionRepository.findByPlanTypeInAndStatusAndEndAtBefore(
+                eq(List.of(PlanType.PLUS, PlanType.PRO)),
                 eq(SubscriptionStatus.ACTIVE),
                 any(OffsetDateTime.class)
         )).thenReturn(List.of(expired));

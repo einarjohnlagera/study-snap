@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 type BillingSuccessPageProps = {
   searchParams?: Promise<{
     returnUrl?: string | string[];
+    plan?: string | string[];
   }>;
 };
 
@@ -25,9 +26,15 @@ function shouldReturnToDashboard(returnUrl: string | null): boolean {
     || pathname.startsWith("/billing/");
 }
 
+function resolvePlanLabel(rawPlan: string | string[] | undefined): "Plus" | "Pro" {
+  const value = Array.isArray(rawPlan) ? rawPlan[0] : rawPlan;
+  return value === "PLUS" ? "Plus" : "Pro";
+}
+
 export default async function BillingSuccessPage({ searchParams }: Readonly<BillingSuccessPageProps>) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const returnUrl = resolveReturnUrl(resolvedSearchParams.returnUrl);
+  const planLabel = resolvePlanLabel(resolvedSearchParams.plan);
   const useDashboardPrimary = shouldReturnToDashboard(returnUrl);
   const primaryHref = useDashboardPrimary ? "/dashboard" : returnUrl ?? "/dashboard";
   const primaryLabel = useDashboardPrimary ? "Go to Dashboard" : "Continue where you left off";
@@ -40,13 +47,15 @@ export default async function BillingSuccessPage({ searchParams }: Readonly<Bill
             Payment successful
           </p>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Your Premium access is now active
+            Your NoteLib {planLabel} access is now active
           </h1>
           <p className="text-sm leading-relaxed text-foreground/75 sm:text-base">
-            You now have higher limits, Adaptive Practice, difficulty selection, and Board Exam Mode.
+            {planLabel === "Pro"
+              ? "You now have the highest limits, Adaptive Practice, difficulty selection, Board Exam Mode, and unlimited exports."
+              : "You now have higher monthly limits, more exports, and more room to keep studying without hitting Free plan caps."}
           </p>
           <p className="text-xs text-foreground/60 sm:text-sm">
-            Premium is activated after payment confirmation. If your access does not update immediately, refresh after a few seconds.
+            Paid access is activated after payment confirmation. If your access does not update immediately, refresh after a few seconds.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
