@@ -705,6 +705,10 @@ export type BillingCheckoutSessionResponse = {
   checkoutUrl: string;
 };
 
+export type BillingCheckoutSessionRequest = {
+  returnUrl?: string | null;
+};
+
 export type BillingUsageSummaryResponse = {
   planType: PlanType;
   studyPacksUsed: number;
@@ -2094,12 +2098,17 @@ export async function getMasterySnapshot(): Promise<MasterySnapshotResponse> {
   return parseApiResponse<MasterySnapshotResponse>(response, "Could not load mastery snapshot.");
 }
 
-export async function createPremiumCheckoutSession(): Promise<BillingCheckoutSessionResponse> {
+export async function createPremiumCheckoutSession(
+  request?: BillingCheckoutSessionRequest,
+): Promise<BillingCheckoutSessionResponse> {
   const response = await fetchWithAuth(
     "/payments/create",
     {
       method: "POST",
-      headers: buildAuthHeaders(),
+      headers: buildAuthHeaders("application/json"),
+      body: JSON.stringify({
+        returnUrl: request?.returnUrl ?? null,
+      }),
     },
     true,
   );

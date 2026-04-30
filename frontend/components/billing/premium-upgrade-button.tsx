@@ -6,7 +6,7 @@ import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-require
 import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import { createPremiumCheckoutSession, isEmailNotVerifiedError, trackAnalyticsEvent } from "@/lib/api";
-import { getAuthUser } from "@/lib/auth";
+import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 type PremiumUpgradeButtonProps = {
@@ -55,7 +55,9 @@ export function PremiumUpgradeButton({
           target: "xendit_checkout",
         },
       });
-      const response = await createPremiumCheckoutSession();
+      const response = await createPremiumCheckoutSession({
+        returnUrl: getSafeRedirectPath(getCurrentPathWithQuery()),
+      });
       redirectToCheckoutUrl(response.checkoutUrl);
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {

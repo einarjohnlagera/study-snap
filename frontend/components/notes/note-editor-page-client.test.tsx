@@ -35,6 +35,10 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
+  getCurrentPathWithQuery: () => `${window.location.pathname}${window.location.search}`,
+  getSafeRedirectPath: (path: string | null | undefined) => (
+    path && path.startsWith("/") && !path.startsWith("//") ? path : null
+  ),
   setAuthUser: jest.fn(),
 }));
 
@@ -752,6 +756,53 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     expect(await screen.findByText("You have 1 Study Pack left this month on the Free plan.")).toBeInTheDocument();
+  });
+
+  it("saves a draft note before starting checkout from the Study Pack paywall", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
+      },
+      usage: {
+        studyPacksUsed: 10,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+        noteGenerationsUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 0,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+        noteGenerationsRemaining: 5,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    const contentInput = await screen.findByLabelText("Content");
+    fireEvent.change(contentInput, { target: { value: "Saved before checkout" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Upgrade to Premium" }));
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalled();
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ returnUrl: "/notes/note-created/edit" });
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
   });
 
   it("shows the import panel only when Import notes is selected", async () => {

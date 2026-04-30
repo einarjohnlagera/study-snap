@@ -4,7 +4,6 @@ import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
-import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.SubscriptionRepository;
 import com.studysnap.backend.repository.UserRepository;
@@ -41,12 +40,6 @@ public class BillingUsagePeriodService {
             return premiumUsagePeriod;
         }
 
-        UserEntity user = userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
-        OffsetDateTime premiumExpiresAt = normalize(user.getPremiumExpiresAt());
-        if (Boolean.TRUE.equals(user.getIsPremium())
-                && (premiumExpiresAt == null || nowUtc.isBefore(premiumExpiresAt))) {
-            return toDirectPremiumUsagePeriod(user, nowUtc);
-        }
         return toFreeUsagePeriod(userId, nowUtc);
     }
 
@@ -79,24 +72,6 @@ public class BillingUsagePeriodService {
         OffsetDateTime periodEnd = periodStart.plusMonths(1);
         return new UsagePeriod(
                 PlanType.FREE,
-                BillingCycle.MONTHLY,
-                periodStart,
-                periodEnd,
-                periodStart.getYear(),
-                periodStart.getMonthValue()
-        );
-    }
-
-    public UsagePeriod toDirectPremiumUsagePeriod(UserEntity user, OffsetDateTime referenceTime) {
-        OffsetDateTime nowUtc = normalize(referenceTime);
-        OffsetDateTime anchor = normalize(user.getPremiumActivatedAt());
-        if (anchor == null) {
-            anchor = normalize(user.getCreatedAt());
-        }
-        OffsetDateTime periodStart = resolveCycleStart(anchor, nowUtc);
-        OffsetDateTime periodEnd = periodStart.plusMonths(1);
-        return new UsagePeriod(
-                PlanType.PREMIUM,
                 BillingCycle.MONTHLY,
                 periodStart,
                 periodEnd,

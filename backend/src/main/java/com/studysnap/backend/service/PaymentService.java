@@ -10,6 +10,8 @@ import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionEntity;
+import com.studysnap.backend.exception.InvalidCheckoutReturnUrlException;
 import com.studysnap.backend.exception.InvalidPaymentWebhookTokenException;
 import com.studysnap.backend.exception.PaymentCheckoutUnavailableException;
 import com.studysnap.backend.exception.PremiumAlreadyActiveException;
@@ -23,10 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.Optional;
@@ -45,6 +49,7 @@ public class PaymentService {
     private static final String DESCRIPTION = "NoteLib Premium Monthly";
     private static final String SUCCESS_REDIRECT_PATH = "/billing/success";
     private static final String FAILURE_REDIRECT_PATH = "/billing/failed";
+    private static final String RETURN_URL_QUERY_KEY = "returnUrl";
     private static final String HEADER_CONTENT_TYPE = "Content-Type";
     private static final String HEADER_AUTHORIZATION = "Authorization";
     private static final String CONTENT_TYPE_JSON = "application/json";
@@ -55,8 +60,9 @@ public class PaymentService {
     private static final String FIELD_STATUS = "status";
     private static final String FIELD_ID = "id";
     private static final String FIELD_INVOICE_URL = "invoice_url";
+    private static final String FIELD_EXPIRY_DATE = "expiry_date";
     private static final int INVOICE_DURATION_SECONDS = 86_400;
-    private static final int PREMIUM_MONTHLY_AMOUNT_MINOR = 24_900;
+    private static final int PREMIUM_ACCESS_DAYS = 30;
     private static final BigDecimal PREMIUM_MONTHLY_AMOUNT_MAJOR = new BigDecimal("249.00");
 
     private final StudySnapProperties properties;
@@ -66,19 +72,46 @@ public class PaymentService {
     private final WebhookEventService webhookEventService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final Clock clock;
 
-    public BillingCheckoutSessionResponse createCheckoutSession(UUID userId) {
+    public BillingCheckoutSessionResponse createCheckoutSession(UUID userId, String requestedReturnUrl) {
         userRepository.findById(userId).orElseThrow(UserNotFoundException::new);
-        if (subscriptionService.resolvePlan(userId) == PlanType.PREMIUM) {
+        if (subscriptionService.hasActiveSubscription(userId, PLAN_TYPE)) {
             throw new PremiumAlreadyActiveException();
         }
 
         ensureCheckoutConfigured();
+        String returnUrl = sanitizeReturnUrl(requestedReturnUrl);
+        OffsetDateTime now = OffsetDateTime.now(clock);
 
-        String externalId = buildExternalId(userId);
-        JsonNode invoiceResponse = createInvoice(externalId);
-        String checkoutUrl = readText(invoiceResponse, FIELD_INVOICE_URL);
-        if (checkoutUrl == null) {
+        Optional<PaymentTransactionEntity> latestPendingTransaction = paymentTransactionService.findLatestPendingTransaction(
+                userId,
+                BILLING_PROVIDER,
+                PLAN_TYPE
+        );
+        if (latestPendingTransaction.isPresent()) {
+            PaymentTransactionEntity transaction = latestPendingTransaction.get();
+            if (canReusePendingTransaction(transaction, now)) {
+                log.info(
+                        "billing.xendit.checkout reused userId={} externalId={} expiresAt={}",
+                        userId,
+                        transaction.getProviderReferenceId(),
+                        transaction.getExpiresAt()
+                );
+                return new BillingCheckoutSessionResponse(transaction.getCheckoutUrl());
+            }
+            paymentTransactionService.markFailed(transaction.getId());
+            log.info(
+                    "billing.xendit.checkout expiredPendingMarkedFailed userId={} externalId={} expiresAt={}",
+                    userId,
+                    transaction.getProviderReferenceId(),
+                    transaction.getExpiresAt()
+            );
+        }
+
+        String externalId = buildExternalId(userId, now);
+        InvoiceCheckout invoiceCheckout = createInvoice(externalId, returnUrl, now);
+        if (invoiceCheckout.checkoutUrl() == null) {
             throw new PaymentCheckoutUnavailableException("Could not start the payment checkout right now.");
         }
 
@@ -89,14 +122,22 @@ public class PaymentService {
                 PLAN_TYPE,
                 PREMIUM_MONTHLY_AMOUNT_MAJOR,
                 CURRENCY,
-                externalId
+                externalId,
+                invoiceCheckout.checkoutUrl(),
+                invoiceCheckout.expiresAt()
         );
         if (pendingTransaction.isEmpty()) {
             throw new PaymentCheckoutUnavailableException("Could not reserve the payment transaction.");
         }
 
-        log.info("billing.xendit.checkout created userId={} externalId={}", userId, externalId);
-        return new BillingCheckoutSessionResponse(checkoutUrl);
+        log.info(
+                "billing.xendit.checkout created userId={} externalId={} expiresAt={} returnUrl={}",
+                userId,
+                externalId,
+                invoiceCheckout.expiresAt(),
+                returnUrl == null ? "none" : returnUrl
+        );
+        return new BillingCheckoutSessionResponse(invoiceCheckout.checkoutUrl());
     }
 
     public void handleWebhook(String payload, String callbackToken) {
@@ -157,19 +198,33 @@ public class PaymentService {
     }
 
     private void handlePaidWebhook(PaymentTransactionEntity paymentTransaction, String externalId) {
-        if (paymentTransaction.getStatus() != PaymentTransactionStatus.SUCCESS) {
-            paymentTransactionService.markSuccess(paymentTransaction.getId());
+        if (paymentTransaction.getStatus() == PaymentTransactionStatus.SUCCESS) {
+            log.info(
+                    "billing.xendit.webhook alreadyProcessed externalId={} userId={}",
+                    externalId,
+                    paymentTransaction.getUser().getId()
+            );
+            return;
         }
-        subscriptionService.activatePremiumSubscription(
+        OffsetDateTime activatedAt = OffsetDateTime.now(clock);
+        OffsetDateTime premiumExpiresAt = activatedAt.plusDays(PREMIUM_ACCESS_DAYS);
+        SubscriptionEntity subscription = subscriptionService.activatePremiumSubscription(
                 paymentTransaction.getUser().getId(),
                 BILLING_TYPE,
                 BILLING_PROVIDER,
-                OffsetDateTime.now(),
-                null,
+                activatedAt,
+                premiumExpiresAt,
                 false,
                 new SubscriptionService.ProviderMetadata(null, externalId)
         );
-        log.info("billing.xendit.webhook premiumActivated externalId={} userId={}", externalId, paymentTransaction.getUser().getId());
+        paymentTransactionService.markSuccess(paymentTransaction.getId());
+        paymentTransactionService.attachSubscription(paymentTransaction.getId(), subscription);
+        log.info(
+                "billing.xendit.webhook premiumActivated externalId={} userId={} premiumExpiresAt={}",
+                externalId,
+                paymentTransaction.getUser().getId(),
+                premiumExpiresAt
+        );
     }
 
     private void handleFailedWebhook(PaymentTransactionEntity paymentTransaction, String status) {
@@ -183,15 +238,15 @@ public class PaymentService {
         );
     }
 
-    private JsonNode createInvoice(String externalId) {
+    private InvoiceCheckout createInvoice(String externalId, String returnUrl, OffsetDateTime now) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put(FIELD_EXTERNAL_ID, externalId);
-        payload.put("amount", PREMIUM_MONTHLY_AMOUNT_MINOR);
+        payload.put("amount", PREMIUM_MONTHLY_AMOUNT_MAJOR);
         payload.put("description", DESCRIPTION);
         payload.put("invoice_duration", INVOICE_DURATION_SECONDS);
         payload.put("currency", CURRENCY);
-        payload.put("success_redirect_url", buildFrontendRedirectUrl(SUCCESS_REDIRECT_PATH));
-        payload.put("failure_redirect_url", buildFrontendRedirectUrl(FAILURE_REDIRECT_PATH));
+        payload.put("success_redirect_url", buildFrontendRedirectUrl(SUCCESS_REDIRECT_PATH, returnUrl));
+        payload.put("failure_redirect_url", buildFrontendRedirectUrl(FAILURE_REDIRECT_PATH, returnUrl));
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(normalizeBaseUrl(properties.getBilling().getXendit().getBaseUrl()) + INVOICE_ENDPOINT))
@@ -206,7 +261,13 @@ public class PaymentService {
                 log.warn("billing.xendit.checkout failed status={} body={}", response.statusCode(), response.body());
                 throw new PaymentCheckoutUnavailableException("Could not create a hosted payment page.");
             }
-            return parseJson(response.body());
+            JsonNode invoiceResponse = parseJson(response.body());
+            String checkoutUrl = readText(invoiceResponse, FIELD_INVOICE_URL);
+            OffsetDateTime expiresAt = parseOffsetDateTime(readText(invoiceResponse, FIELD_EXPIRY_DATE));
+            if (expiresAt == null) {
+                expiresAt = now.plusSeconds(INVOICE_DURATION_SECONDS);
+            }
+            return new InvoiceCheckout(checkoutUrl, expiresAt);
         } catch (IOException | InterruptedException exception) {
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -228,12 +289,33 @@ public class PaymentService {
         }
     }
 
-    private String buildExternalId(UUID userId) {
-        return "notelib-" + userId + "-" + System.currentTimeMillis();
+    private boolean canReusePendingTransaction(PaymentTransactionEntity transaction, OffsetDateTime now) {
+        String checkoutUrl = normalizeText(transaction.getCheckoutUrl());
+        if (checkoutUrl == null) {
+            return false;
+        }
+        OffsetDateTime expiresAt = transaction.getExpiresAt();
+        if (expiresAt == null) {
+            OffsetDateTime createdAt = transaction.getCreatedAt();
+            expiresAt = createdAt == null ? now : createdAt.plusSeconds(INVOICE_DURATION_SECONDS);
+        }
+        return expiresAt.isAfter(now);
     }
 
-    private String buildFrontendRedirectUrl(String path) {
-        return normalizeBaseUrl(properties.getBilling().getFrontendBaseUrl()) + path;
+    private String buildExternalId(UUID userId, OffsetDateTime now) {
+        return "notelib-" + userId + "-" + now.toInstant().toEpochMilli();
+    }
+
+    private String buildFrontendRedirectUrl(String path, String returnUrl) {
+        StringBuilder redirectUrl = new StringBuilder(normalizeBaseUrl(properties.getBilling().getFrontendBaseUrl()))
+                .append(path);
+        if (!isBlank(returnUrl)) {
+            redirectUrl.append("?")
+                    .append(RETURN_URL_QUERY_KEY)
+                    .append("=")
+                    .append(URLEncoder.encode(returnUrl, StandardCharsets.UTF_8));
+        }
+        return redirectUrl.toString();
     }
 
     private String buildBasicAuthorizationHeader() {
@@ -258,6 +340,17 @@ public class PaymentService {
         return externalId + ":" + status;
     }
 
+    private OffsetDateTime parseOffsetDateTime(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(value);
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
     private String readText(JsonNode node, String fieldName) {
         if (node == null) {
             return null;
@@ -274,8 +367,37 @@ public class PaymentService {
         return normalized.isEmpty() ? null : normalized;
     }
 
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
     private String normalizeStatus(String value) {
         return value == null ? null : value.trim().toUpperCase();
+    }
+
+    private String sanitizeReturnUrl(String rawReturnUrl) {
+        if (isBlank(rawReturnUrl)) {
+            return null;
+        }
+        try {
+            URI uri = URI.create(rawReturnUrl.trim());
+            String path = uri.getPath();
+            if (uri.isAbsolute()
+                    || uri.getScheme() != null
+                    || uri.getHost() != null
+                    || path == null
+                    || !path.startsWith("/")
+                    || path.startsWith("//")) {
+                throw new InvalidCheckoutReturnUrlException();
+            }
+            return rawReturnUrl.trim();
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidCheckoutReturnUrlException();
+        }
     }
 
     private String normalizeBaseUrl(String value) {
@@ -288,5 +410,11 @@ public class PaymentService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private record InvoiceCheckout(
+            String checkoutUrl,
+            OffsetDateTime expiresAt
+    ) {
     }
 }

@@ -32,7 +32,7 @@ import {
   type MeResponse,
   type SubscriptionCancellationReason,
 } from "@/lib/api";
-import { buildLoginPath, getAuthUser, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
+import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
 import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
@@ -302,7 +302,9 @@ export default function SettingsPage() {
           target: "xendit_checkout",
         },
       });
-      const response = await createPremiumCheckoutSession();
+      const response = await createPremiumCheckoutSession({
+        returnUrl: getSafeRedirectPath(getCurrentPathWithQuery()),
+      });
       redirectToCheckoutUrl(response.checkoutUrl);
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
@@ -449,9 +451,6 @@ export default function SettingsPage() {
     if (subscriptionSummaryPlan !== "PREMIUM") {
       return "Free plan";
     }
-    if (billingHistory?.cancelAtPeriodEnd) {
-      return "Cancels at period end";
-    }
     if (billingHistory?.subscriptionStatus === "ACTIVE") {
       return "Active";
     }
@@ -463,18 +462,12 @@ export default function SettingsPage() {
     }
     return "Premium";
   })();
-  const subscriptionSummaryDate = billingHistory?.cancelAtPeriodEnd
-    ? billingHistory.cancellationEffectiveAt ?? billingHistory.currentPeriodEnd
-    : billingHistory?.currentPeriodEnd;
+  const subscriptionSummaryDate = billingHistory?.currentPeriodEnd;
   const subscriptionSummaryDateLabel =
     subscriptionSummaryPlan === "PREMIUM"
-      ? (billingHistory?.cancelAtPeriodEnd ? "Ends on" : subscriptionSummaryDate ? "Renews on" : "Renewal")
+      ? "Valid until"
       : "Status";
-  const subscriptionBillingCycleLabel = billingHistory?.billingType
-    ? billingHistory.billingType === "YEARLY"
-      ? "Yearly"
-      : "Monthly"
-    : "—";
+  const subscriptionBillingCycleLabel = subscriptionSummaryPlan === "PREMIUM" ? "Manual renewal" : "—";
   const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
 
   return (
@@ -732,6 +725,9 @@ export default function SettingsPage() {
                       <p className="mt-2 text-xs text-foreground/60">
                         Current checkout amount: {monthlyPriceLabel}
                       </p>
+                      <p className="mt-1 text-xs text-foreground/60">
+                        Premium currently lasts 30 days per payment and renews manually.
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -750,26 +746,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
               )}
-              {isPremiumPlan && billingHistory?.currentPeriodEnd && !isCancellationScheduled ? (
-                <div className="rounded-md border border-border bg-background p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Cancel Subscription</p>
-                      <p className="text-xs text-foreground/70">
-                        Premium stays active until the end of your current billing period.
-                      </p>
-                    </div>
-                    <ResponsiveActionButton
-                      type="button"
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={handleOpenCancellationModal}
-                      action="delete"
-                      label="Cancel Subscription"
-                    />
-                  </div>
-                </div>
-              ) : null}
+              {null}
             </div>
 
             <div className="space-y-4 rounded-md border border-border bg-background p-4">
@@ -796,7 +773,7 @@ export default function SettingsPage() {
                     </p>
                     <p className="text-sm font-medium text-foreground">
                       {subscriptionSummaryPlan === "PREMIUM"
-                        ? (subscriptionSummaryDate ? formatBillingDate(subscriptionSummaryDate) : "No scheduled renewal")
+                        ? (subscriptionSummaryDate ? formatBillingDate(subscriptionSummaryDate) : "Manual renewal")
                         : "No active subscription"}
                     </p>
                   </div>
@@ -806,20 +783,11 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {billingHistory?.cancelAtPeriodEnd ? (
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
-                    <p className="text-sm font-medium text-foreground">
-                      Your Premium plan will end on {formatBillingDate(subscriptionSummaryDate ?? null)} and will not renew.
-                    </p>
-                    <p className="mt-1 text-xs text-foreground/70">
-                      Your notes and Study Packs will remain in your library.
-                    </p>
-                  </div>
-                ) : subscriptionSummaryPlan === "PREMIUM" ? (
+                {subscriptionSummaryPlan === "PREMIUM" ? (
                   <p className="text-sm text-foreground/75">
                     {subscriptionSummaryDate
-                      ? `Your Premium plan renews on ${formatBillingDate(subscriptionSummaryDate)}.`
-                      : "Your Premium access is active. Renewal scheduling is not enabled yet."}
+                      ? `Your Premium access is active until ${formatBillingDate(subscriptionSummaryDate)}. Renew manually whenever you're ready.`
+                      : "Your Premium access is active. Renewal is manual in the current billing model."}
                   </p>
                 ) : (
                   <p className="text-sm text-foreground/75">

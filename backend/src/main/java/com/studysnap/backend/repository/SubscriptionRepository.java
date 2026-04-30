@@ -18,6 +18,11 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
 
     boolean existsByUser_IdAndPlanType(UUID userId, PlanType planType);
 
+    List<SubscriptionEntity> findByUser_IdAndStatusOrderByUpdatedAtDesc(
+            UUID userId,
+            SubscriptionStatus status
+    );
+
     List<SubscriptionEntity> findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
             UUID userId,
             PlanType planType,

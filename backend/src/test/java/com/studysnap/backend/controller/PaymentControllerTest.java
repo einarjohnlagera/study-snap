@@ -1,5 +1,6 @@
 package com.studysnap.backend.controller;
 
+import com.studysnap.backend.dto.BillingCheckoutSessionRequest;
 import com.studysnap.backend.dto.BillingCheckoutSessionResponse;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -42,12 +43,15 @@ class PaymentControllerTest {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
         BillingCheckoutSessionResponse expected = new BillingCheckoutSessionResponse("https://checkout.xendit.test/invoice_123");
-        when(paymentService.createCheckoutSession(userId)).thenReturn(expected);
+        when(paymentService.createCheckoutSession(userId, "/notes/new")).thenReturn(expected);
 
-        BillingCheckoutSessionResponse response = paymentController.createCheckoutSession(user);
+        BillingCheckoutSessionResponse response = paymentController.createCheckoutSession(
+                user,
+                new BillingCheckoutSessionRequest("/notes/new")
+        );
 
         verify(authService).requireEmailVerified(userId);
-        verify(paymentService).createCheckoutSession(userId);
+        verify(paymentService).createCheckoutSession(userId, "/notes/new");
         assertThat(response).isEqualTo(expected);
     }
 
@@ -62,9 +66,9 @@ class PaymentControllerTest {
         );
         doThrow(verificationError).when(authService).requireEmailVerified(userId);
 
-        assertThatThrownBy(() -> paymentController.createCheckoutSession(user))
+        assertThatThrownBy(() -> paymentController.createCheckoutSession(user, null))
                 .isSameAs(verificationError);
 
-        verify(paymentService, never()).createCheckoutSession(userId);
+        verify(paymentService, never()).createCheckoutSession(userId, null);
     }
 }

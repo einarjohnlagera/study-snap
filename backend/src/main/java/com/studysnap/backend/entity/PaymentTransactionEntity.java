@@ -29,6 +29,10 @@ public class PaymentTransactionEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
+    @ManyToOne
+    @JoinColumn(name = "subscription_id")
+    private SubscriptionEntity subscription;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private BillingProvider provider;
@@ -53,6 +57,12 @@ public class PaymentTransactionEntity {
 
     @Column(name = "provider_reference_id", nullable = false, length = 191)
     private String providerReferenceId;
+
+    @Column(name = "checkout_url", length = 1000)
+    private String checkoutUrl;
+
+    @Column(name = "expires_at")
+    private OffsetDateTime expiresAt;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

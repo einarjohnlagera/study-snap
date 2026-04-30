@@ -128,9 +128,6 @@ Recommended fields:
 - `learner_level` (nullable enum: `GRADE_SCHOOL`, `JUNIOR_HIGH`, `SENIOR_HIGH`, `COLLEGE`, `BOARD_EXAM_REVIEW`, `PROFESSIONAL`, `PERSONAL_LEARNING`)
 - `course_program` (nullable, up to 120 chars)
 - `public_profile_visible` (boolean, default true)
-- `is_premium` (boolean, default false)
-- `premium_activated_at` (nullable)
-- `premium_expires_at` (nullable, future use)
 - `country_code` (optional)
 - `profile_type` (nullable enum)
 - `role` (`USER` | `ADMIN`)
@@ -166,7 +163,15 @@ Billing notes:
 
 - Active provider is currently `XENDIT`.
 - Current Premium activation uses a hosted invoice checkout and webhook-confirmed premium upgrade rather than recurring subscriptions.
-- `subscriptions` still stores plan state history and remains the place for future recurring billing or expiry logic.
+- Current Premium billing model is prepaid/manual-renewal for `30` days of access per successful payment.
+- `subscriptions` is the only source of truth for plans and entitlements.
+- `users` must not store Premium flags or plan state.
+- `subscriptions` stores full plan history; users may have multiple historical rows.
+- Only one `ACTIVE` subscription row should exist per user at a time.
+- The current plan is resolved from the active valid subscription row for that user.
+- A paid Premium activation expires the currently active non-Premium row when needed and creates a new active Premium history row.
+- Manual renewals extend the active Premium `end_at` rather than creating duplicate active Premium rows.
+- `subscriptions` remains the place for future recurring billing, expiry logic, and provider-managed renewals.
 - Webhook event idempotency is enforced through persisted webhook events plus `payment_transactions(provider, provider_reference_id)` uniqueness.
 
 ## Payment Transactions
@@ -186,7 +191,17 @@ Recommended fields:
 - `currency`
 - `status` (`PENDING` | `SUCCESS` | `FAILED`)
 - `provider_reference_id` (Xendit `external_id`)
+- `subscription_id` (nullable reference to the subscription activated by the payment)
+- `checkout_url` (nullable stored Xendit hosted invoice URL)
+- `expires_at` (nullable invoice expiry timestamp)
 - `created_at`
+
+Behavior notes:
+
+- Pending transactions may be reused when the same user starts upgrade again before the invoice expires.
+- Expired pending transactions should not remain reusable.
+- Payment transactions are billing-event history only; they are not the source of truth for plan access.
+- Premium activation is derived from validated webhook outcomes, not from frontend redirect completion.
 
 ## OCR Confirmation Drafts
 

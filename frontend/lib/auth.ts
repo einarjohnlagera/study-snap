@@ -65,7 +65,7 @@ function emitAuthChangeEvent(): void {
   globalThis.dispatchEvent(new Event("studysnap-auth-change"));
 }
 
-function getSafeRedirectPath(path: string | null | undefined): string | null {
+export function getSafeRedirectPath(path: string | null | undefined): string | null {
   if (!path) {
     return null;
   }

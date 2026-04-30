@@ -62,6 +62,13 @@ import {
   COURSE_PROGRAM_SUGGESTIONS,
   mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
+import {
+  clearNoteUpgradeDraft,
+  loadNoteUpgradeDraft,
+  resolveNoteUpgradeDraftReturnPath,
+  saveNoteUpgradeDraft,
+  shouldRestoreNoteUpgradeDraft,
+} from "@/lib/note-upgrade-draft";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
 import { hasSeenTip, markTipSeen } from "@/lib/guidance";
 import {
@@ -115,6 +122,7 @@ const IMPORT_EMPTY_MESSAGE = "This file is empty or has no readable text.";
 const IMPORT_GENERIC_ERROR_MESSAGE = "We couldn’t extract text from this file. Try another image or file.";
 const IMPORT_UNSUPPORTED_FILE_MESSAGE = "Unsupported file type. Upload PNG, JPG, JPEG, WEBP, TXT, PDF, or DOCX.";
 const IMPORT_SCANNED_PDF_MESSAGE = "This PDF appears to be scanned or image-based. Please upload images for OCR instead.";
+const CHECKOUT_DRAFT_FALLBACK_MESSAGE = "We couldn't save your draft before checkout. Your note was preserved locally and will be restored when you return.";
 
 export function NoteEditorPageClient({
   noteId,
@@ -267,6 +275,21 @@ export function NoteEditorPageClient({
     setToastTone(tone);
     setToastMessage(message);
   }, []);
+
+  useEffect(() => {
+    if (isEditMode || !authUser?.id || !shouldRestoreNoteUpgradeDraft()) {
+      return;
+    }
+    const snapshot = loadNoteUpgradeDraft(authUser.id);
+    if (!snapshot) {
+      return;
+    }
+    setDraft(snapshot.draft);
+    setEntryOption(snapshot.entryOption);
+    setGenerateTopic(snapshot.generateTopic);
+    clearNoteUpgradeDraft(authUser.id);
+    showToast("Draft restored after returning from billing.", "info");
+  }, [authUser?.id, isEditMode, showToast]);
 
   const appendExtractedTextToContent = useCallback((extractedText: string) => {
     const normalized = extractedText.trim();
@@ -474,7 +497,7 @@ export function NoteEditorPageClient({
       return;
     }
     const timeoutId = globalThis.setTimeout(() => {
-      generatedContentSectionRef.current?.scrollIntoView({
+      generatedContentSectionRef.current?.scrollIntoView?.({
         behavior: "smooth",
         block: "start",
       });
@@ -599,6 +622,55 @@ export function NoteEditorPageClient({
     return saved;
   }, [buildRequest, contentEmpty, currentNoteId, showToast]);
 
+  const prepareUpgradeReturnUrl = useCallback(async () => {
+    const fallbackReturnPath = resolveNoteUpgradeDraftReturnPath();
+    const shouldPreserveDraft = draft.content.trim().length > 0
+      || draft.title.trim().length > 0
+      || draft.subject.trim().length > 0
+      || draft.courseProgram.trim().length > 0
+      || draft.tags.length > 0
+      || generateTopic.trim().length > 0
+      || entryOption !== "write";
+
+    if (!isEditMode && authUser?.id && shouldPreserveDraft) {
+      saveNoteUpgradeDraft(authUser.id, {
+        draft,
+        entryOption,
+        generateTopic,
+        savedAtMs: Date.now(),
+      });
+    }
+
+    if (draft.content.trim().length === 0) {
+      return !isEditMode && shouldPreserveDraft ? fallbackReturnPath : pathname;
+    }
+
+    try {
+      const saved = await upsertNote();
+      if (saved) {
+        if (authUser?.id) {
+          clearNoteUpgradeDraft(authUser.id);
+        }
+        return `/notes/${saved.id}/edit`;
+      }
+    } catch {
+      if (!isEditMode && authUser?.id && shouldPreserveDraft) {
+        showToast(CHECKOUT_DRAFT_FALLBACK_MESSAGE, "info");
+      }
+    }
+
+    return !isEditMode && shouldPreserveDraft ? fallbackReturnPath : pathname;
+  }, [
+    authUser?.id,
+    draft,
+    entryOption,
+    generateTopic,
+    isEditMode,
+    pathname,
+    showToast,
+    upsertNote,
+  ]);
+
   const handleSave = useCallback(async () => {
     if (isSaving || isGenerating || contentEmpty) {
       return;
@@ -617,6 +689,9 @@ export function NoteEditorPageClient({
         setFirstStudyStep("saved-note");
       }
       setSaveStateLabel("Saved");
+      if (authUser?.id) {
+        clearNoteUpgradeDraft(authUser.id);
+      }
       if (isEditMode) {
         router.push(`/notes/${saved.id}?saved=1`);
         return;
@@ -629,7 +704,7 @@ export function NoteEditorPageClient({
     } finally {
       setIsSaving(false);
     }
-  }, [contentEmpty, firstStudyStep, isEditMode, isGenerating, isSaving, router, showToast, upsertNote]);
+  }, [authUser?.id, contentEmpty, firstStudyStep, isEditMode, isGenerating, isSaving, router, showToast, upsertNote]);
 
   const handleCancel = useCallback(() => {
     const destinationNoteId = currentNoteId ?? noteId;
@@ -667,6 +742,9 @@ export function NoteEditorPageClient({
 
       const queued = await createStudyPackFromNote(saved.id);
       setStudyPackStatus(queued.studyPackStatus ?? "GENERATING");
+      if (authUser?.id) {
+        clearNoteUpgradeDraft(authUser.id);
+      }
       finalizeGenerationRedirect(saved.id);
     } catch (error) {
       if (isEmailNotVerifiedError(error)) {
@@ -694,6 +772,7 @@ export function NoteEditorPageClient({
     showToast,
     upsertNote,
     refreshUsageSummary,
+    authUser?.id,
   ]);
 
   const applySuggestions = useCallback(async (selection: AiSuggestionSelection) => {
@@ -1070,6 +1149,7 @@ export function NoteEditorPageClient({
           isOpen={showLimitReachedModal}
           variant="study-pack-limit"
           source="note_editor_study_pack_limit"
+          resolveReturnUrl={prepareUpgradeReturnUrl}
           onClose={() => setShowLimitReachedModal(false)}
         />
       ) : (
@@ -1086,6 +1166,7 @@ export function NoteEditorPageClient({
           isOpen={showNoteGenerationLimitModal}
           variant="note-generation-limit"
           source="note_editor_note_generation_limit"
+          resolveReturnUrl={prepareUpgradeReturnUrl}
           onClose={() => setShowNoteGenerationLimitModal(false)}
         />
       ) : (
@@ -1114,6 +1195,7 @@ export function NoteEditorPageClient({
           isOpen={showOcrLimitModal}
           variant="ocr-limit"
           source="note_editor_ocr_limit"
+          resolveReturnUrl={prepareUpgradeReturnUrl}
           onClose={() => setShowOcrLimitModal(false)}
         />
       ) : (

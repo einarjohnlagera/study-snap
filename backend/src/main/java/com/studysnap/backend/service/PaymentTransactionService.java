@@ -5,6 +5,7 @@ import com.studysnap.backend.entity.BillingType;
 import com.studysnap.backend.entity.PaymentTransactionEntity;
 import com.studysnap.backend.entity.PaymentTransactionStatus;
 import com.studysnap.backend.entity.PlanType;
+import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
@@ -31,6 +32,20 @@ public class PaymentTransactionService {
         return paymentTransactionRepository.findByProviderAndProviderReferenceId(provider, providerReferenceId);
     }
 
+    @Transactional(readOnly = true)
+    public Optional<PaymentTransactionEntity> findLatestPendingTransaction(
+            UUID userId,
+            BillingProvider provider,
+            PlanType planType
+    ) {
+        return paymentTransactionRepository.findFirstByUser_IdAndProviderAndPlanTypeAndStatusOrderByCreatedAtDesc(
+                userId,
+                provider,
+                planType,
+                PaymentTransactionStatus.PENDING
+        );
+    }
+
     public Optional<PaymentTransactionEntity> createPending(
             UUID userId,
             BillingProvider provider,
@@ -38,7 +53,9 @@ public class PaymentTransactionService {
             PlanType planType,
             BigDecimal amount,
             String currency,
-            String providerReferenceId
+            String providerReferenceId,
+            String checkoutUrl,
+            OffsetDateTime expiresAt
     ) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
@@ -53,6 +70,8 @@ public class PaymentTransactionService {
         transaction.setCurrency(normalizeCurrency(currency));
         transaction.setStatus(PaymentTransactionStatus.PENDING);
         transaction.setProviderReferenceId(providerReferenceId);
+        transaction.setCheckoutUrl(normalizeCheckoutUrl(checkoutUrl));
+        transaction.setExpiresAt(expiresAt);
         transaction.setCreatedAt(OffsetDateTime.now());
 
         try {
@@ -70,6 +89,14 @@ public class PaymentTransactionService {
                 });
     }
 
+    public void attachSubscription(UUID transactionId, SubscriptionEntity subscription) {
+        paymentTransactionRepository.findById(transactionId)
+                .ifPresent(transaction -> {
+                    transaction.setSubscription(subscription);
+                    paymentTransactionRepository.save(transaction);
+                });
+    }
+
     public void markFailed(UUID transactionId) {
         paymentTransactionRepository.findById(transactionId)
                 .ifPresent(transaction -> {
@@ -83,5 +110,13 @@ public class PaymentTransactionService {
             return "USD";
         }
         return rawCurrency.trim().toUpperCase();
+    }
+
+    private String normalizeCheckoutUrl(String rawCheckoutUrl) {
+        if (rawCheckoutUrl == null) {
+            return null;
+        }
+        String normalized = rawCheckoutUrl.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 }
