@@ -941,7 +941,7 @@ export default function OnboardingPage() {
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border/80 bg-muted/30 p-3 text-sm text-foreground/70">
-                    You&apos;ve reached your topic note generation limit for this billing cycle. Your limit resets on your next billing date.
+                    You&apos;ve reached your topic note generation limit for this billing cycle. Continue with Pro if you want more room to generate note drafts this month.
                   </div>
                 )
               ) : noteGenerationRemainingLabel ? (
@@ -1214,7 +1214,7 @@ export default function OnboardingPage() {
                 type="button"
                 className="min-h-12 text-base sm:min-w-40"
                 onClick={() => void handleGenerateNoteDraft()}
-                disabled={!canGenerateNoteDraft || hasReachedNoteGenerationLimit}
+                disabled={!canGenerateNoteDraft}
                 loading={isGeneratingNote}
                 loadingText="Generating..."
               >
@@ -1377,14 +1377,7 @@ export default function OnboardingPage() {
   return (
     <>
       {renderCardShell(renderStepContent(), renderFooterActions())}
-      {currentPlan === "FREE" ? (
-        <PaywallModal
-          isOpen={showNoteGenerationLimitModal}
-          variant="note-generation-limit"
-          source="onboarding_note_generation_limit"
-          onClose={() => setShowNoteGenerationLimitModal(false)}
-        />
-      ) : (
+      {currentPlan === "PRO" ? (
         <AppModal
           isOpen={showNoteGenerationLimitModal}
           title="Note generation limit reached"
@@ -1402,6 +1395,13 @@ export default function OnboardingPage() {
               </Button>
             </div>
           )}
+        />
+      ) : (
+        <PaywallModal
+          isOpen={showNoteGenerationLimitModal}
+          context={{ type: "GENERATE_NOTE_LIMIT" }}
+          source="onboarding_note_generation_limit"
+          onClose={() => setShowNoteGenerationLimitModal(false)}
         />
       )}
     </>

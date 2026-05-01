@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { BillingSuccessResume } from "./billing-success-resume";
 
 type BillingSuccessPageProps = {
   searchParams?: Promise<{
@@ -41,6 +42,11 @@ export default async function BillingSuccessPage({ searchParams }: Readonly<Bill
 
   return (
     <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-3xl items-center px-4 py-8 sm:px-6">
+      <BillingSuccessResume
+        fallbackReturnUrl={returnUrl}
+        shouldPreferDashboard={useDashboardPrimary}
+        selectedPlan={planLabel === "Plus" ? "PLUS" : "PRO"}
+      />
       <Card className="w-full space-y-6 p-6 sm:p-8">
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-600 dark:text-emerald-400">
@@ -56,6 +62,11 @@ export default async function BillingSuccessPage({ searchParams }: Readonly<Bill
           </p>
           <p className="text-xs text-foreground/60 sm:text-sm">
             Paid access is activated after payment confirmation. If your access does not update immediately, refresh after a few seconds.
+          </p>
+          <p className="text-xs text-foreground/60 sm:text-sm">
+            {useDashboardPrimary
+              ? "We&apos;ll take you to your dashboard in a moment."
+              : "We&apos;ll take you back so you can keep going right where you left off."}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">

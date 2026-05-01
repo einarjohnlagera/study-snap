@@ -29,6 +29,7 @@ Completed in `v0.11.0`:
 - Free / Plus / Pro multi-plan billing model replacing the legacy single-tier paid plan
 - Settings Plan & Billing redesign: billing cycle toggle + 3-column plan cards (Free, Plus, Pro)
 - pricing system unification through a shared frontend plan config used by landing, pricing, and settings surfaces
+- conversion-focused paywall redesign with context-aware copy, autosave-before-checkout, and resume-after-upgrade flow restoration
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard

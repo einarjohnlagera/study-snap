@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PaywallModal } from "./paywall-modal";
-import { createPremiumCheckoutSession } from "@/lib/api";
+import {
+  createPremiumCheckoutSession,
+  getBillingPricing,
+} from "@/lib/api";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
+import { loadPendingPaywallUpgradeContext } from "@/lib/paywall-upgrade-context";
 
 const pushMock = jest.fn();
 const requestEmailVerificationMock = jest.fn();
@@ -11,6 +15,7 @@ jest.mock("@/lib/api", () => ({
   createPremiumCheckoutSession: jest.fn().mockResolvedValue({
     checkoutUrl: "https://checkout.xendit.test/invoice_123",
   }),
+  getBillingPricing: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   trackAnalyticsEvent: jest.fn(),
   requestEmailVerification: (...args: unknown[]) => requestEmailVerificationMock(...args),
@@ -35,14 +40,61 @@ jest.mock("@/lib/checkout-redirect", () => ({
   redirectToCheckoutUrl: jest.fn(),
 }));
 
+const billingPricingFixture = {
+  region: "PH",
+  currency: "PHP",
+  plus: {
+    planType: "PLUS" as const,
+    monthly: {
+      amount: 179,
+      durationDays: 30,
+      introAmount: 149,
+      introEligible: true,
+      available: true,
+    },
+    yearly: {
+      amount: 1790,
+      durationDays: 365,
+      introAmount: null,
+      introEligible: false,
+      available: false,
+    },
+  },
+  pro: {
+    planType: "PRO" as const,
+    monthly: {
+      amount: 249,
+      durationDays: 30,
+      introAmount: 199,
+      introEligible: true,
+      available: true,
+    },
+    yearly: {
+      amount: 2490,
+      durationDays: 365,
+      introAmount: null,
+      introEligible: false,
+      available: false,
+    },
+  },
+};
+
 describe("PaywallModal", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/notes/note-1");
     pushMock.mockReset();
-    (redirectToCheckoutUrl as jest.Mock).mockReset();
     requestEmailVerificationMock.mockReset();
     getAuthUserMock.mockReset();
+    (redirectToCheckoutUrl as jest.Mock).mockReset();
+    (createPremiumCheckoutSession as jest.Mock).mockReset();
+    (getBillingPricing as jest.Mock).mockReset();
+    (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
+      checkoutUrl: "https://checkout.xendit.test/invoice_123",
+    });
+    (getBillingPricing as jest.Mock).mockResolvedValue(billingPricingFixture);
     getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
       emailVerifiedAt: "2026-03-24T00:00:00Z",
       profileType: "STUDENT",
     });
@@ -50,103 +102,78 @@ describe("PaywallModal", () => {
     window.sessionStorage.clear();
   });
 
-  it("renders the adaptive practice paywall copy", async () => {
+  it("renders context-aware adaptive practice copy with Plus and Pro plan cards", async () => {
     render(
       <PaywallModal
         isOpen
-        variant="adaptive-practice"
+        context={{ type: "ADAPTIVE_PRACTICE_LOCKED" }}
         source="test_source"
         onClose={jest.fn()}
       />,
     );
 
-    expect(await screen.findByText("Adaptive Practice is a Pro feature")).toBeInTheDocument();
-    expect(screen.getByText(/Adaptive Practice focuses on your weak concepts/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
+    expect(await screen.findByText("Unlock Adaptive Practice")).toBeInTheDocument();
+    expect(screen.getByText("Train on your weak concepts and improve faster with targeted quizzes.")).toBeInTheDocument();
+    expect(screen.getByText("Plus")).toBeInTheDocument();
+    expect(screen.getByText("Pro")).toBeInTheDocument();
+    expect(screen.getByText("Most popular")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Choose Plus" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue with Pro" })).toBeInTheDocument();
+    expect(screen.getByText("Access activates immediately after payment")).toBeInTheDocument();
+    expect(screen.getByText("No automatic charges. You control renewals.")).toBeInTheDocument();
   });
 
-  it("starts checkout when Go Pro is clicked", async () => {
+  it("saves the paywall upgrade context and starts checkout for Pro", async () => {
     render(
       <PaywallModal
         isOpen
-        variant="adaptive-practice"
+        context={{ type: "GENERATE_STUDY_PACK_LIMIT", noteId: "note-1" }}
         source="test_source"
         onClose={jest.fn()}
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Go Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue with Pro" }));
 
     await waitFor(() => {
       expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PRO", returnUrl: "/notes/note-1" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
+
+    expect(loadPendingPaywallUpgradeContext("user-1")).toMatchObject({
+      type: "GENERATE_STUDY_PACK_LIMIT",
+      lastAction: "GENERATE_STUDY_PACK",
+      noteId: "note-1",
+      returnPath: "/notes/note-1",
+      source: "test_source",
+    });
   });
 
-  it("reopens after dismissal when the user triggers the same gated action again", async () => {
-    const onClose = jest.fn();
-    const { rerender } = render(
-      <PaywallModal
-        isOpen
-        variant="difficulty-selection"
-        source="test_source"
-        onClose={onClose}
-      />,
-    );
-
-    fireEvent.click(await screen.findByRole("button", { name: "Maybe Later" }));
-
-    rerender(
-      <PaywallModal
-        isOpen
-        variant="difficulty-selection"
-        source="test_source"
-        onClose={onClose}
-      />,
-    );
-
-    expect(await screen.findByText("Difficulty Selection is a Pro feature")).toBeInTheDocument();
-  });
-
-  it("uses student-specific quiz limit copy", async () => {
-    render(
-      <PaywallModal
-        isOpen
-        variant="challenge-quiz-limit"
-        source="test_source"
-        onClose={jest.fn()}
-      />,
-    );
-
-    expect(await screen.findByText("You’ve reached your quiz limit")).toBeInTheDocument();
-    expect(
-      screen.getByText("You’ve used all your quizzes for this month. Choose Plus or go Pro to continue practicing and unlock higher limits."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Maybe Later" })).toBeInTheDocument();
-  });
-
-  it("uses board taker-specific quiz limit copy", async () => {
+  it("disables the Plus CTA when the current plan is already Plus", async () => {
     getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      planType: "PLUS",
       emailVerifiedAt: "2026-03-24T00:00:00Z",
-      profileType: "BOARD_EXAM",
+      profileType: "STUDENT",
     });
 
     render(
       <PaywallModal
         isOpen
-        variant="challenge-quiz-limit"
+        context={{ type: "GENERATE_NOTE_LIMIT" }}
         source="test_source"
         onClose={jest.fn()}
       />,
     );
 
-    expect(
-      await screen.findByText("You’ve used all your quizzes for this month. Go Pro to continue practicing and access Board Exam mode."),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Current plan" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Continue with Pro" })).toBeEnabled();
   });
 
   it("uses teacher-specific quiz generation copy", async () => {
     getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
       emailVerifiedAt: "2026-03-24T00:00:00Z",
       profileType: "TEACHER",
     });
@@ -160,13 +187,16 @@ describe("PaywallModal", () => {
       />,
     );
 
+    expect(await screen.findByText("You've reached your quiz generation limit")).toBeInTheDocument();
     expect(
-      await screen.findByText("You’ve used all your quiz generations for this month. Choose Plus or go Pro to generate more quizzes and export materials for your class."),
+      screen.getByText("Generate more quizzes and export-ready classroom materials without breaking your teaching flow."),
     ).toBeInTheDocument();
   });
 
-  it("shows the verification modal instead of routing when the user is unverified", async () => {
+  it("shows the verification modal instead of starting checkout for unverified users", async () => {
     getAuthUserMock.mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
       emailVerifiedAt: null,
       profileType: "STUDENT",
     });
@@ -177,16 +207,16 @@ describe("PaywallModal", () => {
     render(
       <PaywallModal
         isOpen
-        variant="adaptive-practice"
+        context={{ type: "ADAPTIVE_PRACTICE_LOCKED" }}
         source="test_source"
         onClose={jest.fn()}
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Go Pro" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Continue with Pro" }));
 
     expect(await screen.findByText("Verify your email first")).toBeInTheDocument();
-    expect(pushMock).not.toHaveBeenCalled();
+    expect(createPremiumCheckoutSession).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole("button", { name: "Resend verification email" }));
 

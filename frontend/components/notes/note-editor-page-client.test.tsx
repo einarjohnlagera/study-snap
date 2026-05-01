@@ -156,11 +156,40 @@ describe("NoteEditorPageClient", () => {
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
       currency: "PHP",
-      monthlyPrice: 249,
-      yearlyPrice: 1999,
-      introMonthlyPrice: 199,
-      hasIntroPromo: true,
-      introEligible: true,
+      plus: {
+        planType: "PLUS",
+        monthly: {
+          amount: 179,
+          durationDays: 30,
+          introAmount: 149,
+          introEligible: true,
+          available: true,
+        },
+        yearly: {
+          amount: 1790,
+          durationDays: 365,
+          introAmount: null,
+          introEligible: false,
+          available: false,
+        },
+      },
+      pro: {
+        planType: "PRO",
+        monthly: {
+          amount: 249,
+          durationDays: 30,
+          introAmount: 199,
+          introEligible: true,
+          available: true,
+        },
+        yearly: {
+          amount: 2490,
+          durationDays: 365,
+          introAmount: null,
+          introEligible: false,
+          available: false,
+        },
+      },
     });
     (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
       checkoutUrl: "https://checkout.xendit.test/invoice_123",
@@ -510,7 +539,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getAllByRole("button", { name: "Generate Again" })).toHaveLength(1);
   });
 
-  it("disables topic note generation at the free plan limit and opens the paywall", async () => {
+  it("keeps topic note generation clickable at the free plan limit and opens the paywall", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
@@ -546,13 +575,16 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), {
+      target: { value: "Photosynthesis" },
+    });
 
     expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Generate Note" })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
 
-    expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your note generation limit")).toBeInTheDocument();
   });
 
   it("uses the student generate label and helper text by default", async () => {
@@ -720,7 +752,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
-    expect(await screen.findByText("You’ve reached your study pack limit")).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your Study Pack limit")).toBeInTheDocument();
   });
 
   it("shows the exact remaining Study Pack count in the near-limit banner", async () => {
@@ -800,7 +832,7 @@ describe("NoteEditorPageClient", () => {
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalled();
-      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PLUS", returnUrl: "/notes/note-created/edit" });
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PLUS", returnUrl: "/notes/note-created?generate=1" });
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });
   });
@@ -1039,8 +1071,8 @@ describe("NoteEditorPageClient", () => {
     const file = new File(["img"], "note.png", { type: "image/png" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
 
-    expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
-    expect(screen.getByText(/You've reached your image-to-text limit for this month\./i)).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your OCR limit")).toBeInTheDocument();
+    expect(screen.getByText("Extract more text from images and files without retyping your notes.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
     await waitFor(() => {
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
