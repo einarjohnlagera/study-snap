@@ -150,7 +150,7 @@ Recommended fields:
 
 - `id`
 - `user_id`
-- `plan_type` (`FREE` | `PREMIUM`)
+- `plan_type` (`FREE` | `PLUS` | `PRO`)
 - `status`
 - `start_at`
 - `end_at` (nullable)
@@ -161,10 +161,97 @@ Recommended fields:
 
 Billing notes:
 
-- Active provider is currently `PAYMONGO` (provider-agnostic interface remains in backend).
-- Recurring cadence (`MONTHLY` vs `YEARLY`) is selected at checkout and mapped to external plan IDs.
-- Plan cadence IDs stay in configuration/environment (`PAYMONGO_MONTHLY_PLAN_ID`, `PAYMONGO_YEARLY_PLAN_ID`), not as a required schema change.
-- Webhook event idempotency is enforced through `payment_transactions(provider, provider_reference_id)` uniqueness.
+- Active provider is currently `XENDIT`.
+- Current paid-plan activation uses hosted invoice checkout and webhook-confirmed upgrades rather than recurring subscriptions.
+- Current manual-renewal model is `30`-day Monthly access for `PLUS` and `PRO`, plus `365`-day Annual access for `PRO`.
+- `subscriptions` is the only source of truth for plans and entitlements.
+- `users` must not store plan flags or plan state.
+- `subscriptions` stores full plan history; users may have multiple historical rows.
+- Only one `ACTIVE` subscription row should exist per user at a time.
+- The current plan is resolved from the active valid subscription row for that user.
+- A paid activation expires the currently active other-plan row when needed and creates a new active paid history row.
+- Manual renewals extend the active row when the purchased plan matches the current active paid plan.
+- `subscriptions` remains the place for future recurring billing, expiry logic, and provider-managed renewals.
+- Webhook event idempotency is enforced through persisted webhook events plus `payment_transactions(provider, provider_reference_id)` uniqueness.
+
+## Payment Transactions
+
+Purpose:
+
+- store hosted checkout attempts and webhook-resolved payment outcomes
+
+Recommended fields:
+
+- `id`
+- `user_id`
+- `provider` (`XENDIT`)
+- `billing_type` (`PREPAID`)
+- `plan_type` (`PLUS` | `PRO`)
+- `billing_cycle` (`MONTHLY` | `YEARLY`)
+- `original_amount`
+- `discount_amount`
+- `amount` (final charged amount)
+- `currency`
+- `status` (`PENDING` | `SUCCESS` | `FAILED`)
+- `provider_reference_id` (Xendit `external_id`)
+- `voucher_id` (nullable applied `discount_vouchers` reference)
+- `subscription_id` (nullable reference to the subscription activated by the payment)
+- `checkout_url` (nullable stored Xendit hosted invoice URL)
+- `expires_at` (nullable invoice expiry timestamp)
+- `created_at`
+
+Behavior notes:
+
+- Pending transactions may be reused when the same user starts upgrade again before the invoice expires.
+- Reuse requires matching plan, billing cycle, final amount, and voucher state.
+- Expired pending transactions should not remain reusable.
+- Payment transactions are billing-event history only; they are not the source of truth for plan access.
+- Paid-plan activation is derived from validated webhook outcomes, not from frontend redirect completion.
+
+## Discount Vouchers
+
+Purpose:
+
+- define automatic and code-based checkout discounts without hardcoding billing exceptions
+
+Key fields:
+
+- `id`
+- `code`
+- `discount_type` (`FIXED_AMOUNT` | `PERCENTAGE` | `OVERRIDE_PRICE`)
+- `discount_value`
+- `currency`
+- `billing_cycle_scope`
+- `plan_scope`
+- `region_scope`
+- `new_subscribers_only`
+- `requires_code`
+- `max_redemptions`
+- `valid_from`
+- `valid_until`
+- `is_active`
+
+## Voucher Redemptions
+
+Purpose:
+
+- preserve successful discount usage history without treating pending checkout as redeemed
+
+Key fields:
+
+- `id`
+- `voucher_id`
+- `user_id`
+- `subscription_id`
+- `payment_transaction_id`
+- `redeemed_at`
+- `applied_amount`
+- `currency`
+
+Behavior notes:
+
+- Voucher redemptions are created only after a validated `PAID` webhook.
+- `payment_transaction_id` should stay idempotent for webhook retries.
 
 ## OCR Confirmation Drafts
 

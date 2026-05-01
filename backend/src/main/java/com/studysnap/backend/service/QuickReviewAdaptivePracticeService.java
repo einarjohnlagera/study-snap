@@ -59,7 +59,7 @@ public class QuickReviewAdaptivePracticeService {
     private static final String ADAPTIVE_GENERATION_FAILED_CODE = "ADAPTIVE_QUIZ_GENERATION_FAILED";
     private static final String ADAPTIVE_GENERATION_FAILED_DETAIL = "Could not generate enough unique adaptive questions. Please try again.";
     private static final String PREMIUM_FEATURE_REQUIRED_CODE = "PREMIUM_FEATURE_REQUIRED";
-    private static final String PREMIUM_FEATURE_REQUIRED_MESSAGE = "Adaptive Practice is a Premium feature. Upgrade to Premium to continue.";
+    private static final String PREMIUM_FEATURE_REQUIRED_MESSAGE = "Adaptive Practice is a Pro feature. Upgrade to Pro to continue.";
     private static final String MONTHLY_LIMIT_REACHED_CODE = "MONTHLY_ADAPTIVE_PRACTICE_LIMIT_REACHED";
     private static final String MONTHLY_LIMIT_REACHED_MESSAGE = "You've reached your monthly Adaptive Practice limit.";
     private static final String INVALID_SESSION_RESULT_CODE = "INVALID_SESSION_RESULT";

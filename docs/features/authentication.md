@@ -30,7 +30,7 @@ Required endpoints:
   - confirm the user is now in NoteLib
   - explain the first-study-pack flow
   - link to `Dashboard`
-  - mention Free plan access plus Premium coming-soon positioning
+  - mention Free access plus available Plus / Pro upgrades
 - Welcome emails should be logged through `email_log` and must only send once per user.
 
 ## Session Behavior (Frontend)

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { PremiumWaitlistModal } from "@/components/billing/premium-waitlist-modal";
+import { Check, Sparkles } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { ThemeSelector } from "@/components/theme-selector";
 import { Button } from "@/components/ui/button";
@@ -13,30 +14,38 @@ import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   cancelPremiumSubscription,
+  createPremiumCheckoutSession,
   getBillingPricing,
   getBillingHistory,
   getMyPlan,
   getMe,
+  isEmailNotVerifiedError,
   logout,
+  trackAnalyticsEvent,
   updateEngagementMode,
   updateStudyReminders,
-  type BillingCycle,
   type BillingHistoryResponse,
   type BillingHistoryItemResponse,
   type BillingPricingResponse,
+  type BillingCycle,
   type CancelPremiumSubscriptionRequest,
   type EngagementMode,
   type MePlanResponse,
   type MeResponse,
   type SubscriptionCancellationReason,
 } from "@/lib/api";
-import { buildLoginPath, getAuthUser, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
-import { getBillingCyclePriceLabel } from "@/lib/billing-pricing";
+import { buildLoginPath, getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath, LOGIN_REASON_LOGGED_OUT } from "@/lib/auth";
+import { formatBillingAmount as formatPricingAmount, getBillingCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
+import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import {
   PLAN_BILLING_SECTION_ID,
+  getPlanDisplayName,
   getUsageProgressPercent,
+  isPaidPlanType,
 } from "@/lib/plans";
+import { PLANS, getPaidPlanCtaLabel } from "@/src/config/plans";
 
 function SettingsLoading() {
   return (
@@ -64,15 +73,11 @@ function UsageMetric({
   used,
   limit,
   resetDateLabel,
-  showUpgradeCta,
-  onUpgradeClick,
 }: Readonly<{
   label: string;
   used: number;
   limit: number;
   resetDateLabel: string;
-  showUpgradeCta: boolean;
-  onUpgradeClick: () => void;
 }>) {
   const progressPercent = getUsageProgressPercent(used, limit);
   const hasReachedLimit = limit > 0 && used >= limit;
@@ -92,18 +97,31 @@ function UsageMetric({
         />
       </div>
       {hasReachedLimit ? (
-        <div className="space-y-2">
-          <p className="text-xs text-foreground/70">
-            You&apos;ve reached your limit for this cycle. Limits reset on: {resetDateLabel}
-          </p>
-          {showUpgradeCta ? (
-            <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={onUpgradeClick}>
-              Upgrade to Premium
-            </Button>
-          ) : null}
-        </div>
+        <p className="text-xs text-foreground/70">
+          You&apos;ve reached your limit for this cycle. Limits reset on: {resetDateLabel}
+        </p>
       ) : null}
     </div>
+  );
+}
+
+function PlanFeatureList({
+  features,
+}: Readonly<{
+  features: ReadonlyArray<{ label: string; helper?: string }>;
+}>) {
+  return (
+    <ul className="mb-5 flex-1 space-y-2 text-sm text-foreground/80">
+      {features.map((feature) => (
+        <li key={feature.label} className="flex items-start gap-2">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+          <span>
+            {feature.label}
+            {feature.helper ? <span className="block text-xs text-foreground/50">{feature.helper}</span> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -121,6 +139,7 @@ const CANCELLATION_REASONS: Array<{
 ];
 
 export default function SettingsPage() {
+  const pathname = usePathname();
   const router = useRouter();
   const startRouteProgress = useRouteProgress();
   const [loading, setLoading] = useState(true);
@@ -130,8 +149,6 @@ export default function SettingsPage() {
   const [billingHistory, setBillingHistory] = useState<BillingHistoryResponse | null>(null);
   const [billingPricing, setBillingPricing] = useState<BillingPricingResponse | null>(null);
   const [signingOut, setSigningOut] = useState(false);
-  const [selectedBillingCycle, setSelectedBillingCycle] = useState<BillingCycle>("MONTHLY");
-  const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   const [selectedEngagementMode, setSelectedEngagementMode] = useState<EngagementMode>("FOCUSED");
   const [savingEngagementMode, setSavingEngagementMode] = useState(false);
   const [engagementModeMessage, setEngagementModeMessage] = useState<string | null>(null);
@@ -143,6 +160,10 @@ export default function SettingsPage() {
   const [selectedCancellationReason, setSelectedCancellationReason] = useState<SubscriptionCancellationReason | null>(null);
   const [cancellationFeedback, setCancellationFeedback] = useState("");
   const [cancellingSubscription, setCancellingSubscription] = useState(false);
+  const [startingCheckoutKey, setStartingCheckoutKey] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("MONTHLY");
+  const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
 
   const scrollToPlanBillingSection = useCallback(() => {
     if (globalThis.window === undefined) {
@@ -278,6 +299,46 @@ export default function SettingsPage() {
     }
   };
 
+  const handleStartCheckout = async (
+    planType: "PLUS" | "PRO",
+    billingCycle: BillingCycle = "MONTHLY",
+  ) => {
+    const authUser = getAuthUser();
+    if (authUser && !authUser.emailVerifiedAt) {
+      setVerifyEmailModalOpen(true);
+      return;
+    }
+
+    const checkoutKey = `${planType}-${billingCycle}`;
+    setStartingCheckoutKey(checkoutKey);
+    setCheckoutError(null);
+    try {
+      void trackAnalyticsEvent({
+        eventType: "UPGRADE_CLICKED",
+        metadata: {
+          source: "settings_plan_billing",
+          feature: `${planType.toLowerCase()}_checkout_${billingCycle.toLowerCase()}`,
+          path: pathname,
+          target: "xendit_checkout",
+        },
+      });
+      const response = await createPremiumCheckoutSession({
+        planType,
+        billingCycle,
+        returnUrl: getSafeRedirectPath(getCurrentPathWithQuery()),
+      });
+      redirectToCheckoutUrl(response.checkoutUrl);
+    } catch (error) {
+      if (isEmailNotVerifiedError(error)) {
+        setVerifyEmailModalOpen(true);
+      } else {
+        setCheckoutError(error instanceof Error ? error.message : "Could not start checkout. Please try again.");
+      }
+    } finally {
+      setStartingCheckoutKey(null);
+    }
+  };
+
   const handleOpenCancellationModal = () => {
     setSelectedCancellationReason(null);
     setCancellationFeedback("");
@@ -332,7 +393,7 @@ export default function SettingsPage() {
     }
   };
 
-  const isPremiumPlan = profile?.planType === "PREMIUM";
+  const currentPlan = usageSummary?.plan ?? profile?.planType ?? "FREE";
   const isCancellationScheduled = Boolean(
     billingHistory?.cancelAtPeriodEnd ?? (profile?.subscription.cancelAtPeriodEnd && profile.subscription.premiumEndsAt),
   );
@@ -342,10 +403,37 @@ export default function SettingsPage() {
   const challengeQuizLimit = usageSummary?.limits.challengeQuizzesPerMonth ?? 0;
   const adaptivePracticeUsed = usageSummary?.usage.adaptivePracticeUsed ?? 0;
   const adaptivePracticeLimit = usageSummary?.limits.adaptivePracticePerMonth ?? 0;
+  const exportsUsed = usageSummary?.usage.exportsUsed ?? 0;
+  const exportsLimit = usageSummary?.limits.exportsPerMonth ?? null;
   const difficultySelectionAvailable = usageSummary?.features.difficultySelectionAvailable ?? false;
-  const monthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "MONTHLY");
-  const yearlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "YEARLY");
+  const plusMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY");
+  const proMonthlyPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY");
+  const proAnnualPriceLabel = getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY");
+  const plusAnnualPricing = resolveCyclePricing(billingPricing, "PLUS", "YEARLY");
+  const proAnnualPricing = resolveCyclePricing(billingPricing, "PRO", "YEARLY");
   const billingTransactions = billingHistory?.transactions ?? [];
+
+  const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
+  const annualAvailableForPro = proAnnualPricing?.available ?? (pricingConfig.price[displayRegion].pro.yearly !== null);
+  const annualAvailableForPlus = plusAnnualPricing?.available ?? (pricingConfig.price[displayRegion].plus.yearly !== null);
+  const hasAnnualOption = annualAvailableForPro || annualAvailableForPlus;
+  const freePlanConfig = PLANS.FREE;
+  const plusPlanConfig = PLANS.PLUS;
+  const proPlanConfig = PLANS.PRO;
+  const proYearlySavingsPct = (() => {
+    const monthly = billingPricing?.pro.monthly.amount ?? pricingConfig.price[displayRegion].pro.monthly;
+    const yearly = billingPricing?.pro.yearly.amount ?? pricingConfig.price[displayRegion].pro.yearly;
+    if (!yearly || !monthly) return null;
+    return Math.round((1 - yearly / (monthly * 12)) * 100);
+  })();
+  const proAnnualLabelForDisplay = (() => {
+    if (proAnnualPricing?.available) return proAnnualPriceLabel;
+    const yearly = pricingConfig.price[displayRegion].pro.yearly;
+    if (!yearly) return null;
+    return `${formatPricingAmount(yearly, pricingConfig.price[displayRegion].currency)}/year`;
+  })();
+  const effectivePlusCycle: BillingCycle = "MONTHLY";
+  const effectiveProCycle: BillingCycle = selectedCycle === "YEARLY" && annualAvailableForPro ? "YEARLY" : "MONTHLY";
 
   const formatBillingDate = (rawDate: string | null) => {
     if (!rawDate) {
@@ -408,13 +496,10 @@ export default function SettingsPage() {
     }
   };
 
-  const subscriptionSummaryPlan = billingHistory?.currentPlan ?? profile?.planType ?? "FREE";
+  const subscriptionSummaryPlan = billingHistory?.currentPlan ?? currentPlan;
   const subscriptionSummaryStatus = (() => {
-    if (subscriptionSummaryPlan !== "PREMIUM") {
+    if (!isPaidPlanType(subscriptionSummaryPlan)) {
       return "Free plan";
-    }
-    if (billingHistory?.cancelAtPeriodEnd) {
-      return "Cancels at period end";
     }
     if (billingHistory?.subscriptionStatus === "ACTIVE") {
       return "Active";
@@ -425,17 +510,15 @@ export default function SettingsPage() {
     if (billingHistory?.subscriptionStatus === "CANCELED") {
       return "Canceled";
     }
-    return "Premium";
+    return `${getPlanDisplayName(subscriptionSummaryPlan)} plan`;
   })();
-  const subscriptionSummaryDate = billingHistory?.cancelAtPeriodEnd
-    ? billingHistory.cancellationEffectiveAt ?? billingHistory.currentPeriodEnd
-    : billingHistory?.currentPeriodEnd;
+  const subscriptionSummaryDate = billingHistory?.currentPeriodEnd;
   const subscriptionSummaryDateLabel =
-    subscriptionSummaryPlan === "PREMIUM" ? (billingHistory?.cancelAtPeriodEnd ? "Ends on" : "Renews on") : "Status";
-  const subscriptionBillingCycleLabel = billingHistory?.billingType
-    ? billingHistory.billingType === "YEARLY"
-      ? "Yearly"
-      : "Monthly"
+    isPaidPlanType(subscriptionSummaryPlan)
+      ? "Valid until"
+      : "Status";
+  const subscriptionBillingCycleLabel = isPaidPlanType(subscriptionSummaryPlan)
+    ? `${billingHistory?.billingType === "YEARLY" ? "Yearly" : "Monthly"} · Manual renewal`
     : "—";
   const usageResetDateLabel = formatUsageResetDate(usageSummary?.usageCycle?.endsAt);
 
@@ -603,146 +686,208 @@ export default function SettingsPage() {
 
           <Card id={PLAN_BILLING_SECTION_ID} className="scroll-mt-24 space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Plan &amp; Billing</h2>
-            <div className="space-y-4 rounded-md border border-border bg-background p-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current Plan</p>
-                <p className="mt-2 inline-flex rounded-full border border-border px-3 py-1 text-sm font-semibold">
-                  {profile.planType}
-                </p>
+
+            {/* Monthly Usage */}
+            <div className="space-y-2 rounded-md border border-border bg-background p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
+              <p className="text-xs text-foreground/60">Usage resets on: {usageResetDateLabel}</p>
+              <div className="space-y-3">
+                <UsageMetric
+                  label="Study Packs"
+                  used={studyPacksUsed}
+                  limit={studyPacksLimit}
+                  resetDateLabel={usageResetDateLabel}
+                />
+                <UsageMetric
+                  label="Quiz"
+                  used={challengeQuizUsed}
+                  limit={challengeQuizLimit}
+                  resetDateLabel={usageResetDateLabel}
+                />
+                {exportsLimit !== null && exportsLimit !== undefined ? (
+                  <UsageMetric
+                    label="Exports"
+                    used={exportsUsed}
+                    limit={exportsLimit}
+                    resetDateLabel={usageResetDateLabel}
+                  />
+                ) : null}
+                {adaptivePracticeLimit > 0 ? (
+                  <UsageMetric
+                    label="Adaptive Practice"
+                    used={adaptivePracticeUsed}
+                    limit={adaptivePracticeLimit}
+                    resetDateLabel={usageResetDateLabel}
+                  />
+                ) : null}
               </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Monthly Usage</p>
-                <p className="text-xs text-foreground/60">Usage resets on: {usageResetDateLabel}</p>
-                <div className="space-y-3">
-                  <UsageMetric
-                    label="Study Packs"
-                    used={studyPacksUsed}
-                    limit={studyPacksLimit}
-                    resetDateLabel={usageResetDateLabel}
-                    showUpgradeCta={!isPremiumPlan}
-                    onUpgradeClick={() => setIsWaitlistModalOpen(true)}
-                  />
-                  <UsageMetric
-                    label="Quiz"
-                    used={challengeQuizUsed}
-                    limit={challengeQuizLimit}
-                    resetDateLabel={usageResetDateLabel}
-                    showUpgradeCta={!isPremiumPlan}
-                    onUpgradeClick={() => setIsWaitlistModalOpen(true)}
-                  />
-                  {isPremiumPlan ? (
-                    <UsageMetric
-                      label="Adaptive Practice"
-                      used={adaptivePracticeUsed}
-                      limit={adaptivePracticeLimit}
-                      resetDateLabel={usageResetDateLabel}
-                      showUpgradeCta={false}
-                      onUpgradeClick={() => {}}
-                    />
+            </div>
+
+            {/* Plan Cards */}
+            <div className="space-y-4 rounded-md border border-border bg-background p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Choose Your Plan</p>
+                {hasAnnualOption ? (
+                  <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCycle("MONTHLY")}
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                        selectedCycle === "MONTHLY"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-foreground/60 hover:text-foreground"
+                      }`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCycle("YEARLY")}
+                      className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                        selectedCycle === "YEARLY"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-foreground/60 hover:text-foreground"
+                      }`}
+                    >
+                      Annual
+                      {proYearlySavingsPct ? (
+                        <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                          Save {proYearlySavingsPct}%
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                {/* Free card */}
+                <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "FREE" ? "border-blue-300 bg-blue-50/20 dark:border-blue-700 dark:bg-blue-950/10" : "border-border bg-muted/20"}`}>
+                  <div className="mb-4 space-y-2">
+                    {currentPlan === "FREE" ? (
+                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        Current plan
+                      </span>
+                    ) : null}
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlanConfig.name}</p>
+                    <p className="text-2xl font-bold">{freePlanConfig.title}</p>
+                    <p className="text-sm leading-snug text-foreground/70">{freePlanConfig.description}</p>
+                  </div>
+                  <PlanFeatureList features={freePlanConfig.features} />
+                  {currentPlan === "FREE" ? (
+                    <Button variant="outline" className="w-full" disabled>Current Plan</Button>
                   ) : null}
                 </div>
-              </div>
-              {isPremiumPlan ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Features</p>
-                  <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                    <li>Weak concepts visible</li>
-                    <li>Adaptive Practice available</li>
-                    <li>{adaptivePracticeLimit} Adaptive Practice sessions per month</li>
-                    <li>{difficultySelectionAvailable ? "Difficulty selection enabled" : "Difficulty selection locked"}</li>
-                    <li>Higher limits</li>
-                    <li>Priority AI enabled</li>
-                  </ul>
-                </div>
-              ) : (
-                <div className="space-y-4 rounded-md border border-border bg-background p-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free Features</p>
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                      <li>Save unlimited notes</li>
-                      <li>{studyPacksLimit} Study Packs per month</li>
-                      <li>Quick Review</li>
-                      <li>{challengeQuizLimit} Quizzes per month</li>
-                      <li>Weak concepts visible</li>
-                      <li>File uploads available</li>
-                      <li>Image to Text (OCR) - Limited</li>
-                      <li>Public Library access</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium Features</p>
-                    <ul className="list-disc space-y-1 pl-5 text-sm text-foreground/80">
-                      <li>Higher monthly limits</li>
-                      <li>Adaptive Practice</li>
-                      <li>Difficulty selection</li>
-                      <li>Higher OCR limits</li>
-                      <li>Priority AI</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Billing Cycle</p>
-                    {billingPricing ? (
-                      <p className="text-xs text-foreground/60">
-                        Regional pricing: {billingPricing.region} · {billingPricing.currency}
-                      </p>
+
+                {/* Plus card */}
+                <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "PLUS" ? "border-blue-300 bg-blue-50/30 dark:border-blue-700 dark:bg-blue-950/15" : "border-border bg-background"}`}>
+                  <div className="mb-4 space-y-2">
+                    {currentPlan === "PLUS" ? (
+                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        Current plan
+                      </span>
                     ) : null}
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBillingCycle("MONTHLY")}
-                        className={`rounded-md border p-3 text-left text-sm transition ${
-                          selectedBillingCycle === "MONTHLY"
-                            ? "border-blue-500 bg-blue-500/5"
-                            : "border-border bg-background"
-                        }`}
-                      >
-                        <p className="font-medium">Monthly</p>
-                        <p className="text-xs text-foreground/60">{monthlyPriceLabel}</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBillingCycle("YEARLY")}
-                        className={`rounded-md border p-3 text-left text-sm transition ${
-                          selectedBillingCycle === "YEARLY"
-                            ? "border-blue-500 bg-blue-500/5"
-                            : "border-border bg-background"
-                        }`}
-                      >
-                        <p className="font-medium">Yearly</p>
-                        <p className="text-xs text-foreground/60">{yearlyPriceLabel}</p>
-                      </button>
-                    </div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{plusPlanConfig.name}</p>
+                    <p className="text-lg font-semibold text-foreground">{plusPlanConfig.title}</p>
+                    <p className="text-sm leading-snug text-foreground/70">{plusPlanConfig.description}</p>
+                    <p className="text-xl font-semibold">{plusMonthlyPriceLabel}</p>
+                    {selectedCycle === "YEARLY" && !annualAvailableForPlus ? (
+                      <p className="text-xs text-foreground/50">Monthly billing only</p>
+                    ) : null}
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <ResponsiveActionButton
-                      type="button"
-                      className="w-full sm:w-auto"
-                      onClick={() => setIsWaitlistModalOpen(true)}
-                      action="studyPack"
-                      label="Upgrade to Premium"
-                    />
+                  <PlanFeatureList features={plusPlanConfig.features} />
+                  <p className="mb-5 text-xs text-foreground/55">{plusPlanConfig.adaptivePracticeMessage}</p>
+                  <div className="space-y-2">
+                    {currentPlan === "FREE" ? (
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("PLUS", effectivePlusCycle)}
+                        loading={startingCheckoutKey === `PLUS-${effectivePlusCycle}`}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label={getPaidPlanCtaLabel("PLUS")}
+                      />
+                    ) : currentPlan === "PLUS" ? (
+                      <>
+                        <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                        {!isCancellationScheduled ? (
+                          <button
+                            type="button"
+                            className="w-full text-center text-xs text-foreground/50 transition-colors hover:text-foreground/70"
+                            onClick={handleOpenCancellationModal}
+                          >
+                            Cancel plan
+                          </button>
+                        ) : (
+                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">Cancellation scheduled</p>
+                        )}
+                      </>
+                    ) : null}
                   </div>
                 </div>
-              )}
-              {isPremiumPlan && !isCancellationScheduled ? (
-                <div className="rounded-md border border-border bg-background p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">Cancel Subscription</p>
-                      <p className="text-xs text-foreground/70">
-                        Premium stays active until the end of your current billing period.
-                      </p>
-                    </div>
-                    <ResponsiveActionButton
-                      type="button"
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={handleOpenCancellationModal}
-                      action="delete"
-                      label="Cancel Subscription"
-                    />
+
+                {/* Pro card */}
+                <div className={`flex flex-col rounded-lg border p-4 ${currentPlan === "PRO" ? "border-blue-400 bg-blue-50/40 dark:border-blue-600 dark:bg-blue-950/20" : "border-blue-200 bg-blue-50/20 dark:border-blue-800/60 dark:bg-blue-950/10"}`}>
+                  <div className="mb-4 space-y-2">
+                    {currentPlan === "PRO" ? (
+                      <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        Current plan
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                        <Sparkles className="h-3 w-3" aria-hidden="true" />
+                        {proPlanConfig.eyebrow}
+                      </span>
+                    )}
+                    <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{proPlanConfig.name}</p>
+                    <p className="text-lg font-semibold text-foreground">{proPlanConfig.title}</p>
+                    <p className="text-sm leading-snug text-foreground/70">{proPlanConfig.description}</p>
+                    <p className="text-xl font-semibold">
+                      {selectedCycle === "YEARLY" && annualAvailableForPro
+                        ? (proAnnualLabelForDisplay ?? proMonthlyPriceLabel)
+                        : proMonthlyPriceLabel}
+                    </p>
+                  </div>
+                  <PlanFeatureList features={proPlanConfig.features} />
+                  <p className="mb-5 text-xs text-foreground/55">{proPlanConfig.adaptivePracticeMessage}</p>
+                  <div className="space-y-2">
+                    {currentPlan !== "PRO" ? (
+                      <ResponsiveActionButton
+                        type="button"
+                        className="w-full"
+                        onClick={() => void handleStartCheckout("PRO", effectiveProCycle)}
+                        loading={startingCheckoutKey === `PRO-${effectiveProCycle}`}
+                        loadingText="Redirecting..."
+                        action="studyPack"
+                        label={getPaidPlanCtaLabel("PRO")}
+                      />
+                    ) : (
+                      <>
+                        <Button variant="outline" className="w-full" disabled>Current Plan</Button>
+                        {!isCancellationScheduled ? (
+                          <button
+                            type="button"
+                            className="w-full text-center text-xs text-foreground/50 transition-colors hover:text-foreground/70"
+                            onClick={handleOpenCancellationModal}
+                          >
+                            Cancel plan
+                          </button>
+                        ) : (
+                          <p className="text-center text-xs text-amber-600 dark:text-amber-400">Cancellation scheduled</p>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-foreground/60">
+                Hosted checkout via Xendit. Access activates after payment confirmation. Manual renewal.
+                {billingPricing ? <span> · {billingPricing.region} · {billingPricing.currency}</span> : null}
+              </div>
+              {checkoutError ? (
+                <p className="text-xs text-red-600 dark:text-red-300">{checkoutError}</p>
               ) : null}
             </div>
 
@@ -757,7 +902,7 @@ export default function SettingsPage() {
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Current plan</p>
                     <p className="text-sm font-medium text-foreground">
-                      {subscriptionSummaryPlan === "PREMIUM" ? "Premium" : "Free"}
+                      {getPlanDisplayName(subscriptionSummaryPlan)}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -769,8 +914,8 @@ export default function SettingsPage() {
                       {subscriptionSummaryDateLabel}
                     </p>
                     <p className="text-sm font-medium text-foreground">
-                      {subscriptionSummaryPlan === "PREMIUM"
-                        ? formatBillingDate(subscriptionSummaryDate ?? null)
+                      {isPaidPlanType(subscriptionSummaryPlan)
+                        ? (subscriptionSummaryDate ? formatBillingDate(subscriptionSummaryDate) : "Manual renewal")
                         : "No active subscription"}
                     </p>
                   </div>
@@ -780,22 +925,15 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {billingHistory?.cancelAtPeriodEnd ? (
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-4">
-                    <p className="text-sm font-medium text-foreground">
-                      Your Premium plan will end on {formatBillingDate(subscriptionSummaryDate ?? null)} and will not renew.
-                    </p>
-                    <p className="mt-1 text-xs text-foreground/70">
-                      Your notes and Study Packs will remain in your library.
-                    </p>
-                  </div>
-                ) : subscriptionSummaryPlan === "PREMIUM" ? (
+                {isPaidPlanType(subscriptionSummaryPlan) ? (
                   <p className="text-sm text-foreground/75">
-                    Your Premium plan renews on {formatBillingDate(subscriptionSummaryDate ?? null)}.
+                    {subscriptionSummaryDate
+                      ? `Your ${getPlanDisplayName(subscriptionSummaryPlan)} access is active until ${formatBillingDate(subscriptionSummaryDate)}. Renew manually whenever you're ready.`
+                      : `Your ${getPlanDisplayName(subscriptionSummaryPlan)} access is active. Renewal is manual in the current billing model.`}
                   </p>
                 ) : (
                   <p className="text-sm text-foreground/75">
-                    Your payment history will appear here once you subscribe to Premium.
+                    Your payment history will appear here once you subscribe to a paid plan.
                   </p>
                 )}
               </div>
@@ -806,7 +944,7 @@ export default function SettingsPage() {
                   <div className="rounded-md border border-dashed border-border p-4 text-sm">
                     <p className="font-medium text-foreground">No billing history yet</p>
                     <p className="mt-1 text-foreground/70">
-                      Your payment history will appear here once you subscribe to Premium.
+                      Your payment history will appear here once you subscribe to Plus or Pro.
                     </p>
                   </div>
                 ) : (
@@ -894,8 +1032,8 @@ export default function SettingsPage() {
       ) : null}
       <AppModal
         isOpen={isCancellationModalOpen}
-        title="Cancel Premium?"
-        description="Your Premium access will remain active until the end of your current billing period. After that, your account will return to the Free plan. Your notes and Study Packs will remain in your library."
+        title={`Cancel ${getPlanDisplayName(currentPlan)}?`}
+        description={`Your ${getPlanDisplayName(currentPlan)} access will remain active until the end of your current billing period. After that, your account will return to the Free plan. Your notes and Study Packs will remain in your library.`}
         onClose={handleCloseCancellationModal}
         panelClassName="max-w-[560px]"
         actions={(
@@ -907,7 +1045,7 @@ export default function SettingsPage() {
               onClick={handleCloseCancellationModal}
               disabled={cancellingSubscription}
               action="back"
-              label="Keep Premium"
+              label={`Keep ${getPlanDisplayName(currentPlan)}`}
               showTextOnMobile
             />
             <ResponsiveActionButton
@@ -956,11 +1094,9 @@ export default function SettingsPage() {
           </label>
         </div>
       </AppModal>
-      <PremiumWaitlistModal
-        isOpen={isWaitlistModalOpen}
-        onClose={() => setIsWaitlistModalOpen(false)}
-        source="settings_plan_billing"
-        feature={selectedBillingCycle.toLowerCase()}
+      <VerifyEmailRequiredModal
+        isOpen={verifyEmailModalOpen}
+        onClose={() => setVerifyEmailModalOpen(false)}
       />
     </main>
   );

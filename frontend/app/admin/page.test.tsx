@@ -97,7 +97,7 @@ describe("AdminPage", () => {
           subscriptionId: "sub-1",
           userEmail: "[email protected]",
           billingCycle: "MONTHLY",
-          provider: "PAYMONGO",
+          provider: "XENDIT",
           cancelAtPeriodEnd: false,
           startedAt: "2026-03-20T00:00:00Z",
         },
@@ -108,7 +108,7 @@ describe("AdminPage", () => {
           userEmail: "[email protected]",
           amount: 249,
           currency: "PHP",
-          provider: "PAYMONGO",
+          provider: "XENDIT",
           createdAt: "2026-03-21T00:00:00Z",
         },
       ],
@@ -128,7 +128,7 @@ describe("AdminPage", () => {
 
     expect(await screen.findByText("Admin Dashboard")).toBeInTheDocument();
     expect(await screen.findByText("Cell Structure")).toBeInTheDocument();
-    expect(screen.getByText("Premium Waitlist")).toBeInTheDocument();
+    expect(screen.getByText("Legacy Upgrade Waitlist")).toBeInTheDocument();
     expect(screen.getByText("Total Users")).toBeInTheDocument();
     expect(screen.getAllByText("120")).toHaveLength(2);
     expect(screen.getByText("Most Viewed Public Notes")).toBeInTheDocument();

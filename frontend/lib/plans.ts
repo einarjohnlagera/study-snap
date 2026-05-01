@@ -64,9 +64,28 @@ export function shouldShowNearStudyPackLimitBanner(
   planType: PlanType,
   remainingCredits: number | null | undefined,
 ): boolean {
-  return (planType === "FREE" || planType === "PREMIUM")
+  return (planType === "FREE" || planType === "PLUS" || planType === "PRO")
     && typeof remainingCredits === "number"
     && remainingCredits <= 2;
+}
+
+export function isPaidPlanType(planType: PlanType | null | undefined): planType is "PLUS" | "PRO" {
+  return planType === "PLUS" || planType === "PRO";
+}
+
+export function isProPlanType(planType: PlanType | null | undefined): planType is "PRO" {
+  return planType === "PRO";
+}
+
+export function getPlanDisplayName(planType: PlanType | null | undefined): string {
+  switch (planType) {
+    case "PLUS":
+      return "Plus";
+    case "PRO":
+      return "Pro";
+    default:
+      return "Free";
+  }
 }
 
 export function formatStudyPackResetDate(rawDate: string | null | undefined): string {
@@ -84,7 +103,7 @@ export function isStudyPackLimitReachedMessage(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
     (normalized.includes("free plan limit") && normalized.includes("study pack"))
-    || (normalized.includes("study pack limit") && normalized.includes("upgrade to premium"))
+    || (normalized.includes("study pack limit") && normalized.includes("upgrade"))
     || normalized.includes("study pack generations per month")
   );
 }

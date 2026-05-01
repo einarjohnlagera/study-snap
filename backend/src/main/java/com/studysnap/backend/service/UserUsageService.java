@@ -26,7 +26,8 @@ public class UserUsageService {
                         usage.getChallengeQuizGenerations(),
                         usage.getAdaptiveQuizGenerations(),
                         usage.getOcrExtractions(),
-                        usage.getNoteGenerations()
+                        usage.getNoteGenerations(),
+                        usage.getExportsCount()
                 ))
                 .orElse(MonthlyUsage.zero(usagePeriod.periodStart(), usagePeriod.periodEnd()));
     }
@@ -40,6 +41,7 @@ public class UserUsageService {
                 usagePeriod.month(),
                 usagePeriod.periodStart(),
                 usagePeriod.periodEnd(),
+                0,
                 0,
                 0,
                 0,
@@ -74,6 +76,11 @@ public class UserUsageService {
         increment(userId, occurredAt, 0, 0, 0, 0, 1);
     }
 
+    @Transactional
+    public void incrementExport(UUID userId, OffsetDateTime occurredAt) {
+        increment(userId, occurredAt, 0, 0, 0, 0, 0, 1);
+    }
+
     private void increment(
             UUID userId,
             OffsetDateTime occurredAt,
@@ -93,6 +100,19 @@ public class UserUsageService {
             int ocrDelta,
             int noteGenerationDelta
     ) {
+        increment(userId, occurredAt, studyPackDelta, challengeDelta, adaptiveDelta, ocrDelta, noteGenerationDelta, 0);
+    }
+
+    private void increment(
+            UUID userId,
+            OffsetDateTime occurredAt,
+            int studyPackDelta,
+            int challengeDelta,
+            int adaptiveDelta,
+            int ocrDelta,
+            int noteGenerationDelta,
+            int exportDelta
+    ) {
         BillingUsagePeriodService.UsagePeriod usagePeriod = billingUsagePeriodService.resolveUsagePeriod(userId, occurredAt);
         userUsageRepository.incrementUsage(
                 userId,
@@ -105,6 +125,7 @@ public class UserUsageService {
                 adaptiveDelta,
                 ocrDelta,
                 noteGenerationDelta,
+                exportDelta,
                 OffsetDateTime.now(ZoneOffset.UTC)
         );
     }
@@ -116,15 +137,16 @@ public class UserUsageService {
             int challengeQuizGenerations,
             int adaptiveQuizGenerations,
             int ocrExtractions,
-            int noteGenerations
+            int noteGenerations,
+            int exportsCount
     ) {
         public static MonthlyUsage zero() {
             OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-            return new MonthlyUsage(now, now, 0, 0, 0, 0, 0);
+            return new MonthlyUsage(now, now, 0, 0, 0, 0, 0, 0);
         }
 
         public static MonthlyUsage zero(OffsetDateTime periodStart, OffsetDateTime periodEnd) {
-            return new MonthlyUsage(periodStart, periodEnd, 0, 0, 0, 0, 0);
+            return new MonthlyUsage(periodStart, periodEnd, 0, 0, 0, 0, 0, 0);
         }
     }
 }

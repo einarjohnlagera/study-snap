@@ -24,13 +24,13 @@ public class SubscriptionExpiryJob {
     @Scheduled(cron = "0 30 2 * * *")
     public void run() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        List<SubscriptionEntity> expiredPremiumSubscriptions = subscriptionRepository.findByPlanTypeAndStatusAndEndAtBefore(
-                PlanType.PREMIUM,
+        List<SubscriptionEntity> expiredPaidSubscriptions = subscriptionRepository.findByPlanTypeInAndStatusAndEndAtBefore(
+                List.of(PlanType.PLUS, PlanType.PRO),
                 SubscriptionStatus.ACTIVE,
                 now
         );
 
-        for (SubscriptionEntity subscription : expiredPremiumSubscriptions) {
+        for (SubscriptionEntity subscription : expiredPaidSubscriptions) {
             subscriptionService.expireSubscriptionAndDowngradeToFree(subscription.getId());
             log.info(
                     "billing.subscription.expiry downgraded userId={} subscriptionId={} endAt={}",

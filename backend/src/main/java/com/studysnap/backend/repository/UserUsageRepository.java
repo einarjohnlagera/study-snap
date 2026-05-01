@@ -28,6 +28,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 adaptive_quiz_generations,
                 ocr_extractions,
                 note_generations,
+                exports_count,
                 created_at
             )
             VALUES (
@@ -42,6 +43,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 :adaptiveDelta,
                 :ocrDelta,
                 :noteGenerationDelta,
+                :exportDelta,
                 :createdAt
             )
             ON CONFLICT (user_id, period_start)
@@ -51,7 +53,8 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
                 challenge_quiz_generations = user_usage.challenge_quiz_generations + EXCLUDED.challenge_quiz_generations,
                 adaptive_quiz_generations = user_usage.adaptive_quiz_generations + EXCLUDED.adaptive_quiz_generations,
                 ocr_extractions = user_usage.ocr_extractions + EXCLUDED.ocr_extractions,
-                note_generations = user_usage.note_generations + EXCLUDED.note_generations
+                note_generations = user_usage.note_generations + EXCLUDED.note_generations,
+                exports_count = user_usage.exports_count + EXCLUDED.exports_count
             """, nativeQuery = true)
     int incrementUsage(
             @Param("userId") UUID userId,
@@ -64,6 +67,7 @@ public interface UserUsageRepository extends JpaRepository<UserUsageEntity, UUID
             @Param("adaptiveDelta") Integer adaptiveDelta,
             @Param("ocrDelta") Integer ocrDelta,
             @Param("noteGenerationDelta") Integer noteGenerationDelta,
+            @Param("exportDelta") Integer exportDelta,
             @Param("createdAt") OffsetDateTime createdAt
     );
 }

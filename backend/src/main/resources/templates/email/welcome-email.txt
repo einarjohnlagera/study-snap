@@ -17,17 +17,23 @@ Here's how to get started:
 You can start here:
 {{dashboard_url}}
 
-Free Plan includes:
+Free includes:
 - 10 Study Packs per month
 - Quick Review
 - Challenge Quiz (limited per month)
 - Public Library access
 
-Premium includes:
+Plus adds:
+- Higher monthly limits
+- More exports
+- More topic note generations
+
+Pro adds:
 - Adaptive Practice
 - Weak Concept Training
 - Difficulty Selection
-- Higher monthly limits
+- Board Exam Mode
+- Highest monthly limits
 
 — NoteLib
 Turn Notes Into Quizzes

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,11 +17,10 @@ import java.util.UUID;
 public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity, UUID> {
     Optional<SubscriptionEntity> findFirstByUser_IdOrderByCreatedAtDesc(UUID userId);
 
-    boolean existsByUser_IdAndPlanType(UUID userId, PlanType planType);
+    boolean existsByUser_IdAndPlanTypeIn(UUID userId, Collection<PlanType> planTypes);
 
-    List<SubscriptionEntity> findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+    List<SubscriptionEntity> findByUser_IdAndStatusOrderByUpdatedAtDesc(
             UUID userId,
-            PlanType planType,
             SubscriptionStatus status
     );
 
@@ -37,19 +37,19 @@ public interface SubscriptionRepository extends JpaRepository<SubscriptionEntity
     @Query("""
             select s
             from SubscriptionEntity s
-            where s.planType = :planType
+            where s.planType in :planTypes
               and s.status = :status
               and (s.endAt is null or s.endAt > :now)
             order by s.updatedAt desc
             """)
-    List<SubscriptionEntity> findCurrentlyActiveByPlanTypeAndStatus(
-            @Param("planType") PlanType planType,
+    List<SubscriptionEntity> findCurrentlyActiveByPlanTypeInAndStatus(
+            @Param("planTypes") Collection<PlanType> planTypes,
             @Param("status") SubscriptionStatus status,
             @Param("now") OffsetDateTime now
     );
 
-    List<SubscriptionEntity> findByPlanTypeAndStatusAndEndAtBefore(
-            PlanType planType,
+    List<SubscriptionEntity> findByPlanTypeInAndStatusAndEndAtBefore(
+            Collection<PlanType> planTypes,
             SubscriptionStatus status,
             OffsetDateTime endAt
     );

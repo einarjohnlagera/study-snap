@@ -1,13 +1,14 @@
-import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
+import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { Card } from "@/components/ui/card";
 import { getUsageProgressPercent } from "@/lib/plans";
+import { getPaidPlanCtaLabel } from "@/src/config/plans";
 
 type PlanUsageCardProps = {
   usedThisMonth: number;
   monthlyLimit: number;
 };
 
-export function PlanUsageCard({ usedThisMonth, monthlyLimit }: PlanUsageCardProps) {
+export function PlanUsageCard({ usedThisMonth, monthlyLimit }: Readonly<PlanUsageCardProps>) {
   const usagePercent = getUsageProgressPercent(usedThisMonth, monthlyLimit);
   const hasReachedLimit = monthlyLimit > 0 && usedThisMonth >= monthlyLimit;
 
@@ -30,10 +31,10 @@ export function PlanUsageCard({ usedThisMonth, monthlyLimit }: PlanUsageCardProp
       {hasReachedLimit ? (
         <div className="space-y-3 rounded-md border border-border bg-background p-3">
           <p className="text-sm text-foreground/85">You have reached your monthly Study Pack limit.</p>
-          <PremiumWaitlistButton label="Upgrade to Premium" source="dashboard_plan_usage_limit" size="sm" />
+          <PremiumUpgradeButton label={getPaidPlanCtaLabel("PLUS")} source="dashboard_plan_usage_limit" planType="PLUS" size="sm" />
         </div>
       ) : (
-        <PremiumWaitlistButton label="Upgrade" source="dashboard_plan_usage_card" variant="outline" size="sm" />
+        <PremiumUpgradeButton label="See paid plans" source="dashboard_plan_usage_card" planType="PLUS" variant="outline" size="sm" />
       )}
     </Card>
   );

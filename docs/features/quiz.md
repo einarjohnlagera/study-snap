@@ -14,7 +14,7 @@ Shared ownership model:
 ### Quick Review
 
 - fast review flow
-- available on Free and Premium
+- available on Free, Plus, and Pro
 - icon: lightning
 - source: generated as part of the base Study Pack quiz
 - shape: 5 questions, fast concept checks, immediate feedback
@@ -24,7 +24,7 @@ Shared ownership model:
 ### Challenge Quiz
 
 - exam-style challenge mode
-- available on Free and Premium with plan-based monthly Challenge Quiz limits
+- available on Free, Plus, and Pro with plan-based monthly Challenge Quiz limits
 - icon: trophy
 - generated separately from Quick Review
 - learner-level aware, defaulting to `College` when missing
@@ -45,8 +45,8 @@ Shared ownership model:
   - `Board Exam Mode` for stricter exam simulation
 - Entering `Challenge Quiz` no longer auto-starts generation; users first choose a mode, then review a mode-specific prescreen before generation begins.
 - `Challenge Quiz` branches by plan:
-  - Premium users go to `Challenge Quiz Setup`, can choose `easy`, `medium`, or `hard`, then start the quiz from that prescreen.
-  - Free users also go to `Challenge Quiz Setup`, see the recommended `Medium` difficulty plus a subtle `Choose difficulty (Premium)` upsell, then start from the same prescreen.
+  - Pro users go to `Challenge Quiz Setup`, can choose `easy`, `medium`, or `hard`, then start the quiz from that prescreen.
+  - Free and Plus users also go to `Challenge Quiz Setup`, see the recommended `Medium` difficulty plus a subtle `Choose difficulty (Pro)` upsell, then start from the same prescreen.
 - `Challenge Quiz Setup` should show:
   - difficulty section
   - timer summary: `10 minutes. Timer runs until submission or expiration.`
@@ -71,7 +71,7 @@ Shared ownership model:
   - message: the user is about to start a board exam simulation, results are delayed until the end, and navigation will be limited during the exam
   - actions: `Cancel`, `Start Exam`
 - Board Exam Mode always skips difficulty selection in the UI and uses internally controlled mixed difficulty (`12` questions) for the current rollout stage.
-- Difficulty selection remains Premium-gated for `Challenge Quiz`; when available, question count is derived from the selected difficulty:
+- Difficulty selection remains Pro-gated for `Challenge Quiz`; when available, question count is derived from the selected difficulty:
   - easy -> 10 questions
   - medium -> 12 questions
   - hard -> 15 questions
@@ -166,7 +166,7 @@ After submission, the result screen shows:
 ### Adaptive Practice
 
 - weak-area follow-up mode
-- shown when weak concepts exist and plan allows it
+- shown when weak concepts exist and the user is on Pro
 - icon: target
 - generated separately from Quick Review
 - learner-level aware, defaulting to `College` when missing
@@ -414,8 +414,8 @@ Board Exam Mode now makes the Challenge Quiz engine feel like a strict board-exa
 - clean answering phase with no correctness hints
 - explicit mode selector with both `Challenge Quiz` and `Board Exam Mode`
 - entering `Challenge Quiz` now always starts at mode selection instead of auto-generating a session
-- Free users can launch `Challenge Quiz` immediately without a disabled difficulty step; Premium users still get the dedicated difficulty setup screen
-- Board Exam Mode available to Free and Premium users under the existing Challenge Quiz quota rules
+- Free and Plus users can launch `Challenge Quiz` immediately without a disabled difficulty step; Pro users still get the dedicated difficulty setup screen
+- Board Exam Mode is available to Pro users under the existing Challenge Quiz quota rules
 - formal `Board Exam Setup` confirmation screen with `Cancel` and `Start Exam`
 - Board Exam Mode skips difficulty selection and uses mixed difficulty during generation
 - 10-minute persisted countdown that auto-submits on expiry
@@ -470,4 +470,3 @@ Notes are sorted by `bestScore` DESC, then `lastAttemptedAt` DESC as a tiebreake
 - `DashboardService.getNotePerformanceSummary(userId, limit)` fetches all completed QUICK_REVIEW + CHALLENGE sessions, groups by `noteId` in Java, computes per-note stats, sorts by best score DESC, then enriches the top `limit` notes with titles from `NoteRepository`
 - note titles looked up in a single batch using `findAllById` to avoid N+1 queries
 - returns `NotePerformanceSummaryResponse` (noteId, noteTitle, bestScore, averageScore, attemptCount, lastAttemptedAt, bestSessionId, bestSessionMode)
-

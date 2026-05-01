@@ -79,7 +79,7 @@ class DashboardServiceTest {
                 subscriptionService,
                 featureGateService
         );
-        lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
+        lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);
         lenient().when(activityEventRepository.findTopByUserIdAndStudyPackIdAndActivityTypeOrderByCreatedAtDesc(
                         any(UUID.class),
                         any(UUID.class),

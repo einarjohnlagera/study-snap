@@ -16,7 +16,7 @@ export type AuthUser = {
   onboardingCompletedAt?: string | null;
   productOnboardingCompletedAt?: string | null;
   role: "USER" | "ADMIN";
-  planType: "FREE" | "PREMIUM";
+  planType: "FREE" | "PLUS" | "PRO";
   themePreference?: ThemePreference | null;
   accessToken: string;
   refreshToken: string;
@@ -65,7 +65,7 @@ function emitAuthChangeEvent(): void {
   globalThis.dispatchEvent(new Event("studysnap-auth-change"));
 }
 
-function getSafeRedirectPath(path: string | null | undefined): string | null {
+export function getSafeRedirectPath(path: string | null | undefined): string | null {
   if (!path) {
     return null;
   }

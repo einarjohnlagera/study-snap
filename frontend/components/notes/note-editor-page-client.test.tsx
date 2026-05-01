@@ -3,6 +3,7 @@ import { NoteEditorPageClient } from "./note-editor-page-client";
 import {
   completeProductOnboarding,
   copyNote,
+  createPremiumCheckoutSession,
   createNote,
   createStudyPackFromNote,
   extractNoteTextFromFile,
@@ -13,10 +14,10 @@ import {
   getNote,
   listCoursePrograms,
   listSubjects,
-  joinPremiumWaitlist,
   updateNote,
 } from "@/lib/api";
 import { getAuthUser } from "@/lib/auth";
+import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
 
 const pushMock = jest.fn();
 
@@ -34,12 +35,21 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/auth", () => ({
   getAuthUser: jest.fn(),
+  getCurrentPathWithQuery: () => `${window.location.pathname}${window.location.search}`,
+  getSafeRedirectPath: (path: string | null | undefined) => (
+    path && path.startsWith("/") && !path.startsWith("//") ? path : null
+  ),
   setAuthUser: jest.fn(),
+}));
+
+jest.mock("@/lib/checkout-redirect", () => ({
+  redirectToCheckoutUrl: jest.fn(),
 }));
 
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
   copyNote: jest.fn(),
+  createPremiumCheckoutSession: jest.fn(),
   createNote: jest.fn(),
   createStudyPackFromNote: jest.fn(),
   extractNoteTextFromFile: jest.fn(),
@@ -53,7 +63,6 @@ jest.mock("@/lib/api", () => ({
   listSubjects: jest.fn(),
   isEmailNotVerifiedError: (error: unknown) => error instanceof Error && error.message === "EMAIL_VERIFICATION_REQUIRED",
   isOcrLimitReachedError: (error: unknown) => error instanceof Error && error.message === "OCR_LIMIT_REACHED",
-  joinPremiumWaitlist: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateNote: jest.fn(),
 }));
@@ -108,7 +117,8 @@ describe("NoteEditorPageClient", () => {
     (getNote as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockReset();
-    (joinPremiumWaitlist as jest.Mock).mockReset();
+    (createPremiumCheckoutSession as jest.Mock).mockReset();
+    (redirectToCheckoutUrl as jest.Mock).mockReset();
     (updateNote as jest.Mock).mockReset();
     (getAuthUser as jest.Mock).mockReset();
     (listSubjects as jest.Mock).mockResolvedValue(["Anatomy", "Biology", "Chemistry"]);
@@ -146,14 +156,43 @@ describe("NoteEditorPageClient", () => {
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
       currency: "PHP",
-      monthlyPrice: 249,
-      yearlyPrice: 1999,
-      introMonthlyPrice: 199,
-      hasIntroPromo: true,
-      introEligible: true,
+      plus: {
+        planType: "PLUS",
+        monthly: {
+          amount: 179,
+          durationDays: 30,
+          introAmount: 149,
+          introEligible: true,
+          available: true,
+        },
+        yearly: {
+          amount: 1790,
+          durationDays: 365,
+          introAmount: null,
+          introEligible: false,
+          available: false,
+        },
+      },
+      pro: {
+        planType: "PRO",
+        monthly: {
+          amount: 249,
+          durationDays: 30,
+          introAmount: 199,
+          introEligible: true,
+          available: true,
+        },
+        yearly: {
+          amount: 2490,
+          durationDays: 365,
+          introAmount: null,
+          introEligible: false,
+          available: false,
+        },
+      },
     });
-    (joinPremiumWaitlist as jest.Mock).mockResolvedValue({
-      message: "You're on the list! We'll notify you when Premium launches.",
+    (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
+      checkoutUrl: "https://checkout.xendit.test/invoice_123",
     });
     (getMe as jest.Mock).mockResolvedValue({
       learnerLevel: "COLLEGE",
@@ -500,7 +539,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getAllByRole("button", { name: "Generate Again" })).toHaveLength(1);
   });
 
-  it("disables topic note generation at the free plan limit and opens the paywall", async () => {
+  it("keeps topic note generation clickable at the free plan limit and opens the paywall", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
       plan: "FREE",
@@ -536,13 +575,16 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), {
+      target: { value: "Photosynthesis" },
+    });
 
     expect(screen.getByText("You've reached your topic note generation limit for this month.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate Note" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Generate Note" })).toBeEnabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
 
-    expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your note generation limit")).toBeInTheDocument();
   });
 
   it("uses the student generate label and helper text by default", async () => {
@@ -710,7 +752,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.change(contentInput, { target: { value: "Some note content" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
 
-    expect(await screen.findByText("You’ve reached your study pack limit")).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your Study Pack limit")).toBeInTheDocument();
   });
 
   it("shows the exact remaining Study Pack count in the near-limit banner", async () => {
@@ -746,6 +788,53 @@ describe("NoteEditorPageClient", () => {
     render(<NoteEditorPageClient />);
 
     expect(await screen.findByText("You have 1 Study Pack left this month on the Free plan.")).toBeInTheDocument();
+  });
+
+  it("saves a draft note before starting checkout from the Study Pack paywall", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1", planType: "FREE", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMyPlan as jest.Mock).mockResolvedValue({
+      plan: "FREE",
+      limits: {
+        studyPacksPerMonth: 10,
+        challengeQuizzesPerMonth: 5,
+        adaptivePracticePerMonth: 0,
+        ocrPerMonth: 20,
+        noteGenerationsPerMonth: 5,
+      },
+      usage: {
+        studyPacksUsed: 10,
+        challengeQuizzesUsed: 0,
+        adaptivePracticeUsed: 0,
+        ocrUsed: 0,
+        noteGenerationsUsed: 0,
+      },
+      remaining: {
+        studyPacksRemaining: 0,
+        challengeQuizzesRemaining: 5,
+        adaptivePracticeRemaining: 0,
+        ocrRemaining: 20,
+        noteGenerationsRemaining: 5,
+      },
+      features: {
+        adaptivePracticeAvailable: false,
+        difficultySelectionAvailable: false,
+        fileUploadAvailable: true,
+        ocrAvailable: true,
+      },
+    });
+
+    render(<NoteEditorPageClient />);
+
+    const contentInput = await screen.findByLabelText("Content");
+    fireEvent.change(contentInput, { target: { value: "Saved before checkout" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choose Plus" }));
+
+    await waitFor(() => {
+      expect(createNote).toHaveBeenCalled();
+      expect(createPremiumCheckoutSession).toHaveBeenCalledWith({ planType: "PLUS", returnUrl: "/notes/note-created?generate=1" });
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
   });
 
   it("shows the import panel only when Import notes is selected", async () => {
@@ -982,16 +1071,18 @@ describe("NoteEditorPageClient", () => {
     const file = new File(["img"], "note.png", { type: "image/png" });
     fireEvent.change(fileInput as HTMLInputElement, { target: { files: [file] } });
 
-    expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
-    expect(screen.getByText(/You've reached your image-to-text limit for this month\./i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Upgrade to Premium" }));
-    expect(pushMock).toHaveBeenCalledWith("/settings#plan-billing");
+    expect(await screen.findByText("You've reached your OCR limit")).toBeInTheDocument();
+    expect(screen.getByText("Extract more text from images and files without retyping your notes.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
+    await waitFor(() => {
+      expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
+    });
   });
 
   it("shows the premium OCR limit modal without upgrade CTA", async () => {
-    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PREMIUM", emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getAuthUser as jest.Mock).mockReturnValue({ planType: "PRO", emailVerifiedAt: "2026-03-21T09:00:00Z" });
     (getMyPlan as jest.Mock).mockResolvedValue({
-      plan: "PREMIUM",
+      plan: "PRO",
       limits: {
         studyPacksPerMonth: 100,
         challengeQuizzesPerMonth: 50,
@@ -1029,7 +1120,7 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("OCR limit reached")).toBeInTheDocument();
     expect(screen.getByText(/Your limits will reset on your next billing date\./i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Upgrade to Premium" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Choose Plus" })).not.toBeInTheDocument();
   });
 
   it("saves a new note after importing content", async () => {

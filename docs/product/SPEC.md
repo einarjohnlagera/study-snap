@@ -4,13 +4,41 @@ Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table nam
 
 Current documentation baseline: `v0.11.0 - Learning Flow Foundation`
 
-Current in-progress release: `v0.11.0 - Learning Flow Foundation`
+Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
 
 ## Product Overview
 
 NoteLib is a study system that guides students, board exam reviewees, and teachers from input to understanding, practice, challenge, and improvement.
 
 The goal is to support active recall and repeated practice through a calm, iterative learning workflow built around note capture, topic generation, summaries, key concepts, quiz practice, weak concepts, and adaptive review.
+
+### Product Positioning
+
+NoteLib is not a generic AI tool — it is a structured study system aimed at learners who need to retain and apply knowledge, especially for board and entrance exams.
+
+- Primary audience: students and board exam takers who want to move from passive reading to active recall
+- Secondary audience: teachers who create quiz materials and review resources
+- Positioning: "Turn your notes into exam-ready study materials"
+- Not positioned as: general-purpose AI, chatbot, summarizer
+
+Every feature must connect to a measurable learning outcome:
+- Study Pack → understand and organize content
+- Quizzes → test retention and identify gaps
+- Adaptive Practice → reinforce weak areas
+- Board Exam Mode → simulate high-stakes exam conditions
+- Export → use materials offline or in a classroom
+
+### Demo as a Conversion Driver
+
+The `/demo` page is the strongest conversion tool on the site.
+
+Rules:
+- Demo must feel like a guided learning experience, not a feature preview
+- Each step must create a sense of progress toward a study goal
+- The quiz section must be interactive — users select answers before seeing results
+- After the quiz, a CTA connects the demo experience to real account creation
+- Demo uses static prebuilt content only — no backend or LLM calls
+- Demo copy: "This is a sample Study Pack to show how NoteLib works. Your own notes will generate similar results."
 
 ## Core Concept
 
@@ -192,13 +220,13 @@ Rules:
 - The alternate quiz mode must remain accessible from the same shared mode-selection step.
 - The `Challenge Quiz` CTA on Note Detail must route into that same shared `mode-selection` entry instead of bypassing it.
 - The shared Note Detail entry must keep users on the initial mode-selection screen even when prior quiz-session recovery data exists; session recovery must not override that entry into setup or running state.
-- Free users who select premium-only `Board Exam Mode` must see the Premium upsell modal instead of entering setup.
-- Free users who exhaust Challenge Quiz credits must see the Premium upsell modal instead of the monthly-limit page.
-- Premium users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
-- Free users who click `Adaptive Practice` must see the Premium upsell modal.
-- Premium users who exhaust `Adaptive Practice` credits should see the dedicated monthly-limit state.
-- Premium-only feature gating and monthly-limit gating must stay separate UI states.
-- `Board Exam Mode` remains Premium-only at quiz entry.
+- Free and Plus users who select Pro-only `Board Exam Mode` must see the Pro upsell modal instead of entering setup.
+- Free users who exhaust Challenge Quiz credits must see the shared paid-plan upsell modal instead of the monthly-limit page.
+- Plus and Pro users who exhaust Challenge Quiz credits should see the dedicated monthly-limit state.
+- Free and Plus users who click `Adaptive Practice` must see the Pro upsell modal.
+- Pro users who exhaust `Adaptive Practice` credits should see the dedicated monthly-limit state.
+- Pro-only feature gating and monthly-limit gating must stay separate UI states.
+- `Board Exam Mode` remains Pro-only at quiz entry.
 
 ### Profile type effects
 
@@ -269,7 +297,7 @@ Shared rules:
 
 Required usage:
 
-- important async actions such as auth submit, profile/settings saves, quiz generation, regeneration, export, sign-out, and upgrade/waitlist actions must use the shared button-loading pattern
+- important async actions such as auth submit, profile/settings saves, quiz generation, regeneration, export, sign-out, and upgrade actions must use the shared button-loading pattern
 - programmatic `router.push` / `router.replace` flows that may feel delayed should start the shared route-progress feedback before navigation
 - dashboards, note-detail dependent sections, quiz preview loading states, and public-library result loading should use skeleton placeholders rather than blank space
 
@@ -360,7 +388,7 @@ Public landing content:
 - Final CTA should include:
   - `Get Started`
   - `View Public Library`
-- Public Library must remain accessible without login and must not be marketed as a Premium-only feature
+- Public Library must remain accessible without login and must not be marketed as a paid-only feature
 
 SEO and social metadata:
 
@@ -486,6 +514,7 @@ Favicon requirements:
   - `/notes/new?source=paste` -> paste-material flow
   - `/notes/new?source=upload` -> upload-material flow
 - Demo mode must not call real generation pipeline, persist data, or consume usage
+- The `/demo` page is a 5-step interactive demo (choose start → input → generated note → Study Pack CTA → Study Pack results) that uses prebuilt static content only (Photosynthesis example); no backend or LLM calls are made during the demo flow
 - Unverified users are blocked from generation with structured `403`:
   - `code=EMAIL_VERIFICATION_REQUIRED`
   - `action=RESEND_VERIFICATION`
@@ -974,8 +1003,8 @@ Dashboard guidance rules:
   - `/notes/new` remains the normal note-creation flow and should open note detail with `tab=summary`
 - Dashboard performance and weak-concept insights must be computed from existing quiz session data only.
 - Dashboard must not use LLM calls for statistics or recommendations.
-- `Focus Areas` should show the top weak concepts and route Premium users to Adaptive Practice through `noteId`.
-- Free users should see the same weak concepts but hit the soft Premium paywall when trying to start Adaptive Practice from Dashboard.
+- `Focus Areas` should show the top weak concepts and route Pro users to Adaptive Practice through `noteId`.
+- Free and Plus users should see the same weak concepts but hit the soft Pro paywall when trying to start Adaptive Practice from Dashboard.
 - Board Taker dashboard should still use the shared note, quiz-session, activity, and usage data even when Board Exam is the default emphasis.
 - Teacher dashboard must hide student-only analytics widgets such as performance overview, recent quiz sessions, weak concepts, and score-tracking cards.
 - Teacher dashboard should keep the shared note / Study Pack workspace visible while changing intent toward creation, preview, and export.
@@ -984,7 +1013,7 @@ Dashboard guidance rules:
 - Dashboard monthly usage should show for learning personas:
   - Study Packs
   - Challenge Quiz
-  - Adaptive Practice for Premium only
+  - Adaptive Practice for Pro only
 - OCR usage must stay hidden from the dashboard UI.
 
 ### Shareable Study Packs
@@ -1045,11 +1074,11 @@ Page responsibilities:
 
 - Timed exam-style mode (10 minutes)
 - Generated from Study Pack summary + key concepts, plus learner-level and note-context metadata
-- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine and is available as a distinct Challenge mode for both Free and Premium users in the current rollout stage.
+- Board Exam Mode is the strict exam-simulation presentation of the Challenge Quiz engine and is available as a distinct Challenge mode for Pro users in the current rollout stage.
 - The Challenge Quiz screen presents both `Challenge Quiz` and `Board Exam Mode` as explicit mode choices.
 - Board Exam Mode uses a dedicated `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
 - Board Exam Mode may request fullscreen/focus mode as a best-effort browser enhancement.
-- Difficulty selection remains Premium-gated, but Board Exam Mode still runs for Free users with recommended difficulty/question count.
+- Difficulty selection remains Pro-gated, and Board Exam Mode remains a Pro feature.
 - Difficulty and question count adapt by latest Quick Review score:
   - `<50`: 10 questions, easy-medium
   - `<80`: 12 questions, medium
@@ -1066,7 +1095,7 @@ Page responsibilities:
   - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
   - backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
 
-### Adaptive Practice (Premium)
+### Adaptive Practice (Pro)
 
 - Generated from Study Pack summary + key concepts + weak concepts, plus learner-level and note-context metadata
 - Question count by weak-concept volume:
@@ -1112,10 +1141,11 @@ Page responsibilities:
 ## Plan Usage Display
 
 - `Settings -> Plan & Billing` shows billing-cycle usage bars instead of raw counters.
-- Free users see:
+- All plan users see:
   - `Study Packs`
   - `Challenge Quiz`
-- Premium users also see:
+  - `Exports`
+- Pro users also see:
   - `Adaptive Practice`
 - OCR usage is tracked in backend but hidden from the Settings UI.
 - Usage bars use warning colors:
@@ -1123,15 +1153,15 @@ Page responsibilities:
   - `60-85%` warning
   - `85-100%` danger
 - Usage reset dates are based on the billing cycle, not the calendar month.
-- When a Free user hits a visible limit, Settings should show an `Upgrade to Premium` CTA.
+- When a Free user hits a visible limit, Settings shows the plan cards below as the upgrade path; no inline upgrade CTA inside the usage bar.
 - Study Pack enforcement and user-facing remaining counts must come from the same backend-resolved usage calculation.
 - Study Pack generation is allowed only when `used < limit` and is blocked when `used >= limit`.
 - Study Pack quota increments only after a successful Study Pack is persisted.
 - Failed Study Pack generation, note saves, opening generation screens, and failed retries must not consume quota.
 - Study Pack near-limit messaging should appear when `studyPacksRemaining <= 2` and should show the actual remaining count with plan-specific monthly-limit copy.
 - When `studyPacksRemaining == 0`, `Generate Study Pack` should remain clickable instead of rendering as a disabled action.
-- Free users at `studyPacksRemaining == 0` should see the Premium/upgrade modal.
-- Premium users at `studyPacksRemaining == 0` should see the dedicated monthly-limit modal.
+- Free users at `studyPacksRemaining == 0` should see the upgrade modal.
+- Plus and Pro users at `studyPacksRemaining == 0` should see the dedicated monthly-limit modal.
 
 ## Study Pack Generation Consistency
 
@@ -1306,7 +1336,7 @@ Current user-facing template set:
 - inactivity reminder
 - weak concept reminder
 - weekly summary
-- premium waitlist confirmation
+- legacy upgrade-waitlist confirmation
 
 Welcome email requirements:
 
@@ -1316,12 +1346,17 @@ Welcome email requirements:
   - Quick Review
   - Challenge Quiz with a monthly limit
   - Public Library access
-- Premium includes:
+- Plus includes:
+  - Higher monthly limits
+  - More exports
+  - More topic-note generations
+- Pro includes:
   - Adaptive Practice
   - Weak Concept Training
   - Difficulty Selection
-  - Higher monthly limits
-- welcome copy must not say Challenge Quiz is Premium-only
+  - Board Exam Mode
+  - Highest monthly limits
+- welcome copy must not say Challenge Quiz is paid-only
 
 ### Settings Preferences
 
@@ -1337,32 +1372,61 @@ Route: `/settings`
 
 Settings route section: `Plan & Billing`
 
-- show plan (`FREE` or `PREMIUM`)
-- support Premium billing cycle selection:
-  - `MONTHLY`
-  - `YEARLY`
-- show usage buckets separately:
-  - Study Packs (monthly quota)
-  - Challenge Quiz (plan-based monthly quota)
-  - Adaptive Practice (Premium-only, plan-based monthly quota)
-  - OCR (tracked internally, hidden from user-facing usage UI)
-- PayMongo recurring subscription checkout for upgrade
+Plans: `FREE`, `PLUS`, `PRO`
+
+- show billing-cycle usage bars (Study Packs, Quizzes, Exports, and Adaptive Practice when the current plan includes it)
+- billing cycle toggle (Monthly / Annual) with savings badge
+- three side-by-side plan cards (Free, Plus, Pro)
+  - current plan shows "Current plan" badge and disabled button
+  - non-current paid plan shows checkout CTA
+  - active paid plan shows "Cancel plan" link below the button
+- start hosted Xendit checkout for verified upgrade attempts (Plus or Pro)
 - Billing webhook sync keeps plan state aligned (webhook-driven source of truth)
-  - `subscription.activated`
-  - `subscription.invoice.paid`
-  - `subscription.invoice.payment_failed`
-  - `subscription.past_due`
-  - `subscription.unpaid`
-  - `subscription.updated`
-- Premium-gated upgrade prompts should link to `/settings#plan-billing`
+  - `PAID`
+  - `FAILED`
+  - `EXPIRED`
+- Paid-plan gated features open shared paywalls first; frontend must never grant paid access directly
 
 Plan limits:
 
-- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, OCR quota, file uploads, weak concept visibility
-- Premium: 100 Study Packs/month, 50 Challenge Quizzes/month, 30 Adaptive Practice sessions/month, higher OCR quota, difficulty selection, priority AI
+- Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 2 exports/month, Summary + Key Concepts
+- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, 10 Adaptive Practice/month on pricing surfaces, higher note generation limits
+- Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, difficulty selection, Board Exam Mode
+- Pricing surfaces must keep the Adaptive Practice limit messaging aligned:
+  - Plus: `Train on weak areas (limited sessions)` and `Adaptive Practice (10 sessions / month)`
+  - Pro: `Train on weak areas until you master them` and `Adaptive Practice (30 sessions / month)`
 - Usage windows are billing-cycle-based:
   - Free resets monthly from account creation date
-  - Premium resets from the active subscription billing window
+  - Plus and Pro reset from the active subscription billing window
+
+Pricing UI source of truth:
+
+- frontend pricing surfaces must use the centralized shared plan config at `frontend/src/config/plans.ts`
+- shared config owns plan names, descriptions, CTA labels, and feature lists
+- backend billing pricing APIs remain the source of truth for checkout amounts and regional pricing eligibility
+
+Context-aware paywall flow:
+
+- all paid blocks must use the shared context-aware paywall instead of generic upgrade copy
+- current paywall contexts are:
+  - `GENERATE_STUDY_PACK_LIMIT`
+  - `GENERATE_NOTE_LIMIT`
+  - `QUIZ_LIMIT`
+  - `ADAPTIVE_PRACTICE_LOCKED`
+  - `EXPORT_LIMIT`
+- paywall content must explain why the user is blocked and what learning value the upgrade unlocks
+- paywall comparison cards should show Plus and Pro only, with Pro visually emphasized as the stronger exam-prep tier
+- paywall CTAs must stay consistent:
+  - primary -> `Continue with Pro`
+  - secondary -> `Choose Plus`
+- paywall resume context must preserve the blocked action plus:
+  - `noteId` when the flow is note-owned
+  - safe internal `returnPath`
+- note-creation paywalls must save the current note or preserve the local draft before checkout so user work is not lost
+- billing success should resume the interrupted flow after confirmed access:
+  - safe `returnPath` returns the user to the original page
+  - Study Pack resume returns to `/notes/{noteId}?generate=1`
+  - Settings / Billing-origin upgrades return to Dashboard instead of looping back to billing
 
 ---
 

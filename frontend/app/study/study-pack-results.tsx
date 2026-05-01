@@ -19,7 +19,7 @@ export function StudyPackResults({
   studyPackResult,
   generatedLabel,
   detectedTopic,
-}: StudyPackResultsProps) {
+}: Readonly<StudyPackResultsProps>) {
   if (loading) {
     return (
       <section className="space-y-4">
@@ -68,7 +68,7 @@ export function StudyPackResults({
       {demoMode ? (
         <Card className="space-y-3 border-blue-500/40 bg-blue-50/70 p-4 dark:bg-blue-950/20 sm:p-5">
           <CardDescription className="text-blue-900 dark:text-blue-200">
-            This is a prebuilt demo Study Pack. It does not create a real account session and does not trigger a new AI generation call.
+            This is a sample Study Pack to show how NoteLib works. Your own notes will generate similar results.
           </CardDescription>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link href="/demo/quick-review" className="w-full sm:w-auto">

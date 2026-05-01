@@ -120,7 +120,7 @@ class QuickReviewSessionServiceTest {
                         invocation.getArgument(0),
                         invocation.getArgument(1)
                 ));
-        lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PREMIUM);
+        lenient().when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.PRO);
     }
 
     @Test

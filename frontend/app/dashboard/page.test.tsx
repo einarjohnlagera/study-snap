@@ -33,12 +33,12 @@ jest.mock("@/lib/auth", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeProductOnboarding: jest.fn(),
+  createPremiumCheckoutSession: jest.fn(),
   getContinueStudyingRecommendation: jest.fn(),
   getDashboardOverview: jest.fn(),
   getMe: jest.fn(),
   getNote: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
-  joinPremiumWaitlist: jest.fn(),
   getQuickReviewPerformanceSummary: jest.fn(),
   listNotes: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
@@ -234,7 +234,7 @@ describe("DashboardPage profile variants", () => {
     });
     (useBillingUsageSummary as jest.Mock).mockReturnValue({
       usageSummary: {
-        plan: "PREMIUM",
+        plan: "PRO",
         limits: { studyPacksPerMonth: 100, challengeQuizzesPerMonth: 50, adaptivePracticePerMonth: 30 },
         usage: { studyPacksUsed: 12, challengeQuizzesUsed: 8, adaptivePracticeUsed: 3 },
       },

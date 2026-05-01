@@ -1,6 +1,5 @@
 package com.studysnap.backend.service;
 
-import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.BillingHistoryResponse;
 import com.studysnap.backend.dto.BillingHistoryItemResponse;
 import com.studysnap.backend.entity.BillingCycle;
@@ -12,7 +11,6 @@ import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.SubscriptionEntity;
 import com.studysnap.backend.entity.SubscriptionStatus;
 import com.studysnap.backend.repository.PaymentTransactionRepository;
-import com.studysnap.backend.repository.SubscriptionRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,6 +22,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,25 +34,13 @@ class BillingHistoryServiceTest {
     @Mock
     private PaymentTransactionRepository paymentTransactionRepository;
     @Mock
-    private SubscriptionRepository subscriptionRepository;
-    @Mock
     private SubscriptionService subscriptionService;
 
     @Test
     void getHistory_returnsSummaryAndSortedTransactions() {
-        StudySnapProperties properties = new StudySnapProperties();
-        properties.getBilling().getPaymongo().setMonthlyAmount(new BigDecimal("4.99"));
-        properties.getBilling().getPaymongo().setYearlyAmount(new BigDecimal("39.99"));
-        StudySnapProperties.RegionPricing regionPricing = new StudySnapProperties.RegionPricing();
-        regionPricing.setCurrency("USD");
-        regionPricing.setMonthlyPrice(new BigDecimal("4.99"));
-        regionPricing.setYearlyPrice(new BigDecimal("39.99"));
-        properties.getBilling().getPricingRegions().put("US", regionPricing);
         BillingHistoryService service = new BillingHistoryService(
                 paymentTransactionRepository,
-                subscriptionRepository,
                 subscriptionService,
-                properties,
                 Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
         );
 
@@ -62,7 +49,7 @@ class BillingHistoryServiceTest {
         OffsetDateTime endAt = OffsetDateTime.parse("2026-04-01T00:00:00Z");
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setId(UUID.randomUUID());
-        subscription.setPlanType(PlanType.PREMIUM);
+        subscription.setPlanType(PlanType.PRO);
         subscription.setStatus(SubscriptionStatus.ACTIVE);
         subscription.setStartAt(startAt);
         subscription.setEndAt(endAt);
@@ -89,17 +76,13 @@ class BillingHistoryServiceTest {
 
         when(subscriptionService.getPlanSnapshot(userId)).thenReturn(
                 new SubscriptionService.PlanSnapshot(
-                        PlanType.PREMIUM,
+                        PlanType.PRO,
                         true,
                         endAt,
                         OffsetDateTime.parse("2026-03-20T00:00:00Z")
                 )
         );
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
-                userId,
-                PlanType.PREMIUM,
-                SubscriptionStatus.ACTIVE
-        )).thenReturn(List.of(subscription));
+        when(subscriptionService.findActiveSubscription(userId, PlanType.PRO)).thenReturn(Optional.of(subscription));
         when(paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(List.of(
                 failedTransaction,
                 renewalTransaction,
@@ -108,7 +91,7 @@ class BillingHistoryServiceTest {
 
         BillingHistoryResponse history = service.getHistory(userId);
 
-        assertThat(history.currentPlan()).isEqualTo(PlanType.PREMIUM);
+        assertThat(history.currentPlan()).isEqualTo(PlanType.PRO);
         assertThat(history.subscriptionStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
         assertThat(history.billingType()).isEqualTo(BillingCycle.MONTHLY);
         assertThat(history.currentPeriodStart()).isEqualTo(startAt);
@@ -116,19 +99,16 @@ class BillingHistoryServiceTest {
         assertThat(history.cancelAtPeriodEnd()).isTrue();
         assertThat(history.cancellationEffectiveAt()).isEqualTo(endAt);
         assertThat(history.transactions()).extracting(BillingHistoryItemResponse::description)
-                .containsExactly("Failed payment", "Subscription Renewal", "Premium Monthly");
+                .containsExactly("Failed payment", "Pro Renewal", "Pro Monthly");
         assertThat(history.transactions()).extracting(BillingHistoryItemResponse::providerReferenceId)
                 .containsExactly("evt_failed", "evt_renewal", "evt_initial");
     }
 
     @Test
     void getHistory_returnsFreeSummaryWhenThereAreNoTransactions() {
-        StudySnapProperties properties = new StudySnapProperties();
         BillingHistoryService service = new BillingHistoryService(
                 paymentTransactionRepository,
-                subscriptionRepository,
                 subscriptionService,
-                properties,
                 Clock.fixed(Instant.parse("2026-03-25T00:00:00Z"), ZoneOffset.UTC)
         );
 
@@ -136,11 +116,6 @@ class BillingHistoryServiceTest {
         when(subscriptionService.getPlanSnapshot(userId)).thenReturn(
                 new SubscriptionService.PlanSnapshot(PlanType.FREE, false, null, null)
         );
-        when(subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
-                userId,
-                PlanType.PREMIUM,
-                SubscriptionStatus.ACTIVE
-        )).thenReturn(List.of());
         when(paymentTransactionRepository.findByUser_IdOrderByCreatedAtDesc(userId)).thenReturn(List.of());
 
         BillingHistoryResponse history = service.getHistory(userId);
@@ -162,9 +137,12 @@ class BillingHistoryServiceTest {
     ) {
         PaymentTransactionEntity transaction = new PaymentTransactionEntity();
         transaction.setId(UUID.randomUUID());
-        transaction.setProvider(BillingProvider.PAYMONGO);
+        transaction.setProvider(BillingProvider.XENDIT);
         transaction.setBillingType(BillingType.SUBSCRIPTION);
-        transaction.setPlanType(PlanType.PREMIUM);
+        transaction.setPlanType(PlanType.PRO);
+        transaction.setBillingCycle(BillingCycle.MONTHLY);
+        transaction.setOriginalAmount(amount);
+        transaction.setDiscountAmount(BigDecimal.ZERO);
         transaction.setAmount(amount);
         transaction.setCurrency("USD");
         transaction.setStatus(status);

@@ -49,7 +49,7 @@ If OCR confidence is low:
 - enforce backend OCR usage limits per billing period by plan
 - enforce backend OCR rate limits with `429 Too Many Requests`
 - use the friendly OCR quota message:
-  - `You have reached your OCR limit for now. Please try again later or upgrade to Premium.`
+  - `You have reached your OCR limit for now. Please try again later or upgrade to Plus or Pro.`
 - use the friendly rate-limit message:
   - `Too many requests. Please wait a moment and try again.`
 

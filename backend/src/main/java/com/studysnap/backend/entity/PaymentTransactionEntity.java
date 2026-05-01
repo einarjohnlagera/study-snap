@@ -29,6 +29,14 @@ public class PaymentTransactionEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
+    @ManyToOne
+    @JoinColumn(name = "subscription_id")
+    private SubscriptionEntity subscription;
+
+    @ManyToOne
+    @JoinColumn(name = "voucher_id")
+    private DiscountVoucherEntity voucher;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private BillingProvider provider;
@@ -40,6 +48,19 @@ public class PaymentTransactionEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_type", nullable = false, length = 32)
     private PlanType planType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_cycle", nullable = false, length = 16)
+    private BillingCycle billingCycle;
+
+    @Column(name = "access_duration_days", nullable = false)
+    private Integer accessDurationDays;
+
+    @Column(name = "original_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal originalAmount;
+
+    @Column(name = "discount_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal discountAmount;
 
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal amount;
@@ -53,6 +74,12 @@ public class PaymentTransactionEntity {
 
     @Column(name = "provider_reference_id", nullable = false, length = 191)
     private String providerReferenceId;
+
+    @Column(name = "checkout_url", length = 1000)
+    private String checkoutUrl;
+
+    @Column(name = "expires_at")
+    private OffsetDateTime expiresAt;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

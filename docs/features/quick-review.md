@@ -18,7 +18,7 @@ It is designed to feel:
 - low-pressure
 
 Quick Review is not intended to be a formal exam mode.
-For exam-style timed practice, use Challenge Quiz (Premium).
+For exam-style timed practice, use Challenge Quiz or Board Exam Mode on eligible plans.
 
 ---
 
@@ -35,7 +35,7 @@ Dashboard resume cards should show the note title plus subject/course metadata w
 Note Detail quiz-entry hierarchy:
 
 - primary action: `Start Quick Review`
-- secondary action: `Challenge Quiz` (Premium-gated for Free users)
+- secondary action: `Challenge Quiz`
 - `Adaptive Practice` should only be shown when weak concepts exist
 
 ---
@@ -134,12 +134,12 @@ For each question:
 Quick Review should feel consistent with quiz behavior elsewhere in the app.
 
 Plan gating:
-- core Quick Review (question flow, retry, score) is available on Free and Premium
-- Weak Concept Detection is Premium-only
-- Adaptive Practice is Premium-only
-- Challenge Quiz is Premium-only
-- when a Free user clicks Premium follow-up CTAs from Quick Review results, show the shared paywall modal before any billing redirect
-- the paywall modal should only route to billing when the user explicitly presses `Upgrade to Premium`
+- core Quick Review (question flow, retry, score) is available on Free, Plus, and Pro
+- weak concepts remain visible after review completion on all plans
+- Adaptive Practice is Pro-only
+- Challenge Quiz is available on all plans with plan-based monthly limits
+- when a Free or Plus user clicks a Pro-only follow-up CTA from Quick Review results, show the shared paywall modal before any billing redirect
+- the paywall modal should only route to billing when the user explicitly chooses an upgrade
 
 ---
 
@@ -223,10 +223,9 @@ The results screen may also show:
 - weak concepts (derived from incorrectly answered question concepts)
 
 Weak concept detection:
-- when a Premium session is completed, incorrect answers are mapped to their `concept` values
+- when a session is completed, incorrect answers are mapped to their `concept` values
 - duplicate concepts are deduplicated for the session summary
-- results display a `Weak Concepts` section when at least one concept was missed (Premium)
-- Free plan users continue to get normal score/retry flow without weak-concept output
+- results display a `Weak Concepts` section when at least one concept was missed
 - concise concept metadata improves weak-area quality and adaptive practice targeting
 
 ### Study Tip
@@ -311,7 +310,7 @@ Behavior:
 
 - weak concepts are sourced from the most recent completed Quick Review for the same Note
 - adaptive practice is available only when weak concepts exist
-- adaptive practice is Premium-only
+- adaptive practice is Pro-only
 - adaptive quiz is newly generated and separate from the original Study Pack quiz
 - adaptive set contains 5, 7, or 10 questions based on weak-concept count:
   - weak concepts <= 2: 5 questions
@@ -327,7 +326,7 @@ Behavior:
 Entry point:
 
 - results screen shows `Practice Weak Areas` when weak concepts exist
-- Free users should see a clear upgrade CTA instead of adaptive-practice launch
+- Free and Plus users should see a clear Pro upgrade CTA instead of adaptive-practice launch
 - this starts a separate follow-up practice flow
 - Adaptive Practice usage limit is 50/month (tracked separately from Study Pack credits)
 
@@ -345,15 +344,15 @@ This keeps retry as the main reinforcement mechanic while allowing users to end 
 After completion:
 
 - primary action: `Back to Note`
-- guided next step when struggling: `Practice Weak Areas` (Adaptive Practice, Premium-gated)
-- guided next step when performing well: `Start Challenge Quiz` (Premium-gated)
+- guided next step when struggling: `Practice Weak Areas` (Adaptive Practice, Pro-gated)
+- guided next step when performing well: `Start Challenge Quiz`
 - secondary action: `Practice Again` (optional, lower emphasis)
 
 `Practice Again` is not the primary post-review action, especially for short quizzes.
 
-## Challenge Quiz (Premium)
+## Challenge Quiz
 
-Challenge Quiz is a separate Premium review mode for longer timed practice.
+Challenge Quiz is a separate timed review mode available across plans, while Board Exam Mode and difficulty selection stay Pro-gated.
 
 Behavior:
 
@@ -392,9 +391,9 @@ Behavior:
 
 Gating and usage:
 
-- Free users should see an upgrade prompt instead of challenge launch
-- Premium users can start Challenge Quiz
-- Challenge Quiz usage limit is 50/month
+- Free, Plus, and Pro users can start Challenge Quiz while under their current monthly limit
+- Board Exam Mode and manual difficulty selection remain Pro-only
+- Challenge Quiz usage limits are plan-based
 - usage is counted on quiz start
 - Challenge Quiz usage does not deduct from monthly Study Pack generation credits
 - Challenge Quiz and Adaptive Practice quotas are independent from each other

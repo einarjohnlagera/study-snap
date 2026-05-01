@@ -8,7 +8,7 @@ describe("PrivacyPage", () => {
     expect(screen.getByRole("heading", { name: "Privacy Policy" })).toBeInTheDocument();
     expect(screen.getByText("Last updated: March 25, 2026")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "2. Information We Collect" })).toBeInTheDocument();
-    expect(screen.getByText(/Payments are processed via PayMongo/i)).toBeInTheDocument();
+    expect(screen.getByText(/Payments are processed via Xendit/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "support@mail.notelib.app" })).toHaveAttribute("href", "mailto:support@mail.notelib.app");
   });
 

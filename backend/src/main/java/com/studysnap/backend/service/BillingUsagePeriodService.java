@@ -27,18 +27,27 @@ public class BillingUsagePeriodService {
     @Transactional(readOnly = true)
     public UsagePeriod resolveUsagePeriod(UUID userId, OffsetDateTime referenceTime) {
         OffsetDateTime nowUtc = normalize(referenceTime);
-        return subscriptionRepository.findByUser_IdAndPlanTypeAndStatusOrderByUpdatedAtDesc(
+        UsagePeriod paidUsagePeriod = subscriptionRepository.findByUser_IdAndStatusOrderByUpdatedAtDesc(
                         userId,
-                        PlanType.PREMIUM,
                         SubscriptionStatus.ACTIVE
                 ).stream()
+                .filter(subscription -> subscription.getPlanType().isPaid())
                 .filter(subscription -> isWithinActiveWindow(subscription, nowUtc))
-                .findFirst()
-                .map(this::toPremiumUsagePeriod)
-                .orElseGet(() -> toFreeUsagePeriod(userId, nowUtc));
+                .min(java.util.Comparator.comparingInt(subscription -> switch (subscription.getPlanType()) {
+                    case PRO -> 0;
+                    case PLUS -> 1;
+                    case FREE -> 2;
+                }))
+                .map(this::toPaidUsagePeriod)
+                .orElse(null);
+        if (paidUsagePeriod != null) {
+            return paidUsagePeriod;
+        }
+
+        return toFreeUsagePeriod(userId, nowUtc);
     }
 
-    public UsagePeriod toPremiumUsagePeriod(SubscriptionEntity subscription) {
+    public UsagePeriod toPaidUsagePeriod(SubscriptionEntity subscription) {
         OffsetDateTime start = normalize(subscription.getStartAt());
         if (start == null) {
             start = normalize(OffsetDateTime.now(ZoneOffset.UTC));
@@ -49,7 +58,7 @@ public class BillingUsagePeriodService {
             end = billingCycle == BillingCycle.YEARLY ? start.plusYears(1) : start.plusMonths(1);
         }
         return new UsagePeriod(
-                PlanType.PREMIUM,
+                subscription.getPlanType(),
                 billingCycle,
                 start,
                 end,

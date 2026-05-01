@@ -80,16 +80,24 @@ studysnap:
       max-questions: ${QUICK_REVIEW_STUDY_TIP_MAX_QUESTIONS:3}
   pricing:
     free-monthly-study-pack-limit: ${FREE_MONTHLY_STUDY_PACK_LIMIT:10}
-    premium-monthly-study-pack-limit: ${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}
+    plus-monthly-study-pack-limit: ${PLUS_MONTHLY_STUDY_PACK_LIMIT:50}
+    pro-monthly-study-pack-limit: ${PRO_MONTHLY_STUDY_PACK_LIMIT:${PREMIUM_MONTHLY_STUDY_PACK_LIMIT:100}}
     free-monthly-challenge-quiz-limit: ${FREE_MONTHLY_CHALLENGE_QUIZ_LIMIT:5}
-    premium-monthly-challenge-quiz-limit: ${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}
-    premium-monthly-adaptive-practice-limit: ${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}
+    plus-monthly-challenge-quiz-limit: ${PLUS_MONTHLY_CHALLENGE_QUIZ_LIMIT:25}
+    pro-monthly-challenge-quiz-limit: ${PRO_MONTHLY_CHALLENGE_QUIZ_LIMIT:${PREMIUM_MONTHLY_CHALLENGE_QUIZ_LIMIT:50}}
+    plus-monthly-adaptive-practice-limit: ${PLUS_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:0}
+    pro-monthly-adaptive-practice-limit: ${PRO_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:${PREMIUM_MONTHLY_ADAPTIVE_PRACTICE_LIMIT:30}}
     free-monthly-ocr-limit: ${FREE_MONTHLY_OCR_LIMIT:20}
-    premium-monthly-ocr-limit: ${PREMIUM_MONTHLY_OCR_LIMIT:100}
+    plus-monthly-ocr-limit: ${PLUS_MONTHLY_OCR_LIMIT:50}
+    pro-monthly-ocr-limit: ${PRO_MONTHLY_OCR_LIMIT:${PREMIUM_MONTHLY_OCR_LIMIT:100}}
     free-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_FREE:5}
-    premium-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}
-    adaptive-practice-premium-only: ${ADAPTIVE_PRACTICE_PREMIUM_ONLY:true}
-    difficulty-selection-premium-only: ${DIFFICULTY_SELECTION_PREMIUM_ONLY:true}
+    plus-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PLUS:25}
+    pro-monthly-note-generation-limit: ${NOTELIB_NOTE_GENERATION_LIMIT_PRO:${NOTELIB_NOTE_GENERATION_LIMIT_PREMIUM:100}}
+    free-monthly-export-limit: ${FREE_MONTHLY_EXPORT_LIMIT:2}
+    plus-monthly-export-limit: ${PLUS_MONTHLY_EXPORT_LIMIT:15}
+    pro-monthly-export-limit: ${PRO_MONTHLY_EXPORT_LIMIT:-1}
+    adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:true}
+    difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
     txt-upload-max-size: ${TXT_IMPORT_MAX_SIZE:1}
@@ -102,97 +110,182 @@ studysnap:
     free-ocr-rate-limit-per-minute: ${OCR_FREE_RATE_LIMIT_PER_MINUTE:6}
     premium-ocr-rate-limit-per-minute: ${OCR_PREMIUM_RATE_LIMIT_PER_MINUTE:20}
   billing:
-    provider: ${BILLING_PROVIDER:PAYMONGO}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+    backend-base-url: ${BACKEND_BASE_URL:http://localhost:8080}
+    price-id-placeholder: ${PLAN_PREMIUM_PRICE_ID:not_used_for_now}
     pricing-regions:
       US:
         currency: USD
-        monthly-price: ${PRICING_US_MONTHLY_PRICE:4.99}
-        yearly-price: ${PRICING_US_YEARLY_PRICE:39.99}
-        paymongo-monthly-plan-id: ${PAYMONGO_US_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_US_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_US_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_US_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_US_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_US_PLUS_MONTHLY_PRICE:3.99}
+            duration-days: ${PRICING_US_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_US_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_US_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_US_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_US_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_US_PRO_MONTHLY_PRICE:${PRICING_US_MONTHLY_PRICE:4.99}}
+            duration-days: ${PRICING_US_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_US_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_US_PRO_YEARLY_PRICE:${PRICING_US_YEARLY_PRICE:39.99}}
+            duration-days: ${PRICING_US_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_US_PRO_YEARLY_ACTIVE:true}
       PH:
         currency: PHP
-        monthly-price: ${PRICING_PH_MONTHLY_PRICE:249}
-        yearly-price: ${PRICING_PH_YEARLY_PRICE:1999}
-        paymongo-monthly-plan-id: ${PAYMONGO_PH_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_PH_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_PH_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_PH_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_PH_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_PH_PLUS_MONTHLY_PRICE:179}
+            duration-days: ${PRICING_PH_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_PH_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_PH_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_PH_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_PH_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_PH_PRO_MONTHLY_PRICE:${PRICING_PH_MONTHLY_PRICE:249}}
+            duration-days: ${PRICING_PH_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_PH_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_PH_PRO_YEARLY_PRICE:${PRICING_PH_YEARLY_PRICE:1999}}
+            duration-days: ${PRICING_PH_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_PH_PRO_YEARLY_ACTIVE:true}
       GB:
         currency: GBP
-        monthly-price: ${PRICING_GB_MONTHLY_PRICE:4.49}
-        yearly-price: ${PRICING_GB_YEARLY_PRICE:35.99}
-        paymongo-monthly-plan-id: ${PAYMONGO_GB_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_GB_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_GB_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_GB_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_GB_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_GB_PLUS_MONTHLY_PRICE:3.49}
+            duration-days: ${PRICING_GB_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_GB_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_GB_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_GB_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_GB_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_GB_PRO_MONTHLY_PRICE:${PRICING_GB_MONTHLY_PRICE:4.49}}
+            duration-days: ${PRICING_GB_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_GB_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_GB_PRO_YEARLY_PRICE:${PRICING_GB_YEARLY_PRICE:35.99}}
+            duration-days: ${PRICING_GB_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_GB_PRO_YEARLY_ACTIVE:true}
       EU:
         currency: EUR
-        monthly-price: ${PRICING_EU_MONTHLY_PRICE:4.99}
-        yearly-price: ${PRICING_EU_YEARLY_PRICE:39.99}
-        paymongo-monthly-plan-id: ${PAYMONGO_EU_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_EU_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_EU_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_EU_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_EU_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_EU_PLUS_MONTHLY_PRICE:3.99}
+            duration-days: ${PRICING_EU_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_EU_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_EU_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_EU_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_EU_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_EU_PRO_MONTHLY_PRICE:${PRICING_EU_MONTHLY_PRICE:4.99}}
+            duration-days: ${PRICING_EU_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_EU_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_EU_PRO_YEARLY_PRICE:${PRICING_EU_YEARLY_PRICE:39.99}}
+            duration-days: ${PRICING_EU_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_EU_PRO_YEARLY_ACTIVE:true}
       AU:
         currency: AUD
-        monthly-price: ${PRICING_AU_MONTHLY_PRICE:7.49}
-        yearly-price: ${PRICING_AU_YEARLY_PRICE:59.99}
-        paymongo-monthly-plan-id: ${PAYMONGO_AU_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_AU_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_AU_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_AU_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_AU_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_AU_PLUS_MONTHLY_PRICE:5.99}
+            duration-days: ${PRICING_AU_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_AU_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_AU_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_AU_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_AU_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_AU_PRO_MONTHLY_PRICE:${PRICING_AU_MONTHLY_PRICE:7.49}}
+            duration-days: ${PRICING_AU_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_AU_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_AU_PRO_YEARLY_PRICE:${PRICING_AU_YEARLY_PRICE:59.99}}
+            duration-days: ${PRICING_AU_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_AU_PRO_YEARLY_ACTIVE:true}
       CA:
         currency: CAD
-        monthly-price: ${PRICING_CA_MONTHLY_PRICE:6.49}
-        yearly-price: ${PRICING_CA_YEARLY_PRICE:51.99}
-        paymongo-monthly-plan-id: ${PAYMONGO_CA_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_CA_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_CA_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_CA_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_CA_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_CA_PLUS_MONTHLY_PRICE:5.49}
+            duration-days: ${PRICING_CA_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_CA_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_CA_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_CA_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_CA_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_CA_PRO_MONTHLY_PRICE:${PRICING_CA_MONTHLY_PRICE:6.49}}
+            duration-days: ${PRICING_CA_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_CA_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_CA_PRO_YEARLY_PRICE:${PRICING_CA_YEARLY_PRICE:51.99}}
+            duration-days: ${PRICING_CA_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_CA_PRO_YEARLY_ACTIVE:true}
       SG:
         currency: SGD
-        monthly-price: ${PRICING_SG_MONTHLY_PRICE:6.49}
-        yearly-price: ${PRICING_SG_YEARLY_PRICE:51.99}
-        paymongo-monthly-plan-id: ${PAYMONGO_SG_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_SG_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_SG_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_SG_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_SG_ACTIVE:true}
+        plus:
+          monthly:
+            amount: ${PRICING_SG_PLUS_MONTHLY_PRICE:5.49}
+            duration-days: ${PRICING_SG_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_SG_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_SG_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_SG_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_SG_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_SG_PRO_MONTHLY_PRICE:${PRICING_SG_MONTHLY_PRICE:6.49}}
+            duration-days: ${PRICING_SG_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_SG_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_SG_PRO_YEARLY_PRICE:${PRICING_SG_YEARLY_PRICE:51.99}}
+            duration-days: ${PRICING_SG_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_SG_PRO_YEARLY_ACTIVE:true}
       IN:
         currency: INR
-        monthly-price: ${PRICING_IN_MONTHLY_PRICE:399}
-        yearly-price: ${PRICING_IN_YEARLY_PRICE:3199}
-        paymongo-monthly-plan-id: ${PAYMONGO_IN_MONTHLY_PLAN_ID:${PAYMONGO_MONTHLY_PLAN_ID:}}
-        paymongo-yearly-plan-id: ${PAYMONGO_IN_YEARLY_PLAN_ID:${PAYMONGO_YEARLY_PLAN_ID:}}
-        paymongo-intro-monthly-plan-id: ${PAYMONGO_IN_INTRO_MONTHLY_PLAN_ID:}
-        paymongo-intro-yearly-plan-id: ${PAYMONGO_IN_INTRO_YEARLY_PLAN_ID:}
         active: ${PRICING_IN_ACTIVE:true}
-    stripe:
-      api-base-url: ${STRIPE_API_BASE_URL:https://api.stripe.com/v1}
-      secret-key: ${STRIPE_SECRET_KEY:}
-      webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
-      premium-price-id: ${STRIPE_PREMIUM_PRICE_ID:}
-      checkout-success-url: ${STRIPE_CHECKOUT_SUCCESS_URL:http://localhost:3000/settings?checkout=success}
-      checkout-cancel-url: ${STRIPE_CHECKOUT_CANCEL_URL:http://localhost:3000/settings?checkout=cancel}
-    paymongo:
-      api-base-url: ${PAYMONGO_API_BASE_URL:https://api.paymongo.com/v1}
-      secret-key: ${PAYMONGO_SECRET_KEY:}
-      webhook-secret: ${PAYMONGO_WEBHOOK_SECRET:}
-      monthly-plan-id: ${PAYMONGO_MONTHLY_PLAN_ID:}
-      yearly-plan-id: ${PAYMONGO_YEARLY_PLAN_ID:}
-      monthly-amount: ${PAYMONGO_MONTHLY_AMOUNT:4.99}
-      yearly-amount: ${PAYMONGO_YEARLY_AMOUNT:39.99}
-      checkout-success-url: ${PAYMONGO_CHECKOUT_SUCCESS_URL:http://localhost:3000/settings?checkout=success}
-      checkout-cancel-url: ${PAYMONGO_CHECKOUT_CANCEL_URL:http://localhost:3000/settings?checkout=cancel}
+        plus:
+          monthly:
+            amount: ${PRICING_IN_PLUS_MONTHLY_PRICE:299}
+            duration-days: ${PRICING_IN_PLUS_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_IN_PLUS_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_IN_PLUS_YEARLY_PRICE:0}
+            duration-days: ${PRICING_IN_PLUS_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_IN_PLUS_YEARLY_ACTIVE:false}
+        pro:
+          monthly:
+            amount: ${PRICING_IN_PRO_MONTHLY_PRICE:${PRICING_IN_MONTHLY_PRICE:399}}
+            duration-days: ${PRICING_IN_PRO_MONTHLY_DURATION_DAYS:30}
+            active: ${PRICING_IN_PRO_MONTHLY_ACTIVE:true}
+          yearly:
+            amount: ${PRICING_IN_PRO_YEARLY_PRICE:${PRICING_IN_YEARLY_PRICE:3199}}
+            duration-days: ${PRICING_IN_PRO_YEARLY_DURATION_DAYS:365}
+            active: ${PRICING_IN_PRO_YEARLY_ACTIVE:true}
+    xendit:
+      base-url: ${XENDIT_BASE_URL:https://api.xendit.co}
+      secret-key: ${XENDIT_SECRET_KEY:}
+      webhook-token: ${XENDIT_WEBHOOK_TOKEN:}
   email:
     resend-api-key: ${RESEND_API_KEY:}
     resend-api-base-url: ${RESEND_API_BASE_URL:https://api.resend.com}

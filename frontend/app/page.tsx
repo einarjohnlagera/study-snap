@@ -136,19 +136,19 @@ const landingScreenshots = {
 
 const valueSummaryCards = [
   {
-    title: "Move from input to understanding faster",
-    description: "Write, paste, upload, or generate a note, then turn it into structured review without restarting your workflow.",
+    title: "Built for studying",
+    description: "Not just AI output — structured for real learning and exam preparation.",
+    icon: BookOpen,
+  },
+  {
+    title: "Learn from your weak points",
+    description: "Adaptive practice focuses on the concepts you struggle with so you improve where it counts.",
     icon: Sparkles,
   },
   {
-    title: "Practice in layers",
-    description: "Use summaries, key concepts, quizzes, and challenge flows to review the same topic from understanding to exam prep.",
+    title: "From notes to mastery",
+    description: "Turn raw notes into summaries, quizzes, and review sessions that stick.",
     icon: Trophy,
-  },
-  {
-    title: "Keep improving, not restarting",
-    description: "Use weak areas and repeat review cycles to sharpen what still needs work before your next study session.",
-    icon: ArrowRight,
   },
 ] as const;
 
@@ -163,34 +163,34 @@ function HeroSection() {
               Notes to active recall
             </span>
             <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Board Exam Mode · Premium
+              Board Exam Mode · Pro
             </span>
           </div>
           <div className="space-y-3">
             <h1 className="max-w-4xl text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-              Turn anything into a complete study flow
+              Turn your notes into exam-ready study materials in seconds
             </h1>
             <p className="max-w-3xl text-sm leading-relaxed text-foreground/75 sm:text-base">
-              Write, paste, or generate notes - then turn them into summaries, key concepts, quizzes, and exam-ready practice.
+              Summaries, key concepts, and quizzes designed to help you understand and retain what matters.
             </p>
           </div>
           <div className="space-y-2">
             <div className="flex flex-col gap-3 sm:flex-row">
               <TrackedLink
-                href="/signup"
+                href="/demo"
                 className={buttonVariants({ className: "w-full sm:w-auto" })}
                 eventType="LANDING_CTA_CLICKED"
-                eventMetadata={{ placement: "hero_primary", destination: "/signup" }}
-              >
-                Start for Free
-              </TrackedLink>
-              <TrackedLink
-                href="/demo"
-                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
-                eventType="LANDING_CTA_CLICKED"
-                eventMetadata={{ placement: "hero_secondary", destination: "/demo" }}
+                eventMetadata={{ placement: "hero_primary", destination: "/demo" }}
               >
                 Try Demo
+              </TrackedLink>
+              <TrackedLink
+                href="/signup"
+                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+                eventType="LANDING_CTA_CLICKED"
+                eventMetadata={{ placement: "hero_secondary", destination: "/signup" }}
+              >
+                Start for Free
               </TrackedLink>
             </div>
             <p className="text-sm text-foreground/65">
@@ -325,10 +325,10 @@ function ValueSummarySection() {
   return (
     <section className="space-y-5">
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Features</p>
-        <h2 className="text-2xl font-semibold sm:text-3xl">Built for a guided study flow</h2>
+        <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Why NoteLib</p>
+        <h2 className="text-2xl font-semibold sm:text-3xl">Built for serious study</h2>
         <p className="max-w-3xl text-sm text-foreground/75">
-          Built for studying, not just exploring information.
+          Every feature is designed to move you from reading to remembering.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">

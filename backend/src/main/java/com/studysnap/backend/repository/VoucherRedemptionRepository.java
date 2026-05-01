@@ -9,4 +9,6 @@ public interface VoucherRedemptionRepository extends JpaRepository<VoucherRedemp
     long countByVoucher_Id(UUID voucherId);
 
     boolean existsByVoucher_IdAndUser_Id(UUID voucherId, UUID userId);
+
+    boolean existsByPaymentTransaction_Id(UUID paymentTransactionId);
 }

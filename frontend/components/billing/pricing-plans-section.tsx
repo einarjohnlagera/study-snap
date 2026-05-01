@@ -1,95 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { Check, Crown, Minus } from "lucide-react";
-import { PremiumWaitlistButton } from "@/components/billing/premium-waitlist-button";
+import { Check, Minus, Sparkles } from "lucide-react";
+import type { PaidPlanType } from "@/lib/api";
+import { PremiumUpgradeButton } from "@/components/billing/premium-upgrade-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { useBillingPricing } from "@/hooks/use-billing-pricing";
-import { formatBillingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
+import { formatBillingAmount, getBillingCyclePriceLabel, resolveCyclePricing } from "@/lib/billing-pricing";
 import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
+import {
+  type ComparisonValue,
+  PLAN_COMPARISON_ROWS,
+  getPaidPlanCtaLabel,
+  getPlanConfig,
+} from "@/src/config/plans";
 
 type PricingPlansSectionProps = {
   showHeading?: boolean;
 };
 
-type ComparisonValue = "check" | string | null;
-type ComparisonRow = {
-  label: string;
-  free: ComparisonValue;
-  premium: ComparisonValue;
-};
-
-const FREE_FEATURES = [
-  `${pricingConfig.free.studyPacksPerMonth} Study Packs / month`,
-  `${pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month`,
-  "Summary + Key Concepts",
-  "Weak Concepts tracking",
-];
-
-const FREE_LIMITATIONS = [
-  "Adaptive Practice (Premium)",
-  "Difficulty selection (Premium)",
-  "Board Exam Mode (Premium)",
-  "Higher note generation limits (Premium)",
-];
-
-const PREMIUM_FEATURES = [
-  `${pricingConfig.premium.studyPacksPerMonth} Study Packs / month`,
-  `${pricingConfig.premium.challengeQuizzesPerMonth} Quizzes / month`,
-  `${pricingConfig.premium.adaptivePracticePerMonth} Adaptive Practice sessions / month`,
-  "Difficulty selection",
-  "Board Exam Mode",
-  "Higher note generation limits",
-];
-
-const COMPARISON_ROWS: ComparisonRow[] = [
-  {
-    label: "Study Packs / month",
-    free: String(pricingConfig.free.studyPacksPerMonth),
-    premium: String(pricingConfig.premium.studyPacksPerMonth),
-  },
-  {
-    label: "Quizzes / month",
-    free: String(pricingConfig.free.challengeQuizzesPerMonth),
-    premium: String(pricingConfig.premium.challengeQuizzesPerMonth),
-  },
-  {
-    label: "Summary + Key Concepts",
-    free: "check",
-    premium: "check",
-  },
-  {
-    label: "Weak Concepts tracking",
-    free: "check",
-    premium: "check",
-  },
-  {
-    label: "Adaptive Practice",
-    free: null,
-    premium: "check",
-  },
-  {
-    label: "Difficulty selection",
-    free: null,
-    premium: "check",
-  },
-  {
-    label: "Board Exam Mode",
-    free: null,
-    premium: "check",
-  },
-  {
-    label: "Topic note generation",
-    free: "Limited",
-    premium: "Higher",
-  },
-];
-
 function ComparisonCell({ value, emphasize = false }: Readonly<{ value: ComparisonValue; emphasize?: boolean }>) {
-  const baseClassName = emphasize
-    ? "text-foreground"
-    : "text-foreground/85";
+  const baseClassName = emphasize ? "text-foreground" : "text-foreground/85";
 
   if (value === null) {
     return (
@@ -114,16 +46,141 @@ function ComparisonCell({ value, emphasize = false }: Readonly<{ value: Comparis
   );
 }
 
+function FeatureList({ features }: Readonly<{ features: ReadonlyArray<{ label: string; helper?: string }> }>) {
+  return (
+    <ul className="space-y-2 text-sm text-foreground/80">
+      {features.map((feature) => (
+        <li key={feature.label} className="flex items-start gap-2">
+          <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <span>
+            {feature.label}
+            {feature.helper ? <span className="block text-xs text-foreground/50">{feature.helper}</span> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function resolveFallbackCycleLabel(planType: PaidPlanType, region: ReturnType<typeof resolvePricingDisplayRegion>) {
+  const regionPricing = pricingConfig.price[region];
+  const introPricing = pricingConfig.intro[region];
+  const planPricing = planType === "PLUS" ? regionPricing.plus : regionPricing.pro;
+  const introAmount = planType === "PLUS" ? introPricing.plus.monthly : introPricing.pro.monthly;
+
+  return {
+    monthly: introAmount === null
+      ? `${formatBillingAmount(planPricing.monthly, regionPricing.currency)}/month`
+      : `${formatBillingAmount(introAmount, regionPricing.currency)} first month, then ${formatBillingAmount(planPricing.monthly, regionPricing.currency)}/month`,
+    yearly: planPricing.yearly === null
+      ? null
+      : `${formatBillingAmount(planPricing.yearly, regionPricing.currency)}/year`,
+  };
+}
+
+function PlanCard({
+  label,
+  eyebrow,
+  title,
+  description,
+  monthlyLabel,
+  yearlyLabel,
+  introHint,
+  highlights,
+  ctaLabel,
+  planType,
+  accent = false,
+}: Readonly<{
+  label: string;
+  eyebrow?: string;
+  title: string;
+  description: string;
+  monthlyLabel: string;
+  yearlyLabel?: string | null;
+  introHint?: string | null;
+  highlights: ReadonlyArray<{ label: string; helper?: string }>;
+  ctaLabel: string;
+  planType: PaidPlanType;
+  accent?: boolean;
+}>) {
+  return (
+    <Card className={`space-y-5 p-4 transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg sm:p-6 ${
+      accent ? "border-blue-300 bg-blue-50/35 shadow-sm dark:border-blue-700 dark:bg-blue-950/18" : ""
+    }`}>
+      <div className="space-y-2">
+        {eyebrow ? (
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+            <Sparkles className="h-3.5 w-3.5" />
+            {eyebrow}
+          </div>
+        ) : (
+          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{label}</p>
+        )}
+        <CardTitle>{title}</CardTitle>
+        <CardDescription className="leading-relaxed">{description}</CardDescription>
+      </div>
+      <div className="space-y-1">
+        <p className="text-xl font-semibold text-foreground">{monthlyLabel}</p>
+        {yearlyLabel ? <p className="text-sm text-foreground/70">{yearlyLabel}</p> : null}
+        {introHint ? <p className="text-xs text-foreground/60">{introHint}</p> : null}
+      </div>
+      <FeatureList features={highlights} />
+      <div className="space-y-2">
+        <PremiumUpgradeButton
+          label={ctaLabel}
+          source={`pricing_plans_section_${planType.toLowerCase()}_monthly`}
+          planType={planType}
+          billingCycle="MONTHLY"
+          className="w-full"
+        />
+        {yearlyLabel ? (
+          <PremiumUpgradeButton
+            label={planType === "PLUS" ? `${ctaLabel} Yearly` : "Go Pro Yearly"}
+            source={`pricing_plans_section_${planType.toLowerCase()}_yearly`}
+            planType={planType}
+            billingCycle="YEARLY"
+            variant="outline"
+            className="w-full"
+          />
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
 export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlansSectionProps>) {
   const { billingPricing } = useBillingPricing(true);
   const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
-  const fallbackPrice = pricingConfig.price[displayRegion];
-  const monthlyLabel = billingPricing
-    ? getBillingCyclePriceLabel(billingPricing, "MONTHLY")
-    : `${formatBillingAmount(fallbackPrice.monthly, fallbackPrice.currency)}/month`;
-  const yearlyLabel = billingPricing
-    ? getBillingCyclePriceLabel(billingPricing, "YEARLY")
-    : `${formatBillingAmount(fallbackPrice.yearly, fallbackPrice.currency)}/year`;
+  const regionFallback = pricingConfig.price[displayRegion];
+  const freePlan = getPlanConfig("FREE");
+  const plusPlan = getPlanConfig("PLUS");
+  const proPlan = getPlanConfig("PRO");
+  const plusFallback = resolveFallbackCycleLabel("PLUS", displayRegion);
+  const proFallback = resolveFallbackCycleLabel("PRO", displayRegion);
+
+  const plusMonthlyLabel = billingPricing
+    ? getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY")
+    : plusFallback.monthly;
+  const plusYearlyLabel = billingPricing
+    ? (resolveCyclePricing(billingPricing, "PLUS", "YEARLY")?.available ? getBillingCyclePriceLabel(billingPricing, "PLUS", "YEARLY") : null)
+    : plusFallback.yearly;
+  const proMonthlyLabel = billingPricing
+    ? getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY")
+    : proFallback.monthly;
+  const proYearlyLabel = billingPricing
+    ? (resolveCyclePricing(billingPricing, "PRO", "YEARLY")?.available ? getBillingCyclePriceLabel(billingPricing, "PRO", "YEARLY") : null)
+    : proFallback.yearly;
+
+  const plusIntroHint = billingPricing?.plus.monthly.introEligible && billingPricing.plus.monthly.introAmount !== null
+    ? `Intro offer: ${formatBillingAmount(billingPricing.plus.monthly.introAmount, billingPricing.currency)} for your first monthly checkout.`
+    : pricingConfig.intro[displayRegion].plus.monthly !== null
+      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].plus.monthly, regionFallback.currency)} for your first monthly checkout.`
+      : null;
+  const proIntroHint = billingPricing?.pro.monthly.introEligible && billingPricing.pro.monthly.introAmount !== null
+    ? `Intro offer: ${formatBillingAmount(billingPricing.pro.monthly.introAmount, billingPricing.currency)} for your first monthly checkout.`
+    : pricingConfig.intro[displayRegion].pro.monthly !== null
+      ? `Intro offer: ${formatBillingAmount(pricingConfig.intro[displayRegion].pro.monthly, regionFallback.currency)} for your first monthly checkout.`
+      : null;
 
   return (
     <section className="space-y-4">
@@ -132,34 +189,26 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
             Pricing
           </p>
-          <h2 className="text-2xl font-semibold sm:text-3xl">Free for everyday study. Premium for deeper exam prep.</h2>
+          <h2 className="text-2xl font-semibold sm:text-3xl">Free to start. Plus for consistency. Pro for serious review.</h2>
           <p className="max-w-3xl text-sm leading-relaxed text-foreground/75">
-            Compare the core NoteLib workflow with the higher limits and deeper practice tools designed for heavier review weeks.
+            Choose the plan that fits your study pace. Free covers the core note-to-study loop, Plus raises your limits, and Pro unlocks the full exam-prep toolkit.
           </p>
         </div>
       ) : null}
-      <div className="grid gap-4 md:grid-cols-2">
+
+      <div className="grid gap-4 xl:grid-cols-3">
         <Card className="space-y-5 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-            <CardTitle>For everyday study</CardTitle>
-            <CardDescription className="leading-relaxed">
-              Build notes, generate Study Packs, and review with quizzes without paying upfront.
-            </CardDescription>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlan.name}</p>
+            <CardTitle>{freePlan.title}</CardTitle>
+            <CardDescription className="leading-relaxed">{freePlan.description}</CardDescription>
           </div>
-          <p className="text-3xl font-semibold">Free</p>
-          <ul className="space-y-2 text-sm text-foreground/80">
-            {FREE_FEATURES.map((feature) => (
-              <li key={feature} className="flex items-start gap-2">
-                <Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
-                {feature}
-              </li>
-            ))}
-          </ul>
+          <p className="text-3xl font-semibold">{freePlan.name}</p>
+          <FeatureList features={freePlan.features} />
           <div className="space-y-2 rounded-lg border border-dashed border-border bg-background/70 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Premium-only extras</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Paid upgrades</p>
             <ul className="space-y-2 text-sm text-foreground/75">
-              {FREE_LIMITATIONS.map((feature) => (
+              {freePlan.upgradeHighlights?.map((feature) => (
                 <li key={feature} className="flex items-start gap-2">
                   <Minus className="mt-0.5 h-4 w-4 text-foreground/55" />
                   {feature}
@@ -168,85 +217,61 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
             </ul>
           </div>
           <Link href="/auth" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-            Start for Free
+            {freePlan.ctaLabel}
           </Link>
         </Card>
 
-        <Card className="space-y-5 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
-          <div className="space-y-2">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-              <Crown className="h-3.5 w-3.5" />
-              Premium
-            </div>
-            <CardTitle>For focused exam preparation</CardTitle>
-            <CardDescription className="leading-relaxed">
-              Premium adds higher limits and targeted quiz tools for the weeks when review gets serious.
-            </CardDescription>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xl font-semibold text-foreground">
-              ₱{pricingConfig.price.PH.monthly}/month{" "}
-              <span className="text-sm font-normal text-foreground/60">· ₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</span>
-            </p>
-            {billingPricing?.introEligible ? (
-              <p className="text-xs text-foreground/60">
-                Intro offer: first month ₱{pricingConfig.intro.PH.monthly} / ${pricingConfig.intro.DEFAULT.monthly}
-              </p>
-            ) : null}
-            <p className="text-xs text-foreground/50">Prices may vary depending on your region.</p>
-          </div>
-          <ul className="space-y-2 text-sm text-foreground/80">
-            {PREMIUM_FEATURES.map((feature) => (
-              <li key={feature} className="flex items-start gap-2">
-                <Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />
-                {feature}
-              </li>
-            ))}
-          </ul>
-          <div className="space-y-2">
-            <PremiumWaitlistButton
-              label="Upgrade to Premium"
-              source="pricing_plans_section"
-              className="w-full sm:w-auto"
-            />
-            <p className="text-sm text-foreground/65">
-              Premium pricing is shown now, but upgrades currently join the waitlist while checkout is still being prepared.
-            </p>
-          </div>
-        </Card>
+        <PlanCard
+          label={plusPlan.name}
+          title={plusPlan.title}
+          description={plusPlan.description}
+          monthlyLabel={plusMonthlyLabel}
+          yearlyLabel={plusYearlyLabel}
+          introHint={plusIntroHint}
+          highlights={plusPlan.features}
+          ctaLabel={getPaidPlanCtaLabel("PLUS")}
+          planType="PLUS"
+        />
+
+        <PlanCard
+          label={proPlan.name}
+          eyebrow={proPlan.eyebrow}
+          title={proPlan.title}
+          description={proPlan.description}
+          monthlyLabel={proMonthlyLabel}
+          yearlyLabel={proYearlyLabel}
+          introHint={proIntroHint}
+          highlights={proPlan.features}
+          ctaLabel={getPaidPlanCtaLabel("PRO")}
+          planType="PRO"
+          accent
+        />
       </div>
 
       <Card className="overflow-hidden p-0">
         <div className="border-b border-border px-4 py-4 sm:px-6">
           <h3 className="text-lg font-semibold sm:text-xl">Plan comparison</h3>
           <p className="mt-1 text-sm text-foreground/70">
-            Free covers the core study loop. Premium expands limits and unlocks deeper quiz training.
+            Free covers the core study loop. Plus expands your limits. Pro adds the full exam-prep toolkit.
           </p>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-xl text-sm">
+          <table className="min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30 text-left">
                 <th className="px-4 py-3 font-semibold sm:px-6">Feature</th>
                 <th className="px-4 py-3 text-center font-semibold sm:px-6">Free</th>
-                <th className="bg-blue-500/8 px-4 py-3 text-center font-semibold text-foreground sm:px-6 dark:bg-blue-500/12">
-                  Premium
-                </th>
+                <th className="px-4 py-3 text-center font-semibold sm:px-6">Plus</th>
+                <th className="bg-blue-500/8 px-4 py-3 text-center font-semibold text-foreground sm:px-6 dark:bg-blue-500/12">Pro</th>
               </tr>
             </thead>
             <tbody>
-              {COMPARISON_ROWS.map((row, rowIndex) => (
-                <tr
-                  key={row.label}
-                  className={`border-b border-border ${rowIndex === COMPARISON_ROWS.length - 1 ? "border-b-0" : ""}`}
-                >
+              {PLAN_COMPARISON_ROWS.map((row, rowIndex) => (
+                <tr key={row.label} className={`border-b border-border ${rowIndex === PLAN_COMPARISON_ROWS.length - 1 ? "border-b-0" : ""}`}>
                   <td className="px-4 py-3 font-medium sm:px-6">{row.label}</td>
-                  <td className="px-4 py-3 text-center align-middle sm:px-6">
-                    <ComparisonCell value={row.free} />
-                  </td>
-                  <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12">
-                    <ComparisonCell value={row.premium} emphasize />
-                  </td>
+                  <td className="px-4 py-3 text-center align-middle sm:px-6"><ComparisonCell value={row.values.FREE} /></td>
+                  <td className="px-4 py-3 text-center align-middle sm:px-6"><ComparisonCell value={row.values.PLUS} /></td>
+                  <td className="bg-blue-500/8 px-4 py-3 text-center align-middle sm:px-6 dark:bg-blue-500/12"><ComparisonCell value={row.values.PRO} emphasize /></td>
                 </tr>
               ))}
             </tbody>
@@ -258,18 +283,21 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
         <div className="space-y-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Regional Pricing</p>
           <h3 className="text-lg font-semibold">Pricing shown clearly</h3>
-          <p className="text-sm leading-relaxed text-foreground/70">Prices are shown for Philippines (PHP) and international (USD).</p>
+          <p className="text-sm leading-relaxed text-foreground/70">Prices are shown for Philippines (PHP) and international (USD) using backend pricing data when available.</p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
             <p className="text-sm font-semibold text-foreground">🇵🇭 Philippines pricing (PHP)</p>
-            <p className="text-2xl font-semibold text-foreground">₱{pricingConfig.price.PH.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
-            <p className="text-sm text-foreground/70">₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</p>
+            <p className="text-sm text-foreground/80">Plus: ₱{pricingConfig.price.PH.plus.monthly}/month</p>
+            <p className="text-sm text-foreground/80">Pro: ₱{pricingConfig.price.PH.pro.monthly}/month</p>
+            <p className="text-sm text-foreground/70">Pro yearly: ₱{pricingConfig.price.PH.pro.yearly?.toLocaleString()}</p>
+            <p className="text-xs text-foreground/60">Intro monthly offers: Plus ₱{pricingConfig.intro.PH.plus.monthly}, Pro ₱{pricingConfig.intro.PH.pro.monthly}</p>
           </div>
           <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
             <p className="text-sm font-semibold text-foreground">🌍 International pricing</p>
-            <p className="text-2xl font-semibold text-foreground">${pricingConfig.price.DEFAULT.monthly}<span className="text-sm font-normal text-foreground/60">/month</span></p>
-            <p className="text-sm text-foreground/70">${pricingConfig.price.DEFAULT.yearly}/year</p>
+            <p className="text-sm text-foreground/80">Plus: ${pricingConfig.price.DEFAULT.plus.monthly}/month</p>
+            <p className="text-sm text-foreground/80">Pro: ${pricingConfig.price.DEFAULT.pro.monthly}/month</p>
+            <p className="text-sm text-foreground/70">Pro yearly: ${pricingConfig.price.DEFAULT.pro.yearly}/year</p>
           </div>
         </div>
       </Card>
@@ -281,10 +309,10 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
         </div>
         <dl className="space-y-4 text-sm">
           {[
-            { q: "Is NoteLib free?", a: "Yes. You can use core features for free — including Study Packs, summaries, key concepts, and quizzes up to the monthly limits." },
-            { q: "When should I upgrade?", a: "When you need more quizzes, Adaptive Practice, or deeper exam-style practice with higher monthly limits." },
-            { q: "Do prices vary by country?", a: "Prices are shown for Philippines (PHP) and international (USD)." },
-            { q: "Is Board Exam Mode included?", a: "Yes, it is part of Premium." },
+            { q: "Is NoteLib free?", a: "Yes. You can use the core note-to-study workflow for free up to the monthly limits." },
+            { q: "Who is Plus for?", a: "Plus is for regular study sessions when Free limits start to feel tight but you do not need the advanced Pro features yet." },
+            { q: "Who is Pro for?", a: "Pro is built for serious review and exam prep with Adaptive Practice, difficulty selection, Board Exam Mode, and the highest limits." },
+            { q: "Do prices vary by country?", a: "Yes. Backend pricing resolves your region and keeps PHP visibility clear for Xendit checkout." },
           ].map(({ q, a }) => (
             <div key={q} className="space-y-1">
               <dt className="font-medium text-foreground">{q}</dt>
@@ -298,53 +326,74 @@ export function PricingPlansSection({ showHeading = true }: Readonly<PricingPlan
 }
 
 export function SimplePricingSection() {
+  const freePlan = getPlanConfig("FREE");
+  const plusPlan = getPlanConfig("PLUS");
+  const proPlan = getPlanConfig("PRO");
+
   return (
     <section className="space-y-5">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Free</p>
-            <CardTitle>For everyday study</CardTitle>
+      <div className="grid gap-4 xl:grid-cols-3">
+        {/* Free */}
+        <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{freePlan.name}</p>
+            <CardTitle>{freePlan.title}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{freePlan.description}</CardDescription>
           </div>
-          <p className="text-3xl font-semibold">Free</p>
-          <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.free.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Summary + Key Concepts</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Weak Concepts tracking</li>
-          </ul>
-          <Link href="/signup" className={buttonVariants({ className: "w-full sm:w-auto" })}>
-            Start for Free
+          <p className="text-3xl font-semibold">{freePlan.name}</p>
+          <div className="grow">
+            <FeatureList features={freePlan.features} />
+          </div>
+          <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
+            {freePlan.ctaLabel}
           </Link>
         </Card>
 
-        <Card className="space-y-4 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
-          <div className="space-y-2">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-              <Crown className="h-3.5 w-3.5" />
-              Premium
-            </div>
-            <CardTitle>For focused exam preparation</CardTitle>
-          </div>
+        {/* Plus */}
+        <Card className="flex flex-col space-y-4 p-4 transition-[transform,box-shadow,border-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md sm:p-6">
           <div className="space-y-1">
-            <p className="text-xl font-semibold">₱{pricingConfig.price.PH.monthly}/month <span className="text-sm font-normal text-foreground/60">· ₱{pricingConfig.price.PH.yearly.toLocaleString()}/year</span></p>
-            <p className="text-sm text-foreground/60">${pricingConfig.price.DEFAULT.monthly}/month · ${pricingConfig.price.DEFAULT.yearly}/year</p>
-            <p className="text-xs text-foreground/50">Prices are shown for Philippines (PHP) and international (USD).</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">{plusPlan.name}</p>
+            <CardTitle>{plusPlan.title}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{plusPlan.description}</CardDescription>
           </div>
-          <ul className="space-y-2 text-sm text-foreground/80">
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.studyPacksPerMonth} Study Packs / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />{pricingConfig.premium.challengeQuizzesPerMonth} Quizzes / month</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Adaptive Practice</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Difficulty selection</li>
-            <li className="flex items-start gap-2"><Check className="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-400" />Board Exam Mode</li>
-          </ul>
-          <Link href="/pricing" className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}>
-            View Pricing
+          <div className="space-y-0.5">
+            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.plus.monthly} first month</p>
+            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.plus.monthly}/month</p>
+          </div>
+          <div className="grow">
+            <FeatureList features={plusPlan.features} />
+          </div>
+          <p className="text-xs text-foreground/55">{plusPlan.adaptivePracticeMessage}</p>
+          <Link href="/signup" className={buttonVariants({ variant: "outline", className: "w-full" })}>
+            {plusPlan.ctaLabel}
+          </Link>
+        </Card>
+
+        {/* Pro */}
+        <Card className="flex flex-col space-y-4 border-blue-300 bg-blue-50/35 p-4 shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:border-blue-700 dark:bg-blue-950/18 sm:p-6">
+          <div className="space-y-1">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+              <Sparkles className="h-3.5 w-3.5" />
+              {proPlan.eyebrow}
+            </div>
+            <CardTitle>{proPlan.title}</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">{proPlan.description}</CardDescription>
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-xl font-semibold">₱{pricingConfig.intro.PH.pro.monthly} first month</p>
+            <p className="text-sm text-foreground/60">then ₱{pricingConfig.price.PH.pro.monthly}/month</p>
+          </div>
+          <div className="grow">
+            <FeatureList features={proPlan.features} />
+          </div>
+          <p className="text-xs text-foreground/55">{proPlan.adaptivePracticeMessage}</p>
+          <Link href="/signup" className={buttonVariants({ className: "w-full" })}>
+            {proPlan.ctaLabel}
           </Link>
         </Card>
       </div>
       <p className="text-sm text-foreground/60">
-        Simple pricing. Start free, upgrade when you need more.
+        Manual renewal. No automatic charges. Intro pricing applies to your first monthly checkout.
       </p>
     </section>
   );

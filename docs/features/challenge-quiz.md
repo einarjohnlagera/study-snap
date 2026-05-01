@@ -41,14 +41,14 @@ Runtime/session rules:
   - `Board Taker` -> `Board Exam Mode` is visually emphasized by default
 - Do not skip directly into setup based only on persona.
 
-## Premium Gating
+## Plan Gating
 
-- `Board Exam Mode` is Premium-only.
+- `Board Exam Mode` is Pro-only.
 - Free users should still see `Board Exam Mode` on the shared mode-selection screen.
-- Free users who click `Board Exam Mode` from the shared mode-selection screen must see the shared Premium upsell modal.
-- Do not replace the Premium upsell with a normal setup screen for free users.
+- Plus and Free users who click `Board Exam Mode` from the shared mode-selection screen must see the shared Pro upsell modal.
+- Do not replace the Pro upsell with a normal setup screen for non-Pro users.
 - Monthly quiz-limit handling is separate:
-  - free user + premium-only path -> Premium upsell modal
-  - free user + exhausted Challenge Quiz credits -> Premium upsell modal
-  - premium user + exhausted monthly quiz limit -> quiz-limit state / limit messaging
+  - free or plus user + Pro-only path -> Pro upsell modal
+  - free user + exhausted Challenge Quiz credits -> paid-plan upsell modal
+  - plus or pro user + exhausted monthly quiz limit -> quiz-limit state / limit messaging
 - Free users who already exhausted Challenge Quiz credits should be stopped by the paywall modal before entering quiz setup or mode-selection flow from Note Detail actions.

@@ -11,6 +11,7 @@ Provide an internal, read-only Admin Dashboard for monitoring product usage, bil
   - `GET /api/admin/dashboard/summary`
   - `GET /api/admin/dashboard/top-content`
   - `GET /api/admin/dashboard/recent-events`
+  - `POST /api/admin/jobs/subscription-expiry/{subscriptionId}` — expire a specific subscription and downgrade to Free (dev/ops use; subscription `end_at` must already be in the past)
 - Access is restricted to users with the `ADMIN` role.
 - Non-admin users must not be able to use admin endpoints.
 - Frontend should redirect authenticated non-admin users away from `/admin`.
@@ -33,7 +34,7 @@ Overview cards should show:
 - total users
 - verified users
 - premium users
-- premium waitlist count
+- premium waitlist count (legacy interest metric, separate from live checkout)
 - total notes
 - total Study Packs generated
 - total public notes
@@ -78,9 +79,9 @@ Admin v1 tables should include:
 Reuse existing data sources where possible:
 
 - `analytics_events` for funnel, paywall, upgrade, and public-note metrics
-- `premium_waitlist` for pre-launch Premium interest
-- `subscriptions` for active Premium state and cancel-at-period-end status
-- `payment_transactions` for failed payments and recurring-revenue estimates
+- `premium_waitlist` for legacy paid-plan interest reporting when that data still exists
+- `subscriptions` for active paid-plan state and cancel-at-period-end status
+- `payment_transactions` for upgrade history, failed payments, and billing estimates
 - `feedback` for recent user feedback during soft launch
 - `notes` and `study_packs` for library and generation counts
 

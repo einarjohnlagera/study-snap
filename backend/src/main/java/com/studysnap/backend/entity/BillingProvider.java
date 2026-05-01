@@ -2,6 +2,6 @@ package com.studysnap.backend.entity;
 
 public enum BillingProvider {
     NONE,
-    STRIPE,
-    PAYMONGO
+    INTERNAL_MIGRATION,
+    XENDIT
 }

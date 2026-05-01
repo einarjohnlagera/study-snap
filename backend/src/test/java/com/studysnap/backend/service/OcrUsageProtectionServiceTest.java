@@ -42,7 +42,7 @@ class OcrUsageProtectionServiceTest {
     void setUp() {
         StudySnapProperties properties = new StudySnapProperties();
         properties.getPricing().setFreeMonthlyOcrLimit(2);
-        properties.getPricing().setPremiumMonthlyOcrLimit(5);
+        properties.getPricing().setProMonthlyOcrLimit(5);
         service = new OcrUsageProtectionService(
                 properties,
                 userUsageService,
@@ -83,13 +83,14 @@ class OcrUsageProtectionServiceTest {
                         0,
                         0,
                         2,
+                        0,
                         0
                 ));
 
         AppException error = assertThrows(AppException.class, () -> service.assertQuotaAvailable(userId, PlanType.FREE));
 
         assertEquals("OCR_LIMIT_REACHED", error.getCode());
-        assertEquals("You have reached your OCR limit for now. Please try again later or upgrade to Premium.", error.getMessage());
+        assertEquals("You have reached your OCR limit for now. Please try again later or upgrade your plan.", error.getMessage());
     }
 
     @Test
@@ -102,10 +103,11 @@ class OcrUsageProtectionServiceTest {
                         0,
                         0,
                         3,
+                        0,
                         0
                 ));
 
-        assertDoesNotThrow(() -> service.assertQuotaAvailable(userId, PlanType.PREMIUM));
+        assertDoesNotThrow(() -> service.assertQuotaAvailable(userId, PlanType.PRO));
     }
 
     @Test

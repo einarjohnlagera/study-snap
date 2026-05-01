@@ -226,10 +226,14 @@ Profile Type does not affect:
 
 ### Billing Architecture
 
-- `BillingController` exposes provider-agnostic billing endpoints:
-  - `POST /api/billing/checkout/premium`
-  - `POST /api/billing/webhook`
+- `BillingController` exposes pricing, usage, and history endpoints:
+  - `GET /api/billing/pricing`
+  - `GET /api/billing/history`
   - `GET /api/billing/usage`
+- `PaymentController` exposes checkout creation:
+  - `POST /api/payments/create`
+- `XenditWebhookController` exposes the public payment callback endpoint:
+  - `POST /api/webhooks/xendit`
 - `MeController` exposes the authenticated plan summary endpoint:
   - `GET /api/me/plan`
 - `GET /api/me/plan` is the single frontend-facing source of truth for:
@@ -237,32 +241,30 @@ Profile Type does not affect:
   - monthly limits for Study Packs, Challenge Quiz, Adaptive Practice, and OCR
   - current monthly usage counters
   - remaining usage counters
-  - Premium feature flags such as Adaptive Practice and Difficulty Selection
+  - Pro-only feature flags such as Adaptive Practice and Difficulty Selection
 - Usage periods are enforced from `BillingUsagePeriodService`:
   - Free users anchor monthly cycles to `users.created_at`
-  - Premium users use the active subscription `startAt/endAt` billing window
+  - paid users use the active subscription billing window
   - `user_usage.period_start` and `user_usage.period_end` are the persisted cycle boundaries used for quota checks
-- `BillingService` is the provider abstraction used by the controller.
-- Active provider is resolved by configuration (`studysnap.billing.provider`).
-- Current active provider: `PAYMONGO`.
-- Premium checkout supports billing cycle selection:
-  - `MONTHLY` -> configured `PAYMONGO_MONTHLY_PLAN_ID`
-  - `YEARLY` -> configured `PAYMONGO_YEARLY_PLAN_ID`
-- Subscription state changes are webhook-driven (source of truth):
-  - `subscription.activated`
-  - `subscription.invoice.paid`
-  - `subscription.invoice.payment_failed`
-  - `subscription.past_due`
-  - `subscription.unpaid`
-  - `subscription.updated`
-- Provider service maps external events to internal domain services only:
+- `PaymentService` owns hosted checkout creation and Xendit webhook processing.
+- Current active provider: `XENDIT`.
+- Checkout creation flow:
+  - validate the selected paid plan and current eligibility
+  - create a Xendit invoice at `/v2/invoices`
+  - persist a pending `payment_transactions` row with provider reference `external_id`
+  - return the hosted `invoice_url` to frontend
+- Webhook state changes are the source of truth for paid-plan activation:
+  - `PAID`
+  - `FAILED`
+  - `EXPIRED`
+- Payment services map external events to internal domain services only:
   - `SubscriptionService` (activate/downgrade + provider IDs)
-  - `PaymentTransactionService` (transaction recording + idempotency by provider reference)
+  - `PaymentTransactionService` (transaction recording + provider-reference lookup)
 - Webhook idempotency:
   - incoming provider events are persisted to `webhook_events`
   - duplicate `(provider, event_id)` deliveries are acknowledged and skipped
 - Safety jobs:
-  - `SubscriptionExpiryJob` downgrades expired active Premium subscriptions
+  - `SubscriptionExpiryJob` downgrades expired active paid subscriptions
   - `BillingUsageResetJob` ensures usage records exist for current period windows
 
 ## Generation Pipeline
@@ -537,7 +539,7 @@ Quick Review:
 - UI letters are presentation-only and are derived from displayed choice order at render time
 - displayed choice order must stay deterministic for a given question/session so re-renders do not change correctness
 
-Challenge Quiz (Premium):
+Challenge Quiz:
 
 - generated from summary + key concepts only
 - timed and continuously persisted
@@ -546,7 +548,7 @@ Challenge Quiz (Premium):
 - generation may start from raw LLM `answer` letters, but backend/session persistence must normalize to canonical `correctIndex`
 - session state stores selected canonical choice indexes and may normalize legacy answer-text payloads on load
 
-Adaptive Practice (Premium):
+Adaptive Practice (Pro):
 
 - generated from summary + key concepts + weak concepts only
 - resumes in-progress session if present (no duplicate generation call)

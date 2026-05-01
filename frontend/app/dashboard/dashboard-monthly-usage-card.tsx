@@ -37,7 +37,7 @@ export function DashboardMonthlyUsageCard({
       used: usageSummary.usage.challengeQuizzesUsed,
       limit: usageSummary.limits.challengeQuizzesPerMonth,
     },
-    ...(usageSummary.plan === "PREMIUM"
+    ...(usageSummary.plan === "PRO"
       ? [{
         label: "Adaptive Practice",
         used: usageSummary.usage.adaptivePracticeUsed,

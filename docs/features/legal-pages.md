@@ -27,7 +27,7 @@ The Privacy Policy page should cover:
 - AI and OCR processing disclosures
 - data storage and security language
 - account, reminder, and billing emails
-- PayMongo payment processing
+- Xendit payment processing
 - contact at `support@mail.notelib.app`
 
 ## Terms of Service
@@ -38,7 +38,7 @@ The Terms page should cover:
 - user responsibility for uploaded content
 - account responsibility and abuse suspension
 - acceptable use restrictions
-- Premium subscription and cancellation-at-period-end
+- paid-plan manual renewal and cancellation-at-period-end
 - service availability and feature changes
 - contact at `support@mail.notelib.app`
 

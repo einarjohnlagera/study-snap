@@ -29,11 +29,11 @@ class AiRateLimitServiceTest {
         assertEquals("TOO_MANY_REQUESTS", freeError.getCode());
         assertEquals("Too many requests. Please wait a moment and try again.", freeError.getMessage());
 
-        assertDoesNotThrow(() -> service.assertAllowed(userId, PlanType.PREMIUM, "study-pack"));
-        assertDoesNotThrow(() -> service.assertAllowed(userId, PlanType.PREMIUM, "study-pack"));
+        assertDoesNotThrow(() -> service.assertAllowed(userId, PlanType.PRO, "study-pack"));
+        assertDoesNotThrow(() -> service.assertAllowed(userId, PlanType.PRO, "study-pack"));
         AppException premiumError = assertThrows(
                 AppException.class,
-                () -> service.assertAllowed(userId, PlanType.PREMIUM, "study-pack")
+                () -> service.assertAllowed(userId, PlanType.PRO, "study-pack")
         );
         assertEquals("TOO_MANY_REQUESTS", premiumError.getCode());
     }

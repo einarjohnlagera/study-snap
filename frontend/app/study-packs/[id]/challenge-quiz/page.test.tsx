@@ -110,7 +110,7 @@ describe("ChallengeQuizPage", () => {
   function setupInProgressChallengeQuiz(mode: "challenge" | "board_exam" = "challenge") {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -170,13 +170,13 @@ describe("ChallengeQuizPage", () => {
   function setupChallengePrestart(
     difficultySelectionAvailable = true,
     profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" = "STUDENT",
-    planType?: "FREE" | "PREMIUM",
+    planType?: "FREE" | "PRO",
     options: {
       usedThisMonth?: number;
       monthlyLimit?: number;
     } = {},
   ) {
-    const resolvedPlanType = planType ?? (difficultySelectionAvailable ? "PREMIUM" : "FREE");
+    const resolvedPlanType = planType ?? (difficultySelectionAvailable ? "PRO" : "FREE");
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       profileType,
@@ -233,7 +233,7 @@ describe("ChallengeQuizPage", () => {
   } = {}) {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -333,7 +333,7 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
   });
 
-  it("shows Premium difficulty selection after students choose Challenge Quiz", async () => {
+  it("shows Pro difficulty selection after students choose Challenge Quiz", async () => {
     setupChallengePrestart(true, "STUDENT");
 
     render(<ChallengeQuizPage />);
@@ -343,7 +343,7 @@ describe("ChallengeQuizPage", () => {
     expect(screen.getByRole("button", { name: "easy" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "medium" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "hard" })).toBeInTheDocument();
-    expect(screen.getByText("Premium lets you choose the level before you start.")).toBeInTheDocument();
+    expect(screen.getByText("Pro lets you choose the level before you start.")).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
     expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Choose another mode" })).toBeInTheDocument();
@@ -358,7 +358,7 @@ describe("ChallengeQuizPage", () => {
     fireEvent.click(await getModeCard("Challenge Quiz"));
     expect(await screen.findByRole("heading", { name: "Challenge Quiz Setup" })).toBeInTheDocument();
     expect(screen.getByText("Recommended difficulty: Medium")).toBeInTheDocument();
-    expect(screen.getByText("Choose difficulty (Premium)")).toBeInTheDocument();
+    expect(screen.getByText("Choose difficulty (Pro)")).toBeInTheDocument();
     expect(screen.getByText("10 minutes. Timer runs until submission or expiration.")).toBeInTheDocument();
     expect(screen.getByText("Recommended based on your recent performance.")).toBeInTheDocument();
     expect(screen.getByText("Counts toward your monthly quiz limit.")).toBeInTheDocument();
@@ -396,7 +396,7 @@ describe("ChallengeQuizPage", () => {
   });
 
   it("starts Board Takers on the shared mode-selection screen with Board Exam emphasized", async () => {
-    setupChallengePrestart(true, "BOARD_EXAM", "PREMIUM");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
 
     render(<ChallengeQuizPage />);
 
@@ -413,7 +413,7 @@ describe("ChallengeQuizPage", () => {
     (getAuthUser as jest.Mock).mockReturnValue({
       id: "user-1",
       profileType: "BOARD_EXAM",
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
 
@@ -427,8 +427,8 @@ describe("ChallengeQuizPage", () => {
     expect(replaceMock).toHaveBeenCalledWith("/notes/note-1/challenge-quiz", { scroll: false });
   });
 
-  it("opens Board Exam setup for premium Board Takers after mode selection", async () => {
-    setupChallengePrestart(true, "BOARD_EXAM", "PREMIUM");
+  it("opens Board Exam setup for Pro Board Takers after mode selection", async () => {
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
 
     render(<ChallengeQuizPage />);
 
@@ -456,7 +456,7 @@ describe("ChallengeQuizPage", () => {
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     fireEvent.click(await getModeCard("Board Exam Mode"));
 
-    expect(await screen.findByRole("dialog", { name: "Board Exam Mode is a Premium feature" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Board Exam Mode is a Pro feature" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Board Exam Setup" })).not.toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
   });
@@ -471,8 +471,8 @@ describe("ChallengeQuizPage", () => {
     expect(screen.queryByRole("heading", { name: "You’ve reached your quiz limit for this month" })).not.toBeInTheDocument();
   });
 
-  it("shows the limit page for premium users who exhausted Challenge Quiz credits", async () => {
-    setupChallengePrestart(true, "STUDENT", "PREMIUM", { usedThisMonth: 50, monthlyLimit: 50 });
+  it("shows the limit page for Pro users who exhausted Challenge Quiz credits", async () => {
+    setupChallengePrestart(true, "STUDENT", "PRO", { usedThisMonth: 50, monthlyLimit: 50 });
 
     render(<ChallengeQuizPage />);
 
@@ -564,7 +564,7 @@ describe("ChallengeQuizPage", () => {
   });
 
   it("shows the Board Exam start confirmation modal before generation begins", async () => {
-    setupChallengePrestart(true, "BOARD_EXAM", "PREMIUM");
+    setupChallengePrestart(true, "BOARD_EXAM", "PRO");
 
     render(<ChallengeQuizPage />);
 
@@ -744,7 +744,7 @@ describe("ChallengeQuizPage", () => {
 
   it("loads note/session once and does not loop initialization calls", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -1018,7 +1018,7 @@ describe("ChallengeQuizPage", () => {
 
   it('result screen does not contain a "Note" button', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -1100,7 +1100,7 @@ describe("ChallengeQuizPage", () => {
 
   it('result screen shows "← Back to Note" navigation link', async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({
@@ -1188,7 +1188,7 @@ describe("ChallengeQuizPage", () => {
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({
-      planType: "PREMIUM",
+      planType: "PRO",
       emailVerifiedAt: "2026-03-21T09:00:00Z",
     });
     (getNote as jest.Mock).mockResolvedValue({

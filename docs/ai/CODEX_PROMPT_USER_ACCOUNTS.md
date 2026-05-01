@@ -159,7 +159,7 @@ Apply sensible validation such as:
 Do not add:
 - social login
 - password reset email flows
-- Stripe integration
+- additional payment provider integrations
 - family linking
 - teacher features
 - analytics dashboards
@@ -197,4 +197,3 @@ Please return:
 8. anything risky or ambiguous that should be reviewed before coding
 
 Favor concrete code scaffolding over vague advice.
-

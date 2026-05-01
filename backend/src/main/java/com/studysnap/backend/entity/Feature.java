@@ -5,10 +5,10 @@ import lombok.Getter;
 @Getter
 public enum Feature {
     ADAPTIVE_QUIZ(
-            "Adaptive Practice is a Premium feature. Upgrade to Premium to continue."
+            "Adaptive Practice is a Pro feature. Upgrade to Pro to continue."
     ),
     DIFFICULTY_SELECTION(
-            "Difficulty selection is a Premium feature. Upgrade to Premium to continue."
+            "Difficulty selection is a Pro feature. Upgrade to Pro to continue."
     ),
     WEAK_CONCEPT_DETECTION(
             "Weak concepts are available."

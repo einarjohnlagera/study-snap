@@ -162,7 +162,7 @@ Validation/error handling in the OCR path:
 - no readable text detected
 - generic OCR/extraction failures
 - OCR billing-period quota reached:
-  - `You have reached your OCR limit for now. Please try again later or upgrade to Premium.`
+  - `You have reached your OCR limit for now. Please try again later or upgrade to Plus or Pro.`
 - OCR or AI request rate limit reached:
   - `Too many requests. Please wait a moment and try again.`
 
@@ -172,23 +172,26 @@ Errors should remain supportive and actionable.
 
 - Demo: 3 questions
 - Free: 5 questions
-- Premium: 10–20 questions
+- Paid plans: larger configured quiz ranges based on plan and mode
 
 ## Study Pack usage UX
 
 - Free users keep the existing `10` Study Packs/month product rule.
-- Premium users keep the existing `100` Study Packs/month product rule.
+- Plus users keep the existing `50` Study Packs/month product rule.
+- Pro users keep the existing `100` Study Packs/month product rule.
 - When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on generation-related surfaces.
 - Free near-limit banner copy should say:
   - `You have {X} Study Packs left this month on the Free plan.`
-- Premium near-limit banner copy should say:
+- Plus near-limit banner copy should say:
+  - `You have {X} Study Packs left this month on Plus.`
+- Pro near-limit banner copy should say:
   - `You have {X} Study Packs left this month.`
-- When a Free user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared Premium/upgrade modal instead of the monthly-limit modal.
-- When a Premium user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared limit modal with:
+- When a Free user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared upgrade modal instead of the monthly-limit modal.
+- When a paid user reaches `0` remaining Study Packs, keep `Generate Study Pack` enabled and open the shared limit modal with:
   - title: `Monthly Limit Reached`
   - reset-date messaging
   - actions: `Upgrade Plan`, `Get More Study Packs`, `Maybe Later`
-- Limit messaging should make it clear that Premium increases Study Pack capacity and unlocks Challenge Quiz + Adaptive Practice.
+- Limit messaging should make it clear that Plus and Pro increase Study Pack capacity and that Pro unlocks Adaptive Practice plus Board Exam Mode.
 - Warning banners and generation blocking must use the same backend-resolved effective usage count so remaining counts and enforcement never disagree.
 - Study Pack quota only increments after a successful Study Pack is saved.
 - Failed generation attempts, note saves, opening generation surfaces, and failed retries must not consume Study Pack quota.
