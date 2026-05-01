@@ -1405,6 +1405,29 @@ Pricing UI source of truth:
 - shared config owns plan names, descriptions, CTA labels, and feature lists
 - backend billing pricing APIs remain the source of truth for checkout amounts and regional pricing eligibility
 
+Context-aware paywall flow:
+
+- all paid blocks must use the shared context-aware paywall instead of generic upgrade copy
+- current paywall contexts are:
+  - `GENERATE_STUDY_PACK_LIMIT`
+  - `GENERATE_NOTE_LIMIT`
+  - `QUIZ_LIMIT`
+  - `ADAPTIVE_PRACTICE_LOCKED`
+  - `EXPORT_LIMIT`
+- paywall content must explain why the user is blocked and what learning value the upgrade unlocks
+- paywall comparison cards should show Plus and Pro only, with Pro visually emphasized as the stronger exam-prep tier
+- paywall CTAs must stay consistent:
+  - primary -> `Continue with Pro`
+  - secondary -> `Choose Plus`
+- paywall resume context must preserve the blocked action plus:
+  - `noteId` when the flow is note-owned
+  - safe internal `returnPath`
+- note-creation paywalls must save the current note or preserve the local draft before checkout so user work is not lost
+- billing success should resume the interrupted flow after confirmed access:
+  - safe `returnPath` returns the user to the original page
+  - Study Pack resume returns to `/notes/{noteId}?generate=1`
+  - Settings / Billing-origin upgrades return to Dashboard instead of looping back to billing
+
 ---
 
 ## Activity Tracking

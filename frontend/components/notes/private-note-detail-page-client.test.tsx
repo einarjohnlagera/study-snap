@@ -233,11 +233,40 @@ describe("PrivateNoteDetailPageClient", () => {
     (getBillingPricing as jest.Mock).mockResolvedValue({
       region: "PH",
       currency: "PHP",
-      monthlyPrice: 249,
-      yearlyPrice: 1999,
-      introMonthlyPrice: 199,
-      hasIntroPromo: true,
-      introEligible: true,
+      plus: {
+        planType: "PLUS",
+        monthly: {
+          amount: 179,
+          durationDays: 30,
+          introAmount: 149,
+          introEligible: true,
+          available: true,
+        },
+        yearly: {
+          amount: 1790,
+          durationDays: 365,
+          introAmount: null,
+          introEligible: false,
+          available: false,
+        },
+      },
+      pro: {
+        planType: "PRO",
+        monthly: {
+          amount: 249,
+          durationDays: 30,
+          introAmount: 199,
+          introEligible: true,
+          available: true,
+        },
+        yearly: {
+          amount: 2490,
+          durationDays: 365,
+          introAmount: null,
+          introEligible: false,
+          available: false,
+        },
+      },
     });
     (createPremiumCheckoutSession as jest.Mock).mockResolvedValue({
       checkoutUrl: "https://checkout.xendit.test/invoice_123",
@@ -604,7 +633,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Challenge Quiz" }));
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz limit" })).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your quiz limit")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -623,7 +652,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Adaptive Practice" }));
 
-    expect(await screen.findByText("Adaptive Practice is a Pro feature")).toBeInTheDocument();
+    expect(await screen.findByText("Unlock Adaptive Practice")).toBeInTheDocument();
   });
 
   it("routes premium users with exhausted Adaptive Practice usage into the limit flow", async () => {
@@ -760,7 +789,7 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Quiz" }));
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your quiz generation limit" })).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your quiz generation limit")).toBeInTheDocument();
     expect(generateGeneratedQuiz).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -1128,8 +1157,8 @@ describe("PrivateNoteDetailPageClient", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Generate Study Pack" }));
 
-    expect(await screen.findByRole("dialog", { name: "You’ve reached your study pack limit" })).toBeInTheDocument();
-    expect(screen.queryByText("You’ve reached your study pack limit for this month")).not.toBeInTheDocument();
+    expect(await screen.findByText("You've reached your Study Pack limit")).toBeInTheDocument();
+    expect(screen.queryByText("You've reached your Study Pack limit for this month")).not.toBeInTheDocument();
   });
 
   it("shows quiz view when tab=quiz is requested", async () => {

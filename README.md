@@ -66,6 +66,14 @@ NoteLib uses a 3-tier learning-focused plan structure:
 
 Pricing UI is kept consistent across the app through a shared frontend plan config, while checkout amounts remain backend-owned.
 
+## Monetization flow
+
+- usage-based limits are enforced per plan for Study Packs, quizzes, exports, OCR, and topic note generation
+- hitting a limit opens a context-aware paywall that explains the blocked action and the value of upgrading
+- paywalls compare Plus and Pro directly, with Pro highlighted as the stronger review tier
+- note-creation upgrade attempts preserve progress before checkout so users do not lose in-progress work
+- after successful payment, users are returned to the interrupted flow and Study Pack generation can resume automatically from the saved note
+
 ## Brand Assets
 
 Primary brand assets live in `frontend/public`:

@@ -87,8 +87,12 @@ Teacher flow rule:
 ### Paid Upgrade Prompt Rule
 
 - Free users should see a soft paywall modal before any paid-plan quiz feature or Study Pack limit block attempts a paid conversion flow.
+- All paywalls must be context-aware. Never use generic upgrade prompts when the blocked action is known.
+- Shared paywalls must explain the specific blocked action, the upgrade value, and the strongest next plan path for that action.
 - Verified users who choose to upgrade should start the hosted checkout flow via `POST /api/payments/create`.
 - Frontend upgrade actions should redirect only to the backend-returned Xendit checkout URL.
+- Paywall upgrade attempts must preserve a safe internal return path and resume the interrupted flow after successful payment.
+- Note-creation paywalls must save the current note or preserve a local draft before redirecting to checkout.
 - When a user has `2` or `1` Study Packs remaining, show a non-blocking monthly-limit banner on Dashboard, Note Detail, and Study Pack generation surfaces.
 - When Study Pack remaining reaches `0`, keep `Generate Study Pack` enabled and show a student-friendly monthly-limit modal on click instead of disabling the action.
 - Upgrade messaging should position Plus as the practical step-up for regular study and Pro as the exam-preparation and mastery tier.

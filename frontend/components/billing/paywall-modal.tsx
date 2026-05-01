@@ -1,145 +1,169 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Sparkles } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
-import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
+import { Button } from "@/components/ui/button";
 import {
   createPremiumCheckoutSession,
   isEmailNotVerifiedError,
   trackAnalyticsEvent,
-  type PaidPlanType,
+  type PlanType,
 } from "@/lib/api";
 import { getAuthUser, getCurrentPathWithQuery, getSafeRedirectPath } from "@/lib/auth";
+import { formatBillingAmount, getBillingCyclePriceLabel } from "@/lib/billing-pricing";
 import { redirectToCheckoutUrl } from "@/lib/checkout-redirect";
-import { getPaidPlanCtaLabel } from "@/src/config/plans";
 import {
-  type FreePaywallContent,
-  type PaywallAction,
-  resolveFreePaywallContent,
+  type PaywallContext,
+  type PaywallModalVariant,
+  resolvePaywallContextTypeFromVariant,
+  resolvePaywallPresentation,
 } from "@/lib/paywall-content";
-
-export type PaywallModalVariant =
-  | "adaptive-practice"
-  | "board-exam-mode"
-  | "difficulty-selection"
-  | "challenge-quiz-limit"
-  | "quiz-generation-limit"
-  | "study-pack-limit"
-  | "ocr-limit"
-  | "note-generation-limit"
-  | "export-limit";
+import {
+  savePendingPaywallUpgradeContext,
+  type PendingPaywallUpgradeContext,
+} from "@/lib/paywall-upgrade-context";
+import { pricingConfig, resolvePricingDisplayRegion } from "@/lib/pricing-config";
+import { useBillingPricing } from "@/hooks/use-billing-pricing";
+import { PLANS } from "@/src/config/plans";
 
 type PaywallModalProps = {
   isOpen: boolean;
-  variant: PaywallModalVariant;
+  context?: PaywallContext;
+  variant?: PaywallModalVariant;
   onClose: () => void;
   source: string;
   returnUrl?: string | null;
   resolveReturnUrl?: () => Promise<string | null> | string | null;
+  resolveContext?: () => Promise<Partial<PaywallContext> | null> | Partial<PaywallContext> | null;
 };
 
-/** Variants with no PaywallAction mapping keep their own inline content. */
-type LegacyPaywallConfig = {
-  title: string;
-  message: string;
-  dismissLabel: string;
-  feature: string;
-};
+const PLAN_CARD_ORDER: Array<"PLUS" | "PRO"> = ["PLUS", "PRO"];
+const PLAN_CARD_SUBTEXT = {
+  PLUS: "Train on weak areas (limited sessions)",
+  PRO: "Train on weak areas until you master them",
+} as const;
+const PAYWALL_REASSURANCE = "Access activates immediately after payment";
+const PAYWALL_RENEWAL_NOTE = "No automatic charges. You control renewals.";
 
-const LEGACY_PAYWALL_CONTENT: Partial<Record<PaywallModalVariant, LegacyPaywallConfig>> = {
-  "difficulty-selection": {
-    title: "Difficulty Selection is a Pro feature",
-    message:
-      "Choose your quiz difficulty and challenge yourself. Great for exam preparation and mastering difficult topics.",
-    dismissLabel: "Maybe Later",
-    feature: "difficulty",
-  },
-  "ocr-limit": {
-    title: "OCR limit reached",
-    message:
-      "You've reached your image-to-text limit for this month. You can still create notes manually or upload files. Upgrade your plan for higher OCR limits.",
-    dismissLabel: "Maybe Later",
-    feature: "ocr_limit",
-  },
-};
-
-function resolvePaywallAction(variant: PaywallModalVariant): PaywallAction | null {
-  switch (variant) {
-    case "study-pack-limit": return "STUDY_PACK";
-    case "challenge-quiz-limit": return "QUIZ";
-    case "quiz-generation-limit": return "QUIZ_GENERATION";
-    case "board-exam-mode": return "BOARD_EXAM";
-    case "adaptive-practice": return "ADAPTIVE_PRACTICE";
-    case "note-generation-limit": return "NOTE_GENERATION";
-    case "export-limit": return "EXPORT";
-    default: return null;
+function buildFallbackMonthlyLabel(planType: "PLUS" | "PRO", region: ReturnType<typeof resolvePricingDisplayRegion>) {
+  const regionPricing = pricingConfig.price[region];
+  const introPricing = pricingConfig.intro[region];
+  const regularAmount = planType === "PLUS" ? regionPricing.plus.monthly : regionPricing.pro.monthly;
+  const introAmount = planType === "PLUS" ? introPricing.plus.monthly : introPricing.pro.monthly;
+  if (introAmount === null) {
+    return `${formatBillingAmount(regularAmount, regionPricing.currency)}/month`;
   }
+  return `${formatBillingAmount(introAmount, regionPricing.currency)} first month, then ${formatBillingAmount(regularAmount, regionPricing.currency)}/month`;
 }
 
-function toModalConfig(content: FreePaywallContent): LegacyPaywallConfig {
+function resolvePaywallContext(
+  context: PaywallContext | undefined,
+  variant: PaywallModalVariant | undefined,
+): PaywallContext {
+  if (context) {
+    return context;
+  }
   return {
-    title: content.title,
-    message: content.body,
-    dismissLabel: content.dismissLabel,
-    feature: content.feature,
+    type: resolvePaywallContextTypeFromVariant(variant ?? "adaptive-practice"),
   };
+}
+
+function PlanCard({
+  planType,
+  currentPlan,
+  monthlyLabel,
+}: Readonly<{
+  planType: "PLUS" | "PRO";
+  currentPlan: PlanType;
+  monthlyLabel: string;
+}>) {
+  const plan = PLANS[planType];
+  const isCurrentPlan = currentPlan === planType;
+  const highlight = planType === "PRO";
+
+  return (
+    <div className={`rounded-2xl border p-4 ${
+      highlight
+        ? "border-blue-400 bg-blue-50/45 dark:border-blue-700 dark:bg-blue-950/22"
+        : "border-border bg-muted/20"
+    }`}>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-foreground">{plan.name}</p>
+          {isCurrentPlan ? (
+            <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+              Current plan
+            </span>
+          ) : null}
+          {!isCurrentPlan && plan.eyebrow ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+              <Sparkles className="h-3 w-3" aria-hidden="true" />
+              {plan.eyebrow}
+            </span>
+          ) : null}
+        </div>
+        <p className="text-lg font-semibold text-foreground">{monthlyLabel}</p>
+        <p className="text-sm text-foreground/70">{plan.title}</p>
+      </div>
+      <ul className="mt-4 space-y-2 text-sm text-foreground/80">
+        {plan.features.map((feature) => (
+          <li key={feature.label} className="flex items-start gap-2">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+            <span>
+              {feature.label}
+              {feature.helper ? <span className="block text-xs text-foreground/55">{feature.helper}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 text-xs text-foreground/55">{PLAN_CARD_SUBTEXT[planType]}</p>
+    </div>
+  );
 }
 
 export function PaywallModal({
   isOpen,
+  context,
   variant,
   onClose,
   source,
   returnUrl = null,
   resolveReturnUrl,
+  resolveContext,
 }: Readonly<PaywallModalProps>) {
   const router = useRouter();
   const pathname = usePathname();
   const hasTrackedOpenRef = useRef(false);
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
-  const [startingCheckout, setStartingCheckout] = useState(false);
+  const [startingCheckoutPlan, setStartingCheckoutPlan] = useState<"PLUS" | "PRO" | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const authUser = getAuthUser();
   const currentPlan = authUser?.planType ?? "FREE";
-  const upgradePlanType = useMemo<PaidPlanType>(() => {
-    if (variant === "board-exam-mode" || variant === "adaptive-practice" || variant === "difficulty-selection") {
-      return "PRO";
-    }
-    if (currentPlan === "PLUS") {
-      return "PRO";
-    }
-    return "PLUS";
-  }, [currentPlan, variant]);
-  const upgradeLabel = getPaidPlanCtaLabel(upgradePlanType);
-
-  const config = useMemo((): LegacyPaywallConfig => {
-    if (variant === "export-limit" && currentPlan === "PLUS") {
-      return {
-        title: "You’ve reached your monthly export limit for Plus",
-        message: "Go Pro to keep exporting quizzes and exams this month.",
-        dismissLabel: "Maybe Later",
-        feature: "export_limit",
-      };
-    }
-    const action = resolvePaywallAction(variant);
-    if (action) {
-      return toModalConfig(resolveFreePaywallContent(action, authUser?.profileType));
-    }
-    return LEGACY_PAYWALL_CONTENT[variant] ?? {
-      title: "Paid feature",
-      message: "Choose Plus or go Pro to access this feature.",
-      dismissLabel: "Maybe Later",
-      feature: variant,
-    };
-  }, [authUser?.profileType, currentPlan, variant]);
+  const normalizedContext = useMemo(
+    () => resolvePaywallContext(context, variant),
+    [context, variant],
+  );
+  const presentation = useMemo(
+    () => resolvePaywallPresentation(normalizedContext.type, currentPlan, authUser?.profileType),
+    [authUser?.profileType, currentPlan, normalizedContext.type],
+  );
+  const { billingPricing } = useBillingPricing(true);
+  const displayRegion = resolvePricingDisplayRegion(billingPricing?.region);
+  const plusMonthlyLabel = billingPricing
+    ? getBillingCyclePriceLabel(billingPricing, "PLUS", "MONTHLY")
+    : buildFallbackMonthlyLabel("PLUS", displayRegion);
+  const proMonthlyLabel = billingPricing
+    ? getBillingCyclePriceLabel(billingPricing, "PRO", "MONTHLY")
+    : buildFallbackMonthlyLabel("PRO", displayRegion);
 
   useEffect(() => {
     if (!isOpen) {
       hasTrackedOpenRef.current = false;
       setVerifyEmailModalOpen(false);
-      setStartingCheckout(false);
+      setStartingCheckoutPlan(null);
       setCheckoutError(null);
       return;
     }
@@ -151,27 +175,30 @@ export function PaywallModal({
       eventType: "PAYWALL_VIEWED",
       metadata: {
         source,
-        feature: config.feature,
+        feature: presentation.feature,
         path: pathname,
-        variant,
+        paywallType: normalizedContext.type,
+        currentPlan,
+        remaining: normalizedContext.remaining ?? null,
       },
     });
-  }, [config.feature, isOpen, onClose, pathname, source, variant]);
+  }, [currentPlan, isOpen, normalizedContext.remaining, normalizedContext.type, pathname, presentation.feature, source]);
 
   const handleDismiss = () => {
     void trackAnalyticsEvent({
       eventType: "PAYWALL_DISMISSED",
       metadata: {
         source,
-        feature: config.feature,
+        feature: presentation.feature,
         path: pathname,
-        variant,
+        paywallType: normalizedContext.type,
+        currentPlan,
       },
     });
     onClose();
   };
 
-  const handleUpgrade = async () => {
+  const startCheckout = async (planType: "PLUS" | "PRO") => {
     if (authUser && !authUser.emailVerifiedAt) {
       setVerifyEmailModalOpen(true);
       return;
@@ -182,26 +209,43 @@ export function PaywallModal({
       return;
     }
 
-    setStartingCheckout(true);
+    setStartingCheckoutPlan(planType);
     setCheckoutError(null);
     try {
-      const resolvedReturnUrl = getSafeRedirectPath(
-        (await resolveReturnUrl?.()) ?? returnUrl ?? getCurrentPathWithQuery(),
+      const contextPatch = (await resolveContext?.()) ?? null;
+      const resolvedReturnPath = getSafeRedirectPath(
+        contextPatch?.returnPath
+        ?? (await resolveReturnUrl?.())
+        ?? normalizedContext.returnPath
+        ?? returnUrl
+        ?? getCurrentPathWithQuery(),
       );
+      const pendingContext: PendingPaywallUpgradeContext = {
+        type: contextPatch?.type ?? normalizedContext.type,
+        lastAction: presentation.lastAction,
+        noteId: contextPatch?.noteId ?? normalizedContext.noteId ?? null,
+        returnPath: resolvedReturnPath,
+        source,
+        createdAtMs: Date.now(),
+      };
+      savePendingPaywallUpgradeContext(authUser.id, pendingContext);
+
       void trackAnalyticsEvent({
         eventType: "UPGRADE_CLICKED",
         metadata: {
           source,
-          feature: config.feature,
+          feature: presentation.feature,
           path: pathname,
-          variant,
-          planType: upgradePlanType,
+          paywallType: normalizedContext.type,
+          currentPlan,
+          selectedPlan: planType,
           target: "xendit_checkout",
         },
       });
+
       const response = await createPremiumCheckoutSession({
-        planType: upgradePlanType,
-        returnUrl: resolvedReturnUrl,
+        planType,
+        returnUrl: resolvedReturnPath,
       });
       onClose();
       redirectToCheckoutUrl(response.checkoutUrl);
@@ -212,39 +256,69 @@ export function PaywallModal({
         setCheckoutError(error instanceof Error ? error.message : "Could not start checkout. Please try again.");
       }
     } finally {
-      setStartingCheckout(false);
+      setStartingCheckoutPlan(null);
     }
   };
+
+  const secondaryActionDisabled = currentPlan === "PLUS";
 
   return (
     <>
       <AppModal
         isOpen={isOpen}
-        title={config.title}
-        description={config.message}
+        title={presentation.headline}
+        description={presentation.body}
         onClose={handleDismiss}
-        panelClassName="max-w-[460px]"
+        panelClassName="max-w-[760px]"
         actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" onClick={handleDismiss}>
-              {config.dismissLabel}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleUpgrade()}
-              loading={startingCheckout}
-              loadingText="Redirecting..."
-            >
-              {upgradeLabel}
-            </Button>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button type="button" variant="ghost" onClick={handleDismiss}>
+                Maybe Later
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void startCheckout("PLUS")}
+                disabled={secondaryActionDisabled}
+                loading={startingCheckoutPlan === "PLUS"}
+                loadingText="Redirecting..."
+              >
+                {secondaryActionDisabled ? "Current plan" : presentation.secondaryCtaLabel}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void startCheckout("PRO")}
+                loading={startingCheckoutPlan === "PRO"}
+                loadingText="Redirecting..."
+              >
+                {presentation.primaryCtaLabel}
+              </Button>
+            </div>
+            <div className="space-y-1 text-center text-xs text-foreground/60 sm:text-right">
+              <p>{PAYWALL_REASSURANCE}</p>
+              <p>{PAYWALL_RENEWAL_NOTE}</p>
+            </div>
           </div>
         )}
       >
-        {checkoutError ? (
-          <div className="rounded-lg border border-red-500/30 bg-red-50/70 p-3 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-300">
-            {checkoutError}
+        <div className="space-y-4">
+          <div className="grid gap-3 lg:grid-cols-2">
+            {PLAN_CARD_ORDER.map((planType) => (
+              <PlanCard
+                key={planType}
+                planType={planType}
+                currentPlan={currentPlan}
+                monthlyLabel={planType === "PLUS" ? plusMonthlyLabel : proMonthlyLabel}
+              />
+            ))}
           </div>
-        ) : null}
+          {checkoutError ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-50/70 p-3 text-sm text-red-700 dark:bg-red-950/20 dark:text-red-300">
+              {checkoutError}
+            </div>
+          ) : null}
+        </div>
       </AppModal>
       <VerifyEmailRequiredModal
         isOpen={verifyEmailModalOpen}
@@ -253,3 +327,5 @@ export function PaywallModal({
     </>
   );
 }
+
+export type { PaywallContext, PaywallModalVariant } from "@/lib/paywall-content";

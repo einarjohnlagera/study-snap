@@ -70,8 +70,10 @@ import {
   saveNoteUpgradeDraft,
   shouldRestoreNoteUpgradeDraft,
 } from "@/lib/note-upgrade-draft";
+import { buildStudyPackResumePath } from "@/lib/paywall-upgrade-context";
 import { applyAiSuggestionSelection, type AiSuggestionSelection } from "@/lib/note-metadata";
 import { hasSeenTip, markTipSeen } from "@/lib/guidance";
+import type { PaywallContextType } from "@/lib/paywall-content";
 import {
   isTeacherSelectableNoteTarget,
   mapProfileTypeToNoteTargetProfile,
@@ -623,7 +625,9 @@ export function NoteEditorPageClient({
     return saved;
   }, [buildRequest, contentEmpty, currentNoteId, showToast]);
 
-  const prepareUpgradeReturnUrl = useCallback(async () => {
+  const prepareUpgradeContext = useCallback(async (
+    contextType: PaywallContextType,
+  ): Promise<Partial<{ returnPath: string | null; noteId: string | null }>> => {
     const fallbackReturnPath = resolveNoteUpgradeDraftReturnPath();
     const shouldPreserveDraft = draft.content.trim().length > 0
       || draft.title.trim().length > 0
@@ -643,7 +647,10 @@ export function NoteEditorPageClient({
     }
 
     if (draft.content.trim().length === 0) {
-      return !isEditMode && shouldPreserveDraft ? fallbackReturnPath : pathname;
+      return {
+        noteId: currentNoteId,
+        returnPath: !isEditMode && shouldPreserveDraft ? fallbackReturnPath : pathname,
+      };
     }
 
     try {
@@ -652,7 +659,12 @@ export function NoteEditorPageClient({
         if (authUser?.id) {
           clearNoteUpgradeDraft(authUser.id);
         }
-        return `/notes/${saved.id}/edit`;
+        return {
+          noteId: saved.id,
+          returnPath: contextType === "GENERATE_STUDY_PACK_LIMIT"
+            ? buildStudyPackResumePath(saved.id)
+            : `/notes/${saved.id}/edit`,
+        };
       }
     } catch {
       if (!isEditMode && authUser?.id && shouldPreserveDraft) {
@@ -660,9 +672,13 @@ export function NoteEditorPageClient({
       }
     }
 
-    return !isEditMode && shouldPreserveDraft ? fallbackReturnPath : pathname;
+    return {
+      noteId: currentNoteId,
+      returnPath: !isEditMode && shouldPreserveDraft ? fallbackReturnPath : pathname,
+    };
   }, [
     authUser?.id,
+    currentNoteId,
     draft,
     entryOption,
     generateTopic,
@@ -1094,7 +1110,7 @@ export function NoteEditorPageClient({
           void handleGenerateNote();
         }}
         isGeneratingNote={isGeneratingNote}
-        disableGenerateNote={!isEmailVerified || hasReachedNoteGenerationLimit}
+        disableGenerateNote={!isEmailVerified}
         generateNoteLabel={generateNoteButtonLabel}
         generateNoteLoadingLabel="Generating..."
         generateNoteFooter={generateNoteFooter}
@@ -1145,32 +1161,27 @@ export function NoteEditorPageClient({
         onSkip={keepMineAndContinue}
       />
 
-      {currentPlan === "FREE" ? (
-        <PaywallModal
-          isOpen={showLimitReachedModal}
-          variant="study-pack-limit"
-          source="note_editor_study_pack_limit"
-          resolveReturnUrl={prepareUpgradeReturnUrl}
-          onClose={() => setShowLimitReachedModal(false)}
-        />
-      ) : (
+      {currentPlan === "PRO" ? (
         <StudyPackLimitModal
           isOpen={showLimitReachedModal}
           planType={currentPlan}
           resetDateLabel={usageResetDateLabel}
           onClose={() => setShowLimitReachedModal(false)}
         />
+      ) : (
+        <PaywallModal
+          isOpen={showLimitReachedModal}
+          context={{
+            type: "GENERATE_STUDY_PACK_LIMIT",
+            noteId: currentNoteId,
+          }}
+          source="note_editor_study_pack_limit"
+          resolveContext={() => prepareUpgradeContext("GENERATE_STUDY_PACK_LIMIT")}
+          onClose={() => setShowLimitReachedModal(false)}
+        />
       )}
 
-      {currentPlan === "FREE" ? (
-        <PaywallModal
-          isOpen={showNoteGenerationLimitModal}
-          variant="note-generation-limit"
-          source="note_editor_note_generation_limit"
-          resolveReturnUrl={prepareUpgradeReturnUrl}
-          onClose={() => setShowNoteGenerationLimitModal(false)}
-        />
-      ) : (
+      {currentPlan === "PRO" ? (
         <AppModal
           isOpen={showNoteGenerationLimitModal}
           title="Note generation limit reached"
@@ -1189,14 +1200,28 @@ export function NoteEditorPageClient({
             </div>
           )}
         />
+      ) : (
+        <PaywallModal
+          isOpen={showNoteGenerationLimitModal}
+          context={{
+            type: "GENERATE_NOTE_LIMIT",
+            noteId: currentNoteId,
+          }}
+          source="note_editor_note_generation_limit"
+          resolveContext={() => prepareUpgradeContext("GENERATE_NOTE_LIMIT")}
+          onClose={() => setShowNoteGenerationLimitModal(false)}
+        />
       )}
 
       {currentPlan === "FREE" ? (
         <PaywallModal
           isOpen={showOcrLimitModal}
-          variant="ocr-limit"
+          context={{
+            type: "OCR_LIMIT",
+            noteId: currentNoteId,
+          }}
           source="note_editor_ocr_limit"
-          resolveReturnUrl={prepareUpgradeReturnUrl}
+          resolveContext={() => prepareUpgradeContext("OCR_LIMIT")}
           onClose={() => setShowOcrLimitModal(false)}
         />
       ) : (

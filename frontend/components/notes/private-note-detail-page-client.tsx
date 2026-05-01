@@ -104,6 +104,7 @@ import {
   resolveStudyPackGenerationMessage,
 } from "@/lib/study-pack-generation";
 import { PUBLIC_NOTE_COPY_QUERY_PARAMS } from "@/lib/public-note-copy";
+import { resolvePaywallContextTypeFromVariant } from "@/lib/paywall-content";
 import Link from "next/link";
 
 function stateChip(status: NoteStudyPackStatus) {
@@ -720,12 +721,17 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
         noteId: note?.id ?? null,
       },
     });
-    if (currentPlan === "FREE") {
+    if (currentPlan !== "PRO") {
       setActivePaywallModal("study-pack-limit");
       return;
     }
     setShowLimitReachedModal(true);
   }, [currentPlan, note?.id, pathname]);
+
+  const activePaywallContext = useMemo(() => ({
+    type: resolvePaywallContextTypeFromVariant(activePaywallModal ?? "adaptive-practice"),
+    noteId: note?.id ?? null,
+  }), [activePaywallModal, note?.id]);
 
   const handleChangeStudyPackTab = useCallback((nextTab: NoteDetailTab) => {
     if (!note || activeStudyPackTab === nextTab) {
@@ -2058,13 +2064,13 @@ export function PrivateNoteDetailPageClient({ routeId }: Readonly<PrivateNoteDet
 
       <PaywallModal
         isOpen={activePaywallModal !== null}
-        variant={activePaywallModal ?? "adaptive-practice"}
+        context={activePaywallContext}
         source="private_note_detail"
         onClose={() => setActivePaywallModal(null)}
       />
 
       <StudyPackLimitModal
-        isOpen={!isTeacherMode && currentPlan !== "FREE" && showLimitReachedModal}
+        isOpen={!isTeacherMode && currentPlan === "PRO" && showLimitReachedModal}
         planType={currentPlan}
         resetDateLabel={usageResetDateLabel}
         onClose={() => setShowLimitReachedModal(false)}
