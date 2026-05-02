@@ -106,6 +106,15 @@ The Settings page (`/settings#plan-billing`) surfaces plan selection and billing
 - **Checkout footer** — single-line note with provider, confirmation model, and detected region/currency.
 - **Billing History** — subscription summary grid (plan, status, valid-until, billing cycle) and payment transaction table, unchanged from v0.11.0.
 
+### Post-Success Upgrade Nudge
+
+- `PostSuccessUpgradeNudge` (`frontend/components/billing/post-success-upgrade-nudge.tsx`) is a lightweight inline banner shown on quiz result screens to Free/Plus users after completing a study session.
+- Rendered after Quick Review and Challenge Quiz completions when `note.adaptivePracticeAvailable === false` (proxy for non-Pro status).
+- Dismissed per-session, per-user via `sessionStorage` key `notelib-post-success-nudge:{trigger}:{userId}`.
+- CTA links to `/pricing` and fires an `UPGRADE_CLICKED` analytics event with `source: "post_success_nudge_{trigger}"`.
+- Trigger values: `"quick-review"` and `"challenge-quiz"`. Each has its own copy and session key.
+- The nudge is purely informational — it does not gate any feature or trigger checkout directly.
+
 ### Limitations
 
 - No recurring billing yet

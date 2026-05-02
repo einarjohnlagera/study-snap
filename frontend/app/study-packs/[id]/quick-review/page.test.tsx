@@ -411,4 +411,26 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.getByRole("button", { name: "Go Pro for Adaptive Practice" })).toHaveClass("border");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
+
+  it("shows upgrade nudge on result screen when adaptive practice is not available", async () => {
+    setupCompleteState({ adaptivePracticeAvailable: false });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.getByText("Ready to improve your weak areas?")).toBeInTheDocument();
+  });
+
+  it("hides upgrade nudge on result screen when adaptive practice is available (Pro user)", async () => {
+    setupCompleteState({ adaptivePracticeAvailable: true });
+    render(<QuickReviewPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Finish Quick Review" }));
+    await screen.findByText("Quick Review Complete");
+
+    expect(screen.queryByText("Ready to improve your weak areas?")).not.toBeInTheDocument();
+  });
 });

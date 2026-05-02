@@ -375,6 +375,14 @@ export default function AdaptivePracticePage() {
     const nextIndex = currentIndex + 1;
     if (nextIndex >= quiz.length && !completionTracked && noteId) {
       setCompletionTracked(true);
+      void trackAnalyticsEvent({
+        eventType: "ADAPTIVE_PRACTICE_COMPLETED",
+        entityId: adaptiveQuiz?.sessionId,
+        metadata: {
+          scorePercentage: quiz.length > 0 ? Math.round((score / quiz.length) * 100) : 0,
+          totalQuestions: quiz.length,
+        },
+      });
       const durationSeconds = sessionStartedAt
         ? Math.max(0, Math.round((Date.now() - sessionStartedAt) / 1000))
         : undefined;

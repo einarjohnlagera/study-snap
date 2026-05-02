@@ -38,6 +38,7 @@ import {
 } from "@/lib/api";
 import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
 import { ToastMessage } from "@/components/ui/toast-message";
+import { PostSuccessUpgradeNudge } from "@/components/billing/post-success-upgrade-nudge";
 import {
   clearFirstStudyOnboardingStep,
   getFirstStudyOnboardingStep,
@@ -572,6 +573,11 @@ export default function QuickReviewPage() {
     } finally {
       setCompletionTracked(true);
       setCompletingSession(false);
+      void trackAnalyticsEvent({
+        eventType: "QUICK_REVIEW_COMPLETED",
+        entityId: currentSessionId,
+        metadata: { scorePercentage: totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0, weakConceptCount: weakConcepts.length },
+      });
     }
   }, [completingSession, completionTracked, currentSessionId, retryCount, score, sessionStartedAt, totalQuestions, weakConcepts]);
 
@@ -945,6 +951,11 @@ export default function QuickReviewPage() {
 
           {showAnswerReview ? (
             <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
+          ) : null}
+
+          {/* Upgrade nudge for non-Pro users */}
+          {!note?.adaptivePracticeAvailable ? (
+            <PostSuccessUpgradeNudge trigger="quick-review" />
           ) : null}
 
           {/* Confidence + Learner level (secondary section) */}
