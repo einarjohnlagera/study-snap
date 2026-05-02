@@ -48,7 +48,7 @@ Hero CTA rules:
 Board Exam Mode must be visible in the hero with:
 
 - `Board Exam Mode`
-- `Free for a limited time`
+- `Pro`
 - hero screenshot: `/landing/feature-study-pack.jpg`
 
 ## Required Landing Sections

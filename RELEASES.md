@@ -2,6 +2,24 @@
 
 ## v0.11.0 - Learning Flow Foundation
 
+### Learning Personalization Polish
+
+- added inline learner level pill-selector to Quick Review and Challenge Quiz result screens so users can adjust their level immediately after a quiz without leaving the review flow; saving shows a toast `Learner level updated. Future Study Packs and quizzes will match this level.`
+- restructured Quick Review result screen to show exactly one primary CTA: `Practice Weak Areas` when struggling and Adaptive Practice is available, `Take Another Challenge` after a strong or perfect result, `Practice Again` otherwise
+- moved confidence feedback to a secondary collapsed section below the primary CTAs on Quick Review results; selecting a level replaces the option buttons with a badge — `🟢 Confident`, `🟡 Improving`, `🔴 Needs Practice`
+- updated Dashboard personalization prompt to `Too easy or too hard?` / `Set your learner level so future quizzes match your study stage.` with a `Adjust level` CTA that navigates directly to the Learning Profile section of `/profile`
+- Profile Settings now shows `← Dashboard` back link when reached from the Dashboard "Adjust Level" button, instead of the default public-profile back link
+- "Adjust Level" CTA navigates to `/profile?from=dashboard#learning-profile` and auto-scrolls to the Learning Profile card on arrival
+
+### Onboarding Safety
+
+- onboarding Study Pack generation step is now idempotent: `handleStartStudyPack()` checks `draft.noteId` before creating a note and routes to step 4 if a note already exists, preventing duplicate notes from back/forward/refresh behavior
+- back button is hidden while Study Pack generation is active during onboarding and the notice copy is replaced with `Your Study Pack is being created. This step can't be undone.`
+
+### Study Pack Metadata Sync
+
+- after Study Pack generation from an existing note, the backend now automatically applies AI-generated `subject` and `tags` back to the source note if those fields are empty — zero-friction, non-destructive, no user prompt required
+
 ### Improvements
 
 - repositioned NoteLib as a structured learning system built around the study loop from input to mastery
@@ -9,21 +27,21 @@
 - added Generate Note from topic so users can draft editable notes before saving or generating a Study Pack
 - improved Create Note UX with dual entry options: write your own note or generate from topic
 - upgraded topic note generation so drafts are more study-ready and structured instead of stub-like filler
-- added monthly note-generation limits with Premium-aware gating so topic drafting follows the same protection pattern as other credit-based AI actions
+- added monthly note-generation limits with paid-plan-aware gating so topic drafting follows the same protection pattern as other credit-based AI actions
 - refined the first-study onboarding flow so topic generation stays guided and single-use there, while the standalone New Note page keeps iterative `Generate Again` behavior
 - redesigned the New Note page to focus on content creation first and moved `Title`, `Subject`, `Course / Program`, `Tags`, and teacher/admin audience selection into collapsed `Add details (optional)`
 - kept Create Note and Study Pack generation low-friction by preserving profile-based defaults and allowing save/generate actions without opening optional metadata
 - polished onboarding and generated-note transitions with lighter motion and better scroll-to-content behavior
-- added a post-onboarding Dashboard prompt that encourages users to set learning style and reminder preferences from Settings
+- added a post-onboarding Dashboard prompt that encourages users to adjust learner level from Profile
 - aligned create-note action copy around `Generate Study Pack`
-- expanded manual Premium checkout to support both Monthly and Annual Xendit flows using config-driven pricing
+- expanded manual Xendit checkout to support Plus / Pro monthly checkout and Pro yearly checkout using config-driven pricing
 - fixed intro-offer voucher application so eligible first checkouts use discounted pricing and successful payments record voucher redemption history
 - hardened pending checkout reuse so billing cycle, final amount, and voucher state must still match before an existing Xendit invoice is reused
 - replaced legacy single-tier Premium billing with Free / Plus / Pro multi-plan model; plan state is now owned by the `subscriptions` table with one active row per user
 - redesigned Settings Plan & Billing with a billing cycle toggle (Monthly / Annual) and three plan cards (Free, Plus, Pro) in a responsive side-by-side layout
 - defaulted region to `PH` when the `CF-IPCountry` header is absent so checkout amounts and currency display correctly for local testing and non-Cloudflare environments
 - added a cancel plan entry point in Settings for active paid subscribers
-- updated product context, roadmap, spec, and release documentation for the new positioning
+- updated product context, roadmap, spec, and release documentation for the current onboarding, billing, and plan model
 
 ## v0.10.1 - Landing & Pricing Conversion Polish
 

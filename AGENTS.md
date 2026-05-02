@@ -7,9 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.5.0 - Public Profiles & Public Notes`
-- next planned milestone: `v0.6.0 - Landing Revamp & Positioning`
-- following milestone: `v0.7.0 - Board Exam Mode`
+- `v0.11.0 - Learning Flow Foundation`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -181,37 +179,29 @@ Teacher flow rule:
 - Onboarding is active again for all verified users, not only paid-plan users.
 - Onboarding should happen once after email verification / first verified entry into the app.
 - Onboarding must stay short and reuse the existing step flow.
-- Preferences onboarding order is:
+- Current `/onboarding` flow order is:
   - `Profile Type`
-  - `Learning Profile`
-  - `Learning Style` (`engagementMode`)
-  - `Study Reminder Frequency`
-  - `Exam Date` only for `BOARD_EXAM`
-- `Learning Profile` onboarding collects:
-  - required `learnerLevel`
-  - required `courseProgram`
-  - optional `bio`
+  - `Study Goal`
+  - `Input Method`
+  - `Study Pack Generation`
+  - `Completion`
+- `Exam Date` is optional and shown inline on the Study Goal step for `BOARD_EXAM`.
+- Onboarding persists `profileType`, optional `examDate`, and `onboardingCompletedAt`.
+- `learnerLevel`, `courseProgram`, `bio`, `Learning Style`, and reminder preferences are deferred to `/profile` and `/settings`.
 - Profile Type can be edited later in `Profile`.
 - Learning Style can be edited later in `Settings > Preferences`.
 - Study Reminder Frequency can be edited later in `Settings > Preferences`.
 - Public pages and anonymous flows must not be blocked by onboarding.
-- NoteLib also has a separate first-study product onboarding flow for brand-new users with `studyPackCount == 0`.
-- Product onboarding guides the first workflow:
-  - `Verify Email`
-  - `Create Note`
-  - `Generate Study Pack`
-  - `Challenge Quiz`
-  - `Weak Concepts`
-  - `Dashboard`
+- NoteLib also has a separate product-onboarding tracker for brand-new users with `studyPackCount == 0`.
 - After email verification, first-time users should see a welcome CTA before an empty dashboard so they know to create their first note immediately.
 - Empty dashboard states for first-time users must be instructional, not generic.
 - After the first Study Pack is generated, Note Detail should point users to Challenge Quiz as the next action.
 - After the first Challenge Quiz is completed, surface weak-concept guidance before returning users to normal study flows.
-- Product onboarding completion is tracked separately from preferences onboarding and should not reuse `onboardingCompletedAt`.
+- Product onboarding completion is tracked separately from activation onboarding and should not reuse `onboardingCompletedAt`.
 - **Onboarding Study Pack generation (Step 4) must be idempotent**: `handleStartStudyPack()` must check `draft.noteId` before creating a note; if a note already exists, navigate to Step 4 instead of creating another. This prevents duplicate notes and study packs from back/forward/refresh behavior.
 - **Back button lock during Study Pack generation**: hide the Back button while generation is active (`studyPackGenerating || startingStudyPack`); replace the notice with `Your Study Pack is being created. This step can't be undone.`; restore the Back button on error or completion.
 - **After Study Pack generation from existing note**: the backend automatically applies AI-generated `subject` and `tags` to the source note if those fields are empty — zero-friction, no user prompt needed. This is implemented in `generateStudyPackFromExistingNoteAsync` via `applyGeneratedMetadataToNote`.
-- **Learner level is deferred from onboarding**: do not add a learner level step to onboarding. The dashboard personalization prompt handles deferred collection pointing users to `/profile`.
+- **Learner level is deferred from onboarding**: do not add a learner level step to onboarding. The dashboard personalization prompt handles deferred collection. Prompt copy: title `Too easy or too hard?`, body `Set your learner level so future quizzes match your study stage.`, CTA `Adjust level` — navigates to `/profile?from=dashboard#learning-profile`.
 
 ### Profile Rule
 
@@ -238,6 +228,8 @@ Teacher flow rule:
   - an `Identity` card with its own `Save Identity` action
   - a `Learning Profile` card with its own `Save Learning Profile` action
   - a `Profile Type` card with its own `Save Profile Type` action
+- The Learning Profile card must carry `id={PROFILE_LEARNING_PROFILE_SECTION_ID}` (`"learning-profile"`) so it is reachable via hash navigation.
+- The Dashboard "Adjust Level" CTA must navigate to `/profile?from=dashboard#learning-profile` — this scrolls directly to the Learning Profile card and enables context-aware back navigation back to Dashboard.
 - Learning Profile combobox-style inputs should reuse the same input-plus-suggestions pattern as the Note Editor `Subject` field.
 - Learning Profile `Course / Program` helper text should adapt to `learnerLevel` so examples match the learner's current study stage.
 - Saving `Learning Profile` requires both fields and should show:
@@ -353,6 +345,7 @@ Teacher flow rule:
 - Never hardcode pricing-card features or plan CTA labels directly in UI components when the shared plan config already owns them.
 - Shared pricing surfaces may keep the existing reviewer-safe PHP and USD display config, but checkout creation and upgrade eligibility stay backend-owned.
 - Intro pricing and first-time promos must be implemented through the voucher/promotion system, not as a boolean on `User`.
+- If pricing-surface messaging and runtime feature gating diverge, backend plan enforcement plus `GET /api/me/plan` remain the behavior source of truth until the product intentionally changes the gate.
 
 ### Payments Safety Rule
 
@@ -732,6 +725,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Non-owner viewing another user's public profile: `<BackLink href="/library/public" label="Public Library" />`.
 - Inline card action buttons (quiz error/limit states etc.) should use short destination labels (`Note`, `Library`) — not "Back to Note" or "Back to Library".
 - Back link is positioned above the page header card, left-aligned.
+- **Context-aware back navigation**: Profile Settings (`/profile`) should render `← Dashboard` (href `/dashboard`) when reached via `?from=dashboard`, and `← Profile` (href public profile path) in all other cases. Pass `?from=dashboard` in the navigation URL to trigger this behavior.
 
 ### Note Ownership Rule
 

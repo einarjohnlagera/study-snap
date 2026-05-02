@@ -8,6 +8,8 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 `v0.11.0 - Learning Flow Foundation` is complete and is now the documentation baseline.
 
+Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
 Completed in `v0.11.0`:
 
 - learning loop positioning across the landing page and product messaging
@@ -30,6 +32,7 @@ Completed in `v0.11.0`:
 - Settings Plan & Billing redesign: billing cycle toggle + 3-column plan cards (Free, Plus, Pro)
 - pricing system unification through a shared frontend plan config used by landing, pricing, and settings surfaces
 - conversion-focused paywall redesign with context-aware copy, autosave-before-checkout, and resume-after-upgrade flow restoration
+- documentation context cleanup so product, architecture, and feature docs match the current Free / Plus / Pro, Xendit, onboarding, and paywall behavior
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard

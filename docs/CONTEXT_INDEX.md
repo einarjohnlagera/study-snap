@@ -10,6 +10,7 @@ Preserve legacy context while keeping current implementation guidance clear and 
 
 - Original source documents are retained under `docs/legacy/`.
 - Active documentation is maintained under `README.md` and `docs/`.
+- Files under `docs/legacy/` are historical reference only and are not the current behavior source of truth.
 
 ## Mapping
 

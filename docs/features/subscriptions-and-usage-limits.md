@@ -2,197 +2,117 @@
 
 ## Goal
 
-Support freemium usage control and webhook-confirmed paid-plan upgrades without making paywalls or billing feel heavy.
+Document the current plan model, quota enforcement, and hosted-upgrade behavior.
 
-## Plan behavior
+## Source of truth
+
+Plan access and entitlements come from:
+
+- `subscriptions` for active plan state
+- `GET /api/me/plan` for frontend-facing limits, usage, remaining counts, and feature flags
+
+Do not derive plan access from:
+
+- frontend pricing copy
+- `payment_transactions`
+- user-level paid flags
+
+## Current enforced plan behavior
 
 ### Free
 
-- 10 Study Packs per month
-- Topic note generation (5/month by default, backend-configurable)
-- OCR (20/month by default, backend-configurable)
-- File uploads available
-- Library and Public Library access
-- Quick Review
-- Challenge Quiz (5/month)
-- Weak concepts remain visible after quiz/review completion
-- Adaptive Practice is Pro-only
-- Difficulty selection is Pro-only
+- `10` Study Packs / month
+- `5` Challenge Quizzes / month
+- topic note generation: backend-configured Free limit (`5` by default)
+- OCR: backend-configured Free limit (`20` by default)
+- exports: `2` / month
+- Quick Review available
+- Challenge Quiz available
+- weak concepts visible after quiz completion
+- Adaptive Practice unavailable
+- Difficulty selection unavailable
+- Board Exam Mode unavailable
 
 ### Plus
 
-- 50 Study Packs per month
-- Topic note generation (25/month by default, backend-configurable)
-- Challenge Quiz (25/month)
-- OCR (50/month by default, backend-configurable)
-- Exports (15/month)
-- Higher usage limits than Free
+- `50` Study Packs / month
+- `25` Challenge Quizzes / month
+- topic note generation: backend-configured Plus limit (`25` by default)
+- OCR: backend-configured Plus limit (`50` by default)
+- exports: `15` / month
+- higher usage limits than Free
+- Adaptive Practice currently unavailable in runtime
+- Difficulty selection unavailable
+- Board Exam Mode unavailable
 
 ### Pro
 
-- 100 Study Packs per month
-- Topic note generation (100/month by default, backend-configurable)
-- Challenge Quiz (50/month)
-- Adaptive Practice (30/month)
-- OCR (100/month by default, backend-configurable)
-- Exports (unlimited)
-- Difficulty selection
-- Board Exam Mode
-- Highest usage limits
+- `100` Study Packs / month
+- `50` Challenge Quizzes / month
+- topic note generation: backend-configured Pro limit (`100` by default)
+- OCR: backend-configured Pro limit (`100` by default)
+- exports: unlimited
+- Adaptive Practice available and quota-limited (`30` / month by default)
+- Difficulty selection available
+- Board Exam Mode available
 
-## Soft paywall UX
+## Pricing-surface note
 
-- Free users should see a shared explanatory paywall before a paid-plan quiz action or a hard quota block attempts paid conversion.
-- The paywall should explain:
-  - `Challenge Quiz`
-  - `Adaptive Practice`
-  - `Weak Concept Training`
-  - `Higher monthly limits`
-- Modal actions:
-  - `View Plans`
-  - `Maybe Later`
-- Verified users who continue should start hosted checkout through `POST /api/payments/create`.
-- Study Pack limit blocks should keep `Generate Study Pack` clickable instead of disabling it.
-- Topic note generation and OCR stay separately gated from Study Pack generation.
+Some pricing surfaces currently position Plus with stronger “regular study” messaging than the backend feature gates provide.
 
-## Topic note generation and OCR gating
+For actual behavior and gating decisions:
 
-- Topic note generation is a distinct monthly quota from Study Packs and OCR.
-- When topic note generation quota is exhausted:
-  - Free users see the shared upgrade modal
-  - Plus / Pro users see a reset-on-next-billing-date modal
-- OCR exhaustion follows the same split:
-  - Free users see an upgrade path
-  - Plus / Pro users see a reset-date explanation
-- Backend must enforce all limits even when frontend disables actions.
+- use backend plan limits and feature flags
+- treat `GET /api/me/plan` as the frontend contract
 
-## Pricing and upgrade surfaces
+## Study Pack limit UX
 
-- Pricing page, Settings billing, dashboard upgrade cards, and shared paywall surfaces may start the same hosted checkout flow.
-- Frontend pricing surfaces should still read pricing context from `GET /api/billing/pricing`.
-- Shared PHP and USD pricing labels may remain in `pricingConfig` so reviewer-safe pricing stays visible before the pricing API resolves.
-- Success and failure pages are informational only and must never activate a paid plan directly.
+- remaining Study Packs come from backend usage calculations
+- when remaining reaches `2` or `1`, show the near-limit warning banner
+- when remaining reaches `0`, keep `Generate Study Pack` clickable and show the appropriate limit/paywall modal on click
+- quota increments only after a successful Study Pack is persisted
+- saving a note, failed generation, or failed retry must not consume Study Pack quota
 
-## Billing architecture
+## Topic note generation and OCR
 
-- Active runtime provider is `XENDIT`.
-- Backend is the source of truth for pricing, upgrade eligibility, checkout creation, webhook validation, and paid-plan activation.
-- `POST /api/payments/create` creates a hosted Xendit invoice and returns `checkoutUrl`.
-- `POST /api/webhooks/xendit` validates `x-callback-token`, applies idempotency through `webhook_events`, updates `payment_transactions`, and activates the selected paid plan only when status is `PAID`.
-- `premium_waitlist` may remain in the system for legacy reporting, but it is not part of the active checkout flow.
+Topic note generation and OCR are distinct monthly quotas from Study Packs.
 
-## Hosted checkout flow
+When topic note generation is exhausted:
 
-1. User clicks `Choose Plus`, `Choose Pro`, or a paywall upgrade CTA.
-2. Frontend calls `POST /api/payments/create`.
-3. Backend creates a Xendit invoice with a unique `external_id`.
-4. Backend persists a pending `payment_transactions` row.
-5. Frontend redirects to the hosted Xendit checkout URL.
-6. Xendit calls `POST /api/webhooks/xendit`.
-7. Backend marks the payment transaction `SUCCESS` or `FAILED`.
-8. Backend activates the selected paid plan only after a validated `PAID` webhook.
+- Free users hit the upgrade path
+- paid users get reset-date messaging instead of a billing redirect
 
-## Current billing limitations
+When OCR is exhausted:
 
-- Current implementation is a hosted one-time paid-plan checkout flow.
-- Recurring subscriptions are not implemented yet.
-- Paid access is manual renewal with subscription-table expiry handling.
-- Billing history is read-only.
+- Free users get the upgrade path
+- paid users get reset-date messaging
 
-## Regional pricing
+Backend enforcement is mandatory even if the frontend disables or hides actions.
 
-- Region detection uses the `CF-IPCountry` request header.
-- `PricingRegionResolver` maps country codes into supported display regions.
-- Backend pricing config includes:
-  - `currency`
-  - `monthlyPrice`
-  - `yearlyPrice`
-  - `introMonthlyPrice` (optional)
-  - `isActive`
+## Checkout and billing flow
 
-## Voucher and promotion rules
+- active provider: `XENDIT`
+- frontend starts checkout with `POST /api/payments/create`
+- backend validates pricing, vouchers, return URL, and pending-checkout reuse
+- Xendit webhook confirmation is the only path that activates or extends paid access
+- success and failure pages are informational only
 
-- Intro pricing is implemented through voucher logic, not a boolean on `User`.
-- Voucher records support:
-  - `discountType`
-  - `discountValue`
-  - `currency`
-  - `billingCycleScope`
-  - `planScope`
-  - `regionScope`
-  - `newSubscribersOnly`
-  - `requiresCode`
-  - redemption limits and validity windows
+## Pending checkout reuse
 
-## Pricing API
+Pending checkout reuse is allowed only when all of these still match:
 
-- `GET /api/billing/pricing` returns the effective display pricing for the request region.
-- Response contract:
-  - `region`
-  - `currency`
-  - `monthlyPrice`
-  - `yearlyPrice`
-  - `introMonthlyPrice`
-  - `hasIntroPromo`
-  - `introEligible`
+- user
+- plan
+- billing cycle
+- final amount
+- voucher state
+- provider
+- invoice not expired
 
-## Billing history API
-
-- `GET /api/billing/history` returns the current plan summary plus payment history.
-- Response contract:
-  - `currentPlan`
-  - `subscriptionStatus`
-  - `billingType`
-  - `currentPeriodStart`
-  - `currentPeriodEnd`
-  - `cancelAtPeriodEnd`
-  - `cancellationEffectiveAt`
-  - `transactions[]`
-
-## Centralized plan API
-
-- `GET /api/me/plan` is the frontend source of truth for plan limits, usage, remaining counts, and feature flags.
-- Response contract includes:
-  - `plan`
-  - `limits.studyPacksPerMonth`
-  - `limits.challengeQuizzesPerMonth`
-  - `limits.adaptivePracticePerMonth`
-  - `limits.ocrPerMonth`
-  - `limits.noteGenerationsPerMonth`
-  - `usage.studyPacksUsed`
-  - `usage.challengeQuizzesUsed`
-  - `usage.adaptivePracticeUsed`
-  - `usage.ocrUsed`
-  - `usage.noteGenerationsUsed`
-  - `remaining.studyPacksRemaining`
-  - `remaining.challengeQuizzesRemaining`
-  - `remaining.adaptivePracticeRemaining`
-  - `remaining.ocrRemaining`
-  - `remaining.noteGenerationsRemaining`
-  - `features.adaptivePracticeAvailable`
-  - `features.difficultySelectionAvailable`
-  - `features.fileUploadAvailable`
-  - `features.ocrAvailable`
-- Frontend gating and usage UI should rely on this API instead of local recalculation.
-
-## Settings usage UI
-
-- `Settings -> Plan & Billing -> Monthly Usage` should render progress bars instead of plain counters.
-- Free users see:
-  - `Study Packs`
-  - `Challenge Quiz`
-- Pro users also see:
-  - `Adaptive Practice`
-- OCR usage remains hidden from the Settings UI even though it is still tracked and enforced in backend.
+Monthly and yearly checkouts must not block each other incorrectly.
 
 ## Usage reset windows
 
-- Quotas do not reset on calendar month boundaries.
-- Free users reset monthly from the account creation date anchor.
-- Paid-plan usage windows follow the active billing period model returned by backend.
-- Persisted `user_usage.period_start` and `user_usage.period_end` define the active quota cycle for:
-  - Study Packs
-  - Challenge Quiz
-  - Adaptive Practice
-  - OCR
-  - Topic note generation
+- Free usage resets on the monthly window anchored to account creation
+- paid usage resets on the active subscription billing window
+- persisted `user_usage.period_start` and `user_usage.period_end` remain the quota-cycle boundaries

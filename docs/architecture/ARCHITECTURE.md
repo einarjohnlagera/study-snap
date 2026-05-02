@@ -2,7 +2,7 @@
 
 This document describes the NoteLib system architecture and how backend services connect to the web frontend.
 
-Current architecture baseline: `v0.5.0 - Public Profiles & Public Notes`
+Current architecture baseline: `v0.11.0 - Learning Flow Foundation`
 
 Core workflow:
 
@@ -32,7 +32,10 @@ Routes:
 
 - `/` landing
 - `/demo` demo walkthrough (no real generation)
+- `/how-it-works` marketing walkthrough
+- `/pricing` public pricing page
 - `/study` quick note input flow (legacy-compatible)
+- `/onboarding` verified-user activation onboarding
 - `/notes/new` New Note
 - `/notes/{id}/edit` Edit Note
 - `/dashboard` guidance + library entry
@@ -44,6 +47,9 @@ Routes:
 - `/public/library/{subject}/{slug}` public read-only note detail
 - `/settings` plan/billing and account controls
 - `/profile` account profile
+- `/help` authenticated help center
+- `/billing/success` hosted-checkout success status
+- `/billing/failed` hosted-checkout failure status
 - `/p/{token}` public shared Study Pack
 
 Mode-based note creation stays on the same Note pipeline:
@@ -68,7 +74,7 @@ Responsibilities:
 - orchestrate OCR + LLM generation
 - persist note-authored fields and generated Study Pack fields
 - persist review sessions and performance
-- enforce plan usage limits and premium gates
+- enforce plan usage limits and paid-plan gates
 - support sharing/remix operations
 - avoid logging raw images and full extracted text
 

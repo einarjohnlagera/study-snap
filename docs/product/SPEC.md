@@ -4,8 +4,6 @@ Rebrand note: StudySnap has been rebranded to NoteLib. Database schema/table nam
 
 Current documentation baseline: `v0.11.0 - Learning Flow Foundation`
 
-Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
-
 ## Product Overview
 
 NoteLib is a study system that guides students, board exam reviewees, and teachers from input to understanding, practice, challenge, and improvement.
@@ -920,9 +918,9 @@ Users can:
   - saved custom subjects become future suggestions once the note is persisted
   - subject saves should normalize whitespace and dash formatting so values such as `Biology-Cell Division` and `Biology – Cell Division` collapse into one reusable subject key
   - subject reuse checks should be case-insensitive so equivalent saved subjects resolve to the same autocomplete/filter label when possible
-  - AI-generated subjects should be library-friendly academic labels, usually `Primary field – subtopic` when that helps group similar notes
-  - avoid broad catch-all labels such as `Medicine`, `Engineering`, `Education`, `Law`, or `Business` when the notes support a narrower academic subject
-  - example targets: `Nursing – Pharmacology`, `Biology – Cell Division`, `Criminal Law – Crimes Against Persons`, `Software Engineering – Data Structures`
+  - AI-generated subjects should be broad academic domains because backend normalizes subject metadata to domain-level labels before save
+  - avoid vague catch-all labels when a clearer domain is available, but do not rely on `Primary field – subtopic` storage for current behavior
+  - example targets: `Biology`, `Physics`, `Mathematics`, `Computer Science`, `Nursing`, `Criminal Law`
   - no normalized `subjects` table is required for the current version
 - Course / Program persistence and suggestions:
   - `users.courseProgram` is the profile-level default and `notes.courseProgram` is the note-level persisted source of truth
@@ -1113,6 +1111,18 @@ Page responsibilities:
   - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
   - backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
 
+### Quiz Result — Inline Learner Level Selector
+
+Quick Review and Challenge Quiz result screens expose a learner-level pill-selector so users can adjust their level immediately after a quiz without navigating to Profile.
+
+Rules:
+
+- load the current `learnerLevel` via `GET /auth/me` when the result screen becomes visible
+- render one pill per level option; the current level is visually selected
+- saving calls `updateProfileLearnerLevel` in `lib/api.ts` and shows a toast: `Learner level updated. Future Study Packs and quizzes will match this level.`
+- the selector must reuse the existing `LearnerLevel` enum and `LEARNER_LEVEL_OPTIONS`; do not introduce a new learner level system
+- learner level changes affect future quiz generations only; they do not regenerate the current Study Pack or session
+
 ### Quiz Generation Reliability
 
 - Quiz-generation prompts must return valid JSON only, with no markdown or extra prose outside the JSON object.
@@ -1277,8 +1287,27 @@ Rules:
 - users who already completed onboarding must be redirected to `Dashboard`
 - `Exam Date` is optional and shown inline on Step 2 for Board Takers only
 - `learnerLevel`, `courseProgram`, `bio`, `engagementMode`, and reminder preferences are deferred — collected in Profile and Settings after the user's first session
-- the note created during onboarding is saved to the user's library as a normal Draft note
-- the Study Pack generated during onboarding follows the standard Study Pack generation flow
+- the note created during onboarding is saved to the user's library and then follows the standard async Study Pack generation flow
+- Step 3 `Generate a note` creates an editable note draft first; it does not immediately skip past the user's opportunity to generate the Study Pack from that draft
+- onboarding Study Pack creation must be idempotent: reuse `draft.noteId` and do not create duplicate notes or Study Packs for refresh/back/forward repeats
+- while Step 4 generation is active, the footer `Back` action is hidden and the notice reads `Your Study Pack is being created. This step can't be undone.`
+- after onboarding generation succeeds, backend may auto-apply generated `subject` and `tags` to the source note when those fields are empty
+
+### Dashboard Personalization Prompt
+
+A lightweight learner-level prompt is shown on Dashboard after onboarding completes.
+
+Copy:
+
+- title: `Too easy or too hard?`
+- body: `Set your learner level so future quizzes match your study stage.`
+- CTA: `Adjust level`
+
+Behavior:
+
+- dismissible; dismissal stored per user in frontend storage
+- CTA navigates to `/profile?from=dashboard#learning-profile`
+- this prompt is for learner level only; it does not re-collect learning style or reminder preferences
 
 ### Profile
 
@@ -1306,12 +1335,6 @@ Profile Type section:
 - `profileType`
 - separate `Save Profile Type` action
 
-Account information section:
-
-- `Member Since`
-- `Plan`
-- `Study Packs Created`
-
 `Profile` must not include:
 
 - `Learning Style`
@@ -1326,6 +1349,12 @@ Email change flow:
 - the UI should tell the user: `Please verify your new email address before it replaces your current email.`
 - after verification, `email = pendingEmail`, `pendingEmail = null`, and `emailVerifiedAt` is refreshed
 - email changes must never replace the active account email before verification
+
+Back navigation:
+
+- when `/profile` is reached via `?from=dashboard` (e.g. the Dashboard "Adjust level" CTA), the back link renders as `← Dashboard` (href `/dashboard`)
+- in all other cases the back link renders as `← Profile` (href the user's public profile path)
+- the navigation URL must include `?from=dashboard` to trigger context-aware back link behavior
 
 ### Email Templates
 
@@ -1390,11 +1419,13 @@ Plans: `FREE`, `PLUS`, `PRO`
 Plan limits:
 
 - Free: unlimited notes, 10 Study Packs/month, 5 Challenge Quizzes/month, 2 exports/month, Summary + Key Concepts
-- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, 10 Adaptive Practice/month on pricing surfaces, higher note generation limits
+- Plus: 50 Study Packs/month, 25 Challenge Quizzes/month, 15 exports/month, higher note generation limits
 - Pro: 100 Study Packs/month, 50 Challenge Quizzes/month, unlimited exports, 30 Adaptive Practice/month, difficulty selection, Board Exam Mode
-- Pricing surfaces must keep the Adaptive Practice limit messaging aligned:
-  - Plus: `Train on weak areas (limited sessions)` and `Adaptive Practice (10 sessions / month)`
-  - Pro: `Train on weak areas until you master them` and `Adaptive Practice (30 sessions / month)`
+- Current enforcement truth:
+  - Adaptive Practice access is Pro-only in runtime
+  - Difficulty selection is Pro-only
+  - Board Exam Mode is Pro-only
+- Pricing surfaces may still position Plus as the regular-study tier through shared plan messaging, but backend plan enforcement and `GET /api/me/plan` remain the behavior source of truth
 - Usage windows are billing-cycle-based:
   - Free resets monthly from account creation date
   - Plus and Pro reset from the active subscription billing window

@@ -2,36 +2,50 @@
 
 ## Goal
 
-Adaptive Practice reinforces weak concepts from prior quiz performance on a Study Pack-ready Note.
+Adaptive Practice is the weak-area follow-up quiz mode for a Study Pack-ready note.
 
-## Generation Rules
+It should stay focused on:
 
-- generated from Study Pack summary, key concepts, and weak concepts
-- must stay focused on weak concepts only
-- learner-level aware, defaulting to `College` when learner level is missing
-- may be slightly easier than Challenge Quiz, but should remain targeted and useful
-- may include quantitative reinforcement questions when the weak concepts are computation-heavy
-- explanations should reinforce the weak concept clearly and step through calculations when relevant
+- weak concepts from prior performance
+- targeted reinforcement
+- repeat practice without drifting into unrelated topics
 
-## Contract
+## Current availability
 
-Generated LLM output must include:
+Runtime gating currently treats Adaptive Practice as:
 
-- `question`
-- `choices` (4)
-- `answer` (`A` / `B` / `C` / `D`)
-- `explanation`
-- `concept`
+- unavailable on Free
+- unavailable on Plus
+- available on Pro with a monthly quota
 
-Runtime/session rules:
+If the user cannot access it:
 
-- Backend normalization must convert the LLM answer letter into canonical `correctIndex` before persistence.
-- Frontend rendering may shuffle displayed choices, but `A` / `B` / `C` / `D` stay UI-only labels derived from displayed order.
-- Session grading must compare selected canonical choice indexes against canonical `correctIndex`.
+- use the shared Pro upsell flow for locked access
+- use the dedicated limit state when a Pro user has exhausted the monthly quota
 
-## Gating
+## Generation behavior
 
-- `Adaptive Practice` should remain visible on Note Detail when weak concepts exist.
-- Free and Plus users who click `Adaptive Practice` must see the shared Pro upsell modal.
-- Pro users who exhausted their monthly `Adaptive Practice` quota must see the dedicated monthly-limit state instead of the upgrade upsell.
-- Do not silently fail or redirect users into unrelated pages when `Adaptive Practice` is gated.
+- Adaptive Practice is LLM-generated
+- page load may recover `GENERATING`, `IN_PROGRESS`, or `FAILED` state
+- page load must not automatically trigger a new generation request
+- new generation starts only from the visible CTA
+
+## Result screen
+
+Primary CTA:
+
+- `Generate New Set`
+
+Secondary actions:
+
+- `Review Answers`
+- `← Back to Note`
+
+The result screen should stay focused and should not compete with unrelated actions.
+
+## Session rules
+
+- sessions are note-owned
+- generation and resume flow must be idempotent
+- active generation uses the shared generation lock
+- leaving an active Adaptive Practice session forfeits that session without refunding quota
