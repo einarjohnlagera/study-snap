@@ -160,7 +160,7 @@ describe("DashboardPage profile variants", () => {
     expect(screen.queryByText("Create Quiz")).not.toBeInTheDocument();
   });
 
-  it("shows the personalization prompt after onboarding and routes to settings", async () => {
+  it("shows the personalization prompt after onboarding and routes to profile", async () => {
     (getMe as jest.Mock).mockResolvedValue({
       firstName: "Note",
       displayName: "Note",
@@ -180,10 +180,10 @@ describe("DashboardPage profile variants", () => {
 
     render(<DashboardPage />);
 
-    expect(await screen.findByText("Make NoteLib work better for you")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Set Preferences" }));
+    expect(await screen.findByText("Too easy or too hard?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Adjust level" }));
 
-    expect(routerMock.push).toHaveBeenCalledWith("/settings");
+    expect(routerMock.push).toHaveBeenCalledWith("/profile");
   });
 
   it("persists dismissal of the personalization prompt per user", async () => {
@@ -206,11 +206,11 @@ describe("DashboardPage profile variants", () => {
 
     const { unmount } = render(<DashboardPage />);
 
-    expect(await screen.findByText("Make NoteLib work better for you")).toBeInTheDocument();
+    expect(await screen.findByText("Too easy or too hard?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss personalization prompt" }));
 
     await waitFor(() => {
-      expect(screen.queryByText("Make NoteLib work better for you")).not.toBeInTheDocument();
+      expect(screen.queryByText("Too easy or too hard?")).not.toBeInTheDocument();
     });
     expect(window.localStorage.getItem("notelib-dashboard-personalization-prompt:user-1")).toBe("1");
 
@@ -218,7 +218,7 @@ describe("DashboardPage profile variants", () => {
     render(<DashboardPage />);
 
     await screen.findByText("Continue Studying");
-    expect(screen.queryByText("Make NoteLib work better for you")).not.toBeInTheDocument();
+    expect(screen.queryByText("Too easy or too hard?")).not.toBeInTheDocument();
   });
 
   it("renders the board exam dashboard with countdown and challenge-quiz CTA", async () => {

@@ -605,6 +605,7 @@ public class StudyPackService {
                         noteId
                 );
                 markNoteGenerated(noteId, sourceNote);
+                applyGeneratedMetadataToNote(sourceNote, generated);
                 return savedEntity;
             });
 
@@ -872,6 +873,23 @@ public class StudyPackService {
             note.setUpdatedAt(OffsetDateTime.now());
             noteRepository.save(note);
         });
+    }
+
+    private void applyGeneratedMetadataToNote(NoteEntity note, GeneratedStudyPackContent generated) {
+        boolean changed = false;
+        if ((note.getSubject() == null || note.getSubject().isBlank()) && generated.subject() != null) {
+            note.setSubject(normalizeSubject(generated.subject()));
+            changed = true;
+        }
+        String[] existingTags = note.getTags();
+        if ((existingTags == null || existingTags.length == 0) && generated.tags() != null && !generated.tags().isEmpty()) {
+            note.setTags(resolveTags(generated.tags(), generated.title()));
+            changed = true;
+        }
+        if (changed) {
+            note.setUpdatedAt(OffsetDateTime.now());
+            noteRepository.save(note);
+        }
     }
 
     private LinkedHashMap<String, Object> buildGenerationMetadata(UUID noteId, InputType inputType, boolean generatedFromExistingNote) {

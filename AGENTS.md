@@ -208,6 +208,10 @@ Teacher flow rule:
 - After the first Study Pack is generated, Note Detail should point users to Challenge Quiz as the next action.
 - After the first Challenge Quiz is completed, surface weak-concept guidance before returning users to normal study flows.
 - Product onboarding completion is tracked separately from preferences onboarding and should not reuse `onboardingCompletedAt`.
+- **Onboarding Study Pack generation (Step 4) must be idempotent**: `handleStartStudyPack()` must check `draft.noteId` before creating a note; if a note already exists, navigate to Step 4 instead of creating another. This prevents duplicate notes and study packs from back/forward/refresh behavior.
+- **Back button lock during Study Pack generation**: hide the Back button while generation is active (`studyPackGenerating || startingStudyPack`); replace the notice with `Your Study Pack is being created. This step can't be undone.`; restore the Back button on error or completion.
+- **After Study Pack generation from existing note**: the backend automatically applies AI-generated `subject` and `tags` to the source note if those fields are empty — zero-friction, no user prompt needed. This is implemented in `generateStudyPackFromExistingNoteAsync` via `applyGeneratedMetadataToNote`.
+- **Learner level is deferred from onboarding**: do not add a learner level step to onboarding. The dashboard personalization prompt handles deferred collection pointing users to `/profile`.
 
 ### Profile Rule
 
@@ -604,12 +608,14 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 
 - **No "Note" button** on any quiz screen — `Note` as a `<Button>` is forbidden
 - Navigation back to the note must be a `← Back to Note` **text link** (`BackLink` component), placed **below** action buttons, never grouped with them
+- **Exactly one primary CTA per result screen.** Never show two equal-weight primary buttons.
 - **Button hierarchy** on result screens:
-  - Primary: next learning action (`Practice Weak Concepts` when available, `Practice Again` when Quick Review needs recovery and Adaptive Practice is locked/unavailable, `Start Another Challenge` when Challenge has no weak concepts, `Start Challenge Quiz` after strong Quick Review results, or `Generate New Set` for Adaptive Practice)
-  - Secondary: review/repeat/support actions (`Review Answers`, secondary `Practice Again`, secondary `Start Another Challenge`, locked `Unlock Practice Weak Concepts`)
+  - Primary: next learning action — Quick Review: `Practice Weak Areas` (Adaptive) when struggling + available; `Practice Again` when struggling + adaptive unavailable; `Take Another Challenge` after strong/perfect result — Challenge Quiz: `Practice Weak Concepts` when weak concepts exist, otherwise `Take Another Challenge` — Adaptive Practice: `Generate New Set`
+  - Secondary: review/repeat/support actions (`Review Answers`, upgrade nudge, secondary `Practice Again`)
   - Navigation: `← Back to Note` link below
 - Edge states such as empty quiz data, monthly limits, unavailable sessions, or missing weak-area labels must keep a clear next step and use text-link navigation rather than `Back to Note` buttons.
-- **Confidence feedback** (Quick Review only): after selecting, option buttons are replaced by a badge — `🟢 Confident`, `🟡 Improving`, `🔴 Needs Practice`; "Thanks for the feedback." text is removed
+- **Confidence feedback** (Quick Review only): moved to a secondary section below the primary CTA group; after selecting, option buttons are replaced by a badge — `🟢 Confident`, `🟡 Improving`, `🔴 Needs Practice`; "Thanks for the feedback." text is removed
+- **Inline learner level selector** (Quick Review and Challenge Quiz result screens): pill-group selector loads the user's current `learnerLevel` via `GET /auth/me` when the result becomes visible; changing a level saves via `updateProfileLearnerLevel` in `lib/api.ts` and shows a toast; do NOT add a new learner level system — reuse the existing `LearnerLevel` enum and `LEARNER_LEVEL_OPTIONS`
 - **Adaptive Practice completion**: "Generate New Set" is always the primary button; `← Back to Note` link below
 - **Review Answers**: Quick Review, Challenge Quiz, and Adaptive Practice must use the shared post-quiz review pattern showing question text, selected answer, correct answer, explanation, and concept chip.
 - Review Answers answer states must stay consistent: correct answer uses restrained green styling, incorrect selected answer uses restrained red styling, neutral distractors stay quiet, and selected-correct answers show both `Your answer` and `Correct answer`.

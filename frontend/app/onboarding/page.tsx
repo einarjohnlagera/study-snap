@@ -680,6 +680,10 @@ export default function OnboardingPage() {
     if (!profileType || !selectedInputMethod || startingStudyPack || !canStartStudyPack) {
       return;
     }
+    if (draft.noteId) {
+      goToStep(4);
+      return;
+    }
 
     setStartingStudyPack(true);
     setStepThreeError(null);
@@ -1027,7 +1031,9 @@ export default function OnboardingPage() {
           </div>
 
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
-            {STEP_FOUR_BACK_NOTICE}
+            {studyPackGenerating || startingStudyPack
+              ? "Your Study Pack is being created. This step can't be undone."
+              : STEP_FOUR_BACK_NOTICE}
           </p>
 
           {generationError ? (
@@ -1297,10 +1303,7 @@ export default function OnboardingPage() {
     }
 
     return (
-      <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
-        <Button type="button" variant="outline" className="min-h-12 text-base sm:min-w-32" onClick={handleBack}>
-          Back
-        </Button>
+      <div className="flex justify-end">
         <Button type="button" className="min-h-12 text-base sm:min-w-44" disabled>
           {startingStudyPack ? "Starting..." : "Building your Study Pack..."}
         </Button>

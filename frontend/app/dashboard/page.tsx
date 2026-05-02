@@ -425,7 +425,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleOpenPreferences = useCallback(() => {
-    router.push("/settings");
+    router.push("/profile");
   }, [router]);
 
   const handleSkipFirstStudyOnboarding = useCallback(async () => {

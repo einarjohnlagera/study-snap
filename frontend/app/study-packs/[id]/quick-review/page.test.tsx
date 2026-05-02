@@ -42,11 +42,13 @@ jest.mock("@/lib/api", () => ({
   completeQuickReviewSession: jest.fn(),
   forfeitQuickReviewSession: jest.fn(),
   generateQuickReviewStudyTip: jest.fn(),
+  getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   saveQuickReviewConfidence: jest.fn(),
   startQuickReviewSession: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
+  updateProfileLearnerLevel: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   updateQuickReviewSessionProgress: jest.fn(),
 }));
 
@@ -363,7 +365,7 @@ describe("QuickReviewPage post-quiz UX", () => {
     expect(screen.queryByRole("button", { name: "Not confident" })).not.toBeInTheDocument();
   });
 
-  it('shows "Start Challenge Quiz" CTA on perfect score (no weak concepts)', async () => {
+  it('shows "Take Another Challenge" CTA on perfect score (no weak concepts)', async () => {
     setupCompleteState();
     render(<QuickReviewPage />);
 
@@ -372,8 +374,8 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish Quick Review" }));
     await screen.findByText("Quick Review Complete");
 
-    // Perfect score → showChallengeGuidedCta = true → "Start Challenge Quiz" appears
-    expect(screen.getByRole("link", { name: "Start Challenge Quiz" })).toBeInTheDocument();
+    // Perfect score → showChallengeGuidedCta = true → "Take Another Challenge" appears
+    expect(screen.getByRole("link", { name: "Take Another Challenge" })).toBeInTheDocument();
   });
 
   it("opens answer review with selected answer, correct answer, explanation, and concept", async () => {
@@ -405,8 +407,8 @@ describe("QuickReviewPage post-quiz UX", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish Review" }));
     await screen.findByText("Quick Review Complete");
 
-    expect(screen.getByRole("button", { name: "Practice Again" })).toHaveClass("bg-blue-600");
-    expect(screen.getByRole("button", { name: "Unlock Practice Weak Concepts" })).toHaveClass("border");
+    expect(screen.getByRole("button", { name: "Practice Again" })).toHaveClass("bg-primary");
+    expect(screen.getByRole("button", { name: "Go Pro for Adaptive Practice" })).toHaveClass("border");
     expect(screen.getByRole("button", { name: "Review Answers" })).toHaveClass("border");
   });
 });

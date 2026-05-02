@@ -658,7 +658,7 @@ export default function ProfilePage() {
                     handleLearningProfileFieldChange("learnerLevel", value as LearnerLevel | "")
                   }
                   placeholder="Choose learner level"
-                  helperText="Choose the option that best matches your current study stage."
+                  helperText="Controls difficulty, explanation depth, and quiz complexity."
                   allowCustom={false}
                   toggleLabel="Toggle learner level suggestions"
                 />
@@ -679,7 +679,7 @@ export default function ProfilePage() {
                   }
                   errorText={learningProfileErrors.courseProgram ?? null}
                 />
-                <p className="text-xs text-foreground/60">Used to tailor content and quiz recommendations to your field.</p>
+                <p className="text-xs text-foreground/60">Provides domain context so examples and questions stay relevant to your field.</p>
               </label>
               <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Bio</span>
@@ -698,7 +698,7 @@ export default function ProfilePage() {
                 <p className="text-xs text-foreground/60">{learningProfileMessage}</p>
               ) : (
                 <p className="text-xs text-foreground/60">
-                  Learner level helps NoteLib adjust quiz difficulty and recommendations.
+                  Learner level controls quiz difficulty and explanation depth.
                 </p>
               )}
               <ResponsiveActionButton

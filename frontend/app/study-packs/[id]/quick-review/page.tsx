@@ -21,18 +21,23 @@ import {
   completeQuickReviewSession,
   forfeitQuickReviewSession,
   generateQuickReviewStudyTip,
+  getMe,
   getMyStudyPack,
   getNote,
   saveQuickReviewConfidence,
   startQuickReviewSession,
   trackAnalyticsEvent,
+  updateProfileLearnerLevel,
   updateQuickReviewSessionProgress,
+  type LearnerLevel,
   type NoteResponse,
   type QuickReviewConfidenceLevel,
   type QuickReviewSessionStartResponse,
   type QuickReviewSessionSummaryResponse,
   type QuickReviewStudyTipRequest,
 } from "@/lib/api";
+import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import { ToastMessage } from "@/components/ui/toast-message";
 import {
   clearFirstStudyOnboardingStep,
   getFirstStudyOnboardingStep,
@@ -169,6 +174,9 @@ export default function QuickReviewPage() {
   const [activePaywallModal, setActivePaywallModal] = useState<PaywallModalVariant | null>(null);
   const [showCompletionGuide, setShowCompletionGuide] = useState(false);
   const [showAnswerReview, setShowAnswerReview] = useState(false);
+  const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
+  const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
+  const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const loadedNoteIdRef = useRef<string | null>(null);
   const legacyRedirectTargetRef = useRef<string | null>(null);
 
@@ -393,6 +401,41 @@ export default function QuickReviewPage() {
     }
     setShowCompletionGuide(false);
   }, [isComplete]);
+
+  useEffect(() => {
+    if (!isComplete) {
+      return;
+    }
+    void getMe().then((me) => {
+      if (me.learnerLevel) {
+        setCurrentLearnerLevel(me.learnerLevel);
+      }
+    }).catch(() => undefined);
+  }, [isComplete]);
+
+  useEffect(() => {
+    if (!learnerLevelToast) {
+      return;
+    }
+    const timer = setTimeout(() => setLearnerLevelToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [learnerLevelToast]);
+
+  const handleChangeLearnerLevel = async (level: LearnerLevel) => {
+    if (savingLearnerLevel) {
+      return;
+    }
+    setSavingLearnerLevel(true);
+    try {
+      await updateProfileLearnerLevel(level);
+      setCurrentLearnerLevel(level);
+      setLearnerLevelToast("Learner level updated. Future Study Packs and quizzes will match this level.");
+    } catch {
+      setLearnerLevelToast("Could not update learner level. Please try again.");
+    } finally {
+      setSavingLearnerLevel(false);
+    }
+  };
 
   const persistProgress = useCallback((next: {
     currentQuestionIndex: number;
@@ -807,6 +850,8 @@ export default function QuickReviewPage() {
             Quick Review Complete
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">Your results</h1>
+
+          {/* Section 1: Score summary */}
           <div className="space-y-2 text-sm text-foreground/75">
             <div className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${performanceBadge.className}`}>
               {performanceBadge.label}
@@ -823,45 +868,6 @@ export default function QuickReviewPage() {
                 ) : null}
               </div>
             ) : null}
-            {isPerfectScore ? (
-              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
-                <div className="mb-1 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                  <Trophy className="h-4 w-4" aria-hidden="true" />
-                  <p className="font-medium">Excellent work! You mastered this topic.</p>
-                </div>
-                <p>Try another note to continue learning.</p>
-              </div>
-            ) : (
-              <p>{scoreFeedback}</p>
-            )}
-            {!isPerfectScore && incorrectCount > 0 && displayedWeakConcepts.length > 0 ? (
-              <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                  Weak Areas
-                </p>
-                <p>You may want to review these concepts:</p>
-                <ul className="list-disc space-y-1 pl-5">
-                  {displayedWeakConcepts.map((concept) => (
-                    <li key={concept}>{concept}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {!isPerfectScore && incorrectCount > 0 && !note?.adaptivePracticeAvailable ? (
-              <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
-                <p className="text-sm text-foreground/85">
-                  Adaptive Practice is available on Pro. Challenge Quiz stays available up to your monthly limit.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openAdaptivePracticePaywall("quick_review_results_upgrade")}
-                >
-                    {getPaidPlanCtaLabel("PRO")}
-                </Button>
-              </div>
-            ) : null}
             {displayedRetryCount > 0 ? <p>Retries: {displayedRetryCount}</p> : null}
             {studyTip ? (
               <div className="space-y-2 rounded-md border border-blue-500/30 bg-blue-500/10 p-3">
@@ -871,8 +877,80 @@ export default function QuickReviewPage() {
                 <p className="whitespace-normal wrap-break-word leading-relaxed text-foreground/85">{studyTip}</p>
               </div>
             ) : null}
-            <div className="space-y-2 rounded-md border border-border bg-background p-3">
-              <p className="text-sm font-medium text-foreground">How confident did you feel about this topic?</p>
+          </div>
+
+          {/* Section 2: Outcome guidance */}
+          {isPerfectScore ? (
+            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+              <div className="mb-1 flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                <Trophy className="h-4 w-4" aria-hidden="true" />
+                <p className="font-medium">Excellent work! You mastered this topic.</p>
+              </div>
+              <p className="text-foreground/75">Try a challenge quiz to test yourself at a harder level.</p>
+            </div>
+          ) : displayedWeakConcepts.length > 0 ? (
+            <div className="space-y-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                Weak Areas
+              </p>
+              <p className="text-foreground/75">Focus on these concepts to improve your score:</p>
+              <ul className="list-disc space-y-1 pl-5 text-foreground/85">
+                {displayedWeakConcepts.map((concept) => (
+                  <li key={concept}>{concept}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-sm text-foreground/75">{scoreFeedback}</p>
+          )}
+
+          {/* Section 3: Primary CTA */}
+          {showAdaptiveGuidedCta && note?.adaptivePracticeAvailable ? (
+            <Link href={`/notes/${note.id}/adaptive-practice`} className="block">
+              <Button type="button" className="w-full">
+                Practice Weak Areas
+              </Button>
+            </Link>
+          ) : showChallengeGuidedCta ? (
+            <Link href={`/notes/${note.id}/challenge-quiz`} className="block">
+              <Button type="button" className="w-full">
+                Take Another Challenge
+              </Button>
+            </Link>
+          ) : (
+            <Button type="button" className="w-full" onClick={handleRetry}>
+              Practice Again
+            </Button>
+          )}
+
+          {/* Section 4: Secondary actions */}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {showAdaptiveGuidedCta && !note?.adaptivePracticeAvailable ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
+              >
+                {getPaidPlanCtaLabel("PRO")} for Adaptive Practice
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
+              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
+            </Button>
+          </div>
+          <div className="pt-1">
+            <BackLink href={noteDetailHref} label="Back to Note" />
+          </div>
+
+          {showAnswerReview ? (
+            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
+          ) : null}
+
+          {/* Confidence + Learner level (secondary section) */}
+          <div className="space-y-4 border-t border-border pt-4">
+            <div className="space-y-2 text-sm">
+              <p className="font-medium text-foreground">How confident did you feel about this topic?</p>
               {confidenceAcknowledged ? (
                 <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
                   confidenceLevel === "HIGH"
@@ -904,52 +982,31 @@ export default function QuickReviewPage() {
                 <p className="text-xs text-red-600 dark:text-red-400">{confidenceError}</p>
               ) : null}
             </div>
+            {currentLearnerLevel ? (
+              <div className="space-y-2 text-sm">
+                <p className="font-medium text-foreground">Adjust difficulty level</p>
+                <div className="flex flex-wrap gap-2">
+                  {LEARNER_LEVEL_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={savingLearnerLevel}
+                      onClick={() => void handleChangeLearnerLevel(option.value)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        currentLearnerLevel === option.value
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-foreground/55">This applies to future generations.</p>
+              </div>
+            ) : null}
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {showAdaptiveGuidedCta && note?.adaptivePracticeAvailable ? (
-              <Link href={`/notes/${note.id}/adaptive-practice`} className="w-full sm:w-auto">
-                <Button type="button" className="w-full sm:w-auto">
-                  Practice Weak Concepts
-                </Button>
-              </Link>
-            ) : null}
-            {showPracticeAgainPrimary ? (
-              <Button type="button" className="w-full sm:w-auto" onClick={handleRetry}>
-                Practice Again
-              </Button>
-            ) : null}
-            {showChallengeGuidedCta ? (
-              <Link href={`/notes/${note.id}/challenge-quiz`} className="w-full sm:w-auto">
-                <Button type="button" className="w-full sm:w-auto">
-                  Start Challenge Quiz
-                </Button>
-              </Link>
-            ) : null}
-            {showAdaptiveGuidedCta && !note?.adaptivePracticeAvailable ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => openAdaptivePracticePaywall("quick_review_results_practice_weak_concepts")}
-              >
-                Unlock Practice Weak Concepts
-              </Button>
-            ) : null}
-            {!isPerfectScore && !showPracticeAgainPrimary ? (
-              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleRetry}>
-                Practice Again
-              </Button>
-            ) : null}
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowAnswerReview((previous) => !previous)}>
-              {showAnswerReview ? "Hide Answer Review" : "Review Answers"}
-            </Button>
-          </div>
-          <div className="pt-1">
-            <BackLink href={noteDetailHref} label="Back to Note" />
-          </div>
-          {showAnswerReview ? (
-            <QuizAnswerReview quiz={quiz} selectedChoices={selectedChoices} className="mt-2" />
-          ) : null}
+
           <QuizFeedbackPanel
             quizLabel="Quick Review"
             noteTitle={note.title}
@@ -1058,6 +1115,9 @@ export default function QuickReviewPage() {
         )}
       />
       <LeaveQuizModal />
+      {learnerLevelToast ? (
+        <ToastMessage message={learnerLevelToast} tone="success" />
+      ) : null}
     </main>
   );
 }

@@ -24,16 +24,21 @@ import {
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
   getInProgressChallengeQuizSession,
+  getMe,
   getMyStudyPack,
   getNote,
   isEmailNotVerifiedError,
   startChallengeQuizSession,
   trackAnalyticsEvent,
   updateChallengeQuizSessionProgress,
+  updateProfileLearnerLevel,
+  type LearnerLevel,
   type NoteResponse,
   type ChallengeQuizSessionResponse,
   type ChallengeQuizStartResponse,
 } from "@/lib/api";
+import { LEARNER_LEVEL_OPTIONS } from "@/lib/learning-profile";
+import { ToastMessage } from "@/components/ui/toast-message";
 import {
   computeScore,
   mapPerformanceLevel,
@@ -275,6 +280,9 @@ export default function ChallengeQuizPage() {
     [searchParams],
   );
   const [sharedModeSelectionEntryRequested, setSharedModeSelectionEntryRequested] = useState(hasModeSelectionEntryQuery);
+  const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
+  const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
+  const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const syncProgressRef = useCallback((nextIndex: number, nextSelectedChoices: Record<number, number>) => {
     progressRef.current = {
@@ -366,6 +374,41 @@ export default function ChallengeQuizPage() {
       mediaQuery.removeListener(updateViewport);
     };
   }, []);
+
+  useEffect(() => {
+    if (phase !== "complete") {
+      return;
+    }
+    void getMe().then((me) => {
+      if (me.learnerLevel) {
+        setCurrentLearnerLevel(me.learnerLevel);
+      }
+    }).catch(() => undefined);
+  }, [phase]);
+
+  useEffect(() => {
+    if (!learnerLevelToast) {
+      return;
+    }
+    const timer = setTimeout(() => setLearnerLevelToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [learnerLevelToast]);
+
+  const handleChangeLearnerLevel = async (level: LearnerLevel) => {
+    if (savingLearnerLevel) {
+      return;
+    }
+    setSavingLearnerLevel(true);
+    try {
+      await updateProfileLearnerLevel(level);
+      setCurrentLearnerLevel(level);
+      setLearnerLevelToast("Learner level updated. Future Study Packs and quizzes will match this level.");
+    } catch {
+      setLearnerLevelToast("Could not update learner level. Please try again.");
+    } finally {
+      setSavingLearnerLevel(false);
+    }
+  };
 
   const applyStartedSession = useCallback((started: ChallengeQuizStartResponse, forceRunning = false) => {
     timeoutAutoSubmitRequestedRef.current = false;
@@ -1611,6 +1654,29 @@ export default function ChallengeQuizPage() {
               )}
             />
           ) : null}
+          {currentLearnerLevel ? (
+            <div className="space-y-2 border-t border-border pt-4 text-sm">
+              <p className="font-medium text-foreground">Adjust difficulty level</p>
+              <div className="flex flex-wrap gap-2">
+                {LEARNER_LEVEL_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    disabled={savingLearnerLevel}
+                    onClick={() => void handleChangeLearnerLevel(option.value)}
+                    className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      currentLearnerLevel === option.value
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-foreground/70 hover:border-foreground/30"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-foreground/55">This applies to future generations.</p>
+            </div>
+          ) : null}
           <QuizFeedbackPanel
             quizLabel={isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz"}
             noteTitle={note?.title}
@@ -1670,6 +1736,9 @@ export default function ChallengeQuizPage() {
       />
       <LeaveQuizModal />
       <GenerationLockModal />
+      {learnerLevelToast ? (
+        <ToastMessage message={learnerLevelToast} tone="success" />
+      ) : null}
     </main>
   );
 }

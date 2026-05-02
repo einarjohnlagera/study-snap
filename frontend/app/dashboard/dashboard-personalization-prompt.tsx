@@ -15,9 +15,9 @@ export function DashboardPersonalizationPrompt({
     <Card className="motion-fade-enter space-y-4 p-4 sm:p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1.5">
-          <h2 className="text-lg font-semibold sm:text-xl">Make NoteLib work better for you</h2>
+          <h2 className="text-lg font-semibold sm:text-xl">Too easy or too hard?</h2>
           <p className="text-sm text-foreground/75">
-            Set your learning style and reminders in seconds.
+            Set your learner level so future quizzes match your study stage.
           </p>
         </div>
         <Button
@@ -35,7 +35,7 @@ export function DashboardPersonalizationPrompt({
         <ResponsiveActionButton
           type="button"
           action="settings"
-          label="Set Preferences"
+          label="Adjust level"
           className="w-full sm:w-auto"
           onClick={onOpenPreferences}
         />
