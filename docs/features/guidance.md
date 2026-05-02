@@ -1,80 +1,80 @@
-# In-App Guidance System (v0.9.0)
+# guidance.md - NoteLib Feature Context
 
-NoteLib uses a three-layer guidance model: always-visible micro text, one-time dismissible tips, and a static help center. The goal is to surface contextual information at the moment it's useful — not before.
+## Goal
 
-## Anti-drift rules
+Keep product guidance contextual, lightweight, and non-blocking.
 
-- Never block a user action with a tip or tutorial
-- Never show more than one `GuidanceTip` per card or section
-- Micro guidance must fit one line — cut content before adding line breaks
-- Dismissed tips must never reappear (stored in `localStorage`)
-- Guidance adds context, not instructions — users should still be able to figure things out without it
+NoteLib guidance currently uses three layers:
 
----
+1. always-visible micro copy
+2. one-time dismissible tips
+3. Help Center guide cards + modals
 
-## Layer 1 — Micro Guidance
+## Rules
 
-Simple `text-xs text-foreground/60` paragraphs placed near form fields or action buttons. Always visible, no state.
+- never block a primary user action with guidance
+- dismissed tips should not reappear for the same user/device
+- guidance should clarify context, not replace the main UI
+- result screens and note-detail surfaces should stay focused even when tips are present
 
-### Locations
+## Layer 1 — Micro guidance
 
-| Surface | Field | Text |
-|---------|-------|------|
-| Note editor | Subject | "Helps organize notes and filter by topic in your Library." |
-| Note editor | Course / Program | "Used to personalize content and quiz recommendations." |
-| Profile settings | Course / Program | "Used to tailor content and quiz recommendations to your field." |
-| Note detail | Quiz action buttons | "Quick Review uses saved questions · Challenge Quiz generates new timed questions" |
+Current always-visible helper copy includes:
 
----
+| Surface | Field / area | Current purpose |
+|---|---|---|
+| Note editor | `Subject` | explain organization / Library filtering |
+| Note editor | `Course / Program` | explain personalization context |
+| Profile | `Learner Level` | explain difficulty / explanation depth |
+| Profile | `Course / Program` | explain domain relevance |
+| Note detail | quiz actions | explain Quick Review vs Challenge Quiz |
 
-## Layer 2 — GuidanceTip Component
+## Layer 2 — GuidanceTip
 
-**File:** `components/ui/guidance-tip.tsx`
+Component:
 
-A dismissible one-time tip strip. Reads from `localStorage` on mount. If the user has already dismissed the tip (`localStorage` key = `notelib-guidance-dismissed-{tipId}` = `"1"`), the component returns `null`. On dismiss: starts fade-out transition (200ms), writes `"1"` to `localStorage`, then unmounts.
+- `frontend/components/ui/guidance-tip.tsx`
 
-**Props:**
-- `tipId: string` — unique identifier, used as the `localStorage` key suffix
-- `message: string` — the tip text
-- `className?: string` — optional extra classes
+Persistence:
 
-**State storage:** `lib/guidance.ts` exports `hasSeenTip(tipId)` and `markTipSeen(tipId)`.
+- `frontend/lib/guidance.ts`
+- localStorage key prefix: `notelib-guidance-dismissed-`
 
-### Active tips
+Current active one-time tips:
 
-| tipId | Condition | Location | Message |
-|-------|-----------|----------|---------|
-| `note-detail-try-quiz` | Study Pack ready AND `quickSummary.attempts === 0` AND `challengeSummary.attempts === 0` | Note Detail > Performance Overview | "Try Quick Review or Challenge Quiz to start tracking your performance on this note." |
-
-### Adding a new tip
-
-1. Choose a unique `tipId` string (e.g. `"dashboard-weak-concepts"`)
-2. Determine the render condition — keep it tight; only show when relevant
-3. Render `<GuidanceTip tipId="..." message="..." />` inside the relevant section
-4. Add an entry to the Active tips table above
-5. Write a test that verifies: tip shows when unseen, tip hidden when seen, dismiss calls `markTipSeen`
-
----
+| tipId | Surface | Message |
+|---|---|---|
+| `note-detail-generate-study-pack` | Note Detail draft state | `Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note.` |
+| `note-detail-try-quiz` | Note Detail performance section | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
+| `sessions-export-hint` | Session History empty state | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
+| `public-library-intro` | Public Library | `Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included.` |
 
 ## Layer 3 — Help Center
 
-**Route:** `/help`  
-**File:** `app/help/page.tsx`  
-**Access:** Avatar dropdown menu ("Help") and Settings page header ("Help Center" link)
+Route:
 
-A static authenticated page with six accordion-style sections. Each section contains short Q&A pairs — no long prose, no modals.
+- `/help`
 
-### Sections
+Access:
 
-1. **Getting Started** — What is NoteLib, creating a note, what is a Study Pack
-2. **Creating Notes** — What to put in a note, Subject and Course fields, editing after generation
-3. **Study Packs** — Summary tab, Key Concepts tab, Quiz tab
-4. **Quiz Types** — Quick Review, Challenge Quiz, Adaptive Practice
-5. **Performance Tracking** — Where to see results, Weak Concepts, Strongest Notes
-6. **Exporting Quizzes** — How to export, file format and naming
+- authenticated app surfaces
+- linked from Settings
 
-### Rules for maintaining Help content
+Current Help Center structure:
 
-- Answers stay under 3 sentences
-- Each Q&A describes a single concept
-- If a feature is renamed or removed, update the relevant help section immediately
+- card grid on the page
+- each card opens an `AppModal`
+- guide content is rendered as dedicated components, not accordion Q&A lists
+
+Current guide cards:
+
+1. `Getting Started`
+2. `Creating Notes`
+3. `Study Packs & Quizzes`
+4. `Export & Sharing`
+5. `Student Guide`
+6. `Teacher Guide`
+
+## Maintenance rule
+
+If a workflow, CTA, field helper, or plan gate changes, update the matching micro copy, tip text, and Help guide content in the same change set so guidance does not drift from the product.

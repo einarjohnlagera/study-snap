@@ -7,6 +7,7 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - result screens do not contain a "Note" button — navigation is handled by `← Back to Note` link below action buttons
 - `← Back to Note` link is separate from the action button group, not inside it
 - Quick Review: after selecting a confidence level, option buttons are replaced by a single confidence badge (🟢 Confident, 🟡 Improving, or 🔴 Needs Practice)
+- Quick Review and Challenge Quiz result screens expose learner-level adjustment pills and save through the existing learner-level update flow
 - Quick Review: when the user misses concepts and Adaptive Practice is locked/unavailable, `Practice Again` is the primary action and locked weak-practice messaging remains secondary
 - Adaptive Practice: "Generate New Set" is the primary button on the result screen; "Note" button is absent
 - Adaptive Practice: if a completed set has no attached weak-area labels, the result screen shows a clear empty targeted-weak-areas message and still offers `Generate New Set` plus `Review Answers`
@@ -27,7 +28,7 @@ Verify these cases for quiz surfaces (see also: `OpenAiLlmStudyPackServiceTest`)
 - Pro users who choose `Challenge Quiz` see `Challenge Quiz Setup` before generation with visible difficulty controls
 - Free and Plus users who choose `Challenge Quiz` also see `Challenge Quiz Setup` before generation, but only as a recommended-difficulty summary with subtle Pro upsell copy
 - `Challenge Quiz Setup` shows timer, question-count, and attempt-usage sections in addition to the mode-specific difficulty section
-- Board Exam Mode is available on Pro and still consumes the standard Challenge Quiz quota
+- Board Exam Mode is Pro-only and still consumes the standard Challenge Quiz quota
 - Board Exam Mode shows a dedicated `Board Exam Setup` confirmation state with `Cancel` and `Start Exam`
 - Board Exam Setup includes:
   - focused exam simulation description

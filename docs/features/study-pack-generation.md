@@ -230,8 +230,7 @@ User-facing generation statuses:
   - existing `tags` -> default `Merge Tags`
   - no existing `tags` -> default `Use AI Tags`
 - AI subject output must be a broad academic domain, not a specific topic. Topic specificity belongs in tags.
-- Prefer reusable labels such as `Primary field – subtopic` when that helps group notes, for example `Nursing – Pharmacology` or `Criminal Law – Crimes Against Persons`.
-- Subject must be domain-level (e.g., `Biology`, `Engineering`). Broad domains are valid — they are the intended output.
+- Subject must be domain-level (e.g., `Biology`, `Engineering`). Combined domain-topic values are normalized back to the domain before save.
 - Generation context should use learner level, course/program, current subject, and tags to refine the suggested subject rather than treating the note as context-free.
 
 ## Validation and retry

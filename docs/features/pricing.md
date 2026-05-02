@@ -2,121 +2,112 @@
 
 ## Goal
 
-Explain the difference between Free, Plus, and Pro clearly while keeping upgrade flow simple and trustworthy.
+Keep pricing surfaces consistent, trustworthy, and easy to update.
 
-The pricing page is a positioning surface first:
+Pricing UI should explain the Free -> Plus -> Pro path clearly, while checkout amounts and eligibility stay backend-owned.
 
-- show the core Free workflow
-- make Plus and Pro value easy to understand
-- keep upgrade messaging student-friendly
-- let verified users move into hosted checkout without embedding payment UI on the page
+## Source of truth
 
-## Plans
+Frontend pricing copy is centralized in:
 
-NoteLib currently presents three plans:
+- `frontend/src/config/plans.ts`
+
+That shared config owns:
+
+- plan names
+- descriptions
+- CTA labels
+- feature lists
+- comparison-table rows
+
+Checkout pricing is **not** hardcoded in the UI.
+
+Backend pricing is resolved through billing APIs and pricing services for:
+
+- region
+- currency
+- intro-offer eligibility
+- actual checkout amount
+
+## Current pricing page
+
+Route:
+
+- `/pricing`
+
+Current structure:
+
+1. hero
+2. Free / Plus / Pro pricing cards
+3. plan comparison table
+4. regional pricing block
+5. FAQ
+
+Current CTA labels on the pricing page:
+
+- Free -> `Get Started Free`
+- Plus -> `Choose Plus`
+- Pro monthly -> `Go Pro`
+- Pro yearly -> `Go Pro Yearly`
+
+Important:
+
+- the public landing page still uses `Start for Free`
+- the full pricing page uses `Get Started Free`
+
+## Current plan messaging
 
 ### Free
 
 - `10` Study Packs / month
-- `5` Challenge Quizzes / month
+- `5` Quizzes / month
 - `2` exports / month
-- Summary + Key Concepts
-
-Free-plan limitations that should stay visible on pricing:
-
-- Adaptive Practice is Pro-only
-- Difficulty selection is Pro-only
-- Board Exam Mode is Pro-only
-- Higher note generation limits are on paid plans
-
-Primary CTA:
-
-- `Start for Free`
+- `Summary + Key Concepts`
 
 ### Plus
 
-- `₱149` intro first month (PH) when eligible
-- `₱179/month` regular price (PH)
+- `₱149 first month, then ₱179/month` in PH when intro pricing is eligible
+- positioned as the regular-study tier
 - `50` Study Packs / month
-- `25` Challenge Quizzes / month
+- `25` Quizzes / month
 - `15` exports / month
-- higher note generation limits
-
-Primary CTA:
-
-- `Choose Plus`
+- higher note-generation limits
 
 ### Pro
 
-- `₱199` intro first month (PH) when eligible
-- `₱249/month` regular price (PH)
-- `₱1,999/year` regular price (PH)
+- `₱199 first month, then ₱249/month` in PH when intro pricing is eligible
+- `₱1,999/year` in PH for annual checkout
+- positioned as the exam-prep tier
 - `100` Study Packs / month
-- `50` Challenge Quizzes / month
+- `50` Quizzes / month
 - unlimited exports
-- Adaptive Practice
-- Difficulty selection
+- difficulty selection
 - Board Exam Mode
 
-Primary CTA:
+## Important implementation note
 
-- `Choose Pro`
+Pricing surfaces currently market Plus and Pro through the shared plan config.
 
-### Pricing Source
+System behavior is still enforced from backend plan rules and `GET /api/me/plan`.
 
-- Backend pricing is config-driven and resolved from billing config plus pricing services.
-- Intro offers come from the voucher system, not frontend-only flags.
-- Pricing page display may use backend pricing data when available and safe frontend fallbacks when not.
-- PHP pricing stays visible for Xendit reviewer clarity, and the Regional Pricing block shows PHP plus international USD values.
+Current enforcement truth:
 
-Current rollout rule:
+- Board Exam Mode is Pro-only
+- Difficulty selection is Pro-only
+- Adaptive Practice access is currently gated as Pro-only in runtime
 
-- Pricing remains a positioning-first surface
-- upgrade CTAs start hosted Xendit checkout through the backend payment API
+If pricing copy and backend feature gates diverge, backend gating remains the behavior source of truth until the product intentionally changes it.
 
-## Pricing page structure
+## Regional pricing
 
-The pricing page should stay clean and mobile-friendly:
+Pricing surfaces keep PHP visible for Xendit clarity and also show international USD display pricing.
 
-1. Hero / framing
-2. Free, Plus, and Pro pricing cards
-3. Feature comparison table
-4. Regional Pricing block (PHP and USD visible)
-5. FAQ
-
-Avoid adding embedded payment-step UI, dense billing details, or aggressive conversion copy.
-
-## Comparison table
-
-The pricing page comparison table should use a simple `Feature | Free | Plus | Pro` structure.
-
-Current rows:
-
-- Study Packs / month
-- Challenge Quizzes / month
-- Exports / month
-- Topic note generation
-- Summary + Key Concepts
-- Adaptive Practice
-- Difficulty selection
-- Board Exam Mode
+Visible reviewer-safe display values currently come from the shared pricing config when API data has not resolved yet.
 
 ## Messaging rules
 
-- Position Plus as the practical step-up for regular study and Pro as the full exam-prep tier
-- Keep Free useful and respectful; do not make the Free plan feel broken
-- Use simple labels:
-  - `Free`
-  - `Plus`
-  - `Pro`
-  - `Start for Free`
-  - `Choose Plus`
-  - `Choose Pro`
-- Keep checkout trust signals short and clear
-
-## Mobile UX
-
-- Pricing cards should stack cleanly on mobile
-- CTAs should remain full-width and easy to tap
-- The comparison table may scroll horizontally, but it must remain readable
-- Intro pricing and regular monthly pricing should remain readable without hiding the renewal amount
+- Free should feel useful, not broken
+- Plus should feel like the practical step-up for regular study
+- Pro should feel like the strongest exam-prep and mastery tier
+- pricing surfaces should stay student-friendly and avoid aggressive billing language
+- trust copy should reinforce manual renewal and hosted checkout

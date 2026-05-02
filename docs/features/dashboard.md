@@ -2,45 +2,62 @@
 
 ## Goal
 
-Dashboard helps users decide what to do next without turning into a management page.
+Dashboard is a guidance surface, not a management screen. It should help users decide what to do next in the note -> Study Pack -> quiz loop.
 
-## Personalization Prompt
+## Current Personalization Prompt
 
-After onboarding completes, Dashboard should show a lightweight personalization card near the top of the page.
+After onboarding completes, Dashboard may show a lightweight learner-level prompt near the top.
 
-- title: `Make NoteLib work better for you`
-- description: `Set your learning style and reminders in seconds.`
-- primary action: `Set Preferences` -> `/settings`
-- secondary behavior: dismissible, with dismissal stored per user on the frontend when backend persistence is not required
+Current prompt copy:
 
-This prompt is a post-onboarding nudge. Learning Style and Study Reminders should not move back into onboarding.
+- title: `Too easy or too hard?`
+- body: `Set your learner level so future quizzes match your study stage.`
+- CTA: `Adjust level`
+
+Behavior:
+
+- dismissible
+- dismissal stored per user in frontend storage
+- CTA navigates to `/profile?from=dashboard#learning-profile`
+- when opened from Dashboard, `/profile` shows a `Dashboard` back link instead of the public-profile back link
+
+This prompt is for learner level only. It does not move learning style or reminder preferences back into onboarding.
 
 ## Profile-specific priorities
 
-- `Student` dashboard should prioritize `Continue Studying`, `Weak Concepts`, `Recent Notes`, `Quick Review`, and `Usage / Progress`.
-- `Board Taker` dashboard should prioritize `Exam Countdown`, `Start Board Exam`, `Weak Areas`, `Adaptive Practice`, and `Usage / Progress`.
-- `Teacher` dashboard should prioritize `Create Teaching Material`, `Recent Notes`, `Recently Generated Quizzes`, `Ready to Export`, and `Teacher Help / Tips`.
+### Student
 
-## Teacher Dashboard
+Dashboard should prioritize:
 
-Teacher uses the same note and Study Pack product, but with different intent.
+- `Continue Studying`
+- `Focus Areas`
+- `Recent Notes`
+- `Quick Review`
+- `Usage / Progress`
 
-Rules:
+### Board Taker
 
-- keep the shared note / Study Pack workspace visible through `Recent Notes`
-- do not show student analytics sections such as performance overview, recent quiz sessions, weak concepts, or score widgets
-- generated-quiz links should open Quiz Preview, not student quiz-session routes
-- export remains inside Quiz Preview; Dashboard should only route into preview-ready notes
+Dashboard should prioritize:
 
-Teacher sections:
+- `Exam Countdown`
+- `Start Board Exam`
+- `Weak Areas`
+- `Adaptive Practice`
+- `Usage / Progress`
 
-- `Create Teaching Material` -> primary CTA `Create Note`
-- `Recent Notes` -> latest notes and Study Packs
-- `Recently Generated Quizzes` -> quick links to Quiz Preview pages
-  - when no generated quiz exists yet, the empty state should direct teachers to a recent ready note when available; otherwise it should fall back to `Create Note`
-- `Ready to Export` -> spotlight for generated quizzes that are ready to open in Quiz Preview
-- `Teacher Help / Tips` -> lightweight workflow guidance
-- dashboard welcome copy should sound teacher-first in `Teacher` mode and point users toward note -> Study Pack -> Quiz Preview
+If Adaptive Practice is locked for the current plan, the CTA should open the shared Pro paywall instead of navigating to a dead-end route.
+
+### Teacher
+
+Dashboard should prioritize:
+
+- `Create Teaching Material`
+- `Recent Notes`
+- `Recently Generated Quizzes`
+- `Ready to Export`
+- `Teacher Help / Tips`
+
+Teacher sections should stay quiz-preview and export oriented, not student-session oriented.
 
 ## Continue Studying
 
@@ -48,9 +65,7 @@ Endpoint:
 
 - `GET /dashboard/continue-studying`
 
-The response should give the dashboard enough information to render the card in one pass.
-
-Required fields:
+Required payload shape for the UI:
 
 - `noteId`
 - `noteTitle`
@@ -62,26 +77,29 @@ Required fields:
 - `lastReviewedAt`
 - optional `summaryPreview`
 
-Card structure:
-
-- `KEEP IT SHARP`
-- status chip such as `In Progress`
-- resume label from `resumeType`
-- prominent note title
-- `Subject • Course / Program` metadata line when available
-- progress copy such as `You left off on Question X of Y.`
-- `Last reviewed` or `Last opened`
-- full-width resume action on mobile
-
-Resume label rules:
+Current label mapping:
 
 - `QUICK_REVIEW` -> `Resume Quick Review`
 - `CHALLENGE` -> `Resume Challenge Quiz`
 - `ADAPTIVE` -> `Resume Adaptive Practice`
 
-Guardrails:
+Rules:
 
-- do not make extra frontend API calls just to label the card
-- keep the card note-first; users should know which note they are returning to immediately
-- keep the card compact on mobile
-- teacher-specific generated-quiz lookups are allowed when needed to surface Quiz Preview links, but they must stay note-owned and must not create quiz-session side effects
+- use the backend `resumeType` label directly
+- do not make extra frontend fetches just to label the card
+- keep the card note-first so the user knows which note they are returning to
+
+## Focus Areas
+
+Focus Areas should show weak concepts for all learners when data exists.
+
+Current action behavior:
+
+- Pro users can launch Adaptive Practice from the suggested note
+- Free and Plus users see the same weak concepts, but the CTA opens the shared Pro upsell flow
+
+## First-study guidance
+
+Dashboard may also show first-study guidance for verified users who still have `studyPackCount == 0` and have not completed the separate product-onboarding tracker.
+
+That flow is separate from `/onboarding` and is tracked with `productOnboardingCompletedAt`.

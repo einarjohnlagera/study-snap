@@ -2,18 +2,20 @@
 
 ## Goal
 
-`Profile` is the private account surface for identity, learning-profile metadata, and profile type.
+`/profile` is the private editing surface for identity, learning profile, and profile type.
 
-It is not the place for public-profile visibility or sharing controls.
+It is not the public-profile sharing surface.
 
-## Sections
+## Current Sections
 
-`/profile` should stay split into:
+`/profile` is split into separate save areas:
 
-- top Display Name card
+- top display-name card
 - `Identity`
 - `Learning Profile`
 - `Profile Type`
+
+Each section saves independently.
 
 ## Identity
 
@@ -24,18 +26,19 @@ Identity owns:
 - `displayName`
 - `email`
 
-Save behavior:
+Rules:
 
-- `Save Identity` only writes identity fields
-- email changes write `pendingEmail` first and require verification before replacing `email`
+- `Save Identity` updates only identity fields
+- email changes write `pendingEmail` first
+- the active `email` is replaced only after verification
 
 ## Learning Profile
 
 Learning Profile owns:
 
-- required `learnerLevel` during onboarding
-- required `courseProgram` when completing onboarding or saving the Learning Profile card
-- optional `bio`
+- `learnerLevel`
+- `courseProgram`
+- `bio`
 
 Current learner-level options:
 
@@ -49,15 +52,40 @@ Current learner-level options:
 
 Rules:
 
-- existing users may still have `null` learner metadata until they update it
-- `courseProgram` accepts typed custom values but must be present when the Learning Profile card is saved
-- helper text for `courseProgram` changes with `learnerLevel`
-- autocomplete filters in real time and prioritizes existing prefix matches before contains matches and before the custom action
-- combobox-style fields should reuse the Note Editor `Subject` input-plus-suggestions pattern
-- `Save Learning Profile` should not change identity or profile type
+- onboarding does **not** collect these fields
+- existing users may still have `null` learner metadata until they update the card
+- `Save Learning Profile` requires both `learnerLevel` and `courseProgram`
+- `bio` remains optional
+- `Save Learning Profile` must not update identity or profile type
+
+Current helper-copy meaning:
+
+- `Learner Level` -> `Controls difficulty, explanation depth, and quiz complexity.`
+- `Course / Program` -> `Provides domain context so examples and questions stay relevant to your field.`
+
+Important product rule:
+
+- `learnerLevel` is the primary difficulty and explanation-depth signal for future generations
+- `courseProgram` provides domain context only; it is not the direct difficulty control
+
+## Learning Profile UX
+
+- `Course / Program` uses the shared combobox pattern also used by note metadata inputs
+- suggestions come from curated defaults plus normalized saved values
+- users may still type a custom value
+- typing filters suggestions in real time
+- exact case-insensitive matches should reuse the existing stored display label
+
+## Dashboard entry
+
+The Dashboard learner-level prompt links here using:
+
+- `/profile?from=dashboard#learning-profile`
+
+The Learning Profile card must remain reachable through that hash target.
 
 ## Public Profile Link
 
 `View Public Page` is navigation only.
 
-Public-page controls such as `Share Profile` and public/private visibility belong on `/public/profile/{userId}`.
+Public visibility, share actions, and public-profile presentation belong on `/public/profile/{userId}`.

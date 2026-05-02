@@ -2,36 +2,50 @@
 
 ## Goal
 
-`/profile` is the private account/settings surface for identity and learning-profile inputs.
+`/profile` is the private editor for identity, learning-profile fields, and profile type.
 
-## Responsibilities
+Public profile controls stay on `/public/profile/{userId}`.
 
-- edit identity fields
-- edit learning-profile fields such as `learnerLevel`, `courseProgram`, and `bio`
-- edit profile type
-- link out to `View Public Page`
+## Public vs private boundary
 
-## Public Profile Boundary
+- `/profile` = private account editing
+- `/public/profile/{userId}` = public identity page
 
-- `/profile` does not own public-profile visibility, sharing, or portfolio presentation.
-- Public-profile controls remain on `/public/profile/{userId}`.
-- Public Profile is the public learning-portfolio surface, while `/profile` remains the private settings/editor surface.
-- The avatar dropdown in the authenticated app shell provides quick navigation to:
-  - `My Profile` → `/public/profile/{userId}` (public identity page)
-  - `Settings` → `/settings` (account and app settings)
+`/profile` does **not** own:
+
+- public/private visibility
+- share controls
+- public portfolio presentation
+
+## Navigation model
+
+Authenticated app navigation should keep this terminology consistent:
+
+- avatar dropdown:
+  - `My Profile` -> `/public/profile/{userId}`
+  - `Settings` -> `/settings`
   - `Sign Out`
-- The sidebar Account section uses the same mental model:
-  - `Profile` → `/public/profile/{userId}` (public identity page)
-  - `Settings` → `/settings`
-- `Profile` and `Settings` in the sidebar map to the same routes as the avatar dropdown.
-- This separation ensures users can easily access their public identity without conflating it with account settings.
+- sidebar account section:
+  - `Profile` -> `/public/profile/{userId}`
+  - `Settings` -> `/settings`
 
-## Course / Program
+`Profile` means the public identity page.
+`Settings` means account/app settings.
 
-- `Course / Program` uses the same suggestion-combobox pattern as Note Editor.
-- Suggestions should come from curated defaults plus normalized saved values from the user's notes/profile.
-- Users may still type a custom value.
-- Typing filters suggestions in real time with case-insensitive prefix-first, then contains matching.
-- Existing suggestions should appear before the custom `Use "..."` action so reuse is encouraged.
-- Helper text changes with `Learner Level` so the field examples stay meaningful for grade school, high school, college, board-exam, professional, and personal-learning users.
-- `Save Learning Profile` requires both `Learner Level` and `Course / Program` and shows inline validation when either is missing.
+## Learning Profile behavior
+
+- `Learner Level` and `Course / Program` both use the shared suggestion/combobox interaction pattern
+- `Course / Program` helper text changes with the selected `Learner Level`
+- `Save Learning Profile` requires both fields and shows inline validation when either is missing
+- `Save Identity` and `Save Profile Type` still work independently when Learning Profile fields are incomplete
+
+## Dashboard return behavior
+
+When `/profile` is opened from the learner-level prompt on Dashboard:
+
+- the route uses `/profile?from=dashboard#learning-profile`
+- the top back link should return to `Dashboard`
+
+When opened normally:
+
+- the back link returns to the user's public profile page

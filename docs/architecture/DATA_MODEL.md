@@ -136,6 +136,9 @@ Recommended fields:
 - `failed_login_attempts`
 - `locked_until`
 - `email_verified_at` (nullable)
+- `pending_email` (nullable)
+- `onboarding_completed_at` (nullable)
+- `product_onboarding_completed_at` (nullable)
 - `created_at`
 - `updated_at`
 - `last_login_at` (nullable)

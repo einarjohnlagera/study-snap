@@ -2,222 +2,197 @@
 
 ## Goal
 
-NoteLib onboarding has two phases:
+`/onboarding` is a short activation flow for verified users. Its job is to get the user to a real first Study Pack, not to collect every preference up front.
 
-- **Preferences onboarding** — collected once on first verified entry. Captures profile type, study goal, and the user's first note or topic. Ends with a generated Study Pack so users leave onboarding with real content.
-- **First-study product walkthrough** — a lightweight guide for users who have not created a Study Pack yet. Separate from preferences onboarding.
+Current onboarding is intentionally low-friction:
 
-The goal of v0.11.0 onboarding is to get users to their first Study Pack before they touch the dashboard, eliminating the empty-state problem at activation.
+- it happens once after first verified entry
+- it ends with a generated Study Pack
+- it defers learner-profile and preference details to Profile and Settings
 
 ## Activation Rule
 
-Onboarding is active for all verified users.
+- verified users who have not completed onboarding are routed to `/onboarding`
+- public pages and anonymous flows are never blocked by onboarding
+- users with `onboardingCompletedAt` already set should be sent to `/dashboard`
 
-Required behavior:
-
-- show onboarding once after email verification and first verified entry into the app
-- do not show onboarding to anonymous users
-- do not repeat onboarding after `onboardingCompletedAt` is set
-- do not block public pages such as landing, pricing, or Public Library
-- users who have already completed onboarding must be redirected to `/dashboard`
-
-## Onboarding Flow (v0.11.0)
+## Current Flow
 
 Route: `/onboarding`
 
-Five steps. Steps 1–3 collect input; Steps 4–5 deliver the first win.
+Five steps:
+
+1. `Profile Type`
+2. `Study Goal`
+3. `Input Method`
+4. `Study Pack Generation`
+5. `Completion`
 
 ### Step 1 — Profile Type
 
-Headline: `Welcome to NoteLib. Let's set things up.`
+Options:
 
-Options (required, card-select):
+- `Student`
+- `Board Taker`
+- `Teacher`
 
-- `Student` — Reviewing notes and preparing for quizzes
-- `Board Taker` — Preparing for a board or licensure exam
-- `Teacher` — Creating study materials for students
+This is the only identity-like field collected during onboarding.
 
 ### Step 2 — Study Goal
 
-Headline: `What's your goal right now?`
+Goal options are filtered by the selected profile type.
 
-Options are persona-filtered by the Step 1 selection. One option required.
-
-Student options:
-- Understand a topic in depth
-- Practice and test myself with quizzes
-- Review notes I already have
-
-Board Taker options:
-- Understand a topic before exam day
-- Practice under exam-style conditions
-- Review and reinforce weak concepts
-
-Teacher options:
-- Create study material for students
-- Generate a quiz or exam
-- Understand a topic to teach it
-
-Board Taker only: optional inline `Exam Date` date picker appears below goal options. If set, stored as `examDate`. Label: `When is your exam? (optional)`.
+Board Taker also gets an inline optional `Exam Date` field on this step.
 
 ### Step 3 — Input Method
 
-Headline: `How do you want to start?`
+Users choose one path:
 
-Two paths (card-select, one required):
+- `Generate a note`
+- `Write or paste my own note`
 
-**Generate a note** — user enters a topic string (minimum 3 characters). NoteLib generates a note draft and immediately proceeds to Study Pack generation.
+`Generate a note` path:
 
-**Write or paste my own note** — user enters note content (minimum 50 characters). Proceeds to Study Pack generation.
+- enter a topic
+- click `Generate Note`
+- NoteLib creates an editable note draft first
+- user then clicks `Generate Study Pack →`
 
-CTA label for both paths: `Generate Study Pack →`
+`Write or paste my own note` path:
+
+- enter note content directly
+- click `Generate Study Pack →`
+
+Important:
+
+- onboarding note generation is single-use and guided
+- onboarding does not expose standalone iteration controls like `Generate Again`
+- note-generation gating still applies here
 
 ### Step 4 — Study Pack Generation
 
-Headline during generation: `Building your Study Pack...`
+Headline during generation:
 
-Headline after generation: `Your Study Pack is ready.`
+- `Building your Study Pack...`
 
-Three sections shown after generation:
+Headline after success:
 
-- **Summary** — 2–3 sentence preview
-- **Key Concepts** — 3–4 concept chips; show `+N more` if count exceeds 4
-- **Quiz Preview** — one question shown without the answer to maintain anticipation
+- `Your Study Pack is ready.`
 
-On mobile, Key Concepts and Quiz Preview sections collapse by default; Summary is open. All sections are visible on desktop.
+The page previews:
+
+- `Summary`
+- `Key Concepts`
+- `Quiz Preview`
+
+The note and Study Pack are normal saved library entities, not temporary onboarding-only records.
 
 ### Step 5 — Completion
 
-Headline: `You just started your study loop.`
+Headline:
 
-Subheadline displays the learning loop with the user's current position highlighted:
-
-`Create ✓ → Understand ● → Practice → Challenge → Improve`
-
-Body copy is profile-aware:
-
-- Student: `Your Study Pack is ready. Start practicing when you're ready.`
-- Board Taker: `Your first practice material is ready. Keep going and build toward exam day.`
-- Teacher: `Your Study Pack is ready. You can export a quiz for your students any time.`
+- `You just started your study loop.`
 
 Actions:
 
-- Primary: `Continue Studying` → navigates to the generated Study Pack
-- Secondary: `Go to Dashboard` → navigates to `/dashboard`
+- `Continue Studying`
+- `Go to Dashboard`
 
-## Deferred Fields
+The completion call persists onboarding completion through the existing backend flow and sets `onboardingCompletedAt`.
 
-These fields remain in the system but are not collected during onboarding. They are surfaced in profile settings and preferences after the user's first session.
+## Deferred Personalization
+
+These inputs are **not** collected during onboarding:
+
+- `learnerLevel`
+- `courseProgram`
+- `bio`
+- `engagementMode`
+- reminder preferences
+
+They are adjusted later through:
+
+- `/profile` -> `Learning Profile`
+- `/settings` -> `Preferences`
 
 Dashboard follow-up prompt:
 
-- after onboarding completes, Dashboard should show a lightweight personalization card that points users to `/profile`
-- card copy:
-  - title: `Too easy or too hard?`
-  - body: `Set your learner level so future quizzes match your study stage.`
-  - CTA: `Adjust level` → navigates to `/profile`
-- the prompt must be dismissible and may persist dismissal in frontend local storage per user
+- title: `Too easy or too hard?`
+- body: `Set your learner level so future quizzes match your study stage.`
+- CTA: `Adjust level`
+- destination: `/profile?from=dashboard#learning-profile`
 
-| Field | Deferred to |
-|---|---|
-| `learnerLevel` | Profile → Learning Profile |
-| `courseProgram` | Profile → Learning Profile; nudged on dashboard empty state |
-| `engagementMode` | Settings → Preferences; surfaced after first study session |
-| `inactivityRemindersEnabled` | Settings → Preferences; prompted on Day 3 |
-| `weakConceptRemindersEnabled` | Settings → Preferences; prompted after first quiz |
+The prompt is dismissible and the dismissal is stored per user in frontend storage.
 
 ## Persistence
 
-Backend stores the following on onboarding completion:
+On onboarding completion, backend currently persists:
 
 - `profileType`
+- optional `examDate` for `BOARD_EXAM`
 - `onboardingCompletedAt`
-- `examDate` (Board Taker only, optional)
 
-Deferred fields are persisted when the user edits them later via Profile or Settings.
+The following are **not** persisted by onboarding itself:
 
-The generated note and Study Pack created during onboarding are saved to the user's library as a normal note. The note is editable after onboarding completes.
+- `learnerLevel`
+- `courseProgram`
+- `bio`
+- `engagementMode`
+- reminder preferences
 
-After the Study Pack generation completes, the backend automatically applies the AI-generated `subject` and `tags` to the source note if those fields are empty — without asking the user. This is a zero-friction metadata sync.
+## Generation Safety
 
-## Generation Safety (Step 4)
+### Idempotency
 
-**Back button lock during generation**: The Back button is hidden while `studyPackGenerating || startingStudyPack`. The notice changes to: `Your Study Pack is being created. This step can't be undone.`
+Onboarding Study Pack creation must not duplicate notes or Study Packs for the same in-progress onboarding flow.
 
-**Idempotency guard**: `handleStartStudyPack()` checks whether `draft.noteId` already exists. If a note was already created (e.g. from a previous call, page refresh, or back/forward navigation), the function navigates to Step 4 instead of creating a duplicate note and Study Pack.
+Current guard:
 
-## Edge Cases
+- `handleStartStudyPack()` checks `draft.noteId`
+- if a note already exists, onboarding returns to Step 4 instead of creating a new note
 
-**Empty topic field (Step 3)**
-CTA is disabled. No validation error shown until the user attempts to continue.
+This protects against:
 
-**Own note too short (Step 3)**
-Character count shown (`32 / 50 minimum`). CTA is disabled until minimum is reached. No red error until continue is tapped.
+- repeated clicks
+- refresh
+- back/forward navigation
 
-**Study Pack generation fails (Step 4)**
-Show inline error: `Something went wrong generating your Study Pack. Try a shorter topic or check your connection.` with a `Retry` button. Back button remains enabled.
+### Back-button lock during active generation
 
-**Study Pack generates with no concepts (Step 4)**
-Show `No key concepts found` in the concepts section. Do not hide the section. Summary and Quiz Preview still render.
+While the Study Pack is actively generating:
 
-**Study Pack generates with no quiz questions (Step 4)**
-Replace quiz section with: `Quiz questions will be available when you open your Study Pack.`
+- the footer `Back` button is removed
+- the primary action becomes a disabled status button
+- the notice reads: `Your Study Pack is being created. This step can't be undone.`
 
-**Onboarding save fails (Step 5)**
-Show inline error below CTAs: `We couldn't save your profile. Your Study Pack is still available.` Allow navigation forward anyway. Flag the incomplete profile for a prompt on the dashboard.
+When generation finishes or fails, normal recovery actions return.
 
-**Back from Step 4 (idle or error)**
-Show soft inline notice: `Going back will start a new Study Pack. Your current one will be saved.` No blocking confirmation dialog.
+### Retry behavior
 
-**Back from Step 4 (during active generation)**
-The Back button is hidden entirely. The notice reads: `Your Study Pack is being created. This step can't be undone.` The Back button reappears on error or completion.
+If generation fails after the note was created:
 
-## Analytics Events
+- onboarding keeps the saved note
+- Step 4 shows the friendly failure state
+- `Retry` reuses the saved note instead of creating a new one
 
-All events use the `onboarding_v2` namespace.
+## Metadata Auto-Apply
 
-| Event | Properties |
-|---|---|
-| `onboarding_v2.started` | `source: "signup" \| "resuming"` |
-| `onboarding_v2.step_viewed` | `step: 1–5`, `step_name` |
-| `onboarding_v2.profile_selected` | `profile_type` |
-| `onboarding_v2.goal_selected` | `goal`, `profile_type` |
-| `onboarding_v2.exam_date_set` | `days_until_exam` (computed, not raw date) |
-| `onboarding_v2.input_method_selected` | `method: "generate" \| "own_note"`, `profile_type` |
-| `onboarding_v2.topic_submitted` | `topic_length` (no raw text) |
-| `onboarding_v2.own_note_submitted` | `note_length` |
-| `onboarding_v2.study_pack_generated` | `method`, `summary_length`, `concepts_count`, `quiz_questions_count` |
-| `onboarding_v2.study_pack_error` | `method`, `error_type` |
-| `onboarding_v2.completed` | `profile_type`, `goal`, `method`, `time_elapsed_seconds` |
-| `onboarding_v2.cta_continue_studying` | — |
-| `onboarding_v2.cta_go_to_dashboard` | — |
-| `onboarding_v2.back_navigated` | `from_step` |
-| `onboarding_v2.abandoned` | `last_step` |
+Onboarding-generated Study Packs reuse the normal backend Study Pack generation flow.
 
-Do not log raw topic text, note content, or user bio.
+Current metadata behavior:
 
-## Later Editing
+- if the source note has no `subject`, backend applies the generated `subject`
+- if the source note has no `tags`, backend applies the generated `tags`
 
-- Profile Type: editable in Profile
-- Learner Level, Course / Program, Bio: editable in Profile → Learning Profile
-- Engagement Mode: editable in Settings → Preferences
-- Study Reminders: editable in Settings → Preferences
+This happens automatically with no extra onboarding prompt.
 
-## First-Study Product Walkthrough
+## Product-Onboarding Relationship
 
-This is a separate, lightweight guide for users who have a verified account but have not generated their first Study Pack outside of onboarding.
+NoteLib also keeps a separate lightweight product-onboarding tracker through `productOnboardingCompletedAt`.
 
-Required behavior:
+That system is used for first-study guidance outside `/onboarding`, such as:
 
-- show only when `studyPackCount == 0` and `productOnboardingCompletedAt` is not set
-- do not show after `productOnboardingCompletedAt` is set
-- let the user skip at any step
-- persist only the completion/dismissal flag in the backend
+- first-study welcome guidance on Dashboard
+- completion tracking after the user finishes the early learning flow
 
-Steps:
-
-1. Welcome modal on Dashboard
-2. Create-note hint on New Note
-3. Generate Study Pack modal on Note Detail
-4. Quick Review modal on Note Detail
-5. Completion modal after first Quick Review
+It is separate from `/onboarding` and must not reuse `onboardingCompletedAt`.

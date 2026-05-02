@@ -14,6 +14,8 @@ Users can start with their own notes or generate a draft note from a topic. Note
 - Study Pack is the generated enhancement state of a Note.
 - Note states:
   - `Draft`
+  - `Generating`
+  - `Failed`
   - `Study Pack Ready`
 - Note visibility:
   - `PRIVATE`
@@ -29,7 +31,7 @@ Supporting product loop (internal model):
 
 `Capture → Generate → Review → Improve → Copy → Repeat`
 
-Onboarding is the entry point into the loop. Users complete a 5-step onboarding flow that ends with a generated Study Pack, placing them at the `Understand` stage before they touch the dashboard. This eliminates the empty-state activation problem.
+Onboarding is the entry point into the loop. Verified users complete a 5-step activation flow (`Profile Type -> Study Goal -> Input Method -> Study Pack Generation -> Completion`) that ends with a generated Study Pack, placing them at the `Understand` stage before they touch the dashboard. Learner level and other preferences are deferred to Profile and Settings after this first win.
 
 ## Versioning Rule
 
@@ -96,6 +98,7 @@ NoteLib has three plans: Free, Plus, and Pro.
 - Annual Pro is available at ₱1,999/year (PH).
 - Plus annual is not yet available; Plus always uses monthly checkout.
 - Billing is manual renewal — no automatic charges.
+- Current runtime gating still treats Adaptive Practice, Difficulty Selection, and Board Exam Mode as Pro-only features even when some pricing surfaces position Plus as the regular-study step-up tier.
 
 ## Payments
 

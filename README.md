@@ -4,8 +4,6 @@
 
 Current release baseline: `v0.11.0 - Learning Flow Foundation`
 
-Current in-progress release: `v0.6.0 - Landing Revamp & Positioning`
-
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
 It is built for:
@@ -53,7 +51,6 @@ NoteLib uses a 3-tier learning-focused plan structure:
   - 50 Study Packs / month
   - 25 Quizzes / month
   - 15 exports / month
-  - Adaptive Practice (10 sessions / month)
   - Higher note generation limits
 - Pro
   - ₱199 first month, then ₱249/month in the Philippines when intro pricing applies
@@ -65,6 +62,12 @@ NoteLib uses a 3-tier learning-focused plan structure:
   - Board Exam Mode
 
 Pricing UI is kept consistent across the app through a shared frontend plan config, while checkout amounts remain backend-owned.
+
+Current runtime gating note:
+
+- Board Exam Mode is Pro-only
+- Difficulty selection is Pro-only
+- Adaptive Practice access is currently enforced as Pro-only in runtime, even though some pricing surfaces position Plus as the regular-study step-up tier
 
 ## Monetization flow
 
@@ -106,6 +109,8 @@ Note-first model:
 Note states:
 
 - `Draft`: Note exists with user-authored content only.
+- `Generating`: Study Pack generation is queued or running.
+- `Failed`: The last Study Pack generation attempt did not complete.
 - `Study Pack Ready`: AI-generated study outputs are linked to the Note.
 
 Generated Study Pack outputs include:
@@ -221,12 +226,15 @@ High-level model:
 
 ## Profile and Settings
 
-- `Profile` owns identity information:
+- `Profile` owns identity and learning profile information:
   - `firstName`
   - `lastName`
   - `displayName`
   - `email`
   - `profileType`
+  - `learnerLevel` — controls quiz difficulty, explanation depth, and content complexity
+  - `courseProgram` — provides domain context so examples and questions stay relevant
+  - `bio`
   - `View Public Profile`
 - `Public Profile` owns public-page controls:
   - `Share Profile`
@@ -267,13 +275,17 @@ High-level model:
 
 ## Onboarding
 
-- Verified users go through a short preferences onboarding once.
+- Verified users go through a short activation onboarding once.
 - Current onboarding flow:
   - `Profile Type`
-  - `Learning Style`
-  - `Study Reminder Frequency`
-  - `Exam Date` only for `BOARD_EXAM`
-- The app reuses the existing onboarding flow and persists completion on the user record.
+  - `Study Goal`
+  - `Input Method`
+  - `Study Pack Generation`
+  - `Completion`
+- `Exam Date` is optional and shown inline for `BOARD_EXAM` users during the Study Goal step.
+- The onboarding flow persists `profileType`, optional `examDate`, and `onboardingCompletedAt`.
+- `learnerLevel`, `courseProgram`, `bio`, `Learning Style`, and reminder preferences are deferred to `/profile` and `/settings`.
+- Learner level is surfaced after onboarding through the Dashboard prompt `Too easy or too hard?`, which navigates directly to `/profile?from=dashboard#learning-profile`.
 
 ## Product Philosophy
 
@@ -339,7 +351,7 @@ notelib/
     architecture/
     features/
     ai/
-  legacy/
+    legacy/
   AGENTS.md
   README.md
   .env.example
@@ -361,7 +373,7 @@ Canonical documentation now lives in `/docs`:
 
 No original context was discarded during this refactor.
 
-The previous versions of the original markdown files are preserved under `/legacy` so the repo keeps both:
+The previous versions of the original markdown files are preserved under `/docs/legacy` so the repo keeps both:
 
 - the new organized structure
 - the original source documents for reference and migration

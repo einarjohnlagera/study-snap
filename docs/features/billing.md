@@ -18,7 +18,7 @@
 
 ### Flow
 
-1. User clicks `Choose Plus`, `Choose Pro`, or a paywall upgrade CTA.
+1. User clicks `Choose Plus`, `Go Pro`, `Go Pro Yearly`, or a paywall upgrade CTA.
 2. Frontend sends `POST /api/payments/create` with the selected `planType`, selected billing cycle, and an optional safe internal `returnUrl`.
 3. Backend validates the user, loads region pricing from config, and resolves any eligible automatic voucher before checkout creation.
 4. Backend checks for an unexpired pending Xendit invoice for the same user, plan, billing cycle, final amount, and voucher state.
@@ -95,7 +95,10 @@ The Settings page (`/settings#plan-billing`) surfaces plan selection and billing
 - **Billing cycle toggle** — pill toggle between Monthly and Annual. Annual tab shows a savings badge (e.g. "Save 33%") computed from Pro annual vs. 12× monthly. Toggle always renders because Pro has annual pricing in all regions.
 - **Plan cards** — three side-by-side cards (Free, Plus, Pro):
   - Current plan card shows a "Current plan" badge and a disabled "Current Plan" button.
-  - Non-current paid plan cards show a checkout CTA: "Choose Plus", "Choose Pro" (Free users), or "Upgrade to Pro" (Plus users).
+  - Non-current paid plan cards show the current checkout CTAs used by the page:
+    - `Choose Plus`
+    - `Go Pro`
+    - `Go Pro Yearly` when annual Pro is selected
   - Pro card shows a "Most popular" badge when the user is not already on Pro.
   - Plus Annual is not yet available; when Annual tab is selected, Plus card shows monthly price with a "Monthly billing only" note and the CTA still sends a MONTHLY checkout.
   - Pro card sends YEARLY checkout when Annual tab is active and Pro annual is available.
@@ -110,3 +113,4 @@ The Settings page (`/settings#plan-billing`) surfaces plan selection and billing
 - No invoice download or receipt UI yet
 - Billing history is read-only
 - Plus annual plan not yet available (annual toggle sends monthly checkout for Plus)
+- Adaptive Practice, Difficulty Selection, and Board Exam Mode are still enforced from backend plan rules; current pricing-surface messaging does not override runtime feature gates
