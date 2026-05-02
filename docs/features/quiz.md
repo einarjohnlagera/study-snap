@@ -361,14 +361,22 @@ These rules apply uniformly across Quick Review, Challenge Quiz, and Adaptive Pr
 - During an active quiz, the header BackLink is replaced by active-session text plus `Leave Quiz`; users must confirm forfeiting before leaving.
 
 ### Button hierarchy on result screens
+- **Exactly one primary CTA** per result screen. Never show two equal-weight primary buttons.
 - **Primary**: the most useful next learning step for the result state
-  - Quick Review: `Practice Weak Concepts` when available, otherwise `Practice Again` for missed concepts or `Start Challenge Quiz` after a strong/perfect result
-  - Challenge Quiz: `Practice Weak Concepts` when weak concepts exist, otherwise `Start Another Challenge`
+  - Quick Review: `Practice Weak Areas` (links to Adaptive Practice) when struggling and adaptive is available; `Practice Again` when struggling and adaptive is not available; `Take Another Challenge` after a strong/perfect result
+  - Challenge Quiz: `Practice Weak Concepts` when weak concepts exist, otherwise `Take Another Challenge`
   - Adaptive Practice: `Generate New Set`
-- **Secondary**: learning support and repeat actions that are not the main next step (`Review Answers`, locked `Unlock Practice Weak Concepts`, secondary `Practice Again`, secondary `Start Another Challenge`)
+- **Secondary**: learning support and repeat actions that are not the main next step (`Review Answers`, upgrade nudge, secondary `Practice Again`)
 - **Navigation**: `← Back to Note` text link below the button group — never a button
 - Edge states such as empty quiz data, monthly limits, or unavailable sessions must still use text-link navigation back to the note, not a `Back to Note` button.
 - If no weak concepts are identified, the result screen should say so directly and still provide a clear next step.
+
+### Inline learner level selector (result screens)
+- Quick Review and Challenge Quiz result screens show an inline pill-group selector for Learner Level below the main CTAs.
+- The selector loads the user's current `learnerLevel` from `GET /auth/me` once when the result screen becomes visible.
+- Selecting a different level calls the profile update API and shows a toast: `Learner level updated. Future Study Packs and quizzes will match this level.`
+- A note below the selector reads: `This applies to future generations.`
+- Do NOT re-implement learner level — reuse the existing `LearnerLevel` enum, `LEARNER_LEVEL_OPTIONS`, and `updateProfileLearnerLevel` helper in `lib/api.ts`.
 
 ### Review Answers
 - The result screen must expose a clear `Review Answers` action for post-assessment learning.

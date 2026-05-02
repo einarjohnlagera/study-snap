@@ -45,12 +45,14 @@ jest.mock("@/lib/api", () => ({
   completeChallengeQuizSession: jest.fn(),
   forfeitChallengeQuizSession: jest.fn(),
   getInProgressChallengeQuizSession: jest.fn(),
+  getMe: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
   getMyStudyPack: jest.fn(),
   getNote: jest.fn(),
   isEmailNotVerifiedError: () => false,
   startChallengeQuizSession: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
   updateChallengeQuizSessionProgress: jest.fn(),
+  updateProfileLearnerLevel: jest.fn().mockResolvedValue({ learnerLevel: "COLLEGE" }),
 }));
 
 describe("ChallengeQuizPage", () => {

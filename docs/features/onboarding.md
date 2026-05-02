@@ -111,11 +111,11 @@ These fields remain in the system but are not collected during onboarding. They 
 
 Dashboard follow-up prompt:
 
-- after onboarding completes, Dashboard should show a lightweight personalization card that points users to `Settings`
+- after onboarding completes, Dashboard should show a lightweight personalization card that points users to `/profile`
 - card copy:
-  - title: `Make NoteLib work better for you`
-  - body: `Set your learning style and reminders in seconds.`
-  - CTA: `Set Preferences`
+  - title: `Too easy or too hard?`
+  - body: `Set your learner level so future quizzes match your study stage.`
+  - CTA: `Adjust level` → navigates to `/profile`
 - the prompt must be dismissible and may persist dismissal in frontend local storage per user
 
 | Field | Deferred to |
@@ -138,6 +138,14 @@ Deferred fields are persisted when the user edits them later via Profile or Sett
 
 The generated note and Study Pack created during onboarding are saved to the user's library as a normal note. The note is editable after onboarding completes.
 
+After the Study Pack generation completes, the backend automatically applies the AI-generated `subject` and `tags` to the source note if those fields are empty — without asking the user. This is a zero-friction metadata sync.
+
+## Generation Safety (Step 4)
+
+**Back button lock during generation**: The Back button is hidden while `studyPackGenerating || startingStudyPack`. The notice changes to: `Your Study Pack is being created. This step can't be undone.`
+
+**Idempotency guard**: `handleStartStudyPack()` checks whether `draft.noteId` already exists. If a note was already created (e.g. from a previous call, page refresh, or back/forward navigation), the function navigates to Step 4 instead of creating a duplicate note and Study Pack.
+
 ## Edge Cases
 
 **Empty topic field (Step 3)**
@@ -158,8 +166,11 @@ Replace quiz section with: `Quiz questions will be available when you open your 
 **Onboarding save fails (Step 5)**
 Show inline error below CTAs: `We couldn't save your profile. Your Study Pack is still available.` Allow navigation forward anyway. Flag the incomplete profile for a prompt on the dashboard.
 
-**Back from Step 4**
+**Back from Step 4 (idle or error)**
 Show soft inline notice: `Going back will start a new Study Pack. Your current one will be saved.` No blocking confirmation dialog.
+
+**Back from Step 4 (during active generation)**
+The Back button is hidden entirely. The notice reads: `Your Study Pack is being created. This step can't be undone.` The Back button reappears on error or completion.
 
 ## Analytics Events
 

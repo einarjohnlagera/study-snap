@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,7 +32,7 @@ import {
 } from "@/lib/profile-mode";
 import { BackLink } from "@/components/ui/back-link";
 import { buildPublicProfilePath } from "@/lib/public-note-path";
-import { PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
+import { PROFILE_LEARNING_PROFILE_SECTION_ID, PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 import { ProfileNotePerformance } from "@/components/profile/profile-note-performance";
@@ -114,7 +114,7 @@ function ProfileTypeSwitchModal({
   saving,
   onCancel,
   onConfirm,
-}: ProfileTypeSwitchModalProps) {
+}: Readonly<ProfileTypeSwitchModalProps>) {
   if (!pendingProfileType || !isActiveProfileTypeForSwitch(pendingProfileType)) {
     return null;
   }
@@ -158,6 +158,8 @@ function ProfileTypeSwitchModal({
 
 export default function ProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const fromDashboard = searchParams.get("from") === "dashboard";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<MeResponse | null>(null);
@@ -189,10 +191,12 @@ export default function ProfilePage() {
     if (globalThis.window === undefined) {
       return;
     }
-    if (globalThis.location.hash !== `#${PROFILE_TOP_PERFORMANCE_SECTION_ID}`) {
+    const knownSectionIds = [PROFILE_TOP_PERFORMANCE_SECTION_ID, PROFILE_LEARNING_PROFILE_SECTION_ID];
+    const hash = globalThis.location.hash.slice(1);
+    if (!knownSectionIds.includes(hash)) {
       return;
     }
-    const section = globalThis.document.getElementById(PROFILE_TOP_PERFORMANCE_SECTION_ID);
+    const section = globalThis.document.getElementById(hash);
     if (!section) {
       return;
     }
@@ -486,7 +490,10 @@ export default function ProfilePage() {
         </Card>
       ) : profile ? (
         <div className="space-y-6">
-          <BackLink href={buildPublicProfilePath(profile.id)} label="Profile" />
+          <BackLink
+            href={fromDashboard ? "/dashboard" : buildPublicProfilePath(profile.id)}
+            label={fromDashboard ? "Dashboard" : "Profile"}
+          />
           <PageHeader
             eyebrow="PROFILE"
             title="Profile"
@@ -644,7 +651,7 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          <Card className="space-y-4 p-4 sm:p-6">
+          <Card id={PROFILE_LEARNING_PROFILE_SECTION_ID} className="space-y-4 p-4 sm:p-6">
             <h2 className="text-lg font-semibold sm:text-xl">Learning Profile</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block space-y-2">
@@ -658,7 +665,7 @@ export default function ProfilePage() {
                     handleLearningProfileFieldChange("learnerLevel", value as LearnerLevel | "")
                   }
                   placeholder="Choose learner level"
-                  helperText="Choose the option that best matches your current study stage."
+                  helperText="Controls difficulty, explanation depth, and quiz complexity."
                   allowCustom={false}
                   toggleLabel="Toggle learner level suggestions"
                 />
@@ -679,7 +686,7 @@ export default function ProfilePage() {
                   }
                   errorText={learningProfileErrors.courseProgram ?? null}
                 />
-                <p className="text-xs text-foreground/60">Used to tailor content and quiz recommendations to your field.</p>
+                <p className="text-xs text-foreground/60">Provides domain context so examples and questions stay relevant to your field.</p>
               </label>
               <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Bio</span>
@@ -698,7 +705,7 @@ export default function ProfilePage() {
                 <p className="text-xs text-foreground/60">{learningProfileMessage}</p>
               ) : (
                 <p className="text-xs text-foreground/60">
-                  Learner level helps NoteLib adjust quiz difficulty and recommendations.
+                  Learner level controls quiz difficulty and explanation depth.
                 </p>
               )}
               <ResponsiveActionButton

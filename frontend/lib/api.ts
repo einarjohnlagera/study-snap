@@ -1178,6 +1178,19 @@ export async function updateUserProfile(request: UpdateUserProfileRequest): Prom
   return me;
 }
 
+export async function updateProfileLearnerLevel(level: LearnerLevel): Promise<MeResponse> {
+  const current = await getMe();
+  return updateUserProfile({
+    firstName: current.firstName,
+    lastName: current.lastName ?? "",
+    displayName: current.displayName ?? "",
+    bio: current.bio ?? "",
+    learnerLevel: level,
+    courseProgram: current.courseProgram ?? "",
+    email: current.email,
+  });
+}
+
 export async function updatePublicProfileVisibility(
   request: UpdatePublicProfileVisibilityRequest,
 ): Promise<MeResponse> {
