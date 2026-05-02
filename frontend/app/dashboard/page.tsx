@@ -51,6 +51,7 @@ import {
   dismissDashboardPersonalizationPrompt,
   hasDismissedDashboardPersonalizationPrompt,
 } from "@/lib/dashboard-personalization-prompt";
+import { PROFILE_LEARNING_PROFILE_SECTION_ID } from "@/lib/profile-sections";
 
 type SupportedDashboardProfileType = "STUDENT" | "BOARD_EXAM" | "TEACHER";
 type TeacherGeneratedQuizSummary = {
@@ -425,7 +426,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleOpenPreferences = useCallback(() => {
-    router.push("/profile");
+    router.push(`/profile?from=dashboard#${PROFILE_LEARNING_PROFILE_SECTION_ID}`);
   }, [router]);
 
   const handleSkipFirstStudyOnboarding = useCallback(async () => {

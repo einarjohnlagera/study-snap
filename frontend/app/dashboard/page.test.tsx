@@ -183,7 +183,7 @@ describe("DashboardPage profile variants", () => {
     expect(await screen.findByText("Too easy or too hard?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Adjust level" }));
 
-    expect(routerMock.push).toHaveBeenCalledWith("/profile");
+    expect(routerMock.push).toHaveBeenCalledWith("/profile?from=dashboard#learning-profile");
   });
 
   it("persists dismissal of the personalization prompt per user", async () => {
