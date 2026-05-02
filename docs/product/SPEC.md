@@ -1111,6 +1111,18 @@ Page responsibilities:
   - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
   - backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
 
+### Quiz Result — Inline Learner Level Selector
+
+Quick Review and Challenge Quiz result screens expose a learner-level pill-selector so users can adjust their level immediately after a quiz without navigating to Profile.
+
+Rules:
+
+- load the current `learnerLevel` via `GET /auth/me` when the result screen becomes visible
+- render one pill per level option; the current level is visually selected
+- saving calls `updateProfileLearnerLevel` in `lib/api.ts` and shows a toast: `Learner level updated. Future Study Packs and quizzes will match this level.`
+- the selector must reuse the existing `LearnerLevel` enum and `LEARNER_LEVEL_OPTIONS`; do not introduce a new learner level system
+- learner level changes affect future quiz generations only; they do not regenerate the current Study Pack or session
+
 ### Quiz Generation Reliability
 
 - Quiz-generation prompts must return valid JSON only, with no markdown or extra prose outside the JSON object.
@@ -1281,6 +1293,22 @@ Rules:
 - while Step 4 generation is active, the footer `Back` action is hidden and the notice reads `Your Study Pack is being created. This step can't be undone.`
 - after onboarding generation succeeds, backend may auto-apply generated `subject` and `tags` to the source note when those fields are empty
 
+### Dashboard Personalization Prompt
+
+A lightweight learner-level prompt is shown on Dashboard after onboarding completes.
+
+Copy:
+
+- title: `Too easy or too hard?`
+- body: `Set your learner level so future quizzes match your study stage.`
+- CTA: `Adjust level`
+
+Behavior:
+
+- dismissible; dismissal stored per user in frontend storage
+- CTA navigates to `/profile?from=dashboard#learning-profile`
+- this prompt is for learner level only; it does not re-collect learning style or reminder preferences
+
 ### Profile
 
 Route: `/profile`
@@ -1321,6 +1349,12 @@ Email change flow:
 - the UI should tell the user: `Please verify your new email address before it replaces your current email.`
 - after verification, `email = pendingEmail`, `pendingEmail = null`, and `emailVerifiedAt` is refreshed
 - email changes must never replace the active account email before verification
+
+Back navigation:
+
+- when `/profile` is reached via `?from=dashboard` (e.g. the Dashboard "Adjust level" CTA), the back link renders as `← Dashboard` (href `/dashboard`)
+- in all other cases the back link renders as `← Profile` (href the user's public profile path)
+- the navigation URL must include `?from=dashboard` to trigger context-aware back link behavior
 
 ### Email Templates
 

@@ -96,7 +96,7 @@ studysnap:
     free-monthly-export-limit: ${FREE_MONTHLY_EXPORT_LIMIT:2}
     plus-monthly-export-limit: ${PLUS_MONTHLY_EXPORT_LIMIT:15}
     pro-monthly-export-limit: ${PRO_MONTHLY_EXPORT_LIMIT:-1}
-    adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:true}
+    adaptive-practice-pro-only: ${ADAPTIVE_PRACTICE_PRO_ONLY:false}
     difficulty-selection-pro-only: ${DIFFICULTY_SELECTION_PRO_ONLY:true}
   limits:
     file-upload-max-size: ${MAX_IMPORT_FILE_SIZE:10}
