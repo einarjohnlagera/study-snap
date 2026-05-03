@@ -1,0 +1,49 @@
+# NoteLib content moderation — Filipino (Tagalog) dictionary
+#
+# Format and matching rules: see banned_words_en.txt.
+#
+# Notes:
+#   - Tagalog profanity uses many spelling variants (e.g., "puta", "p*ta",
+#     "puta-na"). For now we only match the canonical surface form because
+#     leetspeak / obfuscation handling is intentionally out of scope (see the
+#     "no regex overkill yet" rule). Add common variants as they are observed
+#     in real abuse.
+#   - Words that are only situationally offensive (e.g., "bobo" can be banter)
+#     are excluded. We block clearly inappropriate terms only.
+
+# explicit
+pota
+puta
+putang
+putangina
+potangnia
+tangina
+putang ina
+puta
+tanginamo
+gago
+gaga
+ulol
+inutil
+hayop
+hayup
+kantot
+kantotan
+chupa
+titi
+pekpek
+puke
+burat
+bayag
+iyot
+jakol
+
+# hate
+bakla-pejorative
+bading-pejorative
+pokpok
+kalapating-mababa-ang-lipad
+
+# harmful
+magpakamatay
+patayinmo

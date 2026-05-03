@@ -1,0 +1,54 @@
+# NoteLib content moderation — English dictionary
+#
+# Format:
+#   - One term per line.
+#   - Lines starting with `#` are comments.
+#   - Section headers `# explicit`, `# hate`, `# harmful` group entries by category.
+#   - Matching is whole-token, case-insensitive, after punctuation stripping.
+#     ("damn" matches "DAMN!" but does NOT match "damnation" or substrings.)
+#
+# Adding terms:
+#   - Keep entries to clearly inappropriate content. Do NOT add legitimate
+#     academic terms (e.g., "sex" is intentionally absent — "sex education",
+#     "sexual reproduction", and "biological sex" are all valid study topics).
+#   - When in doubt, leave it out. False positives erode trust faster than a
+#     missed term costs us.
+#
+# This list is intentionally small. Production deployments should expand it
+# via an admin-managed dictionary (see ContentModerationService extensibility).
+
+# explicit
+fuck
+fucked
+fucking
+fucker
+shit
+asshole
+bitch
+cunt
+dick
+pussy
+cock
+porn
+pornography
+masturbate
+masturbation
+
+# hate
+nigger
+nigga
+faggot
+fag
+retard
+tranny
+chink
+spic
+kike
+gook
+
+# harmful
+suicide-method
+self-harm-howto
+bombmaking
+killyourself
+kys

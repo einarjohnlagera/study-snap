@@ -71,6 +71,8 @@ class NoteServiceTest {
     private FeatureGateService featureGateService;
     @Mock
     private AnalyticsService analyticsService;
+    @Mock
+    private ContentModerationService contentModerationService;
 
     private NoteService noteService;
 
@@ -85,7 +87,8 @@ class NoteServiceTest {
                 userRepository,
                 subscriptionService,
                 featureGateService,
-                analyticsService
+                analyticsService,
+                contentModerationService
         );
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.findAllSubjectValues()).thenReturn(List.of());

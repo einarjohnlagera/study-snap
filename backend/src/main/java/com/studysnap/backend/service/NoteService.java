@@ -91,6 +91,7 @@ public class NoteService {
     private final SubscriptionService subscriptionService;
     private final FeatureGateService featureGateService;
     private final AnalyticsService analyticsService;
+    private final ContentModerationService contentModerationService;
 
     public NoteResponse create(UpsertNoteRequest request, UUID ownerUserId) {
         UserEntity owner = getOwnerOrThrow(ownerUserId);
@@ -468,6 +469,7 @@ public class NoteService {
                     HttpStatus.BAD_REQUEST
             );
         }
+        contentModerationService.validateOrThrow(normalized);
         return normalized;
     }
 
