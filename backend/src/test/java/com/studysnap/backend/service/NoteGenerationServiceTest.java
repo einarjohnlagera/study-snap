@@ -36,6 +36,9 @@ class NoteGenerationServiceTest {
     @Mock
     private NoteGenerationUsageProtectionService noteGenerationUsageProtectionService;
 
+    @Mock
+    private ContentModerationService contentModerationService;
+
     private NoteGenerationService noteGenerationService;
 
     @BeforeEach
@@ -44,7 +47,8 @@ class NoteGenerationServiceTest {
                 userRepository,
                 subscriptionService,
                 noteGenerationUsageProtectionService,
-                llmStudyPackService
+                llmStudyPackService,
+                contentModerationService
         );
     }
 

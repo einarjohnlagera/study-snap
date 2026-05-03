@@ -22,12 +22,14 @@ public class NoteGenerationService {
     private final SubscriptionService subscriptionService;
     private final NoteGenerationUsageProtectionService noteGenerationUsageProtectionService;
     private final LlmStudyPackService llmStudyPackService;
+    private final ContentModerationService contentModerationService;
 
     public GenerateNoteFromTopicResponse generateFromTopic(GenerateNoteFromTopicRequest request, UUID userId) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
         noteGenerationUsageProtectionService.assertQuotaAvailable(userId, subscriptionService.resolvePlan(userId));
         String normalizedTopic = request.topic().trim();
+        contentModerationService.validateOrThrow(normalizedTopic);
         StudyPackGenerationContext context = new StudyPackGenerationContext(
                 user.getLearnerLevel(),
                 CourseProgramNormalizationUtils.normalizeForStorage(user.getCourseProgram()),

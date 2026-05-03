@@ -100,6 +100,7 @@ public class StudyPackService {
     private final StudyPackGenerationContextResolver generationContextResolver;
     private final TransactionOperations studyPackGenerationTransactionOperations;
     private final StudyPackGenerationTaskDispatcher studyPackGenerationTaskDispatcher;
+    private final ContentModerationService contentModerationService;
 
     public StudyPackResponse createFromText(CreateStudyPackRequest request, UUID ownerUserId) {
         long startedAt = System.currentTimeMillis();
@@ -463,6 +464,7 @@ public class StudyPackService {
                     HttpStatus.BAD_REQUEST
             );
         }
+        contentModerationService.validateOrThrow(normalized);
         return normalized;
     }
 

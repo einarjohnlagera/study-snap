@@ -79,6 +79,8 @@ class StudyPackServiceTest {
     private AiRateLimitService aiRateLimitService;
     @Mock
     private StudyPackGenerationContextResolver generationContextResolver;
+    @Mock
+    private ContentModerationService contentModerationService;
 
     private StudyPackService studyPackService;
     private static final TransactionOperations TEST_TRANSACTION_OPERATIONS = new TransactionOperations() {
@@ -107,7 +109,8 @@ class StudyPackServiceTest {
                 aiRateLimitService,
                 generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
-                new StudyPackGenerationTaskDispatcher(Runnable::run)
+                new StudyPackGenerationTaskDispatcher(Runnable::run),
+                contentModerationService
         );
         lenient().when(studyPackRepository.save(any(StudyPackEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(noteRepository.save(any(NoteEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -322,7 +325,8 @@ class StudyPackServiceTest {
                 aiRateLimitService,
                 generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
-                new StudyPackGenerationTaskDispatcher(Runnable::run)
+                new StudyPackGenerationTaskDispatcher(Runnable::run),
+                contentModerationService
         );
         when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
                 .thenReturn(new StudyPackUsageService.UsageSnapshot(
@@ -396,7 +400,8 @@ class StudyPackServiceTest {
                 aiRateLimitService,
                 generationContextResolver,
                 TEST_TRANSACTION_OPERATIONS,
-                new StudyPackGenerationTaskDispatcher(generationTasks::add)
+                new StudyPackGenerationTaskDispatcher(generationTasks::add),
+                contentModerationService
         );
 
         when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
