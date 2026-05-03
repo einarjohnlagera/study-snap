@@ -289,6 +289,9 @@ Teacher flow rule:
 - Backend services should record server-truth events for note, Study Pack, review, auth, public-copy, and subscription flows.
 - Frontend/browser-only funnel events may post through `/api/analytics/events`.
 - Admin reporting should read from analytics events plus core entity counts via `/api/admin/analytics/summary`.
+- **Tracked completion events**: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` are fired from the frontend in the `finally`/completion block of each quiz flow and must not block the primary action.
+- **Tracked funnel events**: `FEATURE_LOCKED_CLICKED` and `UPGRADE_CLICKED` are fired from paywall surfaces and the `PostSuccessUpgradeNudge` component respectively.
+- `AnalyticsEventType` in `frontend/lib/api.ts` is the canonical union of all allowed event names — add new event names there before using them.
 
 ### Retention Email Rule
 
@@ -754,6 +757,14 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - `learnerLevel` is required during onboarding but remains nullable in storage for pre-existing users.
 - `courseProgram` is required during onboarding and later Learning Profile saves, but remains nullable in storage for pre-existing users until they update it.
 - backend generation context may carry `learnerLevel`, `courseProgram`, `subject`, and `tags` for future prompt tuning without changing current UI behavior.
+
+### LLM Context Builder Rule
+
+- All LLM calls for quiz and Study Pack generation must supply learner-level and course/program context by going through `StudyPackGenerationContextResolver` (backend service) and calling `buildLearnerContextBlock()` in `OpenAiLlmStudyPackService`.
+- `buildLearnerContextBlock()` is the single source of truth for how learner level and course/program are formatted in prompts — do not inline this formatting elsewhere.
+- Never add a raw learner-level or course/program string to a prompt without going through `buildLearnerContextBlock()`.
+- Learner level defaults to `COLLEGE` when the user has no saved `learnerLevel`.
+- Course/program is omitted from the context block when the user has no saved `courseProgram`.
 
 ### Quiz Generation Rule
 

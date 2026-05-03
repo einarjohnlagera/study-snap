@@ -115,6 +115,14 @@ NoteLib has three plans: Free, Plus, and Pro.
 - Success and failure pages are user-facing status pages only; they do not grant paid access.
 - Billing success returns users to the interrupted product flow when a safe paywall `returnUrl` exists, but Settings/Billing-origin upgrades land on Dashboard.
 - Frontend redirects after checkout never activate paid access directly.
+- After quiz completion, non-Pro users see a `PostSuccessUpgradeNudge` on Quick Review and Challenge Quiz result screens — a sessionStorage-dismissed inline banner linking to `/pricing`.
+
+## Analytics
+
+- Frontend quiz completion fires `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` events via `trackAnalyticsEvent` in `frontend/lib/api.ts`.
+- `UPGRADE_CLICKED` is fired from upgrade CTAs and the `PostSuccessUpgradeNudge` component.
+- All analytics calls are fire-and-forget (`void`) and must not block or throw on the primary flow.
+- `AnalyticsEventType` in `frontend/lib/api.ts` is the canonical union of all allowed event names.
 
 ## Core Domain Models
 

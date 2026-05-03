@@ -1289,4 +1289,160 @@ describe("ChallengeQuizPage", () => {
     expect(review).toHaveTextContent("Mitochondria produce ATP for the cell.");
     expect(screen.getByText("Found a confusing question or explanation while reviewing answers? Tell us what felt off.")).toBeInTheDocument();
   });
+
+  it("shows upgrade nudge on result screen when adaptive practice is not available", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "FREE",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: [],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: [],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: false,
+      difficultySelectionAvailable: false,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 1,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 5,
+      difficultySelectionAvailable: false,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Cell Biology",
+          explanation: "Explanation",
+        },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: { selectedChoices: {}, timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+    });
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 1,
+      scorePercentage: 100,
+      performanceLevel: "Excellent",
+      conceptBreakdown: [{ concept: "Cell Biology", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 }],
+      weakConcepts: [],
+      durationSeconds: 10,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:01:00Z",
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
+    await screen.findByText("Challenge Quiz Result");
+
+    expect(screen.getByText("You're building momentum. Keep going without limits.")).toBeInTheDocument();
+  });
+
+  it("hides upgrade nudge on result screen when adaptive practice is available (Pro user)", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "user-1",
+      planType: "PRO",
+      emailVerifiedAt: "2026-03-21T09:00:00Z",
+    });
+    (getNote as jest.Mock).mockResolvedValue({
+      id: "note-1",
+      title: "Challenge Note",
+      subject: "Biology",
+      tags: [],
+      content: "content",
+      visibility: "PRIVATE",
+      createdAt: "2026-03-21T10:00:00Z",
+      updatedAt: "2026-03-21T10:30:00Z",
+      copiedFromNoteId: null,
+      copiedFromUserId: null,
+      copiedFromTitle: null,
+      copiedFromPublic: false,
+      copiedAt: null,
+      studyPackId: "sp-1",
+      studyPackStatus: "STUDY_PACK_READY",
+      summary: "Summary",
+      keyConcepts: [],
+      quiz: [],
+      quizCount: 0,
+      quickReviewAvailable: true,
+      challengeQuizAvailable: true,
+      adaptivePracticeAvailable: true,
+      difficultySelectionAvailable: true,
+    });
+    (getInProgressChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      title: "Challenge Note",
+      totalQuestions: 1,
+      timeLimitSeconds: 600,
+      usedThisMonth: 0,
+      monthlyLimit: 50,
+      difficultySelectionAvailable: true,
+      mode: "challenge",
+      selectedDifficulty: "medium",
+      quiz: [
+        {
+          question: "What powers the cell?",
+          choices: ["Mitochondria", "Nucleus", "Golgi apparatus", "Cell wall"],
+          correctIndex: 0,
+          concept: "Cell Biology",
+          explanation: "Explanation",
+        },
+      ],
+      currentQuestionIndex: 0,
+      sessionState: { selectedChoices: {}, timerStartedAtEpochSeconds: Math.floor(Date.now() / 1000) },
+    });
+    (completeChallengeQuizSession as jest.Mock).mockResolvedValue({
+      sessionId: "session-1",
+      studyPackId: "sp-1",
+      status: "COMPLETED",
+      totalQuestions: 1,
+      correctAnswers: 1,
+      scorePercentage: 100,
+      performanceLevel: "Excellent",
+      conceptBreakdown: [{ concept: "Cell Biology", correctAnswers: 1, totalQuestions: 1, accuracyPercentage: 100 }],
+      weakConcepts: [],
+      durationSeconds: 10,
+      createdAt: "2026-03-21T10:00:00Z",
+      completedAt: "2026-03-21T10:01:00Z",
+    });
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
+    await screen.findByText("Challenge Quiz Result");
+
+    expect(screen.queryByText("You're building momentum. Keep going without limits.")).not.toBeInTheDocument();
+  });
 });

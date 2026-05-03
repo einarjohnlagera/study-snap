@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { ChevronDown } from "lucide-react";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { PaywallModal } from "@/components/billing/paywall-modal";
+import { PostSuccessUpgradeNudge } from "@/components/billing/post-success-upgrade-nudge";
 import { QuizFeedbackPanel } from "@/components/feedback/quiz-feedback-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -705,6 +706,14 @@ export default function ChallengeQuizPage() {
       if (persistResultToPage) {
         setResult(completed);
         setPhase("complete");
+        void trackAnalyticsEvent({
+          eventType: "CHALLENGE_QUIZ_COMPLETED",
+          entityId: completed.sessionId,
+          metadata: {
+            scorePercentage: completed.scorePercentage,
+            weakConceptCount: completed.weakConcepts.length,
+          },
+        });
       }
       return completed;
     } catch (err) {
@@ -1676,6 +1685,9 @@ export default function ChallengeQuizPage() {
               </div>
               <p className="text-xs text-foreground/55">This applies to future generations.</p>
             </div>
+          ) : null}
+          {!note?.adaptivePracticeAvailable ? (
+            <PostSuccessUpgradeNudge trigger="challenge-quiz" />
           ) : null}
           <QuizFeedbackPanel
             quizLabel={isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz"}
