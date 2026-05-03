@@ -22,6 +22,7 @@ const routerMock = {
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
   usePathname: () => "/settings",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 jest.mock("@/lib/auth", () => ({

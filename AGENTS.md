@@ -282,6 +282,18 @@ Teacher flow rule:
 - Preference values must persist in backend and be returned by `GET /auth/me`.
 - Future reminder cadence should be guided by `Learning Style`, but scheduling logic is a separate task.
 
+### Upgrade CTA Rule
+
+- Upgrade CTAs must be plan-aware. Never hardcode `Go Pro` as the universal upgrade CTA.
+- Use `getUpgradeCtas(currentPlan)` from `frontend/src/config/plans.ts`:
+  - Free → primary `Upgrade to Plus`, secondary `Go Pro`.
+  - Plus → primary `Upgrade to Pro`, no secondary.
+  - Pro → no CTAs (already top plan).
+- Upgrade CTAs that drive in-app plan selection must navigate to `/settings?section=plans`. The Settings page reads the `section` query param, scrolls to the Plan & Billing card, and applies a temporary highlight ring.
+- The `/pricing` page is the public marketing landing surface and stays linked from the navbar/landing only.
+- Apply this rule on quiz result screens, the paywall modal, the Study Pack limit modal, the post-success upgrade nudge, and any near-limit banners.
+- `PLANS` source of truth is `docs/product/PLANS.md`; runtime numbers live in `frontend/lib/pricing-config.ts` and feature lists in `frontend/src/config/plans.ts`. Keep all three in sync when limits or plan copy change.
+
 ### Analytics Rule
 
 - Track product, growth, and upgrade events through the shared analytics event model.

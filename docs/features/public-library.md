@@ -288,3 +288,15 @@ Rules:
 - `Full Notes` should render the complete original note body so visitors can judge whether the note is worth copying
 - keep the page read-only and copy-first; tabs are for review, not management
 - non-owner primary CTA should use `Copy to My Library`
+
+## Limit-Reached Fallback (planned)
+
+When a user hits their Study Pack limit, the limit modal should offer the Public Library as an alternative path (in addition to the dynamic upgrade CTAs):
+
+- **Title**: "You've reached your limit"
+- **Message**: "Explore existing Study Packs while waiting or upgrade for more access."
+- **Actions**:
+  - `Browse Public Library` — navigates to `/library/public`. If the user's last note has a topic/subject, pre-fill it as a search query (`?q=`).
+  - Dynamic upgrade CTA from `getUpgradeCtas(currentPlan)` — navigates to `/settings?section=plans`.
+
+This fallback turns the limit hit into a *content-discovery* moment rather than a hard wall, especially valuable for Free users early in their study journey.
