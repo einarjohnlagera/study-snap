@@ -1459,6 +1459,17 @@ Context-aware paywall flow:
   - Study Pack resume returns to `/notes/{noteId}?generate=1`
   - Settings / Billing-origin upgrades return to Dashboard instead of looping back to billing
 
+### Upgrade Flow & Dynamic CTAs
+
+- Upgrade CTAs are **plan-aware** and resolved through the shared `getUpgradeCtas(currentPlan)` helper in `frontend/src/config/plans.ts`:
+  - Free → primary `Upgrade to Plus`, secondary `Go Pro`.
+  - Plus → primary `Upgrade to Pro`, no secondary CTA.
+  - Pro → no upgrade CTA (already on the top plan).
+- In-app upgrade CTAs (post-success nudge, limit modal, near-limit banner, paywall modal) navigate to `/settings?section=plans`, **not** the public `/pricing` page.
+- The Settings page reads `?section=plans`, scrolls to the Plan & Billing card, and applies a temporary highlight ring so the user lands directly on the plan options.
+- The plan ladder is `Free → Plus → Pro`. Plus is positioned as *regular study*; Pro is positioned as *exam preparation*. Upgrade copy must respect this framing.
+- Plan limits, prices, and feature scope are documented in `docs/product/PLANS.md`. Runtime values live in `frontend/lib/pricing-config.ts`; feature lists and CTA labels live in `frontend/src/config/plans.ts`.
+
 ---
 
 ## Activity Tracking

@@ -34,7 +34,12 @@ import {
   type OnboardingInputMethod,
   type OnboardingProfileType,
 } from "@/lib/onboarding-v2";
-import { resolveRemainingUsageCredits } from "@/lib/plans";
+import {
+  formatStudyPackResetDate,
+  isStudyPackLimitReachedMessage,
+  resolveRemainingUsageCredits,
+} from "@/lib/plans";
+import { NearLimitBanner } from "@/components/billing/near-limit-banner";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 
 type GenerationSectionKey = "summary" | "concepts" | "quiz";
@@ -240,6 +245,7 @@ export default function OnboardingPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [stepThreeError, setStepThreeError] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [studyPackLimitReached, setStudyPackLimitReached] = useState(false);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const [showNoteGenerationLimitModal, setShowNoteGenerationLimitModal] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
@@ -270,6 +276,7 @@ export default function OnboardingPage() {
   const noteLength = draft.noteContent.trim().length;
   const studyPackStatus = note?.studyPackStatus ?? "DRAFT";
   const currentPlan = usageSummary?.plan ?? (getAuthUser()?.planType ?? "FREE");
+  const usageResetDateLabel = formatStudyPackResetDate(usageSummary?.usageCycle?.endsAt);
   const noteGenerationLimit = usageSummary?.limits.noteGenerationsPerMonth;
   const noteGenerationsUsed = usageSummary?.usage.noteGenerationsUsed;
   const noteGenerationsRemaining = usageSummary
@@ -688,6 +695,7 @@ export default function OnboardingPage() {
     setStartingStudyPack(true);
     setStepThreeError(null);
     setGenerationError(null);
+    setStudyPackLimitReached(false);
 
     if (selectedInputMethod === "own_note") {
       trackOnboardingEvent("ONBOARDING_V2_OWN_NOTE_SUBMITTED", {
@@ -723,6 +731,17 @@ export default function OnboardingPage() {
       const message = error instanceof Error ? error.message : STEP_FOUR_ERROR_MESSAGE;
       if (!savedNote) {
         setStepThreeError(message);
+      } else if (isStudyPackLimitReachedMessage(message)) {
+        setStudyPackLimitReached(true);
+        setGenerationError(null);
+        setDraft((previous) => ({
+          ...previous,
+          currentStep: 5,
+        }));
+        trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
+          method: selectedInputMethod,
+          error_type: "study_pack_limit_reached",
+        });
       } else {
         setGenerationError(STEP_FOUR_ERROR_MESSAGE);
         trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
@@ -742,6 +761,7 @@ export default function OnboardingPage() {
 
     setRetryingGeneration(true);
     setGenerationError(null);
+    setStudyPackLimitReached(false);
     generationTrackedRef.current = null;
     try {
       const queuedNote = await createStudyPackFromNote(note.id);
@@ -754,6 +774,19 @@ export default function OnboardingPage() {
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : STEP_FOUR_ERROR_MESSAGE;
+      if (isStudyPackLimitReachedMessage(message)) {
+        setStudyPackLimitReached(true);
+        setGenerationError(null);
+        setDraft((previous) => ({
+          ...previous,
+          currentStep: 5,
+        }));
+        trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
+          method: draft.inputMethod,
+          error_type: "study_pack_limit_reached",
+        });
+        return;
+      }
       setGenerationError(STEP_FOUR_ERROR_MESSAGE);
       trackOnboardingEvent("ONBOARDING_V2_STUDY_PACK_ERROR", {
         method: draft.inputMethod,
@@ -780,6 +813,15 @@ export default function OnboardingPage() {
     }
     trackOnboardingEvent("ONBOARDING_V2_CTA_GO_TO_DASHBOARD");
     router.push("/dashboard");
+  };
+
+  const handleGoToSavedNote = () => {
+    shouldTrackAbandonmentRef.current = false;
+    if (userIdRef.current) {
+      clearOnboardingDraft(userIdRef.current);
+    }
+    trackOnboardingEvent("ONBOARDING_V2_CTA_GO_TO_SAVED_NOTE");
+    router.push(note?.id ? `/notes/${note.id}` : "/library");
   };
 
   const togglePreviewSection = (sectionKey: GenerationSectionKey) => {
@@ -1128,6 +1170,46 @@ export default function OnboardingPage() {
               </GenerationSection>
             </div>
           ) : null}
+        </div>
+      );
+    }
+
+    if (studyPackLimitReached) {
+      return (
+        <div className="mx-auto flex w-full max-w-[560px] flex-col space-y-5">
+          <div className="space-y-2 text-center sm:text-left">
+            <CardTitle className="text-2xl leading-tight sm:text-3xl">
+              Your note is saved.
+            </CardTitle>
+            <CardDescription className="text-sm">
+              Create ✓ → Understand ○ → Practice → Challenge → Improve
+            </CardDescription>
+          </div>
+
+          <NearLimitBanner
+            planType={currentPlan}
+            remainingCredits={0}
+            resetDateLabel={usageResetDateLabel}
+          />
+
+          <p className="text-[0.95rem] text-foreground/80 sm:text-base">
+            We saved your note in your Library. You can generate the Study Pack when your limit
+            resets on {usageResetDateLabel}, or upgrade your plan to continue without waiting.
+          </p>
+
+          <div className="flex flex-col gap-2.5">
+            <Button type="button" className="min-h-12 text-base" onClick={handleGoToSavedNote}>
+              Go to My Note
+            </Button>
+            <Button type="button" variant="outline" className="min-h-12 text-base" onClick={handleGoToDashboard}>
+              Go to Dashboard
+            </Button>
+          </div>
+
+          {completingOnboarding ? (
+            <p className="text-sm text-foreground/60">Saving your profile...</p>
+          ) : null}
+          {completionError ? <p className="text-sm text-red-600 dark:text-red-400">{completionError}</p> : null}
         </div>
       );
     }

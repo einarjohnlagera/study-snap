@@ -153,3 +153,29 @@ export function getPlanConfig(planType: AppPlanType) {
 export function getPaidPlanCtaLabel(planType: PaidPlanType) {
   return PLANS[planType].ctaLabel;
 }
+
+export type UpgradeCta = {
+  label: string;
+  targetPlan: PaidPlanType;
+};
+
+export type UpgradeCtaSet = {
+  primary: UpgradeCta | null;
+  secondary: UpgradeCta | null;
+};
+
+export function getUpgradeCtas(currentPlan: AppPlanType): UpgradeCtaSet {
+  if (currentPlan === "FREE") {
+    return {
+      primary: { label: "Upgrade to Plus", targetPlan: "PLUS" },
+      secondary: { label: "Go Pro", targetPlan: "PRO" },
+    };
+  }
+  if (currentPlan === "PLUS") {
+    return {
+      primary: { label: "Upgrade to Pro", targetPlan: "PRO" },
+      secondary: null,
+    };
+  }
+  return { primary: null, secondary: null };
+}

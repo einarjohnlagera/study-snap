@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import type { PlanType } from "@/lib/api";
 import { PLAN_BILLING_PATH } from "@/lib/plans";
-import { getPaidPlanCtaLabel } from "@/src/config/plans";
+import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type StudyPackLimitModalProps = {
   isOpen: boolean;
@@ -13,6 +13,15 @@ type StudyPackLimitModalProps = {
   resetDateLabel: string;
   onClose: () => void;
 };
+
+const UPGRADE_PATH = "/settings?section=plans";
+
+function resolveAppPlan(planType: PlanType): AppPlanType {
+  if (planType === "PLUS" || planType === "PRO") {
+    return planType;
+  }
+  return "FREE";
+}
 
 export function StudyPackLimitModal({
   isOpen,
@@ -31,17 +40,19 @@ export function StudyPackLimitModal({
     return null;
   }
 
-  const isFreePlan = planType === "FREE";
-  const isPlusPlan = planType === "PLUS";
+  const appPlan = resolveAppPlan(planType);
+  const ctas = getUpgradeCtas(appPlan);
+  const isFreePlan = appPlan === "FREE";
+  const isPlusPlan = appPlan === "PLUS";
   const title = isFreePlan
     ? "You’ve reached your study pack limit"
     : isPlusPlan
       ? "You’ve reached your study pack limit for Plus"
       : "You’ve reached your study pack limit for this month";
   const description = isFreePlan
-    ? `Choose Plus or go Pro to create more study packs and continue turning your notes into summaries, key concepts, and quizzes.\n\nYou can still create and save notes. Your limit resets on ${resetDateLabel}.`
+    ? `Upgrade for more Study Packs and keep turning notes into summaries, key concepts, and quizzes.\n\nYou can still create and save notes. Your limit resets on ${resetDateLabel}.`
     : isPlusPlan
-      ? `Go Pro for higher study-pack limits, or wait until ${resetDateLabel} for your next reset.\n\nYou can still review your existing notes and quizzes while you wait.`
+      ? `Upgrade for higher study-pack limits, or wait until ${resetDateLabel} for your next reset.\n\nYou can still review your existing notes and quizzes while you wait.`
       : `Your study pack limit resets on ${resetDateLabel}.\n\nYou can still review your existing notes and quizzes while you wait.`;
 
   return (
@@ -54,31 +65,22 @@ export function StudyPackLimitModal({
       panelClassName="max-w-[520px]"
       actions={(
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          {isFreePlan ? (
-            <>
-              <Button type="button" onClick={() => handleNavigate("/pricing")}>
-                {getPaidPlanCtaLabel("PLUS")}
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Maybe Later
-              </Button>
-              <Button type="button" variant="outline" onClick={() => handleNavigate(PLAN_BILLING_PATH)}>
-                View My Plan
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button type="button" onClick={() => handleNavigate("/pricing")}>
-                {isPlusPlan ? getPaidPlanCtaLabel("PRO") : "View Plans"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => handleNavigate(PLAN_BILLING_PATH)}>
-                Get More Study Packs
-              </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
-                Maybe Later
-              </Button>
-            </>
-          )}
+          {ctas.primary ? (
+            <Button type="button" onClick={() => handleNavigate(UPGRADE_PATH)}>
+              {ctas.primary.label}
+            </Button>
+          ) : null}
+          {ctas.secondary ? (
+            <Button type="button" variant="outline" onClick={() => handleNavigate(UPGRADE_PATH)}>
+              {ctas.secondary.label}
+            </Button>
+          ) : null}
+          <Button type="button" variant="outline" onClick={() => handleNavigate(PLAN_BILLING_PATH)}>
+            View My Plan
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose}>
+            Maybe Later
+          </Button>
         </div>
       )}
     />

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Sparkles } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { VerifyEmailRequiredModal } from "@/components/auth/verify-email-required-modal";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { ThemeSelector } from "@/components/theme-selector";
@@ -141,6 +141,9 @@ const CANCELLATION_REASONS: Array<{
 export default function SettingsPage() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const highlightPlansSection = sectionParam === "plans";
   const startRouteProgress = useRouteProgress();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,11 +168,12 @@ export default function SettingsPage() {
   const [selectedCycle, setSelectedCycle] = useState<BillingCycle>("MONTHLY");
   const [verifyEmailModalOpen, setVerifyEmailModalOpen] = useState(false);
 
-  const scrollToPlanBillingSection = useCallback(() => {
+  const scrollToPlanBillingSection = useCallback((force = false) => {
     if (globalThis.window === undefined) {
       return;
     }
-    if (globalThis.location.hash !== `#${PLAN_BILLING_SECTION_ID}`) {
+    const hashRequested = globalThis.location.hash === `#${PLAN_BILLING_SECTION_ID}`;
+    if (!force && !hashRequested) {
       return;
     }
     const section = globalThis.document.getElementById(PLAN_BILLING_SECTION_ID);
@@ -227,12 +231,12 @@ export default function SettingsPage() {
       return;
     }
     const timeoutId = globalThis.setTimeout(() => {
-      scrollToPlanBillingSection();
+      scrollToPlanBillingSection(highlightPlansSection);
     }, 0);
     return () => {
       globalThis.clearTimeout(timeoutId);
     };
-  }, [loading, scrollToPlanBillingSection]);
+  }, [highlightPlansSection, loading, scrollToPlanBillingSection]);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -684,7 +688,12 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          <Card id={PLAN_BILLING_SECTION_ID} className="scroll-mt-24 space-y-4 p-4 sm:p-6">
+          <Card
+            id={PLAN_BILLING_SECTION_ID}
+            className={`scroll-mt-24 space-y-4 p-4 sm:p-6 ${
+              highlightPlansSection ? "ring-2 ring-primary/40 ring-offset-2 ring-offset-background" : ""
+            }`}
+          >
             <h2 className="text-lg font-semibold sm:text-xl">Plan &amp; Billing</h2>
 
             {/* Monthly Usage */}
