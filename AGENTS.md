@@ -1432,3 +1432,21 @@ These rules exist to prevent the most common forms of context drift across AI co
 - `docs/product/PLANS.md` is the canonical plan reference document.
 - `frontend/lib/pricing-config.ts` owns runtime numeric limits.
 - When plan limits or copy change, update all three. Do not update one and leave the others stale.
+
+### Public Library Conversion Anti-Drift
+
+- Public note pages are acquisition surfaces, not only app detail screens. Treat them as such when implementing any public note detail changes.
+- The page order must be: teach → interact → convert. Do not move CTAs above the learning experience.
+- `Share` must always be visible on public note pages regardless of auth state. Never hide it behind a login gate.
+- Mini quiz preview is client-side only for anonymous users. Do not create a quiz session, persist a score, or call the quiz session API for unauthenticated users.
+- The signup gate on the mini quiz continuation must appear only after the visitor has answered at least one question — not on page load.
+- The soft conversion CTA (`Turn your own notes into something like this`) must appear before `Copy to My Library` and `Generate Study Pack` in the visual hierarchy.
+- After a public visitor signs up from a public note page, route them toward copying that note or creating their own Study Pack — not back to the same public note preview.
+- Generated note formatting improvements for public pages must not change how content is stored in the database or how authenticated note detail renders it.
+- Before implementing any public note detail change, confirm the RELEASES.md v0.12.0 section and `docs/features/public-library.md` Public Note Detail section are current.
+
+### v0.12.0 Pre-Implementation Checklist Anti-Drift
+
+- Before implementing any v0.12.0 feature, confirm `RELEASES.md` and `docs/product/ROADMAP.md` v0.12.0 sections reflect the current planned scope.
+- `Public Library public note conversion` is the top-priority feature. Do not deprioritize it in favor of other v0.12.0 items without an explicit direction change from the user.
+- Research-only v0.12.0 items (quiz latency investigation, Long Exam mode planning) must produce a written doc before any code is written. Do not start implementation of these items directly.

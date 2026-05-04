@@ -134,6 +134,31 @@ NoteLib has three plans: Free, Plus, and Pro.
 
 All generated outputs and quiz/practice sessions are note-scoped (`noteId`).
 
+## Public Library as an Acquisition Surface
+
+Public Library is not only a content browser for authenticated users. Public note pages are also top-of-funnel entry points — shareable links that visitors can open from Facebook, messaging apps, and other social channels without an account.
+
+Public note pages must:
+- teach first (topic, hook, mini quiz preview)
+- let visitors interact lightly (1–2 unanswered questions, no account needed)
+- then invite signup or note creation (soft CTA after value is shown)
+
+Public mini quiz rules:
+- public visitors may answer a small preview of 1–2 questions
+- answers are client-side only — no session row is created for anonymous users
+- full quiz access, score persistence, and Study Pack generation require login
+- the signup gate must appear only after the visitor has experienced some value, not on page load
+
+Generated note formatting for public pages:
+- prefer shorter sections, clearer headings, key-fact blocks, and quick recall blocks
+- avoid long paragraph-dense LLM output; public pages should read like a study reviewer, not a transcript
+- formatting improvements apply to generated content displayed on public note pages; they do not change the underlying storage format
+
+CTA ordering on public note detail:
+- show topic hook → mini quiz → summary/key concepts → soft conversion CTA → copy/generate CTA
+- do not lead with `Copy to My Library` or `Generate Study Pack` before the visitor has seen learning value
+- `Share` must always be visible regardless of auth state
+
 ## v0.12.0 Direction
 
 Current in-progress release: `v0.12.0 - Learning Experience, Discovery, and Retention`.

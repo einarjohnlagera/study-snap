@@ -382,8 +382,9 @@ The previous versions of the original markdown files are preserved under `/docs/
 
 Current release: `v0.12.0 - Learning Experience, Discovery, and Retention` (in progress)
 
-Planned for v0.12.0:
+Planned for v0.12.0 (in priority order):
 
+- **Public Library conversion** — public note pages become shareable learning pages; mini quiz preview for visitors; soft conversion CTA; teach-first CTA ordering
 - Learner Level + Course/Program UX refinements (difficulty-aware quiz prompts, context-narrowed autocomplete)
 - Conversion funnel optimization (plan-aware upgrade CTAs, post-quiz nudges, analytics events)
 - Retention loops (continue-studying prompts, weak-concept reminder emails, near-limit banners)
