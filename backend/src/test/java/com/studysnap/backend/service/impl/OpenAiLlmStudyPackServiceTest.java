@@ -230,18 +230,19 @@ class OpenAiLlmStudyPackServiceTest {
         stubResponsesCall();
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("title", "Newton's Laws of Motion");
-        payload.put("overview", "Newton's Laws of Motion describe how forces affect the motion of objects.");
-        payload.putArray("coreConcepts")
-                .add("First Law: inertia keeps an object at rest or in uniform motion unless a net force acts on it.")
-                .add("Second Law: acceleration depends on net force and mass.")
-                .add("Third Law: forces occur in equal and opposite pairs.");
-        payload.putArray("keyDetails")
-                .add("The second law is summarized by F = ma.")
-                .add("Mass resists changes in motion.")
-                .add("Net force determines whether motion changes.");
-        payload.putArray("examples")
-                .add("A seatbelt counters inertia when a car stops suddenly.")
-                .add("Pushing a cart harder increases its acceleration.");
+        payload.put("overview", "Newton's Laws of Motion describe how forces affect the motion of objects. They are the foundation of classical mechanics.");
+        payload.put("keyIdea", "A net force is required to change the state of motion of an object.");
+        payload.putArray("coreDetails")
+                .add("First Law: an object at rest stays at rest unless acted on by a net force.")
+                .add("Second Law: net force equals mass times acceleration.")
+                .add("Third Law: for every action there is an equal and opposite reaction.");
+        payload.putArray("whyItMatters")
+                .add("Explains motion in everyday systems: vehicles, sports, machinery.")
+                .add("Foundation for engineering, aerospace, and physics.");
+        payload.putArray("quickRecall")
+                .add("First Law — law of inertia")
+                .add("Second Law — F = ma")
+                .add("Third Law — equal and opposite reactions");
         when(responseSpec.body(String.class)).thenReturn(generatedQuizResponseJson(payload));
 
         String content = service.generateNoteFromTopic(
@@ -256,10 +257,11 @@ class OpenAiLlmStudyPackServiceTest {
 
         assertThat(content)
                 .contains("Newton's Laws of Motion")
-                .contains("Overview:")
-                .contains("Core Concepts:")
-                .contains("Key Details:")
-                .contains("Examples:");
+                .contains("📘 Overview")
+                .contains("🧠 Key Idea")
+                .contains("⚔️ Core Details")
+                .contains("🎯 Why It Matters")
+                .contains("🧠 Quick Recall");
 
         ArgumentCaptor<String> requestCaptor = ArgumentCaptor.forClass(String.class);
         verify(requestSpec).body(requestCaptor.capture());

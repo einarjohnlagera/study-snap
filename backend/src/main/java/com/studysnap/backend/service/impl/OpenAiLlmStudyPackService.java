@@ -50,6 +50,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private static final int MAX_GENERATED_NOTE_WORDS = 700;
     private static final int MAX_GENERATED_NOTE_TITLE_WORDS = 12;
     private static final int MAX_GENERATED_NOTE_OVERVIEW_WORDS = 90;
+    private static final int MAX_GENERATED_NOTE_KEY_IDEA_WORDS = 40;
     private static final int MAX_GENERATED_NOTE_ITEM_WORDS = 28;
     private static final int MAX_INVALID_OUTPUT_ATTEMPTS = 2;
     private static final LearnerLevel DEFAULT_LEARNER_LEVEL = LearnerLevel.COLLEGE;
@@ -544,9 +545,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         ArrayNode required = root.putArray("required");
         required.add("title");
         required.add("overview");
-        required.add("coreConcepts");
-        required.add("keyDetails");
-        required.add("examples");
+        required.add("keyIdea");
+        required.add("coreDetails");
+        required.add("whyItMatters");
+        required.add("quickRecall");
 
         ObjectNode properties = root.putObject("properties");
         properties.putObject("title")
@@ -557,9 +559,13 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .put("type", "string")
                 .put("minLength", 1)
                 .put("maxLength", 1200);
-        properties.set("coreConcepts", buildGeneratedNoteArraySchema(2, 6));
-        properties.set("keyDetails", buildGeneratedNoteArraySchema(2, 6));
-        properties.set("examples", buildGeneratedNoteArraySchema(0, 4));
+        properties.putObject("keyIdea")
+                .put("type", "string")
+                .put("minLength", 1)
+                .put("maxLength", 500);
+        properties.set("coreDetails", buildGeneratedNoteArraySchema(3, 6));
+        properties.set("whyItMatters", buildGeneratedNoteArraySchema(2, 4));
+        properties.set("quickRecall", buildGeneratedNoteArraySchema(3, 5));
         return root;
     }
 
@@ -1106,35 +1112,41 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 MAX_GENERATED_NOTE_OVERVIEW_WORDS,
                 "The note generation service returned an invalid overview. Please try again."
         );
-        List<String> coreConcepts = normalizeGeneratedNoteItems(
-                generatedNote.coreConcepts(),
-                2,
-                "The note generation service returned invalid core concepts. Please try again."
+        String keyIdea = normalizeGeneratedNoteText(
+                generatedNote.keyIdea(),
+                4,
+                MAX_GENERATED_NOTE_KEY_IDEA_WORDS,
+                "The note generation service returned an invalid key idea. Please try again."
         );
-        List<String> keyDetails = normalizeGeneratedNoteItems(
-                generatedNote.keyDetails(),
-                2,
-                "The note generation service returned invalid key details. Please try again."
+        List<String> coreDetails = normalizeGeneratedNoteItems(
+                generatedNote.coreDetails(),
+                3,
+                "The note generation service returned invalid core details. Please try again."
         );
-        List<String> examples = normalizeGeneratedNoteItems(
-                generatedNote.examples(),
-                0,
-                "The note generation service returned invalid examples. Please try again."
+        List<String> whyItMatters = normalizeGeneratedNoteItems(
+                generatedNote.whyItMatters(),
+                2,
+                "The note generation service returned invalid why-it-matters content. Please try again."
+        );
+        List<String> quickRecall = normalizeGeneratedNoteItems(
+                generatedNote.quickRecall(),
+                3,
+                "The note generation service returned invalid quick recall content. Please try again."
         );
 
-        assertGeneratedNoteAvoidsFiller(normalizedTopic, title, overview, coreConcepts, keyDetails, examples);
+        assertGeneratedNoteAvoidsFiller(normalizedTopic, title, overview, keyIdea, coreDetails, whyItMatters, quickRecall);
 
         StringBuilder builder = new StringBuilder();
         builder.append(title).append("\n\n");
-        builder.append("Overview:\n");
+        builder.append("📘 Overview\n");
         builder.append(overview).append("\n\n");
-        appendGeneratedNoteSection(builder, "Core Concepts", coreConcepts);
+        builder.append("🧠 Key Idea\n");
+        builder.append(keyIdea).append("\n\n");
+        appendGeneratedNoteSection(builder, "⚔️ Core Details", coreDetails);
         builder.append("\n\n");
-        appendGeneratedNoteSection(builder, "Key Details", keyDetails);
-        if (!examples.isEmpty()) {
-            builder.append("\n\n");
-            appendGeneratedNoteSection(builder, "Examples", examples);
-        }
+        appendGeneratedNoteSection(builder, "🎯 Why It Matters", whyItMatters);
+        builder.append("\n\n");
+        appendGeneratedNoteSection(builder, "🧠 Quick Recall", quickRecall);
 
         String content = builder.toString().trim();
         if (StringNormalizationUtils.countWords(content) > MAX_GENERATED_NOTE_WORDS) {
@@ -1175,9 +1187,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String topic,
             String title,
             String overview,
-            List<String> coreConcepts,
-            List<String> keyDetails,
-            List<String> examples
+            String keyIdea,
+            List<String> coreDetails,
+            List<String> whyItMatters,
+            List<String> quickRecall
     ) {
         String normalizedTopic = topic.toLowerCase(Locale.ROOT);
         String noteText = String.join(
@@ -1185,9 +1198,10 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 List.of(
                         title,
                         overview,
-                        String.join("\n", coreConcepts),
-                        String.join("\n", keyDetails),
-                        String.join("\n", examples)
+                        keyIdea,
+                        String.join("\n", coreDetails),
+                        String.join("\n", whyItMatters),
+                        String.join("\n", quickRecall)
                 )
         ).toLowerCase(Locale.ROOT);
         for (String phrase : DISALLOWED_NOTE_GENERATION_PHRASES) {
@@ -1338,16 +1352,18 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
     private record PromptGeneratedNote(
             String title,
             String overview,
-            List<String> coreConcepts,
-            List<String> keyDetails,
-            List<String> examples
+            String keyIdea,
+            List<String> coreDetails,
+            List<String> whyItMatters,
+            List<String> quickRecall
     ) {
         PromptGeneratedNote {
             Objects.requireNonNull(title, "title");
             Objects.requireNonNull(overview, "overview");
-            Objects.requireNonNull(coreConcepts, "coreConcepts");
-            Objects.requireNonNull(keyDetails, "keyDetails");
-            Objects.requireNonNull(examples, "examples");
+            Objects.requireNonNull(keyIdea, "keyIdea");
+            Objects.requireNonNull(coreDetails, "coreDetails");
+            Objects.requireNonNull(whyItMatters, "whyItMatters");
+            Objects.requireNonNull(quickRecall, "quickRecall");
         }
     }
 
