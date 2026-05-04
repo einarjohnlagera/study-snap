@@ -1,5 +1,25 @@
 # RELEASES.md - NoteLib
 
+## v0.12.0 - Learning Experience, Discovery, and Retention
+
+**Status: Planned**
+
+Theme: deepen the learning experience, make the product easier to discover and navigate, and improve retention signals that bring users back to study.
+
+### Planned Scope
+
+- **Learner Level + Course/Program UX refinement** — quiz prompts and metadata suggestions are influenced by the user's saved learner level; Course/Program suggestions are narrowed by the active subject and learner context so recommendations feel personalised rather than generic
+- **Conversion funnel optimization** — plan-aware upgrade CTAs (`getUpgradeCtas`) on all paywall and limit surfaces; post-quiz `PostSuccessUpgradeNudge` on Quick Review and Challenge Quiz result screens; analytics events (`QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, `UPGRADE_CLICKED`) tracked and queryable via admin dashboard
+- **Proration / recomputation design** — design how mid-cycle plan changes (upgrade or downgrade) recompute Study Pack and quiz quotas; do not implement until the design is approved
+- **Retention loops** — continue-studying prompts on Dashboard; weak-concept reminder emails on a backend schedule; near-limit banners surface reset dates and upgrade CTAs
+- **Backend Public Library filtering + shareable URLs** — subject, tags, learner level, and profile-type filters moved to backend query params; each filtered state maps to a shareable URL so students can bookmark or share specific topic collections
+- **Library organization guidance** — in-app guidance tells students how to use subjects and Course/Program to keep their private Library organized as it grows
+- **Social login (Google first)** — Google OAuth login/signup alongside the existing email-and-password flow; no other providers until Google is shipped and stable
+- **Faster quiz generation investigation** — profile current LLM latency for quiz generation; prototype streaming or early-session creation patterns; write findings and a recommended approach before any implementation
+- **Multi-topic exam / Long Exam mode planning** — design how a single Board Exam session could span multiple notes or topics; produce a written spec and UX sketch before any implementation
+
+---
+
 ## v0.11.0 - Learning Flow Foundation
 
 ### Learning Personalization Polish

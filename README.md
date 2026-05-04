@@ -2,7 +2,7 @@
 
 > Rebrand update: this project was renamed from StudySnap to NoteLib. Core behavior and database schema remain unchanged.
 
-Current release baseline: `v0.11.0 - Learning Flow Foundation`
+Current release baseline: `v0.12.0 - Learning Experience, Discovery, and Retention`
 
 NoteLib turns notes into exam-ready study materials. Students and board exam takers paste or generate notes, then use summaries, key concepts, quizzes, and adaptive practice to understand and retain what matters.
 
@@ -377,6 +377,22 @@ The previous versions of the original markdown files are preserved under `/docs/
 
 - the new organized structure
 - the original source documents for reference and migration
+
+## Roadmap
+
+Current release: `v0.12.0 - Learning Experience, Discovery, and Retention` (in progress)
+
+Planned for v0.12.0:
+
+- Learner Level + Course/Program UX refinements (difficulty-aware quiz prompts, context-narrowed autocomplete)
+- Conversion funnel optimization (plan-aware upgrade CTAs, post-quiz nudges, analytics events)
+- Retention loops (continue-studying prompts, weak-concept reminder emails, near-limit banners)
+- Backend Public Library filtering + shareable URLs
+- Social login — Google first
+- Faster quiz generation investigation
+- Multi-topic exam / Long Exam mode planning (design only)
+
+See `docs/product/ROADMAP.md` for the full planned scope and implementation stances.
 
 ## MVP goal
 

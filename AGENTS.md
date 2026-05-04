@@ -7,7 +7,7 @@ Rebrand note: StudySnap has been renamed to NoteLib. Keep existing database sche
 
 Current documentation baseline:
 
-- `v0.11.0 - Learning Flow Foundation`
+- `v0.12.0 - Learning Experience, Discovery, and Retention`
 
 When working on a feature, always check the corresponding document under `docs/features/`.
 
@@ -1363,3 +1363,72 @@ Explicitly state the prompt mode in every prompt:
 - Prompt mode: Short
 
 Default to Short Prompt Mode for incremental follow-ups unless the task clearly introduces a new feature or broader architectural change.
+
+## Anti-Drift Rules (v0.12.0+)
+
+These rules exist to prevent the most common forms of context drift across AI coding sessions. Read them before starting any task.
+
+### Version Management Anti-Drift
+
+- The current version is `v0.12.0`. Always keep `backend/pom.xml`, `frontend/package.json`, `RELEASES.md`, `README.md`, `ROADMAP.md`, and `AGENTS.md` version references in sync when bumping a version.
+- Do not change the version number during a feature implementation — only bump the version as a dedicated version-bump task.
+- `RELEASES.md` is the canonical release log. Add new sections at the top. Do not delete old release entries.
+- `docs/product/ROADMAP.md` is the canonical roadmap. The current release section must reflect the in-progress version.
+
+### Learner Level vs Course/Program Anti-Drift
+
+- **Learner Level** and **Course/Program** are separate concerns. Never merge them into a single field, a single UI input, or a single LLM prompt variable.
+- `learnerLevel` controls **difficulty, style, vocabulary** in generated outputs.
+- `courseProgram` provides **domain context** — examples, scenarios, terminology.
+- Both are passed separately to `buildLearnerContextBlock()`. Do not skip one to simplify.
+- Do not add a learner level step to onboarding. The deferred Dashboard prompt (`Too easy or too hard?`) is the settled pattern. Do not change this without an explicit task.
+- See `docs/features/profile-learning-context.md` for the full rule set.
+
+### Upgrade CTA Anti-Drift
+
+- Never hardcode a plan name as the universal upgrade CTA (e.g., never just `Go Pro` for all users).
+- Always use `getUpgradeCtas(currentPlan)` from `frontend/src/config/plans.ts` to resolve plan-aware CTAs.
+- Upgrade CTAs that drive in-app plan selection navigate to `/settings?section=plans`, not `/pricing`.
+- `/pricing` is the public marketing surface only — linked from navbar and landing page, not from in-app paywalls.
+
+### Analytics Event Anti-Drift
+
+- Never use a string literal for an analytics event name without first adding it to the `AnalyticsEventType` union in `frontend/lib/api.ts`.
+- All analytics calls are fire-and-forget (`void`). Do not `await` them or let failures block the primary flow.
+- Do not duplicate event tracking: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, and `ADAPTIVE_PRACTICE_COMPLETED` are fired once per quiz completion, not per question or per partial step.
+
+### Content Moderation Anti-Drift
+
+- `ContentModerationService` applies token-based exact matching. It does NOT use substring matching — this is intentional to avoid false positives on words like "classic", "Damascus", "passage".
+- Dictionary files live in `backend/src/main/resources/moderation/banned_words_*.txt`. Add new languages by dropping a new file — do not modify the service loader.
+- `validateOrThrow()` is the integration point for validation boundaries. Call it after blank/length checks, not instead of them.
+- The service allows all content when no dictionary files are loaded. Never silently skip loading errors in production.
+
+### Paywall and Limit Surface Anti-Drift
+
+- All paywall copy is action-aware. Never show generic "You've reached your limit" — always name the blocked action.
+- `PaywallModal` resolves copy through `resolvePaywallAction(variant)` → `FREE_PAYWALL_CONTENT[action]`.
+- `StudyPackLimitModal`, `NearLimitBanner`, and `PostSuccessUpgradeNudge` must use plan-aware CTAs, not hardcoded upgrade labels.
+- When Study Pack credits reach `2` or `1`, show a `NearLimitBanner` — do not disable the Generate button.
+- When Study Pack credits reach `0`, show a limit modal on click — do not disable the Generate button.
+
+### Onboarding Anti-Drift
+
+- Onboarding is one-way. Do not add a Back button to Step 4 (Study Pack generation) or Step 5 (Completion).
+- When Study Pack generation is active, hide the Back button and replace notice copy with `Your Study Pack is being created. This step can't be undone.`
+- When the Study Pack limit is reached during onboarding, bump `currentStep` to 5 with `studyPackLimitReached=true`. Step 5 renders the limit-reached layout. This reuses the existing `completeOnboarding` useEffect — do not add a separate completion trigger.
+- `handleStartStudyPack()` must check `draft.noteId` before creating a note (idempotency rule).
+
+### Quiz Generation Anti-Drift
+
+- `buildLearnerContextBlock()` is the single formatting point for learner level + course/program in LLM prompts. Do not inline these fields in individual quiz or Study Pack service methods.
+- Quiz result statistics (score, performance level, weak concepts) are derived from stored session data only. No LLM calls for stats.
+- Weak concept threshold is `< 60%` accuracy (`WEAK_CONCEPT_THRESHOLD`). Do not change this without a test covering the boundary.
+- `lib/challenge-quiz-results.ts` owns quiz result computation utilities. Reuse them; do not duplicate the logic.
+
+### Plan Configuration Anti-Drift
+
+- `frontend/src/config/plans.ts` is the canonical source for plan names, CTA labels, and feature lists across all frontend surfaces.
+- `docs/product/PLANS.md` is the canonical plan reference document.
+- `frontend/lib/pricing-config.ts` owns runtime numeric limits.
+- When plan limits or copy change, update all three. Do not update one and leave the others stale.

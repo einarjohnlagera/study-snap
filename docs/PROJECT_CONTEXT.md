@@ -115,7 +115,7 @@ NoteLib has three plans: Free, Plus, and Pro.
 - Success and failure pages are user-facing status pages only; they do not grant paid access.
 - Billing success returns users to the interrupted product flow when a safe paywall `returnUrl` exists, but Settings/Billing-origin upgrades land on Dashboard.
 - Frontend redirects after checkout never activate paid access directly.
-- After quiz completion, non-Pro users see a `PostSuccessUpgradeNudge` on Quick Review and Challenge Quiz result screens — a sessionStorage-dismissed inline banner linking to `/pricing`.
+- After quiz completion, non-Pro users see a `PostSuccessUpgradeNudge` on Quick Review and Challenge Quiz result screens — a sessionStorage-dismissed inline banner with plan-aware CTAs linking to `/settings?section=plans`.
 
 ## Analytics
 
@@ -134,12 +134,27 @@ NoteLib has three plans: Free, Plus, and Pro.
 
 All generated outputs and quiz/practice sessions are note-scoped (`noteId`).
 
+## v0.12.0 Direction
+
+Current in-progress release: `v0.12.0 - Learning Experience, Discovery, and Retention`.
+
+Key v0.12.0 changes to be aware of:
+
+- **Learner Level drives quiz difficulty and style** — quiz generation prompts use `learnerLevel` for question complexity, explanation depth, and vocabulary; this is an LLM prompt enhancement, not a new UI field
+- **Course/Program drives domain context** — course/program is passed to quiz and Study Pack generation prompts so examples and questions stay relevant to the student's discipline; it is a separate concern from Learner Level and must not be merged with it
+- **Upgrade CTA rule is now enforced** — all paywall and limit surfaces use `getUpgradeCtas(currentPlan)` from `frontend/src/config/plans.ts`; upgrade CTAs navigate to `/settings?section=plans`, not `/pricing`
+- **Analytics funnel is tracked** — `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, and `UPGRADE_CLICKED` are in `AnalyticsEventType` and fired from the relevant completion blocks
+- **Public Library filters move backend** — subject, tags, learner level, and profile type become backend query params so filtered states are shareable; frontend filtering over local payloads is the interim approach until backend params land
+- **Social login (Google)** — planned for this release cycle; must not break or replace existing email-and-password accounts
+- **Content moderation** — `ContentModerationService` in the backend applies token-based dictionary matching to note titles, Study Pack topics, and note content at creation boundaries; dictionaries are in `classpath:/moderation/banned_words_*.txt`
+
 ## Feature Documentation
 
 - docs/features/onboarding.md
 - docs/features/study-pack-generation.md
 - docs/features/quick-review.md
 - docs/features/dashboard-recommendation.md
+- docs/features/profile-learning-context.md
 
 ## Architecture
 
