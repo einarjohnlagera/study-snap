@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
 
@@ -45,6 +45,14 @@ jest.mock("@/components/notes/public-note-ownership-actions", () => ({
   ),
 }));
 
+jest.mock("@/components/notes/public-mini-quiz-preview", () => ({
+  PublicMiniQuizPreview: ({ quiz, noteId }: { quiz: { question: string }[]; noteId: string }) => (
+    <div data-testid="mini-quiz-preview">
+      Mini quiz for {noteId}: {quiz[0]?.question ?? "no question"}
+    </div>
+  ),
+}));
+
 const baseNote = {
   id: "note-1",
   ownerUserId: "user-2",
@@ -54,7 +62,7 @@ const baseNote = {
   content: "Cells are the basic unit of life.\n\nThey contain organelles that support cell function.",
   contentPreview: "Cells are the basic unit of life.",
   studyPackStatus: "STUDY_PACK_READY",
-  summary: "Cell structure summary",
+  summary: "Cell structure is fundamental to biology. Every living organism is made of cells. Cells vary widely in size and function.",
   keyConcepts: ["Cell membrane", "Nucleus"],
   quiz: [
     {
@@ -77,7 +85,123 @@ describe("PublicLibrarySeoPage", () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockReset();
   });
 
-  it("renders public note content without requiring auth", async () => {
+  it("renders title, author, and summary without requiring any interaction", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
+    expect(screen.getByText("Author line for user-2 / studybuddy / regular / other / Science")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
+    expect(screen.getAllByText(/Cell structure is fundamental to biology/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders hook derived from the first two sentences of the summary", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    // Hook is the first 2 sentences and is an exact match — does not include the third sentence
+    const hookEl = screen.getByText(
+      "Cell structure is fundamental to biology. Every living organism is made of cells.",
+      { exact: true },
+    );
+    expect(hookEl).toBeInTheDocument();
+    expect(hookEl.textContent).not.toMatch(/Cells vary widely/i);
+  });
+
+  it("renders key concepts immediately without a tab click", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "🧠 Key Concepts" })).toBeInTheDocument();
+    expect(screen.getByText("Cell membrane")).toBeInTheDocument();
+    expect(screen.getByText("Nucleus")).toBeInTheDocument();
+  });
+
+  it("renders the mini quiz preview for a study-pack-ready note with quiz", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByTestId("mini-quiz-preview")).toBeInTheDocument();
+    expect(screen.getByText(/Mini quiz for note-1: What controls the cell\?/i)).toBeInTheDocument();
+  });
+
+  it("does not render the mini quiz preview for a draft note", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      studyPackStatus: "DRAFT",
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByTestId("mini-quiz-preview")).not.toBeInTheDocument();
+  });
+
+  it("does not render the mini quiz preview when the note has no quiz", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      quiz: [],
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.queryByTestId("mini-quiz-preview")).not.toBeInTheDocument();
+  });
+
+  it("renders the soft conversion CTA", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Struggling with a topic?" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Create your own Study Pack/i })).toBeInTheDocument();
+  });
+
+  it("renders full notes section", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    expect(screen.getByRole("heading", { name: "Full Notes" })).toBeInTheDocument();
+    expect(screen.getByText(/Cells are the basic unit of life\./i)).toBeInTheDocument();
+  });
+
+  it("renders ownership actions after content (not in the header)", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
 
     const { container } = render(
@@ -86,40 +210,42 @@ describe("PublicLibrarySeoPage", () => {
       }),
     );
 
-    expect(screen.getByText("Public Library")).toBeInTheDocument();
-    expect(screen.getByText("Generated with NoteLib")).toBeInTheDocument();
+    const ownershipEl = screen.getByText("Ownership actions for note-1 / user-2");
+    const summaryEl = screen.getByRole("heading", { name: "Summary" });
+    const headerEl = container.querySelector("header");
+
+    expect(ownershipEl).toBeInTheDocument();
+    expect(summaryEl).toBeInTheDocument();
+    // Ownership actions must not be inside the header element
+    expect(headerEl?.contains(ownershipEl)).toBe(false);
+  });
+
+  it("does not render a hook when the summary is empty", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      summary: "",
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
+
+    // Title still renders; no hook since summary is empty
     expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
-    expect(screen.getByText("Author line for user-2 / studybuddy / regular / other / Science")).toBeInTheDocument();
-    expect(screen.getByText("Ownership actions for note-1 / user-2")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Key Concepts" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Quiz" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Full Notes" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Summary" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "View Full Notes →" })).toBeInTheDocument();
-    expect(screen.getByText("Cell structure summary")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "What you can do with this note in NoteLib" })).toBeInTheDocument();
-    expect(screen.getByText("Take Quick Review quiz")).toBeInTheDocument();
+    // Summary section shows the fallback text
+    expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "View Full Notes →" }));
-    expect(screen.getByRole("heading", { name: "Full Notes" })).toBeInTheDocument();
-    expect(screen.getByText(/Cells are the basic unit of life\./i)).toBeInTheDocument();
-    expect(screen.getByText(/They contain organelles that support cell function\./i)).toBeInTheDocument();
+  it("emits Article structured data", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Key Concepts" }));
-    expect(screen.getByRole("heading", { name: "Key Concepts" })).toBeInTheDocument();
-    expect(screen.getByText("Cell membrane")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Quiz" }));
-    expect(screen.getByRole("heading", { name: "Practice Questions Preview" })).toBeInTheDocument();
-    expect(
-      screen.getByText("Copy this note or open your own version to try the interactive quiz, see answers, and track your score."),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/What controls the cell\?/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/Preview only\. The full quiz experience, answer reveal, and score tracking are available/i),
-    ).toBeInTheDocument();
+    const { container } = render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+      }),
+    );
 
     const structuredData = container.querySelector("#public-note-structured-data");
     expect(structuredData).not.toBeNull();
@@ -137,7 +263,7 @@ describe("PublicLibrarySeoPage", () => {
     });
 
     expect(metadata.title).toBe("Cell Structure | NoteLib");
-    expect(metadata.description).toBe("Cell structure summary");
+    expect(metadata.description).toContain("Cell structure is fundamental");
     expect(metadata.alternates).toEqual({
       canonical: "https://notelib.app/public/library/science/cell-structure",
     });
@@ -153,7 +279,6 @@ describe("PublicLibrarySeoPage", () => {
     expect(metadata.twitter).toMatchObject({
       card: "summary_large_image",
       title: "Cell Structure | NoteLib",
-      description: "Cell structure summary",
       images: ["https://notelib.app/og-image.png"],
     });
   });
