@@ -6,9 +6,58 @@ Goal: evolve NoteLib from a one-shot generator into a reusable note-first study 
 
 ## Current Release Baseline
 
-`v0.11.0 - Learning Flow Foundation` is complete and is now the documentation baseline.
+`v0.12.0 - Learning Experience, Discovery, and Retention` is the current in-progress release.
+
+`v0.11.0 - Learning Flow Foundation` is complete and is the previous documentation baseline.
 
 Older milestone labels below are preserved as planning history only. They are not the current in-progress release.
+
+## v0.12.0 - Learning Experience, Discovery, and Retention
+
+**Status: In Progress**
+
+Primary focus:
+
+1. **Public Library public note conversion** *(top priority)* — public notes are shareable but currently function as app detail screens rather than learning pages; a visitor who arrives from a Facebook or social link should immediately understand the topic, see why NoteLib helps them study, interact lightly with the content, and know what to do next without being hard-gated before value is shown
+
+   - add a short topic hook below the note title that anchors the learning angle for visitors
+   - add a Quick Check / mini quiz preview section: expose 1–2 questions to public users without requiring login
+   - gate continuation of the full quiz, score persistence, and Study Pack generation behind signup/login
+   - after signup, route the user toward creating or copying a Study Pack so they land in the product with a clear goal
+   - add a soft conversion CTA: `Turn your own notes into something like this`
+   - reorder primary CTAs so copy/generate actions appear after the visitor has seen learning value
+   - keep `Share` always visible; keep `Copy to My Library` available for signed-in users
+   - improve generated note formatting: shorter sections, clearer headings, key-fact blocks, quick recall blocks, less dense paragraphs — so public pages read like a study reviewer, not a raw LLM dump
+   - public mini quiz answers must not be persisted for anonymous users; no session is created until the user is authenticated
+
+   Acceptance criteria:
+   - a visitor without an account can open a public note, understand the topic, and answer 1–2 questions
+   - signup gate appears only after value is shown — not on page load
+   - CTA does not feel aggressive or interrupt the reading experience
+   - the page works well for Facebook/social sharing use cases
+   - no implementation changes to the core Study Pack generation or session flows for authenticated users
+
+2. **Learner Level + Course/Program UX refinement** — quiz generation prompts use saved learner level for difficulty and explanation depth; Course/Program autocomplete suggestions are narrowed by the active subject context; helper text on Learning Profile adapts to the selected learner level; no new onboarding steps
+3. **Conversion funnel optimization** — plan-aware CTAs via `getUpgradeCtas(currentPlan)` on all paywall and limit surfaces; post-quiz upgrade nudge on Quick Review and Challenge Quiz result screens; analytics funnel events queryable from the admin dashboard
+4. **Proration / recomputation design** — design mid-cycle plan changes (upgrade and downgrade) so quota is recalculated correctly; do not implement until design is approved; document in `docs/architecture/ARCHITECTURE.md`
+5. **Retention loops** — continue-studying prompts on Dashboard for users who have recent unfinished sessions; weak-concept reminder emails on a backend schedule; near-limit banners surface reset date and upgrade CTA
+6. **Backend Public Library filtering + shareable URLs** — move subject, tags, learner level, and profile-type filters from frontend to backend query params; each filtered state maps to a stable shareable URL so students can bookmark and share collections
+7. **Library organization guidance for students** — in-app guidance explains how subjects and Course/Program organize the private Library as it grows; reuse the existing `GuidanceTip` system and add one-time contextual tips at natural growth milestones
+8. **Social login — Google first** — add Google OAuth as an alternative to email-and-password login and signup; no other providers until Google is stable
+9. **Faster quiz generation investigation** — profile current LLM latency end-to-end for quiz generation; prototype streaming or early session-creation patterns; document findings and a recommended approach in `docs/architecture/` before any implementation
+10. **Multi-topic exam / Long Exam mode planning** — design a Board Exam session that spans multiple notes or topics; produce a written spec and UX sketch before any implementation
+
+Implementation stances:
+
+- public note pages must teach first, then convert — do not hard-gate visitors before they see value; mini quiz preview is a lightweight surface, not a full session; no anonymous session state is persisted
+- generated note formatting should prioritize scannability and study usefulness; prefer short sections, clear headings, key-fact blocks, and exam-friendly wording over long paragraph dumps
+- keep Learner Level and Course/Program as separate concerns — Learner Level controls difficulty/style; Course/Program controls domain context — do not merge them
+- do not add learner level to onboarding; deferred collection via Dashboard prompt is the settled pattern
+- social login must be an alternative, not a replacement; existing email accounts must continue to work
+- quiz latency investigation is research-only in v0.12.0; no production latency changes without findings
+- Long Exam mode is design-only in v0.12.0; no implementation until the spec is reviewed
+
+## v0.11.0 — Completed
 
 Completed in `v0.11.0`:
 
@@ -36,6 +85,12 @@ Completed in `v0.11.0`:
 - legacy billing-provider runtime removal and local ngrok-based webhook testing support
 - copy alignment around `Generate Study Pack`
 - activation improvement: users leave onboarding with real content, not an empty dashboard
+- content moderation: `ContentModerationService` with token-based dictionary matching at note title, Study Pack topic, and note content creation boundaries; English and Filipino banned-word dictionaries; 52 tests
+- plan-aware upgrade CTAs: `getUpgradeCtas(currentPlan)` helper in `frontend/src/config/plans.ts`; upgrade surfaces route to `/settings?section=plans` instead of `/pricing`
+- Settings `?section=plans` auto-scroll and highlight ring on the Plan & Billing card
+- post-quiz `PostSuccessUpgradeNudge` on Quick Review and Challenge Quiz result screens with plan-aware CTAs and sessionStorage dismissal
+- analytics funnel events: `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, `ONBOARDING_V2_CTA_GO_TO_SAVED_NOTE` added to `AnalyticsEventType`
+- onboarding Study Pack limit handling: bumps to Step 5 with `studyPackLimitReached` flag; shows `NearLimitBanner` and note-navigation CTAs; fires `completeOnboarding` via existing useEffect
 
 ### v0.6.0 - Landing Revamp & Positioning
 

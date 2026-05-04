@@ -278,16 +278,72 @@ Discovery guidance:
 
 ## Public Note Detail
 
-Public note detail should help visitors evaluate both the generated study outputs and the original source note.
+Public note pages are shareable learning pages and top-of-funnel acquisition surfaces — not just app detail screens. A visitor who arrives from a Facebook or social link must be able to understand the topic, interact lightly, and decide to act without an account.
 
-Rules:
+### Page Purpose
 
-- keep `Summary` as the default tab
-- use `Summary`, `Key Concepts`, `Quiz`, and `Full Notes`
-- include a subtle `View Full Notes →` CTA inside the `Summary` view so visitors can quickly inspect the original note
-- `Full Notes` should render the complete original note body so visitors can judge whether the note is worth copying
-- keep the page read-only and copy-first; tabs are for review, not management
-- non-owner primary CTA should use `Copy to My Library`
+- teach first, convert second
+- do not hard-gate visitors before they see learning value
+- the signup gate must appear only after the visitor has experienced something useful
+
+### Recommended page structure
+
+1. **Note title** — clear, topic-specific
+2. **Topic hook** — a short 1–2 sentence framing of the learning angle (e.g. `This note covers photosynthesis — the process plants use to make food from sunlight.`)
+3. **Tags and subject metadata** — helps the visitor evaluate relevance
+4. **Quick Check / mini quiz preview** — 1–2 questions, interactive, client-side only, no account required
+5. **Summary and Key Concepts** — the generated study outputs
+6. **Full quiz or gated continuation** — gate behind login after the preview experience
+7. **Soft conversion CTA** — `Turn your own notes into something like this`
+8. **Copy to My Library / Generate CTA** — placed after value is shown, for signed-in users
+9. **Share action** — always visible regardless of auth state
+
+### Mini quiz preview rules
+
+- expose 1–2 quiz questions without requiring login
+- allow public visitors to select an answer and see correct/incorrect feedback
+- do not create a quiz session row for anonymous users — all state is client-side only
+- do not persist score, progress, or session data for unauthenticated users
+- after the preview, show an inline gate: `Want to practice all questions and track your progress? Create a free account.`
+- after signup/login, route the user toward copying the note or creating their own Study Pack — not back to the same mini preview
+
+### CTA ordering
+
+The conversion path must feel earned, not forced:
+
+1. visitor lands → sees topic hook and subject
+2. visitor tries mini quiz → sees value
+3. visitor sees summary/key concepts → understands depth
+4. soft CTA appears → `Turn your own notes into something like this`
+5. copy/generate CTA follows → available to signed-in users
+
+Never show `Copy to My Library` or `Generate Study Pack` as the first or only visible CTA on page load.
+
+### Authenticated user view
+
+Signed-in users see the full experience:
+
+- `Summary`, `Key Concepts`, `Quiz`, `Full Notes` tabs
+- `Copy to My Library` as the primary non-owner CTA
+- `Share` always visible
+- `View Full Notes →` CTA inside Summary view
+
+### Generated note formatting for public pages
+
+Public note pages benefit from better-formatted generated content. Prefer:
+
+- shorter section blocks rather than one large paragraph per concept
+- clear headings and sub-headings
+- key-fact callouts (e.g. `Key fact: ...`)
+- quick recall blocks (e.g. `In one sentence: ...`)
+- exam-friendly wording: direct, declarative, testable
+
+Avoid:
+- long dense paragraph-per-concept output
+- LLM filler phrases (`It is important to note that...`, `In summary...`)
+- sections without a clear study takeaway
+
+Note: formatting improvements apply to how generated content is displayed on public note pages. They do not change the underlying storage format or the authenticated note detail view unless explicitly specified.
 
 ## Limit-Reached Fallback (planned)
 
