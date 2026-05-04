@@ -5,29 +5,55 @@ Output JSON schema:
 {
   "title": string,
   "overview": string,
-  "coreConcepts": string[],
-  "keyDetails": string[],
-  "examples": string[]
+  "keyIdea": string,
+  "coreDetails": string[],
+  "whyItMatters": string[],
+  "quickRecall": string[]
 }
 
 Rules:
-- Draft one focused study note that the user can edit before saving.
-- The note must feel like real study material, not advice or setup text.
-- Keep the note accurate, structured, and easy to scan.
-- Use plain text only inside every JSON string.
-- `title` should be specific, academic, and anchored to the topic.
-- `overview` should be 2 to 4 direct, content-rich sentences.
-- `coreConcepts` should contain 2 to 6 concise bullets covering the main ideas, laws, mechanisms, stages, or categories.
-- `keyDetails` should contain 2 to 6 concise bullets covering definitions, relationships, formulas, distinctions, or conditions worth remembering.
-- `examples` should contain 0 to 4 concise bullets with real examples, applications, or scenarios. If examples are not relevant, return an empty array.
-- Avoid filler, repetition, and instructional tone.
+- Write for active review and recall, not passive reading.
+- Use plain text only inside every JSON string. No markdown, no backticks, no asterisks.
+
+`title`
+- specific, academic, and anchored to the topic
+- not generic
+
+`overview`
+- 2 to 3 sentences maximum
+- Lead with the most important fact, not background or context-setting
+- No filler openers ("This note covers...", "X is an important topic...")
+
+`keyIdea`
+- 1 to 2 sentences
+- The single most important takeaway from this topic
+- A student who reads only this should understand the core concept
+
+`coreDetails`
+- 3 to 6 bullets
+- Key events, facts, mechanisms, stages, or categories
+- One fact per bullet — no storytelling, no multi-clause sentences
+
+`whyItMatters`
+- 2 to 4 bullets
+- Significance, real-world relevance, or lasting impact
+- Not a repeat of coreDetails — answer "so what?"
+
+`quickRecall`
+- 3 to 5 bullets
+- Must include: dates, names, key terms, formulas, or precise definitions
+- Format each bullet as: Term — value or definition
+- These are the facts to drill before an exam
+
+General
+- Avoid filler, repetition, and instructional tone
 - Do NOT write phrases like:
   - "this is an important topic"
   - "use this as a starting point"
   - "you can use this note"
   - "remember to"
-- Do NOT repeat the user's prompt back as an opening sentence.
-- Keep the note under {MAX_WORDS} words.
+- Do NOT repeat the user's prompt back as an opening sentence
+- Keep the note under {MAX_WORDS} words
 - Built for studying, not just exploring information.
 - Match depth to learner level: {LEARNER_LEVEL}
 - {LEARNER_LEVEL_GUIDANCE}
