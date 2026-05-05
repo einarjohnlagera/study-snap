@@ -181,10 +181,13 @@ Onboarding-generated Study Packs reuse the normal backend Study Pack generation 
 
 Current metadata behavior:
 
+- onboarding explicitly opts into backend auto-apply when it starts Study Pack generation from a saved note
 - if the source note has no `subject`, backend applies the generated `subject`
 - if the source note has no `tags`, backend applies the generated `tags`
 
 This happens automatically with no extra onboarding prompt.
+
+This is the guided-flow exception. Normal note generation keeps AI metadata suggestions transient until the user applies them.
 
 ## Product-Onboarding Relationship
 

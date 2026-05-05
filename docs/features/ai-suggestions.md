@@ -14,6 +14,8 @@ The shared AI Suggestions modal appears after generation when AI suggests:
 
 Users decide per field which suggestions to keep or apply.
 
+In the normal note flow, these suggestions are transient UI state only. They must not be written back to the note until the user explicitly applies them.
+
 ## Decision Rules
 
 - `Title`
@@ -33,8 +35,23 @@ Users decide per field which suggestions to keep or apply.
 - empty title -> `Use AI Title`
 - existing subject -> `Keep My Subject`
 - empty subject -> `Use AI Subject`
-- existing tags -> `Merge My Tags + AI Tags`
+- existing tags with new AI tags -> `Merge My Tags + AI Tags`
+- existing tags with no new AI tags -> `Keep My Tags`
 - empty tags -> `Use AI Tags Only`
+
+## Tag Deduplication Rules
+
+- compare tags case-insensitively after trimming whitespace
+- preserve original casing for display
+- only show net-new AI tags as suggestions
+- if an AI tag already exists on the note, show it as already included instead of as a fresh suggestion
+- when all AI tags already exist, show `No new tag suggestions.`
+- applying suggestions should merge tags with case-insensitive deduplication
+- skipping or closing the modal must not persist any metadata changes
+
+## Onboarding Exception
+
+Onboarding may explicitly opt into backend auto-apply for empty metadata fields so the guided first-win flow stays low-friction. That exception must stay separate from the normal note flow.
 
 ## UI Rules
 

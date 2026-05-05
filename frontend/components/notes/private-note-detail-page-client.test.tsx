@@ -978,6 +978,7 @@ describe("PrivateNoteDetailPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Skip" }));
 
     await waitFor(() => {
+      expect(updateNote).not.toHaveBeenCalled();
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
     });
     const getNoteCallsAfterReady = (getNote as jest.Mock).mock.calls.length;
@@ -1035,6 +1036,13 @@ describe("PrivateNoteDetailPageClient", () => {
         quickReviewAvailable: true,
         challengeQuizAvailable: true,
       });
+    (getMyStudyPack as jest.Mock).mockResolvedValue({
+      id: "sp-1",
+      noteId: "note-1",
+      title: "Suggested Title",
+      subject: "Biology",
+      tags: ["Review", "cells", "Memory"],
+    });
 
     render(<PrivateNoteDetailPageClient routeId="note-1" />);
 
@@ -1049,6 +1057,8 @@ describe("PrivateNoteDetailPageClient", () => {
     });
 
     expect(await screen.findByText("AI Suggestions")).toBeInTheDocument();
+    expect(screen.getAllByText("Memory").length).toBeGreaterThan(0);
+    expect(screen.getByText("Already on your note")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Use AI Subject"));
     fireEvent.click(screen.getByLabelText("Merge My Tags + AI Tags"));
     fireEvent.click(screen.getByRole("button", { name: "Apply Changes" }));
@@ -1058,7 +1068,7 @@ describe("PrivateNoteDetailPageClient", () => {
         title: "My Note",
         subject: "Biology",
         courseProgram: "Nursing",
-        tags: ["review", "cells"],
+        tags: ["review", "cells", "Memory"],
       }));
       expect(replaceMock).toHaveBeenCalledWith("/notes/note-1?created=1&tab=summary");
     });

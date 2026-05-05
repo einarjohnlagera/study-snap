@@ -1444,9 +1444,15 @@ export async function createStudyPackFromText(notesText: string): Promise<StudyP
   return payload;
 }
 
-export async function createStudyPackFromNote(noteId: string): Promise<NoteResponse> {
+const AUTO_APPLY_METADATA_QUERY_PARAM = "autoApplyMetadata";
+
+export async function createStudyPackFromNote(
+  noteId: string,
+  options: { autoApplyMetadata?: boolean } = {},
+): Promise<NoteResponse> {
+  const query = options.autoApplyMetadata ? `?${AUTO_APPLY_METADATA_QUERY_PARAM}=true` : "";
   const response = await fetchWithAuth(
-    `/notes/${noteId}/generate`,
+    `/notes/${noteId}/generate${query}`,
     {
       method: "POST",
       headers: buildAuthHeaders(),

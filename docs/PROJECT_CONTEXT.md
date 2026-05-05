@@ -42,6 +42,7 @@ Users create a new version by using `Make a Copy`, editing the copied Note, and 
 Copy includes user-authored fields only:
 
 - title
+- courseProgram
 - subject
 - tags
 - note content
@@ -187,6 +188,8 @@ Key v0.12.0 changes to be aware of:
 
 - **Learner Level drives quiz difficulty and style** — quiz generation prompts use `learnerLevel` for question complexity, explanation depth, and vocabulary; this is an LLM prompt enhancement, not a new UI field
 - **Course/Program drives domain context** — course/program is passed to quiz and Study Pack generation prompts so examples and questions stay relevant to the student's discipline; it is a separate concern from Learner Level and must not be merged with it
+- **Note metadata is the Study Pack source of truth** — when a note has its own `courseProgram`, Study Pack generation must use `notes.courseProgram` before falling back to the user's profile default
+- **AI metadata suggestions stay transient in the normal note flow** — generated `title`, `subject`, and `tags` must not be persisted before user confirmation; onboarding may explicitly opt into auto-apply for empty metadata as a guided-flow exception
 - **Upgrade CTA rule is now enforced** — all paywall and limit surfaces use `getUpgradeCtas(currentPlan)` from `frontend/src/config/plans.ts`; upgrade CTAs navigate to `/settings?section=plans`, not `/pricing`
 - **Analytics funnel is tracked** — `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, and `UPGRADE_CLICKED` are in `AnalyticsEventType` and fired from the relevant completion blocks
 - **Public Library filters move backend** — subject, tags, learner level, and profile type become backend query params so filtered states are shareable; frontend filtering over local payloads is the interim approach until backend params land

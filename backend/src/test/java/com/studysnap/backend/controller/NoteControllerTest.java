@@ -116,10 +116,52 @@ class NoteControllerTest {
         );
         when(noteService.getById("note-1", userId)).thenReturn(expected);
 
-        NoteResponse response = noteController.generate("note-1", user);
+        NoteResponse response = noteController.generate("note-1", false, user);
 
         verify(authService).requireEmailVerified(userId);
-        verify(studyPackService).startAsyncGenerationFromNote("note-1", userId);
+        verify(studyPackService).startAsyncGenerationFromNote("note-1", userId, false);
+        verify(noteService).getById("note-1", userId);
+        assertThat(response).isEqualTo(expected);
+    }
+
+    @Test
+    void generate_passesAutoApplyMetadataWhenRequested() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        NoteResponse expected = new NoteResponse(
+                "note-1",
+                "Draft note",
+                "Biology",
+                "Nursing",
+                "STUDENT",
+                List.of("tag"),
+                "content",
+                "PRIVATE",
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                "GENERATING",
+                null,
+                List.of(),
+                List.of(),
+                null,
+                0,
+                false,
+                false,
+                false,
+                false
+        );
+        when(noteService.getById("note-1", userId)).thenReturn(expected);
+
+        NoteResponse response = noteController.generate("note-1", true, user);
+
+        verify(authService).requireEmailVerified(userId);
+        verify(studyPackService).startAsyncGenerationFromNote("note-1", userId, true);
         verify(noteService).getById("note-1", userId);
         assertThat(response).isEqualTo(expected);
     }
@@ -168,10 +210,10 @@ class NoteControllerTest {
         );
         doThrow(verificationError).when(authService).requireEmailVerified(userId);
 
-        assertThatThrownBy(() -> noteController.generate("note-1", user))
+        assertThatThrownBy(() -> noteController.generate("note-1", false, user))
                 .isSameAs(verificationError);
 
-        verify(studyPackService, never()).startAsyncGenerationFromNote("note-1", userId);
+        verify(studyPackService, never()).startAsyncGenerationFromNote("note-1", userId, false);
     }
 
     @Test
