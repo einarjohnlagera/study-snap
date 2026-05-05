@@ -457,7 +457,14 @@ Teacher flow rule:
   - owner viewing own public note -> `By You`
   - official NoteLib account -> `By NoteLib` with `Official`
   - all other public notes -> `By {displayName}`
-- `users.display_name` is the public author field. Never show public author emails.
+- `displayName` is the readable public author label, not a unique creator identity.
+- Public Library cards and public note detail must not rely on `displayName` alone for creator identity when duplicate names exist.
+- Creator links should use a stable public identifier:
+  - preferred -> username / handle when available
+  - fallback direction -> generated public slug
+- When disambiguation is needed or a handle exists, public labels may render `By {displayName} · @{handle}` while keeping `displayName` first for readability.
+- Never show public author emails or raw private user IDs on public surfaces.
+- If stable public handles/slugs are introduced, existing public links must remain valid through compatibility or redirect handling.
 - Reserved display names must be blocked server-side. Reject exact matches for:
   - `notelib`
   - `admin`

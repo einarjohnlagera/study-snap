@@ -16,6 +16,12 @@ Older milestone labels below are preserved as planning history only. They are no
 
 **Status: In Progress**
 
+Current phase emphasis:
+
+- improve user conversion and the first-study / first-quiz experience before expanding monetization work
+- keep Progressive Challenge Quiz generation as the active quiz-flow optimization path
+- treat Board Exam Mode optimization as a separate follow-up after the core quiz flow is more stable
+
 Primary focus:
 
 1. **Public Library public note conversion** *(top priority)* — public notes are shareable but currently function as app detail screens rather than learning pages; a visitor who arrives from a Facebook or social link should immediately understand the topic, see why NoteLib helps them study, interact lightly with the content, and know what to do next without being hard-gated before value is shown
@@ -46,6 +52,19 @@ Primary focus:
 8. **Social login — Google first** — add Google OAuth as an alternative to email-and-password login and signup; no other providers until Google is stable
 9. **Faster quiz generation investigation** — profile current LLM latency end-to-end for quiz generation; prototype streaming or early session-creation patterns; document findings and a recommended approach in `docs/architecture/` before any implementation
 10. **Multi-topic exam / Long Exam mode planning** — design a Board Exam session that spans multiple notes or topics; produce a written spec and UX sketch before any implementation
+
+### High Priority (Current Phase)
+
+- **Quiz Ready badge accuracy** — fix incorrect `Quiz Ready` badge visibility in Student mode and Board Exam mode so the badge reflects actual quiz availability and readiness
+- **Public creator identity disambiguation** — stop relying on `displayName` alone on Public Library cards and public note detail; use or introduce a stable public creator identifier (username / handle when available, otherwise a generated public slug), keep `displayName` for readability, show handle/slug when disambiguation is needed, and preserve existing public links through compatibility or redirect handling
+
+### Medium Priority (Next Phase)
+
+- **Board Exam Mode optimization** — improve generation speed, explore partial or progressive loading only if it preserves the exam-like experience, and keep progressive generation out of Board Exam Mode for now
+
+### Product Direction Note
+
+Board Exam Mode is intentionally kept as a fixed, exam-style experience. Optimization will be handled separately after core quiz flow and conversion improvements are stabilized.
 
 Implementation stances:
 

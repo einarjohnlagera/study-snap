@@ -9,6 +9,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 ### Planned Scope
 
 - **Public Library conversion optimization** *(top priority)* — make public note pages useful as shareable learning pages and top-of-funnel acquisition surfaces; add a learning hook near the top of the public note page so visitors understand the topic before being asked to act; surface a mini quiz preview that lets public visitors answer 1–2 questions before requiring signup; gate full quiz access and progress tracking behind login; add a CTA that encourages visitors to create their own Study Pack from their own notes; reorder CTAs so value is shown before any conversion ask; improve generated note formatting for scannability with shorter sections, clearer headings, key-fact blocks, and exam-friendly paragraph density
+- **Public creator identity / creator display safety** — public note cards and public note detail should stop relying on `displayName` alone; show `displayName` as the readable label, add a stable public handle or slug when disambiguation is needed, keep profile links tied to a stable public identifier, and preserve existing public links without exposing raw user IDs or emails
 - **Learner Level + Course/Program UX refinement** — quiz prompts and metadata suggestions are influenced by the user's saved learner level; Course/Program suggestions are narrowed by the active subject and learner context so recommendations feel personalised rather than generic
 - **Conversion funnel optimization** — plan-aware upgrade CTAs (`getUpgradeCtas`) on all paywall and limit surfaces; post-quiz `PostSuccessUpgradeNudge` on Quick Review and Challenge Quiz result screens; analytics events (`QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, `UPGRADE_CLICKED`) tracked and queryable via admin dashboard
 - **Proration / recomputation design** — design how mid-cycle plan changes (upgrade or downgrade) recompute Study Pack and quiz quotas; do not implement until the design is approved
@@ -18,6 +19,10 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - **Social login (Google first)** — Google OAuth login/signup alongside the existing email-and-password flow; no other providers until Google is shipped and stable
 - **Faster quiz generation investigation** — profile current LLM latency for quiz generation; prototype streaming or early-session creation patterns; write findings and a recommended approach before any implementation
 - **Multi-topic exam / Long Exam mode planning** — design how a single Board Exam session could span multiple notes or topics; produce a written spec and UX sketch before any implementation
+
+### 🐛 Fixes
+
+- Fixed incorrect `Quiz Ready` badge visibility across Student and Board Exam modes so readiness reflects actual quiz availability
 
 ---
 
