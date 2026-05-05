@@ -8,6 +8,11 @@ Route:
 
 - `/public/profile/{userId}`
 
+Current route compatibility note:
+
+- Public Profile currently resolves through `/public/profile/{userId}`.
+- If stable public handles or slugs are introduced later, existing public links must remain valid through compatibility lookup or redirect handling.
+
 Related APIs:
 
 - `GET /api/public/profile/{userId}`
@@ -100,7 +105,11 @@ Non-owners only see Share Profile when the profile is already public (they canno
 
 ## Public Identity Rules
 
-- always use `displayName` as the public identity
+- `displayName` is the readable presentation label, not the unique public identity
+- public creator identity should use a stable public identifier for linking and duplicate-name disambiguation:
+  - preferred: username / handle when available
+  - fallback direction: generated public slug
+- public surfaces may render `displayName` plus handle/slug together when needed, for example `Einar · @einarjohn`
 - never show email on public profile or public note surfaces
 - official badge is backend-derived only
 - hide learner-level and course/program rows entirely when those values are empty

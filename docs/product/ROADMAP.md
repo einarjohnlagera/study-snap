@@ -16,6 +16,12 @@ Older milestone labels below are preserved as planning history only. They are no
 
 **Status: In Progress**
 
+Current phase emphasis:
+
+- improve user conversion and the first-study / first-quiz experience before expanding monetization work
+- keep Progressive Challenge Quiz generation as the active quiz-flow optimization path
+- treat Board Exam Mode optimization as a separate follow-up after the core quiz flow is more stable
+
 Primary focus:
 
 1. **Public Library public note conversion** *(top priority)* — public notes are shareable but currently function as app detail screens rather than learning pages; a visitor who arrives from a Facebook or social link should immediately understand the topic, see why NoteLib helps them study, interact lightly with the content, and know what to do next without being hard-gated before value is shown
@@ -47,6 +53,19 @@ Primary focus:
 9. **Faster quiz generation investigation** — profile current LLM latency end-to-end for quiz generation; prototype streaming or early session-creation patterns; document findings and a recommended approach in `docs/architecture/` before any implementation
 10. **Multi-topic exam / Long Exam mode planning** — design a Board Exam session that spans multiple notes or topics; produce a written spec and UX sketch before any implementation
 
+### High Priority (Current Phase)
+
+- **Quiz Ready badge accuracy** — fix incorrect `Quiz Ready` badge visibility in Student mode and Board Exam mode so the badge reflects actual quiz availability and readiness
+- **Public creator identity disambiguation** — stop relying on `displayName` alone on Public Library cards and public note detail; use or introduce a stable public creator identifier (username / handle when available, otherwise a generated public slug), keep `displayName` for readability, show handle/slug when disambiguation is needed, and preserve existing public links through compatibility or redirect handling
+
+### Medium Priority (Next Phase)
+
+- **Board Exam Mode optimization** — improve generation speed, explore partial or progressive loading only if it preserves the exam-like experience, and keep progressive generation out of Board Exam Mode for now
+
+### Product Direction Note
+
+Board Exam Mode is intentionally kept as a fixed, exam-style experience. Optimization will be handled separately after core quiz flow and conversion improvements are stabilized.
+
 Implementation stances:
 
 - public note pages must teach first, then convert — do not hard-gate visitors before they see value; mini quiz preview is a lightweight surface, not a full session; no anonymous session state is persisted
@@ -56,6 +75,14 @@ Implementation stances:
 - social login must be an alternative, not a replacement; existing email accounts must continue to work
 - quiz latency investigation is research-only in v0.12.0; no production latency changes without findings
 - Long Exam mode is design-only in v0.12.0; no implementation until the spec is reviewed
+
+### Completed in v0.12.0 so far
+
+- **Progressive Challenge Quiz generation** — Challenge mode starts with 5 questions; users generate +5 more from the last question, up to 20 per session; `POST /challenge-quiz/sessions/{sessionId}/generate-more` endpoint; `GenerateMoreChallengeQuizResponse` DTO; `NotEnoughNewQuestionsException` with `NOT_ENOUGH_NEW_QUESTIONS` code; `QuizDeduplicationUtils.uniqueQuestions()` post-generation dedup; `QuizSessionStateUtils.appendQuizItems()` JSONB append; Board Exam Mode is exempt
+- **Progressive quiz scoring** — score computed from answered questions (`selectedChoices.size()`) instead of fixed total; result screen shows `{correct} of {answered} answered correctly`; Score Summary column labeled `Answered`
+- **Challenge Quiz UX refinements** — `Complete Quiz` replaces `Submit Challenge Quiz`; `+5 Questions` / `Adding...` button at last question; microcopy banner at quiz top; "finish anytime" guidance and "What would you like to do next?" hint at last question; generate-more toast (auto-clears after 3 s); `noMoreQuestions` state hides `+5 Questions` silently
+- **Leave Quiz modal stability fix** — `onBeforeRouteLeave` and `onConfirmLeave` memoized via `useCallback` in `page.tsx`; `onConfirmLeave` reads from `challengeSessionRef.current` to avoid stale closures; prevents `LeaveQuizModal` from unmounting/remounting on every timer tick
+- **Analytics enum completeness fix** — added missing `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, and `ONBOARDING_V2_CTA_GO_TO_SAVED_NOTE` to `AnalyticsEventType` Java enum to resolve `HttpMessageNotReadableException` on quiz completion events
 
 ## v0.11.0 — Completed
 

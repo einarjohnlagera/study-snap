@@ -269,6 +269,22 @@ Interaction rules:
 - do not place share/generate/delete/edit actions inside Public Library cards
 - use public note detail for the rest of the actions instead
 
+### Creator Identity Trust Fix (planned for v0.12.0)
+
+Public Library is becoming an acquisition and sharing surface, so creator identity must stay readable **and** unambiguous.
+
+- `displayName` is the presentation label, not the unique creator identity
+- public note cards and public note detail must not rely on `displayName` alone when duplicate names exist
+- use a stable public creator identifier for linking and disambiguation:
+  - preferred: username / handle when available
+  - fallback direction: generated public slug
+- suggested display:
+  - `By Einar`
+  - when disambiguation is needed or a handle exists: `By Einar · @einarjohn`
+- public creator links must use the stable public identifier, not `displayName`
+- never expose email addresses or raw private user IDs on public surfaces
+- if public creator routing changes in the future, existing public links must keep working through compatibility or redirect handling
+
 Discovery guidance:
 
 - prioritize original note preview over generated summary when scanning cards

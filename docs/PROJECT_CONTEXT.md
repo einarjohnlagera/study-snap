@@ -159,6 +159,14 @@ CTA ordering on public note detail:
 - do not lead with `Copy to My Library` or `Generate Study Pack` before the visitor has seen learning value
 - `Share` must always be visible regardless of auth state
 
+Public creator identity direction:
+- `displayName` is presentation-only; it is not a unique creator identity
+- public note cards and public note detail need a stable public creator identifier for trust and duplicate-name disambiguation
+- preferred direction is username / handle when available, otherwise a generated public slug
+- public-facing creator labels should keep `displayName` for readability and add the handle/slug when disambiguation is needed
+- never expose raw user IDs or emails on public note or public profile surfaces
+- current public links must remain valid if handle/slug-based public identity is introduced later
+
 ## v0.12.0 Direction
 
 Current in-progress release: `v0.12.0 - Learning Experience, Discovery, and Retention`.
@@ -170,6 +178,7 @@ Key v0.12.0 changes to be aware of:
 - **Upgrade CTA rule is now enforced** — all paywall and limit surfaces use `getUpgradeCtas(currentPlan)` from `frontend/src/config/plans.ts`; upgrade CTAs navigate to `/settings?section=plans`, not `/pricing`
 - **Analytics funnel is tracked** — `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, and `UPGRADE_CLICKED` are in `AnalyticsEventType` and fired from the relevant completion blocks
 - **Public Library filters move backend** — subject, tags, learner level, and profile type become backend query params so filtered states are shareable; frontend filtering over local payloads is the interim approach until backend params land
+- **Public creator identity safety** — Public Library cards and public note detail currently rely on `displayName` for presentation; v0.12.0 planning adds a stable public creator identifier for disambiguation and shareable creator links while keeping existing public URLs valid
 - **Social login (Google)** — planned for this release cycle; must not break or replace existing email-and-password accounts
 - **Content moderation** — `ContentModerationService` in the backend applies token-based dictionary matching to note titles, Study Pack topics, and note content at creation boundaries; dictionaries are in `classpath:/moderation/banned_words_*.txt`
 

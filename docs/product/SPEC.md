@@ -1077,21 +1077,30 @@ Page responsibilities:
 - Board Exam Mode uses a dedicated `Board Exam setup` confirmation state with timer/question/result summary plus `Cancel` and `Start Exam`.
 - Board Exam Mode may request fullscreen/focus mode as a best-effort browser enhancement.
 - Difficulty selection remains Pro-gated, and Board Exam Mode remains a Pro feature.
-- Difficulty and question count adapt by latest Quick Review score:
-  - `<50`: 10 questions, easy-medium
-  - `<80`: 12 questions, medium
-  - `>=80`: 15 questions, medium-hard
 - Reuse existing in-progress session to avoid duplicate LLM calls
 - Persist in-progress state (answers, index, timer basis)
 - Usage limit: 50/month (separate from Study Pack generation quota)
-- Challenge Quiz generation rules:
-  - learner-level aware, defaulting to `College` when the user has no saved learner level
-  - exam-style and analysis-oriented
-  - should not repeat Quick Review questions for the same Study Pack
-  - quantitative subjects may include computation, formula-based, and multi-step problem-solving questions
-  - explanations should teach like a tutor; computation explanations should show short step-by-step solution flow
-  - each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
-  - backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
+
+**Progressive generation (Challenge mode only):**
+
+- Challenge mode starts with 5 questions; users can generate +5 more from the last question, up to a session maximum of 20
+- Board Exam Mode uses a profile-adaptive fixed count (10–15 questions based on learner level) and does not support progressive generation
+- Board Exam difficulty and question count adapt by latest Quick Review score:
+  - `<50`: 10 questions, easy-medium
+  - `<80`: 12 questions, medium
+  - `>=80`: 15 questions, medium-hard
+- Score is based on answered questions (`selectedChoices.size()`), not the total session question count; this allows users to finish early and receive a fair score
+- `NOT_ENOUGH_NEW_QUESTIONS` (HTTP 409) is returned when fewer than 3 unique new questions survive deduplication; the frontend treats this as a soft end-of-questions state, not an error
+
+**Generation rules (applies to both modes):**
+
+- learner-level aware, defaulting to `College` when the user has no saved learner level
+- exam-style and analysis-oriented
+- should not repeat Quick Review questions for the same Study Pack
+- quantitative subjects may include computation, formula-based, and multi-step problem-solving questions
+- explanations should teach like a tutor; computation explanations should show short step-by-step solution flow
+- each generated question must use strict JSON fields: `question`, `choices`, `answer`, `explanation`, `concept`
+- backend and session storage must normalize generated questions to canonical `choices + correctIndex` before grading or rendering
 
 ### Adaptive Practice (Pro)
 
