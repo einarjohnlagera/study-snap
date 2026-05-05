@@ -15,12 +15,14 @@ type PublicSeoCopyCtaProps = {
   noteId: string;
   label?: string;
   redirectTarget?: PublicCopyRedirectTarget;
+  guestAuthMode?: "login" | "signup";
 };
 
 export function PublicSeoCopyCta({
   noteId,
   label = "Copy to My Library",
   redirectTarget = "library",
+  guestAuthMode = "login",
 }: Readonly<PublicSeoCopyCtaProps>) {
   const router = useRouter();
   const pathname = usePathname();
@@ -81,7 +83,12 @@ export function PublicSeoCopyCta({
       },
     });
     if (!getAuthUser()) {
-      router.push(buildLoginPath({ redirectTo: `${pathname}?${buildPublicCopyIntentQuery(redirectTarget)}` }));
+      const redirectTo = `${pathname}?${buildPublicCopyIntentQuery(redirectTarget)}`;
+      if (guestAuthMode === "signup") {
+        router.push(`/signup?redirect=${encodeURIComponent(redirectTo)}`);
+      } else {
+        router.push(buildLoginPath({ redirectTo }));
+      }
       return;
     }
 

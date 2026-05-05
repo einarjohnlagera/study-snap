@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getAuthUser, buildLoginPath } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 import { getDisplayedQuizChoices, resolveQuizCorrectIndex } from "@/lib/quiz";
 import type { QuizItem } from "@/lib/api";
+import { normalizePublicNoteText } from "@/lib/public-note-text";
+import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicMiniQuizPreviewProps = Readonly<{
   quiz: QuizItem[];
   noteId: string;
-  currentPath: string;
 }>;
 
-export function PublicMiniQuizPreview({ quiz, noteId, currentPath }: PublicMiniQuizPreviewProps) {
+export function PublicMiniQuizPreview({ quiz, noteId }: PublicMiniQuizPreviewProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -55,16 +55,17 @@ export function PublicMiniQuizPreview({ quiz, noteId, currentPath }: PublicMiniQ
     return `${base} border-border bg-background text-foreground/55`;
   };
 
-  const loginHref = buildLoginPath({ redirectTo: currentPath });
+  const normalizedQuestion = normalizePublicNoteText(item.question);
+  const normalizedExplanation = normalizePublicNoteText(item.explanation);
 
   return (
     <Card className="space-y-4 p-4 sm:p-6" aria-label="Quick Check mini quiz">
       <div className="space-y-1">
         <h2 className="text-base font-semibold sm:text-lg">🧠 Quick Check</h2>
-        <p className="text-sm text-foreground/65">Test your understanding with one question</p>
+        <p className="text-sm text-foreground/65">Quick check: see what you remember from the summary.</p>
       </div>
 
-      <p className="text-sm font-medium text-foreground">{item.question}</p>
+      <p className="text-sm font-medium text-foreground">{normalizedQuestion}</p>
 
       <div className="space-y-2" role="group" aria-label="Answer choices">
         {choices.map((choice) => (
@@ -99,31 +100,34 @@ export function PublicMiniQuizPreview({ quiz, noteId, currentPath }: PublicMiniQ
             <p className="mb-1 font-medium text-foreground/90">
               {selectedIndex === correctCanonicalIndex ? "✓ Correct!" : "✗ Not quite."}
             </p>
-            {item.explanation ? (
-              <p className="leading-relaxed text-foreground/75">{item.explanation}</p>
+            {normalizedExplanation ? (
+              <p className="leading-relaxed text-foreground/75">{normalizedExplanation}</p>
             ) : null}
           </div>
 
-          {isAuthenticated ? (
-            <p className="text-sm text-foreground/65">
-              Open your copy of this note to practice all questions and track your progress.
-            </p>
-          ) : (
-            <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 space-y-3">
-              <p className="text-sm font-medium text-foreground">Want to continue?</p>
-              <ul className="space-y-1 pl-4 text-sm text-foreground/75 list-disc">
-                <li>Practice all questions</li>
-                <li>Track progress and weak areas</li>
-                <li>Generate your own Study Pack</li>
-              </ul>
-              <Link
-                href={loginHref}
-                className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-active"
-              >
-                Continue with NoteLib →
-              </Link>
+          <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">Want more practice like this?</p>
+              <p className="text-sm text-foreground/70">
+                {isAuthenticated
+                  ? "Save this note or turn it into your own Study Pack to keep reviewing in your workspace."
+                  : "Create a free account or save this note to keep reviewing in your own workspace."}
+              </p>
             </div>
-          )}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <PublicSeoCopyCta
+                noteId={noteId}
+                label="Create your own Study Pack"
+                redirectTarget="generate"
+                guestAuthMode="signup"
+              />
+              <PublicSeoCopyCta
+                noteId={noteId}
+                label="Copy to My Library"
+                guestAuthMode="signup"
+              />
+            </div>
+          </div>
         </div>
       ) : null}
     </Card>

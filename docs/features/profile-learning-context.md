@@ -26,6 +26,7 @@ NoteLib uses two separate profile fields to personalise the learning experience:
 **UX rules:**
 - Do not add a learner level step to onboarding — this is the settled pattern.
 - The Learning Profile card must carry `id="learning-profile"` so hash navigation works.
+- `/profile` should keep using the shared App Router hash-navigation pattern: native target id plus `HashScrollListener` so direct deep links still scroll after mount.
 - After saving, show a toast: `Learner level updated. Future Study Packs and quizzes will match this level.`
 - Inline pill selectors on Quick Review and Challenge Quiz result screens let users adjust learner level without leaving the review flow.
 

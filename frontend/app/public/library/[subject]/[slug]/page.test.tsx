@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import PublicLibrarySeoPage, { generateMetadata } from "./page";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
 
@@ -51,6 +51,14 @@ jest.mock("@/components/notes/public-mini-quiz-preview", () => ({
       Mini quiz for {noteId}: {quiz[0]?.question ?? "no question"}
     </div>
   ),
+}));
+
+jest.mock("@/components/notes/public-seo-copy-cta", () => ({
+  PublicSeoCopyCta: ({
+    label,
+  }: {
+    label?: string;
+  }) => <button type="button">{label ?? "Copy to My Library"}</button>,
 }));
 
 const baseNote = {
@@ -184,8 +192,8 @@ describe("PublicLibrarySeoPage", () => {
       }),
     );
 
-    expect(screen.getByRole("heading", { name: "Struggling with a topic?" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Create your own Study Pack/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Study from your own notes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Create your own Study Pack/i })).toBeInTheDocument();
   });
 
   it("renders full notes section", async () => {
@@ -199,6 +207,50 @@ describe("PublicLibrarySeoPage", () => {
 
     expect(screen.getByRole("heading", { name: "Full Notes" })).toBeInTheDocument();
     expect(screen.getByText(/Cells are the basic unit of life\./i)).toBeInTheDocument();
+  });
+
+  it("scrolls to full notes on direct hash loads", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue(baseNote);
+
+    const previousPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const requestAnimationFrameMock = jest.fn((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    const scrollIntoViewMock = jest.fn();
+
+    jest.useFakeTimers();
+    globalThis.requestAnimationFrame = requestAnimationFrameMock;
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewMock,
+    });
+    globalThis.history.replaceState({}, "", "/public/library/science/cell-structure#full-notes");
+
+    try {
+      render(
+        await PublicLibrarySeoPage({
+          params: Promise.resolve({ subject: "science", slug: "cell-structure" }),
+        }),
+      );
+
+      act(() => {
+        jest.runAllTimers();
+      });
+
+      expect(requestAnimationFrameMock).toHaveBeenCalled();
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    } finally {
+      jest.useRealTimers();
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+      Object.defineProperty(Element.prototype, "scrollIntoView", {
+        configurable: true,
+        value: originalScrollIntoView,
+      });
+      globalThis.history.replaceState({}, "", previousPath || "/");
+    }
   });
 
   it("renders ownership actions after content (not in the header)", async () => {
@@ -220,7 +272,7 @@ describe("PublicLibrarySeoPage", () => {
     expect(headerEl?.contains(ownershipEl)).toBe(false);
   });
 
-  it("does not render a hook when the summary is empty", async () => {
+  it("derives the hook from note content before using the generic fallback", async () => {
     (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
       ...baseNote,
       summary: "",
@@ -232,10 +284,30 @@ describe("PublicLibrarySeoPage", () => {
       }),
     );
 
-    // Title still renders; no hook since summary is empty
     expect(screen.getByRole("heading", { name: "Cell Structure" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Cells are the basic unit of life. They contain organelles that support cell function."),
+    ).toBeInTheDocument();
     // Summary section shows the fallback text
     expect(screen.getByText("No summary available yet.")).toBeInTheDocument();
+  });
+
+  it("normalizes obvious mojibake in the rendered summary and full notes", async () => {
+    (getServerPublicNoteBySeoPath as jest.Mock).mockResolvedValue({
+      ...baseNote,
+      summary: "Mexicoâ€™s history matters. Students often confuse this holiday.",
+      content: "Most people think Cinco de Mayo is Mexicoâ€™s Independence Day.\n\nIt isnâ€™t.",
+    });
+
+    render(
+      await PublicLibrarySeoPage({
+        params: Promise.resolve({ subject: "history", slug: "cinco-de-mayo" }),
+      }),
+    );
+
+    expect(screen.getAllByText(/Mexico's history matters\./i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Most people think Cinco de Mayo is Mexico's Independence Day\./i)).toBeInTheDocument();
+    expect(screen.getByText("It isn't.")).toBeInTheDocument();
   });
 
   it("emits Article structured data", async () => {

@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { HashScrollListener } from "@/components/navigation/hash-scroll-listener";
 import { PublicMiniQuizPreview } from "@/components/notes/public-mini-quiz-preview";
 import { PublicLibraryBackLink } from "@/components/notes/public-library-back-link";
 import { PublicNoteAuthorLine, PublicNoteOwnershipActions } from "@/components/notes/public-note-ownership-actions";
+import { PublicSeoCopyCta } from "@/components/notes/public-seo-copy-cta";
 import { StructuredDataScript } from "@/components/seo/structured-data-script";
 import { Card } from "@/components/ui/card";
 import { buildPublicLibraryNotePathFromDetail } from "@/lib/public-note-path";
+import { buildPublicNoteHook, normalizePublicNoteText, splitPublicNoteBlocks } from "@/lib/public-note-text";
 import { getServerPublicNoteBySeoPath } from "@/lib/server-public-notes";
 import { absoluteUrl, buildPageMetadata, truncateDescription } from "@/lib/site-metadata";
 import { buildArticleStructuredData } from "@/lib/structured-data";
@@ -19,18 +22,11 @@ type PublicLibrarySeoPageProps = {
 };
 
 function buildDescription(title: string, summary?: string | null) {
-  if (summary?.trim()) {
-    return truncateDescription(summary, 160);
+  const normalizedSummary = normalizePublicNoteText(summary);
+  if (normalizedSummary) {
+    return truncateDescription(normalizedSummary, 160);
   }
   return `Study ${title} with summaries, key concepts, and practice questions on NoteLib.`;
-}
-
-function buildHook(summary: string | null | undefined, title: string): string | null {
-  if (!summary?.trim()) return null;
-  const sentences = summary.split(/(?<=[.!?])\s+/);
-  const hook = sentences.slice(0, 2).join(" ").trim();
-  if (!hook || hook.toLowerCase() === title.toLowerCase()) return null;
-  return hook;
 }
 
 export async function generateMetadata({ params }: PublicLibrarySeoPageProps): Promise<Metadata> {
@@ -43,7 +39,7 @@ export async function generateMetadata({ params }: PublicLibrarySeoPageProps): P
     };
   }
 
-  const title = note.title?.trim() || "Untitled note";
+  const title = normalizePublicNoteText(note.title?.trim()) || "Untitled note";
   const description = buildDescription(title, note.summary);
   const path = buildPublicLibraryNotePathFromDetail(note);
   const url = absoluteUrl(path);
@@ -70,16 +66,26 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
     notFound();
   }
 
-  const title = note.title?.trim() || "Untitled note";
+  const title = normalizePublicNoteText(note.title?.trim()) || "Untitled note";
   const description = buildDescription(title, note.summary);
-  const canonicalUrl = absoluteUrl(buildPublicLibraryNotePathFromDetail(note));
-  const currentPath = buildPublicLibraryNotePathFromDetail(note);
-  const hook = buildHook(note.summary, title);
+  const publicNotePath = buildPublicLibraryNotePathFromDetail(note);
+  const canonicalUrl = absoluteUrl(publicNotePath);
+  const fullNotesHref = `${publicNotePath}#full-notes`;
+  const hook = buildPublicNoteHook({
+    title,
+    summary: note.summary,
+    content: note.content,
+  });
   const isDraft = note.studyPackStatus !== "STUDY_PACK_READY";
-  const fullContent = note.content?.trim() || "No content yet.";
+  const normalizedSummary = normalizePublicNoteText(note.summary);
+  const keyConcepts = note.keyConcepts.map((concept) => normalizePublicNoteText(concept)).filter((concept) => concept.length > 0);
+  const fullContentBlocks = splitPublicNoteBlocks(note.content);
+  const fullContent = fullContentBlocks.length > 0 ? fullContentBlocks : ["No content yet."];
+  const tags = note.tags.map((tag) => normalizePublicNoteText(tag)).filter((tag) => tag.length > 0);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
+      <HashScrollListener allowedIds={["full-notes"]} />
       <StructuredDataScript
         id="public-note-structured-data"
         data={buildArticleStructuredData({
@@ -96,7 +102,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
 
       <article className="space-y-6">
         {/* Header — title, hook, tags, author */}
-        <header className="rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-amber-500/10 p-6 shadow-sm sm:p-8">
+        <header className="rounded-3xl border border-blue-500/20 bg-linear-to-br from-blue-500/10 via-background to-amber-500/10 p-6 shadow-sm sm:p-8">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide">
               <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-blue-700 dark:text-blue-300">
@@ -109,9 +115,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
 
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
 
-            {hook ? (
-              <p className="text-sm leading-relaxed text-foreground/70 sm:text-base">{hook}</p>
-            ) : null}
+            <p className="max-w-3xl text-sm leading-relaxed text-foreground/70 sm:text-base">{hook}</p>
 
             <PublicNoteAuthorLine
               ownerUserId={note.ownerUserId}
@@ -122,7 +126,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             />
 
             <div className="flex flex-wrap gap-2">
-              {note.tags.length > 0 ? note.tags.map((tag) => (
+              {tags.length > 0 ? tags.map((tag) => (
                 <span
                   key={`${note.id}-${tag}`}
                   className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground/75"
@@ -141,29 +145,31 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
         {/* Summary — always visible */}
         <Card className="space-y-3 p-4 sm:p-6">
           <h2 className="text-lg font-semibold sm:text-xl">Summary</h2>
-          <p className="text-sm leading-relaxed text-foreground/80">
-            {isDraft
-              ? "This public note does not have a generated summary yet."
-              : (note.summary?.trim() || "No summary available yet.")}
-          </p>
+          <div className="max-w-3xl space-y-3 text-sm leading-relaxed text-foreground/80">
+            <p>
+              {isDraft
+                ? "This public note does not have a generated summary yet."
+                : (normalizedSummary || "No summary available yet.")}
+            </p>
+          </div>
           {!isDraft && note.content?.trim() ? (
-            <a
-              href="#full-notes"
+            <Link
+              href={fullNotesHref}
               className="inline-flex w-fit text-sm font-medium text-blue-600 transition-colors hover:underline dark:text-blue-400"
             >
               View Full Notes →
-            </a>
+            </Link>
           ) : null}
         </Card>
 
         {/* Key Concepts — always visible */}
         <Card className="space-y-3 p-4 sm:p-6">
           <h2 className="text-lg font-semibold sm:text-xl">🧠 Key Concepts</h2>
-          {isDraft || note.keyConcepts.length === 0 ? (
+          {isDraft || keyConcepts.length === 0 ? (
             <p className="text-sm text-foreground/75">No key concepts generated yet.</p>
           ) : (
-            <ul className="space-y-2 pl-5 list-disc text-sm leading-relaxed text-foreground/85">
-              {note.keyConcepts.map((concept) => (
+            <ul className="max-w-3xl space-y-2 pl-5 list-disc text-sm leading-relaxed text-foreground/85">
+              {keyConcepts.map((concept) => (
                 <li key={concept}>{concept}</li>
               ))}
             </ul>
@@ -175,38 +181,45 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
           <PublicMiniQuizPreview
             quiz={note.quiz}
             noteId={note.id}
-            currentPath={currentPath}
           />
         ) : null}
 
         {/* Soft conversion CTA */}
         <Card className="space-y-3 border-primary/20 bg-primary/5 p-4 sm:p-6">
-          <h2 className="text-base font-semibold sm:text-lg">Struggling with a topic?</h2>
+          <h2 className="text-base font-semibold sm:text-lg">Study from your own notes</h2>
           <p className="text-sm text-foreground/75">
-            NoteLib turns your notes into summaries, key concepts, and practice quizzes — so you can study smarter, not longer.
+            Turn your own notes into summaries, key concepts, and practice questions when you're ready to review.
           </p>
-          <ul className="space-y-1 pl-4 text-sm text-foreground/70 list-disc">
-            <li>Break notes into key concepts</li>
-            <li>Test your understanding</li>
-            <li>Focus on your weak areas</li>
-          </ul>
-          <Link
-            href="/signup"
-            className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover active:bg-primary-active"
-          >
-            Create your own Study Pack →
-          </Link>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <PublicSeoCopyCta
+              noteId={note.id}
+              label="Create your own Study Pack"
+              redirectTarget="generate"
+              guestAuthMode="signup"
+            />
+          </div>
         </Card>
 
         {/* Full Notes */}
-        <Card id="full-notes" className="space-y-3 p-4 sm:p-6">
-          <h2 className="text-lg font-semibold sm:text-xl">Full Notes</h2>
-          <div className="rounded-2xl border border-border bg-background px-4 py-4">
-            <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
-              {fullContent}
-            </p>
-          </div>
-        </Card>
+        <section id="full-notes" aria-labelledby="full-notes-heading">
+          <Card className="space-y-3 p-4 sm:p-6">
+            <div className="space-y-1">
+              <h2 id="full-notes-heading" className="text-lg font-semibold sm:text-xl">Full Notes</h2>
+              <p className="text-sm text-foreground/65">
+                Read the original note content before deciding whether to save or study from it.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background px-4 py-4">
+              <div className="max-w-3xl space-y-4 text-sm leading-7 text-foreground/85">
+                {fullContent.map((block, index) => (
+                  <p key={`${note.id}-full-notes-${index}`} className="whitespace-pre-wrap">
+                    {block}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </Card>
+        </section>
 
         {/* Ownership actions — bottom, after content */}
         <section aria-labelledby="public-note-actions-heading">

@@ -1479,6 +1479,13 @@ Context-aware paywall flow:
 - The plan ladder is `Free → Plus → Pro`. Plus is positioned as *regular study*; Pro is positioned as *exam preparation*. Upgrade copy must respect this framing.
 - Plan limits, prices, and feature scope are documented in `docs/product/PLANS.md`. Runtime values live in `frontend/lib/pricing-config.ts`; feature lists and CTA labels live in `frontend/src/config/plans.ts`.
 
+### Shared Hash Navigation
+
+- Section-deep-link flows such as `/profile?from=dashboard#learning-profile` and `/public/library/{subject}/{slug}#full-notes` are first-class UX paths.
+- Fragment targets must be attached to native DOM elements, not only custom wrapper components.
+- Next.js App Router pages that can open directly with a hash must mount the shared `HashScrollListener` so direct loads and later `hashchange` events scroll after the destination content mounts.
+- Reuse the same pattern for future section CTAs instead of page-specific ad hoc fragment handling.
+
 ---
 
 ## Activity Tracking

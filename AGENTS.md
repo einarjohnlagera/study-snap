@@ -239,6 +239,13 @@ Teacher flow rule:
 - Do not move `Learning Style` or study-reminder preferences into `Profile`.
 - Email changes must write `pendingEmail` first and only update `email` after verification.
 
+### Hash Navigation Rule
+
+- When a page links to an in-page section with a hash target, the destination `id` must live on a native DOM element such as `section`, `div`, or a heading wrapper. Do not rely on fragment targets attached only to custom wrapper components.
+- App Router pages that can be opened directly with a hash must mount the shared `HashScrollListener` (`frontend/components/navigation/hash-scroll-listener.tsx`) with the allowed target ids so direct URL loads and later `hashchange` events scroll correctly after content mounts.
+- Prefer concrete route-plus-hash deep links for cross-surface navigation such as `/profile?from=dashboard#learning-profile` when the destination page is known.
+- Use the same shared hash-navigation pattern for future `View Full Notes`, settings-section, and profile-section deep links instead of one-off fragment handling.
+
 ### Public vs Private Profile Separation Rule
 
 - `Public Profile` (`/public/profile/{userId}`) is the user's public learning-portfolio surface.
