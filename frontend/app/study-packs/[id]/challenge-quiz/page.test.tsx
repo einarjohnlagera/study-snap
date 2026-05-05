@@ -1012,7 +1012,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
 
     expect(await screen.findByText("Great job! Keep studying and improve your weak areas.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "View Weak Concepts" })).toBeInTheDocument();
@@ -1362,7 +1362,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
     await screen.findByText("Challenge Quiz Result");
 
     expect(screen.getByText("You're building momentum. Keep going without limits.")).toBeInTheDocument();
@@ -1440,7 +1440,7 @@ describe("ChallengeQuizPage", () => {
     render(<ChallengeQuizPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /Mitochondria/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Submit Challenge Quiz" }));
+    fireEvent.click(screen.getByRole("button", { name: "Complete Quiz" }));
     await screen.findByText("Challenge Quiz Result");
 
     expect(screen.queryByText("You're building momentum. Keep going without limits.")).not.toBeInTheDocument();

@@ -650,6 +650,11 @@ export type ChallengeQuizSessionResponse = {
   completedAt: string | null;
 };
 
+export type GenerateMoreChallengeQuizResponse = {
+  newQuestions: QuizItem[];
+  totalQuestions: number;
+};
+
 export type ChallengeQuizSessionSummaryResponse = {
   sessionId: string;
   totalQuestions: number;
@@ -2016,6 +2021,23 @@ export async function forfeitChallengeQuizSession(
   return parseApiResponse<SimpleMessageResponse>(response, "Could not leave Challenge Quiz.");
 }
 
+export async function generateMoreChallengeQuizQuestions(
+  sessionId: string,
+): Promise<GenerateMoreChallengeQuizResponse> {
+  const response = await fetchWithAuth(
+    `/challenge-quiz/sessions/${sessionId}/generate-more`,
+    {
+      method: "POST",
+      headers: buildAuthHeaders(),
+    },
+    true,
+  );
+  return parseApiResponse<GenerateMoreChallengeQuizResponse>(
+    response,
+    "Could not generate more questions.",
+  );
+}
+
 export async function listRecentChallengeQuizSessions(
   noteId: string,
   limit = 5,
@@ -2487,6 +2509,10 @@ export function isNoteGenerationLimitReachedError(error: unknown): error is ApiR
 
 export function isExportLimitReachedError(error: unknown): error is ApiRequestError {
   return error instanceof ApiRequestError && error.code === "MONTHLY_EXPORT_LIMIT_REACHED";
+}
+
+export function isNotEnoughNewQuestionsError(error: unknown): error is ApiRequestError {
+  return error instanceof ApiRequestError && error.code === "NOT_ENOUGH_NEW_QUESTIONS";
 }
 
 export async function updateNoteVisibility(noteId: string, visibility: NoteVisibility): Promise<NoteResponse> {

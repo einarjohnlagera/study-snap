@@ -57,6 +57,41 @@ public class QuizGenerationService {
         );
     }
 
+    public List<QuizItem> generateMoreChallengeQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            List<String> existingConcepts,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        if (!isMockModeEnabled()) {
+            return llmStudyPackService.generateMoreChallengeQuiz(
+                    studyPackTitle,
+                    studyPackSummary,
+                    keyConcepts,
+                    disallowedQuestions,
+                    existingConcepts,
+                    questionCount,
+                    difficulty,
+                    context
+            );
+        }
+
+        log.info(MOCK_GENERATION_LOG_MESSAGE, QUIZ_TYPE_CHALLENGE);
+        maybeApplyMockDelay();
+        return MockQuizGenerationUtils.generateChallengeQuiz(
+                studyPackTitle,
+                keyConcepts,
+                disallowedQuestions,
+                questionCount,
+                difficulty,
+                context
+        );
+    }
+
     public List<QuizItem> generateAdaptivePracticeQuiz(
             String studyPackTitle,
             String studyPackSummary,

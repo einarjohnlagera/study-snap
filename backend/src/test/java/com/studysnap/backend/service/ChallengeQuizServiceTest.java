@@ -2,11 +2,14 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
+import com.studysnap.backend.exception.AppException;
+import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
 import com.studysnap.backend.entity.ActivityType;
 import com.studysnap.backend.entity.AnalyticsEventType;
 import com.studysnap.backend.entity.Feature;
@@ -299,7 +302,7 @@ class ChallengeQuizServiceTest {
                 "Summary",
                 List.of("Concept"),
                 List.of("Practice?"),
-                10,
+                5,
                 "easy",
                 new StudyPackGenerationContext(
                         LearnerLevel.BOARD_EXAM_REVIEW,
@@ -312,12 +315,7 @@ class ChallengeQuizServiceTest {
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q3", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q4", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
-                new QuizItem("Q5", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
-                new QuizItem("Q6", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
-                new QuizItem("Q7", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
-                new QuizItem("Q8", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
-                new QuizItem("Q9", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
-                new QuizItem("Q10", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+                new QuizItem("Q5", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
         ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -731,6 +729,133 @@ class ChallengeQuizServiceTest {
         assertThat(session.getCompletedAt()).isNull();
         verify(userUsageService, never()).incrementChallengeQuizGeneration(any(UUID.class), any(OffsetDateTime.class));
         verify(activityTrackingService, never()).recordActivity(userId, ActivityType.COMPLETED_CHALLENGE_QUIZ, studyPackId);
+    }
+
+    @Test
+    void generateMoreQuestions_appendsNewQuestionsToSession() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        List<QuizItem> existingQuiz = List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q3", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q4", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q5", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        );
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(5);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                existingQuiz,
+                Map.of("mode", "challenge", "difficulty", "medium", "completed", false)
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
+        when(quizGenerationService.generateMoreChallengeQuiz(
+                any(), any(), any(), any(), any(), eq(5), eq("medium"), any()
+        )).thenReturn(List.of(
+                new QuizItem("Q6 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                new QuizItem("Q7 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                new QuizItem("Q8 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                new QuizItem("Q9 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation"),
+                new QuizItem("Q10 new", List.of("A", "B", "C", "D"), "A", "Concept2", "Explanation")
+        ));
+        when(quickReviewSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
+
+        assertThat(response.newQuestions()).hasSize(5);
+        assertThat(response.totalQuestions()).isEqualTo(10);
+        assertThat(session.getTotalQuestions()).isEqualTo(10);
+    }
+
+    @Test
+    void generateMoreQuestions_throwsWhenMaxQuestionsReached() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        List<QuizItem> fullQuiz = new java.util.ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            fullQuiz.add(new QuizItem("Q" + i, List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"));
+        }
+
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(20);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                fullQuiz,
+                Map.of("mode", "challenge", "difficulty", "medium", "completed", false)
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+
+        String id = sessionId.toString();
+        assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(id, userId))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("maximum");
+    }
+
+    @Test
+    void generateMoreQuestions_throwsNotEnoughNewQuestionsWhenDeduplicationRemovesTooMany() {
+        UUID userId = UUID.randomUUID();
+        UUID studyPackId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        StudyPackEntity studyPack = buildStudyPack(studyPackId, noteId, userId);
+
+        List<QuizItem> existingQuiz = List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q3", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q4", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q5", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        );
+        QuickReviewSessionEntity session = new QuickReviewSessionEntity();
+        session.setId(sessionId);
+        session.setUserId(userId);
+        session.setStudyPackId(studyPackId);
+        session.setSessionMode(QuickReviewSessionMode.CHALLENGE);
+        session.setStatus(QuickReviewSessionStatus.IN_PROGRESS);
+        session.setTotalQuestions(5);
+        session.setSessionState(QuizSessionStateUtils.withQuiz(
+                existingQuiz,
+                Map.of("mode", "challenge", "difficulty", "medium", "completed", false)
+        ));
+
+        when(quickReviewSessionRepository.findByIdAndUserIdAndSessionModeForUpdate(
+                sessionId, userId, QuickReviewSessionMode.CHALLENGE
+        )).thenReturn(Optional.of(session));
+        when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
+        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
+        when(quizGenerationService.generateMoreChallengeQuiz(
+                any(), any(), any(), any(), any(), anyInt(), any(), any()
+        )).thenReturn(List.of(
+                new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
+                new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation")
+        ));
+
+        String id = sessionId.toString();
+        assertThatThrownBy(() -> challengeQuizService.generateMoreQuestions(id, userId))
+                .isInstanceOf(NotEnoughNewQuestionsException.class);
     }
 
     @Test
