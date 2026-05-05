@@ -33,6 +33,20 @@ public interface LlmStudyPackService {
 			StudyPackGenerationContext context
 	);
 
+	default List<QuizItem> generateMoreChallengeQuiz(
+			String studyPackTitle,
+			String studyPackSummary,
+			List<String> keyConcepts,
+			List<String> disallowedQuestions,
+			List<String> existingConcepts,
+			int questionCount,
+			String difficulty,
+			StudyPackGenerationContext context
+	) {
+		return generateChallengeQuiz(studyPackTitle, studyPackSummary, keyConcepts,
+				disallowedQuestions, questionCount, difficulty, context);
+	}
+
 	List<QuizItem> generateTeacherQuiz(
 			String noteTitle,
 			String noteContent,

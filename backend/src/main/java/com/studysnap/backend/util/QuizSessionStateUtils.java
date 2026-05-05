@@ -22,6 +22,13 @@ public class QuizSessionStateUtils {
     private static final String EXPLANATION_KEY = "explanation";
     private static final String SELECTED_CHOICES_KEY = "selectedChoices";
 
+    public Map<String, Object> appendQuizItems(Map<String, Object> sessionState, List<QuizItem> newItems) {
+        List<QuizItem> existing = extractQuiz(sessionState);
+        List<QuizItem> combined = new ArrayList<>(existing);
+        combined.addAll(newItems);
+        return withQuiz(combined, sessionState);
+    }
+
     public Map<String, Object> withQuiz(List<QuizItem> quiz, Map<String, Object> baseState) {
         Map<String, Object> state = new LinkedHashMap<>();
         if (baseState != null && !baseState.isEmpty()) {

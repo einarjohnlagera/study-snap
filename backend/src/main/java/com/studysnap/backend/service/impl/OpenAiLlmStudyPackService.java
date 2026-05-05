@@ -433,6 +433,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             String studyPackSummary,
             List<String> keyConcepts,
             List<String> disallowedQuestions,
+            List<String> existingConcepts,
             int questionCount,
             String difficulty,
             StudyPackGenerationContext context
@@ -448,13 +449,16 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 .replace("{COMPUTATION_GUIDANCE}", buildComputationGuidance(quantitativeContext, QuizMode.CHALLENGE))
                 .replace("{TIME_EXPECTATION}", buildTimeExpectation(QuizMode.CHALLENGE));
         input.add(buildTextMessage("developer", challengeQuizDeveloperPrompt));
-        input.add(buildTextMessage(
-                "user",
-                buildLearnerContextBlock(context) + "\n" +
-                        "Summary: " + studyPackSummary + "\n" +
-                        "Key concepts: " + String.join(", ", keyConcepts) + "\n" +
-                        "Excluded questions (must not be repeated): " + String.join(" || ", disallowedQuestions)
-        ));
+        StringBuilder userMessage = new StringBuilder();
+        userMessage.append(buildLearnerContextBlock(context)).append("\n");
+        userMessage.append("Summary: ").append(studyPackSummary).append("\n");
+        userMessage.append("Key concepts: ").append(String.join(", ", keyConcepts)).append("\n");
+        userMessage.append("Excluded questions (must not be repeated): ").append(String.join(" || ", disallowedQuestions));
+        if (existingConcepts != null && !existingConcepts.isEmpty()) {
+            userMessage.append("\nConcepts already covered (prioritize other concepts when available): ")
+                    .append(String.join(", ", existingConcepts));
+        }
+        input.add(buildTextMessage("user", userMessage.toString()));
         return input;
     }
 
@@ -970,6 +974,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                         studyPackSummary == null ? "" : studyPackSummary,
                         normalizedKeyConcepts,
                         normalizedDisallowedQuestions,
+                        List.of(),
                         questionCount,
                         difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
                         context
@@ -977,6 +982,37 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
                 questionCount,
                 "note_lib_challenge_quiz",
                 "Challenge quiz generation",
+                normalizedKeyConcepts
+        );
+    }
+
+    @Override
+    public List<QuizItem> generateMoreChallengeQuiz(
+            String studyPackTitle,
+            String studyPackSummary,
+            List<String> keyConcepts,
+            List<String> disallowedQuestions,
+            List<String> existingConcepts,
+            int questionCount,
+            String difficulty,
+            StudyPackGenerationContext context
+    ) {
+        List<String> normalizedKeyConcepts = sanitizeConceptList(keyConcepts);
+        List<String> normalizedDisallowedQuestions = sanitizeQuestionList(disallowedQuestions);
+        List<String> normalizedExistingConcepts = sanitizeConceptList(existingConcepts);
+        return generateQuizWithSchema(
+                buildChallengeQuizInputMessages(
+                        studyPackSummary == null ? "" : studyPackSummary,
+                        normalizedKeyConcepts,
+                        normalizedDisallowedQuestions,
+                        normalizedExistingConcepts,
+                        questionCount,
+                        difficulty == null || difficulty.isBlank() ? "medium" : difficulty,
+                        context
+                ),
+                questionCount,
+                "note_lib_challenge_quiz",
+                "Challenge quiz generation (more)",
                 normalizedKeyConcepts
         );
     }

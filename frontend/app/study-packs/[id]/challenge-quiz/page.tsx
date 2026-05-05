@@ -24,11 +24,13 @@ import {
   type ChallengeQuizMode,
   completeChallengeQuizSession,
   forfeitChallengeQuizSession,
+  generateMoreChallengeQuizQuestions,
   getInProgressChallengeQuizSession,
   getMe,
   getMyStudyPack,
   getNote,
   isEmailNotVerifiedError,
+  isNotEnoughNewQuestionsError,
   startChallengeQuizSession,
   trackAnalyticsEvent,
   updateChallengeQuizSessionProgress,
@@ -74,6 +76,7 @@ type ChallengeViewerPlanType = "FREE" | "PLUS" | "PRO" | null;
 
 const CHALLENGE_MODE: ChallengeQuizMode = "challenge";
 const BOARD_EXAM_MODE: ChallengeQuizMode = "board_exam";
+const MAX_SESSION_QUESTIONS = 20;
 const TIMER_TICK_INTERVAL_MS = 1000;
 const BOARD_EXAM_TOOLTIP_STORAGE_KEY_PREFIX = "notelib-board-exam-mode-tip-dismissed";
 const BOARD_EXAM_START_CONFIRM_TITLE = "Start Board Exam Mode?";
@@ -113,12 +116,11 @@ function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number 
 
 function getQuestionCountSummary(
   difficultySelectionAvailable: boolean | undefined,
-  selectedDifficulty: ChallengeDifficulty,
 ): string {
   if (difficultySelectionAvailable) {
-    return `${getQuestionCountForDifficulty(selectedDifficulty)} questions for the selected difficulty.`;
+    return "Starts with 5 questions. Generate more after answering.";
   }
-  return "Recommended question count based on your recent performance.";
+  return "Starts with 5 questions. Generate more after answering.";
 }
 
 function normalizePracticeDifficulty(
@@ -247,6 +249,8 @@ export default function ChallengeQuizPage() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [generatingMore, setGeneratingMore] = useState(false);
+  const [noMoreQuestions, setNoMoreQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [deadlineEpochSeconds, setDeadlineEpochSeconds] = useState<number | null>(null);
@@ -895,14 +899,51 @@ export default function ChallengeQuizPage() {
     setError(null);
     setShowAnswerReview(false);
     setShowBoardExamStartModal(false);
+    setGeneratingMore(false);
+    setNoMoreQuestions(false);
     setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode));
     setPhase("prestart");
   };
 
+  const handleGenerateMore = useCallback(async () => {
+    if (!challengeSession?.sessionId || generatingMore) {
+      return;
+    }
+    setGeneratingMore(true);
+    setError(null);
+    try {
+      const response = await generateMoreChallengeQuizQuestions(challengeSession.sessionId);
+      setChallengeSession((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return {
+          ...prev,
+          quiz: [...prev.quiz, ...response.newQuestions],
+          totalQuestions: response.totalQuestions,
+        };
+      });
+      const nextIndex = challengeSession.quiz.length;
+      syncProgressRef(nextIndex, progressRef.current.selectedChoices);
+      setCurrentIndex(nextIndex);
+      if (challengeSession.quiz.length + response.newQuestions.length >= MAX_SESSION_QUESTIONS) {
+        setNoMoreQuestions(true);
+      }
+    } catch (err) {
+      if (isNotEnoughNewQuestionsError(err)) {
+        setNoMoreQuestions(true);
+      } else {
+        setError(err instanceof Error ? err.message : "Could not generate more questions.");
+      }
+    } finally {
+      setGeneratingMore(false);
+    }
+  }, [challengeSession, generatingMore, syncProgressRef]);
+
   const challengeGenerationLocked = starting || phase === "generating";
   const challengeQuizActive = phase === "running" && Boolean(challengeSession?.sessionId);
   const boardExamTimerExpired = isBoardExamMode && remainingSeconds <= 0;
-  const quizInteractionDisabled = submitting || boardExamTimerExpired;
+  const quizInteractionDisabled = submitting || generatingMore || boardExamTimerExpired;
   const quizModeLabel = isBoardExamMode ? "Board Exam Mode" : "Challenge Quiz";
   const quizResultLabel = isBoardExamMode ? "Exam Result" : "Challenge Quiz Result";
   const submitButtonLabel = isBoardExamMode ? "Submit Exam" : "Submit Challenge Quiz";
@@ -911,7 +952,7 @@ export default function ChallengeQuizPage() {
   const generationOverlayMessage = isBoardExamMode
     ? "Creating a stricter exam simulation from your notes"
     : "Creating personalized questions from your notes";
-  const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable, selectedDifficulty);
+  const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable);
   const canChooseChallengeDifficulty = Boolean(note?.difficultySelectionAvailable);
   const boardExamAvailable = viewerPlanType === "PRO";
   const prefersBoardExam = viewerProfileType === "BOARD_EXAM";
@@ -1490,7 +1531,7 @@ export default function ChallengeQuizPage() {
                 >
                   Next
                 </Button>
-              ) : (
+              ) : isBoardExamMode ? (
                 <Button
                   type="button"
                   className="flex-1 sm:w-auto sm:flex-none"
@@ -1499,6 +1540,28 @@ export default function ChallengeQuizPage() {
                 >
                   {submitting ? "Submitting..." : submitButtonLabel}
                 </Button>
+              ) : (
+                <>
+                  {!noMoreQuestions && totalQuestions < MAX_SESSION_QUESTIONS ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 sm:w-auto sm:flex-none"
+                      onClick={() => void handleGenerateMore()}
+                      disabled={generatingMore || submitting}
+                    >
+                      {generatingMore ? "Generating..." : "Generate More Questions"}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    className="flex-1 sm:w-auto sm:flex-none"
+                    onClick={() => void handleSubmit(false)}
+                    disabled={submitting || generatingMore}
+                  >
+                    {submitting ? "Submitting..." : "Complete Quiz"}
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -1545,7 +1608,7 @@ export default function ChallengeQuizPage() {
           )}>
             <p className="text-lg font-semibold">{result.scorePercentage}%</p>
             <p className="mt-1 text-sm text-foreground/80">
-              {result.correctAnswers} / {result.totalQuestions} correct
+              {result.correctAnswers} of {result.totalQuestions} answered correctly
             </p>
             <p className="mt-1 text-sm text-foreground/70">
               Duration: {formatTimer(result.durationSeconds ?? 0)}
@@ -1569,7 +1632,7 @@ export default function ChallengeQuizPage() {
                 <p className="text-sm font-semibold">{result.correctAnswers}</p>
               </div>
               <div className="rounded-md border border-border bg-background px-3 py-2">
-                <p className="text-xs text-foreground/65">Total</p>
+                <p className="text-xs text-foreground/65">Answered</p>
                 <p className="text-sm font-semibold">{result.totalQuestions}</p>
               </div>
               <div className="rounded-md border border-border bg-background px-3 py-2">

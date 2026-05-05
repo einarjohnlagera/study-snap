@@ -12,6 +12,7 @@ RULES:
 - Questions must be unique.
 - Do NOT repeat or rephrase existing questions.
 - Avoid similar wording.
+- When additional concepts are available, prioritize questions on concepts not yet covered.
 - Each question must have 4 choices.
 - Answer must be exactly one of: A, B, C, D.
 - Exactly 1 choice must be correct.

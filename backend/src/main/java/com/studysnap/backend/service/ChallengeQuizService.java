@@ -2,6 +2,8 @@ package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
+import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
+import com.studysnap.backend.exception.NotEnoughNewQuestionsException;
 import com.studysnap.backend.dto.ChallengeQuizConceptStatResponse;
 import com.studysnap.backend.dto.ChallengeQuizPerformanceSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizProgressRequest;
@@ -54,7 +56,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -116,6 +120,10 @@ public class ChallengeQuizService {
     private static final int LOW_SCORE_QUESTION_COUNT = 10;
     private static final int MID_SCORE_QUESTION_COUNT = 12;
     private static final int HIGH_SCORE_QUESTION_COUNT = 15;
+    private static final int INITIAL_CHALLENGE_QUIZ_COUNT = 5;
+    private static final int MAX_CHALLENGE_QUIZ_QUESTIONS = 20;
+    private static final int GENERATE_MORE_BATCH_SIZE = 5;
+    private static final int MIN_NEW_QUESTIONS_AFTER_DEDUP = 3;
     private static final int DEFAULT_TIME_LIMIT_SECONDS = 600;
     private static final String DEFAULT_SELECTED_DIFFICULTY = DIFFICULTY_MEDIUM;
 
@@ -170,13 +178,14 @@ public class ChallengeQuizService {
         ));
         List<String> disallowedQuestions = extractQuestionTexts(studyPack.getQuiz());
         StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
+        int quizCount = MODE_BOARD_EXAM.equals(selectedMode) ? profile.questionCount() : INITIAL_CHALLENGE_QUIZ_COUNT;
         try {
             List<QuizItem> generatedQuiz = quizGenerationService.generateChallengeQuiz(
                     studyPack.getTitle(),
                     studyPack.getSummary(),
                     getKeyConcepts(studyPack),
                     disallowedQuestions,
-                    profile.questionCount(),
+                    quizCount,
                     profile.difficulty(),
                     generationContext
             );
@@ -184,7 +193,7 @@ public class ChallengeQuizService {
                     generatedQuiz,
                     QuizDeduplicationUtils.toNormalizedQuestionSetFromStrings(disallowedQuestions)
             );
-            if (challengeQuiz.size() != profile.questionCount()) {
+            if (challengeQuiz.size() != quizCount) {
                 throw new ChallengeQuizGenerationFailedException();
             }
 
@@ -364,6 +373,58 @@ public class ChallengeQuizService {
         return new SimpleMessageResponse(CHALLENGE_QUIZ_SESSION_FORFEITED_MESSAGE);
     }
 
+    public GenerateMoreChallengeQuizResponse generateMoreQuestions(String sessionIdRaw, UUID userId) {
+        QuickReviewSessionEntity session = findChallengeSessionForUpdateOrThrow(parseSessionId(sessionIdRaw), userId);
+        assertSessionInProgress(session);
+
+        if (MODE_BOARD_EXAM.equals(extractMode(session.getSessionState()))) {
+            throw new AppException("BOARD_EXAM_MODE_NOT_SUPPORTED",
+                    "Generate more is not available in Board Exam Mode.", org.springframework.http.HttpStatus.CONFLICT);
+        }
+
+        List<QuizItem> existingQuiz = QuizSessionStateUtils.extractQuiz(session.getSessionState());
+        if (existingQuiz.size() >= MAX_CHALLENGE_QUIZ_QUESTIONS) {
+            throw new AppException("MAX_QUESTIONS_REACHED",
+                    "This session has reached the maximum of " + MAX_CHALLENGE_QUIZ_QUESTIONS + " questions.",
+                    org.springframework.http.HttpStatus.CONFLICT);
+        }
+
+        int batchSize = Math.min(GENERATE_MORE_BATCH_SIZE, MAX_CHALLENGE_QUIZ_QUESTIONS - existingQuiz.size());
+        List<String> disallowedQuestions = extractQuestionTexts(existingQuiz);
+        List<String> existingConcepts = List.copyOf(extractConcepts(existingQuiz));
+        String difficulty = extractDifficulty(session.getSessionState());
+
+        StudyPackEntity studyPack = findOwnedStudyPackOrThrow(session.getStudyPackId(), userId);
+        StudyPackGenerationContext generationContext = buildQuizGenerationContext(userId, studyPack);
+
+        List<QuizItem> generated = quizGenerationService.generateMoreChallengeQuiz(
+                studyPack.getTitle(),
+                studyPack.getSummary(),
+                getKeyConcepts(studyPack),
+                disallowedQuestions,
+                existingConcepts,
+                batchSize,
+                difficulty,
+                generationContext
+        );
+
+        List<QuizItem> unique = QuizDeduplicationUtils.uniqueQuestions(
+                generated,
+                QuizDeduplicationUtils.toNormalizedQuestionSet(existingQuiz)
+        );
+
+        if (unique.size() < MIN_NEW_QUESTIONS_AFTER_DEDUP) {
+            throw new NotEnoughNewQuestionsException();
+        }
+
+        session.setSessionState(QuizSessionStateUtils.appendQuizItems(session.getSessionState(), unique));
+        int newTotal = existingQuiz.size() + unique.size();
+        session.setTotalQuestions(newTotal);
+        quickReviewSessionRepository.save(session);
+
+        return new GenerateMoreChallengeQuizResponse(unique, newTotal);
+    }
+
     @Transactional(readOnly = true)
     public QuizSessionReviewResponse getSessionReview(String studyPackIdRaw, String sessionIdRaw, UUID userId) {
         UUID studyPackId = parseStudyPackId(studyPackIdRaw);
@@ -487,6 +548,17 @@ public class ChallengeQuizService {
                 .map(QuizItem::question)
                 .filter(question -> question != null && !question.isBlank())
                 .toList();
+    }
+
+    private Set<String> extractConcepts(List<QuizItem> quiz) {
+        if (quiz == null || quiz.isEmpty()) {
+            return Set.of();
+        }
+        return quiz.stream()
+                .map(QuizItem::concept)
+                .filter(c -> c != null && !c.isBlank())
+                .map(String::trim)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private ChallengeQuizStartResponse toStartResponse(
@@ -773,10 +845,10 @@ public class ChallengeQuizService {
             }
         }
 
-        int totalQuestions = quiz.size();
+        int totalQuestions = selectedChoices.isEmpty() ? quiz.size() : selectedChoices.size();
         BigDecimal percentage = BigDecimal.valueOf(correctAnswers)
                 .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(totalQuestions), 2, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(Math.max(1, totalQuestions)), 2, RoundingMode.HALF_UP);
 
         List<ChallengeQuizConceptStatResponse> conceptBreakdown = conceptCounters.entrySet()
                 .stream()
