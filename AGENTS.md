@@ -200,7 +200,7 @@ Teacher flow rule:
 - Product onboarding completion is tracked separately from activation onboarding and should not reuse `onboardingCompletedAt`.
 - **Onboarding Study Pack generation (Step 4) must be idempotent**: `handleStartStudyPack()` must check `draft.noteId` before creating a note; if a note already exists, navigate to Step 4 instead of creating another. This prevents duplicate notes and study packs from back/forward/refresh behavior.
 - **Back button lock during Study Pack generation**: hide the Back button while generation is active (`studyPackGenerating || startingStudyPack`); replace the notice with `Your Study Pack is being created. This step can't be undone.`; restore the Back button on error or completion.
-- **After Study Pack generation from existing note**: the backend automatically applies AI-generated `subject` and `tags` to the source note if those fields are empty — zero-friction, no user prompt needed. This is implemented in `generateStudyPackFromExistingNoteAsync` via `applyGeneratedMetadataToNote`.
+- **Onboarding-only metadata auto-apply**: onboarding may explicitly opt into backend auto-apply for empty `subject` and `tags` when it starts Study Pack generation from an existing note. Normal note generation must keep AI metadata suggestions transient until the user confirms them in the AI Suggestions modal.
 - **Learner level is deferred from onboarding**: do not add a learner level step to onboarding. The dashboard personalization prompt handles deferred collection. Prompt copy: title `Too easy or too hard?`, body `Set your learner level so future quizzes match your study stage.`, CTA `Adjust level` — navigates to `/profile?from=dashboard#learning-profile`.
 
 ### Profile Rule
@@ -791,6 +791,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - `learnerLevel` lives on `User`, not on Note or a separate learner-profile table.
 - `User.courseProgram` remains the profile-level default for new notes.
 - Notes may also store an optional note-level `courseProgram`, defaulted from the user's profile and editable per note.
+- For Study Pack generation, `notes.courseProgram` is the source of truth when present. Fall back to `users.courseProgram` only when the note has no saved course/program.
 - Metadata hierarchy should stay:
   - `courseProgram` -> top-level track/domain
   - `subject` -> reusable academic topic
@@ -806,6 +807,8 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Never add a raw learner-level or course/program string to a prompt without going through `buildLearnerContextBlock()`.
 - Learner level defaults to `COLLEGE` when the user has no saved `learnerLevel`.
 - Course/program is omitted from the context block when the user has no saved `courseProgram`.
+- In the normal note flow, AI-generated `title`, `subject`, and `tags` must not be persisted before explicit user confirmation.
+- When merging AI tags with existing note tags, always deduplicate case-insensitively after trimming whitespace.
 
 ### Quiz Generation Rule
 

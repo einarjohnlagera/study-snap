@@ -39,6 +39,33 @@ function normalizeTags(tags: string[] | null | undefined): string[] {
   return [...normalizedByKey.values()];
 }
 
+export function partitionAiSuggestedTags(
+  currentTags: string[] | null | undefined,
+  suggestedTags: string[] | null | undefined,
+): {
+  newTags: string[];
+  overlappingTags: string[];
+} {
+  const normalizedCurrentTags = normalizeTags(currentTags);
+  const normalizedSuggestedTags = normalizeTags(suggestedTags);
+  const existingKeys = new Set(normalizedCurrentTags.map((tag) => tag.toLowerCase()));
+  const newTags: string[] = [];
+  const overlappingTags: string[] = [];
+
+  for (const suggestedTag of normalizedSuggestedTags) {
+    if (existingKeys.has(suggestedTag.toLowerCase())) {
+      overlappingTags.push(suggestedTag);
+      continue;
+    }
+    newTags.push(suggestedTag);
+  }
+
+  return {
+    newTags,
+    overlappingTags,
+  };
+}
+
 export function hasExistingNoteMetadata(note: NoteMetadataLike): boolean {
   return Boolean(
     (note.title && note.title.trim().length > 0)
@@ -61,12 +88,13 @@ export function resolveAiSuggestionSelectionDefaults(
   const suggestedTitle = normalizeOptionalText(suggested.title);
   const suggestedSubject = normalizeOptionalText(suggested.subject);
   const suggestedTags = normalizeTags(suggested.tags);
+  const suggestedTagPartition = partitionAiSuggestedTags(currentTags, suggestedTags);
 
   return {
     titleChoice: currentTitle ? "keep" : suggestedTitle ? "use-ai" : "keep",
     subjectChoice: currentSubject ? "keep" : suggestedSubject ? "use-ai" : "keep",
     tagsChoice: currentTags.length > 0
-      ? "merge"
+      ? suggestedTagPartition.newTags.length > 0 ? "merge" : "keep"
       : suggestedTags.length > 0
         ? "use-ai"
         : "keep",

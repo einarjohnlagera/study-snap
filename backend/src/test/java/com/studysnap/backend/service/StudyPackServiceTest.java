@@ -446,6 +446,86 @@ class StudyPackServiceTest {
         verify(studyPackRepository, never()).save(any(StudyPackEntity.class));
     }
 
+    @Test
+    void startAsyncGenerationFromNote_keepsAiMetadataTransientByDefault() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        draftNote.setTitle("My Note");
+        draftNote.setSubject("General Science");
+        draftNote.setTags(new String[]{"history"});
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "Suggested Title",
+                "Generated summary",
+                "History",
+                List.of("History", "Battle of Puebla", "Culture"),
+                List.of("Key concept"),
+                List.of(),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId);
+
+        assertThat(draftNote.getTitle()).isEqualTo("My Note");
+        assertThat(draftNote.getSubject()).isEqualTo("General Science");
+        assertThat(draftNote.getTags()).containsExactly("history");
+    }
+
+    @Test
+    void startAsyncGenerationFromNote_autoApplyMetadataUpdatesEmptyFieldsWhenRequested() {
+        UUID userId = UUID.randomUUID();
+        UUID noteId = UUID.randomUUID();
+        NoteEntity draftNote = buildDraftNote(noteId, userId, "draft note content");
+        draftNote.setSubject(null);
+        draftNote.setTags(new String[0]);
+        GeneratedStudyPackContent generated = new GeneratedStudyPackContent(
+                "Suggested Title",
+                "Generated summary",
+                "History",
+                List.of("History", "Battle of Puebla", "Culture"),
+                List.of("Key concept"),
+                List.of(),
+                "gpt-4.1-mini",
+                10,
+                20,
+                0,
+                new BigDecimal("0.0100")
+        );
+
+        when(noteRepository.findByIdAndOwnerUserId(noteId, userId)).thenReturn(Optional.of(draftNote));
+        when(studyPackRepository.findByOwnerUserIdAndNoteId(userId, noteId)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(studyPackUsageService.resolveUsage(eq(userId), any(OffsetDateTime.class)))
+                .thenReturn(new StudyPackUsageService.UsageSnapshot(
+                        OffsetDateTime.now().minusDays(10),
+                        OffsetDateTime.now().plusDays(20),
+                        0
+                ));
+        when(llmStudyPackService.generateStudyPack(eq("draft note content"), any(StudyPackGenerationContext.class)))
+                .thenReturn(generated);
+
+        studyPackService.startAsyncGenerationFromNote(noteId.toString(), userId, true);
+
+        assertThat(draftNote.getSubject()).isEqualTo("History");
+        assertThat(draftNote.getTags()).containsExactly("History", "Battle of Puebla", "Culture");
+    }
+
     private NoteEntity buildDraftNote(UUID noteId, UUID ownerUserId, String content) {
         NoteEntity note = new NoteEntity();
         note.setId(noteId);

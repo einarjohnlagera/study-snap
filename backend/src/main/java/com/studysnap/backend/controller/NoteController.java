@@ -57,6 +57,7 @@ import java.util.UUID;
 @RequestMapping("/notes")
 @RequiredArgsConstructor
 public class NoteController {
+    private static final String AUTO_APPLY_METADATA_REQUEST_PARAM = "autoApplyMetadata";
 
     private final AuthService authService;
     private final NoteService noteService;
@@ -115,11 +116,12 @@ public class NoteController {
     @PreAuthorize("hasAnyRole('USER','ADMIN')")
     public NoteResponse generate(
             @PathVariable String id,
+            @RequestParam(value = AUTO_APPLY_METADATA_REQUEST_PARAM, defaultValue = "false") boolean autoApplyMetadata,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID userId = user.userId();
         authService.requireEmailVerified(userId);
-        studyPackService.startAsyncGenerationFromNote(id, userId);
+        studyPackService.startAsyncGenerationFromNote(id, userId, autoApplyMetadata);
         return noteService.getById(id, userId);
     }
 

@@ -719,7 +719,7 @@ export default function OnboardingPage() {
         studyPackId: createdNote.studyPackId ?? null,
       }));
 
-      const queuedNote = await createStudyPackFromNote(createdNote.id);
+      const queuedNote = await createStudyPackFromNote(createdNote.id, { autoApplyMetadata: true });
       setNote(queuedNote);
       setDraft((previous) => ({
         ...previous,
@@ -764,7 +764,7 @@ export default function OnboardingPage() {
     setStudyPackLimitReached(false);
     generationTrackedRef.current = null;
     try {
-      const queuedNote = await createStudyPackFromNote(note.id);
+      const queuedNote = await createStudyPackFromNote(note.id, { autoApplyMetadata: true });
       setNote(queuedNote);
       setDraft((previous) => ({
         ...previous,

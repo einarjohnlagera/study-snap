@@ -278,7 +278,7 @@ describe("OnboardingPage", () => {
       targetProfileType: "STUDENT",
       content: "Edited Newton note content for onboarding so the study pack can start.",
     });
-    expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1");
+    expect(createStudyPackFromNote).toHaveBeenCalledWith("note-1", { autoApplyMetadata: true });
     expect(routerMock.push).toHaveBeenCalledWith("/study-packs/study-pack-1");
   });
 
@@ -344,7 +344,7 @@ describe("OnboardingPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
 
-    expect(await screen.findByText("You’ve reached your note generation limit")).toBeInTheDocument();
+    expect(await screen.findByText("You've reached your note generation limit")).toBeInTheDocument();
   });
 
   it("allows board takers to finish without an exam date", async () => {

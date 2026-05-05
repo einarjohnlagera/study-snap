@@ -144,6 +144,10 @@ public class StudyPackService {
     }
 
     public void startAsyncGenerationFromNote(String noteIdRaw, UUID ownerUserId) {
+        startAsyncGenerationFromNote(noteIdRaw, ownerUserId, false);
+    }
+
+    public void startAsyncGenerationFromNote(String noteIdRaw, UUID ownerUserId, boolean autoApplyGeneratedMetadata) {
         long startedAt = System.currentTimeMillis();
         String requestId = UUID.randomUUID().toString();
         NoteEntity sourceNote = resolveSourceNoteForGeneration(noteIdRaw, ownerUserId);
@@ -166,6 +170,7 @@ public class StudyPackService {
                 normalizedText,
                 planType,
                 generationContext,
+                autoApplyGeneratedMetadata,
                 startedAt,
                 requestId
         );
@@ -577,6 +582,7 @@ public class StudyPackService {
             String normalizedText,
             PlanType planType,
             StudyPackGenerationContext generationContext,
+            boolean autoApplyGeneratedMetadata,
             long startedAt,
             String requestId
     ) {
@@ -607,7 +613,9 @@ public class StudyPackService {
                         noteId
                 );
                 markNoteGenerated(noteId, sourceNote);
-                applyGeneratedMetadataToNote(sourceNote, generated);
+                if (autoApplyGeneratedMetadata) {
+                    applyGeneratedMetadataToNote(sourceNote, generated);
+                }
                 return savedEntity;
             });
 

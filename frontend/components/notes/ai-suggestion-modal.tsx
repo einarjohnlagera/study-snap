@@ -5,6 +5,7 @@ import { AppModal } from "@/components/ui/app-modal";
 import { Button } from "@/components/ui/button";
 import {
   applyAiSuggestionSelection,
+  partitionAiSuggestedTags,
   resolveAiSuggestionSelectionDefaults,
   type AiSuggestionSelection,
 } from "@/lib/note-metadata";
@@ -47,6 +48,30 @@ function TagChips({
           {tag}
         </span>
       ))}
+    </div>
+  );
+}
+
+function SuggestedTagSummary({
+  newTags,
+  overlappingTags,
+}: Readonly<{
+  newTags: string[];
+  overlappingTags: string[];
+}>) {
+  return (
+    <div className="space-y-3">
+      {newTags.length > 0 ? (
+        <TagChips tags={newTags} emptyLabel="No new tag suggestions." />
+      ) : (
+        <p className="text-xs text-foreground/55">No new tag suggestions.</p>
+      )}
+      {overlappingTags.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground/55">Already on your note</p>
+          <TagChips tags={overlappingTags} emptyLabel="" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -167,8 +192,10 @@ export function AiSuggestionModal({
     { title: suggestedTitle, subject: suggestedSubject, tags: suggestedTags },
     selection,
   );
+  const suggestedTagPartition = partitionAiSuggestedTags(currentTags, suggestedTags);
   const hasSuggestedSubject = Boolean(suggestedSubject && suggestedSubject.trim().length > 0);
   const hasSuggestedTags = suggestedTags.length > 0;
+  const hasNewSuggestedTags = suggestedTagPartition.newTags.length > 0;
 
   return (
     <AppModal
@@ -251,7 +278,12 @@ export function AiSuggestionModal({
           currentLabel="Your Tags"
           currentValue={<TagChips tags={currentTags} emptyLabel="No tags" />}
           suggestedLabel="AI Tags"
-          suggestedValue={<TagChips tags={suggestedTags} emptyLabel="No tags" />}
+          suggestedValue={(
+            <SuggestedTagSummary
+              newTags={suggestedTagPartition.newTags}
+              overlappingTags={suggestedTagPartition.overlappingTags}
+            />
+          )}
         >
           <fieldset className="space-y-2">
             <legend className="sr-only">Choose how to apply tags</legend>
@@ -266,7 +298,7 @@ export function AiSuggestionModal({
               label="Merge My Tags + AI Tags"
               checked={selection.tagsChoice === "merge"}
               onChange={() => setSelection((current) => ({ ...current, tagsChoice: "merge" }))}
-              disabled={!hasSuggestedTags}
+              disabled={!hasNewSuggestedTags}
             />
             <RadioOption
               name={`${groupBaseId}-tags`}

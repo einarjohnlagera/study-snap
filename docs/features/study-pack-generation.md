@@ -14,7 +14,7 @@ Practice quizzes should feel like real study reviewers, not generic AI trivia.
   - `courseProgram`
   - note `subject`
   - note `tags`
-- This metadata is preparation for smarter prompt personalization in later releases; current Study Pack UI and workflow do not change yet.
+- `courseProgram` must resolve from the note first. If `notes.courseProgram` is present, it is the source of truth for Study Pack generation. Only fall back to the profile-level `users.courseProgram` when the note has no course/program saved.
 
 ## Output structure
 
@@ -219,6 +219,7 @@ User-facing generation statuses:
 - Create Note and Note Detail must use the same metadata suggestion behavior after successful generation.
 - Generated `title`, `subject`, and `tags` should be suggested from both entry points.
 - Generated metadata must not silently overwrite user-entered `title` or `subject`.
+- In the normal note flow, generated metadata must remain transient until the user explicitly clicks `Apply Changes`.
 - Note Editor generation is asynchronous, so Create Note hands off to Note Detail and the suggestion modal opens there once generation reaches `STUDY_PACK_READY`.
 - The shared AI suggestion modal should support:
   - `Title` -> `Keep My Title` or `Use AI Title`
@@ -227,11 +228,15 @@ User-facing generation statuses:
 - Default selection should stay conservative:
   - existing `title` -> default `Keep My Title`
   - existing `subject` -> default `Keep My Subject`
-  - existing `tags` -> default `Merge Tags`
+  - existing `tags` with new AI tags -> default `Merge Tags`
+  - existing `tags` with no new AI tags -> default `Keep My Tags`
   - no existing `tags` -> default `Use AI Tags`
+- Tag comparison must be case-insensitive and whitespace-trimmed when deciding whether an AI tag is actually new.
+- AI tag suggestions should show only new tags as suggestions and should mark overlapping tags as already present on the note instead of presenting them as fresh additions.
 - AI subject output must be a broad academic domain, not a specific topic. Topic specificity belongs in tags.
 - Subject must be domain-level (e.g., `Biology`, `Engineering`). Combined domain-topic values are normalized back to the domain before save.
 - Generation context should use learner level, course/program, current subject, and tags to refine the suggested subject rather than treating the note as context-free.
+- Onboarding is the exception: it may opt into backend auto-apply for empty metadata fields so the guided flow stays zero-friction.
 
 ## Validation and retry
 
