@@ -288,6 +288,7 @@ export default function ChallengeQuizPage() {
   const [currentLearnerLevel, setCurrentLearnerLevel] = useState<LearnerLevel | null>(null);
   const [savingLearnerLevel, setSavingLearnerLevel] = useState(false);
   const [learnerLevelToast, setLearnerLevelToast] = useState<string | null>(null);
+  const [generateMoreToast, setGenerateMoreToast] = useState<string | null>(null);
   const noteDetailHref = useMemo(() => (note ? `/notes/${note.id}` : "/library"), [note]);
   const syncProgressRef = useCallback((nextIndex: number, nextSelectedChoices: Record<number, number>) => {
     progressRef.current = {
@@ -398,6 +399,14 @@ export default function ChallengeQuizPage() {
     const timer = setTimeout(() => setLearnerLevelToast(null), 3500);
     return () => clearTimeout(timer);
   }, [learnerLevelToast]);
+
+  useEffect(() => {
+    if (!generateMoreToast) {
+      return;
+    }
+    const timer = setTimeout(() => setGenerateMoreToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [generateMoreToast]);
 
   const handleChangeLearnerLevel = async (level: LearnerLevel) => {
     if (savingLearnerLevel) {
@@ -901,6 +910,7 @@ export default function ChallengeQuizPage() {
     setShowBoardExamStartModal(false);
     setGeneratingMore(false);
     setNoMoreQuestions(false);
+    setGenerateMoreToast(null);
     setPrestartStep(resolveRecoveryPrestartStep(challengeSession?.mode ?? selectedMode));
     setPhase("prestart");
   };
@@ -926,6 +936,7 @@ export default function ChallengeQuizPage() {
       const nextIndex = challengeSession.quiz.length;
       syncProgressRef(nextIndex, progressRef.current.selectedChoices);
       setCurrentIndex(nextIndex);
+      setGenerateMoreToast(`+${response.newQuestions.length} questions added`);
       if (challengeSession.quiz.length + response.newQuestions.length >= MAX_SESSION_QUESTIONS) {
         setNoMoreQuestions(true);
       }
@@ -986,27 +997,34 @@ export default function ChallengeQuizPage() {
     setPrestartStep("mode-selection");
     setSelectedMode(prefersBoardExam ? BOARD_EXAM_MODE : CHALLENGE_MODE);
   }, [prefersBoardExam]);
+  const handleBeforeRouteLeave = useCallback(() => {
+    persistLatestProgress(true);
+  }, [persistLatestProgress]);
+
+  const handleLeaveSession = useCallback(async () => {
+    const activeSession = challengeSessionRef.current;
+    if (!activeSession?.sessionId) {
+      return;
+    }
+    if (submitInFlightRef.current) {
+      throw new Error("Challenge Quiz submission is already in progress.");
+    }
+    persistLatestProgress(true);
+    if (activeSession.mode === BOARD_EXAM_MODE) {
+      await finalizeChallengeSession({
+        timeoutTriggered: false,
+        persistResultToPage: false,
+      });
+      return;
+    }
+    await forfeitChallengeQuizSession(activeSession.sessionId);
+  }, [finalizeChallengeSession, persistLatestProgress]);
+
   const { requestLeave, LeaveQuizModal } = useQuizSessionGuard({
     active: challengeQuizActive,
     fallbackHref: noteDetailHref,
-    onBeforeRouteLeave: () => persistLatestProgress(true),
-    onConfirmLeave: async () => {
-      if (!challengeSession?.sessionId) {
-        return;
-      }
-      if (submitInFlightRef.current) {
-        throw new Error("Challenge Quiz submission is already in progress.");
-      }
-      persistLatestProgress(true);
-      if (activeMode === BOARD_EXAM_MODE) {
-        await finalizeChallengeSession({
-          timeoutTriggered: false,
-          persistResultToPage: false,
-        });
-        return;
-      }
-      await forfeitChallengeQuizSession(challengeSession.sessionId);
-    },
+    onBeforeRouteLeave: handleBeforeRouteLeave,
+    onConfirmLeave: handleLeaveSession,
     dialogTitle: isBoardExamMode ? BOARD_EXAM_LEAVE_TITLE : undefined,
     dialogDescription: isBoardExamMode ? BOARD_EXAM_LEAVE_DESCRIPTION : undefined,
     confirmLabel: isBoardExamMode ? "Submit & Leave" : undefined,
@@ -1376,6 +1394,11 @@ export default function ChallengeQuizPage() {
         )
       ) : phase === "running" && challengeSession ? (
         <div className="space-y-4">
+          {!isBoardExamMode ? (
+            <p className="text-xs text-foreground/55">
+              Start with 5 questions. Generate more as you go (up to {MAX_SESSION_QUESTIONS}).
+            </p>
+          ) : null}
           {isBoardExamMode && showBoardExamFocusTip ? (
             <div className="flex flex-col gap-3 rounded-xl border border-foreground/15 bg-muted/20 p-4 text-sm text-foreground/80 sm:flex-row sm:items-center sm:justify-between">
               <p>{BOARD_EXAM_FOCUS_TIP}</p>
@@ -1423,6 +1446,9 @@ export default function ChallengeQuizPage() {
                   }}
                 />
                 <p className="text-xs text-foreground/65">Answers are graded only after submission.</p>
+                {!isBoardExamMode ? (
+                  <p className="text-xs text-foreground/50">You can finish anytime. Score is based on answered questions.</p>
+                ) : null}
                 <div className={cn(
                   "rounded-md border p-3",
                   isBoardExamMode ? "border-foreground/15 bg-muted/10" : "border-border bg-background",
@@ -1502,6 +1528,11 @@ export default function ChallengeQuizPage() {
             data-testid="challenge-quiz-action-bar"
             className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0"
           >
+            {!isBoardExamMode && currentIndex >= totalQuestions - 1 && !boardExamTimerExpired ? (
+              <p className="mx-auto mb-2 w-full max-w-3xl text-xs text-foreground/55">
+                What would you like to do next?
+              </p>
+            ) : null}
             <div className="mx-auto flex w-full max-w-3xl gap-2 sm:justify-start">
               <Button
                 type="button"
@@ -1550,7 +1581,7 @@ export default function ChallengeQuizPage() {
                       onClick={() => void handleGenerateMore()}
                       disabled={generatingMore || submitting}
                     >
-                      {generatingMore ? "Generating..." : "Generate More Questions"}
+                      {generatingMore ? "Adding..." : "+5 Questions"}
                     </Button>
                   ) : null}
                   <Button
@@ -1811,7 +1842,9 @@ export default function ChallengeQuizPage() {
       />
       <LeaveQuizModal />
       <GenerationLockModal />
-      {learnerLevelToast ? (
+      {generateMoreToast ? (
+        <ToastMessage message={generateMoreToast} tone="success" />
+      ) : learnerLevelToast ? (
         <ToastMessage message={learnerLevelToast} tone="success" />
       ) : null}
     </main>
