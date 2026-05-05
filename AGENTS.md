@@ -661,6 +661,21 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Weak concept threshold: accuracy < 60% (`WEAK_CONCEPT_THRESHOLD`).
 - The "Practice Weak Concepts" CTA must only appear when `weakConcepts.length > 0` and must link to Adaptive Practice.
 
+### Challenge Quiz — Progressive Generation
+
+- Challenge mode starts with 5 questions (`INITIAL_CHALLENGE_QUIZ_COUNT`). Board Exam Mode generates a fixed count based on learner profile and is exempt from progressive generation.
+- Users can request +5 more questions from the last question via `POST /challenge-quiz/sessions/{sessionId}/generate-more`, up to `MAX_CHALLENGE_QUIZ_QUESTIONS = 20` per session.
+- The backend deduplicates generated questions by normalized text against all existing session questions; if fewer than 3 unique new questions survive, it returns `NOT_ENOUGH_NEW_QUESTIONS` (HTTP 409). The frontend must treat this as a soft end-of-questions state (`noMoreQuestions = true`), not an error.
+- Score is based on **answered questions** (`selectedChoices.size()`), not the total question count in the session. This allows users to finish early without penalizing unattempted questions.
+- Action bar at the last question (Challenge mode only): show `+5 Questions` / `Adding...` when under max and `noMoreQuestions` is false; always show `Complete Quiz` to submit.
+- Board Exam Mode retains its existing submit label and flow unchanged.
+
+### Challenge Quiz — Leave Guard Stability
+
+- `onBeforeRouteLeave` and `onConfirmLeave` callbacks passed to `useQuizSessionGuard` must be stable references (wrapped in `useCallback`).
+- The timer fires every second and causes a re-render on every tick. If these callbacks are inline arrow functions, `useQuizSessionGuard` recreates `LeaveQuizModal` as a new component function each tick — React unmounts and remounts the open modal every second.
+- `onConfirmLeave` should read from `challengeSessionRef.current` instead of `challengeSession` state to avoid listing the session as a dep while still seeing the latest value.
+
 ### Note Card Consistency Rule
 
 - Library, Public Library, Public Profile, and public subject listing pages should reuse the shared note-card layout.
