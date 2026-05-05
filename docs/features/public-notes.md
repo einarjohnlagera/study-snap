@@ -73,19 +73,20 @@ Public note detail is read/copy/share only.
 Owner actions:
 
 - `Open Note`
-- `Share`
+- `Share this note`
 
 Non-owner actions:
 
+- `Create your own Study Pack`
 - `Copy to My Library`
-- `Generate Study Pack`
-- `Share`
+- `Share this note`
 
 Public note detail must not expose edit, delete, generation, or quiz actions.
+The note stays primary; Quick Check and CTA blocks should support the note rather than turning the page into a quiz-first surface.
 
 Copy-first generation rule:
 
-- `Generate Study Pack` on a public note should first copy the note into the viewer's Library.
+- `Create your own Study Pack` on a public note should first copy the note into the viewer's Library.
 - The viewer then continues generation on their own private note route.
 - Public note detail itself stays read-only.
 

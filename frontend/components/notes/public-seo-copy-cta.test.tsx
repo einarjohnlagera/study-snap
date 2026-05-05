@@ -54,6 +54,19 @@ describe("PublicSeoCopyCta", () => {
     expect(copyNote).not.toHaveBeenCalled();
   });
 
+  it("can send anonymous visitors to signup instead of login", () => {
+    (getAuthUser as jest.Mock).mockReturnValue(null);
+
+    render(<PublicSeoCopyCta noteId="note-1" label="Create your own Study Pack" redirectTarget="generate" guestAuthMode="signup" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Create your own Study Pack" }));
+
+    expect(pushMock).toHaveBeenCalledWith(
+      "/signup?redirect=%2Fpublic%2Flibrary%2Fscience%2Fcell-structure%3Fcopy%3D1%26intent%3Dgenerate",
+    );
+    expect(copyNote).not.toHaveBeenCalled();
+  });
+
   it("copies immediately for authenticated visitors", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ id: "user-1" });
     (copyNote as jest.Mock).mockResolvedValue({ id: "copied-note-1" });

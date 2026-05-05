@@ -70,3 +70,20 @@ Protect focused study flows by avoiding noticeable motion on:
 - moving between quiz questions
 - quiz timers or countdown emphasis
 - any interaction where animation would compete with reading or recall
+
+## Hash Anchors and Auto-Scroll
+
+Section deep links are a shared UI pattern in NoteLib.
+
+Rules:
+
+- put fragment targets on native DOM elements (`section`, `div`, heading wrapper) rather than relying on ids passed only through custom components
+- when a Next.js App Router page can open directly with a hash, mount the shared `HashScrollListener` from `frontend/components/navigation/hash-scroll-listener.tsx`
+- `HashScrollListener` should receive only the allowed target ids for that page
+- use the same pattern for initial load and later `hashchange` events so direct URLs and in-page CTA clicks land on the same section
+- keep scroll behavior smooth and anchored to the top of the destination block
+
+Current examples:
+
+- `/profile?from=dashboard#learning-profile`
+- `/public/library/{subject}/{slug}#full-notes`

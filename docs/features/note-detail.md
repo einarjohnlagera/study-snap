@@ -86,15 +86,17 @@ Rules:
 Public note detail is a separate public/read-only surface.
 
 - canonical route: `/public/library/{subject}/{slug}`
-- public note detail should use the same `Summary` / `Key Concepts` / `Quiz` / `Full Notes` reading flow, but it keeps tab state local instead of query-driven routing
-- public note detail should reuse the same `View Full Notes →` CTA inside the summary view so visitors can quickly inspect the source note
-- owner sees `Open Note` and `Share`
-- non-owner sees `Copy to My Library`, `Generate Study Pack`, and `Share`
+- public note detail should keep the same reading flow emphasis (`Summary` / `Key Concepts` / `Quick Check` / `Full Notes`) without turning the page into a quiz-first screen
+- public note detail should keep `Summary`, `Key Concepts`, and `Full Notes` visible as stacked sections; `View Full Notes →` is a section deep link, not a tab switch
+- the `Full Notes` target must use a native `id="full-notes"` section and the page should mount `HashScrollListener` so direct `/public/library/{subject}/{slug}#full-notes` visits auto-scroll after mount
+- owner sees `Open Note` and `Share this note`
+- non-owner sees `Create your own Study Pack`, `Copy to My Library`, and `Share this note`
 - do not expose private editing or study actions there
+- keep the note primary; Quick Check and CTA blocks should support the note instead of replacing it
 
 Copy-first generation rule:
 
-- `Generate Study Pack` on a public note must create a private copy first.
+- `Create your own Study Pack` on a public note must create a private copy first.
 - generation continues on the viewer's own note route after the copy is created.
 - do not run private study actions directly against the public source note
 

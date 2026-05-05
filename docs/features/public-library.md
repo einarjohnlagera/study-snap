@@ -311,8 +311,9 @@ Public note pages are shareable learning pages and top-of-funnel acquisition sur
 5. **Summary and Key Concepts** — the generated study outputs
 6. **Full quiz or gated continuation** — gate behind login after the preview experience
 7. **Soft conversion CTA** — `Turn your own notes into something like this`
-8. **Copy to My Library / Generate CTA** — placed after value is shown, for signed-in users
-9. **Share action** — always visible regardless of auth state
+8. **Post-answer CTA** — after the visitor answers the Quick Check question, show a small follow-up block such as `Want more practice like this?` with `Create your own Study Pack` and `Copy to My Library`
+9. **Copy / create CTA** — keep the stronger actions after value is shown, not above the note
+10. **Share action** — always visible regardless of auth state, but secondary to the note and follow-up CTA
 
 ### Mini quiz preview rules
 
@@ -320,7 +321,8 @@ Public note pages are shareable learning pages and top-of-funnel acquisition sur
 - allow public visitors to select an answer and see correct/incorrect feedback
 - do not create a quiz session row for anonymous users — all state is client-side only
 - do not persist score, progress, or session data for unauthenticated users
-- after the preview, show an inline gate: `Want to practice all questions and track your progress? Create a free account.`
+- after the visitor answers, show a small CTA block that invites the next step without replacing the note
+- use Quick Check copy such as `Quick check: see what you remember from the summary.`
 - after signup/login, route the user toward copying the note or creating their own Study Pack — not back to the same mini preview
 
 ### CTA ordering
@@ -331,18 +333,21 @@ The conversion path must feel earned, not forced:
 2. visitor tries mini quiz → sees value
 3. visitor sees summary/key concepts → understands depth
 4. soft CTA appears → `Turn your own notes into something like this`
-5. copy/generate CTA follows → available to signed-in users
+5. post-answer CTA appears only after interaction
+6. copy/create CTA follows → available without leading the page
 
-Never show `Copy to My Library` or `Generate Study Pack` as the first or only visible CTA on page load.
+Never show `Copy to My Library` or `Create your own Study Pack` as the first or only visible CTA on page load.
 
 ### Authenticated user view
 
 Signed-in users see the full experience:
 
-- `Summary`, `Key Concepts`, `Quiz`, `Full Notes` tabs
-- `Copy to My Library` as the primary non-owner CTA
-- `Share` always visible
-- `View Full Notes →` CTA inside Summary view
+- stacked `Summary`, `Key Concepts`, `Quick Check`, and `Full Notes` sections, with notes still primary
+- `Create your own Study Pack` as the visitor-facing generation CTA
+- `Copy to My Library` as the library/save CTA
+- `Share this note` always visible as a secondary action
+- `View Full Notes →` CTA inside the Summary section that deep-links to `#full-notes`
+- the public note detail page should mount the shared App Router hash-scroll pattern so direct `#full-notes` visits auto-scroll after the page content mounts
 
 ### Generated note formatting for public pages
 
@@ -358,6 +363,7 @@ Avoid:
 - long dense paragraph-per-concept output
 - LLM filler phrases (`It is important to note that...`, `In summary...`)
 - sections without a clear study takeaway
+- obvious mojibake or trust-breaking rendering issues such as broken apostrophes, mangled quotes, or malformed character sequences
 
 Note: formatting improvements apply to how generated content is displayed on public note pages. They do not change the underlying storage format or the authenticated note detail view unless explicitly specified.
 

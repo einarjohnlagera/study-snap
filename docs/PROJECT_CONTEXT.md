@@ -69,6 +69,15 @@ Primary routes:
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only)
 - `/public/profile/{userId}` (Public Profile)
 
+## Hash Navigation Pattern
+
+- Deep links to page sections are part of the product flow, not an incidental browser behavior.
+- When a page exposes a section-targeted CTA such as `View Full Notes →` or `Adjust level`, the target section must use a native DOM `id`.
+- App Router pages that can load directly with `#fragment` must re-apply scrolling after mount via the shared `HashScrollListener` so direct URL visits and later hash changes land on the intended section.
+- Current examples:
+  - `/profile?from=dashboard#learning-profile`
+  - `/public/library/{subject}/{slug}#full-notes`
+
 ## Verification and OCR
 
 - Unverified users are blocked from Study Pack generation.
@@ -142,12 +151,14 @@ Public note pages must:
 - teach first (topic, hook, mini quiz preview)
 - let visitors interact lightly (1–2 unanswered questions, no account needed)
 - then invite signup or note creation (soft CTA after value is shown)
+- keep the note primary; the quiz preview supports engagement but does not replace the note
 
 Public mini quiz rules:
 - public visitors may answer a small preview of 1–2 questions
 - answers are client-side only — no session row is created for anonymous users
 - full quiz access, score persistence, and Study Pack generation require login
 - the signup gate must appear only after the visitor has experienced some value, not on page load
+- after the visitor answers the preview question, show a small next-step CTA such as `Create your own Study Pack` or `Copy to My Library`
 
 Generated note formatting for public pages:
 - prefer shorter sections, clearer headings, key-fact blocks, and quick recall blocks
@@ -156,8 +167,9 @@ Generated note formatting for public pages:
 
 CTA ordering on public note detail:
 - show topic hook → mini quiz → summary/key concepts → soft conversion CTA → copy/generate CTA
-- do not lead with `Copy to My Library` or `Generate Study Pack` before the visitor has seen learning value
-- `Share` must always be visible regardless of auth state
+- do not lead with `Copy to My Library` or `Create your own Study Pack` before the visitor has seen learning value
+- use `Create your own Study Pack` for visitor-facing generation CTAs and keep `Copy to My Library` for library-oriented copy actions
+- `Share this note` should stay visible as a secondary action regardless of auth state
 
 Public creator identity direction:
 - `displayName` is presentation-only; it is not a unique creator identity

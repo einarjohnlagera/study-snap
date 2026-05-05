@@ -10,7 +10,11 @@ jest.mock("@/lib/auth", () => ({
 const publicSeoCopyCtaMock = jest.fn(({ label }: { label?: string }) => <button type="button">{label ?? "Make a Copy"}</button>);
 
 jest.mock("./public-seo-copy-cta", () => ({
-  PublicSeoCopyCta: (props: { label?: string; redirectTarget?: "library" | "generate" }) => publicSeoCopyCtaMock(props),
+  PublicSeoCopyCta: (props: {
+    label?: string;
+    redirectTarget?: "library" | "generate";
+    guestAuthMode?: "login" | "signup";
+  }) => publicSeoCopyCtaMock(props),
 }));
 
 jest.mock("@/lib/api", () => ({
@@ -45,13 +49,13 @@ describe("PublicNoteOwnershipActions", () => {
     );
 
     expect(screen.getByRole("link", { name: "Open Note" })).toHaveAttribute("href", "/notes/note-1");
-    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Share this note" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Start Quick Review" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Challenge Quiz" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
-    expect(screen.getByText("Share this note")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Share this note" }));
+    expect(screen.getByRole("heading", { name: "Share this note" })).toBeInTheDocument();
     expect(screen.getByText("Shareable URL")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
     expect(clipboardWriteText).toHaveBeenCalledWith(
@@ -89,13 +93,21 @@ describe("PublicNoteOwnershipActions", () => {
       />,
     );
 
-    expect(screen.getByText("This note helped you? Copy it to your library and generate your own quiz.")).toBeInTheDocument();
+    expect(screen.getByText("Bring this note into your own workspace so you can review it, practice from it, or build your own Study Pack.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create your own Study Pack" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy to My Library" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Generate Study Pack" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Share this note" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Open Note" })).not.toBeInTheDocument();
-    expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(expect.objectContaining({ label: "Copy to My Library" }));
-    expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(expect.objectContaining({ label: "Generate Study Pack", redirectTarget: "generate" }));
+    expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
+      expect.objectContaining({ label: "Copy to My Library", guestAuthMode: "signup" }),
+    );
+    expect(publicSeoCopyCtaMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        label: "Create your own Study Pack",
+        redirectTarget: "generate",
+        guestAuthMode: "signup",
+      }),
+    );
   });
 
   it("shows NoteLib label and official badge for official public content", () => {

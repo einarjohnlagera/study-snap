@@ -151,18 +151,23 @@ export function PublicNoteOwnershipActions({
         <div className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <ResponsiveActionLink href={openNoteHref} action="open" label="Open Note" className="w-full sm:w-auto" />
-            <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share" />
+            <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share this note" />
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-foreground/75">
-            This note helped you? Copy it to your library and generate your own quiz.
+            Bring this note into your own workspace so you can review it, practice from it, or build your own Study Pack.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <PublicSeoCopyCta noteId={noteId} label="Copy to My Library" />
-            <PublicSeoCopyCta noteId={noteId} label="Generate Study Pack" redirectTarget="generate" />
-            <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share" />
+            <PublicSeoCopyCta
+              noteId={noteId}
+              label="Create your own Study Pack"
+              redirectTarget="generate"
+              guestAuthMode="signup"
+            />
+            <PublicSeoCopyCta noteId={noteId} label="Copy to My Library" guestAuthMode="signup" />
+            <ResponsiveActionButton type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowShareModal(true)} action="share" label="Share this note" />
           </div>
         </div>
       )}
