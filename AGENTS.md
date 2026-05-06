@@ -24,6 +24,18 @@ Teacher flow rule:
 - Do not reuse student quiz session logic for teacher preview.
 - Teacher flow uses `generatedQuiz` only.
 
+## AI Skills System
+
+Reusable workflow patterns for AI-assisted development are documented in `docs/skills/`.
+
+- `docs/skills/README.md` — philosophy, Claude vs Codex guidance, model/effort recommendations
+- `docs/skills/codex-prompt-generator.md` — how to write a structured Codex implementation prompt
+- `docs/skills/ux-product-review.md` — NoteLib UX philosophy and review categories
+- `docs/skills/release-doc-alignment.md` — checklist for keeping docs aligned after feature work
+- `docs/skills/roadmap-feature-audit.md` — how to classify and scope new work before starting
+
+Use these skills before writing prompts, before starting new features, and after shipping work.
+
 ## Implementation Workflow Rules
 
 - After every completed prompt/task that results in code or doc changes, always include a suggested commit message in the final response.

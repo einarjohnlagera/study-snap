@@ -200,6 +200,16 @@ Key v0.12.0 changes to be aware of:
 - **Social login (Google)** — planned for this release cycle; must not break or replace existing email-and-password accounts
 - **Content moderation** — `ContentModerationService` in the backend applies token-based dictionary matching to note titles, Study Pack topics, and note content at creation boundaries; dictionaries are in `classpath:/moderation/banned_words_*.txt`
 
+## AI Development Workflow
+
+NoteLib development uses a lightweight AI Skills system to reduce prompt fatigue and improve consistency across sessions.
+
+- Claude is used for product thinking, UX reviews, roadmap alignment, and architecture discussions
+- Codex is used for implementation, refactoring, cleanup, migrations, and tests
+- Reusable workflow patterns are documented in `docs/skills/`
+
+Skills cover: Codex prompt structure, UX product review, release/doc alignment, and roadmap/feature auditing. Read `docs/skills/README.md` for Claude vs Codex guidance and model/effort recommendations.
+
 ## Feature Documentation
 
 - docs/features/onboarding.md
