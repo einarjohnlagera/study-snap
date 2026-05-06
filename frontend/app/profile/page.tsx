@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
 import { ResponsiveActionButton, ResponsiveActionLink } from "@/components/ui/action-button";
@@ -12,8 +13,11 @@ import { AppModal } from "@/components/ui/app-modal";
 import { ToastMessage } from "@/components/ui/toast-message";
 import {
   completeOnboardingProfileType,
+  connectGoogle,
   getMe,
+  getSignInMethods,
   listCoursePrograms,
+  type SignInMethodsResponse,
   type LearnerLevel,
   type MeResponse,
   type ProfileType,
@@ -188,6 +192,9 @@ export default function ProfilePage() {
   const [learningProfileMessage, setLearningProfileMessage] = useState<string | null>(null);
   const [learningProfileErrors, setLearningProfileErrors] = useState<LearningProfileErrors>({});
   const [courseProgramSuggestions, setCourseProgramSuggestions] = useState<string[]>([]);
+  const [signInMethods, setSignInMethods] = useState<SignInMethodsResponse | null>(null);
+  const [signInMethodsMessage, setSignInMethodsMessage] = useState<string | null>(null);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
 
   const scrollToRequestedSection = useCallback(() => {
     if (globalThis.window === undefined) {
@@ -219,11 +226,13 @@ export default function ProfilePage() {
     setIdentityMessage(null);
     setProfileTypeMessage(null);
     setLearningProfileMessage(null);
+    setSignInMethodsMessage(null);
     setLearningProfileErrors({});
     try {
-      const [meResult, courseProgramsResult] = await Promise.allSettled([
+      const [meResult, courseProgramsResult, signInMethodsResult] = await Promise.allSettled([
         getMe(),
         listCoursePrograms("mine"),
+        getSignInMethods(),
       ]);
       if (meResult.status !== "fulfilled") {
         throw meResult.reason;
@@ -244,12 +253,14 @@ export default function ProfilePage() {
       });
       setSelectedProfileType(me.profileType ?? "");
       setCourseProgramSuggestions(courseProgramsResult.status === "fulfilled" ? courseProgramsResult.value : []);
+      setSignInMethods(signInMethodsResult.status === "fulfilled" ? signInMethodsResult.value : null);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not load profile.";
       setError(message);
       setProfile(null);
       setSelectedProfileType("");
       setCourseProgramSuggestions([]);
+      setSignInMethods(null);
     } finally {
       setLoading(false);
     }
@@ -484,6 +495,23 @@ export default function ProfilePage() {
     }
   };
 
+  const handleConnectGoogle = useCallback(async (credential: string) => {
+    if (connectingGoogle) {
+      return;
+    }
+    setConnectingGoogle(true);
+    setSignInMethodsMessage(null);
+    try {
+      const updated = await connectGoogle({ credential });
+      setSignInMethods(updated);
+      setSignInMethodsMessage("Google connected successfully.");
+    } catch (err) {
+      setSignInMethodsMessage(err instanceof Error ? err.message : "Could not connect Google.");
+    } finally {
+      setConnectingGoogle(false);
+    }
+  }, [connectingGoogle]);
+
   return (
     <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
       {loading ? (
@@ -592,6 +620,51 @@ export default function ProfilePage() {
                 action="save"
                 label="Save Identity"
               />
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-4 sm:p-6">
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold sm:text-xl">Sign-in Methods</h2>
+              <p className="text-sm text-foreground/70">
+                See which login methods are connected to your NoteLib account.
+              </p>
+            </div>
+            <div className="space-y-3 rounded-xl border border-border bg-background/60 p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium">Account email</p>
+                  <p className="text-sm text-foreground/70">{signInMethods?.email ?? profile.email}</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-sm font-medium">Email and password</p>
+                  <p className="text-sm text-foreground/70">
+                    {signInMethods?.passwordEnabled ? "Enabled" : "Not set up"}
+                  </p>
+                </div>
+                <div className="space-y-3 rounded-lg border border-border p-3">
+                  <div>
+                    <p className="text-sm font-medium">Google</p>
+                    <p className="text-sm text-foreground/70">
+                      {signInMethods?.googleConnected
+                        ? `Connected${signInMethods.googleEmail ? `: ${signInMethods.googleEmail}` : ""}`
+                        : "Not connected"}
+                    </p>
+                  </div>
+                  {!signInMethods?.googleConnected ? (
+                    <GoogleAuthButton
+                      label="Connect Google"
+                      loadingLabel="Connecting Google..."
+                      disabled={connectingGoogle}
+                      onCredential={handleConnectGoogle}
+                      onError={setSignInMethodsMessage}
+                    />
+                  ) : null}
+                </div>
+              </div>
+              {signInMethodsMessage ? <p className="text-xs text-foreground/60">{signInMethodsMessage}</p> : null}
             </div>
           </Card>
 

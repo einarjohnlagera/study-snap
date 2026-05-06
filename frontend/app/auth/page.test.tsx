@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AuthPage from "./page";
-import { getMyPlan, login } from "@/lib/api";
+import { getMyPlan, login, loginWithGoogle } from "@/lib/api";
 
 const routerMock = {
   push: jest.fn(),
@@ -36,6 +36,7 @@ jest.mock("@/lib/auth", () => {
 jest.mock("@/lib/api", () => ({
   getMyPlan: jest.fn(),
   login: jest.fn(),
+  loginWithGoogle: jest.fn(),
   signup: jest.fn(),
   trackAnalyticsEvent: jest.fn(),
 }));
@@ -72,6 +73,7 @@ describe("AuthPage", () => {
     routerMock.replace.mockReset();
     routerMock.refresh.mockReset();
     (login as jest.Mock).mockReset();
+    (loginWithGoogle as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockReset();
     (getMyPlan as jest.Mock).mockResolvedValue(null);
     window.history.replaceState({}, "", "/login");
@@ -92,6 +94,22 @@ describe("AuthPage", () => {
 
     expect(screen.getByRole("heading", { name: "Create your NoteLib account" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toBeInTheDocument();
+  });
+
+  it("renders the Google auth option without removing email/password login", () => {
+    render(<AuthPage />);
+
+    expect(screen.getByRole("button", { name: "Continue with Google" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Email or username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toBeInTheDocument();
+  });
+
+  it("shows a clear Google configuration error when unavailable", () => {
+    render(<AuthPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+
+    expect(screen.getByText("Google login is not configured yet.")).toBeInTheDocument();
   });
 
   it("redirects a normal successful login to the dashboard", async () => {

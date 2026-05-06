@@ -368,6 +368,15 @@ export type LoginRequest = {
   keepSignedIn?: boolean;
 };
 
+export type GoogleAuthRequest = {
+  credential: string;
+  keepSignedIn?: boolean;
+};
+
+export type GoogleConnectRequest = {
+  credential: string;
+};
+
 export type AuthResponse = {
   userId: string;
   email: string;
@@ -412,6 +421,13 @@ export type MeResponse = {
   status: "ACTIVE" | "SUSPENDED";
   planType: PlanType;
   subscription: SubscriptionPlanStatusResponse;
+};
+
+export type SignInMethodsResponse = {
+  email: string;
+  passwordEnabled: boolean;
+  googleConnected: boolean;
+  googleEmail: string | null;
 };
 
 export type UpdateEngagementModeRequest = {
@@ -1144,6 +1160,48 @@ export async function login(request: LoginRequest): Promise<AuthUser> {
   });
   const payload = await parseApiResponse<AuthResponse>(response, "Could not log in. Please try again.");
   return toAuthUser(payload);
+}
+
+export async function loginWithGoogle(request: GoogleAuthRequest): Promise<AuthUser> {
+  const response = await fetch(buildUrl("/auth/google"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+  const payload = await parseApiResponse<AuthResponse>(response, "Could not continue with Google. Please try again.");
+  return toAuthUser(payload);
+}
+
+export async function getSignInMethods(): Promise<SignInMethodsResponse> {
+  const response = await fetchWithAuth(
+    "/auth/sign-in-methods",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${getAccessToken()}`,
+      },
+    },
+    true,
+  );
+  return parseApiResponse<SignInMethodsResponse>(response, "Could not load sign-in methods.");
+}
+
+export async function connectGoogle(request: GoogleConnectRequest): Promise<SignInMethodsResponse> {
+  const response = await fetchWithAuth(
+    "/auth/google/connect",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getAccessToken()}`,
+      },
+      body: JSON.stringify(request),
+    },
+    true,
+  );
+  return parseApiResponse<SignInMethodsResponse>(response, "Could not connect Google. Please try again.");
 }
 
 export async function logout(): Promise<void> {

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import ProfilePage from "./page";
-import { completeOnboardingProfileType, getMe, listCoursePrograms, updateUserProfile } from "@/lib/api";
+import { completeOnboardingProfileType, connectGoogle, getMe, getSignInMethods, listCoursePrograms, updateUserProfile } from "@/lib/api";
 
 const routerMock = {
   push: jest.fn(),
@@ -22,7 +22,9 @@ jest.mock("@/lib/route-guards", () => ({
 
 jest.mock("@/lib/api", () => ({
   completeOnboardingProfileType: jest.fn(),
+  connectGoogle: jest.fn(),
   getMe: jest.fn(),
+  getSignInMethods: jest.fn(),
   getUserNotePerformanceSummary: jest.fn().mockResolvedValue([]),
   listCoursePrograms: jest.fn(),
   updateUserProfile: jest.fn(),
@@ -65,10 +67,18 @@ describe("Profile page", () => {
     routerMock.push.mockReset();
     routerMock.refresh.mockReset();
     (getMe as jest.Mock).mockReset();
+    (getSignInMethods as jest.Mock).mockReset();
     (listCoursePrograms as jest.Mock).mockReset();
     (updateUserProfile as jest.Mock).mockReset();
+    (connectGoogle as jest.Mock).mockReset();
     (completeOnboardingProfileType as jest.Mock).mockReset();
     (getMe as jest.Mock).mockResolvedValue(profileResponse);
+    (getSignInMethods as jest.Mock).mockResolvedValue({
+      email: "[email protected]",
+      passwordEnabled: true,
+      googleConnected: false,
+      googleEmail: null,
+    });
     (listCoursePrograms as jest.Mock).mockResolvedValue(["Nursing", "Computer Science"]);
     (completeOnboardingProfileType as jest.Mock).mockResolvedValue(profileResponse);
   });
@@ -170,6 +180,34 @@ describe("Profile page", () => {
     );
     expect(screen.queryByRole("button", { name: "Share Public Profile" })).not.toBeInTheDocument();
     expect(screen.queryByText("Public Profile On")).not.toBeInTheDocument();
+  });
+
+  it("shows connected sign-in methods and Google connect entry point", async () => {
+    render(<ProfilePage />);
+
+    expect(await screen.findByText("Sign-in Methods")).toBeInTheDocument();
+    expect(screen.getByText("Email and password")).toBeInTheDocument();
+    expect(screen.getByText("Enabled")).toBeInTheDocument();
+    expect(screen.getByText("Google")).toBeInTheDocument();
+    expect(screen.getByText("Not connected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect Google" })).toBeInTheDocument();
+  });
+
+  it("shows connected Google email when already linked", async () => {
+    (getSignInMethods as jest.Mock).mockResolvedValue({
+      email: "[email protected]",
+      passwordEnabled: false,
+      googleConnected: true,
+      googleEmail: "[email protected]",
+    });
+
+    render(<ProfilePage />);
+
+    expect(await screen.findByText("Not set up")).toBeInTheDocument();
+    expect(screen.getByText((_, element) =>
+      element?.textContent === "Connected: [email protected]",
+    )).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Connect Google" })).not.toBeInTheDocument();
   });
 
   it("saves the bio field with learning profile settings", async () => {

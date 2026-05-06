@@ -755,6 +755,15 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - After manual sign-out, the next successful login should land on `Dashboard` unless verification or onboarding gating applies.
 - Do not send users back to public marketing or discovery pages automatically after login unless a protected-route redirect explicitly requires it.
 
+### Social Login Rule
+
+- Google OAuth is an alternative sign-in method, not a replacement for email/password.
+- Verify Google identity tokens on the backend; never trust frontend-only Google profile data.
+- Only auto-link by email when Google reports `email_verified=true`.
+- Store provider identity in `user_auth_providers`; do not store provider IDs directly on `users`.
+- Existing email/password users with a verified matching Google email must be linked, not duplicated.
+- Do not add Apple/Facebook/GitHub or unlink/provider-management UI unless explicitly requested.
+
 ### Auth Messaging Rule
 
 - `Your session has expired. Please log in again.` must only appear when login is opened with `reason=session_expired`.

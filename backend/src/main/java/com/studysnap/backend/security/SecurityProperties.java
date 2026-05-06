@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class SecurityProperties {
     private Jwt jwt = new Jwt();
     private Auth auth = new Auth();
+    private Google google = new Google();
 
     @Getter
     @Setter
@@ -27,5 +28,12 @@ public class SecurityProperties {
         private int maxFailedAttempts = 5;
         private int lockMinutes = 15;
         private int authRateLimitPerMinute = 20;
+    }
+
+    @Getter
+    @Setter
+    public static class Google {
+        private String clientId = "";
+        private String certificatesUrl = "https://www.googleapis.com/oauth2/v3/certs";
     }
 }

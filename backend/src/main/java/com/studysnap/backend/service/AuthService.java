@@ -3,11 +3,14 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.GoogleAuthRequest;
+import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
+import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.UpdatePublicProfileVisibilityRequest;
@@ -16,11 +19,13 @@ import com.studysnap.backend.dto.UpdateEngagementModeRequest;
 import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.RefreshTokenEntity;
 import com.studysnap.backend.entity.ThemePreference;
+import com.studysnap.backend.entity.UserAuthProviderEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.entity.UserStatus;
@@ -30,6 +35,7 @@ import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserAuthProviderRepository;
 import com.studysnap.backend.util.CourseProgramNormalizationUtils;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
@@ -51,6 +57,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthService {
     private static final String RESERVED_DISPLAY_NAME_MESSAGE = "This display name is reserved. Please choose another name.";
+    private static final String GOOGLE_EMAIL_NOT_VERIFIED_MESSAGE = "Google email must be verified before signing in.";
+    private static final String GOOGLE_EMAIL_MISMATCH_MESSAGE = "This Google account uses a different email. Please use the same email as your NoteLib account.";
+    private static final String GOOGLE_ALREADY_CONNECTED_MESSAGE = "Google is already connected to this account.";
+    private static final String GOOGLE_CONNECTED_TO_ANOTHER_ACCOUNT_MESSAGE = "This Google account is already connected to another NoteLib account.";
     private static final String USERNAME_TAKEN_MESSAGE = "Username is already taken.";
     private static final String USERNAME_FORMAT_MESSAGE = "Username can only contain letters, numbers, underscores, or hyphens.";
     private static final String USERNAME_LENGTH_MESSAGE = "Username must be 3-30 characters.";
@@ -79,12 +89,14 @@ public class AuthService {
     );
 
     private final UserRepository userRepository;
+    private final UserAuthProviderRepository userAuthProviderRepository;
     private final StudyPackRepository studyPackRepository;
     private final SubscriptionService subscriptionService;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final SecurityProperties securityProperties;
+    private final GoogleIdentityTokenVerifier googleIdentityTokenVerifier;
     private final EmailVerificationService emailVerificationService;
     private final AnalyticsService analyticsService;
 
@@ -142,7 +154,7 @@ public class AuthService {
         if (isLocked(user)) {
             throw invalidCredentials();
         }
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             registerFailedLogin(user);
             throw invalidCredentials();
         }
@@ -161,6 +173,87 @@ public class AuthService {
                 "keepSignedIn", keepSignedIn
         ));
         return buildAuthResponse(user, planType, keepSignedIn, null, ipAddress, userAgent);
+    }
+
+    public AuthResponse loginWithGoogle(GoogleAuthRequest request, String ipAddress, String userAgent) {
+        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = verifyGoogleIdentity(request.credential());
+        OffsetDateTime now = OffsetDateTime.now();
+        UserEntity user = userAuthProviderRepository
+                .findByProviderAndProviderUserId(AuthProvider.GOOGLE, googleIdentity.subject())
+                .map(provider -> {
+                    provider.setProviderEmail(googleIdentity.email());
+                    provider.setUpdatedAt(now);
+                    return findUserOrThrow(provider.getUserId());
+                })
+                .orElseGet(() -> findOrCreateGoogleUser(googleIdentity, now));
+
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            throw invalidCredentials();
+        }
+        if (user.getEmailVerifiedAt() == null && user.getEmail().equalsIgnoreCase(googleIdentity.email())) {
+            user.setEmailVerifiedAt(now);
+        }
+        user.setFailedLoginAttempts(0);
+        user.setLockedUntil(null);
+        user.setLastLoginAt(now);
+        user.setUpdatedAt(now);
+
+        boolean keepSignedIn = Boolean.TRUE.equals(request.keepSignedIn());
+        PlanType planType = subscriptionService.resolvePlan(user.getId());
+        analyticsService.trackEvent(user.getId(), AnalyticsEventType.LOGIN, user.getId(), Map.of(
+                "method", "google",
+                "keepSignedIn", keepSignedIn
+        ));
+        return buildAuthResponse(user, planType, keepSignedIn, null, ipAddress, userAgent);
+    }
+
+    public SignInMethodsResponse connectGoogle(UUID userId, GoogleConnectRequest request) {
+        UserEntity user = findUserOrThrow(userId);
+        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = verifyGoogleIdentity(request.credential());
+        if (!user.getEmail().equalsIgnoreCase(googleIdentity.email())) {
+            throw new AppException("GOOGLE_EMAIL_MISMATCH", GOOGLE_EMAIL_MISMATCH_MESSAGE, HttpStatus.BAD_REQUEST);
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        userAuthProviderRepository
+                .findByProviderAndProviderUserId(AuthProvider.GOOGLE, googleIdentity.subject())
+                .ifPresent(existing -> {
+                    if (!existing.getUserId().equals(userId)) {
+                        throw new AppException(
+                                "GOOGLE_CONNECTED_TO_ANOTHER_ACCOUNT",
+                                GOOGLE_CONNECTED_TO_ANOTHER_ACCOUNT_MESSAGE,
+                                HttpStatus.CONFLICT
+                        );
+                    }
+                });
+
+        UserAuthProviderEntity provider = userAuthProviderRepository
+                .findByUserIdAndProvider(userId, AuthProvider.GOOGLE)
+                .orElse(null);
+        if (provider != null && !provider.getProviderUserId().equals(googleIdentity.subject())) {
+            throw new AppException("GOOGLE_ALREADY_CONNECTED", GOOGLE_ALREADY_CONNECTED_MESSAGE, HttpStatus.CONFLICT);
+        }
+        if (provider == null) {
+            provider = new UserAuthProviderEntity();
+            provider.setId(UUID.randomUUID());
+            provider.setUserId(userId);
+            provider.setProvider(AuthProvider.GOOGLE);
+            provider.setProviderUserId(googleIdentity.subject());
+            provider.setCreatedAt(now);
+        }
+        provider.setProviderEmail(googleIdentity.email());
+        provider.setUpdatedAt(now);
+        userAuthProviderRepository.save(provider);
+        if (user.getEmailVerifiedAt() == null) {
+            user.setEmailVerifiedAt(now);
+        }
+        user.setUpdatedAt(now);
+        return buildSignInMethodsResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public SignInMethodsResponse getSignInMethods(UUID userId) {
+        return buildSignInMethodsResponse(findUserOrThrow(userId));
     }
 
     public AuthResponse refresh(RefreshTokenRequest request, String ipAddress, String userAgent) {
@@ -422,6 +515,128 @@ public class AuthService {
                 refreshToken.rawToken(),
                 accessExpiresAt,
                 refreshToken.expiresAt()
+        );
+    }
+
+    private GoogleIdentityTokenVerifier.GoogleIdentity verifyGoogleIdentity(String credential) {
+        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = googleIdentityTokenVerifier.verify(credential);
+        if (!googleIdentity.emailVerified()) {
+            throw new AppException(
+                    "GOOGLE_EMAIL_NOT_VERIFIED",
+                    GOOGLE_EMAIL_NOT_VERIFIED_MESSAGE,
+                    HttpStatus.BAD_REQUEST
+            );
+        }
+        return googleIdentity;
+    }
+
+    private UserEntity findOrCreateGoogleUser(
+            GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity,
+            OffsetDateTime now
+    ) {
+        return userRepository.findByEmailIgnoreCase(googleIdentity.email())
+                .map(existing -> linkGoogleProvider(existing, googleIdentity, now, false))
+                .orElseGet(() -> createGoogleUser(googleIdentity, now));
+    }
+
+    private UserEntity linkGoogleProvider(
+            UserEntity user,
+            GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity,
+            OffsetDateTime now,
+            boolean allowExistingUserProvider
+    ) {
+        userAuthProviderRepository
+                .findByUserIdAndProvider(user.getId(), AuthProvider.GOOGLE)
+                .ifPresent(existing -> {
+                    if (!allowExistingUserProvider && !existing.getProviderUserId().equals(googleIdentity.subject())) {
+                        throw new AppException(
+                                "GOOGLE_ALREADY_CONNECTED",
+                                GOOGLE_ALREADY_CONNECTED_MESSAGE,
+                                HttpStatus.CONFLICT
+                        );
+                    }
+                });
+
+        UserAuthProviderEntity provider = userAuthProviderRepository
+                .findByUserIdAndProvider(user.getId(), AuthProvider.GOOGLE)
+                .orElseGet(() -> {
+                    UserAuthProviderEntity created = new UserAuthProviderEntity();
+                    created.setId(UUID.randomUUID());
+                    created.setUserId(user.getId());
+                    created.setProvider(AuthProvider.GOOGLE);
+                    created.setProviderUserId(googleIdentity.subject());
+                    created.setCreatedAt(now);
+                    return created;
+                });
+        provider.setProviderEmail(googleIdentity.email());
+        provider.setUpdatedAt(now);
+        userAuthProviderRepository.save(provider);
+        if (user.getEmailVerifiedAt() == null) {
+            user.setEmailVerifiedAt(now);
+        }
+        user.setUpdatedAt(now);
+        return user;
+    }
+
+    private UserEntity createGoogleUser(GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity, OffsetDateTime now) {
+        UserEntity user = new UserEntity();
+        user.setId(UUID.randomUUID());
+        user.setEmail(googleIdentity.email());
+        user.setPendingEmail(null);
+        user.setPasswordHash(null);
+        user.setFirstName(resolveGoogleFirstName(googleIdentity));
+        user.setDisplayName(resolveDisplayName(googleIdentity.name()));
+        user.setUsername(generateAvailableUsername(user.getDisplayName(), user.getFirstName(), googleIdentity.email()));
+        user.setPublicProfileVisible(true);
+        user.setCountryCode(null);
+        user.setProfileType(null);
+        user.setEngagementMode(EngagementMode.FOCUSED);
+        user.setInactivityRemindersEnabled(false);
+        user.setWeakConceptRemindersEnabled(false);
+        user.setThemePreference(ThemePreference.SYSTEM);
+        user.setStatus(UserStatus.ACTIVE);
+        user.setRole(UserRole.USER);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setCurrentStreak(0);
+        user.setLongestStreak(0);
+        user.setLastStudyDate(null);
+        user.setOnboardingCompletedAt(null);
+        user.setProductOnboardingCompletedAt(null);
+        user.setEmailVerifiedAt(now);
+        user.setCreatedAt(now);
+        user.setUpdatedAt(now);
+        user.setLastPasswordChangeAt(null);
+
+        UserEntity saved = userRepository.save(user);
+        subscriptionService.createDefaultFreeSubscription(saved);
+        linkGoogleProvider(saved, googleIdentity, now, true);
+        analyticsService.trackEvent(saved.getId(), AnalyticsEventType.SIGNUP, saved.getId(), Map.of("method", "google"));
+        analyticsService.trackEvent(saved.getId(), AnalyticsEventType.SIGNUP_COMPLETED, saved.getId(), Map.of("method", "google"));
+        return saved;
+    }
+
+    private String resolveGoogleFirstName(GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity) {
+        String givenName = normalizeOptionalText(googleIdentity.givenName());
+        if (givenName != null) {
+            return givenName;
+        }
+        String name = normalizeOptionalText(googleIdentity.name());
+        if (name != null) {
+            return name.split("\\s+", 2)[0];
+        }
+        return googleIdentity.email().split("@", 2)[0];
+    }
+
+    private SignInMethodsResponse buildSignInMethodsResponse(UserEntity user) {
+        UserAuthProviderEntity googleProvider = userAuthProviderRepository
+                .findByUserIdAndProvider(user.getId(), AuthProvider.GOOGLE)
+                .orElse(null);
+        return new SignInMethodsResponse(
+                user.getEmail(),
+                user.getPasswordHash() != null && !user.getPasswordHash().isBlank(),
+                googleProvider != null,
+                googleProvider == null ? null : googleProvider.getProviderEmail()
         );
     }
 

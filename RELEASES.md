@@ -24,6 +24,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 ### ✅ Shipped
 
 - **Public Note Quick Check — multi-question preview** — the Quick Check section on public note detail pages now shows up to 3 sequential preview questions (drawn from existing Study Pack quiz data, no new AI generation); a progress indicator (`1 / 3`) tracks where the visitor is; after submitting each answer, feedback microcopy (✅ Correct!, 🧠 Nice work!, Almost there.) and a "Next Question →" button appear before advancing; the final question transitions to a lightweight completion state with CTAs to copy and start practicing; gracefully falls back when fewer than 3 questions exist; notes-first layout is preserved — Quick Check stays below Summary and Key Concepts
+- **Google social login** — added Google OAuth as an alternative to email/password login and signup; verified Google emails create or link accounts without duplicating existing users; Google-only users skip separate email verification; Profile now shows simple sign-in method status and a `Connect Google` action for matching account emails; existing email/password login remains supported; foundational connected-account architecture (provider linking, `email_verified` guard, sign-in method tracking) is in place to support future provider management features (unlinking, add-password for Google-only users, multi-provider support) tracked in ROADMAP.md
 
 ### 🐛 Fixes
 

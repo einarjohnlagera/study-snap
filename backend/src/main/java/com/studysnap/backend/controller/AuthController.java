@@ -3,11 +3,14 @@ package com.studysnap.backend.controller;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.GoogleAuthRequest;
+import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.LogoutRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.OnboardingProfileTypeRequest;
 import com.studysnap.backend.dto.RefreshTokenRequest;
+import com.studysnap.backend.dto.SignInMethodsResponse;
 import com.studysnap.backend.dto.SignupRequest;
 import com.studysnap.backend.dto.SimpleMessageResponse;
 import com.studysnap.backend.dto.UpdateEngagementModeRequest;
@@ -51,6 +54,13 @@ public class AuthController {
         return authService.login(request, clientIp, servletRequest.getHeader(USER_AGENT));
     }
 
+    @PostMapping("/google")
+    public AuthResponse google(@Valid @RequestBody GoogleAuthRequest request, HttpServletRequest servletRequest) {
+        String clientIp = resolveClientIp(servletRequest);
+        authRateLimitService.assertAllowed("google", clientIp);
+        return authService.loginWithGoogle(request, clientIp, servletRequest.getHeader(USER_AGENT));
+    }
+
     @PostMapping("/refresh")
     public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest request, HttpServletRequest servletRequest) {
         authRateLimitService.assertAllowed("refresh", resolveClientIp(servletRequest));
@@ -66,6 +76,21 @@ public class AuthController {
     @PreAuthorize("isAuthenticated()")
     public MeResponse me(@AuthenticationPrincipal AuthenticatedUser user) {
         return authService.getMe(user.userId());
+    }
+
+    @GetMapping("/sign-in-methods")
+    @PreAuthorize("isAuthenticated()")
+    public SignInMethodsResponse signInMethods(@AuthenticationPrincipal AuthenticatedUser user) {
+        return authService.getSignInMethods(user.userId());
+    }
+
+    @PostMapping("/google/connect")
+    @PreAuthorize("isAuthenticated()")
+    public SignInMethodsResponse connectGoogle(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @Valid @RequestBody GoogleConnectRequest request
+    ) {
+        return authService.connectGoogle(user.userId(), request);
     }
 
     @PostMapping("/onboarding/profile-type")
