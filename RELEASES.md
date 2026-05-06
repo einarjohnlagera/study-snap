@@ -30,6 +30,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - Onboarding keeps its explicit zero-friction metadata auto-apply behavior for empty `subject` / `tags`
 - Added shareable URL-based Public Library filters on the canonical `/public/library` route, including a list-page `Share this list` action that copies the current filtered URL
 - Consolidated Public Library browsing around `/public/library` and cleaned up the duplicate `/library/public` / `/public/library/{subject}` route wrappers into compatibility redirects
+- Polished Public Library URL filter UX with debounced search sync, scroll-preserving filter updates, always-available tag browsing, and stable selector-modal input focus
 
 ---
 

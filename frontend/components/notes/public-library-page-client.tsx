@@ -18,6 +18,7 @@ import { PublicLibraryLikeAction } from "@/components/notes/public-library-like-
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
 import {
   type LearnerLevel,
@@ -69,7 +70,6 @@ const POPULAR_TAG_LIMIT_MOBILE = 4;
 const POPULAR_TAG_LIMIT_DESKTOP = 6;
 const POPULAR_SUBJECT_LIMIT_MOBILE = 4;
 const POPULAR_SUBJECT_LIMIT_DESKTOP = 6;
-const MORE_TAGS_LABEL = "+ More";
 const MORE_SUBJECTS_LABEL = "+ More";
 const TAG_SELECTOR_TITLE = "Select tags";
 const SUBJECT_SELECTOR_TITLE = "Select subject";
@@ -80,12 +80,9 @@ const MODAL_START_REVIEW_LABEL = "Start Review";
 const MOBILE_SUCCESS_SHEET_MEDIA_QUERY = "(max-width: 639px)";
 const CLOSE_MODAL_LABEL = "Close copied to your library";
 const SHARE_PUBLIC_LIBRARY_LABEL = "Share this list";
-const SHARE_PUBLIC_LIBRARY_MODAL_TITLE = "Share this list";
 const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.";
-const SHAREABLE_URL_LABEL = "Shareable URL";
 const SHARE_LINK_COPIED_MESSAGE = "Link copied";
-
-type ShareState = "idle" | "copied" | "error";
+const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 400;
 
 type PublicLibrarySortOption =
   | "NEWEST"
@@ -475,8 +472,8 @@ export function PublicLibraryPageClient() {
     copiedNoteId: string;
   } | null>(null);
   const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
-  const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [shareState, setShareState] = useState<ShareState>("idle");
+  const [shareToastMessage, setShareToastMessage] = useState<string | null>(null);
+  const [shareToastTone, setShareToastTone] = useState<"success" | "error">("success");
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -589,7 +586,7 @@ export function PublicLibraryPageClient() {
     const currentUrl = buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey);
     const nextUrl = buildPublicLibraryUrl(nextFilters, searchParamsKey);
     if (currentUrl !== nextUrl) {
-      router.replace(nextUrl);
+      router.replace(nextUrl, { scroll: false });
     }
   }, [parsedUrlFilters, router, searchParamsKey]);
 
@@ -723,6 +720,38 @@ export function PublicLibraryPageClient() {
     }
   }, [selectedSubject, subjectSelectorOpen]);
 
+  useEffect(() => {
+    const timeoutId = globalThis.setTimeout(() => {
+      const nextSearch = searchQuery.trim();
+      if ((nextSearch || null) === parsedUrlFilters.search) {
+        return;
+      }
+      replacePublicLibraryFilters({
+        ...parsedUrlFilters,
+        search: nextSearch.length > 0 ? nextSearch : null,
+        view: null,
+      });
+    }, PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [parsedUrlFilters, replacePublicLibraryFilters, searchQuery]);
+
+  useEffect(() => {
+    if (!shareToastMessage) {
+      return;
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      setShareToastMessage(null);
+    }, 2200);
+
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [shareToastMessage]);
+
   const toggleDraftTag = useCallback((tag: string) => {
     setTagDraft((previous) => (
       previous.includes(tag)
@@ -818,11 +847,6 @@ export function PublicLibraryPageClient() {
     ];
     return Array.from(new Set(ordered)).slice(0, Math.max(visibleTagLimit, selectedTags.length));
   }, [displayedTags, selectedTags, visibleTagLimit]);
-
-  const remainingTagCount = useMemo(() => {
-    const visible = new Set(visiblePopularTags);
-    return displayedTags.filter((tag) => !visible.has(tag)).length;
-  }, [displayedTags, visiblePopularTags]);
 
   const activeFilterCount = countActivePublicFilterGroups({
     courseProgram: selectedCourseProgram,
@@ -1083,14 +1107,14 @@ export function PublicLibraryPageClient() {
     router.push(buildPublicLibraryUrl({
       ...parsedUrlFilters,
       view,
-    }, searchParamsKey));
+    }, searchParamsKey), { scroll: false });
   }, [parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
   const clearDiscoveryView = useCallback(() => {
     startRouteProgress();
     router.push(buildPublicLibraryUrl({
       ...parsedUrlFilters,
       view: null,
-    }, searchParamsKey));
+    }, searchParamsKey), { scroll: false });
   }, [parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
   const activeSectionCopy = activeDiscoveryView === null ? null : DISCOVERY_SECTION_COPY[activeDiscoveryView];
   const currentPublicLibraryPath = useMemo(
@@ -1103,19 +1127,14 @@ export function PublicLibraryPageClient() {
     }
     return new URL(currentPublicLibraryPath, globalThis.location.origin).toString();
   }, [currentPublicLibraryPath]);
-  const truncatedShareUrl = useMemo(() => {
-    if (resolvedShareUrl.length <= 58) {
-      return resolvedShareUrl;
-    }
-    return `${resolvedShareUrl.slice(0, 55)}...`;
-  }, [resolvedShareUrl]);
-
   const handleCopyShareLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(resolvedShareUrl);
-      setShareState("copied");
+      setShareToastTone("success");
+      setShareToastMessage(SHARE_LINK_COPIED_MESSAGE);
     } catch {
-      setShareState("error");
+      setShareToastTone("error");
+      setShareToastMessage(SHARE_PUBLIC_LIBRARY_COPY_ERROR);
     }
   }, [resolvedShareUrl]);
 
@@ -1126,55 +1145,17 @@ export function PublicLibraryPageClient() {
         title="Public Library"
         description="Explore public notes from you, the community, and official NoteLib examples. Copy a note into your library when you want to study it in your own workspace."
         actions={(
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShareModalOpen(true)}>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto lg:hidden"
+            onClick={() => void handleCopyShareLink()}
+          >
             {SHARE_PUBLIC_LIBRARY_LABEL}
           </Button>
         )}
         brandLogo
       />
-
-      <AppModal
-        isOpen={shareModalOpen}
-        title={SHARE_PUBLIC_LIBRARY_MODAL_TITLE}
-        onClose={() => {
-          setShareModalOpen(false);
-          setShareState("idle");
-        }}
-        actions={(
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <ResponsiveActionButton
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShareModalOpen(false);
-                setShareState("idle");
-              }}
-              action="back"
-              label="Close"
-              showTextOnMobile
-            />
-            <ResponsiveActionButton
-              type="button"
-              onClick={() => void handleCopyShareLink()}
-              action="share"
-              label={shareState === "copied" ? "Copied" : "Copy Link"}
-            />
-          </div>
-        )}
-      >
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-foreground/60">{SHAREABLE_URL_LABEL}</p>
-          <p className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground/85">
-            {truncatedShareUrl}
-          </p>
-          {shareState === "copied" ? (
-            <p className="text-xs text-emerald-700 dark:text-emerald-300">{SHARE_LINK_COPIED_MESSAGE}</p>
-          ) : null}
-          {shareState === "error" ? (
-            <p className="text-xs text-red-600 dark:text-red-400">{SHARE_PUBLIC_LIBRARY_COPY_ERROR}</p>
-          ) : null}
-        </div>
-      </AppModal>
 
       <GuidanceTip
         tipId="public-library-intro"
@@ -1209,15 +1190,7 @@ export function PublicLibraryPageClient() {
                   id="public-library-search"
                   type="search"
                   value={searchQuery}
-                  onChange={(event) => {
-                    const nextSearch = event.target.value;
-                    setSearchQuery(nextSearch);
-                    replacePublicLibraryFilters({
-                      ...parsedUrlFilters,
-                      search: nextSearch,
-                      view: null,
-                    });
-                  }}
+                  onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search public notes..."
                   className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
                 />
@@ -1385,6 +1358,7 @@ export function PublicLibraryPageClient() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">Popular Tags</p>
+                  <div className="flex items-center gap-3">
                   {selectedTags.length > 0 ? (
                     <button
                       type="button"
@@ -1402,6 +1376,14 @@ export function PublicLibraryPageClient() {
                       Clear tags
                     </button>
                   ) : null}
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                      onClick={() => setTagSelectorOpen(true)}
+                    >
+                      Browse all
+                    </button>
+                  </div>
                 </div>
                 <div className={getScrollRailClassName()}>
                   {visiblePopularTags.map((tag) => (
@@ -1430,15 +1412,6 @@ export function PublicLibraryPageClient() {
                       {tag}
                     </button>
                   ))}
-                  {remainingTagCount > 0 ? (
-                    <button
-                      type="button"
-                      className={getFilterChipClassName(false)}
-                      onClick={() => setTagSelectorOpen(true)}
-                    >
-                      {MORE_TAGS_LABEL}
-                    </button>
-                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -1741,6 +1714,7 @@ export function PublicLibraryPageClient() {
             value={subjectSearchQuery}
             onChange={(event) => setSubjectSearchQuery(event.target.value)}
             placeholder="Search subjects..."
+            data-autofocus="true"
             className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
           />
           {subjectDraft !== ALL_SUBJECTS ? (
@@ -1820,6 +1794,7 @@ export function PublicLibraryPageClient() {
             value={tagSearchQuery}
             onChange={(event) => setTagSearchQuery(event.target.value)}
             placeholder="Search tags..."
+            data-autofocus="true"
             className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
           />
           {tagDraft.length > 0 ? (
@@ -1902,6 +1877,8 @@ export function PublicLibraryPageClient() {
           })}
         </div>
       </LibrarySheetModal>
+
+      {shareToastMessage ? <ToastMessage message={shareToastMessage} tone={shareToastTone} /> : null}
 
       <AppModal
         isOpen={copySuccessState !== null}

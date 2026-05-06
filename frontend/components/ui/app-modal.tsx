@@ -58,9 +58,14 @@ export function AppModal({
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const touchStartYRef = useRef<number | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const [touchOffsetY, setTouchOffsetY] = useState(0);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -82,6 +87,11 @@ export function AppModal({
     document.body.style.overflow = "hidden";
 
     const focusFirst = () => {
+      const autoFocusTarget = panelRef.current?.querySelector<HTMLElement>("[data-autofocus='true']");
+      if (autoFocusTarget && !autoFocusTarget.hasAttribute("disabled")) {
+        autoFocusTarget.focus();
+        return;
+      }
       const focusable = getFocusableElements(panelRef.current);
       if (focusable.length > 0) {
         focusable[0].focus();
@@ -94,7 +104,7 @@ export function AppModal({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") {
@@ -135,7 +145,7 @@ export function AppModal({
       document.body.style.overflow = previousOverflow;
       previousActiveElement?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
