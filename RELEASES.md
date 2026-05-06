@@ -2,7 +2,7 @@
 
 ## v0.12.0 - Learning Experience, Discovery, and Retention
 
-**Status: Planned**
+**Status: In Progress**
 
 Theme: deepen the learning experience, make the product easier to discover and navigate, and improve retention signals that bring users back to study.
 
@@ -21,8 +21,13 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - **Faster quiz generation investigation** — profile current LLM latency for quiz generation; prototype streaming or early-session creation patterns; write findings and a recommended approach before any implementation
 - **Multi-topic exam / Long Exam mode planning** — design how a single Board Exam session could span multiple notes or topics; produce a written spec and UX sketch before any implementation
 
+### ✅ Shipped
+
+- **Public Note Quick Check — multi-question preview** — the Quick Check section on public note detail pages now shows up to 3 sequential preview questions (drawn from existing Study Pack quiz data, no new AI generation); a progress indicator (`1 / 3`) tracks where the visitor is; after submitting each answer, feedback microcopy (✅ Correct!, 🧠 Nice work!, Almost there.) and a "Next Question →" button appear before advancing; the final question transitions to a lightweight completion state with CTAs to copy and start practicing; gracefully falls back when fewer than 3 questions exist; notes-first layout is preserved — Quick Check stays below Summary and Key Concepts
+
 ### 🐛 Fixes
 
+- Fixed TypeScript type errors in test fixtures (`NoteListItemResponse`, `NotePerformanceSummaryResponse`, `PublicProfileResponse`) to align test data with updated type definitions
 - Fixed incorrect `Quiz Ready` badge visibility across Student and Board Exam modes so readiness reflects actual quiz availability
 - Fixed Study Pack generation metadata flow so note-level `courseProgram` remains the source of truth and user profile `courseProgram` is used only as a fallback
 - Fixed normal note-owned Study Pack generation so AI `title` / `subject` / `tags` suggestions stay transient until the user applies them

@@ -533,7 +533,7 @@ describe("NoteEditorPageClient", () => {
     expect(screen.getByRole("button", { name: "Generating..." })).toBeInTheDocument();
     expect(screen.getByText("Creating a new version...")).toBeInTheDocument();
 
-    resolveSecondGeneration?.({ content: "Second generated topic note" });
+    resolveSecondGeneration!({ content: "Second generated topic note" });
 
     await screen.findByDisplayValue("Second generated topic note");
     expect(screen.getAllByRole("button", { name: "Generate Again" })).toHaveLength(1);

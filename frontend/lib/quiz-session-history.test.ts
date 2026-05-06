@@ -11,7 +11,6 @@ function makeQuickReviewSession(
   overrides: Partial<QuickReviewSessionSummaryResponse> & { id: string },
 ): QuickReviewSessionSummaryResponse {
   return {
-    id: overrides.id,
     studyPackId: "study-pack-1",
     totalQuestions: 10,
     correctAnswers: 8,
@@ -28,7 +27,6 @@ function makeChallengeSession(
   overrides: Partial<ChallengeQuizSessionSummaryResponse> & { sessionId: string },
 ): ChallengeQuizSessionSummaryResponse {
   return {
-    sessionId: overrides.sessionId,
     totalQuestions: 12,
     correctAnswers: 9,
     scorePercentage: 75,

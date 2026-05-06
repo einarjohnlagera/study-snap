@@ -14,7 +14,7 @@ describe("PublicLibraryBackLink", () => {
   it("hides the link for anonymous visitors", async () => {
     (getAuthUser as jest.Mock).mockReturnValue(null);
 
-    render(<PublicLibraryBackLink className="test-class" />);
+    render(<PublicLibraryBackLink />);
 
     await waitFor(() => {
       expect(screen.queryByRole("link", { name: "Public Library" })).not.toBeInTheDocument();

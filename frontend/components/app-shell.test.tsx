@@ -11,7 +11,7 @@ const routerMock = {
 
 let currentPathname = "/dashboard";
 let currentAuthUser: Record<string, unknown> | null = null;
-const sendFeedbackWidgetMock = jest.fn(() => null);
+const sendFeedbackWidgetMock = jest.fn((_props?: unknown) => null);
 
 jest.mock("next/navigation", () => ({
   usePathname: () => currentPathname,

@@ -22,6 +22,7 @@ function makeNote(
     title: overrides.id,
     courseProgram: null,
     learnerLevel: null,
+    targetProfileType: "STUDENT",
     subject: null,
     tags: [],
     contentPreview: "Content preview",
