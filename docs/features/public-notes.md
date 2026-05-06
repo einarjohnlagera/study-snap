@@ -33,7 +33,7 @@ Canonical discovery route:
 
 App-shell route:
 
-- `/library/public`
+- `/public/library`
 
 Growth behavior:
 

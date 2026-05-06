@@ -353,13 +353,25 @@ public class NoteController {
 
     @GetMapping("/public")
     public List<NoteListItemResponse> listPublic(
+            @RequestParam(value = "search", required = false) String search,
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "subject", required = false) String subject,
+            @RequestParam(value = "tag", required = false) List<String> tags,
+            @RequestParam(value = "courseProgram", required = false) String courseProgram,
+            @RequestParam(value = "audience", required = false) String audience,
             @RequestParam(value = "targetProfileType", required = false) NoteTargetProfileType targetProfileType,
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         UUID viewerUserId = user == null ? null : user.userId();
-        return noteService.listPublic(viewerUserId, sort, subject, targetProfileType);
+        return noteService.listPublic(
+                viewerUserId,
+                search,
+                sort,
+                subject,
+                tags,
+                courseProgram,
+                resolvePublicAudienceFilter(audience, targetProfileType)
+        );
     }
 
     @GetMapping("/public/{id}")
@@ -386,5 +398,27 @@ public class NoteController {
             @AuthenticationPrincipal AuthenticatedUser user
     ) {
         return noteService.getPublicBySeoPath(subject, slug, user == null ? null : user.userId());
+    }
+
+    private NoteTargetProfileType resolvePublicAudienceFilter(
+            String audience,
+            NoteTargetProfileType targetProfileType
+    ) {
+        if (targetProfileType != null) {
+            return targetProfileType;
+        }
+        if (audience == null || audience.isBlank()) {
+            return null;
+        }
+
+        String normalized = audience.trim()
+                .toUpperCase()
+                .replace('-', '_')
+                .replace(' ', '_');
+        try {
+            return NoteTargetProfileType.valueOf(normalized);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 }

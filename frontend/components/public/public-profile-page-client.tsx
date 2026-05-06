@@ -394,7 +394,7 @@ export function PublicProfilePageClient({
   if (pageState === "private" || !profile) {
     return (
       <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-        {!isOwner ? <BackLink href="/library/public" label="Public Library" /> : null}
+        {!isOwner ? <BackLink href="/public/library" label="Public Library" /> : null}
         <header className="space-y-3 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
@@ -412,7 +412,7 @@ export function PublicProfilePageClient({
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
-      {!isOwner ? <BackLink href="/library/public" label="Public Library" /> : null}
+      {!isOwner ? <BackLink href="/public/library" label="Public Library" /> : null}
       <header className="space-y-4 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-500/10 via-background to-emerald-500/10 p-6 shadow-sm sm:p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 gap-4">

@@ -1036,7 +1036,7 @@ Sidebar groups:
 Primary routes:
 
 - `/library` (Library, private workspace)
-- `/library/public` (Public Library)
+- `/public/library` (Public Library)
 - `/notes/{id}` (Note Detail)
 - `/public/library/{subject}` (Public Subject Listing, SEO)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only, SEO)

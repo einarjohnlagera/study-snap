@@ -2375,16 +2375,30 @@ export async function listNotes(): Promise<NoteListItemResponse[]> {
 }
 
 export async function listPublicNotes(params?: {
+  audience?: NoteTargetProfileType;
+  courseProgram?: string;
+  search?: string;
+  sort?: "copied" | "featured" | "popular" | "recent" | "title" | "views";
   subject?: string;
-  targetProfileType?: NoteTargetProfileType;
+  tags?: string[];
 }): Promise<NoteListItemResponse[]> {
   const searchParams = new URLSearchParams();
+  if (params?.audience) {
+    searchParams.set("audience", params.audience);
+  }
+  if (params?.courseProgram) {
+    searchParams.set("courseProgram", params.courseProgram);
+  }
+  if (params?.search) {
+    searchParams.set("search", params.search);
+  }
+  if (params?.sort) {
+    searchParams.set("sort", params.sort);
+  }
   if (params?.subject) {
     searchParams.set("subject", params.subject);
   }
-  if (params?.targetProfileType) {
-    searchParams.set("targetProfileType", params.targetProfileType);
-  }
+  (params?.tags ?? []).forEach((tag) => searchParams.append("tag", tag));
   const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
   const response = await fetch(buildUrl(`/notes/public${query}`), {
     method: "GET",

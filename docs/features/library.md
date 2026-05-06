@@ -80,7 +80,7 @@ Private Library sorting:
 
 Route:
 
-- `/library/public` in the authenticated app shell
+- `/public/library` as the canonical Public Library route in both authenticated and anonymous flows
 - canonical public discovery route is `/public/library`
 
 Responsibility:

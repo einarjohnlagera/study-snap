@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicProfilePageClient } from "./public-profile-page-client";
 import { getAuthUser } from "@/lib/auth";
 import { getPublicProfile, updatePublicProfileVisibility } from "@/lib/api";
@@ -98,7 +98,8 @@ describe("PublicProfilePageClient", () => {
     expect(screen.queryByRole("button", { name: "Open note actions" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
-    expect(await screen.findByRole("dialog", { name: "Share this profile" })).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Share this profile" });
+    const modal = within(dialog);
     expect(screen.getByText(/\/public\/profile\/user-1/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
@@ -107,7 +108,7 @@ describe("PublicProfilePageClient", () => {
     });
     expect(await screen.findByText("Link copied")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(modal.getByLabelText("Close"));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Share this profile" })).not.toBeInTheDocument();
     });
@@ -217,7 +218,7 @@ describe("PublicProfilePageClient", () => {
     );
 
     const backLink = screen.getByRole("link", { name: "Public Library" });
-    expect(backLink).toHaveAttribute("href", "/library/public");
+    expect(backLink).toHaveAttribute("href", "/public/library");
 
     const noteTitles = screen.getAllByText("Plant Cells");
     expect(noteTitles).not.toHaveLength(0);

@@ -23,5 +23,5 @@ export function PublicLibraryBackLink() {
     return null;
   }
 
-  return <BackLink href="/library/public" label="Public Library" />;
+  return <BackLink href="/public/library" label="Public Library" />;
 }
