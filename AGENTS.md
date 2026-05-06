@@ -64,6 +64,13 @@ Use these skills before writing prompts, before starting new features, and after
 - If no suitable exception type exists yet, create a new exception class that extends `AppException` and keep its code/status/message ownership there.
 - New exception classes should stay close to the domain they represent and should not duplicate an existing `AppException` subclass with the same meaning.
 
+### Sonar / Code Smell Rules (Backend)
+
+- **`assertThatThrownBy` — one invocation only (S5778)**: the lambda passed to `assertThatThrownBy` must contain exactly one method invocation — the call expected to throw. Move all setup and preceding calls outside the lambda. Wrong: `assertThatThrownBy(() -> { setup(); service.call(); })`. Right: `setup(); assertThatThrownBy(() -> service.call())`. Apply this fix whenever modifying a test class that contains this violation.
+- **Custom exceptions over raw `AppException`**: throw a named exception subclass (`NoteNotFoundException`, `StudyPackNotFoundException`, etc.) rather than `new AppException(ErrorCode.SOMETHING, "message")` inline. Named exceptions own their code, status, and message — no repeated string literals at throw sites. If no matching subclass exists, create one before throwing.
+- **String literal duplication**: a string literal that appears two or more times in the same class must be extracted to a `private static final String` constant in that class. If the same literal appears in multiple classes, move it to an appropriate shared constants class. Apply this fix whenever modifying a class that already has the duplication — do not leave the violation in place.
+- **`Math.clamp` is unavailable on the project's Java target**: do not use `Math.clamp` — it was introduced in Java 21 and Sonar will flag it if the project targets an earlier version. Use `Math.min(max, Math.max(min, value))` instead.
+
 ## Required Product Architecture (Current)
 
 - Note is the primary entity.
@@ -1082,6 +1089,12 @@ Rules:
 3. Always implement loading and error states.
 4. Use theme tokens (`bg-background`, `text-foreground`, etc.).
 5. Keep Note Detail unified; do not split Note vs Study Pack detail pages again.
+
+### Sonar / Code Smell Rules (Frontend)
+
+- **Use `globalThis` instead of `window`**: Sonar flags direct `window` access. Replace `window.addEventListener`, `window.removeEventListener`, `window.location`, `window.history`, and any other `window.*` global with the `globalThis.*` equivalent. Apply this fix whenever modifying a file that contains `window.` access outside of type guards.
+- **Unknown TypeScript property**: Sonar flags accessing a property that is not in the inferred type of an object. Fix by adding the missing property to the TypeScript interface or type, using `Record<string, T>` when the object is keyed by dynamic strings, or using a type guard. Do not use `as any` to suppress the warning — resolve the underlying type gap. When Sonar reports "Unknown property 'text-sm'" or similar, the property is likely a CSS class key on a plain object; switch to a typed `Record<string, string>` or restructure the object so TypeScript knows the allowed keys.
+- **Escape `>` in JSX text content**: Sonar requires bare `>` characters in visible JSX text to be escaped. Use the HTML entity `&gt;` or the JSX expression `{'>'}` instead. This applies only to `>` appearing as readable text between JSX tags, not to JSX syntax angle brackets (`<Component />`) or ternary expressions.
 
 ## Backend Conventions (`/backend`)
 
