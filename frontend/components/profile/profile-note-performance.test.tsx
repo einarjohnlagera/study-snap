@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { ProfileNotePerformance } from "./profile-note-performance";
-import { getUserNotePerformanceSummary } from "@/lib/api";
+import { getUserNotePerformanceSummary, type NotePerformanceSummaryResponse } from "@/lib/api";
 
 const routerMock = { push: jest.fn() };
 
@@ -12,23 +12,17 @@ jest.mock("@/lib/api", () => ({
   getUserNotePerformanceSummary: jest.fn(),
 }));
 
-const makeNote = (overrides: Partial<ReturnType<typeof baseNote>> = {}) => ({
-  ...baseNote(),
+const makeNote = (overrides: Partial<NotePerformanceSummaryResponse> = {}): NotePerformanceSummaryResponse => ({
+  noteId: "note-1",
+  noteTitle: "Biology Review",
+  bestScore: 90,
+  averageScore: 78,
+  attemptCount: 3,
+  lastAttemptedAt: "2026-04-10T10:00:00Z",
+  bestSessionId: "session-1",
+  bestSessionMode: "QUICK_REVIEW",
   ...overrides,
 });
-
-function baseNote() {
-  return {
-    noteId: "note-1",
-    noteTitle: "Biology Review",
-    bestScore: 90,
-    averageScore: 78,
-    attemptCount: 3,
-    lastAttemptedAt: "2026-04-10T10:00:00Z",
-    bestSessionId: "session-1",
-    bestSessionMode: "QUICK_REVIEW" as const,
-  };
-}
 
 describe("ProfileNotePerformance", () => {
   beforeEach(() => {
@@ -49,7 +43,7 @@ describe("ProfileNotePerformance", () => {
       expect(screen.getByText("Biology Review")).toBeInTheDocument();
     });
     expect(screen.getByText(/Best: 90%/)).toBeInTheDocument();
-    expect(screen.getByText(/3 attempts/)).toBeInTheDocument();
+    expect(screen.getByText(/3 sessions/)).toBeInTheDocument();
   });
 
   it("shows empty state when no notes returned", async () => {
@@ -115,7 +109,7 @@ describe("ProfileNotePerformance", () => {
     (getUserNotePerformanceSummary as jest.Mock).mockResolvedValue([makeNote({ attemptCount: 1 })]);
     render(<ProfileNotePerformance />);
     await waitFor(() => {
-      expect(screen.getByText(/1 attempt[^s]/)).toBeInTheDocument();
+      expect(screen.getByText(/1 session[^s]/)).toBeInTheDocument();
     });
   });
 

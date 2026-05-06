@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicProfilePageClient } from "./public-profile-page-client";
 import { getAuthUser } from "@/lib/auth";
-import { getPublicProfile, updatePublicProfileVisibility } from "@/lib/api";
+import { getPublicProfile, updatePublicProfileVisibility, type PublicProfileResponse } from "@/lib/api";
 import { buildPublicLibraryNotePathFromSlug } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
@@ -25,7 +25,7 @@ jest.mock("@/lib/api", () => {
   };
 });
 
-const baseProfile = {
+const baseProfile: PublicProfileResponse = {
   displayName: "Study Buddy",
   bio: "Biology notes and board-review practice.",
   learnerLevel: "BOARD_EXAM_REVIEW",
@@ -52,7 +52,7 @@ const baseProfile = {
       slug: "plant-cells",
     },
   ],
-} as const;
+};
 
 describe("PublicProfilePageClient", () => {
   const clipboardWriteText = jest.fn();

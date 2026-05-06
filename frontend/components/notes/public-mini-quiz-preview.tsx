@@ -9,14 +9,29 @@ import type { QuizItem } from "@/lib/api";
 import { normalizePublicNoteText } from "@/lib/public-note-text";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
+const MAX_PREVIEW_QUESTIONS = 3;
+
+type QuestionState = {
+  selectedIndex: number | null;
+  submitted: boolean;
+};
+
 type PublicMiniQuizPreviewProps = Readonly<{
   quiz: QuizItem[];
   noteId: string;
 }>;
 
+function getCorrectFeedback(questionIndex: number): string {
+  return (["✅ Correct!", "🧠 Nice work!", "✅ That's right!"] as const)[questionIndex % 3];
+}
+
 export function PublicMiniQuizPreview({ quiz, noteId }: PublicMiniQuizPreviewProps) {
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const previewItems = quiz.slice(0, MAX_PREVIEW_QUESTIONS);
+  const [questionStates, setQuestionStates] = useState<QuestionState[]>(() =>
+    previewItems.map(() => ({ selectedIndex: null, submitted: false })),
+  );
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [completed, setCompleted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
@@ -26,43 +41,112 @@ export function PublicMiniQuizPreview({ quiz, noteId }: PublicMiniQuizPreviewPro
     return () => globalThis.removeEventListener("studysnap-auth-change", syncAuth);
   }, []);
 
-  if (quiz.length === 0) {
+  if (previewItems.length === 0) {
     return null;
   }
 
-  const item = quiz[0];
-  const choices = getDisplayedQuizChoices(item);
-  const correctCanonicalIndex = resolveQuizCorrectIndex(item);
+  const total = previewItems.length;
+  const currentItem = previewItems[currentIndex];
+  const currentState = questionStates[currentIndex];
+  const choices = getDisplayedQuizChoices(currentItem);
+  const correctCanonicalIndex = resolveQuizCorrectIndex(currentItem);
+  const isCorrect = currentState.selectedIndex === correctCanonicalIndex;
+
+  const handleSelectChoice = (canonicalIndex: number) => {
+    if (currentState.submitted) return;
+    setQuestionStates((prev) => {
+      const next = [...prev];
+      next[currentIndex] = { ...next[currentIndex], selectedIndex: canonicalIndex };
+      return next;
+    });
+  };
 
   const handleSubmit = () => {
-    if (selectedIndex === null) return;
-    setSubmitted(true);
+    if (currentState.selectedIndex === null) return;
+    setQuestionStates((prev) => {
+      const next = [...prev];
+      next[currentIndex] = { ...next[currentIndex], submitted: true };
+      return next;
+    });
+  };
+
+  const handleNext = () => {
+    if (currentIndex + 1 >= total) {
+      setCompleted(true);
+    } else {
+      setCurrentIndex(currentIndex + 1);
+    }
   };
 
   const getChoiceStyle = (canonicalIndex: number): string => {
     const base = "w-full rounded-xl border px-4 py-3 text-left text-sm transition-colors";
-    if (!submitted) {
-      return selectedIndex === canonicalIndex
+    if (!currentState.submitted) {
+      return currentState.selectedIndex === canonicalIndex
         ? `${base} border-primary bg-primary/10 text-foreground`
         : `${base} border-border bg-background text-foreground/85 hover:bg-highlight`;
     }
     if (canonicalIndex === correctCanonicalIndex) {
       return `${base} border-emerald-500/60 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300`;
     }
-    if (canonicalIndex === selectedIndex) {
+    if (canonicalIndex === currentState.selectedIndex) {
       return `${base} border-red-400/60 bg-red-400/10 text-red-700 dark:text-red-400`;
     }
     return `${base} border-border bg-background text-foreground/55`;
   };
 
-  const normalizedQuestion = normalizePublicNoteText(item.question);
-  const normalizedExplanation = normalizePublicNoteText(item.explanation);
+  const normalizedQuestion = normalizePublicNoteText(currentItem.question);
+  const normalizedExplanation = normalizePublicNoteText(currentItem.explanation);
+  const isLastQuestion = currentIndex + 1 >= total;
+
+  if (completed) {
+    return (
+      <Card className="space-y-4 p-4 sm:p-6" aria-label="Quick Check complete">
+        <div className="space-y-1">
+          <h2 className="text-base font-semibold sm:text-lg">🎉 Quick Check Complete</h2>
+          <p className="text-sm text-foreground/65">
+            You completed all {total} preview question{total !== 1 ? "s" : ""}. Want more practice like this?
+          </p>
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Keep the momentum going.</p>
+            <p className="text-sm text-foreground/70">
+              {isAuthenticated
+                ? "Copy this note to your library and continue studying with the full quiz experience."
+                : "Create a free account to access the full quiz, save notes, and study from your own materials."}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <PublicSeoCopyCta
+              noteId={noteId}
+              label="Copy & Start Practicing"
+              redirectTarget="quick-review"
+              guestAuthMode="signup"
+            />
+            <PublicSeoCopyCta
+              noteId={noteId}
+              label="Copy to My Library"
+              guestAuthMode="signup"
+            />
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="space-y-4 p-4 sm:p-6" aria-label="Quick Check mini quiz">
-      <div className="space-y-1">
-        <h2 className="text-base font-semibold sm:text-lg">🧠 Quick Check</h2>
-        <p className="text-sm text-foreground/65">Quick check: see what you remember from the summary.</p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="space-y-0.5">
+          <h2 className="text-base font-semibold sm:text-lg">🧠 Quick Check</h2>
+          <p className="text-xs text-foreground/55">See what you remember from the summary.</p>
+        </div>
+        {total > 1 ? (
+          <span className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground/60">
+            {currentIndex + 1} / {total}
+          </span>
+        ) : null}
       </div>
 
       <p className="text-sm font-medium text-foreground">{normalizedQuestion}</p>
@@ -72,10 +156,10 @@ export function PublicMiniQuizPreview({ quiz, noteId }: PublicMiniQuizPreviewPro
           <button
             key={`choice-${choice.canonicalIndex}`}
             type="button"
-            disabled={submitted}
-            aria-pressed={selectedIndex === choice.canonicalIndex}
+            disabled={currentState.submitted}
+            aria-pressed={currentState.selectedIndex === choice.canonicalIndex}
             className={getChoiceStyle(choice.canonicalIndex)}
-            onClick={() => setSelectedIndex(choice.canonicalIndex)}
+            onClick={() => handleSelectChoice(choice.canonicalIndex)}
           >
             <span className="mr-2 font-semibold">{choice.label}.</span>
             {choice.text}
@@ -83,51 +167,31 @@ export function PublicMiniQuizPreview({ quiz, noteId }: PublicMiniQuizPreviewPro
         ))}
       </div>
 
-      {!submitted ? (
+      {!currentState.submitted ? (
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={selectedIndex === null}
+          disabled={currentState.selectedIndex === null}
           className="w-full sm:w-auto"
         >
           Check Answer
         </Button>
       ) : null}
 
-      {submitted ? (
-        <div className="space-y-4">
+      {currentState.submitted ? (
+        <div className="space-y-3">
           <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm">
             <p className="mb-1 font-medium text-foreground/90">
-              {selectedIndex === correctCanonicalIndex ? "✓ Correct!" : "✗ Not quite."}
+              {isCorrect ? getCorrectFeedback(currentIndex) : "Almost there."}
             </p>
             {normalizedExplanation ? (
               <p className="leading-relaxed text-foreground/75">{normalizedExplanation}</p>
             ) : null}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Want more practice like this?</p>
-              <p className="text-sm text-foreground/70">
-                {isAuthenticated
-                  ? "Save this note or turn it into your own Study Pack to keep reviewing in your workspace."
-                  : "Create a free account or save this note to keep reviewing in your own workspace."}
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <PublicSeoCopyCta
-                noteId={noteId}
-                label="Create your own Study Pack"
-                redirectTarget="generate"
-                guestAuthMode="signup"
-              />
-              <PublicSeoCopyCta
-                noteId={noteId}
-                label="Copy to My Library"
-                guestAuthMode="signup"
-              />
-            </div>
-          </div>
+          <Button type="button" onClick={handleNext} className="w-full sm:w-auto">
+            {isLastQuestion ? "See Results" : "Next Question →"}
+          </Button>
         </div>
       ) : null}
     </Card>
