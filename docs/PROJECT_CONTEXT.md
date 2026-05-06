@@ -68,7 +68,8 @@ Primary routes:
 - `/public/library`
 - `/notes/{id}` (Note Detail)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only)
-- `/public/profile/{userId}` (Public Profile)
+- `/public/creator/{username}` (canonical Public Creator/Profile page)
+- `/public/profile/{userId}` (legacy-compatible Public Profile route)
 
 ## Hash Navigation Pattern
 
@@ -174,11 +175,11 @@ CTA ordering on public note detail:
 
 Public creator identity direction:
 - `displayName` is presentation-only; it is not a unique creator identity
-- public note cards and public note detail need a stable public creator identifier for trust and duplicate-name disambiguation
-- preferred direction is username / handle when available, otherwise a generated public slug
-- public-facing creator labels should keep `displayName` for readability and add the handle/slug when disambiguation is needed
+- `username` is the stable public creator identity / handle and must be unique
+- public note cards and public note detail use `displayName` for readability and `@username` for trust and duplicate-name disambiguation
+- public creator links should use `/public/creator/{username}` when a username is available
 - never expose raw user IDs or emails on public note or public profile surfaces
-- current public links must remain valid if handle/slug-based public identity is introduced later
+- legacy `/public/profile/{userId}` links remain valid for compatibility
 
 ## v0.12.0 Direction
 
@@ -195,7 +196,7 @@ Key v0.12.0 changes to be aware of:
 - **Public Library filters are URL-driven and backend-backed** — subject, tags, course/program, audience, search, and sort flow through shareable `/public/library?...` URLs and the public-notes backend filter contract; the list page `Share this list` action must copy that same canonical filtered URL
 - **Public Library route and filters are canonicalized** — `/public/library` is the only canonical public-library browsing route for signed-in and signed-out users; `/library/public` and `/public/library/{subject}` are compatibility redirects only, and active public-library filters must stay URL-driven and shareable
 - **Public Library filter UX must stay stable while syncing the URL** — search uses local input state plus a short debounce before `replace`-ing the canonical `/public/library?...` URL; filter updates preserve scroll position, tag browsing stays reachable through a dedicated `Browse all` action, and selector search inputs must not lose focus during typing
-- **Public creator identity safety** — Public Library cards and public note detail currently rely on `displayName` for presentation; v0.12.0 planning adds a stable public creator identifier for disambiguation and shareable creator links while keeping existing public URLs valid
+- **Public creator identity safety** — `username` is now the stable public identifier for attribution and `/public/creator/{username}` links; `displayName` remains presentation-only, and legacy public-profile links stay compatible
 - **Social login (Google)** — planned for this release cycle; must not break or replace existing email-and-password accounts
 - **Content moderation** — `ContentModerationService` in the backend applies token-based dictionary matching to note titles, Study Pack topics, and note content at creation boundaries; dictionaries are in `classpath:/moderation/banned_words_*.txt`
 

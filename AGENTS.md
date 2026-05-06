@@ -215,7 +215,12 @@ Teacher flow rule:
   - `firstName`
   - `lastName`
   - `displayName`
+  - `username`
   - `email`
+- `displayName` is presentation-only and must never be used as a unique identity.
+- `username` is the stable public identity / handle and is used for public attribution and profile links.
+- Usernames must be unique, URL-safe, and must not expose emails or raw private user IDs.
+- Login accepts either email or username through the same credential field; keep email login working.
 - Learning Profile uses:
   - `learnerLevel`
   - `courseProgram`
@@ -248,7 +253,7 @@ Teacher flow rule:
 
 ### Public vs Private Profile Separation Rule
 
-- `Public Profile` (`/public/profile/{userId}`) is the user's public learning-portfolio surface.
+- `Public Profile` (`/public/creator/{username}` canonical, `/public/profile/{userId}` legacy-compatible) is the user's public learning-portfolio surface.
   - Shareable, view-only to non-owners.
   - Shows `displayName`, `bio`, `learnerLevel`, `courseProgram`, `profileType`, public metrics, and public notes only.
   - Owner controls (`Edit Profile`, `Share Profile`, visibility toggle) are on the Public Profile page only.
@@ -257,11 +262,11 @@ Teacher flow rule:
   - Accessed via the `Edit Profile` button on the Public Profile page.
   - Does not own public-profile visibility or sharing.
 - The authenticated app shell avatar dropdown must always offer:
-  - `My Profile` → `/public/profile/{userId}` (public identity page)
+  - `My Profile` → `/public/creator/{username}` when available, otherwise `/public/profile/{userId}` (public identity page)
   - `Settings` → `/settings` (account and app settings)
   - `Sign Out`
 - The sidebar Account section must use:
-  - `Profile` → `/public/profile/{userId}` (same as `My Profile` in the avatar dropdown)
+  - `Profile` → `/public/creator/{username}` when available, otherwise `/public/profile/{userId}` (same as `My Profile` in the avatar dropdown)
   - `Settings` → `/settings`
 - Terminology rule: **Profile = public identity page. Settings = account/app settings.** Do not use "Account Settings" as a nav label — use plain "Settings".
 
@@ -459,12 +464,13 @@ Teacher flow rule:
 - Public Library cards should label note source as:
   - `By You` for the current user's own public notes
   - `By NoteLib` plus `Official` badge for the official NoteLib account
-  - `By {displayName}` for other public notes
+  - `By {displayName} · @{username}` for other public notes when username is available
 - Public author labels are viewer-relative:
   - owner viewing own public note -> `By You`
   - official NoteLib account -> `By NoteLib` with `Official`
-  - all other public notes -> `By {displayName}`
+  - all other public notes -> `By {displayName} · @{username}` when username is available, otherwise `By {displayName}`
 - `displayName` is the readable public author label, not a unique creator identity.
+- `username` is the stable public author identity and should back public creator links.
 - Public Library cards and public note detail must not rely on `displayName` alone for creator identity when duplicate names exist.
 - Creator links should use a stable public identifier:
   - preferred -> username / handle when available

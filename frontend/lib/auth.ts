@@ -11,6 +11,7 @@ export type AuthUser = {
   id: string;
   email: string;
   displayName: string | null;
+  username?: string | null;
   profileType: "STUDENT" | "BOARD_EXAM" | "TEACHER" | "PARENT" | "PROFESSIONAL" | null;
   emailVerifiedAt: string | null;
   onboardingCompletedAt?: string | null;

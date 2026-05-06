@@ -19,7 +19,7 @@ import { SendFeedbackWidget } from "@/components/feedback/send-feedback-widget";
 import { ResponsiveActionButton, ResponsiveActionContent } from "@/components/ui/action-button";
 import { ToastMessage } from "@/components/ui/toast-message";
 import { Navbar } from "@/components/navbar";
-import { buildPublicProfilePath } from "@/lib/public-note-path";
+import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -28,6 +28,7 @@ type AppShellProps = {
 type ShellUser = {
   id: string | null;
   displayName: string | null;
+  username: string | null;
   firstName: string | null;
   email: string | null;
   emailVerifiedAt: string | null;
@@ -232,6 +233,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   const [user, setUser] = useState<ShellUser>({
     id: null,
     displayName: null,
+    username: null,
     firstName: null,
     email: null,
     emailVerifiedAt: null,
@@ -251,6 +253,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         setUser({
           id: null,
           displayName: null,
+          username: null,
           firstName: null,
           email: null,
           emailVerifiedAt: null,
@@ -262,6 +265,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       setUser((previous) => ({
         id: authUser.id ?? previous.id,
         displayName: authUser.displayName ?? previous.displayName,
+        username: authUser.username ?? previous.username,
         firstName: previous.firstName,
         email: authUser.email ?? previous.email,
         emailVerifiedAt: authUser.emailVerifiedAt,
@@ -325,6 +329,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
     setUser({
       id: authUser?.id ?? null,
       displayName: authUser?.displayName ?? null,
+      username: authUser?.username ?? null,
       firstName: null,
       email: authUser?.email ?? null,
       emailVerifiedAt: authUser?.emailVerifiedAt ?? null,
@@ -349,6 +354,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
         setUser({
           id: me.id,
           displayName: me.displayName?.trim() || null,
+          username: me.username ?? null,
           firstName: me.firstName?.trim() || null,
           email: me.email,
           emailVerifiedAt: me.emailVerifiedAt,
@@ -360,6 +366,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
           setAuthUser({
             ...authUser,
             displayName: me.displayName?.trim() || authUser.displayName,
+            username: me.username ?? null,
             profileType: me.profileType,
             emailVerifiedAt: me.emailVerifiedAt,
             onboardingCompletedAt: me.onboardingCompletedAt,
@@ -377,7 +384,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
   }, [shouldUseShell, pathname]);
 
   const secondaryNav = useMemo<NavLinkItem[]>(() => {
-    const profileHref = user.id ? buildPublicProfilePath(user.id) : "/public/profile";
+    const profileHref = user.id ? buildPublicCreatorOrProfilePath({ userId: user.id, username: user.username }) : "/public/profile";
     const nav: NavLinkItem[] = [
       { href: profileHref, label: "Profile", action: "profile" },
       { href: "/settings", label: "Settings", action: "settings" },
@@ -387,7 +394,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
       nav.push({ href: "/admin", label: "Admin", action: "admin" as const });
     }
     return nav;
-  }, [user.id, user.role]);
+  }, [user.id, user.role, user.username]);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -530,7 +537,7 @@ export function AppShell({ children }: Readonly<AppShellProps>) {
                 <div className="motion-dropdown-panel absolute right-0 top-11 w-52 rounded-md border border-border bg-background p-1 shadow-sm">
                   {user.id ? (
                     <Link
-                      href={buildPublicProfilePath(user.id)}
+                      href={buildPublicCreatorOrProfilePath({ userId: user.id, username: user.username })}
                       className="motion-lift block rounded px-3 py-2 text-sm text-foreground/85 transition-colors hover:bg-highlight hover:text-foreground active:bg-highlight-strong"
                     >
                       <span className="inline-flex items-center gap-2">

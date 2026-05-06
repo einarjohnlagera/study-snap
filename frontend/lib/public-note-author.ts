@@ -21,11 +21,20 @@ export function resolvePublicNoteAuthorMeta(params: {
   ownerUserId: string | null | undefined;
   currentUserId: string | null | undefined;
   authorDisplayName: string | null | undefined;
+  authorUsername?: string | null | undefined;
   isOfficialAuthor: boolean;
   isCurrentUser: boolean;
 }): PublicNoteAuthorMeta {
-  const { ownerUserId, currentUserId, authorDisplayName, isOfficialAuthor, isCurrentUser } = params;
+  const { ownerUserId, currentUserId, authorDisplayName, authorUsername, isOfficialAuthor, isCurrentUser } = params;
   const normalizedAuthorDisplayName = authorDisplayName?.trim();
+  const normalizedUsername = authorUsername?.trim();
+  const labelWithUsername = normalizedAuthorDisplayName && normalizedUsername
+    ? `By ${normalizedAuthorDisplayName} · @${normalizedUsername}`
+    : normalizedAuthorDisplayName
+      ? `By ${normalizedAuthorDisplayName}`
+      : normalizedUsername
+        ? `@${normalizedUsername}`
+        : "By Community";
 
   if (isCurrentUser || isPublicNoteOwner({ ownerUserId, currentUserId })) {
     return {
@@ -42,7 +51,7 @@ export function resolvePublicNoteAuthorMeta(params: {
   }
 
   return {
-    label: normalizedAuthorDisplayName ? `By ${normalizedAuthorDisplayName}` : "By Community",
+    label: labelWithUsername,
     showOfficialBadge: false,
   };
 }

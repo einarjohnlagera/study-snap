@@ -11,17 +11,25 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/public/profile")
+@RequestMapping("/public")
 @RequiredArgsConstructor
 public class PublicProfileController {
 
     private final PublicProfileService publicProfileService;
 
-    @GetMapping("/{userId}")
+    @GetMapping("/profile/{userId}")
     public PublicProfileResponse getByUserId(
             @PathVariable String userId,
             @AuthenticationPrincipal AuthenticatedUser viewer
     ) {
         return publicProfileService.getByUserId(userId, viewer == null ? null : viewer.userId());
+    }
+
+    @GetMapping("/creator/{username}")
+    public PublicProfileResponse getByUsername(
+            @PathVariable String username,
+            @AuthenticationPrincipal AuthenticatedUser viewer
+    ) {
+        return publicProfileService.getByUsername(username, viewer == null ? null : viewer.userId());
     }
 }

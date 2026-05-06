@@ -104,6 +104,7 @@ class AuthServiceTest {
         );
 
         assertThat(response.email()).isEqualTo("[email protected]");
+        verify(userRepository).existsByUsernameIgnoreCase("note");
         assertThat(response.onboardingCompletedAt()).isNull();
         assertThat(response.productOnboardingCompletedAt()).isNull();
         assertThat(response.themePreference()).isEqualTo(ThemePreference.SYSTEM);
@@ -123,6 +124,7 @@ class AuthServiceTest {
         user.setId(userId);
         user.setEmail("current@example.com");
         user.setDisplayName("note");
+        user.setUsername("note");
         user.setPasswordHash("hashed");
         user.setRole(com.studysnap.backend.entity.UserRole.USER);
         user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
@@ -147,16 +149,41 @@ class AuthServiceTest {
     }
 
     @Test
-    void login_throwsInvalidCredentialsException_whenUserDoesNotExist() {
-        when(userRepository.findByEmailIgnoreCase("[email protected]")).thenReturn(Optional.empty());
+    void login_allowsUsernameIdentifier() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setUsername("noteguru");
+        user.setPasswordHash("hashed");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
 
+        when(userRepository.findByUsernameIgnoreCase("noteguru")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("password123", "hashed")).thenReturn(true);
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        AuthResponse response = authService.login(
+            new LoginRequest("noteguru", "password123", false),
+            "127.0.0.1",
+            "JUnit"
+        );
+
+        assertThat(response.email()).isEqualTo("current@example.com");
+        verify(userRepository, never()).findByEmailIgnoreCase("noteguru");
+    }
+
+    @Test
+    void login_throwsInvalidCredentialsException_whenUserDoesNotExist() {
         LoginRequest request = new LoginRequest("[email protected]", "password123", false);
         assertThatThrownBy(() -> authService.login(
             request,
             "127.0.0.1",
             "JUnit"
         )).isInstanceOf(InvalidCredentialsException.class)
-            .hasMessage("Invalid email or password.");
+            .hasMessage("Invalid email, username, or password.");
     }
 
     @Test
@@ -414,6 +441,7 @@ class AuthServiceTest {
         user.setFirstName("Old");
         user.setLastName("Name");
         user.setDisplayName("Old Name");
+        user.setUsername("studybuddy");
         user.setBio("Old bio");
         user.setLearnerLevel(LearnerLevel.COLLEGE);
         user.setCourseProgram("Biology");
@@ -437,6 +465,7 @@ class AuthServiceTest {
                 "New",
                 "Person",
                 "Study Buddy",
+                "studybuddy",
                 "Focused on anatomy review.",
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Pharmacy",
@@ -451,6 +480,7 @@ class AuthServiceTest {
         assertThat(response.bio()).isEqualTo("Focused on anatomy review.");
         assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.BOARD_EXAM_REVIEW);
         assertThat(response.courseProgram()).isEqualTo("Pharmacy");
+        assertThat(response.username()).isEqualTo("studybuddy");
         assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getDisplayName()).isEqualTo("Study Buddy");
         assertThat(user.getBio()).isEqualTo("Focused on anatomy review.");
@@ -468,6 +498,7 @@ class AuthServiceTest {
         user.setFirstName("Note");
         user.setLastName("User");
         user.setDisplayName("Note User");
+        user.setUsername("notehero");
         user.setBio(null);
         user.setLearnerLevel(LearnerLevel.COLLEGE);
         user.setCourseProgram("Biology");
@@ -494,6 +525,7 @@ class AuthServiceTest {
                 "Note",
                 "User",
                 "Note Hero",
+                "notehero",
                 "Weak areas: physiology and pharma.",
                 LearnerLevel.PROFESSIONAL,
                 "Medicine",
@@ -506,6 +538,7 @@ class AuthServiceTest {
         assertThat(response.bio()).isEqualTo("Weak areas: physiology and pharma.");
         assertThat(response.learnerLevel()).isEqualTo(LearnerLevel.PROFESSIONAL);
         assertThat(response.courseProgram()).isEqualTo("Medicine");
+        assertThat(response.username()).isEqualTo("notehero");
         assertThat(response.publicProfileVisible()).isFalse();
         assertThat(user.getPendingEmail()).isEqualTo("updated@example.com");
         assertThat(user.getDisplayName()).isEqualTo("Note Hero");
@@ -566,6 +599,7 @@ class AuthServiceTest {
             "Note",
             "User",
             "NoteLib Support",
+            "notesupport",
             null,
             LearnerLevel.COLLEGE,
             "Biology",
@@ -578,6 +612,76 @@ class AuthServiceTest {
             .isInstanceOf(AppException.class)
             .extracting(Throwable::getMessage)
             .isEqualTo("This display name is reserved. Please choose another name.");
+    }
+
+    @Test
+    void updateUserProfile_rejectsInvalidUsernameFormat() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("Note");
+        user.setUsername("noteuser");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+            "Note",
+            "User",
+            "Note User",
+            "note user!",
+            null,
+            LearnerLevel.COLLEGE,
+            "Biology",
+            "current@example.com"
+        );
+
+        assertThatThrownBy(() -> authService.updateUserProfile(userId, request))
+            .isInstanceOf(AppException.class)
+            .extracting(Throwable::getMessage)
+            .isEqualTo("Username can only contain letters, numbers, underscores, or hyphens.");
+    }
+
+    @Test
+    void updateUserProfile_rejectsDuplicateUsername() {
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("current@example.com");
+        user.setFirstName("Note");
+        user.setDisplayName("Note");
+        user.setUsername("noteuser");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        UserEntity otherUser = new UserEntity();
+        otherUser.setId(otherUserId);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameIgnoreCase("takenname")).thenReturn(Optional.of(otherUser));
+
+        UpdateUserProfileRequest request = new UpdateUserProfileRequest(
+            "Note",
+            "User",
+            "Note User",
+            "takenname",
+            null,
+            LearnerLevel.COLLEGE,
+            "Biology",
+            "current@example.com"
+        );
+
+        assertThatThrownBy(() -> authService.updateUserProfile(userId, request))
+            .isInstanceOf(AppException.class)
+            .extracting(Throwable::getMessage)
+            .isEqualTo("Username is already taken.");
     }
 
     @Test

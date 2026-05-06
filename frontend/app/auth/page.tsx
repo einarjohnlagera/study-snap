@@ -218,13 +218,13 @@ function AuthPageContent() {
           ) : null}
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium">Email</span>
+            <span className="text-sm font-medium">{mode === "login" ? "Email or username" : "Email"}</span>
             <input
-              type="email"
+              type={mode === "login" ? "text" : "email"}
               className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
+              autoComplete={mode === "login" ? "username" : "email"}
               required
             />
           </label>

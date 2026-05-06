@@ -584,6 +584,7 @@ class ChallengeQuizServiceTest {
                 "Test",
                 "User",
                 "Test User",
+                "testuser",
                 null,
                 learnerLevel,
                 courseProgram,

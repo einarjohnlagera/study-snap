@@ -257,6 +257,7 @@ class QuickReviewAdaptivePracticeServiceTest {
                 "Test",
                 "User",
                 "Test User",
+                "testuser",
                 null,
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Nursing",

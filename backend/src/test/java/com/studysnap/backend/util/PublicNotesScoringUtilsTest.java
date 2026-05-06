@@ -141,6 +141,7 @@ class PublicNotesScoringUtilsTest {
                 0L,
                 viewCount,
                 "Author",
+                "author",
                 false,
                 false,
                 createdAt,

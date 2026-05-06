@@ -120,6 +120,7 @@ export default async function PublicLibrarySeoPage({ params }: Readonly<PublicLi
             <PublicNoteAuthorLine
               ownerUserId={note.ownerUserId}
               authorDisplayName={note.authorDisplayName}
+              authorUsername={note.authorUsername}
               isOfficialAuthor={note.isOfficialAuthor}
               isCurrentUser={note.isCurrentUser}
               subject={note.subject}

@@ -284,7 +284,7 @@ public class NoteService {
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listMine(UUID ownerUserId) {
         List<NoteEntity> notes = noteRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
-        return toListItems(notes, ownerUserId);
+        return toListItems(notes, ownerUserId, true);
     }
 
     @Transactional(readOnly = true)
@@ -300,7 +300,7 @@ public class NoteService {
         List<NoteEntity> notes = targetProfileType == null
                 ? noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
                 : noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
-        List<NoteListItemResponse> items = toListItems(notes, viewerUserId);
+        List<NoteListItemResponse> items = toListItems(notes, viewerUserId, false);
         items = filterPublicLibraryItems(items, search, subject, tags, courseProgram);
         return sortPublicLibraryItems(items, sort);
     }
@@ -483,7 +483,7 @@ public class NoteService {
         return mapToPublicDetail(matched, linkedStudyPack, viewerUserId);
     }
 
-    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes, UUID viewerUserId) {
+    private List<NoteListItemResponse> toListItems(List<NoteEntity> notes, UUID viewerUserId, boolean includeOwnerUserId) {
         if (notes.isEmpty()) {
             return List.of();
         }
@@ -528,7 +528,8 @@ public class NoteService {
                         ownerById.get(note.getOwnerUserId()),
                         viewerUserId,
                         likedNoteIds.contains(note.getId()),
-                        generatedQuizByNoteId.get(note.getId())
+                        generatedQuizByNoteId.get(note.getId()),
+                        includeOwnerUserId
                 ))
                 .toList();
     }
@@ -734,12 +735,13 @@ public class NoteService {
             UserEntity owner,
             UUID viewerUserId,
             boolean likedByCurrentUser,
-            GeneratedQuizEntity generatedQuiz
+            GeneratedQuizEntity generatedQuiz,
+            boolean includeOwnerUserId
     ) {
         boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new NoteListItemResponse(
                 note.getId().toString(),
-                note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
+                includeOwnerUserId && note.getOwnerUserId() != null ? note.getOwnerUserId().toString() : null,
                 note.getTitle(),
                 normalizeOptionalText(note.getCourseProgram()),
                 owner == null || owner.getLearnerLevel() == null ? null : owner.getLearnerLevel().name(),
@@ -757,6 +759,7 @@ public class NoteService {
                 shareCount,
                 viewCount,
                 resolvePublicAuthorName(owner),
+                resolvePublicAuthorUsername(owner),
                 isOfficialAuthor,
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getCreatedAt(),
@@ -775,7 +778,7 @@ public class NoteService {
         boolean isOfficialAuthor = isOfficialAuthor(owner);
         return new PublicNoteDetailResponse(
                 note.getId().toString(),
-                note.getOwnerUserId() == null ? null : note.getOwnerUserId().toString(),
+                null,
                 note.getTitle(),
                 note.getSubject(),
                 note.getTags() == null ? List.of() : Arrays.asList(note.getTags()),
@@ -786,6 +789,7 @@ public class NoteService {
                 studyPack == null || studyPack.getKeyConcepts() == null ? List.of() : studyPack.getKeyConcepts(),
                 studyPack == null || studyPack.getQuiz() == null ? List.of() : studyPack.getQuiz(),
                 resolvePublicAuthorName(owner),
+                resolvePublicAuthorUsername(owner),
                 isOfficialAuthor,
                 isCurrentUser(note.getOwnerUserId(), viewerUserId),
                 note.getUpdatedAt()
@@ -808,6 +812,10 @@ public class NoteService {
             return firstName;
         }
         return DEFAULT_AUTHOR_NAME;
+    }
+
+    private String resolvePublicAuthorUsername(UserEntity user) {
+        return normalizeOptionalText(user == null ? null : user.getUsername());
     }
 
     private boolean isOfficialAuthor(UserEntity user) {

@@ -16,6 +16,7 @@ public record PublicNoteDetailResponse(
         List<String> keyConcepts,
         List<QuizItem> quiz,
         String authorDisplayName,
+        String authorUsername,
         boolean isOfficialAuthor,
         boolean isCurrentUser,
         OffsetDateTime updatedAt

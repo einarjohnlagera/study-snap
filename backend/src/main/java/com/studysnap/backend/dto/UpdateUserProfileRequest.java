@@ -16,6 +16,9 @@ public record UpdateUserProfileRequest(
         @Size(max = 100, message = "Display name must be 100 characters or less.")
         String displayName,
 
+        @Size(max = 30, message = "Username must be 3-30 characters.")
+        String username,
+
         @Size(max = 200, message = "Bio must be 200 characters or less.")
         String bio,
 

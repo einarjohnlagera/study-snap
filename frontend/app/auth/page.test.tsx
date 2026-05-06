@@ -99,7 +99,7 @@ describe("AuthPage", () => {
 
     const { container } = render(<AuthPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email or username"), {
       target: { value: "note@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -125,7 +125,7 @@ describe("AuthPage", () => {
 
     expect(screen.getByText("Your session expired. Please log in again.")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email or username"), {
       target: { value: "note@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -160,7 +160,7 @@ describe("AuthPage", () => {
 
     const { container } = render(<AuthPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email or username"), {
       target: { value: "note@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -179,7 +179,7 @@ describe("AuthPage", () => {
 
     const { container } = render(<AuthPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email or username"), {
       target: { value: "second@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -231,7 +231,7 @@ describe("AuthPage", () => {
 
     const { container } = render(<AuthPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email or username"), {
       target: { value: "note@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {
@@ -249,7 +249,7 @@ describe("AuthPage", () => {
 
     const { container } = render(<AuthPage />);
 
-    fireEvent.change(screen.getByLabelText("Email"), {
+    fireEvent.change(screen.getByLabelText("Email or username"), {
       target: { value: "note@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Password"), {

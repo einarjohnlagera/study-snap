@@ -8,9 +8,11 @@ Routes:
 
 - canonical list route for signed-in and signed-out users: `/public/library`
 - canonical public note detail route: `/public/library/{subject}/{slug}`
+- canonical public creator/profile route: `/public/creator/{username}`
 - legacy compatibility redirects:
   - `/library/public` -> `/public/library`
   - `/public/library/{subject}` -> `/public/library?subject={subject}`
+  - `/public/profile/{userId}` remains compatible for existing public-profile links
 
 Shareable filter URLs:
 
@@ -296,21 +298,20 @@ Interaction rules:
 - do not place share/generate/delete/edit actions inside Public Library cards
 - use public note detail for the rest of the actions instead
 
-### Creator Identity Trust Fix (planned for v0.12.0)
+### Creator Identity Trust Fix
 
 Public Library is becoming an acquisition and sharing surface, so creator identity must stay readable **and** unambiguous.
 
 - `displayName` is the presentation label, not the unique creator identity
+- `username` is the unique public identity / handle and must be URL-safe
 - public note cards and public note detail must not rely on `displayName` alone when duplicate names exist
-- use a stable public creator identifier for linking and disambiguation:
-  - preferred: username / handle when available
-  - fallback direction: generated public slug
+- use `username` for creator links and disambiguation
 - suggested display:
   - `By Einar`
-  - when disambiguation is needed or a handle exists: `By Einar · @einarjohn`
-- public creator links must use the stable public identifier, not `displayName`
+  - when a username exists: `By Einar · @einarjohn`
+- public creator links should use `/public/creator/{username}`, not `displayName`
 - never expose email addresses or raw private user IDs on public surfaces
-- if public creator routing changes in the future, existing public links must keep working through compatibility or redirect handling
+- existing `/public/profile/{userId}` links must keep working through compatibility while new links prefer username-based creator URLs
 
 Discovery guidance:
 

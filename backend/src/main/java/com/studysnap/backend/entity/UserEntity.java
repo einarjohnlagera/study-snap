@@ -42,6 +42,9 @@ public class UserEntity {
     @Column(name = "display_name", length = 100)
     private String displayName;
 
+    @Column(name = "username", nullable = false, unique = true, length = 30)
+    private String username;
+
     @Column(name = "bio", length = 200)
     private String bio;
 

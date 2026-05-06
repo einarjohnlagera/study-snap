@@ -307,6 +307,7 @@ class NoteControllerTest {
                 List.of("Nucleus"),
                 List.of(),
                 "noteguru",
+                "noteguru",
                 false,
                 false,
                 OffsetDateTime.now()
@@ -344,6 +345,7 @@ class NoteControllerTest {
                         1L,
                         5L,
                         "My Notes",
+                        "mynotes",
                         false,
                         true,
                         OffsetDateTime.now(),

@@ -2,6 +2,8 @@
 
 NoteLib uses two separate profile fields to personalise the learning experience: **Learner Level** and **Course / Program**. These are distinct concerns and must never be merged or conflated.
 
+Account identity fields are documented separately in `docs/features/account-profile.md`. `displayName` is presentation-only, while `username` is the stable public identity used for attribution and public creator links.
+
 ## Learner Level
 
 **What it controls:** quiz difficulty, explanation depth, vocabulary, and question complexity in all AI-generated outputs (Study Pack quizzes, Quick Review, Challenge Quiz, Adaptive Practice).

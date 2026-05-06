@@ -27,6 +27,10 @@ Theme: deepen the learning experience, make the product easier to discover and n
 
 ### 🐛 Fixes
 
+- Added unique public usernames for stable creator attribution and future creator profile links.
+- Public notes now disambiguate creators with `displayName` plus `@username` while keeping display names as readable presentation.
+- Login now accepts email or username without breaking existing email login.
+- Profile identity settings now allow users to edit their public username.
 - Fixed TypeScript type errors in test fixtures (`NoteListItemResponse`, `NotePerformanceSummaryResponse`, `PublicProfileResponse`) to align test data with updated type definitions
 - Fixed incorrect `Quiz Ready` badge visibility across Student and Board Exam modes so readiness reflects actual quiz availability
 - Fixed Study Pack generation metadata flow so note-level `courseProgram` remains the source of truth and user profile `courseProgram` is used only as a fallback

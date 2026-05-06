@@ -31,7 +31,7 @@ import {
   isActiveProfileTypeForSwitch,
 } from "@/lib/profile-mode";
 import { BackLink } from "@/components/ui/back-link";
-import { buildPublicProfilePath } from "@/lib/public-note-path";
+import { buildPublicCreatorOrProfilePath } from "@/lib/public-note-path";
 import { PROFILE_LEARNING_PROFILE_SECTION_ID, PROFILE_TOP_PERFORMANCE_SECTION_ID } from "@/lib/profile-sections";
 import { redirectToLoginWithCurrentDestination } from "@/lib/route-guards";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
@@ -41,6 +41,7 @@ type IdentityForm = {
   firstName: string;
   lastName: string;
   displayName: string;
+  username: string;
   email: string;
 };
 
@@ -167,6 +168,7 @@ export default function ProfilePage() {
     firstName: "",
     lastName: "",
     displayName: "",
+    username: "",
     email: "",
   });
   const [learningProfileForm, setLearningProfileForm] = useState<LearningProfileForm>({
@@ -232,6 +234,7 @@ export default function ProfilePage() {
         firstName: me.firstName ?? "",
         lastName: me.lastName ?? "",
         displayName: me.displayName ?? "",
+        username: me.username ?? "",
         email: me.pendingEmail ?? me.email ?? "",
       });
       setLearningProfileForm({
@@ -343,6 +346,7 @@ export default function ProfilePage() {
     firstName: identityForm.firstName.trim(),
     lastName: identityForm.lastName.trim(),
     displayName: identityForm.displayName.trim(),
+    username: identityForm.username.trim(),
     bio: learningProfileForm.bio.trim(),
     learnerLevel: learningProfileForm.learnerLevel || null,
     courseProgram: learningProfileForm.courseProgram.trim(),
@@ -377,6 +381,7 @@ export default function ProfilePage() {
         firstName: updatedIdentity.firstName ?? "",
         lastName: updatedIdentity.lastName ?? "",
         displayName: updatedIdentity.displayName ?? "",
+        username: updatedIdentity.username ?? "",
         email: updatedIdentity.pendingEmail ?? updatedIdentity.email,
       });
       setLearningProfileForm({
@@ -415,6 +420,7 @@ export default function ProfilePage() {
         firstName: updatedProfile.firstName ?? "",
         lastName: updatedProfile.lastName ?? "",
         displayName: updatedProfile.displayName ?? "",
+        username: updatedProfile.username ?? "",
         email: updatedProfile.pendingEmail ?? updatedProfile.email,
       });
       setLearningProfileForm({
@@ -491,7 +497,7 @@ export default function ProfilePage() {
       ) : profile ? (
         <div className="space-y-6">
           <BackLink
-            href={fromDashboard ? "/dashboard" : buildPublicProfilePath(profile.id)}
+            href={fromDashboard ? "/dashboard" : buildPublicCreatorOrProfilePath({ userId: profile.id, username: profile.username })}
             label={fromDashboard ? "Dashboard" : "Profile"}
           />
           <PageHeader
@@ -517,7 +523,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <ResponsiveActionLink
-                href={buildPublicProfilePath(profile.id)}
+                href={buildPublicCreatorOrProfilePath({ userId: profile.id, username: profile.username })}
                 action="open"
                 label="View Public Page"
                 variant="outline"
@@ -552,6 +558,18 @@ export default function ProfilePage() {
                   value={identityForm.displayName}
                   onChange={(event) => handleIdentityFieldChange("displayName", event.target.value)}
                 />
+              </label>
+              <label className="block space-y-2 sm:col-span-2">
+                <span className="text-sm font-medium">Username</span>
+                <input
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  value={identityForm.username}
+                  onChange={(event) => handleIdentityFieldChange("username", event.target.value)}
+                  autoComplete="username"
+                />
+                <p className="text-xs text-foreground/60">
+                  Your username is used for public attribution and profile links.
+                </p>
               </label>
               <label className="block space-y-2 sm:col-span-2">
                 <span className="text-sm font-medium">Email</span>

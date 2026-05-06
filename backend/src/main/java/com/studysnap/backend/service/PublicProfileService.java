@@ -50,6 +50,20 @@ public class PublicProfileService {
         UUID userId = UuidParsingUtils.parseUuidOrThrow(userIdRaw, PublicProfileNotFoundException::new);
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(PublicProfileNotFoundException::new);
+        return buildPublicProfile(user, userId, viewerUserId);
+    }
+
+    public PublicProfileResponse getByUsername(String usernameRaw, UUID viewerUserId) {
+        String username = normalizeOptionalText(usernameRaw);
+        if (username == null) {
+            throw new PublicProfileNotFoundException();
+        }
+        UserEntity user = userRepository.findByUsernameIgnoreCase(username)
+                .orElseThrow(PublicProfileNotFoundException::new);
+        return buildPublicProfile(user, user.getId(), viewerUserId);
+    }
+
+    private PublicProfileResponse buildPublicProfile(UserEntity user, UUID userId, UUID viewerUserId) {
         boolean publicProfileVisible = Boolean.TRUE.equals(user.getPublicProfileVisible());
         boolean viewerOwnsProfile = userId.equals(viewerUserId);
         if (!publicProfileVisible && !viewerOwnsProfile) {
@@ -67,12 +81,14 @@ public class PublicProfileService {
 
         return new PublicProfileResponse(
                 resolvePublicDisplayName(user),
+                normalizeOptionalText(user.getUsername()),
                 normalizeOptionalText(user.getBio()),
                 user.getLearnerLevel() == null ? null : user.getLearnerLevel().name(),
                 normalizeOptionalText(user.getCourseProgram()),
                 user.getProfileType() == null ? null : user.getProfileType().name(),
                 isOfficialAuthor(user),
                 publicProfileVisible,
+                viewerOwnsProfile,
                 publicNotes.size(),
                 totalCopies,
                 totalShares,

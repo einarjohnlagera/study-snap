@@ -52,6 +52,7 @@ function createPublicNote(overrides: Record<string, unknown> = {}) {
     shareCount: 0,
     viewCount: 4,
     authorDisplayName: "Study Buddy",
+    authorUsername: "studybuddy",
     isOfficialAuthor: false,
     isCurrentUser: false,
     createdAt: "2026-03-30T08:00:00Z",
@@ -135,9 +136,9 @@ describe("PublicLibraryPageClient", () => {
     expect(await screen.findByText("By You")).toBeInTheDocument();
     expect(screen.getByText("By NoteLib")).toBeInTheDocument();
     expect(screen.getByText("Official")).toBeInTheDocument();
-    expect(screen.getByText("By Study Buddy")).toBeInTheDocument();
+    expect(screen.getByText("By Study Buddy · @studybuddy")).toBeInTheDocument();
     expect(screen.getByText("8 views")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "By Study Buddy" })).toHaveAttribute("href", "/public/profile/user-2");
+    expect(screen.getByRole("link", { name: "By Study Buddy · @studybuddy" })).toHaveAttribute("href", "/public/creator/studybuddy");
     expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Copy to My Library" })).not.toBeInTheDocument();
   });
@@ -297,7 +298,7 @@ describe("PublicLibraryPageClient", () => {
 
     render(<PublicLibraryPageClient />);
 
-    expect(await screen.findByText("By My Notes")).toBeInTheDocument();
+    expect(await screen.findByText("By My Notes · @studybuddy")).toBeInTheDocument();
 
     await act(async () => {
       currentAuthUser = { id: "user-1" };

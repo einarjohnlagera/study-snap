@@ -15,6 +15,7 @@ import { getAuthUser } from "@/lib/auth";
 import { formatLearnerLevel, normalizeCourseProgram } from "@/lib/learning-profile";
 import {
   ApiRequestError,
+  getPublicCreatorProfile,
   getPublicProfile,
   type ProfileType,
   type PublicProfileResponse,
@@ -22,12 +23,13 @@ import {
 } from "@/lib/api";
 import {
   buildPublicLibraryNotePathFromSlug,
-  buildPublicProfilePath,
+  buildPublicCreatorOrProfilePath,
 } from "@/lib/public-note-path";
 import type { ServerPublicProfileResult } from "@/lib/server-public-profiles";
 
 type PublicProfilePageClientProps = {
   userId: string;
+  lookupType?: "userId" | "username";
   initialResult: ServerPublicProfileResult;
 };
 
@@ -75,11 +77,13 @@ function formatLabelList(values: string[]): string {
 
 export function PublicProfilePageClient({
   userId,
+  lookupType = "userId",
   initialResult,
 }: Readonly<PublicProfilePageClientProps>) {
   const router = useRouter();
   const visibilityMenuRef = useRef<HTMLDivElement | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(() => getAuthUser()?.username ?? null);
   const [profile, setProfile] = useState<PublicProfileResponse | null>(
     initialResult.status === "ok" ? initialResult.profile : null,
   );
@@ -99,11 +103,15 @@ export function PublicProfilePageClient({
   const [shareModalCopied, setShareModalCopied] = useState(false);
   const [showSharePrivateConfirm, setShowSharePrivateConfirm] = useState(false);
 
-  const isOwner = currentUserId === userId;
+  const isOwner = Boolean(profile?.isCurrentUser)
+    || (lookupType === "userId" && currentUserId === userId)
+    || (lookupType === "username" && currentUsername?.toLowerCase() === userId.toLowerCase());
 
   useEffect(() => {
     const syncAuthUser = () => {
-      setCurrentUserId(getAuthUser()?.id ?? null);
+      const authUser = getAuthUser();
+      setCurrentUserId(authUser?.id ?? null);
+      setCurrentUsername(authUser?.username ?? null);
     };
 
     syncAuthUser();
@@ -120,7 +128,8 @@ export function PublicProfilePageClient({
     setPageState((current) => (current === "private" ? "loading" : current));
     setErrorMessage(null);
 
-    void getPublicProfile(userId)
+    const loadProfile = lookupType === "username" ? getPublicCreatorProfile : getPublicProfile;
+    void loadProfile(userId)
       .then((nextProfile) => {
         if (cancelled) {
           return;
@@ -144,7 +153,7 @@ export function PublicProfilePageClient({
     return () => {
       cancelled = true;
     };
-  }, [isOwner, userId]);
+  }, [isOwner, lookupType, userId]);
 
   useEffect(() => {
     if (!visibilityMenuOpen) {
@@ -308,7 +317,7 @@ export function PublicProfilePageClient({
       setShowSharePrivateConfirm(true);
       return;
     }
-    const shareUrl = new URL(buildPublicProfilePath(userId), globalThis.location.origin).toString();
+    const shareUrl = new URL(buildPublicCreatorOrProfilePath({ userId, username: profile?.username }), globalThis.location.origin).toString();
     setShareModalUrl(shareUrl);
     setShareModalCopied(false);
     setShowShareModal(true);
@@ -324,7 +333,7 @@ export function PublicProfilePageClient({
     try {
       const updated = await updatePublicProfileVisibility({ publicProfileVisible: true });
       setProfile((current) => (current ? { ...current, publicProfileVisible: updated.publicProfileVisible } : current));
-      const shareUrl = new URL(buildPublicProfilePath(userId), globalThis.location.origin).toString();
+      const shareUrl = new URL(buildPublicCreatorOrProfilePath({ userId, username: profile.username }), globalThis.location.origin).toString();
       setShareModalUrl(shareUrl);
       setShareModalCopied(false);
       setShowShareModal(true);
@@ -482,6 +491,9 @@ export function PublicProfilePageClient({
 
               <div className="space-y-2">
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{profile.displayName}</h1>
+                {profile.username ? (
+                  <p className="text-sm font-medium text-foreground/60">@{profile.username}</p>
+                ) : null}
                 <p className="max-w-2xl text-sm leading-relaxed text-foreground/75 sm:text-base">{bioText}</p>
                 {learnerLevelLabel || courseProgramLabel ? (
                   <div className="flex flex-wrap gap-2">
