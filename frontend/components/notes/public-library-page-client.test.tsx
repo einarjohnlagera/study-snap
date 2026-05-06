@@ -240,13 +240,46 @@ describe("PublicLibraryPageClient", () => {
     expect(await screen.findByText("Cinco de Mayo")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Share this list" }));
 
-    expect(await screen.findByRole("dialog", { name: "Share this list" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
-
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalled();
     });
     expect(writeTextMock.mock.calls[0]?.[0]).toContain("/public/library?search=cinco&subject=history&tag=mexican-history");
+    expect(await screen.findByText("Link copied")).toBeInTheDocument();
+  });
+
+  it("keeps the main search focused and syncs the URL after a debounce", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      createPublicNote({
+        id: "note-1",
+        title: "Pyrolysis Basics",
+        subject: "Chemistry",
+        tags: ["pyro"],
+      }),
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Pyrolysis Basics")).toBeInTheDocument();
+
+    jest.useFakeTimers();
+    try {
+      const input = screen.getByLabelText("Search");
+      input.focus();
+
+      fireEvent.change(input, { target: { value: "pyro" } });
+
+      expect(document.activeElement).toBe(input);
+      expect(replaceMock).not.toHaveBeenCalledWith("/public/library?search=pyro", { scroll: false });
+
+      act(() => {
+        jest.advanceTimersByTime(400);
+      });
+
+      expect(replaceMock).toHaveBeenCalledWith("/public/library?search=pyro", { scroll: false });
+      expect(document.activeElement).toBe(input);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("updates the author badge when auth state hydrates after mount", async () => {
@@ -399,7 +432,7 @@ describe("PublicLibraryPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open sorting" }));
     fireEvent.click(screen.getByRole("button", { name: "Most Viewed" }));
 
-    expect(replaceMock).toHaveBeenCalledWith("/public/library?sort=views");
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?sort=views", { scroll: false });
     const titles = screen.getAllByRole("heading", { level: 3 }).map((element) => element.textContent);
     expect(titles.slice(0, 2)).toEqual(["Most Viewed", "Most Copied"]);
   });
@@ -474,7 +507,7 @@ describe("PublicLibraryPageClient", () => {
     await screen.findByText("Biology Note");
     fireEvent.click(screen.getByRole("button", { name: "Biology" }));
 
-    expect(replaceMock).toHaveBeenCalledWith("/public/library?subject=biology");
+    expect(replaceMock).toHaveBeenCalledWith("/public/library?subject=biology", { scroll: false });
     expect(screen.queryByText("⭐ Featured Notes")).not.toBeInTheDocument();
     expect(screen.getByText("Biology Note")).toBeInTheDocument();
     expect(screen.queryByText("Chemistry Note")).not.toBeInTheDocument();
@@ -496,7 +529,7 @@ describe("PublicLibraryPageClient", () => {
     await screen.findByText("Biology Note");
     fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
 
-    expect(replaceMock).toHaveBeenCalledWith("/public/library");
+    expect(replaceMock).toHaveBeenCalledWith("/public/library", { scroll: false });
   });
 
   it("opens the subject selector from + More and filters subjects with search", async () => {
@@ -555,24 +588,48 @@ describe("PublicLibraryPageClient", () => {
     render(<PublicLibraryPageClient />);
 
     await screen.findByText("Biology Cells");
-    fireEvent.click(screen.getByRole("button", { name: "+ More" }));
+    expect(screen.getByRole("button", { name: "Browse all" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Browse all" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Select tags" });
     const modal = within(dialog);
+    const searchInput = modal.getByPlaceholderText("Search tags...");
 
-    fireEvent.change(modal.getByPlaceholderText("Search tags..."), {
+    searchInput.focus();
+    fireEvent.change(searchInput, {
       target: { value: "motion" },
     });
+    expect(document.activeElement).toBe(searchInput);
+
     fireEvent.click(modal.getByRole("button", { name: "motion" }));
-    fireEvent.change(modal.getByPlaceholderText("Search tags..."), {
+    fireEvent.change(searchInput, {
       target: { value: "cells" },
     });
+    expect(document.activeElement).toBe(searchInput);
     fireEvent.click(modal.getByRole("button", { name: "cells" }));
     fireEvent.click(modal.getByRole("button", { name: "Apply" }));
 
     expect(screen.getByText("Biology Cells")).toBeInTheDocument();
     expect(screen.getByText("Physics Motion")).toBeInTheDocument();
     expect(screen.queryByText("History Essay")).not.toBeInTheDocument();
+  });
+
+  it("keeps tag browsing accessible even when only a few popular tags are visible", async () => {
+    (listPublicNotes as jest.Mock).mockResolvedValue([
+      createPublicNote({
+        id: "note-1",
+        title: "Single Tag Note",
+        subject: "Physics",
+        tags: ["motion"],
+      }),
+    ]);
+
+    render(<PublicLibraryPageClient />);
+
+    expect(await screen.findByText("Single Tag Note")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Browse all" }));
+
+    expect(await screen.findByRole("dialog", { name: "Select tags" })).toBeInTheDocument();
   });
 
   it("shows curated discovery sections without the old browse-by-subject block", async () => {

@@ -525,6 +525,10 @@ Teacher flow rule:
 - Public landing page should emit JSON-LD `WebSite` schema.
 - Public Library index should emit JSON-LD `CollectionPage` schema.
 - Public Library filter state must stay in sync with URL query params; direct opens of filtered `/public/library?...` URLs must restore the same selected filters in the UI.
+- Public Library search inputs must not update the URL on every keypress. Use local input state plus a short debounce, then `router.replace(..., { scroll: false })`.
+- Public Library filter interactions must preserve focus and scroll position. Subject chips, tag chips, audience changes, sort changes, and clear-filter actions must not jump the page back to the top.
+- Public Library tag browsing must always stay accessible through a dedicated action such as `Browse all` / `Browse tags`; do not rely on a disappearing `+ More` tag chip when the visible tag list is short.
+- Searchable Public Library selector modals must keep the search input focused while typing; do not let modal rerenders or close-button autofocus steal the caret.
 - Public SEO note pages should emit JSON-LD `Article` schema using real note data only.
 - `robots.txt` must allow public crawling and disallow authenticated/private app areas such as `/dashboard`, `/library`, `/notes`, `/settings`, `/admin`, and `/api`.
 - `sitemap.xml` must include only public SEO-safe routes: `/`, `/privacy`, `/terms`, `/public/library`, canonical public subject URLs, and canonical public note URLs.
@@ -1221,7 +1225,7 @@ Sanitizer classes live in `backend/.../util/SubjectSanitizer.java` and `KeyConce
 Discovery mode layout order (no active filters):
 1. Search toolbar with `Filter` and `Sort`
 2. one-line `Subjects` rail with `All` and `+ More`
-3. one-line `Popular Tags` rail with `+ More`
+3. one-line `Popular Tags` rail with a dedicated `Browse all` action
 4. 🔥 Featured Notes — top 3 eligible notes by quality + engagement
 5. 📈 Most Popular — top 5 threshold-qualified notes by copies, then views, then likes (excludes Featured)
 6. 🆕 Recently Added — top 5 by createdAt (excludes Featured + Popular)
