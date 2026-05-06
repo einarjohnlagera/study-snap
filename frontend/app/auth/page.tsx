@@ -1,13 +1,14 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BrandFullLogo } from "@/components/branding/brand-assets";
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { PublicFooter } from "@/components/public/public-footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { getMyPlan, login, signup, trackAnalyticsEvent } from "@/lib/api";
+import { getMyPlan, login, loginWithGoogle, signup, trackAnalyticsEvent } from "@/lib/api";
 import {
   getAuthUser,
   LOGIN_REASON_AUTH_REQUIRED,
@@ -113,6 +114,19 @@ function AuthPageContent() {
     return email.trim().length > 0 && password.trim().length > 0;
   }, [email, firstName, mode, password]);
 
+  const completeAuth = useCallback(async (authUser: AuthUser) => {
+    setAuthUser(authUser);
+    const nextAuthUser = {
+      ...authUser,
+      planSummary: await getMyPlan().catch(() => null),
+    };
+    setAuthUser(nextAuthUser);
+    setAuthenticatedUser(nextAuthUser);
+    startRouteProgress();
+    router.replace(resolvePostLoginDestination(nextAuthUser));
+    router.refresh();
+  }, [router, startRouteProgress]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canSubmit || loading) {
@@ -131,22 +145,29 @@ function AuthPageContent() {
               displayName: displayName.trim().length > 0 ? displayName : undefined,
             })
           : await login({ email, password, keepSignedIn });
-      setAuthUser(authUser);
-      const nextAuthUser = {
-        ...authUser,
-        planSummary: await getMyPlan().catch(() => null),
-      };
-      setAuthUser(nextAuthUser);
-      setAuthenticatedUser(nextAuthUser);
-      startRouteProgress();
-      router.replace(resolvePostLoginDestination(nextAuthUser));
-      router.refresh();
+      await completeAuth(authUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not continue. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleGoogleCredential = useCallback(async (credential: string) => {
+    if (loading) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const authUser = await loginWithGoogle({ credential, keepSignedIn });
+      await completeAuth(authUser);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not continue with Google. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [completeAuth, keepSignedIn, loading]);
 
   if (authenticatedUser) {
     return null;
@@ -189,6 +210,21 @@ function AuthPageContent() {
           >
             Sign up
           </Button>
+        </div>
+
+        <div className="space-y-3">
+          <GoogleAuthButton
+            label="Continue with Google"
+            loadingLabel="Continuing with Google..."
+            disabled={loading}
+            onCredential={handleGoogleCredential}
+            onError={setError}
+          />
+          <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-foreground/45">
+            <span className="h-px flex-1 bg-border" />
+            <span>or</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>

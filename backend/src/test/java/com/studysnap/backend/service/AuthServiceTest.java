@@ -3,6 +3,8 @@ package com.studysnap.backend.service;
 import com.studysnap.backend.dto.AuthResponse;
 import com.studysnap.backend.dto.CompleteOnboardingRequest;
 import com.studysnap.backend.dto.CompleteProductOnboardingRequest;
+import com.studysnap.backend.dto.GoogleAuthRequest;
+import com.studysnap.backend.dto.GoogleConnectRequest;
 import com.studysnap.backend.dto.LoginRequest;
 import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.RefreshTokenRequest;
@@ -12,11 +14,13 @@ import com.studysnap.backend.dto.UpdateStudyRemindersRequest;
 import com.studysnap.backend.dto.UpdateThemePreferenceRequest;
 import com.studysnap.backend.dto.UpdateUserProfileRequest;
 import com.studysnap.backend.entity.AnalyticsEventType;
+import com.studysnap.backend.entity.AuthProvider;
 import com.studysnap.backend.entity.EngagementMode;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
 import com.studysnap.backend.entity.ProfileType;
 import com.studysnap.backend.entity.ThemePreference;
+import com.studysnap.backend.entity.UserAuthProviderEntity;
 import com.studysnap.backend.entity.UserEntity;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.exception.InvalidCredentialsException;
@@ -24,6 +28,7 @@ import com.studysnap.backend.exception.InvalidRefreshTokenException;
 import com.studysnap.backend.exception.UserNotFoundException;
 import com.studysnap.backend.repository.UserRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
+import com.studysnap.backend.repository.UserAuthProviderRepository;
 import com.studysnap.backend.security.JwtService;
 import com.studysnap.backend.security.SecurityProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +58,8 @@ class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
     @Mock
+    private UserAuthProviderRepository userAuthProviderRepository;
+    @Mock
     private StudyPackRepository studyPackRepository;
     @Mock
     private SubscriptionService subscriptionService;
@@ -65,6 +72,8 @@ class AuthServiceTest {
     @Mock
     private SecurityProperties securityProperties;
     @Mock
+    private GoogleIdentityTokenVerifier googleIdentityTokenVerifier;
+    @Mock
     private EmailVerificationService emailVerificationService;
     @Mock
     private AnalyticsService analyticsService;
@@ -75,12 +84,14 @@ class AuthServiceTest {
     void setUp() {
         authService = new AuthService(
             userRepository,
+            userAuthProviderRepository,
             studyPackRepository,
             subscriptionService,
             passwordEncoder,
             jwtService,
             refreshTokenService,
             securityProperties,
+            googleIdentityTokenVerifier,
             emailVerificationService,
             analyticsService
         );
@@ -173,6 +184,176 @@ class AuthServiceTest {
 
         assertThat(response.email()).isEqualTo("current@example.com");
         verify(userRepository, never()).findByEmailIgnoreCase("noteguru");
+    }
+
+    @Test
+    void googleLogin_createsNewVerifiedUserAndProvider() {
+        when(googleIdentityTokenVerifier.verify("google-token")).thenReturn(new GoogleIdentityTokenVerifier.GoogleIdentity(
+            "google-sub-1",
+            "student@example.com",
+            true,
+            "Student One",
+            "Student"
+        ));
+        when(userAuthProviderRepository.findByProviderAndProviderUserId(AuthProvider.GOOGLE, "google-sub-1"))
+            .thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("student@example.com")).thenReturn(Optional.empty());
+        when(userRepository.existsByUsernameIgnoreCase("studentone")).thenReturn(false);
+        when(userRepository.save(any(UserEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userAuthProviderRepository.findByUserIdAndProvider(any(UUID.class), eq(AuthProvider.GOOGLE)))
+            .thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(any(UUID.class))).thenReturn(PlanType.FREE);
+
+        AuthResponse response = authService.loginWithGoogle(
+            new GoogleAuthRequest("google-token", true),
+            "127.0.0.1",
+            "JUnit"
+        );
+
+        assertThat(response.email()).isEqualTo("student@example.com");
+        assertThat(response.emailVerifiedAt()).isNotNull();
+        verify(userRepository).save(any(UserEntity.class));
+        verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));
+        verify(subscriptionService).createDefaultFreeSubscription(any(UserEntity.class));
+        verify(emailVerificationService, never()).sendVerificationEmail(any(UserEntity.class), any(Boolean.class));
+        verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.SIGNUP), any(UUID.class), any());
+        verify(analyticsService).trackEvent(any(UUID.class), eq(AnalyticsEventType.LOGIN), any(UUID.class), any());
+    }
+
+    @Test
+    void googleLogin_linksExistingEmailUserWhenGoogleEmailVerified() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "student@example.com");
+        user.setEmailVerifiedAt(null);
+
+        when(googleIdentityTokenVerifier.verify("google-token")).thenReturn(new GoogleIdentityTokenVerifier.GoogleIdentity(
+            "google-sub-1",
+            "student@example.com",
+            true,
+            "Student One",
+            "Student"
+        ));
+        when(userAuthProviderRepository.findByProviderAndProviderUserId(AuthProvider.GOOGLE, "google-sub-1"))
+            .thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("student@example.com")).thenReturn(Optional.of(user));
+        when(userAuthProviderRepository.findByUserIdAndProvider(userId, AuthProvider.GOOGLE)).thenReturn(Optional.empty());
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        AuthResponse response = authService.loginWithGoogle(
+            new GoogleAuthRequest("google-token", false),
+            "127.0.0.1",
+            "JUnit"
+        );
+
+        assertThat(response.userId()).isEqualTo(userId.toString());
+        assertThat(user.getEmailVerifiedAt()).isNotNull();
+        verify(userAuthProviderRepository).save(any(UserAuthProviderEntity.class));
+        verify(userRepository, never()).save(any(UserEntity.class));
+        verify(subscriptionService, never()).createDefaultFreeSubscription(any(UserEntity.class));
+    }
+
+    @Test
+    void googleLogin_reusesExistingProviderLink() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "student@example.com");
+        UserAuthProviderEntity provider = new UserAuthProviderEntity();
+        provider.setUserId(userId);
+        provider.setProvider(AuthProvider.GOOGLE);
+        provider.setProviderUserId("google-sub-1");
+        provider.setProviderEmail("old@example.com");
+
+        when(googleIdentityTokenVerifier.verify("google-token")).thenReturn(new GoogleIdentityTokenVerifier.GoogleIdentity(
+            "google-sub-1",
+            "student@example.com",
+            true,
+            "Student One",
+            "Student"
+        ));
+        when(userAuthProviderRepository.findByProviderAndProviderUserId(AuthProvider.GOOGLE, "google-sub-1"))
+            .thenReturn(Optional.of(provider));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+
+        AuthResponse response = authService.loginWithGoogle(
+            new GoogleAuthRequest("google-token", false),
+            "127.0.0.1",
+            "JUnit"
+        );
+
+        assertThat(response.userId()).isEqualTo(userId.toString());
+        assertThat(provider.getProviderEmail()).isEqualTo("student@example.com");
+        verify(userAuthProviderRepository, never()).save(any(UserAuthProviderEntity.class));
+        verify(userRepository, never()).save(any(UserEntity.class));
+    }
+
+    @Test
+    void googleLogin_rejectsUnverifiedGoogleEmail() {
+        when(googleIdentityTokenVerifier.verify("google-token")).thenReturn(new GoogleIdentityTokenVerifier.GoogleIdentity(
+            "google-sub-1",
+            "student@example.com",
+            false,
+            "Student One",
+            "Student"
+        ));
+
+        assertThatThrownBy(() -> authService.loginWithGoogle(
+            new GoogleAuthRequest("google-token", false),
+            "127.0.0.1",
+            "JUnit"
+        )).isInstanceOf(AppException.class)
+            .hasMessage("Google email must be verified before signing in.");
+
+        verify(userRepository, never()).save(any(UserEntity.class));
+        verify(userAuthProviderRepository, never()).save(any(UserAuthProviderEntity.class));
+    }
+
+    @Test
+    void connectGoogle_rejectsDifferentEmail() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "student@example.com");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(googleIdentityTokenVerifier.verify("google-token")).thenReturn(new GoogleIdentityTokenVerifier.GoogleIdentity(
+            "google-sub-1",
+            "other@example.com",
+            true,
+            "Other User",
+            "Other"
+        ));
+
+        assertThatThrownBy(() -> authService.connectGoogle(userId, new GoogleConnectRequest("google-token")))
+            .isInstanceOf(AppException.class)
+            .hasMessage("This Google account uses a different email. Please use the same email as your NoteLib account.");
+
+        verify(userAuthProviderRepository, never()).save(any(UserAuthProviderEntity.class));
+    }
+
+    @Test
+    void connectGoogle_rejectsProviderAlreadyLinkedToAnotherUser() {
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        UserEntity user = activeUser(userId, "student@example.com");
+        UserAuthProviderEntity existingProvider = new UserAuthProviderEntity();
+        existingProvider.setUserId(otherUserId);
+        existingProvider.setProvider(AuthProvider.GOOGLE);
+        existingProvider.setProviderUserId("google-sub-1");
+        existingProvider.setProviderEmail("student@example.com");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(googleIdentityTokenVerifier.verify("google-token")).thenReturn(new GoogleIdentityTokenVerifier.GoogleIdentity(
+            "google-sub-1",
+            "student@example.com",
+            true,
+            "Student One",
+            "Student"
+        ));
+        when(userAuthProviderRepository.findByProviderAndProviderUserId(AuthProvider.GOOGLE, "google-sub-1"))
+            .thenReturn(Optional.of(existingProvider));
+
+        assertThatThrownBy(() -> authService.connectGoogle(userId, new GoogleConnectRequest("google-token")))
+            .isInstanceOf(AppException.class)
+            .hasMessage("This Google account is already connected to another NoteLib account.");
+
+        verify(userAuthProviderRepository, never()).save(any(UserAuthProviderEntity.class));
     }
 
     @Test
@@ -705,6 +886,27 @@ class AuthServiceTest {
             .isEqualTo("Verification email sent. Please check your inbox.");
 
         verify(emailVerificationService).sendVerificationEmail(user, true);
+    }
+
+    private UserEntity activeUser(UUID userId, String email) {
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail(email);
+        user.setFirstName("Student");
+        user.setDisplayName("Student One");
+        user.setUsername("studentone");
+        user.setPasswordHash("hashed");
+        user.setRole(com.studysnap.backend.entity.UserRole.USER);
+        user.setStatus(com.studysnap.backend.entity.UserStatus.ACTIVE);
+        user.setTokenVersion(0);
+        user.setFailedLoginAttempts(0);
+        user.setEmailVerifiedAt(OffsetDateTime.parse("2026-03-20T00:00:00Z"));
+        user.setEngagementMode(EngagementMode.FOCUSED);
+        user.setThemePreference(ThemePreference.SYSTEM);
+        user.setPublicProfileVisible(true);
+        user.setInactivityRemindersEnabled(false);
+        user.setWeakConceptRemindersEnabled(false);
+        return user;
     }
 
     private static final class RefreshTokenEntityBuilder {

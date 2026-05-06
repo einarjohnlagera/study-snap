@@ -77,6 +77,18 @@ Current runtime gating note:
 - note-creation upgrade attempts preserve progress before checkout so users do not lose in-progress work
 - after successful payment, users are returned to the interrupted flow and Study Pack generation can resume automatically from the saved note
 
+## Local auth setup
+
+Email/password login works without Google OAuth configuration.
+
+Google login requires:
+
+- Backend: `GOOGLE_CLIENT_ID`
+- Frontend: `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+- Optional backend override: `GOOGLE_CERTIFICATES_URL` (defaults to Google's public certs endpoint)
+
+Configure a Google OAuth web client in Google Cloud Console and add `http://localhost:3000` to the allowed JavaScript origins for local development. The frontend uses Google Identity Services to obtain an ID token, and the backend verifies issuer, audience, expiry, signature, and `email_verified` before issuing the normal NoteLib JWT/refresh-token response.
+
 ## Brand Assets
 
 Primary brand assets live in `frontend/public`:

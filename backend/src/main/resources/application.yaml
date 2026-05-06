@@ -306,6 +306,9 @@ studysnap:
     weekly-cooldown-days: ${RETENTION_WEEKLY_COOLDOWN_DAYS:7}
     weak-concept-threshold-percent: ${RETENTION_WEAK_CONCEPT_THRESHOLD_PERCENT:60}
   security:
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      certificates-url: ${GOOGLE_CERTIFICATES_URL:https://www.googleapis.com/oauth2/v3/certs}
     jwt:
       secret: ${JWT_SECRET:replace-this-in-env-with-a-long-secret-at-least-32-chars}
       issuer: ${JWT_ISSUER:notelib}

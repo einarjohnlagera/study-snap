@@ -87,6 +87,17 @@ Primary routes:
 - OCR is optional in Create/Edit Note and populates Note content for manual review before save/generate.
 - Generate Note from topic is available in Create Note and fills editable note content before save.
 
+## Authentication
+
+- NoteLib supports email/password login and Google login.
+- Google social login is an alternative, not a replacement; existing email/password accounts must keep working.
+- Google ID tokens are verified server-side before account creation, login, or linking.
+- Only Google accounts with `email_verified=true` may create or link accounts automatically.
+- If a verified Google email matches an existing NoteLib user, the Google provider is linked to that user instead of creating a duplicate account.
+- Google-only signups set `emailVerifiedAt` immediately and do not require a separate NoteLib verification email.
+- Connected sign-in methods are shown in Profile so users can see whether email/password and Google are enabled.
+- Public-note conversion flows may use Google login/signup to reduce signup friction, but redirect behavior must still follow the existing auth redirect rules.
+
 ## Tech Stack
 
 Backend: Spring Boot  
@@ -197,7 +208,7 @@ Key v0.12.0 changes to be aware of:
 - **Public Library route and filters are canonicalized** — `/public/library` is the only canonical public-library browsing route for signed-in and signed-out users; `/library/public` and `/public/library/{subject}` are compatibility redirects only, and active public-library filters must stay URL-driven and shareable
 - **Public Library filter UX must stay stable while syncing the URL** — search uses local input state plus a short debounce before `replace`-ing the canonical `/public/library?...` URL; filter updates preserve scroll position, tag browsing stays reachable through a dedicated `Browse all` action, and selector search inputs must not lose focus during typing
 - **Public creator identity safety** — `username` is now the stable public identifier for attribution and `/public/creator/{username}` links; `displayName` remains presentation-only, and legacy public-profile links stay compatible
-- **Social login (Google)** — planned for this release cycle; must not break or replace existing email-and-password accounts
+- **Social login (Google)** — implemented as an alternative to email/password; verified Google emails create/link accounts without duplicates, and Profile shows connected sign-in methods
 - **Content moderation** — `ContentModerationService` in the backend applies token-based dictionary matching to note titles, Study Pack topics, and note content at creation boundaries; dictionaries are in `classpath:/moderation/banned_words_*.txt`
 
 ## AI Development Workflow

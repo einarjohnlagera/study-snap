@@ -83,6 +83,7 @@ Implementation stances:
 - **Public Library canonical routing + shareable filters** — consolidated public browsing around `/public/library`; turned `/library/public` and `/public/library/{subject}` into compatibility redirects; synced subject, tag, search, course/program, audience, and sort filters to shareable query params so direct filtered URLs restore the same UI state
 - **Public Library URL-filter UX polish** — stabilized the main search with debounced URL sync, preserved scroll position on filter changes, kept tag browsing reachable through a dedicated `Browse all` action, and fixed selector-modal search focus so typing no longer jumps to the close button
 - **Public Creator Identity / Attribution** — added unique public usernames as stable handles; public attribution now keeps `displayName` for readability while using `@username` and `/public/creator/{username}` for disambiguation and future creator pages; legacy `/public/profile/{userId}` links remain compatible
+- **Social login — Google first** — added Google OAuth login/signup as an alternative to email/password; verified Google emails link to existing accounts instead of creating duplicates; Profile shows connected sign-in methods; Apple/Facebook/GitHub remain out of scope
 - **Study Pack metadata correctness** — locked note-level `courseProgram` as the Study Pack generation source of truth with profile fallback only when the note has no course/program saved; fixed normal note-owned generation so AI metadata suggestions stay transient until apply; removed duplicate AI tag suggestions when user tags already overlap; kept onboarding's explicit auto-apply exception for empty metadata fields
 - **Progressive Challenge Quiz generation** — Challenge mode starts with 5 questions; users generate +5 more from the last question, up to 20 per session; `POST /challenge-quiz/sessions/{sessionId}/generate-more` endpoint; `GenerateMoreChallengeQuizResponse` DTO; `NotEnoughNewQuestionsException` with `NOT_ENOUGH_NEW_QUESTIONS` code; `QuizDeduplicationUtils.uniqueQuestions()` post-generation dedup; `QuizSessionStateUtils.appendQuizItems()` JSONB append; Board Exam Mode is exempt
 - **Progressive quiz scoring** — score computed from answered questions (`selectedChoices.size()`) instead of fixed total; result screen shows `{correct} of {answered} answered correctly`; Score Summary column labeled `Answered`
@@ -249,6 +250,28 @@ Potential expansion areas after `v0.8.0`:
 - forgot password flow
 - change password from Settings
 - email verification and account-security improvements beyond the current launch flow
+
+### Connected Account Management / Auth Provider Management (Future)
+
+Future improvements for users with multiple sign-in methods. The Google OAuth foundation (account linking, `email_verified` guard, Profile sign-in method status) is in place; these are follow-on improvements that require their own design pass before implementation.
+
+Potential scope:
+
+- unlink Google account safely — must prevent lockout when Google is the only sign-in method
+- add/change password for Google-only users — allow switching to or adding email/password without forcing a full re-signup
+- multiple provider support — Apple, Microsoft, etc.; do not add until Google is stable and provider abstraction is reviewed
+- connected account security UX — notify users by email when a new provider is linked to their account
+- account recovery flows for social-login users — what happens when Google revokes access or the associated email changes
+- provider conflict resolution UI — surface a clear choice when a Google email matches an existing email/password account
+- recent login/session visibility — show sign-in history and active sessions in Settings for security-aware users
+- email change flow with connected providers — changing the NoteLib email when a Google account is linked needs careful sequencing
+
+Implementation notes for future reference:
+
+- the provider abstraction should live in a shared auth provider layer, not scattered across login and signup flows
+- lockout prevention: never allow unlinking the only auth method unless an alternative is confirmed first
+- Google-only users have no password; the "add password" flow must go through a secure email-based credential creation path
+- do not add more providers until the connected-account management UX is designed; adding providers without management UX creates a support burden
 
 ### Public Library persona filtering (roadmap)
 
