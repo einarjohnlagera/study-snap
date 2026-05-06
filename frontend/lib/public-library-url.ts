@@ -48,7 +48,14 @@ type ReadonlyURLSearchParams = {
 
 function normalizeFilterValue(value: string | null | undefined) {
   const normalized = value?.trim();
-  return normalized ? normalized : null;
+  return normalized || null;
+}
+
+function isReadonlyURLSearchParams(input: SearchParamsInput): input is ReadonlyURLSearchParams {
+  return typeof input === "object"
+    && input !== null
+    && "entries" in input
+    && typeof input.entries === "function";
 }
 
 function cloneSearchParams(input?: SearchParamsInput) {
@@ -61,8 +68,12 @@ function cloneSearchParams(input?: SearchParamsInput) {
   if (input instanceof URLSearchParams) {
     return new URLSearchParams(input);
   }
-  if ("entries" in input) {
-    return new URLSearchParams(Array.from(input.entries()));
+  if (isReadonlyURLSearchParams(input)) {
+    const params = new URLSearchParams();
+    for (const [key, value] of input.entries()) {
+      params.append(key, value);
+    }
+    return params;
   }
 
   const params = new URLSearchParams();
