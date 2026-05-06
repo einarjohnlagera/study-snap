@@ -61,6 +61,7 @@ class PublicProfileServiceTest {
         user.setId(userId);
         user.setEmail("creator@example.com");
         user.setDisplayName("Study Buddy");
+        user.setUsername("studybuddy");
         user.setBio("Biology teacher sharing board-style review notes.");
         user.setFirstName("Study");
         user.setLearnerLevel(LearnerLevel.BOARD_EXAM_REVIEW);
@@ -98,6 +99,7 @@ class PublicProfileServiceTest {
         PublicProfileResponse response = publicProfileService.getByUserId(userId.toString(), null);
 
         assertThat(response.displayName()).isEqualTo("Study Buddy");
+        assertThat(response.username()).isEqualTo("studybuddy");
         assertThat(response.bio()).isEqualTo("Biology teacher sharing board-style review notes.");
         assertThat(response.learnerLevel()).isEqualTo("BOARD_EXAM_REVIEW");
         assertThat(response.courseProgram()).isEqualTo("Biology");
@@ -147,6 +149,7 @@ class PublicProfileServiceTest {
         user.setId(userId);
         user.setEmail("creator@example.com");
         user.setFirstName("Creator");
+        user.setUsername("creator");
         user.setBio(null);
         user.setLearnerLevel(null);
         user.setCourseProgram(null);
@@ -167,6 +170,28 @@ class PublicProfileServiceTest {
         assertThat(response.totalCopies()).isZero();
         assertThat(response.totalShares()).isZero();
         assertThat(response.totalViews()).isZero();
+        assertThat(response.publicNotes()).isEmpty();
+    }
+
+    @Test
+    void getByUsername_returnsMatchingPublicProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setEmail("creator@example.com");
+        user.setFirstName("Creator");
+        user.setUsername("creator");
+        user.setRole(UserRole.USER);
+        user.setPublicProfileVisible(true);
+
+        when(userRepository.findByUsernameIgnoreCase("creator")).thenReturn(Optional.of(user));
+        when(noteRepository.findByOwnerUserIdAndVisibilityOrderByUpdatedAtDesc(userId, NoteVisibility.PUBLIC))
+                .thenReturn(List.of());
+
+        PublicProfileResponse response = publicProfileService.getByUsername("creator", null);
+
+        assertThat(response.displayName()).isEqualTo("Creator");
+        assertThat(response.username()).isEqualTo("creator");
         assertThat(response.publicNotes()).isEmpty();
     }
 

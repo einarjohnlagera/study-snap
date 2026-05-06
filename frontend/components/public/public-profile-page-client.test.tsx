@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { PublicProfilePageClient } from "./public-profile-page-client";
 import { getAuthUser } from "@/lib/auth";
-import { getPublicProfile, updatePublicProfileVisibility, type PublicProfileResponse } from "@/lib/api";
+import { getPublicCreatorProfile, getPublicProfile, updatePublicProfileVisibility, type PublicProfileResponse } from "@/lib/api";
 import { buildPublicLibraryNotePathFromSlug } from "@/lib/public-note-path";
 
 const pushMock = jest.fn();
@@ -21,12 +21,14 @@ jest.mock("@/lib/api", () => {
   return {
     ...actual,
     getPublicProfile: jest.fn(),
+    getPublicCreatorProfile: jest.fn(),
     updatePublicProfileVisibility: jest.fn(),
   };
 });
 
 const baseProfile: PublicProfileResponse = {
   displayName: "Study Buddy",
+  username: "studybuddy",
   bio: "Biology notes and board-review practice.",
   learnerLevel: "BOARD_EXAM_REVIEW",
   courseProgram: "Biology",
@@ -60,6 +62,7 @@ describe("PublicProfilePageClient", () => {
   beforeEach(() => {
     (getAuthUser as jest.Mock).mockReset();
     (getPublicProfile as jest.Mock).mockReset();
+    (getPublicCreatorProfile as jest.Mock).mockReset();
     (updatePublicProfileVisibility as jest.Mock).mockReset();
     pushMock.mockReset();
     clipboardWriteText.mockReset();
@@ -86,6 +89,7 @@ describe("PublicProfilePageClient", () => {
     expect(await screen.findByRole("link", { name: "Edit Profile" })).toHaveAttribute("href", "/profile");
     expect(screen.getByRole("button", { name: "Public" })).toBeInTheDocument();
     expect(screen.getByText("Biology notes and board-review practice.")).toBeInTheDocument();
+    expect(screen.getByText("@studybuddy")).toBeInTheDocument();
     expect(screen.getByText("Board Exam Review")).toBeInTheDocument();
     expect(screen.getAllByText("Biology")).not.toHaveLength(0);
     expect(screen.getByText("Total Shares")).toBeInTheDocument();
@@ -100,11 +104,11 @@ describe("PublicProfilePageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Share Profile" }));
     const dialog = await screen.findByRole("dialog", { name: "Share this profile" });
     const modal = within(dialog);
-    expect(screen.getByText(/\/public\/profile\/user-1/)).toBeInTheDocument();
+    expect(screen.getByText(/\/public\/creator\/studybuddy/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Copy Link" }));
     await waitFor(() => {
-      expect(clipboardWriteText).toHaveBeenCalledWith("http://localhost/public/profile/user-1");
+      expect(clipboardWriteText).toHaveBeenCalledWith("http://localhost/public/creator/studybuddy");
     });
     expect(await screen.findByText("Link copied")).toBeInTheDocument();
 

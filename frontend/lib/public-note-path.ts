@@ -49,3 +49,18 @@ export function buildPublicLibraryNotePathFromDetail(note: PublicNoteDetailRespo
 export function buildPublicProfilePath(userId: string | null | undefined) {
   return `/public/profile/${userId ?? ""}`;
 }
+
+export function buildPublicCreatorPath(username: string | null | undefined) {
+  return `/public/creator/${username ?? ""}`;
+}
+
+export function buildPublicCreatorOrProfilePath(input: {
+  userId: string | null | undefined;
+  username?: string | null | undefined;
+}) {
+  const username = input.username?.trim();
+  if (username) {
+    return buildPublicCreatorPath(username);
+  }
+  return buildPublicProfilePath(input.userId);
+}

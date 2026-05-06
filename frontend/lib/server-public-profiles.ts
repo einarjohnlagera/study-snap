@@ -32,3 +32,25 @@ export async function getServerPublicProfile(userId: string): Promise<ServerPubl
     profile: (await response.json()) as PublicProfileResponse,
   };
 }
+
+export async function getServerPublicCreatorProfile(username: string): Promise<ServerPublicProfileResult> {
+  const response = await fetch(buildApiUrl(`/public/creator/${username}`), {
+    method: "GET",
+    next: { revalidate: 300 },
+  });
+
+  if (response.status === 404) {
+    return { status: "not_found" };
+  }
+  if (response.status === 403) {
+    return { status: "private" };
+  }
+  if (!response.ok) {
+    throw new Error("Could not load public profile.");
+  }
+
+  return {
+    status: "ok",
+    profile: (await response.json()) as PublicProfileResponse,
+  };
+}

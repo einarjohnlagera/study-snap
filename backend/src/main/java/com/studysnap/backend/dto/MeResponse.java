@@ -18,6 +18,7 @@ public record MeResponse(
         String firstName,
         String lastName,
         String displayName,
+        String username,
         String bio,
         LearnerLevel learnerLevel,
         String courseProgram,

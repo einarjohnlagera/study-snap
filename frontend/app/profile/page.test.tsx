@@ -35,6 +35,7 @@ const profileResponse = {
   firstName: "Note",
   lastName: "User",
   displayName: "Note User",
+  username: "noteuser",
   bio: "Reviewing pathology one note at a time.",
   learnerLevel: "COLLEGE",
   courseProgram: "Nursing",
@@ -101,6 +102,7 @@ describe("Profile page", () => {
         firstName: "Updated",
         lastName: "Person",
         displayName: "Study Buddy",
+        username: "noteuser",
         bio: "Reviewing pathology one note at a time.",
         learnerLevel: "COLLEGE",
         courseProgram: "Nursing",
@@ -164,7 +166,7 @@ describe("Profile page", () => {
 
     expect(await screen.findByRole("link", { name: "View Public Page" })).toHaveAttribute(
       "href",
-      "/public/profile/user-1",
+      "/public/creator/noteuser",
     );
     expect(screen.queryByRole("button", { name: "Share Public Profile" })).not.toBeInTheDocument();
     expect(screen.queryByText("Public Profile On")).not.toBeInTheDocument();
@@ -188,6 +190,7 @@ describe("Profile page", () => {
         firstName: "Note",
         lastName: "User",
         displayName: "Note User",
+        username: "noteuser",
         bio: "Focused on endocrine board review.",
         learnerLevel: "COLLEGE",
         courseProgram: "Nursing",
@@ -222,6 +225,7 @@ describe("Profile page", () => {
         firstName: "Note",
         lastName: "User",
         displayName: "Note User",
+        username: "noteuser",
         bio: "Board review focus with pharmacology notes.",
         learnerLevel: "BOARD_EXAM_REVIEW",
         courseProgram: "Pharmacy",

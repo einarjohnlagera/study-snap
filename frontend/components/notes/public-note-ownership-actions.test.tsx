@@ -110,6 +110,24 @@ describe("PublicNoteOwnershipActions", () => {
     );
   });
 
+  it("shows display name with username and links attribution through the creator route", () => {
+    render(
+      <PublicNoteAuthorLine
+        ownerUserId="user-2"
+        authorDisplayName="Study Buddy"
+        authorUsername="studybuddy"
+        isOfficialAuthor={false}
+        isCurrentUser={false}
+        subject="Chemistry"
+      />,
+    );
+
+    expect(screen.getByRole("link", { name: "By Study Buddy · @studybuddy" })).toHaveAttribute(
+      "href",
+      "/public/creator/studybuddy",
+    );
+  });
+
   it("shows NoteLib label and official badge for official public content", () => {
     render(
       <PublicNoteAuthorLine

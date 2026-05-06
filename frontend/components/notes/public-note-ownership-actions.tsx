@@ -8,7 +8,7 @@ import { getAuthUser } from "@/lib/auth";
 import { trackAnalyticsEvent } from "@/lib/api";
 import { SubjectBadge } from "@/components/notes/subject-badge";
 import { isPublicNoteOwner, resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
-import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
+import { buildPublicCreatorOrProfilePath, buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { PublicSeoCopyCta } from "./public-seo-copy-cta";
 
 type PublicNoteOwnershipActionsProps = {
@@ -22,6 +22,7 @@ type PublicNoteOwnershipActionsProps = {
 type PublicNoteAuthorLineProps = {
   ownerUserId: string | null;
   authorDisplayName: string;
+  authorUsername?: string | null;
   isOfficialAuthor: boolean;
   isCurrentUser: boolean;
   subject?: string | null;
@@ -30,6 +31,7 @@ type PublicNoteAuthorLineProps = {
 export function PublicNoteAuthorLine({
   ownerUserId,
   authorDisplayName,
+  authorUsername,
   isOfficialAuthor,
   isCurrentUser,
   subject,
@@ -52,19 +54,20 @@ export function PublicNoteAuthorLine({
       ownerUserId,
       currentUserId,
       authorDisplayName,
+      authorUsername,
       isOfficialAuthor,
       isCurrentUser,
     }),
-    [authorDisplayName, currentUserId, isCurrentUser, isOfficialAuthor, ownerUserId],
+    [authorDisplayName, authorUsername, currentUserId, isCurrentUser, isOfficialAuthor, ownerUserId],
   );
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm text-foreground/80">
       <SubjectBadge subject={subject} />
       <span className="text-foreground/45">•</span>
-      {ownerUserId ? (
+      {ownerUserId || authorUsername ? (
         <Link
-          href={buildPublicProfilePath(ownerUserId)}
+          href={buildPublicCreatorOrProfilePath({ userId: ownerUserId, username: authorUsername })}
           className="font-medium text-blue-700 hover:underline dark:text-blue-300"
         >
           {authorMeta.label}

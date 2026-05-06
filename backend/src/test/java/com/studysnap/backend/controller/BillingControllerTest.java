@@ -140,6 +140,7 @@ class BillingControllerTest {
                 "Note",
                 null,
                 "Note",
+                "note",
                 null,
                 LearnerLevel.COLLEGE,
                 "Nursing",

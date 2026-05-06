@@ -51,6 +51,23 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthService {
     private static final String RESERVED_DISPLAY_NAME_MESSAGE = "This display name is reserved. Please choose another name.";
+    private static final String USERNAME_TAKEN_MESSAGE = "Username is already taken.";
+    private static final String USERNAME_FORMAT_MESSAGE = "Username can only contain letters, numbers, underscores, or hyphens.";
+    private static final String USERNAME_LENGTH_MESSAGE = "Username must be 3-30 characters.";
+    private static final int USERNAME_MIN_LENGTH = 3;
+    private static final int USERNAME_MAX_LENGTH = 30;
+    private static final Set<String> RESERVED_USERNAMES = Set.of(
+            "admin",
+            "root",
+            "support",
+            "notelib",
+            "public",
+            "library",
+            "settings",
+            "login",
+            "signup",
+            "api"
+    );
     private static final Set<String> RESERVED_DISPLAY_NAMES = Set.of(
             "notelib",
             "admin",
@@ -85,6 +102,7 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFirstName(request.firstName().trim());
         user.setDisplayName(resolveDisplayName(request.displayName()));
+        user.setUsername(generateAvailableUsername(user.getDisplayName(), user.getFirstName(), email));
         user.setPublicProfileVisible(true);
         user.setCountryCode(null);
         user.setProfileType(null);
@@ -115,8 +133,8 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request, String ipAddress, String userAgent) {
-        String email = normalizeEmail(request.email());
-        UserEntity user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        String identifier = normalizeLoginIdentifier(request.email());
+        UserEntity user = resolveLoginUser(identifier);
 
         if (user == null) {
             throw invalidCredentials();
@@ -267,6 +285,7 @@ public class AuthService {
         String normalizedFirstName = normalizeRequiredText(request.firstName());
         String normalizedLastName = normalizeOptionalText(request.lastName());
         String normalizedDisplayName = normalizeOptionalText(request.displayName());
+        String normalizedUsername = normalizeUsername(request.username());
         String normalizedBio = normalizeOptionalText(request.bio());
         LearnerLevel normalizedLearnerLevel = request.learnerLevel();
         String normalizedCourseProgram = normalizeOptionalCourseProgram(request.courseProgram());
@@ -275,6 +294,10 @@ public class AuthService {
         user.setFirstName(normalizedFirstName);
         user.setLastName(normalizedLastName);
         user.setDisplayName(resolveDisplayName(normalizedDisplayName));
+        if (!normalizedUsername.equalsIgnoreCase(user.getUsername())) {
+            ensureUsernameAvailable(user.getId(), normalizedUsername);
+        }
+        user.setUsername(normalizedUsername);
         user.setBio(normalizedBio);
         user.setLearnerLevel(normalizedLearnerLevel);
         user.setCourseProgram(normalizedCourseProgram);
@@ -308,6 +331,7 @@ public class AuthService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getDisplayName(),
+                user.getUsername(),
                 user.getBio(),
                 user.getLearnerLevel(),
                 user.getCourseProgram(),
@@ -433,6 +457,17 @@ public class AuthService {
         return email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String normalizeLoginIdentifier(String identifier) {
+        return identifier == null ? "" : identifier.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private UserEntity resolveLoginUser(String identifier) {
+        if (identifier.contains("@")) {
+            return userRepository.findByEmailIgnoreCase(identifier).orElse(null);
+        }
+        return userRepository.findByUsernameIgnoreCase(identifier).orElse(null);
+    }
+
     private String normalizeRequiredText(String value) {
         if (value == null) {
             return "";
@@ -464,6 +499,65 @@ public class AuthService {
         }
     }
 
+    private String normalizeUsername(String username) {
+        String normalized = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
+        validateUsername(normalized);
+        return normalized;
+    }
+
+    private void validateUsername(String username) {
+        if (username.length() < USERNAME_MIN_LENGTH || username.length() > USERNAME_MAX_LENGTH) {
+            throw new AppException("USERNAME_INVALID_LENGTH", USERNAME_LENGTH_MESSAGE, HttpStatus.BAD_REQUEST);
+        }
+        if (!username.matches("[a-z0-9_-]+")) {
+            throw new AppException("USERNAME_INVALID_FORMAT", USERNAME_FORMAT_MESSAGE, HttpStatus.BAD_REQUEST);
+        }
+        if (RESERVED_USERNAMES.contains(username)) {
+            throw new AppException("USERNAME_RESERVED", USERNAME_FORMAT_MESSAGE, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    private String generateAvailableUsername(String displayName, String firstName, String email) {
+        String base = slugifyUsernameCandidate(displayName);
+        if (base == null) {
+            base = slugifyUsernameCandidate(firstName);
+        }
+        if (base == null) {
+            String emailPrefix = email == null ? null : email.split("@", 2)[0];
+            base = slugifyUsernameCandidate(emailPrefix);
+        }
+        if (base == null || RESERVED_USERNAMES.contains(base)) {
+            base = "user";
+        }
+        if (base.length() > USERNAME_MAX_LENGTH) {
+            base = base.substring(0, USERNAME_MAX_LENGTH);
+        }
+
+        String candidate = base;
+        int suffix = 1;
+        while (userRepository.existsByUsernameIgnoreCase(candidate) || RESERVED_USERNAMES.contains(candidate)) {
+            String suffixText = String.valueOf(suffix);
+            int baseLength = Math.min(base.length(), USERNAME_MAX_LENGTH - suffixText.length());
+            candidate = base.substring(0, baseLength) + suffixText;
+            suffix += 1;
+        }
+        return candidate;
+    }
+
+    private String slugifyUsernameCandidate(String value) {
+        String normalized = normalizeOptionalText(value);
+        if (normalized == null) {
+            return null;
+        }
+        String slug = normalized.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9_-]+", "")
+                .replaceAll("^[-_]+|[-_]+$", "");
+        if (slug.length() < USERNAME_MIN_LENGTH) {
+            return null;
+        }
+        return slug;
+    }
+
     private void ensureEmailAvailable(UUID currentUserId, String email) {
         userRepository.findByEmailIgnoreCase(email)
                 .filter(existing -> !existing.getId().equals(currentUserId))
@@ -474,6 +568,14 @@ public class AuthService {
                 .filter(existing -> !existing.getId().equals(currentUserId))
                 .ifPresent(existing -> {
                     throw new AppException("EMAIL_ALREADY_EXISTS", "This email is already registered.", HttpStatus.CONFLICT);
+                });
+    }
+
+    private void ensureUsernameAvailable(UUID currentUserId, String username) {
+        userRepository.findByUsernameIgnoreCase(username)
+                .filter(existing -> !existing.getId().equals(currentUserId))
+                .ifPresent(existing -> {
+                    throw new AppException("USERNAME_ALREADY_EXISTS", USERNAME_TAKEN_MESSAGE, HttpStatus.CONFLICT);
                 });
     }
 }

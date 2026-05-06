@@ -23,6 +23,7 @@ public record NoteListItemResponse(
         Long shareCount,
         Long viewCount,
         String authorDisplayName,
+        String authorUsername,
         boolean isOfficialAuthor,
         boolean isCurrentUser,
         OffsetDateTime createdAt,

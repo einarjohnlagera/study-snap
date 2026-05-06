@@ -392,6 +392,7 @@ export type MeResponse = {
   firstName: string;
   lastName: string | null;
   displayName: string | null;
+  username?: string | null;
   bio: string | null;
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
@@ -430,6 +431,7 @@ export type UpdateUserProfileRequest = {
   firstName: string;
   lastName: string;
   displayName: string;
+  username: string;
   bio: string;
   learnerLevel: LearnerLevel | null;
   courseProgram: string;
@@ -838,8 +840,9 @@ export type NoteListItemResponse = {
   shareCount: number | null;
   viewCount: number | null;
   authorDisplayName: string;
+  authorUsername?: string | null;
   isOfficialAuthor: boolean;
-  isCurrentUser: boolean;
+  isCurrentUser?: boolean;
   createdAt: string;
   updatedAt: string;
   generatedQuizId?: string | null;
@@ -880,6 +883,7 @@ export type PublicNoteDetailResponse = {
   keyConcepts: string[];
   quiz: QuizItem[];
   authorDisplayName: string;
+  authorUsername?: string | null;
   isOfficialAuthor: boolean;
   isCurrentUser: boolean;
   updatedAt: string;
@@ -901,12 +905,14 @@ export type PublicProfileNoteResponse = {
 
 export type PublicProfileResponse = {
   displayName: string;
+  username?: string | null;
   bio: string | null;
   learnerLevel: LearnerLevel | null;
   courseProgram: string | null;
   profileType: ProfileType | null;
   isOfficial: boolean;
   publicProfileVisible: boolean;
+  isCurrentUser: boolean;
   publicNotesCount: number;
   totalCopies: number;
   totalShares: number;
@@ -1054,6 +1060,7 @@ function syncStoredAuthUserFromMe(me: MeResponse): void {
   patchAuthUser({
     email: me.pendingEmail ?? me.email,
     displayName: me.displayName,
+    username: me.username,
     profileType: me.profileType,
     emailVerifiedAt: me.emailVerifiedAt,
     onboardingCompletedAt: me.onboardingCompletedAt,
@@ -1193,6 +1200,7 @@ export async function updateProfileLearnerLevel(level: LearnerLevel): Promise<Me
     firstName: current.firstName,
     lastName: current.lastName ?? "",
     displayName: current.displayName ?? "",
+    username: current.username ?? "",
     bio: current.bio ?? "",
     learnerLevel: level,
     courseProgram: current.courseProgram ?? "",
@@ -2476,6 +2484,14 @@ export async function getPublicNoteBySeoPath(
 
 export async function getPublicProfile(userId: string): Promise<PublicProfileResponse> {
   const response = await fetch(buildUrl(`/public/profile/${userId}`), {
+    method: "GET",
+    headers: buildAuthHeaders(),
+  });
+  return parseApiResponse<PublicProfileResponse>(response, "Could not load this public profile.");
+}
+
+export async function getPublicCreatorProfile(username: string): Promise<PublicProfileResponse> {
+  const response = await fetch(buildUrl(`/public/creator/${username}`), {
     method: "GET",
     headers: buildAuthHeaders(),
   });

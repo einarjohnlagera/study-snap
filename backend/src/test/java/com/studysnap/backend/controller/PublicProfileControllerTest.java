@@ -34,12 +34,14 @@ class PublicProfileControllerTest {
     void getByUserId_delegatesToService() {
         PublicProfileResponse expected = new PublicProfileResponse(
                 "Study Buddy",
+                "studybuddy",
                 "Biology notes and board-review practice.",
                 "BOARD_EXAM_REVIEW",
                 "Biology",
                 "STUDENT",
                 false,
                 true,
+                false,
                 1,
                 3,
                 2,
@@ -65,5 +67,32 @@ class PublicProfileControllerTest {
 
         assertThat(response).isEqualTo(expected);
         verify(publicProfileService).getByUserId("user-1", viewer.userId());
+    }
+
+    @Test
+    void getByUsername_delegatesToService() {
+        PublicProfileResponse expected = new PublicProfileResponse(
+                "Study Buddy",
+                "studybuddy",
+                null,
+                null,
+                null,
+                null,
+                false,
+                true,
+                false,
+                0,
+                0,
+                0,
+                0,
+                List.of()
+        );
+        AuthenticatedUser viewer = new AuthenticatedUser(java.util.UUID.randomUUID(), UserRole.USER, true, 1);
+        when(publicProfileService.getByUsername("studybuddy", viewer.userId())).thenReturn(expected);
+
+        PublicProfileResponse response = controller.getByUsername("studybuddy", viewer);
+
+        assertThat(response).isEqualTo(expected);
+        verify(publicProfileService).getByUsername("studybuddy", viewer.userId());
     }
 }

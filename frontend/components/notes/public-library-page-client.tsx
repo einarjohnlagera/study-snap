@@ -33,7 +33,7 @@ import {
   normalizeCourseProgram,
 } from "@/lib/learning-profile";
 import { resolvePublicNoteAuthorMeta } from "@/lib/public-note-author";
-import { buildPublicLibraryNotePath, buildPublicProfilePath } from "@/lib/public-note-path";
+import { buildPublicCreatorOrProfilePath, buildPublicLibraryNotePath } from "@/lib/public-note-path";
 import { normalizeSubject } from "@/lib/subjects";
 import { getBrowsingCardClassName } from "@/lib/clickable-card";
 import {
@@ -238,14 +238,16 @@ function buildPriorityComparator(recentValues: string[], counts: Map<string, num
 }
 
 function resolveAuthorBadge(
-  item: Pick<NoteListItemResponse, "ownerUserId" | "authorDisplayName" | "isCurrentUser" | "isOfficialAuthor">,
+  item: Pick<NoteListItemResponse, "ownerUserId" | "authorDisplayName" | "authorUsername" | "isCurrentUser" | "isOfficialAuthor">,
   currentUserId: string | null,
+  currentUsername: string | null,
 ) {
   const authorMeta = resolvePublicNoteAuthorMeta({
     ownerUserId: item.ownerUserId,
     currentUserId,
     authorDisplayName: item.authorDisplayName,
-    isCurrentUser: item.isCurrentUser,
+    authorUsername: item.authorUsername,
+    isCurrentUser: isViewerAuthor(item, currentUserId, currentUsername),
     isOfficialAuthor: item.isOfficialAuthor,
   });
 
@@ -270,9 +272,24 @@ function resolveAuthorBadge(
   };
 }
 
+function isViewerAuthor(
+  item: Pick<NoteListItemResponse, "ownerUserId" | "authorUsername" | "isCurrentUser">,
+  currentUserId: string | null,
+  currentUsername: string | null,
+) {
+  const normalizedAuthorUsername = item.authorUsername?.trim().toLowerCase();
+  const normalizedCurrentUsername = currentUsername?.trim().toLowerCase();
+  return Boolean(item.isCurrentUser)
+    || (item.ownerUserId !== null && item.ownerUserId === currentUserId)
+    || (normalizedAuthorUsername !== undefined
+      && normalizedAuthorUsername.length > 0
+      && normalizedAuthorUsername === normalizedCurrentUsername);
+}
+
 interface PublicNoteCardProps {
   item: NoteListItemResponse;
   currentUserId: string | null;
+  currentUsername: string | null;
   onNavigate: (path: string) => void;
   existingCopyNoteId?: string | null;
   onCopySuccess: (payload: { copiedNoteId: string; sourceNoteId: string }) => void;
@@ -282,15 +299,16 @@ interface PublicNoteCardProps {
 function PublicNoteCard({
   item,
   currentUserId,
+  currentUsername,
   onNavigate,
   existingCopyNoteId = null,
   onCopySuccess,
   onLikeSuccess,
 }: Readonly<PublicNoteCardProps>) {
   const itemTags = normalizeTags(item.tags);
-  const authorBadge = resolveAuthorBadge(item, currentUserId);
+  const authorBadge = resolveAuthorBadge(item, currentUserId, currentUsername);
   const path = buildPublicLibraryNotePath({ subject: item.subject, title: item.title });
-  const isOwner = item.ownerUserId === currentUserId || item.isCurrentUser;
+  const isOwner = isViewerAuthor(item, currentUserId, currentUsername);
 
   return (
     <Card
@@ -341,9 +359,9 @@ function PublicNoteCard({
         footer={(
           <div className="flex flex-wrap items-start justify-between gap-3 text-xs text-foreground/65">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              {item.ownerUserId ? (
+              {item.ownerUserId || item.authorUsername ? (
                 <Link
-                  href={buildPublicProfilePath(item.ownerUserId)}
+                  href={buildPublicCreatorOrProfilePath({ userId: item.ownerUserId, username: item.authorUsername })}
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={(event) => event.stopPropagation()}
                   className={`font-medium hover:underline ${authorBadge.className}`}
@@ -382,6 +400,7 @@ interface PublicLibraryDiscoverySectionProps {
   description?: string;
   items: NoteListItemResponse[];
   currentUserId: string | null;
+  currentUsername: string | null;
   onNavigate: (path: string) => void;
   onViewMore: () => void;
   copiedNoteIdsBySourceId: Record<string, string>;
@@ -394,6 +413,7 @@ function PublicLibraryDiscoverySection({
   description,
   items,
   currentUserId,
+  currentUsername,
   onNavigate,
   onViewMore,
   copiedNoteIdsBySourceId,
@@ -428,6 +448,7 @@ function PublicLibraryDiscoverySection({
             key={item.id}
             item={item}
             currentUserId={currentUserId}
+            currentUsername={currentUsername}
             onNavigate={onNavigate}
             existingCopyNoteId={copiedNoteIdsBySourceId[item.id] ?? null}
             onCopySuccess={onCopySuccess}
@@ -445,6 +466,7 @@ export function PublicLibraryPageClient() {
   const searchParamsKey = searchParams.toString();
   const parsedUrlFilters = useMemo(() => parsePublicLibraryFilters(searchParamsKey), [searchParamsKey]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(() => getAuthUser()?.username ?? null);
   const [selectedTargetProfile, setSelectedTargetProfile] = useState<NoteTargetProfileFilter>(NOTE_TARGET_PROFILE_ALL);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
@@ -509,7 +531,9 @@ export function PublicLibraryPageClient() {
 
   useEffect(() => {
     const syncAuth = () => {
-      setCurrentUserId(getAuthUser()?.id ?? null);
+      const authUser = getAuthUser();
+      setCurrentUserId(authUser?.id ?? null);
+      setCurrentUsername(authUser?.username ?? null);
     };
 
     syncAuth();
@@ -935,15 +959,15 @@ export function PublicLibraryPageClient() {
       const sourceMatch = selectedSourceFilters.length === 0
         || selectedSourceFilters.some((filter) => (
           filter === "BY_YOU"
-            ? item.ownerUserId === currentUserId || item.isCurrentUser
+            ? isViewerAuthor(item, currentUserId, currentUsername)
             : filter === "OFFICIAL"
               ? item.isOfficialAuthor
-              : !(item.ownerUserId === currentUserId || item.isCurrentUser || item.isOfficialAuthor)
+              : !(isViewerAuthor(item, currentUserId, currentUsername) || item.isOfficialAuthor)
         ));
 
       return titleMatch && courseProgramMatch && learnerLevelMatch && subjectMatch && tagMatch && sourceMatch;
     });
-  }, [currentUserId, items, searchQuery, selectedCourseProgram, selectedLearnerLevel, selectedSourceFilters, selectedSubject, selectedTags]);
+  }, [currentUserId, currentUsername, items, searchQuery, selectedCourseProgram, selectedLearnerLevel, selectedSourceFilters, selectedSubject, selectedTags]);
 
   const sortedItems = useMemo(() => {
     const byNewest = (left: NoteListItemResponse, right: NoteListItemResponse) => (
@@ -1445,6 +1469,7 @@ export function PublicLibraryPageClient() {
                     key={item.id}
                     item={item}
                     currentUserId={currentUserId}
+                    currentUsername={currentUsername}
                     onNavigate={(path) => {
                       startRouteProgress();
                       router.push(path);
@@ -1496,6 +1521,7 @@ export function PublicLibraryPageClient() {
                   description="High-engagement notes worth studying"
                   items={featuredNotes}
                   currentUserId={currentUserId}
+                  currentUsername={currentUsername}
                   onNavigate={(path) => {
                     startRouteProgress();
                     router.push(path);
@@ -1512,6 +1538,7 @@ export function PublicLibraryPageClient() {
                   title="🔥 Most Popular"
                   items={popularNotes}
                   currentUserId={currentUserId}
+                  currentUsername={currentUsername}
                   onNavigate={(path) => {
                     startRouteProgress();
                     router.push(path);
@@ -1528,6 +1555,7 @@ export function PublicLibraryPageClient() {
                   title="🆕 Recently Added"
                   items={recentNotes}
                   currentUserId={currentUserId}
+                  currentUsername={currentUsername}
                   onNavigate={(path) => {
                     startRouteProgress();
                     router.push(path);
@@ -1580,6 +1608,7 @@ export function PublicLibraryPageClient() {
                   key={item.id}
                   item={item}
                   currentUserId={currentUserId}
+                  currentUsername={currentUsername}
                   onNavigate={(path) => {
                     startRouteProgress();
                     router.push(path);
