@@ -85,7 +85,7 @@ function shouldShowFloatingFeedbackWidget(pathname: string): boolean {
   return (
     pathname.startsWith("/dashboard")
     || pathname === "/library"
-    || pathname.startsWith("/library/public")
+    || pathname.startsWith("/public/library")
     || pathname.startsWith("/settings")
   );
 }
@@ -101,10 +101,10 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith("/dashboard")) {
     return "Dashboard";
   }
-  if (pathname.startsWith("/library/public")) {
+  if (pathname.startsWith("/public/library/")) {
     return "Public Library";
   }
-  if (pathname.startsWith("/public/library/")) {
+  if (pathname === "/public/library") {
     return "Public Library";
   }
   if (pathname.startsWith("/library")) {
@@ -173,7 +173,7 @@ type NavLinkItem = {
 const MAIN_NAV: NavLinkItem[] = [
   { href: "/dashboard", label: "Dashboard", action: "dashboard" },
   { href: "/library", label: "Library", action: "library" },
-  { href: "/library/public", label: "Public Library", action: "publicLibrary" },
+  { href: "/public/library", label: "Public Library", action: "publicLibrary" },
 ];
 
 

@@ -28,7 +28,7 @@ describe("PublicLibraryBackLink", () => {
 
     expect(await screen.findByRole("link", { name: "Public Library" })).toHaveAttribute(
       "href",
-      "/library/public",
+      "/public/library",
     );
   });
 });

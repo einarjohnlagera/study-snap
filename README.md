@@ -170,7 +170,7 @@ Sidebar structure:
 Primary product pages:
 
 - Library: `/library`
-- Public Library: `/library/public`
+- Public Library: `/public/library`
 - Note Detail: `/notes/{id}`
 - Public Note Detail (read-only): `/public/library/{subject}/{slug}`
 - Public Profile: `/public/profile/{userId}`

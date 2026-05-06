@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowUpDown, CheckCircle2, Filter, X } from "lucide-react";
 import { useRouteProgress } from "@/components/navigation/route-progress-provider";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { PublicLibraryLikeAction } from "@/components/notes/public-library-like-
 import { ResponsiveActionButton } from "@/components/ui/action-button";
 import { GuidanceTip } from "@/components/ui/guidance-tip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToastMessage } from "@/components/ui/toast-message";
 import { getAuthUser } from "@/lib/auth";
 import {
   type LearnerLevel,
@@ -43,19 +44,25 @@ import {
 } from "@/lib/public-library-discovery";
 import { buildCopiedNotePath } from "@/lib/public-note-copy";
 import {
+  buildPublicLibraryUrl,
+  parsePublicLibraryFilters,
+  resolvePublicLibraryValueBySlug,
+  resolvePublicLibraryValuesBySlug,
+  slugifyPublicLibraryFilterValue,
+  type PublicLibraryDiscoveryView,
+  type PublicLibraryUrlFilters,
+  type PublicLibrarySortQuery,
+} from "@/lib/public-library-url";
+import {
   getNoteTargetProfileLabel,
-  isPublicNoteTargetProfileFilter,
   NOTE_TARGET_PROFILE_ALL,
-  PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY,
   PUBLIC_NOTE_TARGET_PROFILE_TYPES,
-  resolvePublicLibraryTargetProfileFilter,
   type NoteTargetProfileFilter,
 } from "@/lib/note-target-profile";
 
 const ALL_COURSE_PROGRAMS = "__ALL_COURSE_PROGRAMS__";
 const ALL_SUBJECTS = "__ALL_SUBJECTS__";
 const ALL_LEARNER_LEVELS = "__ALL_LEARNER_LEVELS__";
-const PUBLIC_LIBRARY_VIEW_PARAM = "view";
 const FEATURED_NOTES_LIMIT = 3;
 const POPULAR_NOTES_LIMIT = 5;
 const RECENT_NOTES_LIMIT = 5;
@@ -63,7 +70,6 @@ const POPULAR_TAG_LIMIT_MOBILE = 4;
 const POPULAR_TAG_LIMIT_DESKTOP = 6;
 const POPULAR_SUBJECT_LIMIT_MOBILE = 4;
 const POPULAR_SUBJECT_LIMIT_DESKTOP = 6;
-const MORE_TAGS_LABEL = "+ More";
 const MORE_SUBJECTS_LABEL = "+ More";
 const TAG_SELECTOR_TITLE = "Select tags";
 const SUBJECT_SELECTOR_TITLE = "Select subject";
@@ -73,8 +79,10 @@ const MODAL_VIEW_NOTE_LABEL = "View Note";
 const MODAL_START_REVIEW_LABEL = "Start Review";
 const MOBILE_SUCCESS_SHEET_MEDIA_QUERY = "(max-width: 639px)";
 const CLOSE_MODAL_LABEL = "Close copied to your library";
-
-type PublicLibraryDiscoveryView = "featured" | "popular" | "recent";
+const SHARE_PUBLIC_LIBRARY_LABEL = "Share this list";
+const SHARE_PUBLIC_LIBRARY_COPY_ERROR = "Could not copy the public library link.";
+const SHARE_LINK_COPIED_MESSAGE = "Link copied";
+const PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS = 400;
 
 type PublicLibrarySortOption =
   | "NEWEST"
@@ -83,29 +91,6 @@ type PublicLibrarySortOption =
   | "TITLE_ASC";
 
 type PublicLibrarySourceFilter = "BY_YOU" | "OFFICIAL" | "COMMUNITY";
-
-function resolveDefaultTargetProfileFilter(): NoteTargetProfileFilter {
-  const authUser = getAuthUser();
-  if (!authUser?.profileType) {
-    return NOTE_TARGET_PROFILE_ALL;
-  }
-  return resolvePublicLibraryTargetProfileFilter(authUser.profileType);
-}
-
-function resolveInitialTargetProfileFilter(): NoteTargetProfileFilter {
-  if (globalThis.window === undefined) {
-    return resolveDefaultTargetProfileFilter();
-  }
-  try {
-    const storedValue = globalThis.localStorage?.getItem(PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY);
-    if (isPublicNoteTargetProfileFilter(storedValue)) {
-      return storedValue;
-    }
-  } catch {
-    // Ignore localStorage access issues and fall back to the signed-in default.
-  }
-  return resolveDefaultTargetProfileFilter();
-}
 
 const PUBLIC_SORT_LABELS: Record<PublicLibrarySortOption, string> = {
   NEWEST: "Newest",
@@ -146,6 +131,36 @@ function resolveDiscoveryView(value: string | null): PublicLibraryDiscoveryView 
     return value;
   }
   return null;
+}
+
+function resolveSortOption(sort: PublicLibrarySortQuery | null): PublicLibrarySortOption {
+  switch (sort) {
+    case "copied":
+      return "MOST_COPIED";
+    case "title":
+      return "TITLE_ASC";
+    case "views":
+      return "MOST_VIEWED";
+    case "popular":
+      return "MOST_COPIED";
+    case "recent":
+    default:
+      return "NEWEST";
+  }
+}
+
+function resolveSortQuery(sort: PublicLibrarySortOption): PublicLibrarySortQuery | null {
+  switch (sort) {
+    case "MOST_COPIED":
+      return "copied";
+    case "MOST_VIEWED":
+      return "views";
+    case "TITLE_ASC":
+      return "title";
+    case "NEWEST":
+    default:
+      return null;
+  }
 }
 
 function countActivePublicFilterGroups({
@@ -426,9 +441,11 @@ function PublicLibraryDiscoverySection({
 
 export function PublicLibraryPageClient() {
   const router = useRouter();
-  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsKey = searchParams.toString();
+  const parsedUrlFilters = useMemo(() => parsePublicLibraryFilters(searchParamsKey), [searchParamsKey]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => getAuthUser()?.id ?? null);
-  const [selectedTargetProfile, setSelectedTargetProfile] = useState<NoteTargetProfileFilter>(resolveInitialTargetProfileFilter);
+  const [selectedTargetProfile, setSelectedTargetProfile] = useState<NoteTargetProfileFilter>(NOTE_TARGET_PROFILE_ALL);
   const [items, setItems] = useState<NoteListItemResponse[]>([]);
   const [copiedNoteIdsBySourceId, setCopiedNoteIdsBySourceId] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -455,12 +472,8 @@ export function PublicLibraryPageClient() {
     copiedNoteId: string;
   } | null>(null);
   const [isMobileSuccessSheet, setIsMobileSuccessSheet] = useState(false);
-  const [activeDiscoveryViewState, setActiveDiscoveryViewState] = useState<PublicLibraryDiscoveryView | null>(() => {
-    if (globalThis.window === undefined) {
-      return null;
-    }
-    return resolveDiscoveryView(new URLSearchParams(globalThis.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM));
-  });
+  const [shareToastMessage, setShareToastMessage] = useState<string | null>(null);
+  const [shareToastTone, setShareToastTone] = useState<"success" | "error">("success");
 
   const loadNotes = useCallback(async () => {
     setLoading(true);
@@ -468,7 +481,12 @@ export function PublicLibraryPageClient() {
     try {
       const [notesResult, subjectsResult] = await Promise.allSettled([
         listPublicNotes({
-          targetProfileType: selectedTargetProfile === NOTE_TARGET_PROFILE_ALL ? undefined : selectedTargetProfile,
+          audience: parsedUrlFilters.audience ?? undefined,
+          courseProgram: parsedUrlFilters.courseProgram ?? undefined,
+          search: parsedUrlFilters.search ?? undefined,
+          sort: parsedUrlFilters.sort ?? undefined,
+          subject: parsedUrlFilters.subject ?? undefined,
+          tags: parsedUrlFilters.tags,
         }),
         listSubjects("public"),
       ]);
@@ -483,7 +501,7 @@ export function PublicLibraryPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [selectedTargetProfile]);
+  }, [parsedUrlFilters.audience, parsedUrlFilters.courseProgram, parsedUrlFilters.search, parsedUrlFilters.sort, parsedUrlFilters.subject, parsedUrlFilters.tags]);
 
   useEffect(() => {
     void loadNotes();
@@ -491,20 +509,7 @@ export function PublicLibraryPageClient() {
 
   useEffect(() => {
     const syncAuth = () => {
-      const authUser = getAuthUser();
-      setCurrentUserId(authUser?.id ?? null);
-      try {
-        const storedValue = globalThis.localStorage?.getItem(PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY);
-        if (isPublicNoteTargetProfileFilter(storedValue)) {
-          setSelectedTargetProfile(storedValue);
-          return;
-        }
-      } catch {
-        // Ignore localStorage access issues and fall back to the profile default.
-      }
-      setSelectedTargetProfile(
-        authUser?.profileType ? resolvePublicLibraryTargetProfileFilter(authUser.profileType) : NOTE_TARGET_PROFILE_ALL,
-      );
+      setCurrentUserId(getAuthUser()?.id ?? null);
     };
 
     syncAuth();
@@ -513,14 +518,6 @@ export function PublicLibraryPageClient() {
       globalThis.removeEventListener("studysnap-auth-change", syncAuth);
     };
   }, []);
-
-  useEffect(() => {
-    try {
-      globalThis.localStorage?.setItem(PUBLIC_LIBRARY_TARGET_PROFILE_STORAGE_KEY, selectedTargetProfile);
-    } catch {
-      // Ignore localStorage access issues.
-    }
-  }, [selectedTargetProfile]);
 
   useEffect(() => {
     if (globalThis.window === undefined || typeof globalThis.matchMedia !== "function") {
@@ -585,6 +582,14 @@ export function PublicLibraryPageClient() {
     )));
   }, []);
 
+  const replacePublicLibraryFilters = useCallback((nextFilters: PublicLibraryUrlFilters) => {
+    const currentUrl = buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey);
+    const nextUrl = buildPublicLibraryUrl(nextFilters, searchParamsKey);
+    if (currentUrl !== nextUrl) {
+      router.replace(nextUrl, { scroll: false });
+    }
+  }, [parsedUrlFilters, router, searchParamsKey]);
+
   const derivedSubjects = useMemo(() => {
     const subjectSet = new Set<string>();
     for (const item of items) {
@@ -621,6 +626,38 @@ export function PublicLibraryPageClient() {
     }
     return Array.from(tagSet).sort((left, right) => left.localeCompare(right));
   }, [items]);
+
+  useEffect(() => {
+    setSearchQuery(parsedUrlFilters.search ?? "");
+    setSelectedTargetProfile(parsedUrlFilters.audience ?? NOTE_TARGET_PROFILE_ALL);
+    setSelectedSort(resolveSortOption(parsedUrlFilters.sort));
+
+    const resolvedCourseProgram = parsedUrlFilters.courseProgram
+      ? resolvePublicLibraryValueBySlug(availableCoursePrograms, parsedUrlFilters.courseProgram)
+      : null;
+    setSelectedCourseProgram(resolvedCourseProgram ?? ALL_COURSE_PROGRAMS);
+
+    const resolvedSubject = parsedUrlFilters.subject
+      ? resolvePublicLibraryValueBySlug(availableSubjects, parsedUrlFilters.subject)
+      : null;
+    const nextSelectedSubject = resolvedSubject ?? ALL_SUBJECTS;
+    setSelectedSubject(nextSelectedSubject);
+    setSubjectDraft(nextSelectedSubject);
+
+    const resolvedTags = resolvePublicLibraryValuesBySlug(availableTags, parsedUrlFilters.tags);
+    setSelectedTags(resolvedTags);
+    setTagDraft(resolvedTags);
+  }, [
+    availableCoursePrograms,
+    availableSubjects,
+    availableTags,
+    parsedUrlFilters.audience,
+    parsedUrlFilters.courseProgram,
+    parsedUrlFilters.search,
+    parsedUrlFilters.sort,
+    parsedUrlFilters.subject,
+    parsedUrlFilters.tags,
+  ]);
 
   const subjectCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -683,6 +720,38 @@ export function PublicLibraryPageClient() {
     }
   }, [selectedSubject, subjectSelectorOpen]);
 
+  useEffect(() => {
+    const timeoutId = globalThis.setTimeout(() => {
+      const nextSearch = searchQuery.trim();
+      if ((nextSearch || null) === parsedUrlFilters.search) {
+        return;
+      }
+      replacePublicLibraryFilters({
+        ...parsedUrlFilters,
+        search: nextSearch.length > 0 ? nextSearch : null,
+        view: null,
+      });
+    }, PUBLIC_LIBRARY_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [parsedUrlFilters, replacePublicLibraryFilters, searchQuery]);
+
+  useEffect(() => {
+    if (!shareToastMessage) {
+      return;
+    }
+
+    const timeoutId = globalThis.setTimeout(() => {
+      setShareToastMessage(null);
+    }, 2200);
+
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+    };
+  }, [shareToastMessage]);
+
   const toggleDraftTag = useCallback((tag: string) => {
     setTagDraft((previous) => (
       previous.includes(tag)
@@ -710,7 +779,16 @@ export function PublicLibraryPageClient() {
     setSelectedSourceFilters([]);
     setSubjectSearchQuery("");
     setTagSearchQuery("");
-  }, []);
+    replacePublicLibraryFilters({
+      audience: null,
+      courseProgram: null,
+      search: null,
+      sort: null,
+      subject: null,
+      tags: [],
+      view: null,
+    });
+  }, [replacePublicLibraryFilters]);
 
   const subjectPriorityComparator = useMemo(
     () => buildPriorityComparator(recentSubjects, subjectCounts),
@@ -770,11 +848,6 @@ export function PublicLibraryPageClient() {
     return Array.from(new Set(ordered)).slice(0, Math.max(visibleTagLimit, selectedTags.length));
   }, [displayedTags, selectedTags, visibleTagLimit]);
 
-  const remainingTagCount = useMemo(() => {
-    const visible = new Set(visiblePopularTags);
-    return displayedTags.filter((tag) => !visible.has(tag)).length;
-  }, [displayedTags, visiblePopularTags]);
-
   const activeFilterCount = countActivePublicFilterGroups({
     courseProgram: selectedCourseProgram,
     learnerLevel: selectedLearnerLevel,
@@ -789,7 +862,7 @@ export function PublicLibraryPageClient() {
     || selectedSubject !== ALL_SUBJECTS
     || selectedTags.length > 0
     || selectedSourceFilters.length > 0;
-  const activeDiscoveryView = activeDiscoveryViewState;
+  const activeDiscoveryView = resolveDiscoveryView(parsedUrlFilters.view);
 
   // Discovery mode: no active search/filter and default sort → show discovery sections
   const isDiscoveryMode = !hasActiveFilters && selectedSort === "NEWEST";
@@ -914,7 +987,14 @@ export function PublicLibraryPageClient() {
           <button
             type="button"
             className="text-foreground/65 hover:text-foreground"
-            onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)}
+            onClick={() => {
+              setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+              replacePublicLibraryFilters({
+                ...parsedUrlFilters,
+                audience: null,
+                view: null,
+              });
+            }}
             aria-label="Clear note audience filter"
           >
             x
@@ -928,7 +1008,14 @@ export function PublicLibraryPageClient() {
           <button
             type="button"
             className="text-foreground/65 hover:text-foreground"
-            onClick={() => setSelectedCourseProgram(ALL_COURSE_PROGRAMS)}
+            onClick={() => {
+              setSelectedCourseProgram(ALL_COURSE_PROGRAMS);
+              replacePublicLibraryFilters({
+                ...parsedUrlFilters,
+                courseProgram: null,
+                view: null,
+              });
+            }}
             aria-label="Clear course program filter"
           >
             x
@@ -956,7 +1043,14 @@ export function PublicLibraryPageClient() {
           <button
             type="button"
             className="text-foreground/65 hover:text-foreground"
-            onClick={() => setSelectedSubject(ALL_SUBJECTS)}
+            onClick={() => {
+              setSelectedSubject(ALL_SUBJECTS);
+              replacePublicLibraryFilters({
+                ...parsedUrlFilters,
+                subject: null,
+                view: null,
+              });
+            }}
             aria-label="Clear subject filter"
           >
             x
@@ -984,7 +1078,17 @@ export function PublicLibraryPageClient() {
           <button
             type="button"
             className="text-foreground/65 hover:text-foreground"
-            onClick={() => setSelectedTags((previous) => previous.filter((value) => value !== tag))}
+            onClick={() => {
+              setSelectedTags((previous) => {
+                const next = previous.filter((value) => value !== tag);
+                replacePublicLibraryFilters({
+                  ...parsedUrlFilters,
+                  tags: next.map((selectedTag) => slugifyPublicLibraryFilterValue(selectedTag)),
+                  view: null,
+                });
+                return next;
+              });
+            }}
             aria-label={`Remove tag filter ${tag}`}
           >
             x
@@ -999,34 +1103,40 @@ export function PublicLibraryPageClient() {
   ) : null;
   const startRouteProgress = useRouteProgress();
   const openDiscoveryView = useCallback((view: PublicLibraryDiscoveryView) => {
-    setActiveDiscoveryViewState(view);
     startRouteProgress();
-    router.push(`${pathname}?${PUBLIC_LIBRARY_VIEW_PARAM}=${view}`);
-  }, [pathname, router, startRouteProgress]);
+    router.push(buildPublicLibraryUrl({
+      ...parsedUrlFilters,
+      view,
+    }, searchParamsKey), { scroll: false });
+  }, [parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
   const clearDiscoveryView = useCallback(() => {
-    setActiveDiscoveryViewState(null);
     startRouteProgress();
-    router.push(pathname);
-  }, [pathname, router, startRouteProgress]);
+    router.push(buildPublicLibraryUrl({
+      ...parsedUrlFilters,
+      view: null,
+    }, searchParamsKey), { scroll: false });
+  }, [parsedUrlFilters, router, searchParamsKey, startRouteProgress]);
   const activeSectionCopy = activeDiscoveryView === null ? null : DISCOVERY_SECTION_COPY[activeDiscoveryView];
-
-  useEffect(() => {
-    const syncDiscoveryViewFromLocation = () => {
-      setActiveDiscoveryViewState(
-        resolveDiscoveryView(new URLSearchParams(globalThis.location.search).get(PUBLIC_LIBRARY_VIEW_PARAM)),
-      );
-    };
-
+  const currentPublicLibraryPath = useMemo(
+    () => buildPublicLibraryUrl(parsedUrlFilters, searchParamsKey),
+    [parsedUrlFilters, searchParamsKey],
+  );
+  const resolvedShareUrl = useMemo(() => {
     if (globalThis.window === undefined) {
-      return undefined;
+      return currentPublicLibraryPath;
     }
-
-    syncDiscoveryViewFromLocation();
-    globalThis.addEventListener("popstate", syncDiscoveryViewFromLocation);
-    return () => {
-      globalThis.removeEventListener("popstate", syncDiscoveryViewFromLocation);
-    };
-  }, []);
+    return new URL(currentPublicLibraryPath, globalThis.location.origin).toString();
+  }, [currentPublicLibraryPath]);
+  const handleCopyShareLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(resolvedShareUrl);
+      setShareToastTone("success");
+      setShareToastMessage(SHARE_LINK_COPIED_MESSAGE);
+    } catch {
+      setShareToastTone("error");
+      setShareToastMessage(SHARE_PUBLIC_LIBRARY_COPY_ERROR);
+    }
+  }, [resolvedShareUrl]);
 
   return (
     <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-10">
@@ -1034,6 +1144,16 @@ export function PublicLibraryPageClient() {
         eyebrow="LIBRARY"
         title="Public Library"
         description="Explore public notes from you, the community, and official NoteLib examples. Copy a note into your library when you want to study it in your own workspace."
+        actions={(
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto lg:hidden"
+            onClick={() => void handleCopyShareLink()}
+          >
+            {SHARE_PUBLIC_LIBRARY_LABEL}
+          </Button>
+        )}
         brandLogo
       />
 
@@ -1117,7 +1237,14 @@ export function PublicLibraryPageClient() {
                   <button
                     type="button"
                     className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                    onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)}
+                    onClick={() => {
+                      setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+                      replacePublicLibraryFilters({
+                        ...parsedUrlFilters,
+                        audience: null,
+                        view: null,
+                      });
+                    }}
                   >
                     View all notes
                   </button>
@@ -1127,7 +1254,14 @@ export function PublicLibraryPageClient() {
                 <button
                   type="button"
                   className={getFilterChipClassName(selectedTargetProfile === NOTE_TARGET_PROFILE_ALL)}
-                  onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)}
+                  onClick={() => {
+                    setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+                    replacePublicLibraryFilters({
+                      ...parsedUrlFilters,
+                      audience: null,
+                      view: null,
+                    });
+                  }}
                   aria-pressed={selectedTargetProfile === NOTE_TARGET_PROFILE_ALL}
                 >
                   All
@@ -1137,7 +1271,14 @@ export function PublicLibraryPageClient() {
                     key={targetProfileType}
                     type="button"
                     className={getFilterChipClassName(selectedTargetProfile === targetProfileType)}
-                    onClick={() => setSelectedTargetProfile(targetProfileType)}
+                    onClick={() => {
+                      setSelectedTargetProfile(targetProfileType);
+                      replacePublicLibraryFilters({
+                        ...parsedUrlFilters,
+                        audience: targetProfileType,
+                        view: null,
+                      });
+                    }}
                     aria-pressed={selectedTargetProfile === targetProfileType}
                   >
                     {getNoteTargetProfileLabel(targetProfileType)}
@@ -1153,7 +1294,14 @@ export function PublicLibraryPageClient() {
                   <button
                     type="button"
                     className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
-                    onClick={() => setSelectedSubject(ALL_SUBJECTS)}
+                    onClick={() => {
+                      setSelectedSubject(ALL_SUBJECTS);
+                      replacePublicLibraryFilters({
+                        ...parsedUrlFilters,
+                        subject: null,
+                        view: null,
+                      });
+                    }}
                   >
                     Reset
                   </button>
@@ -1163,7 +1311,14 @@ export function PublicLibraryPageClient() {
                 <button
                   type="button"
                   className={getFilterChipClassName(selectedSubject === ALL_SUBJECTS)}
-                  onClick={() => setSelectedSubject(ALL_SUBJECTS)}
+                  onClick={() => {
+                    setSelectedSubject(ALL_SUBJECTS);
+                    replacePublicLibraryFilters({
+                      ...parsedUrlFilters,
+                      subject: null,
+                      view: null,
+                    });
+                  }}
                   aria-pressed={selectedSubject === ALL_SUBJECTS}
                 >
                   All
@@ -1176,6 +1331,11 @@ export function PublicLibraryPageClient() {
                     onClick={() => {
                       setSelectedSubject(subject);
                       setRecentSubjects((previous) => updateRecentValues(previous, [subject]));
+                      replacePublicLibraryFilters({
+                        ...parsedUrlFilters,
+                        subject: slugifyPublicLibraryFilterValue(subject),
+                        view: null,
+                      });
                     }}
                     aria-pressed={selectedSubject === subject}
                   >
@@ -1198,6 +1358,7 @@ export function PublicLibraryPageClient() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium">Popular Tags</p>
+                  <div className="flex items-center gap-3">
                   {selectedTags.length > 0 ? (
                     <button
                       type="button"
@@ -1205,43 +1366,52 @@ export function PublicLibraryPageClient() {
                       onClick={() => {
                         setSelectedTags([]);
                         setTagDraft([]);
+                        replacePublicLibraryFilters({
+                          ...parsedUrlFilters,
+                          tags: [],
+                          view: null,
+                        });
                       }}
                     >
                       Clear tags
                     </button>
                   ) : null}
+                    <button
+                      type="button"
+                      className="shrink-0 text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-200"
+                      onClick={() => setTagSelectorOpen(true)}
+                    >
+                      Browse all
+                    </button>
+                  </div>
                 </div>
                 <div className={getScrollRailClassName()}>
                   {visiblePopularTags.map((tag) => (
                     <button
                       key={tag}
                       type="button"
-                      className={getFilterChipClassName(selectedTags.includes(tag))}
-                      onClick={() => {
-                        setSelectedTags((previous) => {
-                          const next = previous.includes(tag)
-                            ? previous.filter((selectedTag) => selectedTag !== tag)
-                            : [...previous, tag];
-                          if (!previous.includes(tag)) {
-                            setRecentTags((recentPrevious) => updateRecentValues(recentPrevious, [tag]));
-                          }
-                          return next;
+                    className={getFilterChipClassName(selectedTags.includes(tag))}
+                    onClick={() => {
+                      setSelectedTags((previous) => {
+                        const next = previous.includes(tag)
+                          ? previous.filter((selectedTag) => selectedTag !== tag)
+                          : [...previous, tag];
+                        if (!previous.includes(tag)) {
+                          setRecentTags((recentPrevious) => updateRecentValues(recentPrevious, [tag]));
+                        }
+                        replacePublicLibraryFilters({
+                          ...parsedUrlFilters,
+                          tags: next.map((selectedTag) => slugifyPublicLibraryFilterValue(selectedTag)),
+                          view: null,
                         });
-                      }}
+                        return next;
+                      });
+                    }}
                       aria-pressed={selectedTags.includes(tag)}
                     >
                       {tag}
                     </button>
                   ))}
-                  {remainingTagCount > 0 ? (
-                    <button
-                      type="button"
-                      className={getFilterChipClassName(false)}
-                      onClick={() => setTagSelectorOpen(true)}
-                    >
-                      {MORE_TAGS_LABEL}
-                    </button>
-                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -1301,7 +1471,19 @@ export function PublicLibraryPageClient() {
                       : "Try another category or view the full Public Library."}
                   </p>
                   {selectedTargetProfile !== NOTE_TARGET_PROFILE_ALL ? (
-                    <Button type="button" variant="outline" onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)} className="w-full sm:w-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+                        replacePublicLibraryFilters({
+                          ...parsedUrlFilters,
+                          audience: null,
+                          view: null,
+                        });
+                      }}
+                      className="w-full sm:w-auto"
+                    >
                       View all notes
                     </Button>
                   ) : null}
@@ -1365,7 +1547,19 @@ export function PublicLibraryPageClient() {
                   <>
                     <h2 className="text-base font-semibold sm:text-lg">No notes available for this category yet.</h2>
                     <p className="text-sm text-foreground/75">Try another note audience or browse the full Public Library.</p>
-                    <Button type="button" variant="outline" onClick={() => setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL)} className="w-full sm:w-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedTargetProfile(NOTE_TARGET_PROFILE_ALL);
+                        replacePublicLibraryFilters({
+                          ...parsedUrlFilters,
+                          audience: null,
+                          view: null,
+                        });
+                      }}
+                      className="w-full sm:w-auto"
+                    >
                       View all notes
                     </Button>
                   </>
@@ -1422,7 +1616,17 @@ export function PublicLibraryPageClient() {
           <select
             id="public-library-filter-course-program"
             value={selectedCourseProgram}
-            onChange={(event) => setSelectedCourseProgram(event.target.value)}
+            onChange={(event) => {
+              const nextCourseProgram = event.target.value;
+              setSelectedCourseProgram(nextCourseProgram);
+              replacePublicLibraryFilters({
+                ...parsedUrlFilters,
+                courseProgram: nextCourseProgram === ALL_COURSE_PROGRAMS
+                  ? null
+                  : slugifyPublicLibraryFilterValue(nextCourseProgram),
+                view: null,
+              });
+            }}
             className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors focus:ring-2 focus:ring-blue-600"
           >
             <option value={ALL_COURSE_PROGRAMS}>All course/programs</option>
@@ -1491,6 +1695,11 @@ export function PublicLibraryPageClient() {
                 if (subjectDraft !== ALL_SUBJECTS) {
                   setRecentSubjects((previous) => updateRecentValues(previous, [subjectDraft]));
                 }
+                replacePublicLibraryFilters({
+                  ...parsedUrlFilters,
+                  subject: subjectDraft === ALL_SUBJECTS ? null : slugifyPublicLibraryFilterValue(subjectDraft),
+                  view: null,
+                });
                 setSubjectSelectorOpen(false);
               }}
             >
@@ -1505,6 +1714,7 @@ export function PublicLibraryPageClient() {
             value={subjectSearchQuery}
             onChange={(event) => setSubjectSearchQuery(event.target.value)}
             placeholder="Search subjects..."
+            data-autofocus="true"
             className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
           />
           {subjectDraft !== ALL_SUBJECTS ? (
@@ -1565,6 +1775,11 @@ export function PublicLibraryPageClient() {
                 if (tagDraft.length > 0) {
                   setRecentTags((previous) => updateRecentValues(previous, [...tagDraft].reverse()));
                 }
+                replacePublicLibraryFilters({
+                  ...parsedUrlFilters,
+                  tags: tagDraft.map((tag) => slugifyPublicLibraryFilterValue(tag)),
+                  view: null,
+                });
                 setTagSelectorOpen(false);
               }}
             >
@@ -1579,6 +1794,7 @@ export function PublicLibraryPageClient() {
             value={tagSearchQuery}
             onChange={(event) => setTagSearchQuery(event.target.value)}
             placeholder="Search tags..."
+            data-autofocus="true"
             className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-foreground/45 focus:ring-2 focus:ring-blue-600"
           />
           {tagDraft.length > 0 ? (
@@ -1648,6 +1864,10 @@ export function PublicLibraryPageClient() {
                 }`}
                 onClick={() => {
                   setSelectedSort(value);
+                  replacePublicLibraryFilters({
+                    ...parsedUrlFilters,
+                    sort: resolveSortQuery(value),
+                  });
                   setSortSheetOpen(false);
                 }}
               >
@@ -1657,6 +1877,8 @@ export function PublicLibraryPageClient() {
           })}
         </div>
       </LibrarySheetModal>
+
+      {shareToastMessage ? <ToastMessage message={shareToastMessage} tone={shareToastTone} /> : null}
 
       <AppModal
         isOpen={copySuccessState !== null}

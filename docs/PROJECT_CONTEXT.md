@@ -65,7 +65,7 @@ Sidebar navigation:
 Primary routes:
 
 - `/library`
-- `/library/public`
+- `/public/library`
 - `/notes/{id}` (Note Detail)
 - `/public/library/{subject}/{slug}` (Public Note Detail, read-only)
 - `/public/profile/{userId}` (Public Profile)
@@ -192,7 +192,9 @@ Key v0.12.0 changes to be aware of:
 - **AI metadata suggestions stay transient in the normal note flow** — generated `title`, `subject`, and `tags` must not be persisted before user confirmation; onboarding may explicitly opt into auto-apply for empty metadata as a guided-flow exception
 - **Upgrade CTA rule is now enforced** — all paywall and limit surfaces use `getUpgradeCtas(currentPlan)` from `frontend/src/config/plans.ts`; upgrade CTAs navigate to `/settings?section=plans`, not `/pricing`
 - **Analytics funnel is tracked** — `QUICK_REVIEW_COMPLETED`, `CHALLENGE_QUIZ_COMPLETED`, `ADAPTIVE_PRACTICE_COMPLETED`, and `UPGRADE_CLICKED` are in `AnalyticsEventType` and fired from the relevant completion blocks
-- **Public Library filters move backend** — subject, tags, learner level, and profile type become backend query params so filtered states are shareable; frontend filtering over local payloads is the interim approach until backend params land
+- **Public Library filters are URL-driven and backend-backed** — subject, tags, course/program, audience, search, and sort flow through shareable `/public/library?...` URLs and the public-notes backend filter contract; the list page `Share this list` action must copy that same canonical filtered URL
+- **Public Library route and filters are canonicalized** — `/public/library` is the only canonical public-library browsing route for signed-in and signed-out users; `/library/public` and `/public/library/{subject}` are compatibility redirects only, and active public-library filters must stay URL-driven and shareable
+- **Public Library filter UX must stay stable while syncing the URL** — search uses local input state plus a short debounce before `replace`-ing the canonical `/public/library?...` URL; filter updates preserve scroll position, tag browsing stays reachable through a dedicated `Browse all` action, and selector search inputs must not lose focus during typing
 - **Public creator identity safety** — Public Library cards and public note detail currently rely on `displayName` for presentation; v0.12.0 planning adds a stable public creator identifier for disambiguation and shareable creator links while keeping existing public URLs valid
 - **Social login (Google)** — planned for this release cycle; must not break or replace existing email-and-password accounts
 - **Content moderation** — `ContentModerationService` in the backend applies token-based dictionary matching to note titles, Study Pack topics, and note content at creation boundaries; dictionaries are in `classpath:/moderation/banned_words_*.txt`

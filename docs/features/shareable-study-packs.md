@@ -6,7 +6,7 @@ Support public discovery and safe reuse of learning content while keeping the no
 
 ## Public Surfaces
 
-- Public Library app route: `/library/public`
+- Public Library canonical route: `/public/library`
 - Public Library canonical SEO route: `/public/library`
 - Public Note Detail route: `/public/library/{subject}/{slug}`
 - Legacy public note route: `/public/notes/{id}` -> redirects to canonical SEO route

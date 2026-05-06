@@ -73,6 +73,12 @@ public class NoteService {
     private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_CODE = "NOTE_TARGET_PROFILE_TYPE_INVALID";
     private static final String NOTE_TARGET_PROFILE_TYPE_REQUIRED_MESSAGE = "Please choose who this note is for.";
     private static final String NOTE_TARGET_PROFILE_TYPE_INVALID_MESSAGE = "Please choose Student or Board Taker for this note.";
+    private static final String PUBLIC_SORT_FEATURED = "featured";
+    private static final String PUBLIC_SORT_POPULAR = "popular";
+    private static final String PUBLIC_SORT_RECENT = "recent";
+    private static final String PUBLIC_SORT_COPIED = "copied";
+    private static final String PUBLIC_SORT_VIEWS = "views";
+    private static final String PUBLIC_SORT_TITLE = "title";
     private static final Comparator<String> COURSE_PROGRAM_DISPLAY_COMPARATOR = (left, right) -> {
         int caseInsensitive = left.compareToIgnoreCase(right);
         return caseInsensitive != 0 ? caseInsensitive : left.compareTo(right);
@@ -284,34 +290,142 @@ public class NoteService {
     @Transactional(readOnly = true)
     public List<NoteListItemResponse> listPublic(
             UUID viewerUserId,
+            String search,
             String sort,
             String subject,
+            List<String> tags,
+            String courseProgram,
             NoteTargetProfileType targetProfileType
     ) {
         List<NoteEntity> notes = targetProfileType == null
                 ? noteRepository.findByVisibilityOrderByUpdatedAtDesc(NoteVisibility.PUBLIC)
                 : noteRepository.findByVisibilityAndTargetProfileTypeOrderByUpdatedAtDesc(NoteVisibility.PUBLIC, targetProfileType);
         List<NoteListItemResponse> items = toListItems(notes, viewerUserId);
-        if (subject != null && !subject.isBlank()) {
-            String normalizedSubjectFilter = SubjectNormalizationUtils.normalizeForLookup(subject);
-            items = items.stream()
-                    .filter(item -> normalizedSubjectFilter.equals(SubjectNormalizationUtils.normalizeForLookup(item.subject())))
-                    .toList();
-        }
-        if (sort == null) {
-            return items;
-        }
-        return switch (sort.toLowerCase()) {
-            case "featured" -> PublicNotesScoringUtils.sortByFeatured(items);
-            case "popular" -> PublicNotesScoringUtils.sortByPopular(items);
-            case "recent" -> PublicNotesScoringUtils.sortByRecent(items);
-            default -> items;
-        };
+        items = filterPublicLibraryItems(items, search, subject, tags, courseProgram);
+        return sortPublicLibraryItems(items, sort);
     }
 
     @Transactional(readOnly = true)
     public List<String> listMineSubjects(UUID ownerUserId) {
         return normalizeSubjects(noteRepository.findSubjectValuesByOwnerUserId(ownerUserId));
+    }
+
+    private List<NoteListItemResponse> filterPublicLibraryItems(
+            List<NoteListItemResponse> items,
+            String search,
+            String subject,
+            List<String> tags,
+            String courseProgram
+    ) {
+        String normalizedSearch = normalizePublicLibrarySearch(search);
+        String normalizedSubjectFilter = normalizePublicLibraryFilterSlug(subject);
+        String normalizedCourseProgramFilter = normalizePublicLibraryFilterSlug(courseProgram);
+        List<String> normalizedTagFilters = normalizePublicLibraryFilterSlugs(tags);
+
+        return items.stream()
+                .filter(item -> matchesPublicLibrarySearch(item, normalizedSearch))
+                .filter(item -> matchesPublicLibrarySubject(item, normalizedSubjectFilter))
+                .filter(item -> matchesPublicLibraryCourseProgram(item, normalizedCourseProgramFilter))
+                .filter(item -> matchesPublicLibraryTags(item, normalizedTagFilters))
+                .toList();
+    }
+
+    private List<NoteListItemResponse> sortPublicLibraryItems(List<NoteListItemResponse> items, String sort) {
+        if (sort == null) {
+            return items;
+        }
+
+        String normalizedSort = sort.trim().toLowerCase();
+        return switch (normalizedSort) {
+            case PUBLIC_SORT_FEATURED -> PublicNotesScoringUtils.sortByFeatured(items);
+            case PUBLIC_SORT_POPULAR, PUBLIC_SORT_COPIED -> PublicNotesScoringUtils.sortByPopular(items);
+            case PUBLIC_SORT_RECENT -> PublicNotesScoringUtils.sortByRecent(items);
+            case PUBLIC_SORT_VIEWS -> items.stream()
+                    .sorted(Comparator
+                            .comparingLong((NoteListItemResponse item) -> item.viewCount() == null ? 0L : item.viewCount())
+                            .reversed()
+                            .thenComparing(NoteListItemResponse::createdAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .toList();
+            case PUBLIC_SORT_TITLE -> items.stream()
+                    .sorted(Comparator.comparing(
+                            item -> StringUtils.defaultIfBlank(item.title(), "Untitled note"),
+                            String.CASE_INSENSITIVE_ORDER
+                    ))
+                    .toList();
+            default -> items;
+        };
+    }
+
+    private boolean matchesPublicLibrarySearch(NoteListItemResponse item, String normalizedSearch) {
+        if (normalizedSearch == null) {
+            return true;
+        }
+
+        return containsIgnoreCase(item.title(), normalizedSearch)
+                || containsIgnoreCase(item.subject(), normalizedSearch)
+                || containsIgnoreCase(item.courseProgram(), normalizedSearch)
+                || containsIgnoreCase(item.contentPreview(), normalizedSearch)
+                || containsIgnoreCase(item.summaryPreview(), normalizedSearch)
+                || item.tags().stream().anyMatch(tag -> containsIgnoreCase(tag, normalizedSearch));
+    }
+
+    private boolean matchesPublicLibrarySubject(NoteListItemResponse item, String normalizedSubjectFilter) {
+        if (normalizedSubjectFilter == null) {
+            return true;
+        }
+        return normalizedSubjectFilter.equals(normalizePublicLibraryFilterSlug(item.subject()));
+    }
+
+    private boolean matchesPublicLibraryCourseProgram(NoteListItemResponse item, String normalizedCourseProgramFilter) {
+        if (normalizedCourseProgramFilter == null) {
+            return true;
+        }
+        return normalizedCourseProgramFilter.equals(normalizePublicLibraryFilterSlug(item.courseProgram()));
+    }
+
+    private boolean matchesPublicLibraryTags(NoteListItemResponse item, List<String> normalizedTagFilters) {
+        if (normalizedTagFilters.isEmpty()) {
+            return true;
+        }
+
+        List<String> itemTagSlugs = item.tags().stream()
+                .map(this::normalizePublicLibraryFilterSlug)
+                .filter(Objects::nonNull)
+                .toList();
+        return normalizedTagFilters.stream().anyMatch(itemTagSlugs::contains);
+    }
+
+    private String normalizePublicLibrarySearch(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toLowerCase();
+    }
+
+    private List<String> normalizePublicLibraryFilterSlugs(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .map(this::normalizePublicLibraryFilterSlug)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private String normalizePublicLibraryFilterSlug(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+
+        return value.trim()
+                .toLowerCase()
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedSearch) {
+        return value != null && value.toLowerCase().contains(normalizedSearch);
     }
 
     @Transactional(readOnly = true)

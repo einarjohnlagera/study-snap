@@ -28,6 +28,9 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - Fixed normal note-owned Study Pack generation so AI `title` / `subject` / `tags` suggestions stay transient until the user applies them
 - Fixed AI Suggestions tag comparisons so overlapping user tags are not shown as duplicate new suggestions
 - Onboarding keeps its explicit zero-friction metadata auto-apply behavior for empty `subject` / `tags`
+- Added shareable URL-based Public Library filters on the canonical `/public/library` route, including a list-page `Share this list` action that copies the current filtered URL
+- Consolidated Public Library browsing around `/public/library` and cleaned up the duplicate `/library/public` / `/public/library/{subject}` route wrappers into compatibility redirects
+- Polished Public Library URL filter UX with debounced search sync, scroll-preserving filter updates, always-available tag browsing, and stable selector-modal input focus
 
 ---
 
@@ -538,7 +541,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - Private and public note detail now include a `Full Notes` tab so users can inspect the complete original note alongside `Summary`, `Key Concepts`, and `Quiz`.
 - The `Summary` view on private and public note detail now includes a subtle `View Full Notes →` CTA so users can jump from AI preview to the original note without losing context.
 - Back navigation across all sub-pages now uses a shared `BackLink` component that renders `← {label}` with an arrow icon — small, muted, and link-styled rather than a button. Replaces all previous blue "Back to Library" / "Back to Note" link text and large Back buttons.
-- My Profile (owner view) has no back link — it is a main navigation page reachable from the sidebar. Non-owners viewing another user's public profile see `← Public Library` linking explicitly to `/library/public`.
+- My Profile (owner view) has no back link — it is a main navigation page reachable from the sidebar. Non-owners viewing another user's public profile see `← Public Library` linking explicitly to `/public/library`.
 - Note Detail shows `← Library`, quiz pages show `← Note`, Create Note shows `← Library`, Edit Note shows `← Note`, Edit Profile shows `← Profile`, learn articles show `← Learn`. Inline card action buttons use short labels (`Note`, `Library`) without "Back to" prefix.
 
 ### Technical Changes

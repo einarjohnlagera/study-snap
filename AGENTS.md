@@ -517,12 +517,18 @@ Teacher flow rule:
   - exact case-insensitive matches should reuse the existing saved display label instead of creating a casing variant
   - saved course/program values should normalize whitespace and dash formatting so equivalent values reuse the same suggestion/filter label when possible
   - course/program reuse checks should be case-insensitive while keeping a readable display label
-- Public Library canonical SEO index route is `/public/library`; app-shell `/library/public` is not the canonical indexed route.
-- Public subject listing pages use `/public/library/{subject}` and must reuse the existing route/data helpers rather than introducing parallel subject-page implementations.
+- Public Library canonical browsing route is `/public/library` for both signed-in and signed-out users.
+- Do not introduce duplicate Public Library browse routes or wrappers such as `/library/public`; keep legacy paths as redirects only when compatibility is required.
+- Public subject listing pages must not become second canonical list pages; use `/public/library?subject={subjectSlug}` for shareable subject filtering and keep `/public/library/{subject}` as compatibility redirect-only when it exists.
 - Public SEO note pages use `/public/library/{subject}/{slug}` as the canonical route.
 - Public SEO pages must stay accessible without login and indexable only for `PUBLIC` notes.
 - Public landing page should emit JSON-LD `WebSite` schema.
 - Public Library index should emit JSON-LD `CollectionPage` schema.
+- Public Library filter state must stay in sync with URL query params; direct opens of filtered `/public/library?...` URLs must restore the same selected filters in the UI.
+- Public Library search inputs must not update the URL on every keypress. Use local input state plus a short debounce, then `router.replace(..., { scroll: false })`.
+- Public Library filter interactions must preserve focus and scroll position. Subject chips, tag chips, audience changes, sort changes, and clear-filter actions must not jump the page back to the top.
+- Public Library tag browsing must always stay accessible through a dedicated action such as `Browse all` / `Browse tags`; do not rely on a disappearing `+ More` tag chip when the visible tag list is short.
+- Searchable Public Library selector modals must keep the search input focused while typing; do not let modal rerenders or close-button autofocus steal the caret.
 - Public SEO note pages should emit JSON-LD `Article` schema using real note data only.
 - `robots.txt` must allow public crawling and disallow authenticated/private app areas such as `/dashboard`, `/library`, `/notes`, `/settings`, `/admin`, and `/api`.
 - `sitemap.xml` must include only public SEO-safe routes: `/`, `/privacy`, `/terms`, `/public/library`, canonical public subject URLs, and canonical public note URLs.
@@ -766,7 +772,7 @@ All three quiz flows (Quick Review, Challenge Quiz, Adaptive Practice) must foll
 - Back navigation always uses explicit routing (`href` prop on `BackLink`) — never `router.back()`.
 - Back link label is the destination page name only — do NOT use "Back to X" or "Back" alone.
 - My Profile (owner's own public profile) is a main page — no back link.
-- Non-owner viewing another user's public profile: `<BackLink href="/library/public" label="Public Library" />`.
+- Non-owner viewing another user's public profile: `<BackLink href="/public/library" label="Public Library" />`.
 - Inline card action buttons (quiz error/limit states etc.) should use short destination labels (`Note`, `Library`) — not "Back to Note" or "Back to Library".
 - Back link is positioned above the page header card, left-aligned.
 - **Context-aware back navigation**: Profile Settings (`/profile`) should render `← Dashboard` (href `/dashboard`) when reached via `?from=dashboard`, and `← Profile` (href public profile path) in all other cases. Pass `?from=dashboard` in the navigation URL to trigger this behavior.
@@ -1219,7 +1225,7 @@ Sanitizer classes live in `backend/.../util/SubjectSanitizer.java` and `KeyConce
 Discovery mode layout order (no active filters):
 1. Search toolbar with `Filter` and `Sort`
 2. one-line `Subjects` rail with `All` and `+ More`
-3. one-line `Popular Tags` rail with `+ More`
+3. one-line `Popular Tags` rail with a dedicated `Browse all` action
 4. 🔥 Featured Notes — top 3 eligible notes by quality + engagement
 5. 📈 Most Popular — top 5 threshold-qualified notes by copies, then views, then likes (excludes Featured)
 6. 🆕 Recently Added — top 5 by createdAt (excludes Featured + Popular)
