@@ -54,8 +54,8 @@ Rules:
 ## Public Profile Back Behavior
 
 - My Profile (owner viewing their own public profile) is a main navigation page — no back link.
-- Non-owner viewing another user's public profile sees `← Public Library` linking to `/library/public`.
-- Do not use `router.back()` for public profile navigation — use explicit `/library/public` route.
+- Non-owner viewing another user's public profile sees `← Public Library` linking to `/public/library`.
+- Do not use `router.back()` for public profile navigation — use explicit `/public/library` route.
 
 ## Button Label Rule
 

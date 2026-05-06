@@ -6,8 +6,23 @@ Public Library is the public discovery surface for shared notes. It should feel 
 
 Routes:
 
-- canonical: `/public/library`
-- authenticated shell entry: `/library/public`
+- canonical list route for signed-in and signed-out users: `/public/library`
+- canonical public note detail route: `/public/library/{subject}/{slug}`
+- legacy compatibility redirects:
+  - `/library/public` -> `/public/library`
+  - `/public/library/{subject}` -> `/public/library?subject={subject}`
+
+Shareable filter URLs:
+
+- `/public/library?subject=history`
+- `/public/library?tag=mexican-history`
+- `/public/library?search=cinco`
+- `/public/library?audience=student`
+- `/public/library?courseProgram=nursing`
+- `/public/library?sort=recent`
+- filters may be combined, for example:
+  - `/public/library?subject=history&tag=mexican-history&search=cinco`
+- the Public Library list page exposes `Share this list`, which copies the current canonical filtered URL instead of a stale local-only filter state
 
 ## Landing Page Preview
 
@@ -43,7 +58,7 @@ Switching from discovery to filter mode:
 - Selecting any filter (Course, Learner Level, Subject, Tags, Source) → filter mode
 - Changing sort from Newest → filter mode
 - Clicking a subject chip or tag chip in the top rails → applies filter → filter mode
-- Changing the audience rail (`All`, `Student`, `Board Taker`, `Teacher`) reloads Public Library for that note audience
+- Changing the audience rail (`All`, `Student`, `Board Taker`) reloads Public Library for that note audience and updates the shareable URL
 
 ## Ranking Audit Summary
 
@@ -170,11 +185,7 @@ Public Library browsing rails:
   - `All`
   - `Student`
   - `Board Taker`
-- default audience:
-  - `Student` -> `Student`
-  - `Board Taker` -> `Board Taker`
-  - `Teacher` -> `All`
-  - guest -> `All`
+- canonical base route `/public/library` means `All`; the UI should only apply an audience filter when `?audience=` is present
 - audience filtering must use `note.targetProfileType`, never the creator's `user.profileType`
 - `Subjects` stays single-select with `All` as the default
 - `Popular Tags` stays multi-select and should use OR logic within the tag group
@@ -187,19 +198,29 @@ Public Library browsing rails:
   - desktop -> modal/sheet
   - actions -> `Apply`, `Clear`
 
-## Backend Subject Filtering
+## Backend Filtering + URL Sync
 
-`GET /notes/public` accepts an optional `?subject=` query parameter for server-side subject filtering:
+`GET /notes/public` is the backend filter source for shareable Public Library URLs.
 
-- Case-insensitive match via `SubjectNormalizationUtils.normalizeForLookup`
-- Applied after fetching all public notes, before sort
-- Frontend currently performs client-side filtering; the `listPublicNotes({ subject })` API function supports passing subject for backend filtering when needed
+Supported query params:
 
-`GET /notes/public` also accepts an optional `?targetProfileType=` query parameter:
+- `search`
+- `subject`
+- `tag` (repeatable)
+- `audience`
+- `courseProgram`
+- `sort`
 
-- supported values: `STUDENT`, `BOARD_TAKER`
-- when omitted, backend returns all public notes
-- when present, backend returns only notes where `note.targetProfileType` matches the selected category
+Behavior:
+
+- frontend filter state must hydrate from the URL query params on first render
+- filter changes must update the canonical `/public/library?...` URL
+- `Share this list` must copy the same canonical `/public/library?...` URL the page is currently using
+- direct opens of a filtered URL must restore the same selected filters in the UI
+- backend filtering is combinable and returns only `PUBLIC` notes
+- search is case-insensitive
+- subject, tags, and course/program use normalized slug values in the URL
+- clearing filters should return to `/public/library`
 
 ## Empty state
 
@@ -374,7 +395,7 @@ When a user hits their Study Pack limit, the limit modal should offer the Public
 - **Title**: "You've reached your limit"
 - **Message**: "Explore existing Study Packs while waiting or upgrade for more access."
 - **Actions**:
-  - `Browse Public Library` — navigates to `/library/public`. If the user's last note has a topic/subject, pre-fill it as a search query (`?q=`).
+  - `Browse Public Library` — navigates to `/public/library`. If the user's last note has a topic/subject, pre-fill it as a search query (`?search=`).
   - Dynamic upgrade CTA from `getUpgradeCtas(currentPlan)` — navigates to `/settings?section=plans`.
 
 This fallback turns the limit hit into a *content-discovery* moment rather than a hard wall, especially valuable for Free users early in their study journey.

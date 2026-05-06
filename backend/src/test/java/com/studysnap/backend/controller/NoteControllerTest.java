@@ -8,6 +8,7 @@ import com.studysnap.backend.dto.NoteResponse;
 import com.studysnap.backend.dto.PublicNoteDetailResponse;
 import com.studysnap.backend.dto.PublicNoteLikeResponse;
 import com.studysnap.backend.dto.UpdateNoteVisibilityRequest;
+import com.studysnap.backend.entity.NoteTargetProfileType;
 import com.studysnap.backend.entity.UserRole;
 import com.studysnap.backend.exception.AppException;
 import com.studysnap.backend.security.AuthenticatedUser;
@@ -182,6 +183,36 @@ class NoteControllerTest {
     }
 
     @Test
+    void listPublic_mapsAudienceQueryToTargetProfileFilter() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
+        when(noteService.listPublic(userId, "cinco", "recent", "history", List.of("mexican-history"), "nursing", NoteTargetProfileType.STUDENT))
+                .thenReturn(List.of());
+
+        List<NoteListItemResponse> response = noteController.listPublic(
+                "cinco",
+                "recent",
+                "history",
+                List.of("mexican-history"),
+                "nursing",
+                "student",
+                null,
+                user
+        );
+
+        verify(noteService).listPublic(
+                userId,
+                "cinco",
+                "recent",
+                "history",
+                List.of("mexican-history"),
+                "nursing",
+                NoteTargetProfileType.STUDENT
+        );
+        assertThat(response).isEmpty();
+    }
+
+    @Test
     void extractText_delegatesToExtractionService() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
@@ -325,12 +356,12 @@ class NoteControllerTest {
                         false
                 )
         );
-        when(noteService.listPublic(userId, null, null, null)).thenReturn(expected);
+        when(noteService.listPublic(userId, null, null, null, null, null, null)).thenReturn(expected);
 
-        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, user);
+        List<NoteListItemResponse> response = noteController.listPublic(null, null, null, null, null, null, null, user);
 
         assertThat(response).isEqualTo(expected);
-        verify(noteService).listPublic(userId, null, null, null);
+        verify(noteService).listPublic(userId, null, null, null, null, null, null);
     }
 
     @Test

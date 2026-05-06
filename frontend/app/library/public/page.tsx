@@ -1,13 +1,13 @@
-import type { Metadata } from "next";
-import { PublicLibraryPageClient } from "@/components/notes/public-library-page-client";
-import { buildPageMetadata } from "@/lib/site-metadata";
+import { redirect } from "next/navigation";
+import { buildPublicLibraryUrl, parsePublicLibraryFilters } from "@/lib/public-library-url";
 
-export const metadata: Metadata = buildPageMetadata({
-  title: "NoteLib Public Library – Free Study Notes, Summaries, and Quizzes",
-  description: "Browse public study notes, summaries, and practice quizzes shared by the NoteLib community.",
-  path: "/public/library",
-});
+type PublicLibraryRedirectPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
 
-export default function PublicLibraryPage() {
-  return <PublicLibraryPageClient />;
+export default async function PublicLibraryRedirectPage({
+  searchParams,
+}: Readonly<PublicLibraryRedirectPageProps>) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  redirect(buildPublicLibraryUrl(parsePublicLibraryFilters(resolvedSearchParams), resolvedSearchParams));
 }

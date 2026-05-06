@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function NotesIndexRedirectPage() {
-  redirect("/library/public");
+  redirect("/public/library");
 }

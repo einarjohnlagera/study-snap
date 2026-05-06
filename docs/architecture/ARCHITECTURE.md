@@ -40,7 +40,7 @@ Routes:
 - `/notes/{id}/edit` Edit Note
 - `/dashboard` guidance + library entry
 - `/library` Library (owned notes, private workspace)
-- `/library/public` Public Library (public notes from you, the community, and official NoteLib content)
+- `/public/library` Public Library (public notes from you, the community, and official NoteLib content)
 - `/public/profile/{userId}` public creator profile (public notes, contribution stats, and owner-only public-page controls)
 - `/notes/{id}` Note Detail (owner view; unified Note + Study Pack view)
 - `/public/library/{subject}` public subject listing

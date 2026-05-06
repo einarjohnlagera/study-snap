@@ -32,7 +32,7 @@ describe("PublicNoteOwnershipActions", () => {
       value: { writeText: clipboardWriteText },
       configurable: true,
     });
-    window.history.replaceState({}, "", "/library/public");
+    window.history.replaceState({}, "", "/public/library");
   });
 
   it("shows owner actions for the current user's public note", async () => {

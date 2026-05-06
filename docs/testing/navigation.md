@@ -7,7 +7,7 @@ Verify these cases for back navigation links:
 ### Pages with a back link (sub-pages)
 
 - Note Details (`/notes/{id}`) shows `← Library` linking to `/library`
-- Public Note Details shows `← Public Library` linking to `/library/public` for authenticated users; no link for anonymous users
+- Public Note Details shows `← Public Library` linking to `/public/library` for authenticated users; no link for anonymous users
 - Public note subject listing page (`/public/library/{subject}/{slug}`) shows `← Public Library` for authenticated users
 - Quick Review shows `← Note` linking to the note detail page at the top of the page
 - Challenge Quiz shows `← Note` linking to the note detail page (hidden while quiz is running — `Leave Quiz` appears instead)
@@ -15,7 +15,7 @@ Verify these cases for back navigation links:
 - Create Note shows `← Library` linking to `/library`
 - Edit Note shows `← Note` linking to the note being edited (`/notes/{id}`)
 - Profile / Edit Profile shows `← Profile` linking to the user's public profile page
-- Public Profile (non-owner viewing another user) shows `← Public Library` linking to `/library/public`
+- Public Profile (non-owner viewing another user) shows `← Public Library` linking to `/public/library`
 - Learn article pages show `← Learn` linking to `/learn`
 - Shared Study Pack (`/p/{token}`) shows `← Home` linking to `/`
 
@@ -42,7 +42,7 @@ Verify these cases for back navigation links:
 | Destination | Label | Route |
 |-------------|-------|-------|
 | My Library | Library | `/library` |
-| Public Library | Public Library | `/library/public` |
+| Public Library | Public Library | `/public/library` |
 | Note Details | Note | `/notes/{id}` |
 | My Profile (public) | Profile | `/public/profile/{userId}` |
 | Learn index | Learn | `/learn` |
