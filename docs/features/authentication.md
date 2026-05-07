@@ -90,9 +90,38 @@ After email verification:
 - Main: Dashboard, Library, Public Library
 - Account: Profile, Settings
 
+## Google Social Login
+
+Google OAuth is supported as an alternative sign-in method alongside email/password.
+
+### Flow
+
+- Frontend loads the Google Identity Services (GSI) script from `https://accounts.google.com/gsi/client`
+- `google.accounts.oauth2.initCodeClient({ ux_mode: "popup" })` initializes an authorization code client with `scope: "openid email profile"`
+- A NoteLib-styled button (outline, Google G icon, label from props) is the only visible UI — no Google-rendered button is ever shown
+- On click, `client.requestCode()` triggers Google's native account chooser popup
+- Google returns an authorization code to the callback
+- Frontend posts `{ code }` to `POST /auth/google`; backend exchanges the code at `https://oauth2.googleapis.com/token` using `redirect_uri: "postmessage"`, extracts the `id_token` JWT, verifies it, and returns an `AuthResponse`
+
+### UX rule
+
+- Never show Google's personalized "Continue as {name}" button inside NoteLib UI
+- The NoteLib button always shows `"Continue with Google"` (or the label prop passed to `GoogleAuthButton`)
+- Google's external account chooser popup is expected and unchanged
+- Do not use Google One Tap (`prompt()`) on the login/signup form
+
+### Component
+
+`components/auth/google-auth-button.tsx` — accepts `label`, `loadingLabel`, `disabled`, `onCredential`, `onError` props. Used on:
+- `app/auth/page.tsx` — login/signup with `label="Continue with Google"`
+- `app/profile/page.tsx` — account linking with `label="Connect Google"`
+
+### Connect Google (existing accounts)
+
+Users with an existing email/password account can link Google from Profile → Identity → Sign-in Methods via `POST /auth/google/connect`. The backend links the Google provider to the existing user if the verified Google email matches.
+
 ## Non-Goals
 
-- social login
 - classroom/family linking
 - advanced admin permission systems
 - campaign email tooling

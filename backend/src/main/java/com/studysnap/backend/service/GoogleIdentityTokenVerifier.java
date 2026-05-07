@@ -1,7 +1,7 @@
 package com.studysnap.backend.service;
 
 public interface GoogleIdentityTokenVerifier {
-    GoogleIdentity verify(String credential);
+    GoogleIdentity verify(String code);
 
     record GoogleIdentity(
             String subject,

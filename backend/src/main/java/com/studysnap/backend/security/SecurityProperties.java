@@ -34,6 +34,8 @@ public class SecurityProperties {
     @Setter
     public static class Google {
         private String clientId = "";
+        private String clientSecret = "";
         private String certificatesUrl = "https://www.googleapis.com/oauth2/v3/certs";
+        private String tokenEndpoint = "https://oauth2.googleapis.com/token";
     }
 }

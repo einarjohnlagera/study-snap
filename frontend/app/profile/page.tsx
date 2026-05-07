@@ -495,14 +495,14 @@ export default function ProfilePage() {
     }
   };
 
-  const handleConnectGoogle = useCallback(async (credential: string) => {
+  const handleConnectGoogle = useCallback(async (code: string) => {
     if (connectingGoogle) {
       return;
     }
     setConnectingGoogle(true);
     setSignInMethodsMessage(null);
     try {
-      const updated = await connectGoogle({ credential });
+      const updated = await connectGoogle({ code });
       setSignInMethods(updated);
       setSignInMethodsMessage("Google connected successfully.");
     } catch (err) {
