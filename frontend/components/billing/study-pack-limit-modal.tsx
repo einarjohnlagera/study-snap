@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { AppModal } from "@/components/ui/app-modal";
 import type { PlanType } from "@/lib/api";
-import { PLAN_BILLING_PATH } from "@/lib/plans";
 import { getUpgradeCtas, type AppPlanType } from "@/src/config/plans";
 
 type StudyPackLimitModalProps = {
@@ -41,7 +40,7 @@ export function StudyPackLimitModal({
   }
 
   const appPlan = resolveAppPlan(planType);
-  const ctas = getUpgradeCtas(appPlan);
+  const ctas = getUpgradeCtas(appPlan, "study-pack-limit");
   const isFreePlan = appPlan === "FREE";
   const isPlusPlan = appPlan === "PLUS";
   const title = isFreePlan
@@ -64,23 +63,21 @@ export function StudyPackLimitModal({
       onClose={onClose}
       panelClassName="max-w-[520px]"
       actions={(
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           {ctas.primary ? (
-            <Button type="button" onClick={() => handleNavigate(UPGRADE_PATH)}>
-              {ctas.primary.label}
+            <>
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Maybe Later
+              </Button>
+              <Button type="button" onClick={() => handleNavigate(UPGRADE_PATH)}>
+                {ctas.primary.label}
+              </Button>
+            </>
+          ) : (
+            <Button type="button" onClick={onClose}>
+              Got It
             </Button>
-          ) : null}
-          {ctas.secondary ? (
-            <Button type="button" variant="outline" onClick={() => handleNavigate(UPGRADE_PATH)}>
-              {ctas.secondary.label}
-            </Button>
-          ) : null}
-          <Button type="button" variant="outline" onClick={() => handleNavigate(PLAN_BILLING_PATH)}>
-            View My Plan
-          </Button>
-          <Button type="button" variant="outline" onClick={onClose}>
-            Maybe Later
-          </Button>
+          )}
         </div>
       )}
     />

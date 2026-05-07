@@ -577,9 +577,9 @@ export default function LibraryPage() {
         </Card>
       ) : !hasItems ? (
         <Card className="space-y-4 p-4 sm:p-6">
-          <h2 className="text-xl font-semibold">You don&apos;t have any notes yet.</h2>
+          <h2 className="text-xl font-semibold">Your note library is empty</h2>
           <p className="text-sm text-foreground/75">
-            Save your first note to start building Study Packs.
+            Create a note to get started — generate a Study Pack and quiz yourself in minutes.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <ResponsiveActionLink href="/notes/new" action="create" label="Create Your First Note" className="w-full sm:w-auto" />

@@ -164,14 +164,34 @@ export type UpgradeCtaSet = {
   secondary: UpgradeCta | null;
 };
 
-export function getUpgradeCtas(currentPlan: AppPlanType): UpgradeCtaSet {
+export type UpgradeCtaContext = "study-pack-limit" | "adaptive-practice" | "general";
+
+export function getUpgradeCtas(currentPlan: AppPlanType, context?: UpgradeCtaContext): UpgradeCtaSet {
   if (currentPlan === "FREE") {
+    if (context === "adaptive-practice") {
+      return {
+        primary: { label: "Unlock Adaptive Practice", targetPlan: "PLUS" },
+        secondary: { label: "Go Pro", targetPlan: "PRO" },
+      };
+    }
+    if (context === "study-pack-limit") {
+      return {
+        primary: { label: "Get More Study Packs", targetPlan: "PLUS" },
+        secondary: null,
+      };
+    }
     return {
       primary: { label: "Upgrade to Plus", targetPlan: "PLUS" },
       secondary: { label: "Go Pro", targetPlan: "PRO" },
     };
   }
   if (currentPlan === "PLUS") {
+    if (context === "study-pack-limit") {
+      return {
+        primary: { label: "Get More Study Packs", targetPlan: "PRO" },
+        secondary: null,
+      };
+    }
     return {
       primary: { label: "Upgrade to Pro", targetPlan: "PRO" },
       secondary: null,
