@@ -33,6 +33,11 @@ Theme: deepen the learning experience, make the product easier to discover and n
   - Challenge extension toast updated from `+5 questions added` to `"Challenge extended to {n} questions"` or `"Full challenge unlocked: 20 questions"` when the session reaches the cap
   - Quick Review result screen now shows a guidance line `"Review your results, then choose your next study step."` below the result heading; the fallback retry CTA is renamed from `Practice Again` to `Retry Quick Review` for clarity
   - Empty state copy polished: Dashboard `"Start studying smarter"` / `"Add your first note, generate a Study Pack, and start quizzing in minutes."`; Library `"Your note library is empty"` / `"Create a note to get started — generate a Study Pack and quiz yourself in minutes."`
+- **Retention loop — continue studying + focus areas** — targeted fixes across `DashboardService`, `ContinueSpotlight`, and `DashboardFocusAreasCard` to close the three highest-value retention gaps:
+  - Continue Studying session priority reordered to Challenge Quiz → Adaptive Practice → Quick Review — a Challenge Quiz in-progress now always surfaces over a more recently created Quick Review session, matching the learning priority of the more structured mode
+  - Continue Studying body copy is now mode-aware: `"You left off on Question 4 of 10 in your Challenge Quiz."` / `"…in your Adaptive Practice."` instead of the generic `"You left off on Question 4 of 10."`
+  - Focus Areas action now has a free-tier fallback: when weak concepts exist but Adaptive Practice is locked, Free and Plus users see a `"Revisit Note"` link to the source note instead of only an upgrade prompt; the paywall button is shown only when no note is resolvable
+  - `MEANINGFUL_STUDY_ACTIVITIES` constant deduplicated — moved to `ActivityType.MEANINGFUL_STUDY_ACTIVITIES` as a single `public static final` field; `DashboardService` and `RetentionService` both reference the shared constant
 
 ### 🐛 Fixes
 

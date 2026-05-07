@@ -96,7 +96,8 @@ Focus Areas should show weak concepts for all learners when data exists.
 Current action behavior:
 
 - Pro users can launch Adaptive Practice from the suggested note
-- Free and Plus users see the same weak concepts, but the CTA opens the shared Pro upsell flow
+- Free and Plus users see the same weak concepts and get a `Revisit Note` link to the source note so they can review material even without Adaptive Practice access
+- The upgrade prompt (`Unlock Adaptive Practice`) is shown only when no source note is resolvable
 
 ## First-study guidance
 

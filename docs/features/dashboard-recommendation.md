@@ -40,6 +40,14 @@ Behavior:
 - Keeps resume and retry actions routed through `noteId`
 - Returns note metadata in the same payload so the card can show `noteTitle`, `subject`, optional `courseProgram`, and `resumeType` without an extra frontend request
 
+In-progress session priority (when multiple modes have an active session):
+
+1. Challenge Quiz — highest priority; surfaces over any more recently started Quick Review
+2. Adaptive Practice
+3. Quick Review
+
+Within the same mode, recency is the tiebreaker.
+
 ## Dashboard Overview
 
 Endpoint:
@@ -86,8 +94,9 @@ Display:
 
 Behavior:
 
-- Pro users get `Practice Weak Concepts`
-- Free and Plus users get `Unlock Adaptive Practice` and the shared Pro upsell modal
+- Pro users get `Practice Weak Concepts` → Adaptive Practice on the source note
+- Free and Plus users get `Revisit Note` → source note page, so they can review material for their weakest concept without an Adaptive Practice session
+- The `Unlock Adaptive Practice` paywall button appears only when weak concepts exist but no source note can be resolved (`practiceNoteId` is null)
 
 ## This Week
 
