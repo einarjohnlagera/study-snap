@@ -1,7 +1,6 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
-import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.entity.ActivityType;
@@ -14,9 +13,7 @@ import com.studysnap.backend.entity.QuickReviewSessionMode;
 import com.studysnap.backend.entity.QuickReviewSessionStatus;
 import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.ThemePreference;
-import com.studysnap.backend.entity.UserRole;
-import com.studysnap.backend.entity.UserStatus;
+import com.studysnap.backend.service.model.StudyPackGenerationContext;
 import com.studysnap.backend.repository.ActivityEventRepository;
 import com.studysnap.backend.repository.QuickReviewSessionRepository;
 import com.studysnap.backend.repository.StudyPackRepository;
@@ -72,6 +69,8 @@ class QuickReviewAdaptivePracticeServiceTest {
     private AnalyticsService analyticsService;
     @Mock
     private AiRateLimitService aiRateLimitService;
+    @Mock
+    private StudyPackGenerationContextResolver generationContextResolver;
 
     private QuickReviewAdaptivePracticeService adaptivePracticeService;
 
@@ -90,7 +89,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 billingUsagePeriodService,
                 authService,
                 analyticsService,
-                aiRateLimitService
+                aiRateLimitService,
+                generationContextResolver
         );
     }
 
@@ -202,7 +202,8 @@ class QuickReviewAdaptivePracticeServiceTest {
                 billingUsagePeriodService,
                 authService,
                 analyticsService,
-                aiRateLimitService
+                aiRateLimitService,
+                generationContextResolver
         );
         QuickReviewSessionEntity latestChallenge = new QuickReviewSessionEntity();
         latestChallenge.setId(UUID.randomUUID());
@@ -250,33 +251,11 @@ class QuickReviewAdaptivePracticeServiceTest {
                 any(OffsetDateTime.class)
         )).thenReturn(0L);
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
-        when(authService.getMe(userId)).thenReturn(new MeResponse(
-                userId.toString(),
-                "user@example.com",
-                null,
-                "Test",
-                "User",
-                "Test User",
-                "testuser",
-                null,
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
                 LearnerLevel.BOARD_EXAM_REVIEW,
                 "Nursing",
-                true,
-                null,
-                null,
-                null,
-                null,
-                true,
-                true,
-                ThemePreference.SYSTEM,
-                OffsetDateTime.now(),
-                OffsetDateTime.now(),
-                OffsetDateTime.now(),
-                0L,
-                UserRole.USER,
-                UserStatus.ACTIVE,
-                PlanType.PRO,
-                null
+                studyPack.getSubject(),
+                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
         ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -289,6 +268,7 @@ class QuickReviewAdaptivePracticeServiceTest {
         assertThat(response.status()).isEqualTo(QuickReviewSessionStatus.IN_PROGRESS);
         assertThat(response.weakConcepts()).containsExactly("Electrolyte Imbalance", "Fluid Shift");
         assertThat(response.quiz()).hasSize(5);
+        verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(llmStudyPackService, never()).generateAdaptivePracticeQuiz(any(), any(), any(), any(), any(), anyInt(), any());
     }
 

@@ -44,6 +44,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - Fixed TypeScript type errors in test fixtures (`NoteListItemResponse`, `NotePerformanceSummaryResponse`, `PublicProfileResponse`) to align test data with updated type definitions
 - Fixed incorrect `Quiz Ready` badge visibility across Student and Board Exam modes so readiness reflects actual quiz availability
 - Fixed Study Pack generation metadata flow so note-level `courseProgram` remains the source of truth and user profile `courseProgram` is used only as a fallback
+- Fixed Quiz metadata context consistency — Challenge Quiz and Board Exam now honor note-level Course/Program before falling back to profile context; Note Creation copy clarified Course/Program as domain context
 - Fixed normal note-owned Study Pack generation so AI `title` / `subject` / `tags` suggestions stay transient until the user applies them
 - Fixed AI Suggestions tag comparisons so overlapping user tags are not shown as duplicate new suggestions
 - Onboarding keeps its explicit zero-friction metadata auto-apply behavior for empty `subject` / `tags`

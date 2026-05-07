@@ -4,7 +4,6 @@ import com.studysnap.backend.config.StudySnapProperties;
 import com.studysnap.backend.dto.ChallengeQuizCompleteRequest;
 import com.studysnap.backend.dto.GenerateMoreChallengeQuizResponse;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
-import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
 import com.studysnap.backend.dto.QuizItem;
@@ -21,9 +20,6 @@ import com.studysnap.backend.entity.StudyPackEntity;
 import com.studysnap.backend.entity.BillingCycle;
 import com.studysnap.backend.entity.LearnerLevel;
 import com.studysnap.backend.entity.PlanType;
-import com.studysnap.backend.entity.ThemePreference;
-import com.studysnap.backend.entity.UserRole;
-import com.studysnap.backend.entity.UserStatus;
 import com.studysnap.backend.exception.InvalidChallengeQuizDifficultyException;
 import com.studysnap.backend.exception.InvalidChallengeQuizModeException;
 import com.studysnap.backend.service.model.StudyPackGenerationContext;
@@ -80,6 +76,8 @@ class ChallengeQuizServiceTest {
     private AiRateLimitService aiRateLimitService;
     @Mock
     private ActivityTrackingService activityTrackingService;
+    @Mock
+    private StudyPackGenerationContextResolver generationContextResolver;
 
     private ChallengeQuizService challengeQuizService;
 
@@ -97,7 +95,8 @@ class ChallengeQuizServiceTest {
                 authService,
                 analyticsService,
                 aiRateLimitService,
-                activityTrackingService
+                activityTrackingService,
+                generationContextResolver
         );
     }
 
@@ -296,7 +295,13 @@ class ChallengeQuizServiceTest {
                 eq(QuickReviewSessionMode.QUICK_REVIEW),
                 any()
         )).thenReturn(List.of(previousQuickReview));
-        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.BOARD_EXAM_REVIEW, "Nursing"));
+        StudyPackGenerationContext generationContext = new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                null,
+                List.of()
+        );
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(generationContext);
         when(quizGenerationService.generateChallengeQuiz(
                 "Pack title",
                 "Summary",
@@ -304,12 +309,7 @@ class ChallengeQuizServiceTest {
                 List.of("Practice?"),
                 5,
                 "easy",
-                new StudyPackGenerationContext(
-                        LearnerLevel.BOARD_EXAM_REVIEW,
-                        "Nursing",
-                        null,
-                        List.of()
-                )
+                generationContext
         )).thenReturn(List.of(
                 new QuizItem("Q1", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
                 new QuizItem("Q2", List.of("A", "B", "C", "D"), "A", "Concept", "Explanation"),
@@ -325,6 +325,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.sessionId()).isNotNull();
         assertThat(response.mode()).isEqualTo("challenge");
         verify(aiRateLimitService).assertAllowed(userId, PlanType.FREE, "challenge-quiz");
+        verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(analyticsService).trackEvent(eq(userId), eq(AnalyticsEventType.CHALLENGE_QUIZ_STARTED), eq(studyPackId), any());
     }
 
@@ -360,7 +361,12 @@ class ChallengeQuizServiceTest {
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Engineering",
+                studyPack.getSubject(),
+                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
+        ));
         when(quizGenerationService.generateChallengeQuiz(
                 eq("Pack title"),
                 eq("Summary"),
@@ -395,6 +401,7 @@ class ChallengeQuizServiceTest {
         assertThat(response.mode()).isEqualTo("board_exam");
         assertThat(response.selectedDifficulty()).isEqualTo("mixed");
         assertThat(response.monthlyLimit()).isEqualTo(5);
+        verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         verify(featureGateService, never()).checkFeatureAccess(PlanType.FREE, Feature.DIFFICULTY_SELECTION);
     }
 
@@ -418,7 +425,8 @@ class ChallengeQuizServiceTest {
                 authService,
                 analyticsService,
                 aiRateLimitService,
-                activityTrackingService
+                activityTrackingService,
+                generationContextResolver
         );
 
         when(studyPackRepository.findByIdAndOwnerUserIdForUpdate(studyPackId, userId)).thenReturn(Optional.of(studyPack));
@@ -446,7 +454,12 @@ class ChallengeQuizServiceTest {
                 ));
         when(userUsageService.getMonthlyUsage(eq(userId), any(OffsetDateTime.class))).thenReturn(UserUsageService.MonthlyUsage.zero());
         when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
-        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.BOARD_EXAM_REVIEW, "Nursing"));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.BOARD_EXAM_REVIEW,
+                "Nursing",
+                studyPack.getSubject(),
+                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
+        ));
         when(quickReviewSessionRepository.save(any(QuickReviewSessionEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -574,37 +587,6 @@ class ChallengeQuizServiceTest {
                 .extracting(stat -> stat.concept() + ":" + stat.correctAnswers() + "/" + stat.totalQuestions())
                 .containsExactly("Respiration:0/1");
         assertThat(response.weakConcepts()).containsExactly("Respiration");
-    }
-
-    private MeResponse buildMeResponse(UUID userId, LearnerLevel learnerLevel, String courseProgram) {
-        return new MeResponse(
-                userId.toString(),
-                "user@example.com",
-                null,
-                "Test",
-                "User",
-                "Test User",
-                "testuser",
-                null,
-                learnerLevel,
-                courseProgram,
-                true,
-                null,
-                null,
-                null,
-                null,
-                true,
-                true,
-                ThemePreference.SYSTEM,
-                OffsetDateTime.now(),
-                OffsetDateTime.now(),
-                OffsetDateTime.now(),
-                0L,
-                UserRole.USER,
-                UserStatus.ACTIVE,
-                PlanType.FREE,
-                null
-        );
     }
 
     @Test
@@ -763,7 +745,12 @@ class ChallengeQuizServiceTest {
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Engineering",
+                studyPack.getSubject(),
+                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
+        ));
         when(quizGenerationService.generateMoreChallengeQuiz(
                 any(), any(), any(), any(), any(), eq(5), eq("medium"), any()
         )).thenReturn(List.of(
@@ -778,6 +765,7 @@ class ChallengeQuizServiceTest {
         GenerateMoreChallengeQuizResponse response = challengeQuizService.generateMoreQuestions(sessionId.toString(), userId);
 
         assertThat(response.newQuestions()).hasSize(5);
+        verify(generationContextResolver).resolveForStudyPack(userId, studyPack);
         assertThat(response.totalQuestions()).isEqualTo(10);
         assertThat(session.getTotalQuestions()).isEqualTo(10);
     }
@@ -846,7 +834,12 @@ class ChallengeQuizServiceTest {
                 sessionId, userId, QuickReviewSessionMode.CHALLENGE
         )).thenReturn(Optional.of(session));
         when(studyPackRepository.findByIdAndOwnerUserId(studyPackId, userId)).thenReturn(Optional.of(studyPack));
-        when(authService.getMe(userId)).thenReturn(buildMeResponse(userId, LearnerLevel.COLLEGE, "Engineering"));
+        when(generationContextResolver.resolveForStudyPack(userId, studyPack)).thenReturn(new StudyPackGenerationContext(
+                LearnerLevel.COLLEGE,
+                "Engineering",
+                studyPack.getSubject(),
+                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
+        ));
         when(quizGenerationService.generateMoreChallengeQuiz(
                 any(), any(), any(), any(), any(), anyInt(), any(), any()
         )).thenReturn(List.of(

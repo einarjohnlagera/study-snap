@@ -48,6 +48,8 @@ Rules:
 
 - learner level remains the primary difficulty and explanation-depth driver
 - course/program remains a contextual/domain hint
+- Challenge Quiz, Board Exam, and Adaptive Practice resolve Course/Program from the source note first, then fall back to the user's profile Course/Program
+- Board Exam Mode keeps its fixed exam-style UX; it should not use progressive generation, but its LLM context still follows the same note-first Course/Program rule
 - when learner level is missing, quiz generation falls back to the existing default behavior
 
 Current learner-level adjustment UI:
