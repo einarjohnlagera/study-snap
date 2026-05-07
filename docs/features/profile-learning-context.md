@@ -49,6 +49,7 @@ Account identity fields are documented separately in `docs/features/account-prof
 **Where it is used in generation:**
 - Study Pack and quiz generation context blocks include `courseProgram` alongside `learnerLevel`.
 - Per-note `courseProgram` takes precedence over the profile default when set.
+- Challenge Quiz, Board Exam, and Adaptive Practice must use the same note-first `courseProgram` resolution as Study Pack generation.
 - When neither is set, the prompt falls back to subject-only context.
 
 **Autocomplete rules:**
@@ -84,7 +85,7 @@ These two fields are passed separately to generation context. Do not combine the
 
 ## LLM Context Builder Rule
 
-All LLM calls that personalise output must use `buildLearnerContextBlock(userId)` (or its backend equivalent) to resolve the current `learnerLevel` and `courseProgram` before constructing the prompt. Do not inline these fields ad hoc in individual services.
+All LLM calls that personalise output must use `buildLearnerContextBlock(userId)` (or its backend equivalent) to resolve the current `learnerLevel` and `courseProgram` before constructing the prompt. Backend generation paths should use the shared `StudyPackGenerationContextResolver` instead of inline profile lookups so note-level Course/Program overrides are preserved.
 
 The context block structure (conceptual):
 

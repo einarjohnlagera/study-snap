@@ -308,6 +308,7 @@ describe("NoteEditorPageClient", () => {
     expect(await screen.findByLabelText("Title (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Subject (optional)")).toBeInTheDocument();
     expect(screen.getByLabelText("Course / Program (optional)")).toBeInTheDocument();
+    expect(screen.getByText("Used as domain context for examples, terminology, and quiz questions.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /\+ Add Tag/i })).toBeInTheDocument();
   });
 
@@ -828,7 +829,8 @@ describe("NoteEditorPageClient", () => {
     const contentInput = await screen.findByLabelText("Content");
     fireEvent.change(contentInput, { target: { value: "Saved before checkout" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Study Pack" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Choose Plus" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Plus / }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Plus" }));
 
     await waitFor(() => {
       expect(createNote).toHaveBeenCalled();
@@ -1073,7 +1075,8 @@ describe("NoteEditorPageClient", () => {
 
     expect(await screen.findByText("You've reached your OCR limit")).toBeInTheDocument();
     expect(screen.getByText("Extract more text from images and files without retyping your notes.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Choose Plus" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Plus / }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue with Plus" }));
     await waitFor(() => {
       expect(redirectToCheckoutUrl).toHaveBeenCalledWith("https://checkout.xendit.test/invoice_123");
     });

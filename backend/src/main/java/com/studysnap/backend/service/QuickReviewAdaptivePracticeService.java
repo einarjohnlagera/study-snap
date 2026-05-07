@@ -1,7 +1,6 @@
 package com.studysnap.backend.service;
 
 import com.studysnap.backend.config.StudySnapProperties;
-import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuickReviewAdaptiveQuizResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.SimpleMessageResponse;
@@ -95,6 +94,7 @@ public class QuickReviewAdaptivePracticeService {
     private final AuthService authService;
     private final AnalyticsService analyticsService;
     private final AiRateLimitService aiRateLimitService;
+    private final StudyPackGenerationContextResolver generationContextResolver;
 
     public QuickReviewAdaptiveQuizResponse generateAdaptiveQuiz(String studyPackIdRaw, UUID userId) {
         authService.requireEmailVerified(userId);
@@ -448,13 +448,7 @@ public class QuickReviewAdaptivePracticeService {
     }
 
     private StudyPackGenerationContext buildQuizGenerationContext(UUID userId, StudyPackEntity studyPack) {
-        MeResponse me = authService.getMe(userId);
-        return new StudyPackGenerationContext(
-            me.learnerLevel(),
-            me.courseProgram(),
-            studyPack.getSubject(),
-            studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
-        );
+        return generationContextResolver.resolveForStudyPack(userId, studyPack);
     }
 
     private List<String> extractQuestionTexts(List<QuizItem> quiz) {

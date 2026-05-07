@@ -11,7 +11,6 @@ import com.studysnap.backend.dto.ChallengeQuizSessionResponse;
 import com.studysnap.backend.dto.ChallengeQuizSessionSummaryResponse;
 import com.studysnap.backend.dto.ChallengeQuizStartRequest;
 import com.studysnap.backend.dto.ChallengeQuizStartResponse;
-import com.studysnap.backend.dto.MeResponse;
 import com.studysnap.backend.dto.QuizItem;
 import com.studysnap.backend.dto.QuizSessionReviewResponse;
 import com.studysnap.backend.dto.SimpleMessageResponse;
@@ -139,6 +138,7 @@ public class ChallengeQuizService {
     private final AnalyticsService analyticsService;
     private final AiRateLimitService aiRateLimitService;
     private final ActivityTrackingService activityTrackingService;
+    private final StudyPackGenerationContextResolver generationContextResolver;
 
     public ChallengeQuizStartResponse startSession(String studyPackIdRaw, UUID userId, ChallengeQuizStartRequest request) {
         authService.requireEmailVerified(userId);
@@ -960,13 +960,7 @@ public class ChallengeQuizService {
     }
 
     private StudyPackGenerationContext buildQuizGenerationContext(UUID userId, StudyPackEntity studyPack) {
-        MeResponse me = authService.getMe(userId);
-        return new StudyPackGenerationContext(
-                me.learnerLevel(),
-                me.courseProgram(),
-                studyPack.getSubject(),
-                studyPack.getTags() == null ? List.of() : List.of(studyPack.getTags())
-        );
+        return generationContextResolver.resolveForStudyPack(userId, studyPack);
     }
 
     private QuickReviewSessionEntity findChallengeSessionOrThrow(UUID sessionId, UUID userId) {

@@ -1459,6 +1459,7 @@ These rules exist to prevent the most common forms of context drift across AI co
 - `learnerLevel` controls **difficulty, style, vocabulary** in generated outputs.
 - `courseProgram` provides **domain context** — examples, scenarios, terminology.
 - Both are passed separately to `buildLearnerContextBlock()`. Do not skip one to simplify.
+- Study Pack, Challenge Quiz, Board Exam, and Adaptive Practice generation must use the shared note-first Course/Program resolver: note `courseProgram` wins, profile `courseProgram` is fallback only.
 - Do not add a learner level step to onboarding. The deferred Dashboard prompt (`Too easy or too hard?`) is the settled pattern. Do not change this without an explicit task.
 - See `docs/features/profile-learning-context.md` for the full rule set.
 
