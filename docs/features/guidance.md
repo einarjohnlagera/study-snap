@@ -29,6 +29,26 @@ Current always-visible helper copy includes:
 | Profile | `Course / Program` | explain domain relevance |
 | Note detail | quiz actions | explain Quick Review vs Challenge Quiz |
 
+## Guidance Engine
+
+Engine:
+
+- `frontend/lib/guidance-engine.ts`
+
+Types:
+
+- `GuidanceRule` — `{ id: string; priority: number; condition: () => boolean; message: string }`
+
+Functions:
+
+- `pickActiveGuidance(rules: GuidanceRule[]): GuidanceRule | null` — returns the first unseen, condition-passing rule sorted by priority ascending; does not mutate the input array
+
+Rules:
+
+- lower `priority` number = shown first
+- a rule is skipped if `hasSeenTip(rule.id)` returns true or `condition()` returns false
+- callers are responsible for rendering the returned rule with `GuidanceTip`
+
 ## Layer 2 — GuidanceTip
 
 Component:
@@ -42,12 +62,14 @@ Persistence:
 
 Current active one-time tips:
 
-| tipId | Surface | Message |
-|---|---|---|
-| `note-detail-generate-study-pack` | Note Detail draft state | `Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note.` |
-| `note-detail-try-quiz` | Note Detail performance section | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
-| `sessions-export-hint` | Session History empty state | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
-| `public-library-intro` | Public Library | `Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included.` |
+| tipId | Surface | Trigger | Message |
+|---|---|---|---|
+| `note-detail-generate-study-pack` | Note Detail draft state | always | `Generate a Study Pack to unlock summary, key concepts, and quiz questions from this note.` |
+| `note-detail-try-quiz` | Note Detail performance section | always | `Try Quick Review or Challenge Quiz to start tracking your performance on this note.` |
+| `sessions-export-hint` | Session History empty state | always | `Complete a quiz session to unlock session review and export — download your results as a PDF for study or sharing.` |
+| `public-library-intro` | Public Library | always | `Browse notes created by others. Copy any note into your library to study it in your own workspace — full Study Pack included.` |
+| `library-first-note-organization` | Library | notes 1–3 | `Add a subject and tags when editing a note — it makes filtering your library much easier as it grows.` |
+| `library-organization-habits` | Library | notes ≥ 5 | `You're building a solid library. Try filtering by subject to find related notes quickly.` |
 
 ## Layer 3 — Help Center
 

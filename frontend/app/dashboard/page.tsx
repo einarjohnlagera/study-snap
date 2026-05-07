@@ -401,12 +401,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const authUser = getAuthUser();
-    if (!authUser?.id || !profile?.onboardingCompletedAt) {
+    if (!authUser?.id || !profile?.onboardingCompletedAt || profile?.learnerLevel) {
       setShowPersonalizationPrompt(false);
       return;
     }
     setShowPersonalizationPrompt(!hasDismissedDashboardPersonalizationPrompt(authUser.id));
-  }, [profile?.onboardingCompletedAt]);
+  }, [profile?.onboardingCompletedAt, profile?.learnerLevel]);
 
   const dismissWelcomeMessage = useCallback(() => {
     const authUser = getAuthUser();
@@ -539,12 +539,6 @@ export default function DashboardPage() {
           className="space-y-6"
           style={{ opacity: contentVisible ? 1 : 0, transition: "opacity 220ms ease-out" }}
         >
-          {showPersonalizationPrompt ? (
-            <DashboardPersonalizationPrompt
-              onDismiss={dismissPersonalizationPrompt}
-              onOpenPreferences={handleOpenPreferences}
-            />
-          ) : null}
           {shouldShowNearLimitBanner ? (
             <NearLimitBanner
               planType={usageSummary?.plan ?? "FREE"}
@@ -583,6 +577,12 @@ export default function DashboardPage() {
                   secondaryActionIcon="create"
                 />
               )}
+              {showPersonalizationPrompt ? (
+                <DashboardPersonalizationPrompt
+                  onDismiss={dismissPersonalizationPrompt}
+                  onOpenPreferences={handleOpenPreferences}
+                />
+              ) : null}
               <DashboardFocusAreasCard
                 title="Weak Concepts"
                 focusAreas={overview?.focusAreas ?? null}
@@ -636,6 +636,12 @@ export default function DashboardPage() {
                 secondaryActionHref={recentNotes[0]?.id ? `/notes/${recentNotes[0].id}` : "/library"}
                 secondaryActionIcon="open"
               />
+              {showPersonalizationPrompt ? (
+                <DashboardPersonalizationPrompt
+                  onDismiss={dismissPersonalizationPrompt}
+                  onOpenPreferences={handleOpenPreferences}
+                />
+              ) : null}
               <DashboardFocusAreasCard
                 title="Weak Areas"
                 focusAreas={overview?.focusAreas ?? null}
@@ -684,6 +690,12 @@ export default function DashboardPage() {
                 secondaryActionHref="/library"
                 secondaryActionIcon="library"
               />
+              {showPersonalizationPrompt ? (
+                <DashboardPersonalizationPrompt
+                  onDismiss={dismissPersonalizationPrompt}
+                  onOpenPreferences={handleOpenPreferences}
+                />
+              ) : null}
               {items.length === 0 ? (
                 <Card className="space-y-4 p-4 sm:p-6">
                   <h2 className="text-lg font-semibold sm:text-xl">Start your teaching workspace</h2>
