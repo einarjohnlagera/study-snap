@@ -417,6 +417,11 @@ Use these skills before writing prompts, before starting new features, and after
 ### Library Rule
 
 - Library is note-based and contains the current user's notes (Draft + Study Pack Ready).
+- `Study Pack Ready` is the learner-facing readiness indicator for normal Library browsing.
+- `Quiz Ready` is a Teacher/exam-export workflow indicator. Show `Quiz Ready` badges and filters only for Teacher private-library browsing or explicit exam-builder/admin-content contexts.
+- Student and Board Taker profiles must not see `Quiz Ready` badges or filters in normal Library browsing; reset hidden `Quiz Ready` filter state if profile/context changes.
+- Public Library must not expose Teacher-specific `Quiz Ready` UI.
+- Do not remove generated-quiz readiness data from backend payloads; Exam Builder still needs it for selection, question counts, disabled states, and exports.
 - Public Library is note-based and contains notes where `visibility=PUBLIC`.
 - Public Profile is a public showcase of one creator's public notes and contribution stats.
 - Public Profile may show `bio`, optional `learnerLevel`, optional `courseProgram`, and derived subject chips, but it remains a learning profile rather than a social-media profile.

@@ -16,6 +16,7 @@ let notesParam = "note-99,note-77";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => routerMock,
+  usePathname: () => "/library/exam-builder",
   useSearchParams: () => ({
     get: (key: string) => (key === "notes" ? notesParam : null),
   }),

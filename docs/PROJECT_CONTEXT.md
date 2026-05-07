@@ -71,6 +71,13 @@ Primary routes:
 - `/public/creator/{username}` (canonical Public Creator/Profile page)
 - `/public/profile/{userId}` (legacy-compatible Public Profile route)
 
+Private Library readiness:
+
+- `Study Pack Ready` is the learner-facing readiness indicator for Student and Board Taker profiles.
+- `Quiz Ready` is a Teacher/exam-export workflow indicator. Show it in normal private Library browsing only when the active profile is Teacher.
+- Public Library must not expose Teacher-specific `Quiz Ready` filters or badges; public notes stay focused on summary, key concepts, Quick Check, and copy/share flows.
+- Exam Builder may continue to use generated-quiz readiness internally for selection, question counts, and export eligibility.
+
 ## Hash Navigation Pattern
 
 - Deep links to page sections are part of the product flow, not an incidental browser behavior.

@@ -5,6 +5,7 @@ import {
   isActiveProfileType,
   isActiveProfileTypeForSwitch,
   resolveProfileMode,
+  shouldShowQuizReadyIndicator,
 } from "./profile-mode";
 
 describe("resolveProfileMode", () => {
@@ -92,5 +93,21 @@ describe("isActiveProfileTypeForSwitch", () => {
 
   it("rejects arbitrary strings", () => {
     expect(isActiveProfileTypeForSwitch("UNKNOWN")).toBe(false);
+  });
+});
+
+describe("shouldShowQuizReadyIndicator", () => {
+  it("shows Quiz Ready only for teacher profile in private library", () => {
+    expect(shouldShowQuizReadyIndicator("TEACHER", "PRIVATE_LIBRARY", "USER")).toBe(true);
+    expect(shouldShowQuizReadyIndicator("STUDENT", "PRIVATE_LIBRARY", "USER")).toBe(false);
+    expect(shouldShowQuizReadyIndicator("BOARD_EXAM", "PRIVATE_LIBRARY", "USER")).toBe(false);
+  });
+
+  it("keeps public library free of teacher-specific Quiz Ready UI", () => {
+    expect(shouldShowQuizReadyIndicator("TEACHER", "PUBLIC_LIBRARY", "USER")).toBe(false);
+  });
+
+  it("allows internal exam-builder readiness logic", () => {
+    expect(shouldShowQuizReadyIndicator("STUDENT", "EXAM_BUILDER", "USER")).toBe(true);
   });
 });

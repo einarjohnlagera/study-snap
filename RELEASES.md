@@ -48,7 +48,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - Login now accepts email or username without breaking existing email login.
 - Profile identity settings now allow users to edit their public username.
 - Fixed TypeScript type errors in test fixtures (`NoteListItemResponse`, `NotePerformanceSummaryResponse`, `PublicProfileResponse`) to align test data with updated type definitions
-- Fixed incorrect `Quiz Ready` badge visibility across Student and Board Exam modes so readiness reflects actual quiz availability
+- **Quiz Ready badge accuracy** — Quiz Ready indicators are now profile-aware and only appear where they support Teacher/exam-export workflows; Student and Board Taker Library browsing keeps Study Pack Ready as the learner-facing readiness signal
 - Fixed Study Pack generation metadata flow so note-level `courseProgram` remains the source of truth and user profile `courseProgram` is used only as a fallback
 - Fixed Quiz metadata context consistency — Challenge Quiz and Board Exam now honor note-level Course/Program before falling back to profile context; Note Creation copy clarified Course/Program as domain context
 - Fixed normal note-owned Study Pack generation so AI `title` / `subject` / `tags` suggestions stay transient until the user applies them

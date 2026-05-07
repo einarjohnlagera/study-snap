@@ -1,4 +1,4 @@
-import type { ProfileType } from "./api";
+import type { ProfileType, UserRole } from "./api";
 
 // --- Mode types ---
 
@@ -34,6 +34,29 @@ export function resolveProfileMode(
     return "TEACHING";
   }
   return "LEARNING";
+}
+
+export type QuizReadyIndicatorContext =
+  | "PRIVATE_LIBRARY"
+  | "PUBLIC_LIBRARY"
+  | "EXAM_BUILDER"
+  | "ADMIN_CONTENT";
+
+export function shouldShowQuizReadyIndicator(
+  profileType: ProfileType | null | undefined,
+  context: QuizReadyIndicatorContext,
+  role?: UserRole | null,
+): boolean {
+  if (context === "PUBLIC_LIBRARY") {
+    return false;
+  }
+  if (context === "EXAM_BUILDER") {
+    return true;
+  }
+  if (context === "ADMIN_CONTENT") {
+    return role === "ADMIN";
+  }
+  return resolveProfileMode(profileType) === "TEACHING";
 }
 
 // --- Profile type switch confirmation content ---
