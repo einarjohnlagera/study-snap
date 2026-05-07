@@ -369,12 +369,12 @@ export type LoginRequest = {
 };
 
 export type GoogleAuthRequest = {
-  credential: string;
+  code: string;
   keepSignedIn?: boolean;
 };
 
 export type GoogleConnectRequest = {
-  credential: string;
+  code: string;
 };
 
 export type AuthResponse = {

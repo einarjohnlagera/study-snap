@@ -153,14 +153,14 @@ function AuthPageContent() {
     }
   };
 
-  const handleGoogleCredential = useCallback(async (credential: string) => {
+  const handleGoogleCredential = useCallback(async (code: string) => {
     if (loading) {
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const authUser = await loginWithGoogle({ credential, keepSignedIn });
+      const authUser = await loginWithGoogle({ code, keepSignedIn });
       await completeAuth(authUser);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not continue with Google. Please try again.");

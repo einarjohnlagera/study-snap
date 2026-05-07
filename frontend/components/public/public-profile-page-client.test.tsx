@@ -35,6 +35,7 @@ const baseProfile: PublicProfileResponse = {
   profileType: "TEACHER",
   isOfficial: false,
   publicProfileVisible: true,
+  isCurrentUser: false,
   publicNotesCount: 1,
   totalCopies: 5,
   totalShares: 2,

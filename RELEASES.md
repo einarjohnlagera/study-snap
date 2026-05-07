@@ -28,6 +28,7 @@ Theme: deepen the learning experience, make the product easier to discover and n
 
 ### 🐛 Fixes
 
+- Replaced Google-rendered personalized button with a NoteLib-styled button (outline, Google G icon, "Continue with Google") — eliminates the misleading "Continue as {name}" from appearing inside NoteLib UI; switched to the `google.accounts.oauth2.initCodeClient` authorization code popup flow so no hidden programmatic click is needed; backend now exchanges the authorization code at `https://oauth2.googleapis.com/token` (`redirect_uri: "postmessage"`) and verifies the returned `id_token` JWT, keeping the rest of the auth path unchanged
 - Added unique public usernames for stable creator attribution and future creator profile links.
 - Public notes now disambiguate creators with `displayName` plus `@username` while keeping display names as readable presentation.
 - Login now accepts email or username without breaking existing email login.

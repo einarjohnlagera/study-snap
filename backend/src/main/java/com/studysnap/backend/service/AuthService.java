@@ -176,7 +176,7 @@ public class AuthService {
     }
 
     public AuthResponse loginWithGoogle(GoogleAuthRequest request, String ipAddress, String userAgent) {
-        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = verifyGoogleIdentity(request.credential());
+        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = verifyGoogleIdentity(request.code());
         OffsetDateTime now = OffsetDateTime.now();
         UserEntity user = userAuthProviderRepository
                 .findByProviderAndProviderUserId(AuthProvider.GOOGLE, googleIdentity.subject())
@@ -209,7 +209,7 @@ public class AuthService {
 
     public SignInMethodsResponse connectGoogle(UUID userId, GoogleConnectRequest request) {
         UserEntity user = findUserOrThrow(userId);
-        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = verifyGoogleIdentity(request.credential());
+        GoogleIdentityTokenVerifier.GoogleIdentity googleIdentity = verifyGoogleIdentity(request.code());
         if (!user.getEmail().equalsIgnoreCase(googleIdentity.email())) {
             throw new AppException("GOOGLE_EMAIL_MISMATCH", GOOGLE_EMAIL_MISMATCH_MESSAGE, HttpStatus.BAD_REQUEST);
         }
