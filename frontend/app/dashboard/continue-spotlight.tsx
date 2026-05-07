@@ -74,10 +74,17 @@ function getCardTone(recommendation: ContinueStudyingResponse) {
     const totalQuestions = recommendation.totalQuestions ?? 0;
     const normalizedTotal = Math.max(1, totalQuestions);
     const normalizedQuestion = Math.min(Math.max(1, currentQuestion + 1), normalizedTotal);
+    const modeLabel = recommendation.resumeType === "CHALLENGE"
+      ? "Challenge Quiz"
+      : recommendation.resumeType === "ADAPTIVE"
+        ? "Adaptive Practice"
+        : null;
     return {
       label: "In Progress",
       icon: TrendingUp,
-      body: `You left off on Question ${normalizedQuestion} of ${normalizedTotal}.`,
+      body: modeLabel
+        ? `You left off on Question ${normalizedQuestion} of ${normalizedTotal} in your ${modeLabel}.`
+        : `You left off on Question ${normalizedQuestion} of ${normalizedTotal}.`,
     };
   }
 

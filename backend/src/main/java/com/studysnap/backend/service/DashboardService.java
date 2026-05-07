@@ -51,14 +51,6 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class DashboardService {
     private static final BigDecimal PERFECT_SCORE = BigDecimal.valueOf(100);
-    private static final Set<ActivityType> MEANINGFUL_STUDY_ACTIVITIES = EnumSet.of(
-            ActivityType.CREATED_STUDY_PACK,
-            ActivityType.STARTED_QUICK_REVIEW,
-            ActivityType.STARTED_ADAPTIVE_PRACTICE,
-            ActivityType.COMPLETED_QUICK_REVIEW,
-            ActivityType.COMPLETED_CHALLENGE_QUIZ,
-            ActivityType.COMPLETED_ADAPTIVE_QUIZ
-    );
 
     private final UserRepository userRepository;
     private final StudyPackRepository studyPackRepository;
@@ -579,7 +571,7 @@ public class DashboardService {
 
         List<UserActivityEventEntity> weeklyEvents = activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
                 userId,
-                MEANINGFUL_STUDY_ACTIVITIES,
+                ActivityType.MEANINGFUL_STUDY_ACTIVITIES,
                 weekStart
         ).stream()
                 .filter(event -> event.getCreatedAt() != null && event.getCreatedAt().isBefore(weekEnd))
@@ -699,6 +691,12 @@ public class DashboardService {
         );
     }
 
+    private static final Map<QuickReviewSessionMode, Integer> IN_PROGRESS_MODE_PRIORITY = Map.of(
+            QuickReviewSessionMode.CHALLENGE, 0,
+            QuickReviewSessionMode.ADAPTIVE, 1,
+            QuickReviewSessionMode.QUICK_REVIEW, 2
+    );
+
     private List<QuickReviewSessionEntity> findInProgressSessionsByRecency(UUID userId) {
         return Stream.of(
                         QuickReviewSessionMode.QUICK_REVIEW,
@@ -711,10 +709,12 @@ public class DashboardService {
                         QuickReviewSessionStatus.IN_PROGRESS
                 ).orElse(null))
                 .filter(Objects::nonNull)
-                .sorted(Comparator.comparing(
-                        QuickReviewSessionEntity::getCreatedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())
-                ))
+                .sorted(
+                        Comparator.comparingInt((QuickReviewSessionEntity s) ->
+                                IN_PROGRESS_MODE_PRIORITY.getOrDefault(s.getSessionMode(), Integer.MAX_VALUE))
+                                .thenComparing(QuickReviewSessionEntity::getCreatedAt,
+                                        Comparator.nullsLast(Comparator.reverseOrder()))
+                )
                 .toList();
     }
 
@@ -920,7 +920,7 @@ public class DashboardService {
 
         List<UserActivityEventEntity> events = activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
                 userId,
-                MEANINGFUL_STUDY_ACTIVITIES,
+                ActivityType.MEANINGFUL_STUDY_ACTIVITIES,
                 weekStartAtMidnight
         );
 

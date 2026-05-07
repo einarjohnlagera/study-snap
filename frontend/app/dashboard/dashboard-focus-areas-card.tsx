@@ -79,6 +79,13 @@ export function DashboardFocusAreasCard({
               label={primaryActionLabel}
               className="w-full sm:w-auto"
             />
+          ) : focusAreas?.practiceNoteId ? (
+            <ResponsiveActionLink
+              href={`/notes/${focusAreas.practiceNoteId}`}
+              action="library"
+              label="Revisit Note"
+              className="w-full sm:w-auto"
+            />
           ) : (
             <ResponsiveActionButton type="button" variant="outline" onClick={onUnlockAdaptivePractice} action="adaptivePractice" label={lockedActionLabel} />
           )

@@ -27,13 +27,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -41,14 +39,6 @@ import java.util.UUID;
 @Slf4j
 public class RetentionService {
     private static final int SESSION_LOOKBACK_LIMIT = 10;
-    private static final Set<ActivityType> MEANINGFUL_STUDY_ACTIVITIES = EnumSet.of(
-            ActivityType.CREATED_STUDY_PACK,
-            ActivityType.STARTED_QUICK_REVIEW,
-            ActivityType.STARTED_ADAPTIVE_PRACTICE,
-            ActivityType.COMPLETED_QUICK_REVIEW,
-            ActivityType.COMPLETED_CHALLENGE_QUIZ,
-            ActivityType.COMPLETED_ADAPTIVE_QUIZ
-    );
     private static final List<QuickReviewSessionMode> WEEKLY_SUMMARY_QUIZ_MODES = List.of(
             QuickReviewSessionMode.QUICK_REVIEW,
             QuickReviewSessionMode.CHALLENGE
@@ -224,7 +214,7 @@ public class RetentionService {
 
         List<UserActivityEventEntity> weeklyEvents = activityEventRepository.findByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
                 user.getId(),
-                MEANINGFUL_STUDY_ACTIVITIES,
+                ActivityType.MEANINGFUL_STUDY_ACTIVITIES,
                 weekStart
         ).stream()
                 .filter(event -> event.getCreatedAt() != null && event.getCreatedAt().isBefore(now))
@@ -346,13 +336,13 @@ public class RetentionService {
     }
 
     private boolean hasRecordedStudyActivity(UUID userId) {
-        return activityEventRepository.existsByUserIdAndActivityTypeIn(userId, MEANINGFUL_STUDY_ACTIVITIES);
+        return activityEventRepository.existsByUserIdAndActivityTypeIn(userId, ActivityType.MEANINGFUL_STUDY_ACTIVITIES);
     }
 
     private boolean hasRecentMeaningfulActivity(UUID userId, OffsetDateTime cutoff) {
         return activityEventRepository.existsByUserIdAndActivityTypeInAndCreatedAtGreaterThanEqual(
                 userId,
-                MEANINGFUL_STUDY_ACTIVITIES,
+                ActivityType.MEANINGFUL_STUDY_ACTIVITIES,
                 cutoff
         );
     }
