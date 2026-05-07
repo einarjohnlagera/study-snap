@@ -856,6 +856,7 @@ export default function QuickReviewPage() {
             Quick Review Complete
           </p>
           <h1 className="text-xl font-semibold sm:text-2xl">Your results</h1>
+          <p className="text-sm text-foreground/75">Review your results, then choose your next study step.</p>
 
           {/* Section 1: Score summary */}
           <div className="space-y-2 text-sm text-foreground/75">
@@ -925,7 +926,7 @@ export default function QuickReviewPage() {
             </Link>
           ) : (
             <Button type="button" className="w-full" onClick={handleRetry}>
-              Practice Again
+              Retry Quick Review
             </Button>
           )}
 

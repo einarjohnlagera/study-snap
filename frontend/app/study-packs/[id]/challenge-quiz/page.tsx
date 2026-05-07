@@ -104,15 +104,6 @@ function shouldCollapseQuestionNavigatorByDefault(
   return isMobileViewport;
 }
 
-function getQuestionCountForDifficulty(difficulty: ChallengeDifficulty): number {
-  if (difficulty === "easy") {
-    return 10;
-  }
-  if (difficulty === "hard") {
-    return 15;
-  }
-  return 12;
-}
 
 function getQuestionCountSummary(
   difficultySelectionAvailable: boolean | undefined,
@@ -936,7 +927,11 @@ export default function ChallengeQuizPage() {
       const nextIndex = challengeSession.quiz.length;
       syncProgressRef(nextIndex, progressRef.current.selectedChoices);
       setCurrentIndex(nextIndex);
-      setGenerateMoreToast(`+${response.newQuestions.length} questions added`);
+      setGenerateMoreToast(
+        response.totalQuestions >= MAX_SESSION_QUESTIONS
+          ? `Full challenge unlocked: ${MAX_SESSION_QUESTIONS} questions`
+          : `Challenge extended to ${response.totalQuestions} questions`,
+      );
       if (challengeSession.quiz.length + response.newQuestions.length >= MAX_SESSION_QUESTIONS) {
         setNoMoreQuestions(true);
       }
@@ -1200,8 +1195,8 @@ export default function ChallengeQuizPage() {
                     className: "p-4",
                   }),
                   selectedMode === BOARD_EXAM_MODE
-                    ? "border-foreground/35 bg-foreground/[0.03] dark:bg-foreground/[0.06]"
-                    : "hover:border-foreground/30 hover:bg-foreground/[0.03] dark:hover:bg-foreground/[0.05]",
+                    ? "border-foreground/35 bg-foreground/3 dark:bg-foreground/6"
+                    : "hover:border-foreground/30 hover:bg-foreground/3 dark:hover:bg-foreground/5",
                 )}
                 onClick={() => handleSelectBoardExamMode()}
                 disabled={challengeGenerationLocked}
@@ -1209,7 +1204,7 @@ export default function ChallengeQuizPage() {
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-foreground">Board Exam Mode</p>
                   {selectedMode === BOARD_EXAM_MODE ? (
-                    <span className="rounded-full border border-foreground/20 bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                    <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
                       {prefersBoardExam ? "Recommended" : "Alternate"}
                     </span>
                   ) : null}
@@ -1494,7 +1489,7 @@ export default function ChallengeQuizPage() {
                                 "motion-pressable rounded-md border px-2 py-1.5 text-sm font-medium",
                                 isCurrentQuestion
                                   ? isBoardExamMode
-                                    ? "border-foreground/40 bg-foreground/[0.06] text-foreground"
+                                    ? "border-foreground/40 bg-foreground/6 text-foreground"
                                     : "border-blue-500 bg-blue-500/10 text-blue-700 dark:text-blue-300"
                                   : isAnswered
                                     ? "border-foreground/30 bg-muted/60 text-foreground"
@@ -1530,7 +1525,15 @@ export default function ChallengeQuizPage() {
           >
             {!isBoardExamMode && currentIndex >= totalQuestions - 1 && !boardExamTimerExpired ? (
               <p className="mx-auto mb-2 w-full max-w-3xl text-xs text-foreground/55">
-                What would you like to do next?
+                {noMoreQuestions || totalQuestions >= MAX_SESSION_QUESTIONS
+                  ? `You've answered all ${totalQuestions} questions — ready to submit?`
+                  : totalQuestions === 5
+                    ? "Good start — want to keep going?"
+                    : totalQuestions === 10
+                      ? "10 questions in — push to 15?"
+                      : totalQuestions === 15
+                        ? "Almost there — finish with all 20?"
+                        : "What would you like to do next?"}
               </p>
             ) : null}
             <div className="mx-auto flex w-full max-w-3xl gap-2 sm:justify-start">
