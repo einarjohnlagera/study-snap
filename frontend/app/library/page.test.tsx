@@ -142,6 +142,38 @@ describe("Library page", () => {
     expect(screen.queryByRole("button", { name: "Create Exam" })).not.toBeInTheDocument();
   });
 
+  it("hides Quiz Ready filter and badges for student profiles", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Quiz Ready")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Study Pack Ready" })).toBeInTheDocument();
+  });
+
+  it("hides Quiz Ready filter and badges for board taker profiles", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "board-1",
+      role: "USER",
+      profileType: "BOARD_EXAM",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Quiz Ready")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Study Pack Ready" })).toBeInTheDocument();
+  });
+
   it("filters notes by horizontal subject chips", async () => {
     render(<LibraryPage />);
 
@@ -157,6 +189,12 @@ describe("Library page", () => {
   });
 
   it("filters notes by readiness chips", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "teacher-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
+
     render(<LibraryPage />);
 
     await screen.findByText("Cell Respiration");
@@ -172,6 +210,48 @@ describe("Library page", () => {
     expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
     expect(screen.getByText("Zygote Review")).toBeInTheDocument();
     expect(screen.getByText("Dosage Calculations")).toBeInTheDocument();
+  });
+
+  it("shows Quiz Ready filter and badges for teacher profiles", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "teacher-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
+
+    render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+
+    expect(screen.getByRole("button", { name: "Quiz Ready" })).toBeInTheDocument();
+    expect(screen.getAllByText("Quiz Ready").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("clears hidden Quiz Ready filter after switching away from teacher profile", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "teacher-1",
+      role: "USER",
+      profileType: "TEACHER",
+    });
+
+    const { rerender } = render(<LibraryPage />);
+
+    await screen.findByText("Cell Respiration");
+    fireEvent.click(screen.getByRole("button", { name: "Quiz Ready" }));
+
+    expect(screen.queryByText("Cell Respiration")).not.toBeInTheDocument();
+
+    (getAuthUser as jest.Mock).mockReturnValue({
+      id: "student-1",
+      role: "USER",
+      profileType: "STUDENT",
+    });
+    rerender(<LibraryPage />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Quiz Ready" })).not.toBeInTheDocument();
+      expect(screen.getByText("Cell Respiration")).toBeInTheDocument();
+    });
   });
 
   it("filters subjects from the searchable subject selector", async () => {
@@ -377,7 +457,7 @@ describe("Library page", () => {
 
     render(<LibraryPage />);
 
-    expect(await screen.findByText("You don't have any notes yet.")).toBeInTheDocument();
+    expect(await screen.findByText("Your note library is empty")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Create Your First Note" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Try Demo" })).toBeInTheDocument();
   });

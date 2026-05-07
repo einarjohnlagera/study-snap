@@ -26,6 +26,7 @@ import {
 } from "@/lib/api";
 import {getBrowsingCardClassName, getSelectionCardClassName} from "@/lib/clickable-card";
 import {normalizeCourseProgram} from "@/lib/learning-profile";
+import {shouldShowQuizReadyIndicator} from "@/lib/profile-mode";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {normalizeSubject} from "@/lib/subjects";
 import {GuidanceTip} from "@/components/ui/guidance-tip";
@@ -234,6 +235,16 @@ export default function LibraryPage() {
 
   const authUser = getAuthUser();
   const isTeacherExamBuilderEnabled = authUser?.profileType === "TEACHER";
+  const showQuizReadyIndicators = shouldShowQuizReadyIndicator(
+    authUser?.profileType,
+    "PRIVATE_LIBRARY",
+    authUser?.role,
+  );
+
+  const visibleReadinessFilters = useMemo(() => (
+    (Object.keys(READINESS_FILTER_LABELS) as LibraryReadinessFilter[])
+      .filter((filterKey) => showQuizReadyIndicators || filterKey !== "QUIZ_READY")
+  ), [showQuizReadyIndicators]);
 
   const hydrateLastReviewed = useCallback(async (notes: NoteListItemResponse[]) => {
     if (notes.length === 0) {
@@ -378,6 +389,12 @@ export default function LibraryPage() {
     setVisibleCount(LIBRARY_PAGE_SIZE);
   }, [readinessFilter, searchQuery, selectedSubject, selectedTags, sortBy]);
 
+  useEffect(() => {
+    if (!showQuizReadyIndicators && readinessFilter === "QUIZ_READY") {
+      setReadinessFilter("ALL");
+    }
+  }, [readinessFilter, showQuizReadyIndicators]);
+
   const clearFilters = useCallback(() => {
     setSearchQuery("");
     setSelectedSubject(ALL_SUBJECTS);
@@ -457,9 +474,12 @@ export default function LibraryPage() {
       const searchMatch = query.length === 0
         || itemTitle.toLowerCase().includes(query)
         || itemTags.some((tag) => tag.toLowerCase().includes(query));
-      const readinessMatch = readinessFilter === "ALL"
-        || (readinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
-        || (readinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
+      const effectiveReadinessFilter = !showQuizReadyIndicators && readinessFilter === "QUIZ_READY"
+        ? "ALL"
+        : readinessFilter;
+      const readinessMatch = effectiveReadinessFilter === "ALL"
+        || (effectiveReadinessFilter === "QUIZ_READY" && Boolean(item.generatedQuizId))
+        || (effectiveReadinessFilter === "STUDY_PACK_READY" && item.studyPackStatus === "STUDY_PACK_READY");
       const subjectMatch = selectedSubject === ALL_SUBJECTS || itemSubject === selectedSubject;
       const tagMatch = selectedTags.length === 0 || selectedTags.some((selectedTag) => itemTags.includes(selectedTag));
 
@@ -503,7 +523,7 @@ export default function LibraryPage() {
           return byDateDesc(left.updatedAt, right.updatedAt);
       }
     });
-  }, [items, readinessFilter, reviewSummaryByNoteId, searchQuery, selectedSubject, selectedTags, sortBy]);
+  }, [items, readinessFilter, reviewSummaryByNoteId, searchQuery, selectedSubject, selectedTags, showQuizReadyIndicators, sortBy]);
 
   const visibleItems = useMemo(
     () => sortedFilteredItems.slice(0, visibleCount),
@@ -670,7 +690,7 @@ export default function LibraryPage() {
                 ) : null}
               </div>
               <div className={getScrollRailClassName()}>
-                {(Object.keys(READINESS_FILTER_LABELS) as LibraryReadinessFilter[]).map((filterKey) => (
+                {visibleReadinessFilters.map((filterKey) => (
                   <button
                     key={filterKey}
                     type="button"
@@ -880,7 +900,7 @@ export default function LibraryPage() {
                         </span>
                       ) : renderVisibilityIcon(item.visibility)}
                       stateBadge={<NoteStateBadge status={item.studyPackStatus} />}
-                      metadataBadges={examReady ? (
+                      metadataBadges={showQuizReadyIndicators && examReady ? (
                         <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                           Quiz Ready
                         </span>

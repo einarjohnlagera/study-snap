@@ -63,9 +63,18 @@ Private Library filters:
 - `Subject`
 - `Tags`
 - `Study Pack Ready`
+- `Quiz Ready` only for Teacher profile browsing and exam-export preparation
 - `Draft`
 - `Public`
 - `Private`
+
+Readiness visibility:
+
+- `Study Pack Ready` is the learner-facing readiness signal and remains visible for Student, Board Taker, and Teacher profiles.
+- `Quiz Ready` is a Teacher/exam-export workflow signal. Hide the `Quiz Ready` badge and filter for Student and Board Taker Library browsing.
+- If the active profile changes while `Quiz Ready` is selected, reset the hidden filter instead of leaving users with an invisible active filter.
+- Public Library does not expose `Quiz Ready` because public discovery should focus on notes, summaries, Quick Check, and copy/share flows.
+- Exam Builder still uses generated-quiz data internally for note selection, question counts, disabled states, and DOCX export.
 
 Private Library sorting:
 
