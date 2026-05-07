@@ -28,6 +28,7 @@ import {getBrowsingCardClassName, getSelectionCardClassName} from "@/lib/clickab
 import {normalizeCourseProgram} from "@/lib/learning-profile";
 import {requireAuthenticatedOnboardedUser} from "@/lib/route-guards";
 import {normalizeSubject} from "@/lib/subjects";
+import {GuidanceTip} from "@/components/ui/guidance-tip";
 
 type LibrarySortOption =
   | "RECENTLY_UPDATED"
@@ -588,6 +589,18 @@ export default function LibraryPage() {
         </Card>
       ) : (
         <div className="space-y-4">
+          {items.length >= 1 && items.length <= 3 ? (
+            <GuidanceTip
+              tipId="library-first-note-organization"
+              message="Add a subject and tags when editing a note — it makes filtering your library much easier as it grows."
+            />
+          ) : null}
+          {items.length >= 5 ? (
+            <GuidanceTip
+              tipId="library-organization-habits"
+              message="You're building a solid library. Try filtering by subject to find related notes quickly."
+            />
+          ) : null}
           {selectionMode ? (
             <Card className="space-y-3 p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
