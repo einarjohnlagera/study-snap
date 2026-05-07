@@ -302,6 +302,7 @@ export function PaywallModal({
               ) : (
                 <Button
                   type="button"
+                  className="min-w-44"
                   onClick={() => void startCheckout(selectedPlan)}
                   loading={!!startingCheckoutPlan}
                   loadingText="Redirecting..."
