@@ -607,6 +607,12 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
             }
         }
         boolean hasContent = StringNormalizationUtils.containsAlphaNumeric(normalized);
+        if (hasContent && SubjectSanitizer.isOverlyBroad(normalized)
+                && context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
+            log.warn("requestId={} field=subject value='{}' reason='overly broad given course/program context'",
+                    MDC.get("requestId"), truncateForLog(normalized));
+            throw invalidOutput("The study pack service returned invalid subject metadata. Please try again.");
+        }
         boolean withinWordLimit = hasContent && StringNormalizationUtils.hasWordCountBetween(normalized, 1, SubjectSanitizer.MAX_SUBJECT_WORDS);
         if (!hasContent || !withinWordLimit) {
             int wordCount = hasContent ? StringNormalizationUtils.countWords(normalized) : 0;
@@ -851,12 +857,15 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
 
     private String buildSubjectSuggestionGuidanceBlock(StudyPackGenerationContext context) {
         List<String> lines = new ArrayList<>();
-        lines.add("Subject guidance: use a broad academic domain or curriculum category — domain only, no topic suffix.");
-        lines.add("Examples of correct subjects: Biology, Physics, Mathematics, Computer Science, English, History, Engineering, Medicine, Law.");
-        lines.add("Do not combine domain and topic. Incorrect: \"Biology – Cell Division\", \"Physics: Ohm's Law\", \"Math – Derivatives\".");
+        lines.add("Subject guidance: use the specific academic subject or professional discipline covered by the note — label only, no topic suffix.");
+        lines.add("For K-12 learners, use the curriculum subject the note belongs to: Biology, Physics, Chemistry, Mathematics, History, English, Economics, Filipino, Science, Social Studies.");
+        lines.add("For college and professional learners, use the specific field of study: Civil Engineering, Nursing, Accountancy, Computer Science, Pharmacy, Architecture, Medicine, Law.");
+        lines.add("Do not combine subject and topic. Incorrect: \"Biology – Cell Division\", \"Physics: Ohm's Law\", \"Math – Derivatives\".");
         lines.add("Topic-level specificity belongs in tags and key concepts, not in subject.");
         if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
-            lines.add("Use the course/program as context when it helps identify the right academic domain.");
+            lines.add("Course / Program context is: " + context.courseProgram().trim() + ".");
+            lines.add("If the course/program is a specific professional discipline (e.g. Civil Engineering, Nursing, Accountancy, Pharmacy), use that as the subject — do not collapse it to a broader term (e.g. 'Engineering', 'Medicine', 'Business').");
+            lines.add("If the course/program is a K-12 strand or track (e.g. STEM, ABM, HUMSS, GAS, General Education, Senior High – STEM), derive the subject from the note content instead (e.g. Biology, Physics, Economics, English).");
         }
         return String.join("\n", lines);
     }
