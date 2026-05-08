@@ -65,8 +65,8 @@ export default async function BillingSuccessPage({ searchParams }: Readonly<Bill
           </p>
           <p className="text-xs text-foreground/60 sm:text-sm">
             {useDashboardPrimary
-              ? "We&apos;ll take you to your dashboard in a moment."
-              : "We&apos;ll take you back so you can keep going right where you left off."}
+              ? "We'll take you to your dashboard in a moment."
+              : "We'll take you back so you can keep going right where you left off."}
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">

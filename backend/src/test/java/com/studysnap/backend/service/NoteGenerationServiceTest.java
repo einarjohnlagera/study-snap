@@ -67,7 +67,7 @@ class NoteGenerationServiceTest {
         )).thenReturn("Generated note content");
 
         GenerateNoteFromTopicResponse response = noteGenerationService.generateFromTopic(
-                new GenerateNoteFromTopicRequest("  Newton's Laws of Motion  "),
+                new GenerateNoteFromTopicRequest("  Newton's Laws of Motion  ", null),
                 userId
         );
 
@@ -80,5 +80,53 @@ class NoteGenerationServiceTest {
         assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Senior High – STEM");
         assertThat(contextCaptor.getValue().subject()).isNull();
         assertThat(contextCaptor.getValue().tags()).isEmpty();
+    }
+
+    @Test
+    void generateFromTopic_requestCourseProgramOverridesProfile() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.COLLEGE);
+        user.setCourseProgram("Software Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest("Ohm's Law", "Civil Engineering"),
+                userId
+        );
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(org.mockito.ArgumentMatchers.any(), contextCaptor.capture());
+        assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Civil Engineering");
+    }
+
+    @Test
+    void generateFromTopic_fallsBackToProfileCourseProgramWhenRequestCourseProgramIsBlank() {
+        UUID userId = UUID.randomUUID();
+        UserEntity user = new UserEntity();
+        user.setId(userId);
+        user.setLearnerLevel(LearnerLevel.PROFESSIONAL);
+        user.setCourseProgram("Software Engineering");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(subscriptionService.resolvePlan(userId)).thenReturn(PlanType.FREE);
+        when(llmStudyPackService.generateNoteFromTopic(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(StudyPackGenerationContext.class)
+        )).thenReturn("Generated note content");
+
+        noteGenerationService.generateFromTopic(
+                new GenerateNoteFromTopicRequest("Design Patterns", "   "),
+                userId
+        );
+
+        ArgumentCaptor<StudyPackGenerationContext> contextCaptor = ArgumentCaptor.forClass(StudyPackGenerationContext.class);
+        verify(llmStudyPackService).generateNoteFromTopic(org.mockito.ArgumentMatchers.any(), contextCaptor.capture());
+        assertThat(contextCaptor.getValue().courseProgram()).isEqualTo("Software Engineering");
     }
 }

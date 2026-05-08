@@ -13,6 +13,7 @@ import {
     UploadCloud
 } from "lucide-react";
 import type {LearnerLevel, NoteTargetProfileType} from "@/lib/api";
+import {LEARNER_LEVEL_OPTIONS} from "@/lib/learning-profile";
 import {CourseProgramCombobox} from "@/components/metadata/course-program-combobox";
 import {SubjectCombobox} from "@/components/notes/subject-combobox";
 import {BackLink} from "@/components/ui/back-link";
@@ -95,6 +96,7 @@ type NoteEditorFormProps = {
     subjectSuggestions?: string[];
     courseProgramSuggestions?: string[];
     learnerLevel?: LearnerLevel | "" | null;
+    resolvedCourseProgram?: string | null;
     showTargetProfileTypeField?: boolean;
     targetProfileTypeHelperText?: string;
     backHref?: string;
@@ -165,6 +167,7 @@ export function NoteEditorForm({
                                    subjectSuggestions = [],
                                    courseProgramSuggestions = [],
                                    learnerLevel = null,
+                                   resolvedCourseProgram = null,
                                    showTargetProfileTypeField = false,
                                    targetProfileTypeHelperText = "Choose the learner audience for this note.",
                                    backHref,
@@ -574,6 +577,10 @@ export function NoteEditorForm({
                 Generate a first draft here, then review and edit the content below before saving or generating a Study
                 Pack.
             </p>
+            <p className="text-xs text-foreground/50">
+                Your Learner Level and Course / Program help tailor the generated note&apos;s depth, terminology, and
+                examples.
+            </p>
             {generateNoteFooter}
             {note.content.trim().length > 0 ? (
                 <p className="text-xs text-foreground/55">
@@ -790,7 +797,7 @@ export function NoteEditorForm({
                 <p className="text-xs text-foreground/60">
                     {actionIcon === "copy"
                         ? actionHelperText
-                        : "Generate when you&apos;re ready. To create a new version later, make a copy first."}
+                        : "Generate when you're ready. To create a new version later, make a copy first."}
                 </p>
             </Card>
 
@@ -798,9 +805,27 @@ export function NoteEditorForm({
                 className="fixed inset-x-0 bottom-0 z-30 border-t border-border/80 bg-background/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur">
                 <div
                     className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0 space-y-1">
+                    <div className="min-w-0 space-y-0.5">
                         <p className="text-xs font-medium text-foreground/75">{saveStateLabel ?? "Save your note or generate a Study Pack when ready."}</p>
-                        {showGenerateNoteEntry ? (
+                        {(() => {
+                            const levelLabel = learnerLevel ? (LEARNER_LEVEL_OPTIONS.find((o) => o.value === learnerLevel)?.label ?? null) : null;
+                            const parts = [levelLabel, resolvedCourseProgram?.trim() || null].filter(Boolean);
+                            if (parts.length === 0) return null;
+                            return (
+                                <p className="text-xs text-foreground/55">
+                                    Tailored for: {parts.join(" · ")}
+                                    <span className="mx-2 text-foreground/25">|</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleRevealOptionalDetails}
+                                        className="text-blue-600 underline-offset-4 transition hover:underline dark:text-blue-400"
+                                    >
+                                        Adjust
+                                    </button>
+                                </p>
+                            );
+                        })()}
+                        {showGenerateNoteEntry && !learnerLevel && !resolvedCourseProgram ? (
                             <button
                                 type="button"
                                 onClick={handleRevealOptionalDetails}

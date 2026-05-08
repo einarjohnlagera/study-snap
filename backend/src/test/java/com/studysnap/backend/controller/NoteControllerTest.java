@@ -171,7 +171,7 @@ class NoteControllerTest {
     void generateNoteFromTopic_callsEmailVerificationBeforeGeneration() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId, UserRole.USER, true, 1);
-        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest("Newton's Laws of Motion");
+        GenerateNoteFromTopicRequest request = new GenerateNoteFromTopicRequest("Newton's Laws of Motion", null);
         GenerateNoteFromTopicResponse expected = new GenerateNoteFromTopicResponse("Generated note content");
         when(noteGenerationService.generateFromTopic(request, userId)).thenReturn(expected);
 

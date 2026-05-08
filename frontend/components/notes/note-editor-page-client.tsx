@@ -900,7 +900,7 @@ export function NoteEditorPageClient({
     const isReplacingContent = draft.content.trim().length > 0;
     setIsGeneratingNote(true);
     try {
-      const response = await generateNoteFromTopic(normalizedTopic);
+      const response = await generateNoteFromTopic(normalizedTopic, draft.courseProgram ?? undefined);
       setDraft((previous) => ({
         ...previous,
         title: previous.title.trim().length > 0 ? previous.title : normalizedTopic,
@@ -1137,6 +1137,7 @@ export function NoteEditorPageClient({
         subjectSuggestions={subjectSuggestions}
         courseProgramSuggestions={availableCourseProgramSuggestions}
         learnerLevel={profileLearnerLevel}
+        resolvedCourseProgram={normalizeOptional(draft.courseProgram) ?? normalizeOptional(profileCourseProgram)}
         showTargetProfileTypeField={showTargetProfileTypeField}
         targetProfileTypeHelperText={targetProfileTypeHelperText}
         backHref={isEditMode ? (noteId ? `/notes/${noteId}` : "/library") : "/library"}

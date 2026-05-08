@@ -838,6 +838,7 @@ public class OpenAiLlmStudyPackService implements LlmStudyPackService {
         lines.add("Learner level: " + toLearnerLevelLabel(resolveLearnerLevel(context)));
         if (context != null && context.courseProgram() != null && !context.courseProgram().isBlank()) {
             lines.add("Course / Program: " + context.courseProgram().trim());
+            lines.add("Domain constraint: treat the course/program above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines.");
         }
         if (context != null && context.subject() != null && !context.subject().isBlank()) {
             lines.add("Current subject: " + context.subject().trim());

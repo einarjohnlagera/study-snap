@@ -1531,13 +1531,20 @@ export async function createStudyPackFromNote(
   );
 }
 
-export async function generateNoteFromTopic(topic: string): Promise<GenerateNoteFromTopicResponse> {
+export async function generateNoteFromTopic(
+  topic: string,
+  courseProgram?: string,
+): Promise<GenerateNoteFromTopicResponse> {
+  const body: Record<string, string> = { topic };
+  if (courseProgram && courseProgram.trim().length > 0) {
+    body.courseProgram = courseProgram.trim();
+  }
   const response = await fetchWithAuth(
     "/notes/generate",
     {
       method: "POST",
       headers: buildAuthHeaders("application/json"),
-      body: JSON.stringify({ topic }),
+      body: JSON.stringify(body),
     },
     true,
   );
