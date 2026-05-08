@@ -24,15 +24,21 @@ public class NoteGenerationService {
     private final LlmStudyPackService llmStudyPackService;
     private final ContentModerationService contentModerationService;
 
+    private static String firstNonBlank(String primary, String fallback) {
+        return (primary != null && !primary.isBlank()) ? primary : fallback;
+    }
+
     public GenerateNoteFromTopicResponse generateFromTopic(GenerateNoteFromTopicRequest request, UUID userId) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(UserNotFoundException::new);
         noteGenerationUsageProtectionService.assertQuotaAvailable(userId, subscriptionService.resolvePlan(userId));
         String normalizedTopic = request.topic().trim();
         contentModerationService.validateOrThrow(normalizedTopic);
+        String resolvedCourseProgram = CourseProgramNormalizationUtils.normalizeForStorage(
+                firstNonBlank(request.courseProgram(), user.getCourseProgram()));
         StudyPackGenerationContext context = new StudyPackGenerationContext(
                 user.getLearnerLevel(),
-                CourseProgramNormalizationUtils.normalizeForStorage(user.getCourseProgram()),
+                resolvedCourseProgram,
                 null,
                 List.of()
         );

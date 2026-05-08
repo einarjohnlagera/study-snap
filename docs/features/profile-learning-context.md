@@ -50,6 +50,7 @@ Account identity fields are documented separately in `docs/features/account-prof
 - Study Pack and quiz generation context blocks include `courseProgram` alongside `learnerLevel`.
 - Per-note `courseProgram` takes precedence over the profile default when set.
 - Challenge Quiz, Board Exam, and Adaptive Practice must use the same note-first `courseProgram` resolution as Study Pack generation.
+- Generate from Topic now also accepts an optional `courseProgram` in `GenerateNoteFromTopicRequest`; the draft's Course / Program is sent from the frontend and used as the domain for the generated note, falling back to the profile value when absent.
 - When neither is set, the prompt falls back to subject-only context.
 
 **Autocomplete rules:**
@@ -92,9 +93,10 @@ The context block structure (conceptual):
 ```
 Learner level: {learnerLevel | "College (default)"}
 Course / Program: {courseProgram | omitted}
+Domain constraint: treat the course/program above as the authoritative academic domain. All content, terminology, examples, and question framing must belong to that domain. Do not blend in material from unrelated disciplines.
 ```
 
-If `courseProgram` is absent, omit the line entirely rather than passing an empty string to the LLM.
+The domain-constraint line is emitted only when `courseProgram` is set. If `courseProgram` is absent, omit both the `Course / Program` line and the `Domain constraint` line rather than passing empty strings to the LLM.
 
 ---
 

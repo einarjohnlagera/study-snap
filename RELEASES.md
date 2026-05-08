@@ -55,6 +55,10 @@ Theme: deepen the learning experience, make the product easier to discover and n
 - **Quiz Ready badge accuracy** — Quiz Ready indicators are now profile-aware and only appear where they support Teacher/exam-export workflows; Student and Board Taker Library browsing keeps Study Pack Ready as the learner-facing readiness signal
 - Fixed Study Pack generation metadata flow so note-level `courseProgram` remains the source of truth and user profile `courseProgram` is used only as a fallback
 - Fixed Quiz metadata context consistency — Challenge Quiz and Board Exam now honor note-level Course/Program before falling back to profile context; Note Creation copy clarified Course/Program as domain context
+- Fixed Generate from Topic so draft Course / Program is sent to the backend and used as the authoritative domain for the generated note, with user profile Course / Program as the fallback; `GenerateNoteFromTopicRequest` now accepts an optional `courseProgram` field
+- Strengthened LLM domain binding — `buildLearnerContextBlock` now emits a domain-constraint directive when Course / Program is set, instructing the model to stay within that academic domain and avoid blending unrelated disciplines
+- Added "Tailored for: [Level] · [Course / Program]" visibility line to the note editor floating footer so users can see which context will be applied before generating; an "Adjust" affordance links directly to the optional details section
+- Added helper text near the Generate from Topic input: "Your Learner Level and Course / Program help tailor the generated note's depth, terminology, and examples."
 - Fixed normal note-owned Study Pack generation so AI `title` / `subject` / `tags` suggestions stay transient until the user applies them
 - Fixed AI Suggestions tag comparisons so overlapping user tags are not shown as duplicate new suggestions
 - Onboarding keeps its explicit zero-friction metadata auto-apply behavior for empty `subject` / `tags`
