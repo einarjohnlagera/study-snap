@@ -51,7 +51,9 @@ Primary focus:
 7. **Library organization guidance for students** — in-app guidance explains how subjects and Course/Program organize the private Library as it grows; reuse the existing `GuidanceTip` system and add one-time contextual tips at natural growth milestones
 8. **Social login — Google first** — add Google OAuth as an alternative to email-and-password login and signup; no other providers until Google is stable
 9. **Faster quiz generation investigation** — profile current LLM latency end-to-end for quiz generation; prototype streaming or early session-creation patterns; document findings and a recommended approach in `docs/architecture/` before any implementation
-10. **Multi-topic exam / Long Exam mode planning** — design a Board Exam session that spans multiple notes or topics; produce a written spec and UX sketch before any implementation
+10. **Profile-aware mode selection + Long Exam coming-soon** — mode-selection screen now profile-aware (Students see Challenge Quiz + Long Exam; Board Takers see Challenge Quiz + Board Exam; Teachers skip to challenge setup); Long Exam card and setup screen live as a coming-soon placeholder so mode identity is established; `lib/exam-mode-visibility.ts` added as the single source of truth; accelerated from Medium Priority after doc planning landed
+11. **Board Exam premium UX polish (presentation-only)** — pre-flight setup, score-report-style result framing, fullscreen behavior, and removal of the inline learner-level pill on the result screen so Board Exam Mode reads as a simulation and not a "longer Challenge Quiz"; no engine changes; details in `docs/product/EXAM_MODES.md`
+12. **Adaptive Practice tier reconciliation** — `PLANS.md` is the canonical source (Plus = 10 / mo, Pro = 30 / mo); align `docs/features/adaptive-practice.md`, `docs/features/quiz.md`, `docs/PROJECT_CONTEXT.md`, and runtime gating to match before any Long Exam monetization work begins
 
 ### High Priority (Current Phase)
 
@@ -59,7 +61,8 @@ Primary focus:
 
 ### Medium Priority (Next Phase)
 
-- **Board Exam Mode optimization** — improve generation speed, explore partial or progressive loading only if it preserves the exam-like experience, and keep progressive generation out of Board Exam Mode for now
+- **Board Exam Mode optimization** — improve generation speed, explore partial or progressive loading only if it preserves the exam-like experience, and keep progressive generation out of Board Exam Mode for now; identity contract is locked in `docs/product/EXAM_MODES.md`
+- **Long Exam Mode v1 (Student-facing, Pro-only)** — backend session support, fixed long-form generation, pause/resume, mastery report result screen; Pro gating and shared Advanced Exam quota
 
 ### Future Guidance System Expansion (Post-v0.12.0)
 
@@ -82,7 +85,8 @@ Implementation stances:
 - do not add learner level to onboarding; deferred collection via Dashboard prompt is the settled pattern
 - social login must be an alternative, not a replacement; existing email accounts must continue to work
 - quiz latency investigation is research-only in v0.12.0; no production latency changes without findings
-- Long Exam mode is design-only in v0.12.0; no implementation until the spec is reviewed
+- Long Exam Mode is design-only in v0.12.0; canonical mode-hierarchy and identity contract live in `docs/product/EXAM_MODES.md`; no implementation until the spec is reviewed
+- exactly five quiz-flavored modes exist: Quick Review, Challenge Quiz, Adaptive Practice, Long Exam, Board Exam; adding a sixth requires updating `docs/product/EXAM_MODES.md` and this roadmap together
 
 ### Completed in v0.12.0 so far
 
@@ -237,6 +241,14 @@ Current session-review UX:
 - Note Detail stays the entry point for history, while the dedicated review page owns focused answer review
 
 ## Future Directions
+
+### v0.13+ exam-mode work (planned)
+
+Sequencing for the exam-mode hierarchy defined in `docs/product/EXAM_MODES.md`:
+
+- **v0.13** — Long Exam Mode v1 (single-note, fixed long-form, Pro-only); profile-aware mode-selection rendering; learner-level grouped UX in profile and the existing post-onboarding Dashboard prompt (no new onboarding step); Guidance Engine extensions (`cooldownMs`, dashboard contextual tips, course/program inline reminder)
+- **v0.14+** — multi-note Long Exam; Board Exam advanced result analytics (trend over time, percentile-style framing); Long Exam tier promotion to Plus only if usage data justifies it
+- **Planning-only** — cross-profile mode unlock (Students opting into Board Exam without changing profile); curated exam decks / cohort content (Pro+); cross-profile journey (Student → Board Taker upgrade flow with continuity)
 
 Potential expansion areas after `v0.8.0`:
 

@@ -306,9 +306,54 @@ describe("ChallengeQuizPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
     expect(await getModeCard("Challenge Quiz")).toHaveAttribute("aria-pressed", "true");
-    expect(await getModeCard("Board Exam Mode")).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByText("Recommended")).toBeInTheDocument();
     expect(startChallengeQuizSession).not.toHaveBeenCalled();
+  });
+
+  it("shows Long Exam Mode card (not Board Exam Mode) for STUDENT", async () => {
+    setupChallengePrestart(true, "STUDENT");
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(await getModeCard("Long Exam Mode")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Board Exam Mode/ })).not.toBeInTheDocument();
+    expect(screen.getByText("Coming Soon")).toBeInTheDocument();
+  });
+
+  it("shows the cross-profile escape-hatch line for STUDENT", async () => {
+    setupChallengePrestart(true, "STUDENT");
+
+    render(<ChallengeQuizPage />);
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
+    expect(screen.getByText(/Preparing for boards/)).toBeInTheDocument();
+  });
+
+  it("shows Long Exam coming-soon setup after STUDENT clicks Long Exam Mode", async () => {
+    setupChallengePrestart(true, "STUDENT");
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await getModeCard("Long Exam Mode"));
+
+    expect(await screen.findByRole("heading", { name: "Long Exam Mode" })).toBeInTheDocument();
+    expect(screen.getByText(/Long Exam Mode is in development/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Long Exam — Coming Soon" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Choose another mode" })).toBeInTheDocument();
+  });
+
+  it("returns to mode selection from Long Exam coming-soon screen", async () => {
+    setupChallengePrestart(true, "STUDENT");
+
+    render(<ChallengeQuizPage />);
+
+    fireEvent.click(await getModeCard("Long Exam Mode"));
+    expect(await screen.findByRole("heading", { name: "Long Exam Mode" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose another mode" }));
+
+    expect(await screen.findByRole("heading", { name: "Choose your quiz mode" })).toBeInTheDocument();
   });
 
   it("keeps Note Detail Challenge Quiz entry on the shared mode-selection screen for students even when an in-progress session exists", async () => {

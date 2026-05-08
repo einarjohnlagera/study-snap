@@ -1,4 +1,4 @@
-import type { LearnerLevel } from "@/lib/api";
+import type { LearnerLevel, ProfileType } from "@/lib/api";
 
 export const LEARNER_LEVEL_OPTIONS: Array<{ value: LearnerLevel; label: string }> = [
   { value: "GRADE_SCHOOL", label: "Grade School" },
@@ -77,7 +77,7 @@ export function normalizeCourseProgram(value: string | null | undefined): string
   if (!trimmed) {
     return null;
   }
-  const normalized = trimmed.replace(/\s*[-–—]\s*/g, " – ").replace(/\s+/g, " ").trim();
+  const normalized = trimmed.replaceAll(/\s*[-–—]\s*/g, " – ").replaceAll(/\s+/g, " ").trim();
   return normalized.length > 0 ? normalized : null;
 }
 
@@ -115,6 +115,41 @@ export function formatLearnerLevel(learnerLevel: LearnerLevel | string | null | 
     return match.label;
   }
   return learnerLevel.replaceAll("_", " ");
+}
+
+export type GroupedLearnerLevels = {
+  recommended: Array<{ value: LearnerLevel; label: string }>;
+  other: Array<{ value: LearnerLevel; label: string }>;
+  recommendedGroupLabel: string;
+};
+
+const LEARNER_LEVEL_SET: Record<string, { value: LearnerLevel; label: string }> = Object.fromEntries(
+  LEARNER_LEVEL_OPTIONS.map((opt) => [opt.value, opt]),
+);
+
+function pick(...values: LearnerLevel[]): Array<{ value: LearnerLevel; label: string }> {
+  return values.map((v) => LEARNER_LEVEL_SET[v]).filter(Boolean);
+}
+
+export function getGroupedLearnerLevels(
+  profileType: ProfileType | null | undefined,
+): GroupedLearnerLevels {
+  if (profileType === "BOARD_EXAM") {
+    const recommended = pick("BOARD_EXAM_REVIEW");
+    const other = LEARNER_LEVEL_OPTIONS.filter((opt) => !recommended.some((r) => r.value === opt.value));
+    return { recommended, other, recommendedGroupLabel: "Recommended for Board Takers" };
+  }
+
+  if (profileType === "TEACHER") {
+    const recommended = pick("PERSONAL_LEARNING", "COLLEGE");
+    const other = LEARNER_LEVEL_OPTIONS.filter((opt) => !recommended.some((r) => r.value === opt.value));
+    return { recommended, other, recommendedGroupLabel: "Recommended for Teachers" };
+  }
+
+  // STUDENT and fallback
+  const recommended = pick("GRADE_SCHOOL", "JUNIOR_HIGH", "SENIOR_HIGH", "COLLEGE");
+  const other = LEARNER_LEVEL_OPTIONS.filter((opt) => !recommended.some((r) => r.value === opt.value));
+  return { recommended, other, recommendedGroupLabel: "Recommended for Students" };
 }
 
 export function getCourseProgramHelperText(

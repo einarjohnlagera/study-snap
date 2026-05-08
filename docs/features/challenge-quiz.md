@@ -1,5 +1,7 @@
 # challenge-quiz.md - NoteLib Feature Context
 
+> **Mode identity is locked in `docs/product/EXAM_MODES.md`.** Challenge Quiz is *practice with stakes* — flexible, progressive, user-controlled. It is **not** a sit-down exam. Long Exam Mode and Board Exam Mode cover those needs. The progressive generation, `+5 Questions`, early-submit, and inline learner-level adjustment are core to Challenge Quiz's identity and must be preserved.
+
 ## Goal
 
 Challenge Quiz is the timed, exam-style quiz mode built from a Study Pack-ready note.
@@ -11,19 +13,35 @@ It is separate from Quick Review:
 - stricter timing and setup
 - result screen designed around next-step practice
 
+It is also separate from Board Exam Mode and (planned) Long Exam Mode:
+
+- Challenge Quiz is flexible and progressive; Long Exam is fixed and pause-friendly; Board Exam is a strict simulation with reduced UI chrome and no progressive controls
+- per-mode identity contracts are in `docs/product/EXAM_MODES.md`
+
 ## Entry flow
 
-Student and Board Taker both enter through the same shared mode-selection screen first.
+Student and Board Taker enter through a shared mode-selection screen. Profile type determines which cards appear and which mode is emphasized. Source of truth: `lib/exam-mode-visibility.ts`.
 
-Visible modes:
+### Profile-aware mode cards (v0.12.0)
 
-- `Challenge Quiz`
-- `Board Exam Mode`
+**Student:**
 
-Default emphasis:
+- `Challenge Quiz` — Recommended
+- `Long Exam Mode` — Coming Soon (card visible; tapping it shows a coming-soon screen with "Long Exam — Coming Soon" disabled; "Choose another mode" returns to mode-selection)
+- Escape-hatch line shown: *"Preparing for boards? Switch your profile in Settings to enable Board Exam Mode."*
 
-- `Student` -> Challenge Quiz
-- `Board Taker` -> Board Exam Mode
+**Board Taker:**
+
+- `Board Exam Mode` — Recommended (Pro gate shown for Free/Plus users)
+- `Challenge Quiz` — listed as alternate
+
+**Teacher:**
+
+- Skips mode-selection entirely; lands directly on the Challenge Quiz setup step
+
+### Planned (v0.13+, per `EXAM_MODES.md`)
+
+- Long Exam Mode backend session support: fixed question set, pause-friendly, mastery-report result screen; "Start Long Exam" becomes active
 
 ## Current plan gating
 

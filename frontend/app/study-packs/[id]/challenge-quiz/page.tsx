@@ -65,7 +65,7 @@ import { cn } from "@/lib/utils";
 import { getSelectionCardClassName } from "@/lib/clickable-card";
 
 type ChallengePhase = "prestart" | "generating" | "running" | "complete" | "limit-reached";
-type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup";
+type ChallengePrestartStep = "mode-selection" | "challenge-setup" | "board-exam-setup" | "long-exam-setup";
 type ChallengeSessionStatePayload = {
   selectedChoices?: Record<string, number> | Record<string, string>;
   timerStartedAtEpochSeconds?: number;
@@ -130,7 +130,8 @@ function resolveRecoveryPrestartStep(mode: ChallengeQuizMode): ChallengePrestart
   return "challenge-setup";
 }
 
-function resolveInitialPrestartStep(): ChallengePrestartStep {
+function resolveInitialPrestartStep(profileType?: string | null): ChallengePrestartStep {
+  if (profileType === "TEACHER") return "challenge-setup";
   return "mode-selection";
 }
 
@@ -344,7 +345,7 @@ export default function ChallengeQuizPage() {
       return;
     }
     setSelectedMode(resolvePreferredChallengeMode(viewerProfileType));
-    setPrestartStep(resolveInitialPrestartStep());
+    setPrestartStep(resolveInitialPrestartStep(viewerProfileType));
   }, [challengeSession?.sessionId, phase, sharedModeSelectionEntryRequested, viewerProfileType]);
 
   useEffect(() => {
@@ -557,7 +558,7 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep());
+        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
         setActivePaywallModal(null);
         setPhase("prestart");
         return;
@@ -576,7 +577,7 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep());
+        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
         const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
         const shouldShowLimitPage = hasReachedMonthlyLimit && shouldShowChallengeQuizLimitPage(resolvedViewerPlanType);
         setPhase(shouldShowLimitPage ? "limit-reached" : "prestart");
@@ -605,7 +606,7 @@ export default function ChallengeQuizPage() {
         setTimedOut(false);
         setShowAnswerReview(false);
         setSelectedMode(preferredMode);
-        setPrestartStep(resolveInitialPrestartStep());
+        setPrestartStep(resolveInitialPrestartStep(authUser?.profileType));
         const hasReachedMonthlyLimit = inProgress.usedThisMonth >= inProgress.monthlyLimit;
         const shouldShowLimitPage = hasReachedMonthlyLimit && shouldShowChallengeQuizLimitPage(resolvedViewerPlanType);
         setPhase(shouldShowLimitPage ? "limit-reached" : "prestart");
@@ -961,7 +962,6 @@ export default function ChallengeQuizPage() {
   const questionCountSummary = getQuestionCountSummary(note?.difficultySelectionAvailable);
   const canChooseChallengeDifficulty = Boolean(note?.difficultySelectionAvailable);
   const boardExamAvailable = viewerPlanType === "PRO";
-  const prefersBoardExam = viewerProfileType === "BOARD_EXAM";
   const boardExamTimerState = useMemo(
     () => resolveBoardExamTimerState(remainingSeconds),
     [remainingSeconds],
@@ -986,12 +986,16 @@ export default function ChallengeQuizPage() {
     }
     setPrestartStep("board-exam-setup");
   }, [boardExamAvailable, openLockedFeaturePaywall]);
+  const handleSelectLongExamMode = useCallback(() => {
+    setError(null);
+    setPrestartStep("long-exam-setup");
+  }, []);
   const returnToModeSelection = useCallback(() => {
     setError(null);
     setShowBoardExamStartModal(false);
     setPrestartStep("mode-selection");
-    setSelectedMode(prefersBoardExam ? BOARD_EXAM_MODE : CHALLENGE_MODE);
-  }, [prefersBoardExam]);
+    setSelectedMode(resolvePreferredChallengeMode(viewerProfileType));
+  }, [viewerProfileType]);
   const handleBeforeRouteLeave = useCallback(() => {
     persistLatestProgress(true);
   }, [persistLatestProgress]);
@@ -1150,9 +1154,9 @@ export default function ChallengeQuizPage() {
             </p>
             <h1 className="text-xl font-semibold sm:text-2xl">Choose your quiz mode</h1>
             <p className="text-sm text-foreground/80">
-              {prefersBoardExam
+              {viewerProfileType === "BOARD_EXAM"
                 ? `Choose how you want to prepare with ${note?.title ?? "this note"}. Board Exam Mode emphasizes exam simulation, while Challenge Quiz stays flexible for regular practice.`
-                : `Choose how you want to practice with ${note?.title ?? "this note"}. Challenge Quiz stays flexible, while Board Exam Mode uses a stricter exam-style flow.`}
+                : `Choose how you want to study ${note?.title ?? "this note"} today.`}
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <button
@@ -1170,14 +1174,12 @@ export default function ChallengeQuizPage() {
                   <p className="text-sm font-semibold text-foreground">Challenge Quiz</p>
                   {selectedMode === CHALLENGE_MODE ? (
                     <span className="rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:text-blue-300">
-                      {prefersBoardExam ? "Alternate" : "Recommended"}
+                      {viewerProfileType === "BOARD_EXAM" ? "Alternate" : "Recommended"}
                     </span>
                   ) : null}
                 </div>
                 <p className="mt-1 text-sm text-foreground/70">
-                  {prefersBoardExam
-                    ? "Flexible timed practice when you want a lighter setup before full exam simulation."
-                    : "Flexible quiz mode with optional difficulty selection."}
+                  Focused practice with flexible pacing.
                 </p>
                 <p className="mt-3 text-xs text-foreground/60">
                   {canChooseChallengeDifficulty
@@ -1185,45 +1187,82 @@ export default function ChallengeQuizPage() {
                     : "Review the recommended setup before you start."}
                 </p>
               </button>
-              <button
-                type="button"
-                aria-pressed={selectedMode === BOARD_EXAM_MODE}
-                className={cn(
-                  getSelectionCardClassName({
-                    selected: selectedMode === BOARD_EXAM_MODE,
-                    disabled: challengeGenerationLocked,
-                    className: "p-4",
-                  }),
-                  selectedMode === BOARD_EXAM_MODE
-                    ? "border-foreground/35 bg-foreground/3 dark:bg-foreground/6"
-                    : "hover:border-foreground/30 hover:bg-foreground/3 dark:hover:bg-foreground/5",
-                )}
-                onClick={() => handleSelectBoardExamMode()}
-                disabled={challengeGenerationLocked}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-foreground">Board Exam Mode</p>
-                  {selectedMode === BOARD_EXAM_MODE ? (
+              {viewerProfileType === "BOARD_EXAM" ? (
+                <button
+                  type="button"
+                  aria-pressed={selectedMode === BOARD_EXAM_MODE}
+                  className={cn(
+                    getSelectionCardClassName({
+                      selected: selectedMode === BOARD_EXAM_MODE,
+                      disabled: challengeGenerationLocked,
+                      className: "p-4",
+                    }),
+                    selectedMode === BOARD_EXAM_MODE
+                      ? "border-foreground/35 bg-foreground/3 dark:bg-foreground/6"
+                      : "hover:border-foreground/30 hover:bg-foreground/3 dark:hover:bg-foreground/5",
+                  )}
+                  onClick={() => handleSelectBoardExamMode()}
+                  disabled={challengeGenerationLocked}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">Board Exam Mode</p>
+                    {selectedMode === BOARD_EXAM_MODE ? (
+                      <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+                        Recommended
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-sm text-foreground/70">
+                    Simulate a realistic board-style exam experience.
+                  </p>
+                  <p className="mt-3 text-xs text-foreground/60">
+                    {boardExamAvailable
+                      ? "Counts toward your monthly quiz limit, the same as the standard Challenge Quiz flow."
+                      : "Pro only. Upgrade to unlock a stricter board-style exam flow."}
+                  </p>
+                </button>
+              ) : viewerProfileType !== "TEACHER" ? (
+                <button
+                  type="button"
+                  aria-pressed={false}
+                  className={cn(
+                    getSelectionCardClassName({
+                      selected: false,
+                      disabled: challengeGenerationLocked,
+                      className: "p-4",
+                    }),
+                    "hover:border-foreground/30 hover:bg-foreground/3 dark:hover:bg-foreground/5",
+                  )}
+                  onClick={() => handleSelectLongExamMode()}
+                  disabled={challengeGenerationLocked}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">Long Exam Mode</p>
                     <span className="rounded-full border border-foreground/20 bg-foreground/6 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
-                      {prefersBoardExam ? "Recommended" : "Alternate"}
+                      Coming Soon
                     </span>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-sm text-foreground/70">
-                  {prefersBoardExam
-                    ? "Simulate a real exam with mixed difficulty and a stricter, more controlled flow."
-                    : "Simulate a real exam with mixed difficulty and a stricter, more controlled flow."}
-                </p>
-                <p className="mt-3 text-xs text-foreground/60">
-                  {boardExamAvailable
-                    ? "Counts toward your monthly quiz limit, the same as the standard Challenge Quiz flow."
-                    : "Pro only. Upgrade to unlock a stricter board-style exam flow."}
-                </p>
-              </button>
+                  </div>
+                  <p className="mt-1 text-sm text-foreground/70">
+                    Comprehensive review across broader topics.
+                  </p>
+                  <p className="mt-3 text-xs text-foreground/60">
+                    A longer session mode for deeper mastery testing.
+                  </p>
+                </button>
+              ) : null}
             </div>
             <p className="text-xs text-foreground/60">
-              Both modes count toward your monthly quiz limit.
+              {viewerProfileType === "BOARD_EXAM"
+                ? "Both modes count toward your monthly quiz limit."
+                : "Challenge Quiz counts toward your monthly quiz limit."}
             </p>
+            {viewerProfileType !== "BOARD_EXAM" && viewerProfileType !== "TEACHER" ? (
+              <p className="text-xs text-foreground/55">
+                Preparing for boards?{" "}
+                <Link href="/profile" className="underline underline-offset-2">Switch your profile in Settings</Link>
+                {" "}to enable Board Exam Mode.
+              </p>
+            ) : null}
             {challengeGenerationLocked ? (
               <p className="text-sm text-foreground/75">Preparing your {quizModeLabel.toLowerCase()}...</p>
             ) : null}
@@ -1310,6 +1349,42 @@ export default function ChallengeQuizPage() {
                 disabled={challengeGenerationLocked}
               >
                 {challengeGenerationLocked ? "Starting..." : "Start Quiz"}
+              </Button>
+            </div>
+          </Card>
+        ) : prestartStep === "long-exam-setup" ? (
+          <Card className="space-y-4 p-4 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+              Long Exam Mode
+            </p>
+            <h1 className="text-xl font-semibold sm:text-2xl">Long Exam Mode</h1>
+            <p className="text-sm text-foreground/80">
+              Long Exam Mode is designed for deeper, broader mastery testing — a longer review
+              session across more topics from {note?.title ?? "this note"}.
+            </p>
+            <div className="space-y-3 rounded-xl border border-border bg-background p-4 text-sm text-foreground/80">
+              <p className="font-medium text-foreground">Coming soon</p>
+              <p>
+                Long Exam Mode is in development and will be available in an upcoming update.
+                Use Challenge Quiz for focused practice in the meantime.
+              </p>
+            </div>
+            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={returnToModeSelection}
+              >
+                Choose another mode
+              </Button>
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                disabled
+              >
+                Long Exam — Coming Soon
               </Button>
             </div>
           </Card>

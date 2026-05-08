@@ -27,6 +27,7 @@ import { getAuthUser } from "@/lib/auth";
 import {
   COURSE_PROGRAM_SUGGESTIONS,
   LEARNER_LEVEL_OPTIONS,
+  getGroupedLearnerLevels,
   mergeCourseProgramSuggestions,
 } from "@/lib/learning-profile";
 import {
@@ -318,6 +319,17 @@ export default function ProfilePage() {
     const fallback = resolvedDisplayName || profile?.email || "U";
     return fallback.charAt(0).toUpperCase();
   }, [profile?.email, resolvedDisplayName]);
+
+  const groupedLearnerLevels = useMemo(
+    () => {
+      const grouped = getGroupedLearnerLevels(profile?.profileType);
+      return [
+        { label: grouped.recommendedGroupLabel, options: grouped.recommended },
+        { label: "Other options", options: grouped.other },
+      ];
+    },
+    [profile?.profileType],
+  );
 
   const availableCourseProgramSuggestions = useMemo(
     () => mergeCourseProgramSuggestions(
@@ -751,12 +763,13 @@ export default function ProfilePage() {
                   id="profile-learner-level"
                   value={learningProfileForm.learnerLevel}
                   options={LEARNER_LEVEL_OPTIONS}
+                  groupedOptions={groupedLearnerLevels}
                   ariaLabel="Learner Level"
                   onChange={(value) =>
                     handleLearningProfileFieldChange("learnerLevel", value as LearnerLevel | "")
                   }
                   placeholder="Choose learner level"
-                  helperText="Controls difficulty, explanation depth, and quiz complexity."
+                  helperText="Quiz questions and explanations will better match your learning stage."
                   allowCustom={false}
                   toggleLabel="Toggle learner level suggestions"
                 />
@@ -796,7 +809,7 @@ export default function ProfilePage() {
                 <p className="text-xs text-foreground/60">{learningProfileMessage}</p>
               ) : (
                 <p className="text-xs text-foreground/60">
-                  Learner level controls quiz difficulty and explanation depth.
+                  Quiz questions and explanations will better match your learning stage.
                 </p>
               )}
               <ResponsiveActionButton
