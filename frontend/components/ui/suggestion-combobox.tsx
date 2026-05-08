@@ -8,10 +8,16 @@ export type SuggestionComboboxOption = {
   label: string;
 };
 
+export type SuggestionComboboxOptionGroup = {
+  label: string;
+  options: SuggestionComboboxOption[];
+};
+
 type SuggestionComboboxProps = {
   id: string;
   value: string;
   options: SuggestionComboboxOption[];
+  groupedOptions?: SuggestionComboboxOptionGroup[];
   onChange: (value: string) => void;
   ariaLabel?: string;
   placeholder?: string;
@@ -39,6 +45,7 @@ export function SuggestionCombobox({
   id,
   value,
   options,
+  groupedOptions,
   onChange,
   ariaLabel,
   placeholder,
@@ -53,9 +60,14 @@ export function SuggestionCombobox({
   const [hasTypedSinceOpen, setHasTypedSinceOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
+  const effectiveOptions = useMemo(
+    () => groupedOptions ? groupedOptions.flatMap((group) => group.options) : options,
+    [groupedOptions, options],
+  );
+
   const selectedOption = useMemo(
-    () => options.find((option) => matchesOption(option, value)) ?? null,
-    [options, value],
+    () => effectiveOptions.find((option) => matchesOption(option, value)) ?? null,
+    [effectiveOptions, value],
   );
 
   const displayValue = useMemo(() => {
@@ -86,15 +98,15 @@ export function SuggestionCombobox({
   const activeInputValue = open ? inputValue : displayValue;
   const normalizedInput = normalize(activeInputValue);
   const exactMatch = useMemo(
-    () => options.find((option) => matchesOption(option, activeInputValue)) ?? null,
-    [activeInputValue, options],
+    () => effectiveOptions.find((option) => matchesOption(option, activeInputValue)) ?? null,
+    [activeInputValue, effectiveOptions],
   );
 
   const filteredOptions = useMemo(() => {
     if (!hasTypedSinceOpen || normalizedInput.length === 0) {
-      return options;
+      return effectiveOptions;
     }
-    return options
+    return effectiveOptions
       .map((option, index) => {
         const normalizedLabel = normalize(option.label);
         const normalizedValue = normalize(option.value);
@@ -123,7 +135,7 @@ export function SuggestionCombobox({
         return left.index - right.index;
       })
       .map((entry) => entry.option);
-  }, [hasTypedSinceOpen, normalizedInput, options]);
+  }, [hasTypedSinceOpen, normalizedInput, effectiveOptions]);
 
   const trimmedInput = activeInputValue.trim();
   const showCreateOption = allowCustom && trimmedInput.length > 0 && exactMatch === null;
@@ -134,7 +146,7 @@ export function SuggestionCombobox({
     setOpen(true);
     setHasTypedSinceOpen(true);
 
-    const matchedOption = options.find((option) => matchesOption(option, nextValue)) ?? null;
+    const matchedOption = effectiveOptions.find((option) => matchesOption(option, nextValue)) ?? null;
 
     if (allowCustom) {
       onChange(matchedOption?.value ?? nextValue);
@@ -201,27 +213,54 @@ export function SuggestionCombobox({
             role="listbox"
             className="motion-dropdown-panel absolute z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-background p-1 shadow-lg"
           >
-            {filteredOptions.map((option) => {
-              const isSelected = selectedOption?.value === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  className="motion-lift flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
-                  onClick={() => {
-                  onChange(option.value);
-                  setInputValue(option.label);
-                  setOpen(false);
-                  setHasTypedSinceOpen(false);
-                }}
-              >
-                  <span>{option.label}</span>
-                  {isSelected ? <Check className="h-4 w-4 text-blue-600 dark:text-blue-400" /> : null}
-                </button>
-              );
-            })}
+            {groupedOptions && !hasTypedSinceOpen
+              ? groupedOptions.map((group) => (
+                  <div key={group.label}>
+                    <p className="px-3 pb-1 pt-2 text-xs font-medium text-foreground/50">{group.label}</p>
+                    {group.options.map((option) => {
+                      const isSelected = selectedOption?.value === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className="motion-lift flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                          onClick={() => {
+                            onChange(option.value);
+                            setInputValue(option.label);
+                            setOpen(false);
+                            setHasTypedSinceOpen(false);
+                          }}
+                        >
+                          <span>{option.label}</span>
+                          {isSelected ? <Check className="h-4 w-4 text-blue-600 dark:text-blue-400" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))
+              : filteredOptions.map((option) => {
+                  const isSelected = selectedOption?.value === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className="motion-lift flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-highlight active:bg-highlight-strong"
+                      onClick={() => {
+                        onChange(option.value);
+                        setInputValue(option.label);
+                        setOpen(false);
+                        setHasTypedSinceOpen(false);
+                      }}
+                    >
+                      <span>{option.label}</span>
+                      {isSelected ? <Check className="h-4 w-4 text-blue-600 dark:text-blue-400" /> : null}
+                    </button>
+                  );
+                })}
             {showCreateOption ? (
               <button
                 type="button"

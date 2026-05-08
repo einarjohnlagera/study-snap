@@ -199,6 +199,31 @@ Public creator identity direction:
 - never expose raw user IDs or emails on public note or public profile surfaces
 - legacy `/public/profile/{userId}` links remain valid for compatibility
 
+## Quiz Mode Hierarchy
+
+NoteLib supports exactly five quiz-flavored modes, organized into two families:
+
+- **Practice modes** — Quick Review (all plans), Adaptive Practice (Plus / Pro per `PLANS.md`)
+- **Exam modes** — Challenge Quiz (all plans), Long Exam Mode (Student-facing, planned), Board Exam Mode (Board Taker, Pro)
+
+All five modes share a single backend pipeline ("Quiz Session Engine") via the `quizSession` aggregate. Mode discriminators (`QUICK_REVIEW`, `CHALLENGE`, `ADAPTIVE`, `LONG_EXAM`, `BOARD_EXAM`) parameterize behavior without forking storage or persistence.
+
+Identity rules:
+
+- **Challenge Quiz** is flexible, progressive, user-controlled — *practice with stakes*. It must keep its `+5 Questions`, early-submit, and learner-level adjustability.
+- **Long Exam Mode** (Student profile) is long-form mastery testing — fixed at start, pause-friendly, mastery-report result. Multi-note coverage is a capability, not a separate mode.
+- **Board Exam Mode** (Board Taker profile) is high-stakes simulation — pre-flight setup, no progressive generation, no inline learner-level adjustment, score-report result. It must never become "a longer Challenge Quiz."
+
+Profile-aware presentation (implemented in `lib/exam-mode-visibility.ts`):
+
+- Student → Challenge Quiz (Recommended) + Long Exam Mode (Coming Soon). Board Exam hidden; cross-profile escape-hatch line shown.
+- Board Taker → Board Exam (Recommended, Pro) + Challenge Quiz. Long Exam not shown.
+- Teacher → Challenge Quiz only; skips mode-selection screen to Challenge Quiz setup directly.
+
+Profile-type filtering is presentational only; the engine accepts any mode for any user.
+
+The canonical mode-hierarchy reference, identity contracts, monetization positioning, and roadmap pointers live in `docs/product/EXAM_MODES.md`. Adding a sixth quiz-flavored mode requires updating that document.
+
 ## v0.12.0 Direction
 
 Current in-progress release: `v0.12.0 - Learning Experience, Discovery, and Retention`.

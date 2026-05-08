@@ -1,5 +1,7 @@
 # quiz.md - NoteLib Feature Context
 
+> **Mode hierarchy and identity contracts** are defined in `docs/product/EXAM_MODES.md`. This file documents shared rules that apply across all quiz modes (ownership, generation lock, leave behavior, learner-level resolution). For per-mode identity (Challenge ≠ Board, Long Exam audience, premium positioning), refer to `EXAM_MODES.md`.
+
 ## Goal
 
 Quiz features turn a Study Pack-ready note into active-recall practice without breaking the note-first ownership model.
@@ -7,7 +9,7 @@ Quiz features turn a Study Pack-ready note into active-recall practice without b
 Shared ownership rule:
 
 - generated quiz content belongs to `noteId`
-- Quick Review, Challenge Quiz, and Adaptive Practice sessions are note-scoped
+- Quick Review, Challenge Quiz, Adaptive Practice, and (planned) Long Exam and Board Exam sessions are note-scoped
 
 ## Current quiz modes
 
@@ -36,9 +38,18 @@ Shared ownership rule:
 ### Adaptive Practice
 
 - weak-area follow-up mode
-- currently gated to Pro in runtime
-- quota-limited on Pro
+- per `PLANS.md` (canonical): Plus = 10 / month, Pro = 30 / month
+- runtime gating and other feature docs currently treat this as Pro-only — reconciliation to `PLANS.md` is tracked in `EXAM_MODES.md` *Open Discrepancies*
 - generated separately from Quick Review and Challenge Quiz
+
+### Long Exam Mode (coming soon — backend pending)
+
+- Student-facing long-form exam mode; identity contract in `docs/product/EXAM_MODES.md`
+- mode card and setup screen are live in v0.12.0 as a coming-soon placeholder (Students see the mode identity now; "Start Long Exam" is disabled pending backend session support)
+- fixed question set generated at start (not progressive); pause/resume planned
+- mastery-report result screen; inline learner-level adjustment is allowed
+- planned Pro-only at launch; backend session discriminator and generation logic ship in v0.13.0
+- single-note at v1; multi-note coverage is a follow-up capability
 
 ## Learner-level context
 
