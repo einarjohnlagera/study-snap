@@ -127,6 +127,13 @@ const IMPORT_UNSUPPORTED_FILE_MESSAGE = "Unsupported file type. Upload PNG, JPG,
 const IMPORT_SCANNED_PDF_MESSAGE = "This PDF appears to be scanned or image-based. Please upload images for OCR instead.";
 const CHECKOUT_DRAFT_FALLBACK_MESSAGE = "We couldn't save your draft before checkout. Your note was preserved locally and will be restored when you return.";
 
+function resolveGenerateFromTopicCourseProgram(
+  draftCourseProgram: string,
+  profileCourseProgram: string,
+) {
+  return normalizeOptional(draftCourseProgram) ?? normalizeOptional(profileCourseProgram) ?? undefined;
+}
+
 export function NoteEditorPageClient({
   noteId,
   initialMode = null,
@@ -900,7 +907,10 @@ export function NoteEditorPageClient({
     const isReplacingContent = draft.content.trim().length > 0;
     setIsGeneratingNote(true);
     try {
-      const response = await generateNoteFromTopic(normalizedTopic, draft.courseProgram ?? undefined);
+      const resolvedCourseProgram = resolveGenerateFromTopicCourseProgram(draft.courseProgram, profileCourseProgram);
+      const response = resolvedCourseProgram
+        ? await generateNoteFromTopic(normalizedTopic, resolvedCourseProgram)
+        : await generateNoteFromTopic(normalizedTopic);
       setDraft((previous) => ({
         ...previous,
         title: previous.title.trim().length > 0 ? previous.title : normalizedTopic,
@@ -942,7 +952,9 @@ export function NoteEditorPageClient({
     isSaving,
     hasReachedNoteGenerationLimit,
     currentPlan,
+    draft.courseProgram,
     openLockedFeaturePaywall,
+    profileCourseProgram,
     refreshUsageSummary,
     showToast,
   ]);
