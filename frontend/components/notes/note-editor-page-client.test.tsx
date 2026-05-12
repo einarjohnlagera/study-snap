@@ -314,6 +314,10 @@ describe("NoteEditorPageClient", () => {
 
   it("expands Add details from the sticky helper link", async () => {
     (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: null,
+      courseProgram: null,
+    });
 
     render(<NoteEditorPageClient />);
 
@@ -476,7 +480,7 @@ describe("NoteEditorPageClient", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
 
     await waitFor(() => {
-      expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion");
+      expect(generateNoteFromTopic).toHaveBeenCalledWith("Newton's Laws of Motion", "Nursing");
       expect(screen.getByLabelText("Content")).toHaveValue("Generated topic note content");
     });
     fireEvent.click(screen.getByRole("button", { name: "Add details (optional)" }));
@@ -485,6 +489,116 @@ describe("NoteEditorPageClient", () => {
     expect(
       screen.getByText("Not quite right? Try refining your topic before generating again."),
     ).toBeInTheDocument();
+  });
+
+  it("uses the selected Course/Program on the first topic note generation", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      courseProgram: "Software Engineering",
+    });
+    (listCoursePrograms as jest.Mock).mockResolvedValue(["Software Engineering", "Civil Engineering"]);
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    await waitFor(() => {
+      expect(courseProgramInput).toHaveValue("Software Engineering");
+    });
+    fireEvent.change(courseProgramInput, { target: { value: "Civil Engineering" } });
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Bridge Load Distribution" } });
+
+    expect(screen.getByText(/Tailored for: College · Civil Engineering/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+
+    await waitFor(() => {
+      expect(generateNoteFromTopic).toHaveBeenCalledWith("Bridge Load Distribution", "Civil Engineering");
+    });
+  });
+
+  it("uses the latest changed Course/Program before clicking Generate Note", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      courseProgram: "Software Engineering",
+    });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    await waitFor(() => {
+      expect(courseProgramInput).toHaveValue("Software Engineering");
+    });
+    fireEvent.change(courseProgramInput, { target: { value: "Civil Engineering" } });
+    fireEvent.change(courseProgramInput, { target: { value: "Mechanical Engineering" } });
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Torque and Rotation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+
+    await waitFor(() => {
+      expect(generateNoteFromTopic).toHaveBeenCalledWith("Torque and Rotation", "Mechanical Engineering");
+    });
+  });
+
+  it("keeps the selected Course/Program for topic note regeneration", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      courseProgram: "Software Engineering",
+    });
+    (generateNoteFromTopic as jest.Mock)
+      .mockResolvedValueOnce({ content: "First generated topic note" })
+      .mockResolvedValueOnce({ content: "Second generated topic note" });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    const courseProgramInput = await screen.findByLabelText("Course / Program (optional)");
+    await waitFor(() => {
+      expect(courseProgramInput).toHaveValue("Software Engineering");
+    });
+    fireEvent.change(courseProgramInput, { target: { value: "Civil Engineering" } });
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Bridge Load Distribution" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+
+    await screen.findByDisplayValue("First generated topic note");
+    fireEvent.click(screen.getByRole("button", { name: "Generate Again" }));
+
+    await waitFor(() => {
+      expect(generateNoteFromTopic).toHaveBeenNthCalledWith(1, "Bridge Load Distribution", "Civil Engineering");
+      expect(generateNoteFromTopic).toHaveBeenNthCalledWith(2, "Bridge Load Distribution", "Civil Engineering");
+    });
+  });
+
+  it("uses profile Course/Program when topic generation has no selected override", async () => {
+    (getAuthUser as jest.Mock).mockReturnValue({ emailVerifiedAt: "2026-03-21T09:00:00Z" });
+    (getMe as jest.Mock).mockResolvedValue({
+      learnerLevel: "COLLEGE",
+      courseProgram: "Software Engineering",
+    });
+
+    render(<NoteEditorPageClient />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add details (optional)" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Course / Program (optional)")).toHaveValue("Software Engineering");
+    });
+
+    fireEvent.click(await screen.findByText("Generate from topic"));
+    fireEvent.change(screen.getByLabelText("Topic"), { target: { value: "Binary Search Trees" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Note" }));
+
+    await waitFor(() => {
+      expect(generateNoteFromTopic).toHaveBeenCalledWith("Binary Search Trees", "Software Engineering");
+    });
   });
 
   it("resets the topic-generation button label when the topic is cleared", async () => {

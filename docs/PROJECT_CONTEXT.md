@@ -93,6 +93,7 @@ Private Library readiness:
 - Unverified users are blocked from OCR upload.
 - OCR is optional in Create/Edit Note and populates Note content for manual review before save/generate.
 - Generate Note from topic is available in Create Note and fills editable note content before save.
+- Generate Note from topic must use the current Create Note Course / Program selection on the first request. Profile Course / Program is fallback only when the draft field is blank; do not rely on stale profile defaults or merge unrelated Course / Program values.
 
 ## Authentication
 
